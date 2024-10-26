@@ -173,8 +173,11 @@ class Shape(ShapeConfiguration):
                         options={},
                     )
 
+    async def test_async(self):
+        return await self.get_wrapped()
+
     def test(self):
-        _ = asyncio.run(self.get_wrapped())
+        _ = asyncio.run(self.test_async())
 
     def show(self, show_object=None):
         asyncio.run(self.show_async(show_object))
@@ -260,7 +263,8 @@ class Shape(ShapeConfiguration):
         result = pickle.loads(response)
         if not result["success"]:
             pc_logging.error(
-                "RenderSVG failed: %s: %s" % (self.name, result["exception"])
+                "RenderSVG failed: %s:%s: %s"
+                % (self.project_name, self.name, result["exception"])
             )
         if "exception" in result and not result["exception"] is None:
             pc_logging.exception(

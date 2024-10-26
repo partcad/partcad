@@ -560,7 +560,9 @@ class Project(project_config.Configuration):
                                 param_value
                             )
                     elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
+                        config["parameters"][param_name][
+                            "default"
+                        ] = param_value
             else:
                 # Filling "with"
                 if not "with" in config:
@@ -799,7 +801,9 @@ class Project(project_config.Configuration):
                                 param_value
                             )
                     elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
+                        config["parameters"][param_name][
+                            "default"
+                        ] = param_value
             else:
                 # Filling "with"
                 if not "with" in config:
@@ -994,7 +998,9 @@ class Project(project_config.Configuration):
                                 param_value
                             )
                     elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
+                        config["parameters"][param_name][
+                            "default"
+                        ] = param_value
             else:
                 # Filling "with"
                 if not "with" in config:
@@ -1203,7 +1209,9 @@ class Project(project_config.Configuration):
                                 param_value
                             )
                     elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
+                        config["parameters"][param_name][
+                            "default"
+                        ] = param_value
             else:
                 # Filling "with"
                 if not "with" in config:
@@ -1427,15 +1435,20 @@ class Project(project_config.Configuration):
                     yaml.dump(config, fp)
                     fp.close()
 
-    def test(self):
+    async def test_async(self):
+        tasks = []
         for interface in self.interfaces.values():
-            interface.test()
+            tasks.append(asyncio.create_task(interface.test_async()))
         for sketch in self.sketches.values():
-            sketch.test()
+            tasks.append(asyncio.create_task(sketch.test_async()))
         for part in self.parts.values():
-            part.test()
+            tasks.append(asyncio.create_task(part.test_async()))
         for assembly in self.assemblies.values():
-            assembly.test()
+            tasks.append(asyncio.create_task(assembly.test_async()))
+        return await asyncio.gather(*tasks)
+
+    def test(self):
+        asyncio.run(self.test_async())
 
     async def render_async(
         self,

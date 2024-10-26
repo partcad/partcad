@@ -8,6 +8,7 @@
 #
 
 import argparse
+import asyncio
 
 import partcad.logging as pc_logging
 import partcad.utils as pc_utils
@@ -68,22 +69,8 @@ def cli_help_test(subparsers: argparse.ArgumentParser):
     )
 
 
-def cli_test(args, ctx):
-    package = args.package if args.package is not None else ""
-    if args.recursive:
-        start_package = pc_utils.get_child_project_path(
-            ctx.get_current_project_path(), package
-        )
-        all_packages = ctx.get_all_packages(start_package)
-        packages = list(
-            map(
-                lambda p: p["name"],
-                list(all_packages),
-            )
-        )
-    else:
-        packages = [package]
-
+async def cli_test_async(args, ctx, packages):
+    tasks = []
     for package in packages:
         if not args.object is None:
             if not ":" in args.object:
@@ -95,7 +82,7 @@ def cli_test(args, ctx):
         prj = ctx.get_project(package)
         if args.object is None:
             # Test all parts and assemblies in this project
-            prj.test()
+            tasks.append(prj.test_async())
         else:
             # Test the requested part or assembly
             if args.sketch:
@@ -107,4 +94,26 @@ def cli_test(args, ctx):
             else:
                 shape = prj.get_part(args.object)
 
-            shape.test()
+            if shape is None:
+                pc_logging.error("%s is not found" % args.object)
+            else:
+                tasks.append(shape.test_async())
+
+    await asyncio.gather(*tasks)
+
+
+def cli_test(args, ctx):
+    package = args.package if args.package is not None else ""
+    if args.recursive:
+        start_package = ctx.get_project_abs_path(package)
+        all_packages = ctx.get_all_packages(start_package)
+        packages = list(
+            map(
+                lambda p: p["name"],
+                list(all_packages),
+            )
+        )
+    else:
+        packages = [package]
+
+    asyncio.run(cli_test_async(args, ctx, packages))

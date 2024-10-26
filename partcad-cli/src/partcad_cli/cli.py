@@ -163,8 +163,11 @@ def main():
 
         elif args.command == "list-all":
             with pc_logging.Process("ListAll", "this"):
-                cli_list_assemblies(args, ctx)
+                cli_list_sketches(args, ctx)
+                cli_list_interfaces(args, ctx)
+                cli_list_mates(args, ctx)
                 cli_list_parts(args, ctx)
+                cli_list_assemblies(args, ctx)
 
         elif args.command == "list-sketches":
             with pc_logging.Process("ListSketches", "this"):
