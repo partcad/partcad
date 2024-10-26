@@ -8,6 +8,7 @@
 #
 
 import argparse
+import asyncio
 
 import partcad.logging as pc_logging
 import partcad.utils as pc_utils
@@ -99,24 +100,8 @@ def cli_help_render(subparsers: argparse.ArgumentParser):
     )
 
 
-def cli_render(args, ctx):
-    ctx.option_create_dirs = args.create_dirs
-
-    package = args.package if args.package is not None else ""
-    if args.recursive:
-        start_package = pc_utils.get_child_project_path(
-            ctx.get_current_project_path(), package
-        )
-        all_packages = ctx.get_all_packages(start_package)
-        packages = list(
-            map(
-                lambda p: p["name"],
-                list(all_packages),
-            )
-        )
-    else:
-        packages = [package]
-
+async def cli_render_async(args, ctx, packages):
+    tasks = []
     for package in packages:
         if not args.object is None:
             if not ":" in args.object:
@@ -127,10 +112,12 @@ def cli_render(args, ctx):
 
         if args.object is None:
             # Render all parts and assemblies configured to be auto-rendered in this project
-            ctx.render(
-                project_path=package,
-                format=args.format,
-                output_dir=args.output_dir,
+            tasks.append(
+                ctx.render_async(
+                    project_path=package,
+                    format=args.format,
+                    output_dir=args.output_dir,
+                )
             )
         else:
             # Render the requested part or assembly
@@ -148,11 +135,36 @@ def cli_render(args, ctx):
                 parts.append(args.object)
 
             prj = ctx.get_project(package)
-            prj.render(
-                sketches=sketches,
-                interfaces=interfaces,
-                parts=parts,
-                assemblies=assemblies,
-                format=args.format,
-                output_dir=args.output_dir,
+            if prj is None:
+                pc_logging.error("%s is not found" % package)
+            else:
+                tasks.append(
+                    prj.render(
+                        sketches=sketches,
+                        interfaces=interfaces,
+                        parts=parts,
+                        assemblies=assemblies,
+                        format=args.format,
+                        output_dir=args.output_dir,
+                    )
+                )
+    await asyncio.gather(*tasks)
+
+
+def cli_render(args, ctx):
+    ctx.option_create_dirs = args.create_dirs
+
+    package = args.package if args.package is not None else ""
+    if args.recursive:
+        start_package = ctx.get_project_abs_path(package)
+        all_packages = ctx.get_all_packages(start_package)
+        packages = list(
+            map(
+                lambda p: p["name"],
+                list(all_packages),
             )
+        )
+    else:
+        packages = [package]
+
+    asyncio.run(cli_render_async(args, ctx, packages))

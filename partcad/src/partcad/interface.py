@@ -503,6 +503,9 @@ class Interface:
                 continue
             project.ctx.add_mate(self, target_interface, mate_target_config)
 
+    async def test_async(self):
+        return self.test()
+
     def test(self):
         _ = self.get_ports()
 
