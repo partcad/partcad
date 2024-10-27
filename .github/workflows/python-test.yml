@@ -81,4 +81,4 @@ jobs:
           pip install -U ./partcad ./partcad-cli
           mkdir new_pkg
           cd examples
-          pc test -r --package /pub
+          pc test -r --package /pub/examples
