@@ -45,7 +45,7 @@ class Assembly(ShapeWithAi):
         self.count = 0
 
     async def do_instantiate(self):
-        async with self.lock:
+        async with self.locked():
             if len(self.children) == 0:
                 self.shape = None  # Invalidate if any
                 await pc_thread.run(self.instantiate, self)
@@ -75,7 +75,7 @@ class Assembly(ShapeWithAi):
 
     async def get_shape(self):
         await self.do_instantiate()
-        async with self.lock:
+        async with self.locked():
             if self.shape is None:
                 child_shapes = []
                 tasks = []
@@ -116,7 +116,7 @@ class Assembly(ShapeWithAi):
 
     async def get_bom(self):
         await self.do_instantiate()
-        async with self.lock:
+        async with self.locked():
             bom = {}
             for child in self.children:
                 if hasattr(child.item, "get_bom"):
