@@ -76,6 +76,15 @@ jobs:
           # Install a subset of CLI dependencies, that are required for tests
           pip install svglib rlPyCairo renderlab
           # pip install -r partcad-cli/requirements.txt
+      - name: Install OS-specific dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openscad
+      - name: Install OS-specific dependencies (MacOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install openscad
       - name: Test the entire repository
         run: |
           pip install -U ./partcad ./partcad-cli
