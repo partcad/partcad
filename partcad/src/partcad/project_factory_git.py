@@ -131,7 +131,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             # Need to check for updates
                             origin.fetch()
                             repo.git.checkout(self.import_revision, force=True)
-                            origin.pull()
+                            origin.pull(force=True, rebase=True)
                             pathlib.Path(guard_path).touch()
 
                     if not before is None:
