@@ -49,7 +49,7 @@ class Configuration:
             return
 
         # Read the body of the configuration file
-        fp = open(self.config_path, "r")
+        fp = open(self.config_path, "r", encoding="utf-8")
         config = fp.read()
         fp.close()
 
