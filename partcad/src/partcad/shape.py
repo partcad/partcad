@@ -44,7 +44,7 @@ class Shape(ShapeConfiguration):
     def __init__(self, config):
         super().__init__(config)
         self.errors = []
-        self.lock = threading.Lock()
+        self._lock = threading.Lock()
         self.shape = None
         self.components = []
         self.compound = None
@@ -61,11 +61,11 @@ class Shape(ShapeConfiguration):
     @contextlib.asynccontextmanager
     async def locked(self):
         """Multi-threading lock for coroutines"""
-        await pc_thread.run(self.lock.acquire)
+        await pc_thread.run(self._lock.acquire)
         try:
             yield
         finally:
-            self.lock.release()
+            self._lock.release()
 
     async def get_components(self):
         if len(self.components) == 0:

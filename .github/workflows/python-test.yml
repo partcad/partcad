@@ -50,7 +50,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
-          openscad-installer.exe
+          ./openscad-installer.exe
       - name: Test with pytest
         env:
           PYTHONPATH: partcad/src
@@ -103,7 +103,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
-          openscad-installer.exe
+          ./openscad-installer.exe
       - name: Test the entire repository
         run: |
           pip install -U ./partcad ./partcad-cli
