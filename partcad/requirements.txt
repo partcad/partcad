@@ -1,6 +1,6 @@
-build123d>=0.5.0
+build123d>=0.7.0
 cadquery>=2.4.0
-numpy>=1.24.1,<2
+numpy>=2,<3
 ocp_tessellate
 scipy>=1.11.1
 pyyaml>=6.0.1
