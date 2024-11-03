@@ -2,7 +2,7 @@ ocp_tessellate
 cadquery>=2.4.0
 numpy==1.24.1
 numpy-quaternion==2023.0.4
-nptyping==1.24.1
+nptyping==1.4.4
 typing_extensions>=4.6.0,<5
 build123d>=0.7.0
 scipy>=1.11.1
