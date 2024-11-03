@@ -136,7 +136,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             await self.runtime.ensure("ocp-tessellate")
             await self.runtime.ensure("numpy==1.24.1")
             await self.runtime.ensure("numpy-quaternion==2023.0.4")
-            await self.runtime.ensure("nptyping==1.24.1")
+            await self.runtime.ensure("nptyping==1.4.4")
             await self.runtime.ensure("cadquery")
             cwd = self.project.config_dir
             if self.cwd is not None:
