@@ -15,6 +15,10 @@ import sys
 
 from OCP.STEPControl import STEPControl_Reader
 import OCP.IFSelect
+from OCP.TopoDS import (
+    TopoDS_Builder,
+    TopoDS_Compound,
+)
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
@@ -32,10 +36,16 @@ def process(path, request):
     for i in range(reader.NbShapes()):
         occ_shapes.append(reader.Shape(i + 1))
 
+    builder = TopoDS_Builder()
+    compound = TopoDS_Compound()
+    builder.MakeCompound(compound)
+    for shape in occ_shapes:
+        builder.Add(compound, shape)
+
     return {
         "success": True,
         "exception": None,
-        "shape": occ_shapes,
+        "shape": compound,
     }
 
 
