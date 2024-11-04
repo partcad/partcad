@@ -58,13 +58,17 @@ class PythonRuntime(runtime.Runtime):
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     # TODO(clairbee): Lock the entire runtime instead
-                    await self.ensure_async_onced("ocp-tessellate")
-                    await self.ensure_async_onced("cadquery")
-                    await self.ensure_async_onced("numpy==1.24.1")
-                    await self.ensure_async_onced("numpy-quaternion==2023.0.4")
-                    await self.ensure_async_onced("nptyping==1.4.4")
-                    await self.ensure_async_onced("typing_extensions>=4.6.0,<5")
-                    await self.ensure_async_onced("build123d>=0.7.0")
+                    await self.ensure_async_onced_locked("ocp-tessellate")
+                    await self.ensure_async_onced_locked("cadquery")
+                    await self.ensure_async_onced_locked("numpy==1.24.1")
+                    await self.ensure_async_onced_locked(
+                        "numpy-quaternion==2023.0.4"
+                    )
+                    await self.ensure_async_onced_locked("nptyping==1.4.4")
+                    await self.ensure_async_onced_locked(
+                        "typing_extensions>=4.6.0,<5"
+                    )
+                    await self.ensure_async_onced_locked("build123d>=0.7.0")
                     self.initialized = True
 
     def run(self, cmd, stdin="", cwd=None):
@@ -184,6 +188,22 @@ class PythonRuntime(runtime.Runtime):
                             ["-m", "pip", "install", python_package]
                         )
                     pathlib.Path(guard_path).touch()
+
+    async def ensure_async_onced_locked(self, python_package):
+        # TODO(clairbee): expire the guard file after a certain time
+
+        python_package_hash = hashlib.sha256(
+            python_package.encode()
+        ).hexdigest()
+        guard_path = os.path.join(
+            self.path, ".partcad.installed." + python_package_hash
+        )
+        if not os.path.exists(guard_path):
+            with pc_logging.Action("PipInst", self.version, python_package):
+                await self.run_async_onced(
+                    ["-m", "pip", "install", python_package]
+                )
+            pathlib.Path(guard_path).touch()
 
     async def prepare_for_package(self, project):
         await self.once_async()
