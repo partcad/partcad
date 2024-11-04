@@ -30,16 +30,6 @@ class PythonRuntime(runtime.Runtime):
         self.lock = threading.RLock()
         self.tls = threading.local()
 
-        # Preinstall the most common packages to avoid race conditions
-        # TODO(clairbee): Lock the entire runtime instead
-        self.ensure("ocp-tessellate")
-        self.ensure("cadquery")
-        self.ensure("numpy==1.24.1")
-        self.ensure("numpy-quaternion==2023.0.4")
-        self.ensure("nptyping==1.4.4")
-        self.ensure("typing_extensions>=4.6.0,<5")
-        self.ensure("build123d>=0.7.0")
-
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
             self.tls.async_locks = {}
@@ -49,10 +39,33 @@ class PythonRuntime(runtime.Runtime):
         return self.tls.async_locks[self_id]
 
     def once(self):
-        pass
+        with self.lock:
+            if not self.initialized:
+                # Preinstall the most common packages to avoid race conditions
+                # TODO(clairbee): Lock the entire runtime instead
+                self.ensure_onced("ocp-tessellate")
+                self.ensure_onced("cadquery")
+                self.ensure_onced("numpy==1.24.1")
+                self.ensure_onced("numpy-quaternion==2023.0.4")
+                self.ensure_onced("nptyping==1.4.4")
+                self.ensure_onced("typing_extensions>=4.6.0,<5")
+                self.ensure_onced("build123d>=0.7.0")
+                self.initialized = True
 
     async def once_async(self):
-        pass
+        with self.lock:
+            async with self.get_async_lock():
+                if not self.initialized:
+                    # Preinstall the most common packages to avoid
+                    # TODO(clairbee): Lock the entire runtime instead
+                    await self.ensure_async_onced("ocp-tessellate")
+                    await self.ensure_async_onced("cadquery")
+                    await self.ensure_async_onced("numpy==1.24.1")
+                    await self.ensure_async_onced("numpy-quaternion==2023.0.4")
+                    await self.ensure_async_onced("nptyping==1.4.4")
+                    await self.ensure_async_onced("typing_extensions>=4.6.0,<5")
+                    await self.ensure_async_onced("build123d>=0.7.0")
+                    self.initialized = True
 
     def run(self, cmd, stdin="", cwd=None):
         self.once()
@@ -136,7 +149,9 @@ class PythonRuntime(runtime.Runtime):
 
     def ensure(self, python_package):
         self.once()
+        self.ensure_onced(python_package)
 
+    def ensure_onced(self, python_package):
         python_package_hash = hashlib.sha256(
             python_package.encode()
         ).hexdigest()
@@ -150,7 +165,9 @@ class PythonRuntime(runtime.Runtime):
 
     async def ensure_async(self, python_package):
         await self.once_async()
+        await self.ensure_async_onced(python_package)
 
+    async def ensure_async_onced(self, python_package):
         # TODO(clairbee): expire the guard file after a certain time
 
         python_package_hash = hashlib.sha256(
