@@ -41,7 +41,14 @@ class PythonRuntime(runtime.Runtime):
     def once(self):
         pass
 
+    async def once_async(self):
+        pass
+
     async def run(self, cmd, stdin="", cwd=None):
+        await self.once_async()
+        return await self.run_onced(cmd, stdin=stdin, cwd=cwd)
+
+    async def run_onced(self, cmd, stdin="", cwd=None):
         pc_logging.debug("Running: %s", cmd)
         p = await asyncio.create_subprocess_exec(
             # cmd,
@@ -78,7 +85,7 @@ class PythonRuntime(runtime.Runtime):
         return stdout, stderr
 
     async def ensure(self, python_package):
-        self.once()
+        await self.once_async()
 
         # TODO(clairbee): expire the guard file after a certain time
 
@@ -94,11 +101,13 @@ class PythonRuntime(runtime.Runtime):
                     with pc_logging.Action(
                         "PipInst", self.version, python_package
                     ):
-                        await self.run(["-m", "pip", "install", python_package])
+                        await self.run_locked(
+                            ["-m", "pip", "install", python_package]
+                        )
                     pathlib.Path(guard_path).touch()
 
     async def prepare_for_package(self, project):
-        self.once()
+        await self.once_async()
 
         # TODO(clairbee): expire the guard file after a certain time
 
@@ -118,7 +127,7 @@ class PythonRuntime(runtime.Runtime):
                         with pc_logging.Action(
                             "PipReqs", self.version, project.name
                         ):
-                            await self.run(
+                            await self.run_locked(
                                 [
                                     "-m",
                                     "pip",
@@ -135,7 +144,7 @@ class PythonRuntime(runtime.Runtime):
                 await self.ensure(req)
 
     async def prepare_for_shape(self, config):
-        self.once()
+        await self.once_async()
 
         # Install dependencies of this part
         if "pythonRequirements" in config:

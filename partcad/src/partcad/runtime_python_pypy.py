@@ -40,8 +40,8 @@ class PyPyPythonRuntime(runtime_python.PythonRuntime):
                 shutil.rmtree(self.path)
                 raise e
 
-    async def run(self, cmd, stdin="", cwd=None):
-        return await super().run(
+    async def run_onced(self, cmd, stdin="", cwd=None):
+        return await super().run_onced(
             ["conda", "run", "--no-capture-output", "-p", self.path, "pypy"]
             + cmd,
             stdin,

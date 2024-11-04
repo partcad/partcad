@@ -15,7 +15,6 @@ import sys
 
 from OCP.STEPControl import STEPControl_Reader
 import OCP.IFSelect
-from OCP.TopoDS import Shape
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
@@ -33,15 +32,10 @@ def process(path, request):
     for i in range(reader.NbShapes()):
         occ_shapes.append(reader.Shape(i + 1))
 
-    # Make sure that we extract all the solids
-    solids = []
-    for shape in occ_shapes:
-        solids.append(Shape.cast(shape))
-
     return {
         "success": True,
         "exception": None,
-        "shape": solids,
+        "shape": occ_shapes,
     }
 
 

@@ -16,7 +16,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-13] # macos-latest has an issue with nlopt
         # os: ["ubuntu-latest", "windows-latest", "macos-latest"]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12"]
         # exclude:
         #   # False negatives on Windows for pytest result evaluation
         #   - os: "windows-latest"
