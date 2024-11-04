@@ -74,9 +74,7 @@ class PythonRuntime(runtime.Runtime):
     def run_onced(self, cmd, stdin="", cwd=None):
         pc_logging.debug("Running: %s", cmd)
         p = subprocess.Popen(
-            # cmd,
-            cmd[0],
-            *cmd[1:],
+            cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -208,7 +206,7 @@ class PythonRuntime(runtime.Runtime):
                         with pc_logging.Action(
                             "PipReqs", self.version, project.name
                         ):
-                            await self.run_onced(
+                            await self.run_async_onced(
                                 [
                                     "-m",
                                     "pip",
