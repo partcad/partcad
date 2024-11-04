@@ -30,6 +30,16 @@ class PythonRuntime(runtime.Runtime):
         self.lock = threading.RLock()
         self.tls = threading.local()
 
+        # Preinstall the most common packages to avoid race conditions
+        # TODO(clairbee): Lock the entire runtime instead
+        self.ensure("ocp-tessellate")
+        self.ensure("cadquery")
+        self.ensure("numpy==1.24.1")
+        self.ensure("numpy-quaternion==2023.0.4")
+        self.ensure("nptyping==1.4.4")
+        self.ensure("typing_extensions>=4.6.0,<5")
+        self.ensure("build123d>=0.7.0")
+
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
             self.tls.async_locks = {}
@@ -44,11 +54,51 @@ class PythonRuntime(runtime.Runtime):
     async def once_async(self):
         pass
 
-    async def run(self, cmd, stdin="", cwd=None):
-        await self.once_async()
-        return await self.run_onced(cmd, stdin=stdin, cwd=cwd)
+    def run(self, cmd, stdin="", cwd=None):
+        self.once()
+        return self.run_onced(cmd, stdin=stdin, cwd=cwd)
 
-    async def run_onced(self, cmd, stdin="", cwd=None):
+    def run_onced(self, cmd, stdin="", cwd=None):
+        pc_logging.debug("Running: %s", cmd)
+        p = subprocess.Popen(
+            # cmd,
+            cmd[0],
+            *cmd[1:],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=False,
+            # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+            cwd=cwd,
+        )
+        stdout, stderr = p.communicate(
+            input=stdin.encode(),
+            # TODO(clairbee): add timeout
+        )
+
+        stdout = stdout.decode()
+        stderr = stderr.decode()
+
+        # if stdout:
+        #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+        # if stderr:
+        #     pc_logging.debug("Error of %s: %s" % (cmd, stderr))
+
+        # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
+        # f = open("/tmp/log", "w")
+        # f.write("Completed: %s\n" % cmd)
+        # f.write(" stdin: %s\n" % stdin)
+        # f.write(" stderr: %s\n" % stderr)
+        # f.write(" stdout: %s\n" % stdout)
+        # f.close()
+
+        return stdout, stderr
+
+    async def run_async(self, cmd, stdin="", cwd=None):
+        await self.once_async()
+        return await self.run_async_onced(cmd, stdin=stdin, cwd=cwd)
+
+    async def run_async_onced(self, cmd, stdin="", cwd=None):
         pc_logging.debug("Running: %s", cmd)
         p = await asyncio.create_subprocess_exec(
             # cmd,
@@ -84,7 +134,21 @@ class PythonRuntime(runtime.Runtime):
 
         return stdout, stderr
 
-    async def ensure(self, python_package):
+    def ensure(self, python_package):
+        self.once()
+
+        python_package_hash = hashlib.sha256(
+            python_package.encode()
+        ).hexdigest()
+        guard_path = os.path.join(
+            self.path, ".partcad.installed." + python_package_hash
+        )
+        if not os.path.exists(guard_path):
+            with pc_logging.Action("PipInst", self.version, python_package):
+                self.run_onced(["-m", "pip", "install", python_package])
+            pathlib.Path(guard_path).touch()
+
+    async def ensure_async(self, python_package):
         await self.once_async()
 
         # TODO(clairbee): expire the guard file after a certain time
@@ -101,7 +165,7 @@ class PythonRuntime(runtime.Runtime):
                     with pc_logging.Action(
                         "PipInst", self.version, python_package
                     ):
-                        await self.run_onced(
+                        await self.run_async_onced(
                             ["-m", "pip", "install", python_package]
                         )
                     pathlib.Path(guard_path).touch()
@@ -141,7 +205,7 @@ class PythonRuntime(runtime.Runtime):
         # Install dependencies of the package
         if "pythonRequirements" in project.config_obj:
             for req in project.config_obj["pythonRequirements"]:
-                await self.ensure(req)
+                await self.ensure_async(req)
 
     async def prepare_for_shape(self, config):
         await self.once_async()
@@ -149,4 +213,4 @@ class PythonRuntime(runtime.Runtime):
         # Install dependencies of this part
         if "pythonRequirements" in config:
             for req in config["pythonRequirements"]:
-                await self.ensure(req)
+                await self.ensure_async(req)

@@ -29,8 +29,15 @@ class NonePythonRuntime(runtime_python.PythonRuntime):
             os.makedirs(self.path)
             self.initialized = True
 
-    async def run_onced(self, cmd, stdin="", cwd=None):
-        return await super().run_onced(
+    def run_onced(self, cmd, stdin="", cwd=None):
+        return super().run_onced(
+            [self.exec_name] + cmd,
+            stdin,
+            cwd=cwd,
+        )
+
+    async def run_async_onced(self, cmd, stdin="", cwd=None):
+        return await super().run_async_onced(
             [self.exec_name] + cmd,
             stdin,
             cwd=cwd,
