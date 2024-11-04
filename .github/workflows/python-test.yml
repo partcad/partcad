@@ -16,7 +16,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-13] # macos-latest has an issue with nlopt
         # os: ["ubuntu-latest", "windows-latest", "macos-latest"]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
         # exclude:
         #   # False negatives on Windows for pytest result evaluation
         #   - os: "windows-latest"
@@ -33,10 +33,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -U pytest
-          pip install -r partcad/requirements.txt
-          # Install a subset of CLI dependencies, that are required for tests
-          pip install svglib rlPyCairo renderlab
-          # pip install -r partcad-cli/requirements.txt
+          pip install -r partcad/requirements.txt && \
+            pip install svglib rlPyCairo renderlab # Install a subset of CLI dependencies, that are required for tests
       - name: Install OS-specific dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
