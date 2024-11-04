@@ -101,7 +101,7 @@ class PythonRuntime(runtime.Runtime):
                     with pc_logging.Action(
                         "PipInst", self.version, python_package
                     ):
-                        await self.run_locked(
+                        await self.run_onced(
                             ["-m", "pip", "install", python_package]
                         )
                     pathlib.Path(guard_path).touch()
@@ -127,7 +127,7 @@ class PythonRuntime(runtime.Runtime):
                         with pc_logging.Action(
                             "PipReqs", self.version, project.name
                         ):
-                            await self.run_locked(
+                            await self.run_onced(
                                 [
                                     "-m",
                                     "pip",
