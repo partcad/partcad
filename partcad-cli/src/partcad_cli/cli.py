@@ -13,7 +13,6 @@ import logging
 import sys
 
 import partcad as pc
-import partcad.logging as pc_logging
 from partcad.user_config import user_config
 
 from .cli_add import *
@@ -116,7 +115,10 @@ def main():
     if not args.no_ansi:
         pc.logging_ansi_terminal_init()
     else:
+        logging.getLogger("partcad").propagate = True
         logging.basicConfig()
+        # logging.getLogger("partcad").info("test")
+        # logging.getLogger("partcad").propagate = True
 
     if args.quiet > 0:
         pc.logging.setLevel(logging.CRITICAL + 1)
@@ -136,7 +138,7 @@ def main():
             cli_status(args)
             return
         elif args.command == "version":
-            pc_logging.info("PartCAD version: %s" % pc.__version__)
+            pc.logging.info("PartCAD version: %s" % pc.__version__)
             return
 
         if args.command == "install" or args.command == "update":
@@ -150,15 +152,15 @@ def main():
 
         # Handle the command
         if args.command == "add":
-            with pc_logging.Process("Add", "this"):
+            with pc.logging.Process("Add", "this"):
                 cli_add(args, ctx)
 
         elif args.command == "add-part":
-            with pc_logging.Process("AddPart", "this"):
+            with pc.logging.Process("AddPart", "this"):
                 cli_add_part(args, ctx)
 
         elif args.command == "add-assembly":
-            with pc_logging.Process("AddAssy", "this"):
+            with pc.logging.Process("AddAssy", "this"):
                 cli_add_assembly(args, ctx)
 
         elif args.command == "ai":
@@ -170,19 +172,19 @@ def main():
                 parser.print_help()
 
         elif args.command == "info":
-            with pc_logging.Process("Info", "this"):
+            with pc.logging.Process("Info", "this"):
                 cli_info(args, ctx)
 
         elif args.command == "install" or args.command == "update":
-            with pc_logging.Process("Install", "this"):
+            with pc.logging.Process("Install", "this"):
                 cli_install(args, ctx)
 
         elif args.command == "list":
-            with pc_logging.Process("List", "this"):
+            with pc.logging.Process("List", "this"):
                 cli_list(args, ctx)
 
         elif args.command == "list-all":
-            with pc_logging.Process("ListAll", "this"):
+            with pc.logging.Process("ListAll", "this"):
                 cli_list_sketches(args, ctx)
                 cli_list_interfaces(args, ctx)
                 cli_list_mates(args, ctx)
@@ -190,52 +192,52 @@ def main():
                 cli_list_assemblies(args, ctx)
 
         elif args.command == "list-sketches":
-            with pc_logging.Process("ListSketches", "this"):
+            with pc.logging.Process("ListSketches", "this"):
                 cli_list_sketches(args, ctx)
 
         elif args.command == "list-interfaces":
-            with pc_logging.Process("ListInterfaces", "this"):
+            with pc.logging.Process("ListInterfaces", "this"):
                 cli_list_interfaces(args, ctx)
 
         elif args.command == "list-mates":
-            with pc_logging.Process("ListMates", "this"):
+            with pc.logging.Process("ListMates", "this"):
                 cli_list_mates(args, ctx)
 
         elif args.command == "list-parts":
-            with pc_logging.Process("ListParts", "this"):
+            with pc.logging.Process("ListParts", "this"):
                 cli_list_parts(args, ctx)
 
         elif args.command == "list-assemblies":
-            with pc_logging.Process("ListAssy", "this"):
+            with pc.logging.Process("ListAssy", "this"):
                 cli_list_assemblies(args, ctx)
 
         elif args.command == "render":
-            with pc_logging.Process("Render", "this"):
+            with pc.logging.Process("Render", "this"):
                 cli_render(args, ctx)
 
         elif args.command == "inspect":
-            with pc_logging.Process("inspect", "this"):
+            with pc.logging.Process("inspect", "this"):
                 cli_inspect(args, ctx)
 
         elif args.command == "supply":
             if args.supply_command == "find":
-                with pc_logging.Process("SupplyFind", "this"):
+                with pc.logging.Process("SupplyFind", "this"):
                     cli_supply_find(args, ctx)
             elif args.supply_command == "caps":
-                with pc_logging.Process("SupplyCaps", "this"):
+                with pc.logging.Process("SupplyCaps", "this"):
                     cli_supply_caps(args, ctx)
             elif args.supply_command == "quote":
-                with pc_logging.Process("SupplyQuote", "this"):
+                with pc.logging.Process("SupplyQuote", "this"):
                     cli_supply_quote(args, ctx)
             elif args.supply_command == "order":
-                with pc_logging.Process("SupplyOrder", "this"):
+                with pc.logging.Process("SupplyOrder", "this"):
                     cli_supply_order(args, ctx)
             else:
                 print("Unknown supply command.\n")
                 parser.print_help()
 
         elif args.command == "test":
-            with pc_logging.Process("Test", "this"):
+            with pc.logging.Process("Test", "this"):
                 cli_test(args, ctx)
 
         else:
@@ -246,7 +248,7 @@ def main():
 
     if not args.no_ansi:
         pc.logging_ansi_terminal_fini()
-    if pc_logging.had_errors:
+    if pc.logging.had_errors:
         sys.exit(1)
 
 

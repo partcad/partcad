@@ -54,19 +54,19 @@ jobs:
           PYTHONPATH: partcad/src
           PYTHONWARNINGS: ignore
         run: |
-          pytest -x -p no:error-for-skips
+          pytest -x -p no:error-for-skips -p no:warnings
       - name: Basic integration test for CLI
         run: |
           pip install -U ./partcad ./partcad-cli
           mkdir new_pkg
           cd new_pkg
-          pc init
-          pc list-all -r
+          pc --no-ansi init
+          pc --no-ansi list-all -r
           cd ../examples
-          pc list-all -r
-          pc test -r
-          pc render -r
-          pc test -r --package /pub/examples
+          pc --no-ansi list-all -r
+          pc --no-ansi test -r
+          pc --no-ansi render -r
+          pc --no-ansi test -r --package /pub/examples
 
   test-repo:
     strategy:
@@ -107,4 +107,4 @@ jobs:
           pip install -U ./partcad ./partcad-cli
           mkdir new_pkg
           cd examples
-          pc test -r --package /pub
+          pc --no-ansi test -r --package /pub

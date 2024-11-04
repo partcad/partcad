@@ -82,7 +82,10 @@ def default_action_start(
 
 
 def default_action_end(self_ops, op: str, package: str, item: str = None):
-    pass
+    if item is None:
+        info("Finished action: %s: %s" % (op, package))
+    else:
+        info("Finished action: %s: %s: %s" % (op, package, item))
 
 
 # Dependency injection point for logging plugins
