@@ -91,10 +91,10 @@ class PartFactoryCadquery(PartFactoryPython):
 
             await self.runtime.ensure("ocp-tessellate")
             await self.runtime.ensure("cadquery")
-            # await self.runtime.ensure("numpy==1.24.1")
-            # await self.runtime.ensure("numpy-quaternion==2023.0.4")
-            # await self.runtime.ensure("nptyping==1.4.4")
-            # await self.runtime.ensure("typing_extensions>=4.6.0,<5")
+            await self.runtime.ensure("numpy==1.24.1")
+            await self.runtime.ensure("numpy-quaternion==2023.0.4")
+            await self.runtime.ensure("nptyping==1.4.4")
+            await self.runtime.ensure("typing_extensions>=4.6.0,<5")
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
