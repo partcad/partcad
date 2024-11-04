@@ -13,25 +13,40 @@
 import os
 import sys
 
-import cadquery as cq
+from OCP.STEPControl import STEPControl_Reader
+import OCP.IFSelect
+from OCP.TopoDS import Shape
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
 
 def process(path, request):
-    shape = cq.importers.importStep(path).val().wrapped
+    reader = STEPControl_Reader()
+    readStatus = reader.ReadFile(path)
+    if readStatus != OCP.IFSelect.IFSelect_RetDone:
+        raise ValueError("STEP File could not be loaded")
+    for i in range(reader.NbRootsForTransfer()):
+        reader.TransferRoot(i + 1)
+
+    occ_shapes = []
+    for i in range(reader.NbShapes()):
+        occ_shapes.append(reader.Shape(i + 1))
+
+    # Make sure that we extract all the solids
+    solids = []
+    for shape in occ_shapes:
+        solids.append(Shape.cast(shape))
 
     return {
         "success": True,
         "exception": None,
-        "shape": shape,
+        "shape": solids,
     }
 
 
 path, request = wrapper_common.handle_input()
 
-# Call CadQuery
 model = process(path, request)
 
 wrapper_common.handle_output(model)
