@@ -25,22 +25,32 @@ import wrapper_common
 
 
 def process(path, request):
-    reader = STEPControl_Reader()
-    readStatus = reader.ReadFile(path)
-    if readStatus != OCP.IFSelect.IFSelect_RetDone:
-        raise ValueError("STEP File could not be loaded")
-    for i in range(reader.NbRootsForTransfer()):
-        reader.TransferRoot(i + 1)
+    compound = None
+    try:
+        reader = STEPControl_Reader()
+        readStatus = reader.ReadFile(path)
+        if readStatus != OCP.IFSelect.IFSelect_RetDone:
+            raise Exception("STEP File could not be loaded")
+        for i in range(reader.NbRootsForTransfer()):
+            reader.TransferRoot(i + 1)
 
-    occ_shapes = []
-    for i in range(reader.NbShapes()):
-        occ_shapes.append(reader.Shape(i + 1))
+        occ_shapes = []
+        for i in range(reader.NbShapes()):
+            occ_shapes.append(reader.Shape(i + 1))
 
-    builder = TopoDS_Builder()
-    compound = TopoDS_Compound()
-    builder.MakeCompound(compound)
-    for shape in occ_shapes:
-        builder.Add(compound, shape)
+        builder = TopoDS_Builder()
+        compound = TopoDS_Compound()
+        builder.MakeCompound(compound)
+        for shape in occ_shapes:
+            builder.Add(compound, shape)
+    except Exception as e:
+        wrapper_common.handle_exception(e)
+        return {
+            "success": False,
+            # "exception": e,
+            "exception": str(e.with_traceback(None)),
+            "shape": None,
+        }
 
     return {
         "success": True,
