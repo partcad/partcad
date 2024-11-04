@@ -20,6 +20,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "conda", version)
 
+        self.initialized_conda = self.initialized
         self.conda_path = shutil.which("conda")
         if self.conda_path is None:
             self.conda_cli = importlib.import_module("conda.cli.python_api")
@@ -48,17 +49,17 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
     def once(self):
         with self.lock:
-            self.once_locked()
+            self.once_conda_locked()
         super().once()
 
     async def once_async(self):
         with self.lock:
             async with self.get_async_lock():
-                self.once_locked()
+                self.once_conda_locked()
         await super().once_async()
 
-    def once_locked(self):
-        if not self.initialized:
+    def once_conda_locked(self):
+        if not self.initialized_conda:
             with pc_logging.Action("Conda", "create", self.version):
                 if self.conda_path is None:
                     raise Exception(
@@ -106,7 +107,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     if not stderr is None and stderr != b"":
                         pc_logging.error("conda pip install error: %s" % stderr)
 
-                    self.initialized = True
+                    self.initialized_conda = True
                 except Exception as e:
                     shutil.rmtree(self.path)
                     raise e
