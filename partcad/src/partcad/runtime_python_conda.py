@@ -49,11 +49,13 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
     def once(self):
         with self.lock:
             self.once_locked()
+        super().once()
 
     async def once_async(self):
         with self.lock:
             async with self.get_async_lock():
                 self.once_locked()
+        await super().once_async()
 
     def once_locked(self):
         if not self.initialized:
@@ -109,8 +111,24 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     shutil.rmtree(self.path)
                     raise e
 
-    async def run_onced(self, cmd, stdin="", cwd=None):
-        return await super().run_onced(
+    def run_onced(self, cmd, stdin="", cwd=None):
+        return super().run_onced(
+            [
+                self.conda_path,
+                "run",
+                "--no-capture-output",
+                "-p",
+                self.path,
+                "python" if os.name != "nt" else "pythonw",
+                # "python%s" % self.version,  # This doesn't work on Windows
+            ]
+            + cmd,
+            stdin,
+            cwd=cwd,
+        )
+
+    async def run_async_onced(self, cmd, stdin="", cwd=None):
+        return await super().run_async_onced(
             [
                 self.conda_path,
                 "run",
