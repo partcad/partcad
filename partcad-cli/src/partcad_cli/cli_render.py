@@ -104,9 +104,7 @@ def cli_render(args, ctx):
 
     package = args.package if args.package is not None else ""
     if args.recursive:
-        start_package = pc_utils.get_child_project_path(
-            ctx.get_current_project_path(), package
-        )
+        start_package = pc_utils.get_child_project_path(ctx.get_current_project_path(), package)
         all_packages = ctx.get_all_packages(start_package)
         packages = list(
             map(
@@ -121,9 +119,7 @@ def cli_render(args, ctx):
         if not args.object is None:
             if not ":" in args.object:
                 args.object = ":" + args.object
-            args.package, args.object = pc_utils.resolve_resource_path(
-                ctx.get_current_project_path(), args.object
-            )
+            args.package, args.object = pc_utils.resolve_resource_path(ctx.get_current_project_path(), args.object)
 
         if args.object is None:
             # Render all parts and assemblies configured to be auto-rendered in this project

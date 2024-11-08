@@ -207,6 +207,7 @@ class Context(project_config.Configuration):
                     del self._projects_being_loaded[name]
                     return None
                 if imported_project.broken:
+                    # TODO: DO not print if coming from 'pc init'
                     pc_logging.error(
                         "Failed to parse the package's 'partcad.yaml': %s"
                         % name

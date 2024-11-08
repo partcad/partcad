@@ -33,21 +33,17 @@ def cli_help_list(subparsers):
         "list-mates",
         help="List available mating interfaces",
     )
-    parser_list_parts = subparsers.add_parser(
-        "list-parts",
-        help="List available parts",
-    )
     parser_list_assemblies = subparsers.add_parser(
         "list-assemblies",
         help="List available assemblies",
     )
 
-    parser_list_all.add_argument(
-        "-r",
-        help="Recursively process all imported packages",
-        dest="recursive",
-        action="store_true",
-    )
+    # parser_list_all.add_argument(
+    #     "-r",
+    #     help="Recursively process all imported packages",
+    #     dest="recursive",
+    #     action="store_true",
+    # )
     parser_list_sketches.add_argument(
         "-r",
         help="Recursively process all imported packages",
@@ -61,12 +57,6 @@ def cli_help_list(subparsers):
         action="store_true",
     )
     parser_list_mates.add_argument(
-        "-r",
-        help="Recursively process all imported packages",
-        dest="recursive",
-        action="store_true",
-    )
-    parser_list_parts.add_argument(
         "-r",
         help="Recursively process all imported packages",
         dest="recursive",
@@ -107,26 +97,12 @@ def cli_help_list(subparsers):
         type=str,
         required=False,
     )
-    parser_list_parts.add_argument(
-        "-u",
-        help="Only process objects used by the given assembly or scene.",
-        dest="used_by",
-        type=str,
-        required=False,
-    )
     parser_list_assemblies.add_argument(
         "-u",
         help="Only process objects used by the given assembly or scene.",
         dest="used_by",
         type=str,
         required=False,
-    )
-
-    parser_list_sketches.add_argument(
-        "package",
-        help="Package to retrieve the object from",
-        type=str,
-        nargs="?",
     )
     parser_list_interfaces.add_argument(
         "package",
@@ -135,12 +111,6 @@ def cli_help_list(subparsers):
         nargs="?",
     )
     parser_list_mates.add_argument(
-        "package",
-        help="Package to retrieve the object from",
-        type=str,
-        nargs="?",
-    )
-    parser_list_parts.add_argument(
         "package",
         help="Package to retrieve the object from",
         type=str,
@@ -200,11 +170,7 @@ def cli_list_sketches(args, ctx):
 
     output = "PartCAD sketches:\n"
     for project_name in ctx.projects:
-        if (
-            not args.recursive
-            and args.package is not None
-            and args.package != project_name
-        ):
+        if not args.recursive and args.package is not None and args.package != project_name:
             continue
 
         if (
@@ -240,9 +206,7 @@ def cli_list_sketches(args, ctx):
             line += " " + " " * (35 - len(sketch_name))
 
             desc = sketch.desc if sketch.desc is not None else ""
-            desc = desc.replace(
-                "\n", "\n" + " " * (80 if args.recursive else 44)
-            )
+            desc = desc.replace("\n", "\n" + " " * (80 if args.recursive else 44))
             line += "%s" % desc
             output += line + "\n"
             sketch_kinds = sketch_kinds + 1
@@ -276,11 +240,7 @@ def cli_list_interfaces(args, ctx):
 
     output = "PartCAD interfaces:\n"
     for project_name in ctx.projects:
-        if (
-            not args.recursive
-            and args.package is not None
-            and args.package != project_name
-        ):
+        if not args.recursive and args.package is not None and args.package != project_name:
             continue
 
         if (
@@ -316,9 +276,7 @@ def cli_list_interfaces(args, ctx):
             line += " " + " " * (35 - len(interface_name))
 
             desc = interface.desc if interface.desc is not None else ""
-            desc = desc.replace(
-                "\n", "\n" + " " * (80 if args.recursive else 44)
-            )
+            desc = desc.replace("\n", "\n" + " " * (80 if args.recursive else 44))
             line += "%s" % desc
             output += line + "\n"
             interface_kinds = interface_kinds + 1
@@ -353,11 +311,7 @@ def cli_list_mates(args, ctx):
     # finalized
     for package_name in ctx.projects:
         if not args.recursive:
-            if (
-                hasattr(args, "package")
-                and args.package is not None
-                and package_name != args.package
-            ):
+            if hasattr(args, "package") and args.package is not None and package_name != args.package:
                 continue
             if (
                 not hasattr(args, "package") or args.package is None
@@ -365,15 +319,11 @@ def cli_list_mates(args, ctx):
                 continue
 
         if args.recursive:
-            if (
-                hasattr(args, "package")
-                and args.package is not None
-                and not package_name.startswith(args.package)
-            ):
+            if hasattr(args, "package") and args.package is not None and not package_name.startswith(args.package):
                 continue
-            if (
-                not hasattr(args, "package") or args.package is None
-            ) and not package_name.startswith(ctx.get_current_project_path()):
+            if (not hasattr(args, "package") or args.package is None) and not package_name.startswith(
+                ctx.get_current_project_path()
+            ):
                 continue
 
         package = ctx.projects[package_name]
@@ -403,12 +353,8 @@ def cli_list_mates(args, ctx):
             if (
                 args.recursive
                 and (not hasattr(args, "package") or args.package is None)
-                and not source_package_name.startswith(
-                    ctx.get_current_project_path()
-                )
-                and not target_package_name.startswith(
-                    ctx.get_current_project_path()
-                )
+                and not source_package_name.startswith(ctx.get_current_project_path())
+                and not target_package_name.startswith(ctx.get_current_project_path())
             ):
                 continue
 
@@ -461,77 +407,71 @@ def cli_list_mates(args, ctx):
     pc.logging.info(output)
 
 
-def cli_list_parts(args, ctx):
-    part_count = 0
-    part_kinds = 0
+# def cli_list_parts(args, ctx):
+#     part_count = 0
+#     part_kinds = 0
 
-    if args.used_by is not None:
-        pc.logging.info("Instantiating %s..." % args.used_by)
-        ctx.get_assembly(args.used_by)
-    else:
-        ctx.get_all_packages()
+#     if args.used_by is not None:
+#         pc.logging.info("Instantiating %s..." % args.used_by)
+#         ctx.get_assembly(args.used_by)
+#     else:
+#         ctx.get_all_packages()
 
-    # TODO(clairbee): remove the following workaround after replacing 'print'
-    # with corresponding logging calls
-    time.sleep(2)
+#     # TODO(clairbee): remove the following workaround after replacing 'print'
+#     # with corresponding logging calls
+#     time.sleep(2)
 
-    output = "PartCAD parts:\n"
-    for project_name in ctx.projects:
-        if (
-            not args.recursive
-            and args.package is not None
-            and args.package != project_name
-        ):
-            continue
+#     output = "PartCAD parts:\n"
+#     for project_name in ctx.projects:
+#         if not args.recursive and args.package is not None and args.package != project_name:
+#             continue
 
-        if (
-            args.recursive
-            and hasattr(args, "package")
-            and args.package is not None
-            and not project_name.startswith(args.package)
-        ):
-            continue
+#         if (
+#             args.recursive
+#             and hasattr(args, "package")
+#             and args.package is not None
+#             and not project_name.startswith(args.package)
+#         ):
+#             continue
 
-        if (
-            args.recursive
-            and (not hasattr(args, "package") or args.package is None)
-            and not project_name.startswith(ctx.get_current_project_path())
-        ):
-            continue
+#         if (
+#             args.recursive
+#             and (not hasattr(args, "package") or args.package is None)
+#             and not project_name.startswith(ctx.get_current_project_path())
+#         ):
+#             continue
 
-        project = ctx.projects[project_name]
+#         project = ctx.projects[project_name]
 
-        for part_name, part in project.parts.items():
-            if args.used_by is not None and part.count == 0:
-                continue
+#         for part_name, part in project.parts.items():
+#             if args.used_by is not None and part.count == 0:
+#                 continue
 
-            line = "\t"
-            if args.recursive:
-                line += "%s" % project_name
-                line += " " + " " * (35 - len(project_name))
-            line += "%s" % part_name
-            if args.used_by is not None:
-                part = project.parts[part_name]
-                line += "(%d)" % part.count
-                part_count = part_count + part.count
-            line += " " + " " * (35 - len(part_name))
+#             line = "\t"
+#             if args.recursive:
+#                 line += "%s" % project_name
+#                 line += " " + " " * (35 - len(project_name))
+#             line += "%s" % part_name
+#             if args.used_by is not None:
+#                 part = project.parts[part_name]
+#                 line += "(%d)" % part.count
+#                 part_count = part_count + part.count
+#             line += " " + " " * (35 - len(part_name))
 
-            desc = part.desc if part.desc is not None else ""
-            desc = desc.replace(
-                "\n", "\n" + " " * (84 if args.recursive else 44)
-            )
-            line += "%s" % desc
-            output += line + "\n"
-            part_kinds = part_kinds + 1
+#             desc = part.desc if part.desc is not None else ""
+#             desc = desc.replace("\n", "\n" + " " * (84 if args.recursive else 44))
+#             line += "%s" % desc
+#             output += line + "\n"
+#             part_kinds = part_kinds + 1
 
-    if part_kinds > 0:
-        if args.used_by is None:
-            output += "Total: %d\n" % part_kinds
-        else:
-            output += "Total: %d parts of %d kinds\n" % (part_count, part_kinds)
-    else:
-        output += "\t<none>\n"
-    pc.logging.info(output)
+#     if part_kinds > 0:
+#         if args.used_by is None:
+#             output += "Total: %d\n" % part_kinds
+#         else:
+#             output += "Total: %d parts of %d kinds\n" % (part_count, part_kinds)
+#     else:
+#         output += "\t<none>\n"
+#     pc.logging.info(output)
 
 
 def cli_list_assemblies(args, ctx):
@@ -551,11 +491,7 @@ def cli_list_assemblies(args, ctx):
 
     output = "PartCAD assemblies:\n"
     for project_name in ctx.projects:
-        if (
-            not args.recursive
-            and args.package is not None
-            and args.package != project_name
-        ):
+        if not args.recursive and args.package is not None and args.package != project_name:
             continue
 
         if (
@@ -591,9 +527,7 @@ def cli_list_assemblies(args, ctx):
             line += " " + " " * (35 - len(assy_name))
 
             desc = assy.desc if assy.desc is not None else ""
-            desc = desc.replace(
-                "\n", "\n" + " " * (84 if args.recursive else 44)
-            )
+            desc = desc.replace("\n", "\n" + " " * (84 if args.recursive else 44))
             line += "%s" % desc
             output += line + "\n"
             assy_kinds = assy_kinds + 1

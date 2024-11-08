@@ -22,6 +22,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
         self.conda_path = shutil.which("conda")
         if self.conda_path is None:
+            # This problem was on Windows
+            # https://stackoverflow.com/questions/76342609/cannot-install-conda-with-pip-and-python-3-8
+            # https://pypi.org/project/conda/
+            # https://github.com/conda/conda/issues/11715
             self.conda_cli = importlib.import_module("conda.cli.python_api")
             self.conda_cli.run_command("config", "--quiet")
             info_json, _, _ = self.conda_cli.run_command("info", "--json")
@@ -57,7 +61,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
                     try:
                         os.makedirs(self.path)
-
+                        # TODO: Add command logging for generated CLI command
                         # Install new conda environment with the preferred Python version
                         p = subprocess.Popen(
                             [
@@ -108,6 +112,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
     async def run(self, cmd, stdin="", cwd=None):
         self.once()
 
+        # TODO: Add debug logging for generated CLI command
         return await super().run(
             [
                 self.conda_path,
@@ -115,7 +120,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 "--no-capture-output",
                 "-p",
                 self.path,
-                "python" if os.name != "nt" else "pythonw",
+                # TODO: Manually test on Windows
+                os.path.join(
+                    self.path, "bin", "python" if os.name != "nt" else "pythonw"
+                ),
                 # "python%s" % self.version,  # This doesn't work on Windows
             ]
             + cmd,

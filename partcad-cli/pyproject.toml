@@ -1,5 +1,9 @@
 [project]
 name = "partcad-cli"
+packages = [
+    { include = "partcad_cli", from = "src" }
+]
+
 version = "0.7.16"
 description = "Command-line interface to PartCAD"
 readme = "README.md"
@@ -7,10 +11,10 @@ keywords = ["cadquery", "build123d", "cad", "design", "openscad", "step", "stl"]
 requires-python = ">=3.10"
 license = {file = "LICENSE.txt"}
 authors = [
-  {name = "Roman Kuzmenko", email = "openvmp@proton.me" }
+  {name = "Roman Kuzmenko", email = "support@partcad.org" }
 ]
 maintainers = [
-  {name = "Roman Kuzmenko", email = "openvmp@proton.me" }
+  {name = "Roman Kuzmenko", email = "support@partcad.org" }
 ]
 dynamic = ["dependencies"]
 
@@ -23,9 +27,57 @@ classifiers = [
 [project.scripts]
 pc = "partcad_cli:main_cli"
 
+[tool.poetry.scripts]
+pc = 'partcad_cli:main_cli'
+partcad = 'partcad_cli.click.command:cli'
+
+[tool.poetry.group.dev.dependencies]
+flameprof = "^0.4"
+snakeviz = "^2.2.2"
+lsp-devtools = "^0.2.3"
+yappi = "^1.6.10"
+gprof2dot = "^2024.6.6"
+pytest = "^8.3.3"
+
+
+[tool.poetry.group.docs.dependencies]
+esbonio = "^0.16.5"
+sphinx-rtd-theme = "^3.0.2"
+sphinx = "^8.1.3"
+docutils = "^0.21.2"
+readthedocs-sphinx-search = "^0.3.2"
+sphinx-autodoc-typehints = "^2.5.0"
+sphinx-copybutton = "^0.5.2"
+sphinx-hoverxref = "^1.4.1"
+sphinx-design = "^0.6.1"
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/openvmp/partcad"
 Issues = "https://github.com/openvmp/partcad/issues"
+
+[tool.poetry]
+name = "partcad-cli"
+version = "0.7.16"
+description = "Command-line interface to PartCAD"
+authors = ["Roman Kuzmenko <support@partcad.org>"]
+license = "Apache"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+partcad = {path = "../partcad", develop = true}
+renderlab = "^0.1.20230421184216"
+rlPyCairo = "^0.3.0"
+svglib = "^1.5.1"
+ocp-vscode = "^2.6.1"
+coloredlogs = "^15.0.1"
+click = "^8.1.7"
+rich-click = "^1.8.4"
+numpy = "^1.26.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

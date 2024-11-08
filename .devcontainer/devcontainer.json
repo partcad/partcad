@@ -1,0 +1,224 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+  "name": "Python 3",
+  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+  // TODO: Bullseye has glibc 2.31 and cadquery-ocp@7.7.2 needs 2.35
+  // "image": "mcr.microsoft.com/devcontainers/python:1-3.10-bookworm",
+  "build": {
+    "dockerfile": "./Dockerfile"
+  },
+  // Features to add to the dev container. More info: https://containers.dev/features.
+  "features": {
+    "ghcr.io/deep-space-cartel/devcontainers-features/apt:latest": {
+      // TODO: cmake is a dependency of Python package "pycairo"
+      // TODO: as well as those: libcairo2-dev pkg-config python3-dev // https://pycairo.readthedocs.io/en/latest/getting_started.html
+      // ffmpeg libsm6 libxext6 -> `ImportError: libGL.so.1: cannot open shared object file: No such file or directory`
+      // openscad-> `pc inspect :test`
+      // partcad -> pypy3 pypy3-dev
+      // graphviz -> gprof2dot
+      // pipx -> poetry-plugin-export
+      // time, moreutils -> potato debugging
+      "packages": "shellcheck bash-completion cmake libcairo2-dev pkg-config python3-dev ffmpeg libsm6 libxext6 openscad pypy3 pypy3-dev graphviz pipx time" // shfmt
+    },
+    "ghcr.io/deep-space-cartel/devcontainers-features/pip:1": {
+      // TODO: Move poetry installation to pipx
+      "packages": "pre-commit poetry",
+      "location": "/opt/pip"
+    },
+    "ghcr.io/deep-space-cartel/devcontainers-features/starship:latest": {
+      "version": "latest"
+    }
+  },
+  "remoteEnv": {
+    // export PATH="/home/vscode/miniconda3/bin:$PATH"
+    // TODO: @alexanderilyin: Use 'poetry shell' for '.venv/bin'
+    "PATH": "${containerEnv:PATH}:/opt/pip/bin:${containerEnv:HOME}/miniconda3/bin"
+  },
+  "postCreateCommand": {
+    "Install poetry-multiproject-plugin": "poetry self add poetry-multiproject-plugin" // sudo /opt/pip/bin/
+  },
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  // "forwardPorts": [],
+  // Use 'postCreateCommand' to run commands after the container is created.
+  // "postCreateCommand": "pip3 install --user -r requirements.txt",
+  // Configure tool-specific properties.
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "launch": {
+          "version": "0.2.0",
+          "configurations": [
+            {
+              "name": "Python: Current File",
+              "type": "debugpy",
+              "request": "launch",
+              "program": "${file}",
+              "console": "integratedTerminal",
+              "python": "${command:python.interpreterPath}",
+              "justMyCode": false
+            }
+          ]
+        },
+        "redhat.telemetry.enabled": false,
+        "security.workspace.trust.untrustedFiles": "open",
+        "[yaml]": {
+          "editor.defaultFormatter": "redhat.vscode-yaml"
+        },
+        "[json]": {
+          "editor.defaultFormatter": "vscode.json-language-features"
+        },
+        "go.toolsManagement.autoUpdate": true,
+        "diffEditor.hideUnchangedRegions.enabled": true,
+        "[markdown]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "git.autofetch": true,
+        "githubPullRequests.pullBranch": "never",
+        "remote.autoForwardPortsSource": "hybrid",
+        "codeQL.telemetry.enableTelemetry": true,
+        "amazonQ.telemetry": false,
+        "amazonQ.showInlineCodeSuggestionsWithCodeReferences": false,
+        "amazonQ.importRecommendationForInlineCodeSuggestions": false,
+        "amazonQ.shareContentWithAWS": false,
+        "editor.accessibilitySupport": "off",
+        "[go]": {
+          "editor.insertSpaces": false,
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+          }
+        },
+        "openapi.approvedHostnames": [],
+        "codeium.enableConfig": {
+          "*": true,
+          "markdown": true,
+          "feature": true,
+          "log": true
+        },
+        "workbench.colorTheme": "GitHub Dark",
+        "testing.openTesting": "neverOpen",
+        "testing.automaticallyOpenPeekView": "never",
+        "testing.followRunningTest": false,
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[feature]": {
+          // Need to find a way to keep formatting in """
+          "editor.formatOnSave": false
+        },
+        "[typescriptreact]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "atlascode.jira.enabled": true,
+        "atlascode.bitbucket.enabled": false,
+        "svg.preview.mode": "svg",
+        "terminal.integrated.scrollback": 10000000,
+        "dotfiles.repository": "deep-space-cartel/dotfiles",
+        "editor.fontFamily": "'Hack Nerd Font Mono'",
+        "terminal.integrated.fontFamily": "'Hack Nerd Font Mono'",
+        "partcad.packagePath": "examples",
+        "partcad.pythonSandbox": "pypy",
+        "files.trimFinalNewlines": true,
+        "files.encoding": "utf8",
+        "editor.useTabStops": false,
+        "editor.detectIndentation": false,
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "editor.autoIndent": "full",
+        "editor.rulers": [
+          120
+        ],
+        "files.exclude": {
+          ".git/**": true,
+          "**/__pycache__": true,
+          "**/*.egg-info": true,
+          "**/.pytest_cache": true,
+          "**/apache20.svg": true,
+          "**/LICENSE.txt": true,
+          ".ocp_vscode": true,
+          ".conda": true,
+          ".venv": true,
+          ".tox": true,
+          "**/.partcad": true,
+          "docs/build": true,
+          "partcad*/build": true,
+          "partcad*/dist": true
+        },
+        "search.exclude": {
+          ".git/**": true,
+          "**/__pycache__": true,
+          "**/*.egg-info": true,
+          "**/.pytest_cache": true,
+          "**/apache20.svg": true,
+          "**/LICENSE.txt": true,
+          ".ocp_vscode": true,
+          ".conda": true,
+          ".venv": true,
+          ".tox": true,
+          "**/.partcad": true,
+          "docs/build": true,
+          "partcad*/build": true,
+          "partcad*/dist": true
+        },
+        "markdown.extension.toc.omittedFromToc": {
+          "README.md": [
+            "# PartCAD"
+          ]
+        },
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter"
+        },
+        "python.terminal.activateEnvInCurrentTerminal": true,
+        "python.envFile": "${workspaceFolder}/.env",
+        "python.testing.pytestArgs": [],
+        "python.testing.unittestEnabled": false,
+        "python.testing.pytestEnabled": true,
+        "python.terminal.executeInFileDir": true,
+        "python.terminal.launchArgs": [],
+        "OcpCadViewer.advanced.autostart": false,
+        "yaml.format.bracketSpacing": false,
+        "esbonio.sphinx.confDir": "",
+        "files.eol": "\n"
+      },
+      "extensions": [
+        "esbenp.prettier-vscode",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "donjayamanne.python-environment-manager",
+        "bernhard-42.ocp-cad-viewer",
+        "redhat.vscode-yaml",
+        "yzhang.markdown-all-in-one",
+        "bierner.github-markdown-preview",
+        "bierner.markdown-preview-github-styles",
+        "bierner.markdown-checkbox",
+        "bierner.markdown-yaml-preamble",
+        "bierner.markdown-footnotes",
+        "bierner.markdown-mermaid",
+        "samuelcolvin.jinjahtml",
+        "Atlassian.atlascode",
+        "GitHub.vscode-pull-request-github",
+        "GitHub.vscode-github-actions",
+        "jock.svg",
+        "swyddfa.esbonio",
+        "Codeium.codeium",
+        "ms-azuretools.vscode-docker",
+        "hediet.debug-visualizer",
+        "bbenoist.vagrant",
+        "ryanluker.vscode-coverage-gutters",
+        "ms-python.python",
+        "chintans98.markdown-jira",
+        "streetsidesoftware.code-spell-checker",
+        "alexkrechik.cucumberautocomplete",
+        "GitHub.copilot",
+        "lextudio.restructuredtext",
+        "trond-snekvik.simple-rst",
+        "psioniq.psi-header"
+      ]
+    }
+  }
+  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+  // "remoteUser": "root"
+}

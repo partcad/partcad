@@ -542,7 +542,7 @@ Other Part Types
 
 Other methods to define parts are coming soon (e.g. `SDF <https://github.com/fogleman/sdf>`_).
 Please, express your interest in support for other formats by filing a corresponding issue on GitHub
-or sending an email to `openvmp@proton.me <mailto:openvmp@proton.me>`_.
+or sending an email to `support@partcad.org <mailto:support@partcad.org>`_.
 
 Parameters
 ----------
