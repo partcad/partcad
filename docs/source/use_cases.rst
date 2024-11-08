@@ -210,17 +210,17 @@ shell
 -----
 
   .. code-block:: shell
- 
+
     # custom.sh
     for part in $PART_LIST; do
-      pc render -t png $part 
+      pc render -t png $part
     done
 
   .. code-block:: shell
- 
+
     # custom.sh
     for assembly in $ASSEMBLY_LIST; do
-      pc render -t png -a $assembly 
+      pc render -t png -a $assembly
     done
 
 ==============

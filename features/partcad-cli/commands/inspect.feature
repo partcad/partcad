@@ -1,0 +1,3 @@
+    # pc inspect :test
+    # pc inspect ...
+    # pc inspect /pub/std/metric/cqwarehouse:fastener/hexhead-din931    

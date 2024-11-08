@@ -9,4 +9,4 @@
 
 ## Reporting a Vulnerability
 
-Please, email vulnerabilities at [openvmp@proton.me](mailto:openvmp@proton.me).
+Please, email vulnerabilities at [support@partcad.org](mailto:support@partcad.org).

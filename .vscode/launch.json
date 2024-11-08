@@ -5,12 +5,67 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Current File",
-      "type": "python",
+      "name": "Debug: partcad behave",
+      "type": "debugpy",
       "request": "launch",
-      "program": "${file}",
+      "program": "${workspaceFolder}/.venv/bin/behave",
+      "args": [
+        // TODO: @alexanderilyin: use $input to make it possible to run any feature file
+        "features/partcad-cli/pc.feature",
+      ],
       "console": "integratedTerminal",
-      "justMyCode": true
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "env": {
+        "PATH": "${workspaceFolder}/.venv/bin/:${env:PATH}",
+        "PYTHONPATH": "${env:PATH}"
+      }
+    },
+    {
+      "name": "Debug: partcad status",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "args": [
+        "status"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "env": {
+        "PYTHONPATH": "${env:PATH}"
+      }
+    },
+    {
+      "name": "Debug: partcad init",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "args": [
+        "init"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "env": {
+        "PYTHONPATH": "${env:PATH}"
+      }
+    },
+    {
+      "name": "Debug: partcad add --help",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "args": [
+        "add",
+        "--help"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "env": {
+        "PYTHONPATH": "${env:PATH}"
+      }
     }
   ]
 }

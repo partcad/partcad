@@ -1,4 +1,5 @@
 name: "Setup"
+description: "Setup"
 
 runs:
   using: "composite"

@@ -33,7 +33,7 @@ jobs:
       - name: Configure git
         run: |
           git config --global user.name 'PartCAD GitHub Action'
-          git config --global user.email 'openvmp@proton.me'
+          git config --global user.email 'support@partcad.org'
 
       # If a commit starts with [MAJOR] a new major verion upgrade will be
       # triggered. Use with caution as Major upgrades denote backwards

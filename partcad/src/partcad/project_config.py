@@ -41,6 +41,7 @@ class Configuration:
             self.config_dir = os.path.dirname(os.path.abspath(config_path))
 
         if not os.path.isfile(self.config_path):
+            # TODO: DO not print if coming from 'pc init'
             pc_logging.error(
                 "PartCAD configuration file is not found: '%s'"
                 % self.config_path

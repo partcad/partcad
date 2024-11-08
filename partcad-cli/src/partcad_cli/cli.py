@@ -11,11 +11,9 @@
 import argparse
 import logging
 import sys
-
 import partcad as pc
 import partcad.logging as pc_logging
 from partcad.user_config import user_config
-
 from .cli_add import *
 from .cli_init import *
 from .cli_info import *
@@ -119,6 +117,9 @@ def main():
         # in their own way
         if args.command == "init":
             cli_init(args)
+            # TODO: @alexanderilyin: do this only in one place
+            if pc_logging.had_errors:
+                sys.exit(1)
             return
         elif args.command == "status":
             cli_status(args)
@@ -139,7 +140,7 @@ def main():
         # Handle the command
         if args.command == "add":
             with pc_logging.Process("Add", "this"):
-                cli_add(args, ctx)
+                cli_add(args, ctx)  # package
 
         elif args.command == "add-part":
             with pc_logging.Process("AddPart", "this"):

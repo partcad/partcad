@@ -6,10 +6,10 @@ date: July 15th 2022
 
 desc:
 
-    The Python code utilizes the build123d library to create a 3D model of a clock face. 
-    It defines a minute indicator with arcs and lines, applying fillets, and then 
-    integrates it into the clock face sketch. The clock face includes a circular outline, 
-    hour labels, and slots at specified positions. The resulting 3D model represents 
+    The Python code utilizes the build123d library to create a 3D model of a clock face.
+    It defines a minute indicator with arcs and lines, applying fillets, and then
+    integrates it into the clock face sketch. The clock face includes a circular outline,
+    hour labels, and slots at specified positions. The resulting 3D model represents
     a detailed and visually appealing clock design.
 
     PolarLocations are used to position features on the clock face.
