@@ -125,6 +125,23 @@ test1 -.-> |Export| gazebo
 test2 -.-> |Export| gazebo
 ```
 
+## Development
+
+```bash
+poetry completions bash >> ~/.bash_completion
+```
+
+```bash
+cd partcad-cli
+poetry install
+```
+
+## Roadmap
+
+- [ ] Move poetry completions to the dotfiles repo.
+- [ ] Move from Python 3.10 to 3.12.
+- [ ] Configure dev dependencies for `partcad-cli`.
+
 [CadQuery]: https://github.com/CadQuery/cadquery
 [build123d]: https://github.com/gumyr/build123d
 [STEP]: https://en.wikipedia.org/wiki/ISO_10303

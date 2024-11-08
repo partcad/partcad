@@ -29,3 +29,24 @@ dependencies = {file = ["requirements.txt"]}
 [project.urls]
 Homepage = "https://github.com/openvmp/partcad"
 Issues = "https://github.com/openvmp/partcad/issues"
+
+[tool.poetry]
+name = "partcad-cli"
+version = "0.7.16"
+description = "Command-line interface to PartCAD"
+authors = ["Roman Kuzmenko <openvmp@proton.me>"]
+license = "Apache"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+partcad = "0.7.16"
+renderlab = "^0.1.20230421184216"
+rlPyCairo = "^0.3.0"
+svglib = "^1.5.1"
+ocp-vscode = "^2.6.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

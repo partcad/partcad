@@ -1,0 +1,30 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        exclude: "^partcad/tests/unit/data/project_config_(template|include).yaml$"
+      - id: check-added-large-files
+  - repo: https://github.com/python-poetry/poetry
+    rev: 1.8.4 # add version here
+    hooks:
+      - id: poetry-check
+        args: ["-C", "./partcad-cli"]
+      - id: poetry-lock
+        args: ["-C", "./partcad-cli"]
+      - id: poetry-export
+        args:
+          [
+            "-C",
+            "./partcad-cli",
+            "-f",
+            "requirements.txt",
+            "-o",
+            "./partcad-cli/requirements.txt",
+          ]
+      - id: poetry-install
+        args: ["-C", "./partcad-cli"]
