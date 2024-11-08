@@ -1,0 +1,141 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+  "name": "Python 3",
+  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+  // TODO: Bullseye has glibc 2.31 and cadquery-ocp@7.7.2 needs 2.35
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.10-bookworm",
+  // Features to add to the dev container. More info: https://containers.dev/features.
+  "features": {
+    "ghcr.io/deep-space-cartel/devcontainers-features/apt:latest": {
+      // TODO: cmake is a dependency of Python package "pycairo"
+      // TODO: as well as those: libcairo2-dev pkg-config python3-dev // https://pycairo.readthedocs.io/en/latest/getting_started.html
+      // ffmpeg libsm6 libxext6 to fix ImportError: libGL.so.1: cannot open shared object file: No such file or directory
+      // openscad: is needed for "pc inspect :test"
+      "packages": "shellcheck bash-completion cmake libcairo2-dev pkg-config python3-dev ffmpeg libsm6 libxext6 openscad" // shfmt
+    },
+    "ghcr.io/deep-space-cartel/devcontainers-features/pip:1": {
+      "packages": "pre-commit poetry",
+      "location": "/opt/pip"
+    },
+    "ghcr.io/deep-space-cartel/devcontainers-features/starship:latest": {
+      "version": "latest"
+    }
+  },
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/opt/pip/bin"
+  },
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  // "forwardPorts": [],
+  // Use 'postCreateCommand' to run commands after the container is created.
+  // "postCreateCommand": "pip3 install --user -r requirements.txt",
+  // Configure tool-specific properties.
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "launch": {
+          "version": "0.2.0",
+          "configurations": [
+            {
+              "name": "Python: Current File",
+              "type": "debugpy",
+              "request": "launch",
+              "program": "${file}",
+              "console": "integratedTerminal",
+              "justMyCode": true
+            }
+          ]
+        },
+        "terminal.integrated.scrollback": 10000000,
+        "dotfiles.repository": "deep-space-cartel/dotfiles",
+        "editor.fontFamily": "'Hack Nerd Font Mono'",
+        "terminal.integrated.fontFamily": "'Hack Nerd Font Mono'",
+        "partcad.packagePath": "examples",
+        "files.trimFinalNewlines": true,
+        "files.encoding": "utf8",
+        "editor.useTabStops": false,
+        "editor.detectIndentation": false,
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "editor.autoIndent": "full",
+        "editor.rulers": [
+          80
+        ],
+        "files.exclude": {
+          ".git/**": true,
+          "**/__pycache__": true,
+          "**/*.egg-info": true,
+          "**/.pytest_cache": true,
+          "**/apache20.svg": true,
+          "**/LICENSE.txt": true,
+          ".ocp_vscode": true,
+          ".conda": true,
+          ".venv": true,
+          ".tox": true,
+          "**/.partcad": true,
+          "docs/build": true,
+          "partcad*/build": true,
+          "partcad*/dist": true
+        },
+        "search.exclude": {
+          ".git/**": true,
+          "**/__pycache__": true,
+          "**/*.egg-info": true,
+          "**/.pytest_cache": true,
+          "**/apache20.svg": true,
+          "**/LICENSE.txt": true,
+          ".ocp_vscode": true,
+          ".conda": true,
+          ".venv": true,
+          ".tox": true,
+          "**/.partcad": true,
+          "docs/build": true,
+          "partcad*/build": true,
+          "partcad*/dist": true
+        },
+        "markdown.extension.toc.omittedFromToc": {
+          "README.md": [
+            "# PartCAD"
+          ]
+        },
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.black-formatter"
+        },
+        "python.testing.pytestArgs": [],
+        "python.testing.unittestEnabled": false,
+        "python.testing.pytestEnabled": true,
+        "python.terminal.executeInFileDir": true,
+        "python.terminal.launchArgs": [],
+        // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
+        "OcpCadViewer.advanced.autostart": false,
+        "yaml.format.bracketSpacing": false, // prevent YAML formatter from breaking Jinja2 templates
+        "esbonio.sphinx.confDir": "",
+        "files.eol": "\n"
+      },
+      "extensions": [
+        // Python
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "donjayamanne.python-environment-manager",
+        // CAD
+        "bernhard-42.ocp-cad-viewer",
+        // YAML
+        "redhat.vscode-yaml",
+        // Markdown
+        "yzhang.markdown-all-in-one",
+        "bierner.github-markdown-preview",
+        "bierner.markdown-preview-github-styles",
+        "bierner.markdown-checkbox",
+        "bierner.markdown-yaml-preamble",
+        "bierner.markdown-footnotes",
+        "bierner.markdown-mermaid",
+        // Jinja2
+        "samuelcolvin.jinjahtml"
+      ]
+    }
+  }
+  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+  // "remoteUser": "root"
+}
