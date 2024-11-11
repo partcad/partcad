@@ -47,8 +47,9 @@ class PartFactoryPython(PartFactoryFile):
         """
 
         # Install dependencies of this package
-        await self.runtime.prepare_for_package(self.project)
-        await self.runtime.prepare_for_shape(self.config)
+        # DO NOT COMMIT
+        # await self.runtime.prepare_for_package(self.project)
+        # await self.runtime.prepare_for_shape(self.config)
 
     def info(self, part):
         info: dict[str, object] = part.shape_info()
