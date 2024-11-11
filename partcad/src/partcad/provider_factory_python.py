@@ -133,12 +133,12 @@ class ProviderFactoryPython(ProviderFactoryFile):
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
-            await self.runtime.ensure_async("ocp-tessellate")
-            await self.runtime.ensure_async("numpy==1.24.1")
-            await self.runtime.ensure_async("numpy-quaternion==2023.0.4")
-            await self.runtime.ensure_async("nptyping==1.4.4")
-            await self.runtime.ensure_async("typing_extensions>=4.6.0,<5")
-            await self.runtime.ensure_async("cadquery")
+            # await self.runtime.ensure_async("ocp-tessellate")
+            # await self.runtime.ensure_async("numpy==1.24.1")
+            # await self.runtime.ensure_async("numpy-quaternion==2023.0.4")
+            # await self.runtime.ensure_async("nptyping==1.4.4")
+            # await self.runtime.ensure_async("typing_extensions>=4.6.0,<5")
+            # await self.runtime.ensure_async("cadquery")
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)

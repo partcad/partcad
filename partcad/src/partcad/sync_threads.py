@@ -11,12 +11,13 @@ from concurrent.futures import ThreadPoolExecutor
 import os
 import sys
 
+# cpu_count = 1
 cpu_count = os.cpu_count()
 # Leave one core for the asyncio event loop and stuff
 if cpu_count > 1:
     cpu_count -= 1
-if cpu_count < 7:
-    cpu_count = 7
+# if cpu_count < 7:
+#     cpu_count = 7
 executor = ThreadPoolExecutor(cpu_count, "partcad-executor-")
 
 

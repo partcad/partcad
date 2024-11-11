@@ -259,10 +259,10 @@ class Shape(ShapeConfiguration):
         # as this is expected to be hermetic.
         # Stick to the version where CadQuery and build123d are known to work.
         runtime = ctx.get_python_runtime(version="3.10")
-        await runtime.ensure_async(
-            "cadquery"
-        )  # SVG wrapper requires cq-serialize
-        await runtime.ensure_async("build123d>=0.7.0")
+        # await runtime.ensure_async(
+        #     "cadquery"
+        # )  # SVG wrapper requires cq-serialize
+        # await runtime.ensure_async("build123d>=0.7.0")
         response_serialized, errors = await runtime.run_async(
             [
                 wrapper_path,
@@ -685,7 +685,7 @@ class Shape(ShapeConfiguration):
             # as this is expected to be hermetic.
             # Stick to the version where CadQuery and build123d are known to work.
             runtime = ctx.get_python_runtime(version="3.10")
-            await runtime.ensure_async("cadquery")
+            # await runtime.ensure_async("cadquery")
             response_serialized, errors = await runtime.run_async(
                 [
                     wrapper_path,
