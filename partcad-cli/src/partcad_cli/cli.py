@@ -17,6 +17,7 @@ import partcad.logging as pc_logging
 from partcad.user_config import user_config
 
 from .cli_add import *
+from .cli_ai_regenerate import *
 from .cli_init import *
 from .cli_info import *
 from .cli_install import *
@@ -84,6 +85,17 @@ def main():
     cli_help_status(subparsers)
     cli_help_test(subparsers)
 
+    # AI subcommands
+    parser_ai = subparsers.add_parser(
+        "ai",
+        help="AI related commands",
+    )
+    ai_subparsers = parser_ai.add_subparsers(
+        dest="ai_command",
+        required=True,
+    )
+    cli_help_ai_regenerate(ai_subparsers)
+
     # Supply subcommands
     parser_supply = subparsers.add_parser(
         "supply",
@@ -148,6 +160,14 @@ def main():
         elif args.command == "add-assembly":
             with pc_logging.Process("AddAssy", "this"):
                 cli_add_assembly(args, ctx)
+
+        elif args.command == "ai":
+            if args.ai_command == "regenerate":
+                with pc_logging.Process("AiRegen", "this"):
+                    cli_ai_regenerate(args, ctx)
+            else:
+                print("Unknown AI command.\n")
+                parser.print_help()
 
         elif args.command == "info":
             with pc_logging.Process("Info", "this"):
