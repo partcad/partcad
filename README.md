@@ -59,7 +59,8 @@ python3 -m pip install -U -e ./partcad-cli
 PartCAD works best when [conda](https://docs.conda.io/) is installed.
 If that doesn't help (e.g. MacOS+arm64) then try ``mamba``.
 On Windows, PartCAD requires at least a `conda` environment.
-On Ubuntu, try `apt install libcairo2-dev` if `pip install` fails to install `cairo`.
+On Ubuntu, try `apt install libcairo2-dev python3-dev` if `pip install` fails to install `cairo`.
+On MacOS, make sure XCode and command lines tools are installed.
 
 ## Architecture
 
