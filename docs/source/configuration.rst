@@ -446,6 +446,7 @@ Generate OpenSCAD, CadQuery or build123d scripts with Generative AI using the fo
 
   parts:
     <part name>:
+      desc: <(optional) The detailed description to be used in the model generation prompt>
       type: <ai-openscad|ai-cadquery|ai-build123d>
       provider: <google|openai|ollama, the model provider to use>
       model: <(optional) the model to use>
@@ -453,8 +454,9 @@ Generate OpenSCAD, CadQuery or build123d scripts with Generative AI using the fo
       temperature: <(optional) the temperature LLM parameter>
       top_p: <(optional) the top_p LLM parameter>
       top_k: <(optional, openai|ollama) the top_k LLM parameter>
-      images: <(optional) contextual images as input for AI>
-        - <image path>
+
+Place the detailed description of the part in the ``desc`` field.
+Use ``INSERT_IMAGE_HERE(<relative-path-without-quotes>)`` to insert images into the prompt.
 
 The following models are recommended for use:
 

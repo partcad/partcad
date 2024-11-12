@@ -9,6 +9,7 @@
 import asyncio
 import copy
 import os
+import re
 
 # from pprint import pformat
 import ruamel.yaml
@@ -560,7 +561,9 @@ class Project(project_config.Configuration):
                                 param_value
                             )
                     elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
+                        config["parameters"][param_name][
+                            "default"
+                        ] = param_value
             else:
                 # Filling "with"
                 if not "with" in config:
@@ -799,7 +802,9 @@ class Project(project_config.Configuration):
                                 param_value
                             )
                     elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
+                        config["parameters"][param_name][
+                            "default"
+                        ] = param_value
             else:
                 # Filling "with"
                 if not "with" in config:
@@ -994,7 +999,9 @@ class Project(project_config.Configuration):
                                 param_value
                             )
                     elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
+                        config["parameters"][param_name][
+                            "default"
+                        ] = param_value
             else:
                 # Filling "with"
                 if not "with" in config:
@@ -1203,7 +1210,9 @@ class Project(project_config.Configuration):
                                 param_value
                             )
                     elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
+                        config["parameters"][param_name][
+                            "default"
+                        ] = param_value
             else:
                 # Filling "with"
                 if not "with" in config:
@@ -1889,6 +1898,14 @@ class Project(project_config.Configuration):
                 parameters += "</ul>\n"
                 columns += [parameters]
 
+            if not "images" in config and "INSERT_IMAGE_HERE" in config["desc"]:
+                config["images"] = list(
+                    re.findall(
+                        r"INSERT_IMAGE_HERE\(([^)]*)\)",
+                        config["desc"],
+                        re.MULTILINE,
+                    ),
+                )
             if "images" in config:
                 images = "Input images:\n"
                 for image in config["images"]:
