@@ -2,6 +2,8 @@ desc: |
   This example demonstrates how the same parametrized assembly
   can be defined in three slightly different ways
   using three approaches to connect parts to each other.
+cover:
+  assembly: connect-mates
 
 docs:
   usage: |

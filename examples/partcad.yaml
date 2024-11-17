@@ -11,6 +11,9 @@
 # use the path prefix that we would expect in the real production use case.
 name: /pub/examples/partcad
 
+cover:
+  package: feature_interface
+
 import:
   pub:
     onlyInRoot: True
