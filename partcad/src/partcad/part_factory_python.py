@@ -38,6 +38,7 @@ class PartFactoryPython(PartFactoryFile):
             # TODO(clairbee): stick to a default constant or configured version
             python_version = self.project.python_version
         self.runtime = self.ctx.get_python_runtime(python_version)
+        self.session = self.runtime.get_session(source_project.name)
 
     async def prepare_python(self):
         """
@@ -48,8 +49,10 @@ class PartFactoryPython(PartFactoryFile):
 
         # Install dependencies of this package
         # DO NOT COMMIT
-        await self.runtime.prepare_for_package(self.project)
-        await self.runtime.prepare_for_shape(self.config)
+        await self.runtime.prepare_for_package(
+            self.project, session=self.session
+        )
+        await self.runtime.prepare_for_shape(self.config, session=self.session)
 
     def info(self, part):
         info: dict[str, object] = part.shape_info()

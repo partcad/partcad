@@ -61,7 +61,7 @@ class Shape(ShapeConfiguration):
     @contextlib.asynccontextmanager
     async def locked(self):
         """Multi-threading lock for coroutines"""
-        await pc_thread.run(self._lock.acquire)
+        await pc_thread.run_detached(self._lock.acquire)
         try:
             yield
         finally:

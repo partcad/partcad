@@ -89,12 +89,30 @@ class PartFactoryCadquery(PartFactoryPython):
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
-            # await self.runtime.ensure_async("ocp-tessellate")
-            # await self.runtime.ensure_async("cadquery")
-            # await self.runtime.ensure_async("numpy==1.24.1")
-            # await self.runtime.ensure_async("numpy-quaternion==2023.0.4")
-            # await self.runtime.ensure_async("nptyping==1.4.4")
-            # await self.runtime.ensure_async("typing_extensions>=4.6.0,<5")
+            await self.runtime.ensure_async(
+                "ocp-tessellate",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "numpy==1.24.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "numpy-quaternion==2023.0.4",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "nptyping==1.4.4",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "typing_extensions>=4.6.0,<5",
+                session=self.session,
+            )
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
@@ -105,6 +123,7 @@ class PartFactoryCadquery(PartFactoryPython):
                     os.path.abspath(cwd),
                 ],
                 request_serialized,
+                session=self.session,
             )
             if len(errors) > 0:
                 error_lines = errors.split("\n")
