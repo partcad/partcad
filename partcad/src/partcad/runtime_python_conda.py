@@ -112,7 +112,23 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     shutil.rmtree(self.path)
                     raise e
 
-    def run_onced(self, cmd, stdin="", cwd=None):
+    def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
+        if path is None:
+            if session is None or not session["dirty"]:
+                path = self.path
+            else:
+                path = session["path"]
+        if os.name == "nt":
+            bin_dir_name = "Scripts"
+        else:
+            bin_dir_name = "bin"
+        python_path = os.path.join(
+            path,
+            bin_dir_name,
+            "python" if os.name != "nt" else "pythonw",
+        )
+        # "python%s" % self.version,  # This doesn't work on Windows
+
         return super().run_onced(
             [
                 self.conda_path,
@@ -120,15 +136,32 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 "--no-capture-output",
                 "-p",
                 self.path,
-                "python" if os.name != "nt" else "pythonw",
-                # "python%s" % self.version,  # This doesn't work on Windows
+                python_path,
             ]
             + cmd,
             stdin,
             cwd=cwd,
         )
 
-    async def run_async_onced(self, cmd, stdin="", cwd=None):
+    async def run_async_onced(
+        self, cmd, stdin="", cwd=None, session=None, path=None
+    ):
+        if path is None:
+            if session is None or not session["dirty"]:
+                path = self.path
+            else:
+                path = session["path"]
+        if os.name == "nt":
+            bin_dir_name = "Scripts"
+        else:
+            bin_dir_name = "bin"
+        python_path = os.path.join(
+            path,
+            bin_dir_name,
+            "python" if os.name != "nt" else "pythonw",
+        )
+        # "python%s" % self.version,  # This doesn't work on Windows
+
         return await super().run_async_onced(
             [
                 self.conda_path,
@@ -136,10 +169,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 "--no-capture-output",
                 "-p",
                 self.path,
-                "python" if os.name != "nt" else "pythonw",
-                # "python%s" % self.version,  # This doesn't work on Windows
+                python_path,
             ]
             + cmd,
             stdin,
             cwd=cwd,
+            session=session,
         )

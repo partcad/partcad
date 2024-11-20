@@ -58,6 +58,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             python_version = "3.10"
 
         self.runtime = self.ctx.get_python_runtime(python_version)
+        self.session = self.runtime.get_session(source_project.name)
 
     def info(self, provider):
         info: dict[str, object] = provider.shape_info()
@@ -76,8 +77,10 @@ class ProviderFactoryPython(ProviderFactoryFile):
         """
 
         # Install dependencies of this package
-        await self.runtime.prepare_for_package(self.project)
-        await self.runtime.prepare_for_shape(self.config)
+        await self.runtime.prepare_for_package(
+            self.project, session=self.session
+        )
+        await self.runtime.prepare_for_shape(self.config, session=self.session)
 
         return await super().prepare_script(provider)
 

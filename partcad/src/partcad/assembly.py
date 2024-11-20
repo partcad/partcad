@@ -76,64 +76,85 @@ class Assembly(ShapeWithAi):
     async def get_shape(self):
         await self.do_instantiate()
         async with self.locked():
-            if self.shape is None:
-                child_shapes = []
-                tasks = []
+            if hasattr(self, "project_name"):
+                # This is the top level assembly
+                with pc_logging.Action(
+                    "Assembly", self.project_name, self.name
+                ):
+                    return await self._get_shape_real()
+            else:
+                return await self._get_shape_real()
 
-                async def per_child(child):
-                    item = copy.copy(await child.item.get_build123d())
-                    if not child.name is None:
-                        item.label = child.name
-                    if not child.location is None:
-                        item.locate(child.location)
-                    return item
+    async def _get_shape_real(self):
+        if self.shape is None:
+            child_shapes = []
+            tasks = []
 
-                if len(self.children) == 0:
-                    pc_logging.warning(
-                        "The assembly %s:%s is empty"
-                        % (self.project_name, self.name)
-                    )
-                for child in self.children:
-                    tasks.append(per_child(child))
+            async def per_child(child):
+                item = copy.copy(await child.item.get_build123d())
+                if not child.name is None:
+                    item.label = child.name
+                if not child.location is None:
+                    item.locate(child.location)
+                return item
 
-                # TODO(clairbee): revisit whether non-determinism here is acceptable
-                for f in asyncio.as_completed(tasks):
-                    item = await f
-                    child_shapes.append(item)
+            if len(self.children) == 0:
+                pc_logging.warning(
+                    "The assembly %s:%s is empty"
+                    % (self.project_name, self.name)
+                )
+            for child in self.children:
+                tasks.append(per_child(child))
 
-                compound = b3d.Compound(children=child_shapes)
-                if not self.name is None:
-                    compound.label = self.name
-                if not self.location is None:
-                    compound.locate(self.location)
-                self.shape = compound.wrapped
-            if self.shape is None:
-                pc_logging.warning("The shape is None")
-            return self.shape
-            # return copy.copy(
-            #     self.shape
-            # )  # TODO(clairbee): fix this for the case when the parts are made with cadquery
+            # TODO(clairbee): revisit whether non-determinism here is acceptable
+            for f in asyncio.as_completed(tasks):
+                item = await f
+                child_shapes.append(item)
+
+            compound = b3d.Compound(children=child_shapes)
+            if not self.name is None:
+                compound.label = self.name
+            if not self.location is None:
+                compound.locate(self.location)
+            self.shape = compound.wrapped
+        if self.shape is None:
+            pc_logging.warning("The shape is None")
+        return self.shape
+        # return copy.copy(
+        #     self.shape
+        # )  # TODO(clairbee): fix this for the case when the parts are made with cadquery
 
     async def get_bom(self):
         await self.do_instantiate()
         async with self.locked():
-            bom = {}
-            for child in self.children:
-                if hasattr(child.item, "get_bom"):
-                    # This is an assembly
-                    child_bom = await child.item.get_bom()
-                    for child_part_name, child_part_count in child_bom.items():
-                        if child_part_name in bom:
-                            bom[child_part_name] += child_part_count
-                        else:
-                            bom[child_part_name] = child_part_count
-                else:
-                    part_name = child.item.project_name + ":" + child.item.name
-                    if part_name in bom:
-                        bom[part_name] += 1
+            if hasattr(self, "project_name"):
+                # This is the top level assembly
+                with pc_logging.Action("BoM", self.project_name, self.name):
+                    return await self._get_bom_real()
+            else:
+                return await self._get_bom_real()
+
+    async def _get_bom_real(self):
+        bom = {}
+        for child in self.children:
+            if hasattr(child.item, "get_bom"):
+                # This is an assembly
+                child_bom = await child.item.get_bom()
+                for (
+                    child_part_name,
+                    child_part_count,
+                ) in child_bom.items():
+                    if child_part_name in bom:
+                        bom[child_part_name] += child_part_count
                     else:
-                        bom[part_name] = 1
-            return bom
+                        bom[child_part_name] = child_part_count
+            else:
+                part_name = child.item.project_name + ":" + child.item.name
+                if part_name in bom:
+                    bom[part_name] += 1
+                else:
+                    bom[part_name] = 1
+        return bom
 
     async def _render_txt_real(self, file):
         await self.do_instantiate()
