@@ -70,7 +70,7 @@ class PythonRuntime(runtime.Runtime):
         # The path to the Python executable
         self.exec_path = None
         # The name of the Python executable to search for in bin folders
-        self.exec_name = "python" if os.name != "nt" else "pythonw"
+        self.exec_name = "python" if os.name != "nt" else "pythonw.exe"
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
@@ -380,10 +380,10 @@ class PythonRuntime(runtime.Runtime):
             else:
                 path = session["path"]
 
-        if os.name == "nt":
-            bin_dir_name = "Scripts"
-        else:
-            bin_dir_name = "bin"
+        # if os.name == "nt":
+        #     bin_dir_name = "Scripts"
+        # else:
+        bin_dir_name = "bin"
 
         python_path = os.path.join(
             path,
