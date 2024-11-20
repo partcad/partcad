@@ -52,13 +52,16 @@ from .render import render_cfg_merge
 from .utils import resolve_resource_path, normalize_resource_path
 
 
+# TODO FIXME NOCOMMIT: switch from RLock back to Lock
+
+
 class Project(project_config.Configuration):
 
     class InterfaceLock(object):
         def __init__(self, prj, interface_name: str):
             prj.interface_locks_lock.acquire()
             if not interface_name in prj.interface_locks:
-                prj.interface_locks[interface_name] = threading.Lock()
+                prj.interface_locks[interface_name] = threading.RLock()
             self.lock = prj.interface_locks[interface_name]
             prj.interface_locks_lock.release()
 
@@ -72,7 +75,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, sketch_name: str):
             prj.sketch_locks_lock.acquire()
             if not sketch_name in prj.sketch_locks:
-                prj.sketch_locks[sketch_name] = threading.Lock()
+                prj.sketch_locks[sketch_name] = threading.RLock()
             self.lock = prj.sketch_locks[sketch_name]
             prj.sketch_locks_lock.release()
 
@@ -86,7 +89,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, part_name: str):
             prj.part_locks_lock.acquire()
             if not part_name in prj.part_locks:
-                prj.part_locks[part_name] = threading.Lock()
+                prj.part_locks[part_name] = threading.RLock()
             self.lock = prj.part_locks[part_name]
             prj.part_locks_lock.release()
 
@@ -100,7 +103,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, assembly_name: str):
             prj.assembly_locks_lock.acquire()
             if not assembly_name in prj.assembly_locks:
-                prj.assembly_locks[assembly_name] = threading.Lock()
+                prj.assembly_locks[assembly_name] = threading.RLock()
             self.lock = prj.assembly_locks[assembly_name]
             prj.assembly_locks_lock.release()
 
@@ -114,7 +117,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, provider_name: str):
             prj.provider_locks_lock.acquire()
             if not provider_name in prj.provider_locks:
-                prj.provider_locks[provider_name] = threading.Lock()
+                prj.provider_locks[provider_name] = threading.RLock()
             self.lock = prj.provider_locks[provider_name]
             prj.provider_locks_lock.release()
 
