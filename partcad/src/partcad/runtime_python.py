@@ -91,7 +91,7 @@ class PythonRuntime(runtime.Runtime):
                 self.ensure_onced("numpy-quaternion==2023.0.4")
                 self.ensure_onced("nptyping==1.4.4")
                 self.ensure_onced("typing_extensions>=4.6.0,<5")
-                self.ensure_onced("build123d>=0.7.0")
+                self.ensure_onced("build123d==0.7.0")
                 self.initialized = True
 
     async def once_async(self):
@@ -110,7 +110,7 @@ class PythonRuntime(runtime.Runtime):
                     await self.ensure_async_onced_locked(
                         "typing_extensions>=4.6.0,<5"
                     )
-                    await self.ensure_async_onced_locked("build123d>=0.7.0")
+                    await self.ensure_async_onced_locked("build123d==0.7.0")
                     self.initialized = True
 
     def run(self, cmd, stdin="", cwd=None, session=None):

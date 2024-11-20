@@ -120,7 +120,7 @@ class PartFactoryBuild123d(PartFactoryPython):
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "build123d>=0.7.0",
+                "build123d==0.7.0",
                 session=self.session,
             )
             cwd = self.project.config_dir
