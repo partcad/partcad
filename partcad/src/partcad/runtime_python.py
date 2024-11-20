@@ -67,6 +67,11 @@ class PythonRuntime(runtime.Runtime):
         self.lock = threading.RLock()
         self.tls = threading.local()
 
+        # The path to the Python executable
+        self.exec_path = None
+        # The name of the Python executable to search for in bin folders
+        self.exec_name = "python" if os.name != "nt" else "pythonw"
+
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
             self.tls.async_locks = {}
@@ -365,6 +370,27 @@ class PythonRuntime(runtime.Runtime):
         if "pythonRequirements" in config:
             for req in config["pythonRequirements"]:
                 await self.ensure_async_onced(req, session)
+
+    def get_venv_python_path(self, session=None, path=None):
+        if path is None:
+            if session is None or not session["dirty"]:
+                if not self.exec_path is None:
+                    return self.exec_path
+                path = self.path
+            else:
+                path = session["path"]
+
+        if os.name == "nt":
+            bin_dir_name = "Scripts"
+        else:
+            bin_dir_name = "bin"
+
+        python_path = os.path.join(
+            path,
+            bin_dir_name,
+            self.exec_name,
+        )
+        return python_path
 
     def get_session(self, name: str):
         """Create a context to describe the venv environment in case it is needed"""

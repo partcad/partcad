@@ -113,21 +113,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     raise e
 
     def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        if path is None:
-            if session is None or not session["dirty"]:
-                path = self.path
-            else:
-                path = session["path"]
-        if os.name == "nt":
-            bin_dir_name = "Scripts"
-        else:
-            bin_dir_name = "bin"
-        python_path = os.path.join(
-            path,
-            bin_dir_name,
-            "python" if os.name != "nt" else "pythonw",
-        )
-        # "python%s" % self.version,  # This doesn't work on Windows
+        python_path = self.get_venv_python_path(session, path)
 
         return super().run_onced(
             [
@@ -146,21 +132,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
     async def run_async_onced(
         self, cmd, stdin="", cwd=None, session=None, path=None
     ):
-        if path is None:
-            if session is None or not session["dirty"]:
-                path = self.path
-            else:
-                path = session["path"]
-        if os.name == "nt":
-            bin_dir_name = "Scripts"
-        else:
-            bin_dir_name = "bin"
-        python_path = os.path.join(
-            path,
-            bin_dir_name,
-            "python" if os.name != "nt" else "pythonw",
-        )
-        # "python%s" % self.version,  # This doesn't work on Windows
+        python_path = self.get_venv_python_path(session, path)
 
         return await super().run_async_onced(
             [
