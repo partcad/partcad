@@ -81,6 +81,10 @@ python3 -m pip install -U -e ./partcad
 python3 -m pip install -U -e ./partcad-cli
 ```
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=partcad/partcad&type=Date)](https://star-history.com/#partcad/partcad&Date)
+
 [PartCAD]: https://partcad.org/
 [our website]: https://partcad.org/
 [our documentation]: https://partcad.readthedocs.io/en/latest/?badge=latest
