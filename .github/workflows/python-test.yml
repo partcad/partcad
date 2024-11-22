@@ -74,12 +74,13 @@ jobs:
           pc --no-ansi test -r --package /pub/examples
 
   test-repo:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ["ubuntu-latest"]
-        python-version: ["3.12"]
-    runs-on: ${{ matrix.os }}
+    #strategy:
+    #  fail-fast: false
+    #  matrix:
+    #    os: ["ubuntu-latest"]
+    #    python-version: ["3.12"]
+    #runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest-m
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
 
     steps:
