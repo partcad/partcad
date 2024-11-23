@@ -39,7 +39,7 @@ jobs:
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
-          cmake-version: '3.16.x'
+          cmake-version: '3.17.x'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
