@@ -31,6 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup
+      - name: Install C/C++ Compiler
+        id: install_cc
+        uses: rlalik/setup-cpp-compiler@master
+        with:
+          compiler: latest  # You can specify 'gcc', 'clang', or specific versions like 'gcc-10'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
