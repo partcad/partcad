@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13] # macos-latest has an issue with nlopt
+        os: [ubuntu-latest-m, windows-latest, macos-13-xl] # macos-latest has an issue with nlopt
         # os: ["ubuntu-latest", "windows-latest", "macos-latest"]
         python-version: ["3.10", "3.11", "3.12"]
         exclude:
@@ -71,16 +71,19 @@ jobs:
           pc --no-ansi list-all -r
           pc --no-ansi test -r
           pc --no-ansi render -r
-          pc --no-ansi test -r --package /pub/examples
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            echo "Skipping additional tests on Windows: not enough resources on the runner";
+          else
+            pc --no-ansi test -r --package /pub/examples;
+          fi
 
   test-repo:
-    #strategy:
-    #  fail-fast: false
-    #  matrix:
-    #    os: ["ubuntu-latest"]
-    #    python-version: ["3.12"]
-    #runs-on: ${{ matrix.os }}
-    runs-on: ubuntu-latest-m
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest-m"]
+        python-version: ["3.12"]
+    runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
 
     steps:
