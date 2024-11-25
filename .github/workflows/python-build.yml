@@ -1,4 +1,5 @@
-name: CD on Linux, MacOS and Windows
+# CD on Linux, MacOS and Windows
+name: CD # Keep the action badge icon short
 
 on:
   push:

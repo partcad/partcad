@@ -9,16 +9,22 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import os
-import sys
 
-cpu_count = os.cpu_count()
-if cpu_count < 8:
-    # This is a workaround for the fact that sometimes we waste threads and
-    # we should not dead lock ourselves on a machine with a small number of cores
-    constrained_cpu_count = 7
+from .user_config import user_config
+
+if user_config.threads_max is not None:
+    cpu_count = user_config.threads_max
 else:
-    # Leave one core for the asyncio event loop and stuff
-    constrained_cpu_count = cpu_count - 1
+    cpu_count = os.cpu_count()
+    if cpu_count < 8:
+        # This is a workaround for the fact that sometimes we waste threads and
+        # we should not dead lock ourselves on a machine with a small number of cores
+        cpu_count = 7
+    else:
+        # Leave one core for the asyncio event loop and stuff
+        cpu_count = cpu_count - 1
+
+constrained_cpu_count = cpu_count
 unconstrained_cpu_count = 2 + cpu_count * 2
 
 if os.name == "nt":
