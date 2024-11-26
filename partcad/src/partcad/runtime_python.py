@@ -352,7 +352,8 @@ class PythonRuntime(runtime.Runtime):
         else:
             requirements_path = os.path.join(project.path, "requirements.txt")
             if os.path.exists(requirements_path):
-                requirements_text = open(requirements_path).read()
+                with open(requirements_path) as f:
+                    requirements_text = f.read()
                 requirements_lines = requirements_text.strip().split("\n")
                 for line in requirements_lines:
                     line = line.strip()

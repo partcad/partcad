@@ -85,7 +85,8 @@ class ProviderFactoryManufacturer(ProviderFactoryPython):
             part = self.ctx.get_part(cart_item.name)
             filepath = tempfile.mktemp(".step")
             await part.render_step_async(self.ctx, filepath=filepath)
-            step = open(filepath, "rb").read()
+            with open(filepath, "rb") as f:
+                step = f.read()
             cart_item.add_binary("step", step)
         else:
             # TODO(clairbee): add support for other formats

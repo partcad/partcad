@@ -91,13 +91,13 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                 # Update the repository if it is already cached.
                 try:
                     before = None
+                    now = time.time()
 
                     # Try to open the existing repository and update it.
                     if self.import_revision is None:
                         # Import the default branch
                         if user_config.force_update or (
-                            time.time() - os.path.getmtime(guard_path)
-                            > 24 * 3600
+                            now - os.path.getmtime(guard_path) > 24 * 3600
                         ):
                             repo = Repo(cache_path)
                             origin = repo.remote("origin")
@@ -115,24 +115,31 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 % short_branch_name
                             )
                             origin.pull(short_branch_name)
-                            pathlib.Path(guard_path).touch()
+                            os.utime(guard_path, (now, now))
                     else:
                         # Import a specific revision
-                        repo = Repo(cache_path)
-                        origin = repo.remote("origin")
-                        before = repo.active_branch.commit
-                        if user_config.force_update or (
-                            before != self.import_revision
-                            or (
-                                time.time() - os.path.getmtime(guard_path)
-                                > 24 * 3600
-                            )
+                        if user_config.force_update:
+                            # Ensure "before" doesn't match the desired revision
+                            before = ""
+                        else:
+                            # Read the revision name from the guard file
+                            with open(guard_path, "r") as f:
+                                before = f.read()
+
+                        if before != self.import_revision or (
+                            now - os.path.getmtime(guard_path) > 24 * 3600
                         ):
+                            repo = Repo(cache_path)
+                            # before = repo.active_branch.commit
+                            origin = repo.remote("origin")
                             # Need to check for updates
                             origin.fetch()
                             repo.git.checkout(self.import_revision, force=True)
                             origin.pull(force=True, rebase=True)
-                            pathlib.Path(guard_path).touch()
+                            os.utime(guard_path, (now, now))
+                        else:
+                            # No update was performed
+                            before = None
 
                     if not before is None:
                         # Update was performed
@@ -142,6 +149,11 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 "Updated the GIT repo: %s"
                                 % self.import_config_url
                             )
+                            with open(guard_path, "w") as f:
+                                if self.import_revision is None:
+                                    f.write(str(after))
+                                else:
+                                    f.write(self.import_revision)
                 except Exception as e:
                     pc_logging.error("Failed to update a repo: %s" % e)
                     # Fall back to using the previous copy
@@ -154,9 +166,12 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     repo = Repo.clone_from(repo_url, cache_path)
                     if not self.import_revision is None:
                         repo.git.checkout(self.import_revision, force=True)
+                        after = self.import_revision
+                    else:
+                        after = repo.active_branch.commit
 
-                    if not os.path.exists(guard_path):
-                        pathlib.Path(guard_path).touch()
+                    with open(guard_path, "w") as f:
+                        f.write(str(after))
                 except Exception as e:
                     raise RuntimeError(f"Failed to clone a repo: {e}")
 
