@@ -120,16 +120,23 @@ class AiOpenAI:
             if i < len(image_content):
                 content.append(image_content[i])
 
-        cc = openai_client.chat.completions.create(
-            messages=[
+        params = {
+            "messages": [
                 {"role": "user", "content": content},
             ],
-            stream=False,
-            n=options_num,
-            max_tokens=tokens,
-            top_p=top_p,
-            temperature=temperature,
-            model=model,
+            "stream": False,
+            "n": options_num,
+            "model": model,
+        }
+        if model.startswith("o1"):
+            # params["max_completion_tokens"] = tokens
+            pass
+        else:
+            params["max_tokens"] = tokens
+            params["temperature"] = temperature
+            params["top_p"] = top_p
+        cc = openai_client.chat.completions.create(
+            **params,
         )
 
         products = []

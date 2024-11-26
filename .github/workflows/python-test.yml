@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest-m, windows-latest, macos-13] # macos-latest has an issue with nlopt
+        os: [ubuntu-latest, windows-latest, macos-13] # macos-latest has an issue with nlopt
         # os: ["ubuntu-latest", "windows-latest", "macos-latest"]
         python-version:
           - "3.10"
