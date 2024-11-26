@@ -1,0 +1,50 @@
+{
+  "name": "Python 3",
+  "build": {
+    "dockerfile": "./Dockerfile"
+  },
+  "features": {
+    "ghcr.io/deepspacecartel/devcontainers-features/apt:2": {
+      "packages": "shellcheck bash-completion cmake libcairo2-dev pkg-config python3-dev ffmpeg libsm6 libxext6 openscad pypy3 pypy3-dev graphviz pipx time" // shfmt
+    },
+    "ghcr.io/deepspacecartel/devcontainers-features/pip:2": {
+      "packages": "pre-commit poetry",
+      "location": "/opt/pip"
+    },
+    "ghcr.io/deepspacecartel/devcontainers-features/starship:2": {
+      "version": "latest"
+    }
+  },
+  // https://code.visualstudio.com/remote/advancedcontainers/environment-variables
+  // https://containers.dev/implementors/json_reference/#variables-in-devcontainerjson
+  //  "containerEnv": {
+  //    "PATH": "${localEnv:PATH}:/opt/pip/bin:${localEnv:HOME}/miniconda3/bin"
+  //  },
+  //  "remoteEnv": {
+  //    "PATH": "${containerEnv:PATH}"
+  //  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        // "[python]": {
+        // "editor.defaultFormatter": "ms-python.black-formatter"
+        // },
+        // "python.terminal.activateEnvInCurrentTerminal": true,
+        // "python.envFile": "${workspaceFolder}/.env",
+        // "python.testing.pytestArgs": [],
+        // "python.testing.unittestEnabled": false,
+        // "python.testing.pytestEnabled": true,
+        // "python.terminal.executeInFileDir": true,
+        // "python.terminal.launchArgs": []
+      },
+      "extensions": [
+        // "GitHub.copilot",
+        // "GitHub.vscode-github-actions",
+        // "GitHub.vscode-pull-request-github",
+        // "ms-python.black-formatter",
+        // "ms-python.python",
+        // "ms-python.vscode-pylance"
+      ]
+    }
+  }
+}
