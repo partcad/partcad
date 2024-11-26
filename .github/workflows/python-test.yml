@@ -52,7 +52,7 @@ jobs:
       - name: Install OS-specific dependencies (MacOS)
         if: runner.os == 'macOS'
         run: |
-          brew install openscad
+          brew install -f openscad
       - name: Install OS-specific dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
