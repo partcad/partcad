@@ -480,6 +480,23 @@ class Context(project_config.Configuration):
         return tasks
 
     def get_all_packages(self, parent_name=None):
+        # See if we need to preload any "onlyInRoot" packages
+        # TODO(clairbee): parallelize preloading too?
+        if (
+            "import" in self.config_obj
+            and not self.config_obj["import"] is None
+        ):
+            imports = self.config_obj["import"]
+            for prj_name in imports:
+                if "onlyInRoot" in imports[prj_name]:
+                    if parent_name is None:
+                        if self.name == "/":
+                            # preload
+                            _ = self.get_project("/" + prj_name)
+                    elif parent_name.startswith(("/" + prj_name)):
+                        # preload
+                        _ = self.get_project(parent_name)
+
         # TODO(clairbee): leverage root_project.get_child_project_names()
         self.import_all(parent_name)
         return self.get_packages(parent_name)
@@ -922,10 +939,19 @@ class Context(project_config.Configuration):
             self._get_assembly(assembly_spec, params).get_build123d()
         )
 
+    async def render_async(
+        self, project_path=None, format=None, output_dir=None
+    ):
+        if project_path is None:
+            project_path = self.get_current_project_path()
+        pc_logging.debug("Rendering all objects in %s..." % project_path)
+        project = self.get_project(project_path)
+        await project.render_async(format=format, output_dir=output_dir)
+
     def render(self, project_path=None, format=None, output_dir=None):
         if project_path is None:
             project_path = self.get_current_project_path()
-        pc_logging.info("Rendering all objects in %s..." % project_path)
+        pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
         project.render(format=format, output_dir=output_dir)
 

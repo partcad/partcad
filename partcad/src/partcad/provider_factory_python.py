@@ -58,6 +58,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             python_version = "3.10"
 
         self.runtime = self.ctx.get_python_runtime(python_version)
+        self.session = self.runtime.get_session(source_project.name)
 
     def info(self, provider):
         info: dict[str, object] = provider.shape_info()
@@ -76,8 +77,10 @@ class ProviderFactoryPython(ProviderFactoryFile):
         """
 
         # Install dependencies of this package
-        await self.runtime.prepare_for_package(self.project)
-        await self.runtime.prepare_for_shape(self.config)
+        await self.runtime.prepare_for_package(
+            self.project, session=self.session
+        )
+        await self.runtime.prepare_for_shape(self.config, session=self.session)
 
         return await super().prepare_script(provider)
 
@@ -133,21 +136,41 @@ class ProviderFactoryPython(ProviderFactoryFile):
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
-            await self.runtime.ensure("ocp-tessellate")
-            await self.runtime.ensure("numpy==1.24.1")
-            await self.runtime.ensure("numpy-quaternion==2023.0.4")
-            await self.runtime.ensure("nptyping==1.24.1")
-            await self.runtime.ensure("cadquery")
+            await self.runtime.ensure_async(
+                "ocp-tessellate",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "numpy==1.24.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "numpy-quaternion==2023.0.4",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "nptyping==1.4.4",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "typing_extensions>=4.6.0,<5",
+                session=self.session,
+            )
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
-            response_serialized, errors = await self.runtime.run(
+            response_serialized, errors = await self.runtime.run_async(
                 [
                     wrapper_path,
                     os.path.abspath(self.path),
                     os.path.abspath(cwd),
                 ],
                 request_serialized,
+                session=self.session,
             )
             if len(errors) > 0:
                 error_lines = errors.split("\n")

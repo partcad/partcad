@@ -40,6 +40,7 @@ class SketchFactoryPython(SketchFactoryFile):
             # TODO(clairbee): stick to a default constant or configured version
             python_version = self.project.python_version
         self.runtime = self.ctx.get_python_runtime(python_version)
+        self.session = self.runtime.get_session(source_project.name)
 
     async def prepare_python(self):
         """
@@ -49,8 +50,10 @@ class SketchFactoryPython(SketchFactoryFile):
         """
 
         # Install dependencies of this package
-        await self.runtime.prepare_for_package(self.project)
-        await self.runtime.prepare_for_shape(self.config)
+        await self.runtime.prepare_for_package(
+            self.project, session=self.session
+        )
+        await self.runtime.prepare_for_shape(self.config, session=self.session)
 
     def info(self, sketch):
         info: dict[str, object] = sketch.shape_info()

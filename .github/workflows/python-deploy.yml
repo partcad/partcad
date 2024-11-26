@@ -1,4 +1,5 @@
-name: Deployment to PyPI
+# Deployment to PyPI
+name: Deployment # Keep the action badge icon short
 
 on:
   push:
@@ -111,11 +112,9 @@ jobs:
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url:
-            "${{ github.ref == 'refs/heads/main' &&
+          repository-url: "${{ github.ref == 'refs/heads/main' &&
             'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
             }}"
           user: __token__
-          password:
-            "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY ||
+          password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY ||
             secrets.TEST_PYPI_KEY }}"

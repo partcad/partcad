@@ -31,15 +31,20 @@ warn = lambda *a, **kw: logging.getLogger("partcad").warn(*a, **kw)
 warning = lambda *a, **kw: logging.getLogger("partcad").warning(*a, **kw)
 
 
-def error(*args, **kwargs):
+def _track_error(args):
     global had_errors
+    if args and len(args) > 1 and "conda run pythonw" in args[0]:
+        return
     had_errors = True
+
+
+def error(*args, **kwargs):
+    _track_error(args)
     logging.getLogger("partcad").error(*args, **kwargs)
 
 
 def critical(*args, **kwargs):
-    global had_errors
-    had_errors = True
+    _track_error(args)
     logging.getLogger("partcad").critical(*args, **kwargs)
 
 
@@ -48,8 +53,7 @@ def critical(*args, **kwargs):
 def exception(
     *args,
 ):
-    global had_errors
-    had_errors = True
+    _track_error(args)
     logging.getLogger("partcad").exception(*args)
 
 
@@ -78,7 +82,10 @@ def default_action_start(
 
 
 def default_action_end(self_ops, op: str, package: str, item: str = None):
-    pass
+    if item is None:
+        info("Finished action: %s: %s" % (op, package))
+    else:
+        info("Finished action: %s: %s: %s" % (op, package, item))
 
 
 # Dependency injection point for logging plugins

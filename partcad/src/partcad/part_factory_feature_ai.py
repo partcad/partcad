@@ -237,7 +237,8 @@ class PartFactoryFeatureAi(Ai):
     def _change_file(self, path, change=None):
         """This method is called to change the part."""
 
-        script = open(path, "r").read()
+        with open(path, "r") as f:
+            script = f.read()
 
         if change is not None:
             change = change.strip()

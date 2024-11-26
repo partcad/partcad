@@ -1,4 +1,5 @@
-name: CD on Linux, MacOS and Windows
+# CD on Linux, MacOS and Windows
+name: CD # Keep the action badge icon short
 
 on:
   push:
@@ -17,9 +18,14 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-13] # macos-latest has an issue with nlopt
         # os: [ubuntu-latest, windows-latest, macos-latest]
         # TODO(clairbee): Add pypy versions to the matrix?
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.12"]
+        #python-version: ["3.10", "3.11", "3.12"]
         # TODO(clairbee): prescrive specific versions since nlopt often causes problems on Windows or MacOS?
         # python-version: ["3.10.11", "3.11.8", "3.12.3"]
+        exclude:
+          # Reduce costs by testing one version of Python on MacOS
+          - os: "macos-13"
+            python-version: "3.10"
     runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
     env:

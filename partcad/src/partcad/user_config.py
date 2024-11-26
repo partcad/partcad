@@ -35,6 +35,15 @@ class UserConfig:
             except Exception as e:
                 pc_logging.error("ERROR: Failed to parse %s" % config_path)
 
+        # option: threadsMax
+        # description: the maximum number of processing threads to use (not a strict limit)
+        # values: >2
+        # default: min(7, <cpu threads count - 1>)
+        self.threads_max = None
+
+        if "threadsMax" in self.config_obj:
+            self.threads_max = int(self.config_obj["threadsMax"])
+
         # option: pythonSandbox
         # description: sandboxing environment for invoking python scripts
         # values: [none | pypy | conda]
@@ -100,7 +109,9 @@ class UserConfig:
         # values: <integer>
         # default: None
         if "maxGeometricModeling" in self.config_obj:
-            self.max_geometric_modeling = int(self.config_obj["maxGeometricModeling"])
+            self.max_geometric_modeling = int(
+                self.config_obj["maxGeometricModeling"]
+            )
         else:
             self.max_geometric_modeling = None
 
@@ -109,7 +120,9 @@ class UserConfig:
         # values: <integer>
         # default: None
         if "maxModelGeneration" in self.config_obj:
-            self.max_model_generation = int(self.config_obj["maxModelGeneration"])
+            self.max_model_generation = int(
+                self.config_obj["maxModelGeneration"]
+            )
         else:
             self.max_model_generation = None
 
@@ -118,7 +131,9 @@ class UserConfig:
         # values: <integer>
         # default: None
         if "maxScriptCorrection" in self.config_obj:
-            self.max_script_correction = int(self.config_obj["maxScriptCorrection"])
+            self.max_script_correction = int(
+                self.config_obj["maxScriptCorrection"]
+            )
         else:
             self.max_script_correction = None
 

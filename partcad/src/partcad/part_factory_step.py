@@ -84,8 +84,8 @@ class PartFactoryStep(PartFactoryFile):
                 picklestring = pickle.dumps(request)
                 request_serialized = base64.b64encode(picklestring).decode()
 
-                await self.runtime.ensure("cadquery")
-                response_serialized, errors = await self.runtime.run(
+                # await self.runtime.ensure_async("cadquery")
+                response_serialized, errors = await self.runtime.run_async(
                     [
                         wrapper_path,
                         os.path.abspath(self.path),

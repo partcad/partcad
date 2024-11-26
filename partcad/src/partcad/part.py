@@ -46,7 +46,7 @@ class Part(ShapeWithAi):
         self.count = 0
 
     async def get_shape(self):
-        async with self.lock:
+        async with self.locked():
             if self.shape is None:
                 self.shape = await pc_thread.run_async(self.instantiate, self)
             return self.shape

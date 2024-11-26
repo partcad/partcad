@@ -20,18 +20,33 @@ class NonePythonRuntime(runtime_python.PythonRuntime):
 
         if os.name == "nt" and shutil.which("pythonw") is not None:
             self.exec_name = "pythonw"
-        elif shutil.which("python3") is not None:
-            self.exec_name = "python3"
         else:
-            self.exec_name = "python"
+            which = shutil.which("python3")
+            if which is not None:
+                self.exec_path = which
+            else:
+                self.exec_name = "python"
 
         if not self.initialized:
             os.makedirs(self.path)
             self.initialized = True
 
-    async def run(self, cmd, stdin="", cwd=None):
-        return await super().run(
-            [self.exec_name] + cmd,
+    def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
+        python_path = self.get_venv_python_path(session, path)
+        return super().run_onced(
+            [python_path] + cmd,
             stdin,
             cwd=cwd,
+            session=session,
+        )
+
+    async def run_async_onced(
+        self, cmd, stdin="", cwd=None, session=None, path=None
+    ):
+        python_path = self.get_venv_python_path(session, path)
+        return await super().run_async_onced(
+            [python_path] + cmd,
+            stdin,
+            cwd=cwd,
+            session=session,
         )

@@ -18,10 +18,12 @@ class PyPyPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, "pypy", version)
 
         if not self.initialized:
-            if shutil.which("pypy") is None:
+            which = shutil.which("pypy")
+            if which is None:
                 raise Exception(
                     "ERROR: PartCAD is configured to use missing pypy to execute Python scripts (CadQuery, build123d etc)"
                 )
+            self.exec_path = which
 
             os.makedirs(self.path)
             try:
@@ -40,10 +42,24 @@ class PyPyPythonRuntime(runtime_python.PythonRuntime):
                 shutil.rmtree(self.path)
                 raise e
 
-    async def run(self, cmd, stdin="", cwd=None):
-        return await super().run(
+    def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
+        # TODO: python_path = self.get_venv_python_path(session, path)
+        return super().run_onced(
             ["conda", "run", "--no-capture-output", "-p", self.path, "pypy"]
             + cmd,
             stdin,
             cwd=cwd,
+            session=session,
+        )
+
+    async def run_async_onced(
+        self, cmd, stdin="", cwd=None, session=None, path=None
+    ):
+        # TODO: python_path = self.get_venv_python_path(session, path)
+        return await super().run_async_onced(
+            ["conda", "run", "--no-capture-output", "-p", self.path, "pypy"]
+            + cmd,
+            stdin,
+            cwd=cwd,
+            session=session,
         )

@@ -122,6 +122,12 @@ def cli_help_list(subparsers):
         required=False,
     )
 
+    parser_list_all.add_argument(
+        "package",
+        help="Package to retrieve the object from",
+        type=str,
+        nargs="?",
+    )
     parser_list_sketches.add_argument(
         "package",
         help="Package to retrieve the object from",
