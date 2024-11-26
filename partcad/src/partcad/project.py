@@ -1898,7 +1898,11 @@ class Project(project_config.Configuration):
                 parameters += "</ul>\n"
                 columns += [parameters]
 
-            if not "images" in config and "INSERT_IMAGE_HERE" in config["desc"]:
+            if (
+                not "images" in config
+                and "desc" in config
+                and "INSERT_IMAGE_HERE" in config["desc"]
+            ):
                 config["images"] = list(
                     re.findall(
                         r"INSERT_IMAGE_HERE\(([^)]*)\)",
