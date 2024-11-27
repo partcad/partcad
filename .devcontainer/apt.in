@@ -1,0 +1,14 @@
+bash-completion
+cmake
+ffmpeg
+graphviz
+libcairo2-dev
+libsm6
+libxext6
+openscad
+pkg-config
+pypy3
+pypy3-dev
+python3-dev
+shellcheck
+time

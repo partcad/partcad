@@ -1,0 +1,29 @@
+{
+  "name": "PartCAD Dev Container",
+  "build": { // 13:27.664
+    "dockerfile": "./Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": { // 06:25.200
+      // https://github.com/devcontainers/features/tree/main/src/python
+      "version": "3.10",
+      "installTools": true,
+      "toolsToInstall": "pre-commit,poetry",
+      "optimize": true,
+      "enableShared": false,
+      "installPath": "/usr/local/python",
+      "installJupyterlab": false,
+      "configureJupyterlabAllowOrigin": "",
+      "httpProxy": ""
+    },
+    "ghcr.io/devcontainers/features/conda:1": { // 00:35.700
+      // https://github.com/devcontainers/features/tree/main/src/conda
+      "version": "latest",
+      "addCondaForge": false
+    }
+  },
+  "postCreateCommand": {
+    "Installing pre-commit hooks": "cd /workspaces/partcad && pre-commit install",
+    "Installing poetry dependencies": "cd /workspaces/partcad && poetry self add poetry-plugin-export"
+  }
+}
