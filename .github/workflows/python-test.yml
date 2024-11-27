@@ -58,7 +58,6 @@ jobs:
         run: |
           curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
           ./openscad-installer.exe /S
-          refreshenv
       - name: Test with pytest
         env:
           PYTHONPATH: partcad/src
@@ -67,6 +66,7 @@ jobs:
           pytest -x -p no:error-for-skips -p no:warnings
       - name: Basic integration test for CLI
         run: |
+          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
           refreshenv
           pip install -U ./partcad ./partcad-cli
           mkdir new_pkg
