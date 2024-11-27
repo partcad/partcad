@@ -8,42 +8,77 @@
 [![Documentation Status](https://readthedocs.org/projects/partcad/badge/?version=latest)](https://partcad.readthedocs.io/en/latest/?badge=latest)
 <a href="https://discord.gg/zdwyxkGM"><img alt="Discord" src="https://img.shields.io/discord/1091497262733074534?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
 
-[PartCAD] is the first package manager for CAD models
+[PartCAD] is **the first package manager for CAD models**
 and a framework for managing assemblies.
+
 It aims to complement Git with everything necessary for hardware development
 to substitute commercial Product Lifecycle Management (PLM) tools.
-It is a free versioning and change management system for your CAD,
-but built around your CAD artifacts instead of being built in into your CAD tool.
+It's a free versioning and change management solution for all your CAD needs,
+built around your CAD artifacts instead of being built into your CAD tool.
 
-[PartCAD] maintains information about mechanical parts and
-how they come together to form larger assemblies.
-The same parts can be reused in multiple assemblies and multiple projects.
-And all of that is supercharged by the ultimate versioning and collaboration features of Git.
+Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](https://youtube.com/@PartCAD)💥💥.
 
-## Join PartCAD
+## Join us!
 
-Participate in defining the roadmap on [our Patreon page](https://patreon.com/PartCAD).
+Stay informed and share feedback by joining [our Discord server](https://discord.gg/zdwyxkGM).
 <br/>
-Stay informed by joining [our Discord server](https://discord.gg/zdwyxkGM).
-<br/>
-Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [X] and [Threads].
+Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [X].
 
 ## Features
 
-Here is a brief description of PartCAD features:
-
-- 3D part models using [CadQuery], [build123d] and [OpenSCAD] scripting languages
-- 3D part models using legacy `STEP`, `STL` and `3MF` files
-- Generate 3D models using LLM/GenAI: Google AI (`Gemini`), OpenAI (`ChatGPT`) or any model published to [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`, `Code Llama` etc)
-- 2D blueprints using [build123d], or legacy `DXF` and `SVG` files
-- Object-Oriented Programming approach to maintaining part interfaces and mating information
-- Live preview of 3D models while coding in VS Code
-- Render models to `SVG`, `PNG` and export to `STEP`, `STL`, `3MF`, `ThreeJS` and `OBJ`
-- Render `Markdown` documentation files
-
-## Documentation
-
-Browse [our documentation] and visit [our website].
+- Multiple OSes supported
+  - [x] Windows
+  - [x] Linux
+  - [x] MacOS
+- Collaboration on designs
+  - [x] Versioning of CAD designs using `Git` _(like it's 2024 for real)_
+      - [x] Mechanics
+      - [ ] Electronics _(in progress)_
+      - [ ] Software _(in progress)_
+  - [x] Automated generation of `Markdown` documentation
+  - [x] Parametric (hardware and software) bill of materials
+  - [x] Publish models online on PartCAD.org
+  - [ ] Publish models online on your website _(in progress)_
+  - [ ] Publish configurable parts and assemblies online _(in progress)_
+  - [ ] Purchase of assemblies and parts online, both marketplace and SaaS _(in progress)_
+  - [x] Automated purchase of parts via CLI
+- Assembly models (3D)
+  - [x] Using specialized `Assembly YAML` format
+    - [x] Automatically maintaining the bill of materials
+    - [ ] Generating user-friendly visual assembly instructions _(in progress)_
+  - [ ] Generating with LLM/GenAI _(in progress)_
+- Part models (3D)
+  - Using scripting languages
+    - [x] [CadQuery]
+    - [x] [build123d]
+    - [x] [OpenSCAD]
+  - Using legacy CAD files
+    - [x] `STEP`
+    - [x] `STL`
+    - [x] `3MF`
+  - Generating with LLM/GenAI
+    - [x] Google AI (`Gemini`)
+    - [x] OpenAI (`ChatGPT`)
+    - [x] Any model published to [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`, `Code Llama` etc)
+- Part and interface blueprints (2D)
+  - Using scripting languages
+    - [x] [CadQuery]
+    - [x] [build123d]
+  - Using legacy file formats:
+    - [x] `DXF`
+    - [x] `SVG`
+- Other features
+  - Object-Oriented Programming approach to maintaining part interfaces and mating information
+  - Live preview of 3D models while working in Visual Studio Code
+  - Render 2D and 3D to images
+    - [x] `SVG`
+    - [x] `PNG`
+  - Export 3D models to CAD files
+    - [x] `STEP`
+    - [x] `STL`
+    - [x] `3MF`
+    - [x] `ThreeJS`
+    - [x] `OBJ`
 
 ## Installation
 
@@ -68,7 +103,7 @@ pip install -U partcad-cli
 
 - On **Windows**, PartCAD must be executed inside a [conda] environment. Also set `LongPathsEnabled` to 1 at `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` using `Registry Editor`.
 - On **Ubuntu**, try `apt install libcairo2-dev python3-dev` if `pip install` fails to install `cairo`.
-- On **MacOS**, make sure XCode and command lines tools are installed. Also, use ``mamba`` should you experience difficulties on MacOS with the arm64 architecture.
+- On **MacOS**, make sure XCode and command lines tools are installed. Also, use ``mamba`` should you experience difficulties on MacOS with the ARM architecture.
 
 ### PartCAD development
 
@@ -80,6 +115,14 @@ cd partcad
 python3 -m pip install -U -e ./partcad
 python3 -m pip install -U -e ./partcad-cli
 ```
+
+## Getting Started
+
+See the tutorials for [PartCAD command line tools](https://partcad.readthedocs.io/en/latest/tutorial.html#command-line) or [PartCAD Visual Studio Code extension](https://partcad.readthedocs.io/en/latest/tutorial.html#vs-code-extension).
+
+## Have you read this page this far?
+
+Give us a star for our hard work!
 
 [PartCAD]: https://partcad.org/
 [our website]: https://partcad.org/
