@@ -58,7 +58,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
-          ./openscad-installer.exe /S
+          ./openscad-installer.exe /S /USERNAME=runneradmin
       # - name: Test with pytest
       #   env:
       #     PYTHONPATH: partcad/src
@@ -75,6 +75,7 @@ jobs:
           refreshenv
       - name: Basic integration test for CLI
         run: |
+          openscad --version
           mkdir new_pkg
           cd new_pkg
           pc --no-ansi init
