@@ -68,10 +68,11 @@ jobs:
       - name: Install CLI
         run: |
           pip install -U ./partcad ./partcad-cli
-          # if [ "$RUNNER_OS" == "Windows" ]; then
-          #   Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1;
-          #   refreshenv;
-          # fi
+      - name: Refresh the environment (Windows only)
+        if: runner.os == 'Windows'
+        run: |
+          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+          refreshenv
       - name: Basic integration test for CLI
         run: |
           mkdir new_pkg
