@@ -1,0 +1,38 @@
+# https://github.com/devcontainers/ci/blob/main/docs/github-action.md
+name: 'Dev Container CI'
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - devel
+
+jobs:
+  build:
+    name: Build Dev Container and run PyTest
+    runs-on: ubuntu-latest
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: write
+    steps:
+
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and run Dev Container task
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ghcr.io/partcad/partcad-devcontainer
+          cacheFrom: ghcr.io/partcad/partcad-devcontainer
+          push: always
+          runCmd: |
+            poetry install
+            poetry run pytest --verbose
