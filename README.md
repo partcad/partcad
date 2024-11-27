@@ -66,7 +66,7 @@ The recommended method to install PartCAD CLI tools for most users is:
 pip install -U partcad-cli
 ```
 
-- On **Windows**, PartCAD must be executed inside a [conda] environment.
+- On **Windows**, PartCAD must be executed inside a [conda] environment. Also set `LongPathsEnabled` to 1 at `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` using `Registry Editor`.
 - On **Ubuntu**, try `apt install libcairo2-dev python3-dev` if `pip install` fails to install `cairo`.
 - On **MacOS**, make sure XCode and command lines tools are installed. Also, use ``mamba`` should you experience difficulties on MacOS with the arm64 architecture.
 

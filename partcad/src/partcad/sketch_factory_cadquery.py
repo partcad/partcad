@@ -95,11 +95,11 @@ class SketchFactoryCadquery(SketchFactoryPython):
             request_serialized = base64.b64encode(picklestring).decode()
 
             await self.runtime.ensure_async(
-                "ocp-tessellate",
+                "ocp-tessellate==3.0.8",
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "cadquery",
+                "cadquery==2.4.0",
                 session=self.session,
             )
             await self.runtime.ensure_async(
@@ -115,7 +115,8 @@ class SketchFactoryCadquery(SketchFactoryPython):
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "typing_extensions>=4.6.0,<5",
+                # "typing_extensions>=4.6.0,<5", # doesn't work on Windows
+                "typing_extensions==4.12.2",
                 session=self.session,
             )
             cwd = self.project.config_dir

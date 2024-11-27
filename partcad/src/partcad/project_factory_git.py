@@ -130,7 +130,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             now - os.path.getmtime(guard_path) > 24 * 3600
                         ):
                             repo = Repo(cache_path)
-                            # before = repo.active_branch.commit
+                            before = repo.active_branch.commit
                             origin = repo.remote("origin")
                             # Need to check for updates
                             origin.fetch()
@@ -149,6 +149,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 "Updated the GIT repo: %s"
                                 % self.import_config_url
                             )
+                        if before != after or user_config.force_update:
                             with open(guard_path, "w") as f:
                                 if self.import_revision is None:
                                     f.write(str(after))

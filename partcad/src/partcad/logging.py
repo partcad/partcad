@@ -63,9 +63,9 @@ def default_process_start(
     self_ops, op: str, package: str, item: str | None = None
 ):
     if item is None:
-        info("Starting process: %s: %s" % (op, package))
+        debug("Starting process: %s: %s" % (op, package))
     else:
-        info("Starting process: %s: %s: %s" % (op, package, item))
+        debug("Starting process: %s: %s: %s" % (op, package, item))
 
 
 def default_process_end(self_ops, op: str, package: str, item: str = None):
@@ -76,16 +76,16 @@ def default_action_start(
     self_ops, op: str, package: str, item: str | None = None
 ):
     if item is None:
-        info("Starting action: %s: %s" % (op, package))
+        debug("Starting action: %s: %s" % (op, package))
     else:
-        info("Starting action: %s: %s: %s" % (op, package, item))
+        debug("Starting action: %s: %s: %s" % (op, package, item))
 
 
 def default_action_end(self_ops, op: str, package: str, item: str = None):
     if item is None:
-        info("Finished action: %s: %s" % (op, package))
+        debug("Finished action: %s: %s" % (op, package))
     else:
-        info("Finished action: %s: %s: %s" % (op, package, item))
+        debug("Finished action: %s: %s: %s" % (op, package, item))
 
 
 # Dependency injection point for logging plugins

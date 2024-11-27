@@ -70,7 +70,9 @@ class PythonRuntime(runtime.Runtime):
         # The path to the Python executable
         self.exec_path = None
         # The name of the Python executable to search for in bin folders
-        self.exec_name = "python" if os.name != "nt" else "pythonw.exe"
+        self.exec_name = "python" if os.name != "nt" else "python.exe"
+        self.python_flags = []
+        # self.python_flags = ["-Iu"]  # TODO(clairbee): add -P on 3.11+?
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
@@ -85,12 +87,13 @@ class PythonRuntime(runtime.Runtime):
             if not self.initialized:
                 # Preinstall the most common packages to avoid race conditions
                 # TODO(clairbee): Lock the entire runtime instead
-                self.ensure_onced("ocp-tessellate")
-                self.ensure_onced("cadquery")
+                self.ensure_onced("ocp-tessellate==3.0.8")
+                self.ensure_onced("cadquery==2.4.0")
                 self.ensure_onced("numpy==1.24.1")
                 self.ensure_onced("numpy-quaternion==2023.0.4")
                 self.ensure_onced("nptyping==1.4.4")
-                self.ensure_onced("typing_extensions>=4.6.0,<5")
+                # self.ensure_onced("typing_extensions>=4.6.0,<5") # doesn't work on Windows
+                self.ensure_onced("typing_extensions==4.12.2")
                 self.ensure_onced("build123d==0.7.0")
                 self.initialized = True
 
@@ -100,15 +103,18 @@ class PythonRuntime(runtime.Runtime):
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     # TODO(clairbee): Lock the entire runtime instead
-                    await self.ensure_async_onced_locked("ocp-tessellate")
-                    await self.ensure_async_onced_locked("cadquery")
+                    await self.ensure_async_onced_locked(
+                        "ocp-tessellate==3.0.8"
+                    )
+                    await self.ensure_async_onced_locked("cadquery==2.4.0")
                     await self.ensure_async_onced_locked("numpy==1.24.1")
                     await self.ensure_async_onced_locked(
                         "numpy-quaternion==2023.0.4"
                     )
                     await self.ensure_async_onced_locked("nptyping==1.4.4")
+                    # await self.ensure_async_onced_locked("typing_extensions>=4.6.0,<5") # doesn't work on Windows
                     await self.ensure_async_onced_locked(
-                        "typing_extensions>=4.6.0,<5"
+                        "typing_extensions==4.12.2"
                     )
                     await self.ensure_async_onced_locked("build123d==0.7.0")
                     self.initialized = True
@@ -126,6 +132,7 @@ class PythonRuntime(runtime.Runtime):
                         "v-env", self.version, session["name"]
                     ):
                         # Create the venv environment
+                        pc_logging.debug("Creating venv: %s" % session["path"])
                         self.run_onced(
                             [
                                 "-m",
@@ -145,6 +152,7 @@ class PythonRuntime(runtime.Runtime):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=False,
+            encoding="utf-8",
             # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
             cwd=cwd,
         )
@@ -159,7 +167,7 @@ class PythonRuntime(runtime.Runtime):
         # if stdout:
         #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
         # if stderr:
-        #     pc_logging.debug("Error of %s: %s" % (cmd, stderr))
+        #     pc_logging.debug("Error in %s: %s" % (cmd, stderr))
 
         # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
         # f = open("/tmp/log", "w")
@@ -186,6 +194,7 @@ class PythonRuntime(runtime.Runtime):
                         "v-env", self.version, session["name"]
                     ):
                         # Create the venv environment
+                        pc_logging.debug("Creating venv: %s" % session["path"])
                         await self.run_async_onced(
                             [
                                 "-m",
@@ -223,7 +232,7 @@ class PythonRuntime(runtime.Runtime):
         # if stdout:
         #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
         # if stderr:
-        #     pc_logging.debug("Error of %s: %s" % (cmd, stderr))
+        #     pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
         # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
         # f = open("/tmp/log", "w")
@@ -369,28 +378,40 @@ class PythonRuntime(runtime.Runtime):
 
         # Install dependencies of this part
         if "pythonRequirements" in config:
-            for req in config["pythonRequirements"]:
-                await self.ensure_async_onced(req, session)
+            reqs = config["pythonRequirements"]
+            if isinstance(reqs, str):
+                reqs = reqs.strip().split("\n")
+            for req in reqs:
+                await self.ensure_async_onced(req.strip(), session)
 
     def get_venv_python_path(self, session=None, path=None):
+        use_venv = False
+
         if path is None:
             if session is None or not session["dirty"]:
+                # Use the full interpreter path if known
                 if not self.exec_path is None:
                     return self.exec_path
+                # If the full path is not known, use the interpreter name
                 path = self.path
             else:
                 path = session["path"]
+                use_venv = True
+        else:
+            # This can be either a venv path or a conda path.
+            if str(os.path.basename(path)).startswith("v-env-"):
+                use_venv = True
+            else:
+                use_venv = False
 
-        # if os.name == "nt":
-        #     bin_dir_name = "Scripts"
-        # else:
-        bin_dir_name = "bin"
+        if os.name == "nt":
+            if use_venv:
+                python_path = os.path.join(path, "Scripts", self.exec_name)
+            else:
+                python_path = os.path.join(path, self.exec_name)
+        else:
+            python_path = os.path.join(path, "bin", self.exec_name)
 
-        python_path = os.path.join(
-            path,
-            bin_dir_name,
-            self.exec_name,
-        )
         return python_path
 
     def get_session(self, name: str):
