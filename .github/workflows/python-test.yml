@@ -57,6 +57,10 @@ jobs:
       - name: Install OS-specific dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
+          # Prepare the registry
+          reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
+          # Install OpenSCAD
           curl -o openscad.zip https://files.openscad.org/OpenSCAD-2021.01-x86-64.zip
           Expand-Archive -Force openscad.zip
           Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\openscad\openscad-2021.01
