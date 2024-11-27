@@ -57,9 +57,12 @@ jobs:
       - name: Install OS-specific dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
-          mkdir openscad
-          ./openscad-installer.exe /S /USERNAME=runneradmin /D=$env:GITHUB_WORKSPACE/openscad
+          curl -o openscad.zip https://files.openscad.org/OpenSCAD-2021.01-x86-64.zip
+          Expand-Archive -Force openscad.zip
+          Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\openscad\openscad-2021.01
+          # curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
+          # mkdir openscad
+          # ./openscad-installer.exe /S /USERNAME=runneradmin /D=$env:GITHUB_WORKSPACE/openscad
       # - name: Test with pytest
       #   env:
       #     PYTHONPATH: partcad/src
@@ -69,11 +72,11 @@ jobs:
       - name: Install CLI
         run: |
           pip install -U ./partcad ./partcad-cli
-      - name: Refresh the environment (Windows only)
-        if: runner.os == 'Windows'
-        run: |
-          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-          refreshenv
+      # - name: Refresh the environment (Windows only)
+      #   if: runner.os == 'Windows'
+      #   run: |
+      #     Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
+      #     refreshenv
       - name: Basic integration test for CLI
         run: |
           openscad --version
