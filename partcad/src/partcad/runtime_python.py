@@ -410,10 +410,7 @@ class PythonRuntime(runtime.Runtime):
             else:
                 python_path = os.path.join(path, self.exec_name)
         else:
-            if use_venv:
-                python_path = os.path.join(path, "bin", self.exec_name)
-            else:
-                python_path = os.path.join(path, self.exec_name)
+            python_path = os.path.join(path, "bin", self.exec_name)
 
         return python_path
 
