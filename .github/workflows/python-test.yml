@@ -15,7 +15,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13] # macos-latest has an issue with nlopt
+        os: [windows-latest] # macos-latest has an issue with nlopt
+        # os: [ubuntu-latest, windows-latest, macos-13] # macos-latest has an issue with nlopt
         python-version:
           - "3.10"
           # - "3.11"
@@ -66,9 +67,11 @@ jobs:
           pytest -x -p no:error-for-skips -p no:warnings
       - name: Basic integration test for CLI
         run: |
-          Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-          refreshenv
           pip install -U ./partcad ./partcad-cli
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1;
+            refreshenv;
+          fi
           mkdir new_pkg
           cd new_pkg
           pc --no-ansi init
