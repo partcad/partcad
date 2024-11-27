@@ -71,7 +71,8 @@ class PythonRuntime(runtime.Runtime):
         self.exec_path = None
         # The name of the Python executable to search for in bin folders
         self.exec_name = "python" if os.name != "nt" else "python.exe"
-        self.python_flags = ["-Iu"]  # TODO(clairbee): add -P on 3.11+?
+        self.python_flags = []
+        # self.python_flags = ["-Iu"]  # TODO(clairbee): add -P on 3.11+?
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
@@ -86,8 +87,8 @@ class PythonRuntime(runtime.Runtime):
             if not self.initialized:
                 # Preinstall the most common packages to avoid race conditions
                 # TODO(clairbee): Lock the entire runtime instead
-                self.ensure_onced("ocp-tessellate")
-                self.ensure_onced("cadquery")
+                self.ensure_onced("ocp-tessellate==3.0.8")
+                self.ensure_onced("cadquery==2.4.0")
                 self.ensure_onced("numpy==1.24.1")
                 self.ensure_onced("numpy-quaternion==2023.0.4")
                 self.ensure_onced("nptyping==1.4.4")
@@ -102,8 +103,10 @@ class PythonRuntime(runtime.Runtime):
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     # TODO(clairbee): Lock the entire runtime instead
-                    await self.ensure_async_onced_locked("ocp-tessellate")
-                    await self.ensure_async_onced_locked("cadquery")
+                    await self.ensure_async_onced_locked(
+                        "ocp-tessellate==3.0.8"
+                    )
+                    await self.ensure_async_onced_locked("cadquery==2.4.0")
                     await self.ensure_async_onced_locked("numpy==1.24.1")
                     await self.ensure_async_onced_locked(
                         "numpy-quaternion==2023.0.4"
@@ -375,43 +378,44 @@ class PythonRuntime(runtime.Runtime):
 
         # Install dependencies of this part
         if "pythonRequirements" in config:
-            for req in config["pythonRequirements"]:
-                await self.ensure_async_onced(req, session)
+            reqs = config["pythonRequirements"]
+            if isinstance(reqs, str):
+                reqs = reqs.strip().split("\n")
+            for req in reqs:
+                await self.ensure_async_onced(req.strip(), session)
 
     def get_venv_python_path(self, session=None, path=None):
-        is_venv = session is not None
+        use_venv = False
 
         if path is None:
-            if not is_venv or not session["dirty"]:
+            if session is None or not session["dirty"]:
+                # Use the full interpreter path if known
                 if not self.exec_path is None:
                     return self.exec_path
+                # If the full path is not known, use the interpreter name
                 path = self.path
             else:
                 path = session["path"]
+                use_venv = True
+        else:
+            # This can be either a venv path or a conda path.
+            if str(os.path.basename(path)).startswith("v-env-"):
+                use_venv = True
+            else:
+                use_venv = False
 
-        python_path_options = [
-            [
-                path,
-                "bin",
-                self.exec_name,
-            ],
-            [
-                path,
-                self.exec_name,
-            ],
-            [
-                path,
-                "Scripts",
-                self.exec_name,
-            ],
-        ]
-        for python_path_option in python_path_options:
-            python_path = os.path.join(*python_path_option)
-            if os.path.exists(python_path):
-                return python_path
+        if os.name == "nt":
+            if use_venv:
+                python_path = os.path.join(path, "Scripts", self.exec_name)
+            else:
+                python_path = os.path.join(path, self.exec_name)
+        else:
+            if use_venv:
+                python_path = os.path.join(path, "bin", self.exec_name)
+            else:
+                python_path = os.path.join(path, self.exec_name)
 
-        pc_logging.error("Python executable not found at %s" % path)
-        return "python-not-found"
+        return python_path
 
     def get_session(self, name: str):
         """Create a context to describe the venv environment in case it is needed"""

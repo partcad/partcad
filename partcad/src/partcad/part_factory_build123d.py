@@ -96,11 +96,11 @@ class PartFactoryBuild123d(PartFactoryPython):
             request_serialized = base64.b64encode(picklestring).decode()
 
             await self.runtime.ensure_async(
-                "ocp-tessellate",
+                "ocp-tessellate==3.0.8",
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "cadquery",
+                "cadquery==2.4.0",
                 session=self.session,
             )
             await self.runtime.ensure_async(

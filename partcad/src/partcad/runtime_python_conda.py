@@ -87,7 +87,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         encoding="utf-8",
                     )
                     _, stderr = p.communicate()
-                    if not stderr is None and stderr.encode().strip() != "":
+                    if not stderr is None and stderr.strip() != "":
                         pc_logging.error("conda env install error: %s" % stderr)
 
                     # Install pip into the newly created conda environment
@@ -108,7 +108,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         encoding="utf-8",
                     )
                     _, stderr = p.communicate()
-                    if not stderr is None and stderr.encode().strip() != "":
+                    if not stderr is None and stderr.strip() != "":
                         pc_logging.error("conda pip install error: %s" % stderr)
 
                     self.initialized_conda = True
@@ -132,6 +132,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
             + cmd,
             stdin,
             cwd=cwd,
+            session=session,
         )
 
     async def run_async_onced(
