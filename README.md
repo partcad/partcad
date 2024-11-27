@@ -22,12 +22,12 @@ Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](ht
 
 Stay informed and share feedback by joining [our Discord server](https://discord.gg/zdwyxkGM).
 <br/>
-Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [X].
+Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
 ## Features
 
 - Multiple OSes supported
-  - [x] Windows
+  - [X] Windows
   - [x] Linux
   - [x] MacOS
 - Collaboration on designs
@@ -132,7 +132,7 @@ Give us a star for our hard work!
 [TikTok]: https://tiktok.com/@partcad
 [Facebook]: https://www.facebook.com/profile.php?id=61568171037701
 [Instagram]: https://instagram.com/partcadofficial
-[X]: https://x.com/PartCAD
+[Twitter/X]: https://x.com/PartCAD
 [Threads]: https://threads.net/@partcadofficial
 [conda]: https://docs.conda.io/
 [CadQuery]: https://github.com/CadQuery/cadquery
