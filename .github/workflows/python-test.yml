@@ -58,9 +58,6 @@ jobs:
         run: |
           curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
           ./openscad-installer.exe /S
-          # curl -o openscad.zip https://files.openscad.org/OpenSCAD-2021.01-x86-64.zip
-          # powershell -command "Expand-Archive -Force openscad.zip"
-          # powershell -command "Add-Content $env:GITHUB_PATH %CD%\openscad\openscad-2021.01"
       - name: Test with pytest
         env:
           PYTHONPATH: partcad/src
