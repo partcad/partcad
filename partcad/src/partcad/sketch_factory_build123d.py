@@ -119,7 +119,8 @@ class SketchFactoryBuild123d(SketchFactoryPython):
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "typing_extensions>=4.6.0,<5",
+                # "typing_extensions>=4.6.0,<5", # doesn't work on Windows
+                "typing_extensions==4.12.2",
                 session=self.session,
             )
             await self.runtime.ensure_async(

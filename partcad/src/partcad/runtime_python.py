@@ -70,7 +70,8 @@ class PythonRuntime(runtime.Runtime):
         # The path to the Python executable
         self.exec_path = None
         # The name of the Python executable to search for in bin folders
-        self.exec_name = "python" if os.name != "nt" else "pythonw.exe"
+        self.exec_name = "python" if os.name != "nt" else "python.exe"
+        self.python_flags = ["-Iu"]  # TODO(clairbee): add -P on 3.11+?
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
@@ -90,7 +91,8 @@ class PythonRuntime(runtime.Runtime):
                 self.ensure_onced("numpy==1.24.1")
                 self.ensure_onced("numpy-quaternion==2023.0.4")
                 self.ensure_onced("nptyping==1.4.4")
-                self.ensure_onced("typing_extensions>=4.6.0,<5")
+                # self.ensure_onced("typing_extensions>=4.6.0,<5") # doesn't work on Windows
+                self.ensure_onced("typing_extensions==4.12.2")
                 self.ensure_onced("build123d==0.7.0")
                 self.initialized = True
 
@@ -107,8 +109,9 @@ class PythonRuntime(runtime.Runtime):
                         "numpy-quaternion==2023.0.4"
                     )
                     await self.ensure_async_onced_locked("nptyping==1.4.4")
+                    # await self.ensure_async_onced_locked("typing_extensions>=4.6.0,<5") # doesn't work on Windows
                     await self.ensure_async_onced_locked(
-                        "typing_extensions>=4.6.0,<5"
+                        "typing_extensions==4.12.2"
                     )
                     await self.ensure_async_onced_locked("build123d==0.7.0")
                     self.initialized = True
@@ -126,6 +129,7 @@ class PythonRuntime(runtime.Runtime):
                         "v-env", self.version, session["name"]
                     ):
                         # Create the venv environment
+                        pc_logging.debug("Creating venv: %s" % session["path"])
                         self.run_onced(
                             [
                                 "-m",
@@ -145,6 +149,7 @@ class PythonRuntime(runtime.Runtime):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=False,
+            encoding="utf-8",
             # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
             cwd=cwd,
         )
@@ -159,7 +164,7 @@ class PythonRuntime(runtime.Runtime):
         # if stdout:
         #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
         # if stderr:
-        #     pc_logging.debug("Error of %s: %s" % (cmd, stderr))
+        #     pc_logging.debug("Error in %s: %s" % (cmd, stderr))
 
         # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
         # f = open("/tmp/log", "w")
@@ -186,6 +191,7 @@ class PythonRuntime(runtime.Runtime):
                         "v-env", self.version, session["name"]
                     ):
                         # Create the venv environment
+                        pc_logging.debug("Creating venv: %s" % session["path"])
                         await self.run_async_onced(
                             [
                                 "-m",
@@ -223,7 +229,7 @@ class PythonRuntime(runtime.Runtime):
         # if stdout:
         #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
         # if stderr:
-        #     pc_logging.debug("Error of %s: %s" % (cmd, stderr))
+        #     pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
         # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
         # f = open("/tmp/log", "w")
@@ -373,25 +379,39 @@ class PythonRuntime(runtime.Runtime):
                 await self.ensure_async_onced(req, session)
 
     def get_venv_python_path(self, session=None, path=None):
+        is_venv = session is not None
+
         if path is None:
-            if session is None or not session["dirty"]:
+            if not is_venv or not session["dirty"]:
                 if not self.exec_path is None:
                     return self.exec_path
                 path = self.path
             else:
                 path = session["path"]
 
-        # if os.name == "nt":
-        #     bin_dir_name = "Scripts"
-        # else:
-        bin_dir_name = "bin"
+        python_path_options = [
+            [
+                path,
+                "bin",
+                self.exec_name,
+            ],
+            [
+                path,
+                self.exec_name,
+            ],
+            [
+                path,
+                "Scripts",
+                self.exec_name,
+            ],
+        ]
+        for python_path_option in python_path_options:
+            python_path = os.path.join(*python_path_option)
+            if os.path.exists(python_path):
+                return python_path
 
-        python_path = os.path.join(
-            path,
-            bin_dir_name,
-            self.exec_name,
-        )
-        return python_path
+        pc_logging.error("Python executable not found at %s" % path)
+        return "python-not-found"
 
     def get_session(self, name: str):
         """Create a context to describe the venv environment in case it is needed"""

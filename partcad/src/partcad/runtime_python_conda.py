@@ -83,9 +83,11 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         ],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
+                        shell=False,
+                        encoding="utf-8",
                     )
                     _, stderr = p.communicate()
-                    if not stderr is None and stderr != b"":
+                    if not stderr is None and stderr.encode().strip() != "":
                         pc_logging.error("conda env install error: %s" % stderr)
 
                     # Install pip into the newly created conda environment
@@ -102,9 +104,11 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         ],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
+                        shell=False,
+                        encoding="utf-8",
                     )
                     _, stderr = p.communicate()
-                    if not stderr is None and stderr != b"":
+                    if not stderr is None and stderr.encode().strip() != "":
                         pc_logging.error("conda pip install error: %s" % stderr)
 
                     self.initialized_conda = True
@@ -123,6 +127,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 "-p",
                 self.path,
                 python_path,
+                *self.python_flags,
             ]
             + cmd,
             stdin,
@@ -142,6 +147,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 "-p",
                 self.path,
                 python_path,
+                *self.python_flags,
             ]
             + cmd,
             stdin,
