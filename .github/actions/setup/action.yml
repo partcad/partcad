@@ -23,7 +23,7 @@ runs:
       run: |
         mamba init
         mamba create -n env-test python=${{ matrix.python-version }} -y
-        mamaba activate env-test
+        mamba activate env-test
 
     - uses: actions/cache@v3
       id: cache
