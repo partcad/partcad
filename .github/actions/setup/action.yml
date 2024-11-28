@@ -23,7 +23,7 @@ runs:
           curl -o miniforge.sh https://github.com/conda-forge/miniforge/releases/download/24.9.2-0/Miniforge3-24.9.2-0-$(uname)-$(uname -m).sh
           mkdir miniforge3
           sh ./miniforge.sh -b
-          ./miniforge3/condabin/conda init
+          ./miniforge3/condabin/conda init --system
     - name: Install Miniforge3 (Windows)
       if: runner.os == 'Windows'
       shell: powershell
@@ -35,7 +35,7 @@ runs:
           dir
           dir miniforge3
           dir miniforge3\condabin
-          $env:GITHUB_WORKSPACE\miniforge3\condabin\conda init
+          .\miniforge3\condabin\conda init --system
 
     - name: Activate miniforge (Windows)
       shell: bash
