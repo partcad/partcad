@@ -49,10 +49,11 @@ jobs:
           python -m pip install --upgrade pip build
           mamba deactivate
 
-          mamba create -n env-install python=${{ matrix.python-version }} -y
-          mamba activate env-install
-          python -m pip install --upgrade pip build
-          mamba deactivate
+          # Done in action.yml
+          # mamba create -n env-test python=${{ matrix.python-version }} -y
+          # mamba activate env-test
+          # python -m pip install --upgrade pip build
+          # mamba deactivate
 
       # cadquery-ocp hack for MacOS with ARM
       - name: install cadquery-ocp on MacOS (Python 3.10)
@@ -67,9 +68,10 @@ jobs:
           python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
           mamba deactivate
 
-          mamba activate install
-          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
-          mamba deactivate
+          # Done in action.yml
+          # mamba activate env-test
+          # python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
+          # mamba deactivate
 
       - name: install cadquery-ocp on MacOS (Python 3.11)
         if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.11') }}
@@ -83,7 +85,8 @@ jobs:
           python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
           mamba deactivate
 
-          mamba activate install
+          # Done in action.yml
+          mamba activate env-test
           python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
           mamba deactivate
 
@@ -99,7 +102,8 @@ jobs:
           python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
           mamba deactivate
 
-          mamba activate install
+          # Done in action.yml
+          mamba activate env-test
           python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
           mamba deactivate
 
@@ -121,7 +125,7 @@ jobs:
       - name: Test installation
         shell: bash
         run: |
-          mamba activate install
+          mamba activate env-test
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist ./partcad
           python -m pip install -r partcad-cli/requirements.txt
@@ -131,5 +135,7 @@ jobs:
       - name: Build documentation
         shell: bash
         run: |
+          mamba activate build
           python -m pip install -r ./requirements.txt
           sphinx-build  -M html docs/source docs/build -n -W
+          mamba deactivate
