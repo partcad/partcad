@@ -37,8 +37,6 @@ jobs:
       - name: Prepare environments
         shell: bash
         run: |
-          mamba init
-
           mamba create -n env-build python=${{ matrix.python-version }} -y
           mamba activate env-build
           python -m pip install --upgrade pip build

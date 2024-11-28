@@ -18,10 +18,14 @@ runs:
         # activate-environment: env-test
         python-version: ${{ matrix.python-version }}
 
-    - name: Create the default environment
+    - name: Init mamba
       shell: bash
       run: |
         mamba init
+
+    - name: Create the default environment
+      shell: bash
+      run: |
         mamba create -n env-test python=${{ matrix.python-version }} -y
         mamba activate env-test
 

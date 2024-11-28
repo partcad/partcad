@@ -24,6 +24,8 @@ Stay informed and share feedback by joining [our Discord server](https://discord
 <br/>
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
+[![PartCAD Visual Studio Code extension](./docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
+
 ## Features
 
 - Multiple OSes supported
@@ -91,7 +93,6 @@ This extension can be installed by searching for `PartCAD` in the VS Code extens
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
 
-[![PartCAD Visual Studio Code extension](./docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
 
 ### Command-Line Interface
 
