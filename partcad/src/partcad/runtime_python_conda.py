@@ -21,31 +21,31 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, "conda", version)
 
         self.initialized_conda = self.initialized
-        self.conda_path = shutil.which("conda")
-        if self.conda_path is None:
-            self.conda_cli = importlib.import_module("conda.cli.python_api")
-            self.conda_cli.run_command("config", "--quiet")
-            info_json, _, _ = self.conda_cli.run_command("info", "--json")
-            info = json.loads(info_json)
-            if "CONDA_EXE" in info["env_vars"]:
-                self.conda_path = info["env_vars"]["CONDA_EXE"]
-            else:
-                root_prefix = info["root_prefix"]
-                root_bin = os.path.join(root_prefix, "bin")
-                root_scripts = os.path.join(root_prefix, "Scripts")
-                search_paths = [
-                    root_scripts,
-                    root_bin,
-                    root_prefix,
-                ]
-                if os.name == "nt":
-                    search_path_strings = ";".join(search_paths)
-                else:
-                    search_path_strings = ":".join(search_paths)
-                self.conda_path = shutil.which(
-                    "conda",
-                    path=search_path_strings,
-                )
+        self.conda_path = shutil.which("mamba")
+        # if self.conda_path is None:
+        #     self.conda_cli = importlib.import_module("conda.cli.python_api")
+        #     self.conda_cli.run_command("config", "--quiet")
+        #     info_json, _, _ = self.conda_cli.run_command("info", "--json")
+        #     info = json.loads(info_json)
+        #     if "CONDA_EXE" in info["env_vars"]:
+        #         self.conda_path = info["env_vars"]["CONDA_EXE"]
+        #     else:
+        #         root_prefix = info["root_prefix"]
+        #         root_bin = os.path.join(root_prefix, "bin")
+        #         root_scripts = os.path.join(root_prefix, "Scripts")
+        #         search_paths = [
+        #             root_scripts,
+        #             root_bin,
+        #             root_prefix,
+        #         ]
+        #         if os.name == "nt":
+        #             search_path_strings = ";".join(search_paths)
+        #         else:
+        #             search_path_strings = ":".join(search_paths)
+        #         self.conda_path = shutil.which(
+        #             "conda",
+        #             path=search_path_strings,
+        #         )
 
     def once(self):
         with self.lock:
