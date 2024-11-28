@@ -15,8 +15,14 @@ runs:
         mamba-version: "*"
         # mamba-version: latest
         channels: conda-forge,defaults
-        # activate-environment: pc-env
+        # activate-environment: env-test
         python-version: ${{ matrix.python-version }}
+
+    - name: Create the default environment
+      run: |
+        mamba init
+        mamba create -n env-test python=${{ matrix.python-version }} -y
+        mamaba activate env-test
 
     - uses: actions/cache@v3
       id: cache
@@ -55,12 +61,6 @@ runs:
     #     HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
 
     # cadquery-ocp hack for MacOS with ARM
-    - name: Create the default environment
-      shell: bash
-      run: |
-        mamba init
-        mamba create -n env-test python=${{ matrix.python-version }} -y
-
     - name: install macos dev dependencies
       if: startsWith(${{matrix.os}}, 'macos')
       shell: bash
