@@ -3,18 +3,43 @@ name: "Setup"
 runs:
   using: "composite"
   steps:
-    - name: python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: pip
+    # - name: python
+    #   uses: actions/setup-python@v5
+    #   with:
+    #     python-version: ${{ matrix.python-version }}
+    #     cache: pip
 
-    # Miniconda
-    - uses: conda-incubator/setup-miniconda@v3
-      with:
-        miniconda-version: latest
-        activate-environment: pc-conda-env
-        python-version: ${{ matrix.python-version }}
+    # # Miniconda
+    # - uses: conda-incubator/setup-miniconda@v3
+    #   with:
+    #     miniconda-version: latest
+    #     activate-environment: pc-conda-env
+    #     python-version: ${{ matrix.python-version }}
+
+    - name: Install Miniforge3 (non-Windows)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+          curl -L -o miniforge.sh https://github.com/conda-forge/miniforge/releases/download/24.9.2-0/Miniforge3-24.9.2-0-$(uname)-$(uname -m).sh
+          mkdir miniforge3
+          sh ./miniforge.sh -b
+          ./miniforge3/condabin/conda init
+    - name: Install Miniforge3 (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+          curl -L -o miniforge.exe https://github.com/conda-forge/miniforge/releases/download/24.9.2-0/Miniforge3-24.9.2-0-Windows-x86_64.exe
+          mkdir miniforge3
+          ./miniforge.exe /S /D=$env:GITHUB_WORKSPACE/miniforge3
+          Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\miniforge3\condabin
+          ./miniforge3/condabin/conda init
+
+    - name: Activate miniforge (Windows)
+      shell: bash
+      run: |
+          conda --set auto_activate_base false
+          conda info
+          conda activate base
 
     - uses: actions/cache@v3
       id: cache
@@ -24,40 +49,39 @@ runs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    # Install dev dependencies
-    - name: install dev dependencies
-      shell: bash
-      run: |
-        pip install wheel mypy
-    # - name: Update Homebrew
-    #   if: matrix.os == 'macos-latest'
+    # # Install dev dependencies
+    # - name: install dev dependencies
     #   shell: bash
     #   run: |
-    #     brew update --preinstall
-    #     # cat "$(brew --repository)/Library/Taps/homebrew/homebrew-core/Formula/nlopt.rb" > .github/brew-formulae
-    # # - name: Configure Homebrew cache
+    #     pip install wheel mypy
+    # # - name: Update Homebrew
     # #   if: matrix.os == 'macos-latest'
-    # #   uses: actions/cache@v2
-    # #   with:
-    # #     path: |
-    # #       ~/Library/Caches/Homebrew/nlopt--*
-    # #       ~/Library/Caches/Homebrew/downloads/*--nlopt-*
-    # #     key: brew-${{ hashFiles('.github/brew-formulae') }}
-    # #     restore-keys: brew-
-    # - name: Install Homebrew dependencies
-    #   if: matrix.os == 'macos-latest'
-    #   shell: bash
-    #   run: |
-    #     # env HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
-    #     HOMEBREW_NO_AUTO_UPDATE=1 brew install gcc
-    #     HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
+    # #   shell: bash
+    # #   run: |
+    # #     brew update --preinstall
+    # #     # cat "$(brew --repository)/Library/Taps/homebrew/homebrew-core/Formula/nlopt.rb" > .github/brew-formulae
+    # # # - name: Configure Homebrew cache
+    # # #   if: matrix.os == 'macos-latest'
+    # # #   uses: actions/cache@v2
+    # # #   with:
+    # # #     path: |
+    # # #       ~/Library/Caches/Homebrew/nlopt--*
+    # # #       ~/Library/Caches/Homebrew/downloads/*--nlopt-*
+    # # #     key: brew-${{ hashFiles('.github/brew-formulae') }}
+    # # #     restore-keys: brew-
+    # # - name: Install Homebrew dependencies
+    # #   if: matrix.os == 'macos-latest'
+    # #   shell: bash
+    # #   run: |
+    # #     # env HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
+    # #     HOMEBREW_NO_AUTO_UPDATE=1 brew install gcc
+    # #     HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
 
     # cadquery-ocp hack for MacOS with ARM
     - name: install macos dev dependencies
       if: startsWith(${{matrix.os}}, 'macos')
       shell: bash
       run: |
-        # pip install numpy swig
         pip install swig
     - name: install cadquery-ocp on MacOS (Python 3.10)
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.10') }}
