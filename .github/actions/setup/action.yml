@@ -22,7 +22,7 @@ runs:
       run: |
           curl -o miniforge.sh https://github.com/conda-forge/miniforge/releases/download/24.9.2-0/Miniforge3-24.9.2-0-$(uname)-$(uname -m).sh
           mkdir miniforge3
-          sh ./miniforge.sh -b
+          sh ./miniforge.sh
           ./miniforge3/condabin/conda init --system
     - name: Install Miniforge3 (Windows)
       if: runner.os == 'Windows'
@@ -30,7 +30,7 @@ runs:
       run: |
           curl -o miniforge.exe https://github.com/conda-forge/miniforge/releases/download/24.9.2-0/Miniforge3-24.9.2-0-Windows-x86_64.exe
           mkdir miniforge3
-          ./miniforge.exe /S /D=$env:GITHUB_WORKSPACE/miniforge3
+          Start-Process -FilePath "./miniforge.exe" -ArgumentList "/S /D=$env:GITHUB_WORKSPACE/miniforge3" -Wait
           Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\miniforge3\condabin
           dir
           dir miniforge3
@@ -40,9 +40,7 @@ runs:
     - name: Activate miniforge (Windows)
       shell: bash
       run: |
-          conda --set auto_activate_base false
           conda info
-          conda activate base
 
     - uses: actions/cache@v3
       id: cache
