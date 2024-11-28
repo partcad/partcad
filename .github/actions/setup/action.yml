@@ -19,6 +19,7 @@ runs:
         python-version: ${{ matrix.python-version }}
 
     - name: Create the default environment
+      shell: bash
       run: |
         mamba init
         mamba create -n env-test python=${{ matrix.python-version }} -y
