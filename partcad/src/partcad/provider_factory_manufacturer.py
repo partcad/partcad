@@ -21,9 +21,7 @@ from . import logging as pc_logging
 
 class ProviderFactoryManufacturer(ProviderFactoryPython):
     def __init__(self, ctx, source_project, target_project, config):
-        with pc_logging.Action(
-            "InitManuf", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitManuf", target_project.name, config["name"]):
             super().__init__(
                 ctx,
                 source_project,
@@ -66,14 +64,8 @@ class ProviderFactoryManufacturer(ProviderFactoryPython):
                         caps["materials"][cart_item.material]["finishes"],
                     )
                 ):
-                    pc_logging.debug(
-                        "Provider %s does not support finish %s"
-                        % (self.name, cart_item.finish)
-                    )
-                    pc_logging.debug(
-                        "Supported finishes: %s"
-                        % caps["materials"][cart_item.material]["finishes"]
-                    )
+                    pc_logging.debug("Provider %s does not support finish %s" % (self.name, cart_item.finish))
+                    pc_logging.debug("Supported finishes: %s" % caps["materials"][cart_item.material]["finishes"])
                     return False
         return True
 
@@ -90,9 +82,7 @@ class ProviderFactoryManufacturer(ProviderFactoryPython):
             cart_item.add_binary("step", step)
         else:
             # TODO(clairbee): add support for other formats
-            pc_logging.error(
-                f"Provider {self.provider.name} does not support STEP format."
-            )
+            pc_logging.error(f"Provider {self.provider.name} does not support STEP format.")
 
     async def query_caps(self, request: ProviderRequestCaps):
         # TODO(clairbee): does it make sense to run this in a separate thread?
@@ -106,15 +96,11 @@ class ProviderFactoryManufacturer(ProviderFactoryPython):
         # return await pc_thread.run_async(
         #   self.query_script, self.provider, "quote", request.compose(),
         # )
-        return await self.query_script(
-            self.provider, "quote", request.compose()
-        )
+        return await self.query_script(self.provider, "quote", request.compose())
 
     async def query_order(self, request: ProviderRequestOrder):
         # TODO(clairbee): does it make sense to run this in a separate thread?
         # return await pc_thread.run_async(
         #   self.query_script, self.provider, "order", request.compose(),
         # )
-        return await self.query_script(
-            self.provider, "order", request.compose()
-        )
+        return await self.query_script(self.provider, "order", request.compose())

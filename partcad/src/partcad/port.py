@@ -37,14 +37,8 @@ class WithPorts(Interface):
         self.interfaces = {}
 
         # Recursively merge the inherited interfaces
-        def merge_inherits(
-            inherits, interface_state: str = "", top_level=False
-        ):
-            if (
-                not top_level
-                and len(inherits.keys()) == 1
-                and (len(list(inherits.values())[0].instances.keys()) == 1)
-            ):
+        def merge_inherits(inherits, interface_state: str = "", top_level=False):
+            if not top_level and len(inherits.keys()) == 1 and (len(list(inherits.values())[0].instances.keys()) == 1):
                 compatible = True
             else:
                 compatible = False
@@ -64,9 +58,7 @@ class WithPorts(Interface):
 
                 for instance_name in inherit.instances.keys():
                     if instance_name != "" and interface_state != "":
-                        instance_full_name = (
-                            interface_state + "-" + instance_name
-                        )
+                        instance_full_name = interface_state + "-" + instance_name
                     elif instance_name != "":
                         instance_full_name = instance_name
                     elif interface_state != "":
@@ -76,15 +68,11 @@ class WithPorts(Interface):
 
                     if not compatible:
                         if instance_name not in self.interfaces[interface_name]:
-                            self.interfaces[interface_name][
-                                instance_full_name
-                            ] = {}
+                            self.interfaces[interface_name][instance_full_name] = {}
 
                         for port_name in interface.get_ports().keys():
                             if instance_full_name != "" and port_name != "":
-                                port_full_name = (
-                                    instance_full_name + "-" + port_name
-                                )
+                                port_full_name = instance_full_name + "-" + port_name
                             elif instance_full_name != "":
                                 port_full_name = instance_full_name
                             elif port_name != "":
@@ -92,9 +80,7 @@ class WithPorts(Interface):
                             else:
                                 port_full_name = ""
 
-                            self.interfaces[interface_name][instance_full_name][
-                                port_name
-                            ] = port_full_name
+                            self.interfaces[interface_name][instance_full_name][port_name] = port_full_name
 
                     merge_inherits(interface.get_parents(), instance_full_name)
 
@@ -108,10 +94,7 @@ class WithPorts(Interface):
                     dict(
                         (
                             instance_name,
-                            dict(
-                                (port_name, port)
-                                for port_name, port in instance.items()
-                            ),
+                            dict((port_name, port) for port_name, port in instance.items()),
                         )
                         for instance_name, instance in interface.items()
                     ),

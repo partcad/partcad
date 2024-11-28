@@ -15,9 +15,7 @@ from . import logging as pc_logging
 
 
 class AssemblyFactoryFile(AssemblyFactory):
-    def __init__(
-        self, ctx, source_project, target_project, config, extension=""
-    ):
+    def __init__(self, ctx, source_project, target_project, config, extension=""):
         super().__init__(ctx, source_project, target_project, config)
 
         if "path" in config:
@@ -27,8 +25,7 @@ class AssemblyFactoryFile(AssemblyFactory):
 
         if not os.path.isdir(source_project.config_dir):
             raise Exception(
-                "ERROR: The project config directory must be a directory, found: '%s'"
-                % source_project.config_dir
+                "ERROR: The project config directory must be a directory, found: '%s'" % source_project.config_dir
             )
         self.path = os.path.join(source_project.config_dir, self.path)
         if not os.path.exists(self.path):
@@ -36,7 +33,5 @@ class AssemblyFactoryFile(AssemblyFactory):
 
     async def instantiate(self, assembly):
         if not self.fileFactory is None and not os.path.exists(assembly.path):
-            with pc_logging.Action(
-                "File", self.target_project.name, assembly.name
-            ):
+            with pc_logging.Action("File", self.target_project.name, assembly.name):
                 await self.fileFactory.download(assembly.path)

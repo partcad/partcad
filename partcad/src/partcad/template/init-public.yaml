@@ -10,7 +10,7 @@ import:
   #         poc: <maintainer's email>                 # optional
   pub:
     type: git
-    url: https://github.com/openvmp/partcad-index.git
+    url: https://github.com/partcad/partcad-index.git
 
 parts:
   # Add parts here

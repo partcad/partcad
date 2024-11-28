@@ -22,9 +22,7 @@ class PartFactoryEnrich(pf.PartFactory):
     source: str
 
     def __init__(self, ctx, source_project, target_project, config):
-        with pc_logging.Action(
-            "InitEnrich", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitEnrich", target_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config)
 
             # Determine the part the 'enrich' points to
@@ -33,24 +31,17 @@ class PartFactoryEnrich(pf.PartFactory):
             else:
                 self.source_part_name = config["name"]
                 if not "project" in config:
-                    raise Exception(
-                        "Enrich needs either the source part name or the source project name"
-                    )
+                    raise Exception("Enrich needs either the source part name or the source project name")
 
             if "project" in config:
                 self.source_project_name = config["project"]
-                if (
-                    self.source_project_name == "this"
-                    or self.source_project_name == ""
-                ):
+                if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = source_project.name
             else:
                 if ":" in self.source_part_name:
-                    self.source_project_name, self.source_part_name = (
-                        resolve_resource_path(
-                            source_project.name,
-                            self.source_part_name,
-                        )
+                    self.source_project_name, self.source_part_name = resolve_resource_path(
+                        source_project.name,
+                        self.source_part_name,
                     )
                 else:
                     self.source_project_name = source_project.name
@@ -63,27 +54,15 @@ class PartFactoryEnrich(pf.PartFactory):
             # Get the config of the part the 'enrich' points to
             orig_source_project = source_project
             if self.source_project_name == source_project.name:
-                augmented_config = source_project.get_part_config(
-                    self.source_part_name
-                )
+                augmented_config = source_project.get_part_config(self.source_part_name)
             else:
                 source_project = ctx.get_project(self.source_project_name)
                 if source_project is None:
-                    pc_logging.debug(
-                        "Available projects: %s"
-                        % str(sorted(list(ctx.projects.keys())))
-                    )
-                    raise Exception(
-                        "Package not found: %s" % self.source_project_name
-                    )
-                augmented_config = source_project.get_part_config(
-                    self.source_part_name
-                )
+                    pc_logging.debug("Available projects: %s" % str(sorted(list(ctx.projects.keys()))))
+                    raise Exception("Package not found: %s" % self.source_project_name)
+                augmented_config = source_project.get_part_config(self.source_part_name)
             if augmented_config is None:
-                pc_logging.error(
-                    "Failed to find the part to enrich: %s"
-                    % self.source_part_name
-                )
+                pc_logging.error("Failed to find the part to enrich: %s" % self.source_part_name)
                 return
 
             augmented_config = copy.deepcopy(augmented_config)
@@ -115,9 +94,7 @@ class PartFactoryEnrich(pf.PartFactory):
             # Fill in the parameter values using the simplified "with" option
             if "with" in config:
                 for param in config["with"]:
-                    augmented_config["parameters"][param]["default"] = config[
-                        "with"
-                    ][param]
+                    augmented_config["parameters"][param]["default"] = config["with"][param]
             orig_source_project.init_part_by_config(
                 augmented_config,
                 source_project,

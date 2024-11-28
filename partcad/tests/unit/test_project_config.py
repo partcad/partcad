@@ -23,9 +23,7 @@ def test_project_config_version_1():
 def test_project_config_version_2():
     """Negative test case for PartCAD version requirement in the package config file"""
     try:
-        ctx = pc.Context(
-            "partcad/tests/unit/data/project_config_invalid_1.yaml"
-        )
+        ctx = pc.Context("partcad/tests/unit/data/project_config_invalid_1.yaml")
         assert False, "Invalid configuration file did not cause an exception"
     except:
         _ignore = True

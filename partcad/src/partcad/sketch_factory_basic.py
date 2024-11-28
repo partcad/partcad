@@ -149,9 +149,7 @@ class SketchFactoryBasic(SketchFactory):
     inner_rects: list[Rect] = []
 
     def __init__(self, ctx, source_project, target_project, config):
-        with pc_logging.Action(
-            "InitBasic", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitBasic", target_project.name, config["name"]):
             super().__init__(
                 ctx,
                 source_project,
@@ -171,21 +169,15 @@ class SketchFactoryBasic(SketchFactory):
                 if "circle" in inner:
                     self.inner_circles = [Circle(inner["circle"])]
                 if "circles" in inner:
-                    self.inner_circles.extend(
-                        [Circle(c) for c in inner["circles"]]
-                    )
+                    self.inner_circles.extend([Circle(c) for c in inner["circles"]])
                 if "square" in inner:
                     self.inner_squares = [Square(inner["square"])]
                 if "squares" in inner:
-                    self.inner_squares.extend(
-                        [Square(s) for s in inner["squares"]]
-                    )
+                    self.inner_squares.extend([Square(s) for s in inner["squares"]])
                 if "rectangle" in inner:
                     self.inner_rects = [Rect(inner["rectangle"])]
                 if "rectangles" in inner:
-                    self.inner_rects.extend(
-                        [Rect(r) for r in inner["rectangles"]]
-                    )
+                    self.inner_rects.extend([Rect(r) for r in inner["rectangles"]])
 
             self._create(config)
 
@@ -228,16 +220,12 @@ class SketchFactoryBasic(SketchFactory):
                 face_builder = BRepBuilderAPI_MakeFace(outer_wire, True)
                 for inner_wire in inner_wires:
                     if not inner_wire.is_closed:
-                        raise ValueError(
-                            "Cannot build face(s): inner wire is not closed"
-                        )
+                        raise ValueError("Cannot build face(s): inner wire is not closed")
                     face_builder.Add(inner_wire.wrapped)
 
                 face_builder.Build()
                 if not face_builder.IsDone():
-                    raise ValueError(
-                        f"Cannot build face(s): {face_builder.Error()}"
-                    )
+                    raise ValueError(f"Cannot build face(s): {face_builder.Error()}")
 
                 face = face_builder.Face()
 

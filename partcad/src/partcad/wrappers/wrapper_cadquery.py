@@ -36,10 +36,7 @@ def process(path, request):
         script = re.sub(old, new, script, flags=re.MULTILINE)
 
     if "import partcad" in script:
-        script = (
-            "import logging\nlogging.basicConfig(level=60)\n"  # Disable PartCAD logging
-            + script
-        )
+        script = "import logging\nlogging.basicConfig(level=60)\n" + script  # Disable PartCAD logging
 
     # Ignore ocp_vscode as it is of no use in the sandboxed environment
     # and it produces a lot of sporadic output to stdout and stderr

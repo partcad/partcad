@@ -59,9 +59,7 @@ def exception(
 
 # Create 'ops' that are used for dependency injection of the logic to control
 # the logging context (e.g. the current state of processes and actions).
-def default_process_start(
-    self_ops, op: str, package: str, item: str | None = None
-):
+def default_process_start(self_ops, op: str, package: str, item: str | None = None):
     if item is None:
         debug("Starting process: %s: %s" % (op, package))
     else:
@@ -72,9 +70,7 @@ def default_process_end(self_ops, op: str, package: str, item: str = None):
     pass
 
 
-def default_action_start(
-    self_ops, op: str, package: str, item: str | None = None
-):
+def default_action_start(self_ops, op: str, package: str, item: str | None = None):
     if item is None:
         debug("Starting action: %s: %s" % (op, package))
     else:
@@ -141,16 +137,11 @@ class Process(object):
             if self.item is None:
                 info("DONE: %s: %s: %.2fs" % (self.op, self.package, delta))
             else:
-                info(
-                    "DONE: %s: %s: %s: %.2fs"
-                    % (self.op, self.package, self.item, delta)
-                )
+                info("DONE: %s: %s: %s: %.2fs" % (self.op, self.package, self.item, delta))
 
 
 class Action(object):
-    def __init__(
-        self, op: str, package: str, item: str = None, extra: str = None
-    ):
+    def __init__(self, op: str, package: str, item: str = None, extra: str = None):
         self.op = op
         self.package = package
         if extra:

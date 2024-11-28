@@ -19,6 +19,4 @@ class FileFactory:
         self.project = source_project
 
     async def download(self, path):
-        raise NotImplementedError(
-            "FileFactory.download is implemented in child classes"
-        )
+        raise NotImplementedError("FileFactory.download is implemented in child classes")

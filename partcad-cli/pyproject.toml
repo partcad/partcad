@@ -7,10 +7,10 @@ keywords = ["cadquery", "build123d", "cad", "design", "openscad", "step", "stl"]
 requires-python = ">=3.10"
 license = {file = "LICENSE.txt"}
 authors = [
-  {name = "Roman Kuzmenko", email = "openvmp@proton.me" }
+  {name = "PartCAD", email = "support@partcad.org" }
 ]
 maintainers = [
-  {name = "Roman Kuzmenko", email = "openvmp@proton.me" }
+  {name = "PartCAD", email = "support@partcad.org" }
 ]
 dynamic = ["dependencies"]
 
@@ -27,5 +27,5 @@ pc = "partcad_cli:main_cli"
 dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
-Homepage = "https://github.com/openvmp/partcad"
-Issues = "https://github.com/openvmp/partcad/issues"
+Homepage = "https://github.com/partcad/partcad"
+Issues = "https://github.com/partcad/partcad/issues"

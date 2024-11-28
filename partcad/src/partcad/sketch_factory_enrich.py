@@ -22,9 +22,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
     source: str
 
     def __init__(self, ctx, source_project, target_project, config):
-        with pc_logging.Action(
-            "InitEnrich", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitEnrich", target_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config)
 
             # Determine the sketch the 'enrich' points to
@@ -33,49 +31,33 @@ class SketchFactoryEnrich(pf.SketchFactory):
             else:
                 self.source_sketch_name = config["name"]
                 if not "project" in config:
-                    raise Exception(
-                        "Enrich needs either the source sketch name or the source project name"
-                    )
+                    raise Exception("Enrich needs either the source sketch name or the source project name")
 
             if "project" in config:
                 self.source_project_name = config["project"]
-                if (
-                    self.source_project_name == "this"
-                    or self.source_project_name == ""
-                ):
+                if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = source_project.name
             else:
                 if ":" in self.source_sketch_name:
-                    self.source_project_name, self.source_sketch_name = (
-                        resolve_resource_path(
-                            source_project.name,
-                            self.source_sketch_name,
-                        )
+                    self.source_project_name, self.source_sketch_name = resolve_resource_path(
+                        source_project.name,
+                        self.source_sketch_name,
                     )
                 else:
                     self.source_project_name = source_project.name
-            self.source = (
-                self.source_project_name + ":" + self.source_sketch_name
-            )
+            self.source = self.source_project_name + ":" + self.source_sketch_name
 
             pc_logging.debug("Initializing an enrich to %s" % self.source)
 
             # Get the config of the sketch the 'enrich' points to
             orig_source_project = source_project
             if self.source_project_name == source_project.name:
-                augmented_config = source_project.get_sketch_config(
-                    self.source_sketch_name
-                )
+                augmented_config = source_project.get_sketch_config(self.source_sketch_name)
             else:
                 source_project = ctx.get_project(self.source_project_name)
-                augmented_config = source_project.get_sketch_config(
-                    self.source_sketch_name
-                )
+                augmented_config = source_project.get_sketch_config(self.source_sketch_name)
             if augmented_config is None:
-                pc_logging.error(
-                    "Failed to find the sketch to enrich: %s"
-                    % self.source_sketch_name
-                )
+                pc_logging.error("Failed to find the sketch to enrich: %s" % self.source_sketch_name)
                 return
 
             augmented_config = copy.deepcopy(augmented_config)
@@ -107,9 +89,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
             # Fill in the parameter values using the simplified "with" option
             if "with" in config:
                 for param in config["with"]:
-                    augmented_config["parameters"][param]["default"] = config[
-                        "with"
-                    ][param]
+                    augmented_config["parameters"][param]["default"] = config["with"][param]
             orig_source_project.init_sketch_by_config(
                 augmented_config,
                 source_project,

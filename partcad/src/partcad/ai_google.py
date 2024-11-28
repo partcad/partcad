@@ -47,9 +47,7 @@ def google_once():
             google_genai = importlib.import_module("google.generativeai")
 
         if google_api_core_exceptions is None:
-            google_api_core_exceptions = importlib.import_module(
-                "google.api_core.exceptions"
-            )
+            google_api_core_exceptions = importlib.import_module("google.api_core.exceptions")
 
         latest_key = user_config.google_api_key
         if latest_key != GOOGLE_API_KEY:

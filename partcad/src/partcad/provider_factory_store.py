@@ -21,9 +21,7 @@ from . import logging as pc_logging
 
 class ProviderFactoryStore(ProviderFactoryPython):
     def __init__(self, ctx, source_project, target_project, config):
-        with pc_logging.Action(
-            "InitStore", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitStore", target_project.name, config["name"]):
             super().__init__(
                 ctx,
                 source_project,
@@ -51,11 +49,7 @@ class ProviderFactoryStore(ProviderFactoryPython):
             "avail",
             request.compose(),
         )
-        return (
-            availability["available"]
-            if availability and "available" in availability
-            else False
-        )
+        return availability["available"] if availability and "available" in availability else False
 
     async def load(self, cart_item: ProviderCartItem):
         """No-op. No CAD binary to be loded."""
@@ -66,15 +60,11 @@ class ProviderFactoryStore(ProviderFactoryPython):
         # return await pc_thread.run_async(
         #   self.query_script, self.provider, "quote", request.compose(),
         # )
-        return await self.query_script(
-            self.provider, "quote", request.compose()
-        )
+        return await self.query_script(self.provider, "quote", request.compose())
 
     async def query_order(self, request: ProviderRequestOrder):
         # TODO(clairbee): does it make sense to run this in a separate thread?
         # return await pc_thread.run_async(
         #   self.query_script, self.provider, "order", request.compose(),
         # )
-        return await self.query_script(
-            self.provider, "order", request.compose()
-        )
+        return await self.query_script(self.provider, "order", request.compose())

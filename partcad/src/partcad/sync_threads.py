@@ -42,18 +42,14 @@ others = ThreadPoolExecutor(unconstrained_cpu_count, "partcad-executor-others-")
 async def run(method, *args):
     global executor
 
-    return await asyncio.get_running_loop().run_in_executor(
-        executor, method, *args
-    )
+    return await asyncio.get_running_loop().run_in_executor(executor, method, *args)
 
 
 # run returns a future to wait for 'method' to be completed in a separate thread
 async def run_detached(method, *args):
     global others
 
-    return await asyncio.get_running_loop().run_in_executor(
-        others, method, *args
-    )
+    return await asyncio.get_running_loop().run_in_executor(others, method, *args)
 
 
 # run returns a future to wait for 'coroutine' to be completed in a separate thread on a constrained executor

@@ -88,14 +88,14 @@ Here are some examples of references to imported packages:
 | :raw-html:`<br />` |                                                                                                       |
 | (HTTPS, SSH)       |   import:                                                                                             |
 |                    |     other_repo:                                                                                       |
-|                    |         url: https://github.com/openvmp/partcad                                                       |
+|                    |         url: https://github.com/partcad/partcad                                                       |
 |                    |         relPath: examples  # where to "cd"                                                            |
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | Hosted tar ball    | .. code-block:: yaml                                                                                  |
 | :raw-html:`<br />` |                                                                                                       |
 | (HTTPS)            |   import:                                                                                             |
 |                    |     other_archive:                                                                                    |
-|                    |       url: https://github.com/openvmp/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz |
+|                    |       url: https://github.com/partcad/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz |
 +--------------------+-------------------------------------------------------------------------------------------------------+
 
 ========
@@ -423,14 +423,14 @@ Define parts with CodeCAD scripts using the following syntax:
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
 +======================================================================================+===========================+=========================================================================================================================+
-|                                                                                      | .. code-block:: yaml      | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_part_cadquery_primitive/cylinder.svg?raw=true  |
+|                                                                                      | .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_cadquery_primitive/cylinder.svg?raw=true  |
 || `CadQuery <https://github.com/CadQuery/cadquery>`_ or                               |                           |   :width: 128                                                                                                           |
 || `build123d <https://github.com/gumyr/build123d>`_ script                            |   parts:                  |                                                                                                                         |
 || in ``src/cylinder.py``                                                              |     src/cylinder:         |                                                                                                                         |
 |                                                                                      |       type: cadquery      |                                                                                                                         |
 |                                                                                      |       # type: build123d   |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
-|| `OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_ script                         | .. code-block:: yaml      | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_part_openscad/cube.svg?raw=true                |
+|| `OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_ script                         | .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_openscad/cube.svg?raw=true                |
 || in ``cube.scad``                                                                    |                           |   :width: 128                                                                                                           |
 |                                                                                      |   parts:                  |                                                                                                                         |
 |                                                                                      |     cube:                 |                                                                                                                         |
@@ -477,7 +477,7 @@ The following models are recommended for use:
 +---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                   | Result                                                                                                                  |
 +===========================+=========================================================================================================================+
-| .. code-block:: yaml      | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_part_ai_cadquery/cube.svg?raw=true             |
+| .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_ai_cadquery/cube.svg?raw=true             |
 |                           |   :width: 128                                                                                                           |
 |   parts:                  |                                                                                                                         |
 |     cube:                 |                                                                                                                         |
@@ -501,7 +501,7 @@ Define parts with CAD files using the following syntax:
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
 +======================================================================================+===========================+=========================================================================================================================+
-|| CAD file                                                                            | .. code-block:: yaml      | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_part_step/bolt.svg?raw=true                    |
+|| CAD file                                                                            | .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_step/bolt.svg?raw=true                    |
 || (`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_ in ``screw.step``,               |                           |   :width: 128                                                                                                           |
 || `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_ in ``screw.stl``,          |   parts:                  |                                                                                                                         |
 || or `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_ in ``screw.3mf``) |     screw:                |                                                                                                                         |
@@ -642,7 +642,7 @@ Here is an example:
 +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Configuration                                     | Result                                                                                                                  |
 +===================================================+=========================================================================================================================+
-| .. code-block:: yaml                              | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_assembly_assy/logo.svg?raw=true                |
+| .. code-block:: yaml                              | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_assembly_assy/logo.svg?raw=true                |
 |                                                   |   :width: 400                                                                                                           |
 |   # partcad.yaml                                  |                                                                                                                         |
 |   assemblies:                                     |                                                                                                                         |

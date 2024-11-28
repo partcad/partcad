@@ -96,9 +96,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     # Try to open the existing repository and update it.
                     if self.import_revision is None:
                         # Import the default branch
-                        if user_config.force_update or (
-                            now - os.path.getmtime(guard_path) > 24 * 3600
-                        ):
+                        if user_config.force_update or (now - os.path.getmtime(guard_path) > 24 * 3600):
                             repo = Repo(cache_path)
                             origin = repo.remote("origin")
                             before = repo.active_branch.commit
@@ -107,13 +105,8 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             # explicitly specify the branch to pull.
                             remote_head = origin.refs.HEAD
                             branch_name = remote_head.reference.name
-                            short_branch_name = branch_name[
-                                branch_name.find("/") + 1 :
-                            ]
-                            pc_logging.debug(
-                                "Refreshing the GIT branch: %s"
-                                % short_branch_name
-                            )
+                            short_branch_name = branch_name[branch_name.find("/") + 1 :]
+                            pc_logging.debug("Refreshing the GIT branch: %s" % short_branch_name)
                             origin.pull(short_branch_name)
                             os.utime(guard_path, (now, now))
                     else:
@@ -126,9 +119,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             with open(guard_path, "r") as f:
                                 before = f.read()
 
-                        if before != self.import_revision or (
-                            now - os.path.getmtime(guard_path) > 24 * 3600
-                        ):
+                        if before != self.import_revision or (now - os.path.getmtime(guard_path) > 24 * 3600):
                             repo = Repo(cache_path)
                             before = repo.active_branch.commit
                             origin = repo.remote("origin")
@@ -145,10 +136,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                         # Update was performed
                         after = repo.active_branch.commit
                         if before != after:
-                            pc_logging.info(
-                                "Updated the GIT repo: %s"
-                                % self.import_config_url
-                            )
+                            pc_logging.info("Updated the GIT repo: %s" % self.import_config_url)
                         if before != after or user_config.force_update:
                             with open(guard_path, "w") as f:
                                 if self.import_revision is None:
@@ -161,9 +149,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
             else:
                 # Clone the repository if it's not cached yet.
                 try:
-                    pc_logging.info(
-                        "Cloning the GIT repo: %s" % self.import_config_url
-                    )
+                    pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
                     repo = Repo.clone_from(repo_url, cache_path)
                     if not self.import_revision is None:
                         repo.git.checkout(self.import_revision, force=True)

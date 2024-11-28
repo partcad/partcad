@@ -34,9 +34,7 @@ class SketchFactory(ShapeFactory):
 
     def _create_sketch(self, config: object) -> Sketch:
         sketch = Sketch(config)
-        sketch.project_name = (
-            self.target_project.name
-        )  # TODO(clairbee): pass it via the constructor
+        sketch.project_name = self.target_project.name  # TODO(clairbee): pass it via the constructor
         # TODO(clairbee): Make the next line work for sketch_factory_file only
         sketch.instantiate = lambda sketch_self: self.instantiate(sketch_self)
         sketch.info = lambda: self.info(sketch)

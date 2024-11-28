@@ -145,16 +145,10 @@ class ProviderCart:
                 for part_name, part_count in bom.items():
                     pc_logging.debug(f"Adding part '{part_name}' to the cart")
                     part_spec = part_name + "#" + str(part_count)
-                    tasks.append(
-                        asyncio.create_task(
-                            self.add_item_from_spec(ctx, part_spec, count)
-                        )
-                    )
+                    tasks.append(asyncio.create_task(self.add_item_from_spec(ctx, part_spec, count)))
                 await asyncio.gather(*tasks)
             else:
-                raise Exception(
-                    f"Part or assembly '{object_name}' not found in project '{project_name}'"
-                )
+                raise Exception(f"Part or assembly '{object_name}' not found in project '{project_name}'")
 
     async def add_item_from_spec(self, ctx, part_spec: str, count=1):
         part_item = ProviderCartItem()

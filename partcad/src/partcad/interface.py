@@ -58,31 +58,22 @@ class InterfacePort:
         elif "sketch" in config:
             if "project" in config:
                 self.source_project_name = config["project"]
-                if (
-                    self.source_project_name == "this"
-                    or self.source_project_name == ""
-                ):
+                if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = project.name
             else:
                 self.source_project_name = project.name
 
             self.source_sketch_name = config["sketch"]
             if ":" in self.source_sketch_name:
-                self.source_project_name, self.source_sketch_name = (
-                    resolve_resource_path(
-                        self.source_project_name,
-                        self.source_sketch_name,
-                    )
+                self.source_project_name, self.source_sketch_name = resolve_resource_path(
+                    self.source_project_name,
+                    self.source_sketch_name,
                 )
-                self.source_sketch_spec = (
-                    self.source_project_name + ":" + self.source_sketch_name
-                )
+                self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
                 self.sketch = project.ctx.get_sketch(self.source_sketch_spec)
             else:
                 self.source_project_name = project.name
-                self.source_sketch_spec = (
-                    self.source_project_name + ":" + self.source_sketch_name
-                )
+                self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
                 self.sketch = project.get_sketch(self.source_sketch_name)
 
     def __repr__(self):
@@ -184,13 +175,9 @@ class InterfaceParameter:
 
     def get_offsets(self, value):
         if self.min is not None and value < self.min:
-            pc_logging.warning(
-                "Parameter %s: value below minimum: %f" % (self.name, value)
-            )
+            pc_logging.warning("Parameter %s: value below minimum: %f" % (self.name, value))
         if self.max is not None and value > self.max:
-            pc_logging.warning(
-                "Parameter %s: value above maximum: %f" % (self.name, value)
-            )
+            pc_logging.warning("Parameter %s: value above maximum: %f" % (self.name, value))
 
         trsf = gp_Trsf()
         if self.type == PARAM_MOVE:
@@ -237,9 +224,7 @@ class Interface:
 
     ports: dict[str, InterfacePort]  # both own and inherited
     inherits: dict[str, InterfaceInherits] | None  # not set until instantiate()
-    compatible_with: list[
-        str
-    ]  # list of ancestor interfaces with the same ports
+    compatible_with: list[str]  # list of ancestor interfaces with the same ports
 
     params: dict[str, InterfaceParameter]
 
@@ -281,10 +266,7 @@ class Interface:
             if isinstance(params_config, list):
                 params_config = {param: {} for param in params_config}
             elif not isinstance(params_config, dict):
-                raise Exception(
-                    "Invalid 'parameters' section in the interface '%s'"
-                    % self.name
-                )
+                raise Exception("Invalid 'parameters' section in the interface '%s'" % self.name)
 
             for param_name, param_config in params_config.items():
                 param_config = InterfaceParameter.config_normalize(param_config)
@@ -310,16 +292,12 @@ class Interface:
             elif isinstance(ports_config, str):
                 ports_config = {ports_config: {}}
             elif not isinstance(ports_config, dict):
-                raise Exception(
-                    "Invalid 'ports' section in the interface '%s'" % self.name
-                )
+                raise Exception("Invalid 'ports' section in the interface '%s'" % self.name)
 
             for port_name, port_config in ports_config.items():
                 if isinstance(port_config, list):
                     port_config = {"location": port_config}
-                self.ports[port_name] = InterfacePort(
-                    port_name, self.project, port_config
-                )
+                self.ports[port_name] = InterfacePort(port_name, self.project, port_config)
 
     def get_parents(self):
         if self.inherits is None:
@@ -338,8 +316,7 @@ class Interface:
                 inherits_config = {inherits_config: ""}  # {}???
 
             if len(inherits_config.keys()) == 1 and (
-                isinstance(list(inherits_config.values())[0], str)
-                or len(list(inherits_config.values())[0]) == 1
+                isinstance(list(inherits_config.values())[0], str) or len(list(inherits_config.values())[0]) == 1
             ):
                 compatible_with_parents = True
             else:
@@ -365,21 +342,15 @@ class Interface:
                     interface_name,
                 )
 
-                inherit = InterfaceInherits(
-                    interface_name, self.project, interface_config
-                )
+                inherit = InterfaceInherits(interface_name, self.project, interface_config)
                 if inherit.interface is None:
-                    pc_logging.error(
-                        "Failed to inherit interface: %s" % interface_name
-                    )
+                    pc_logging.error("Failed to inherit interface: %s" % interface_name)
                     continue
                 self.inherits[inherit.name] = inherit
 
                 if compatible_with_parents:
                     self.compatible_with.add(inherit.name)
-                    self.compatible_with = self.compatible_with.union(
-                        inherit.interface.compatible_with
-                    )
+                    self.compatible_with = self.compatible_with.union(inherit.interface.compatible_with)
 
                 for (
                     instance_name,
@@ -394,9 +365,7 @@ class Interface:
                         port,
                     ) in inherit.interface.get_ports().items():
                         if instance_name != "":
-                            inherited_port_name = (
-                                instance_name + "-" + port_name
-                            )
+                            inherited_port_name = instance_name + "-" + port_name
                         else:
                             inherited_port_name = port_name
 
@@ -407,9 +376,7 @@ class Interface:
                             # pc_logging.debug(
                             #     "Instance location: %s" % instance_location
                             # )
-                            trsf.PreMultiply(
-                                instance_location.wrapped.Transformation()
-                            )
+                            trsf.PreMultiply(instance_location.wrapped.Transformation())
                             port_location = Location(trsf)
                             # pc_logging.debug(
                             #     "Result location: %s" % port_location
@@ -447,9 +414,7 @@ class Interface:
         mates = self.config.get("mates", None)
         if not mates is None:
             if self.abstract:
-                pc_logging.error(
-                    "Abstract interfaces cannot have mates: %s" % self.name
-                )
+                pc_logging.error("Abstract interfaces cannot have mates: %s" % self.name)
                 return
 
             if isinstance(mates, str):
@@ -457,9 +422,7 @@ class Interface:
             elif isinstance(mates, list):
                 mates = {x: {} for x in mates}
             elif not isinstance(mates, dict):
-                raise Exception(
-                    "Invalid 'mates' section in the interface '%s'" % self.name
-                )
+                raise Exception("Invalid 'mates' section in the interface '%s'" % self.name)
 
             self.add_mates(self.project, mates)
 
@@ -469,11 +432,9 @@ class Interface:
         of any project."""
         for target_interface_name, mate_target_config in mates.items():
             if not ":" in target_interface_name:
-                target_interface_name = (
-                    project.name + ":" + target_interface_name
-                )
-            target_package_name, short_target_interface_name = (
-                resolve_resource_path(project.name, target_interface_name)
+                target_interface_name = project.name + ":" + target_interface_name
+            target_package_name, short_target_interface_name = resolve_resource_path(
+                project.name, target_interface_name
             )
 
             if target_package_name == project.name:
@@ -482,24 +443,15 @@ class Interface:
                 target_project = project.ctx.get_project(target_package_name)
             if target_project is None:
                 pc_logging.error(
-                    "Failed to find the target package for %s: %s"
-                    % (target_interface_name, target_package_name)
+                    "Failed to find the target package for %s: %s" % (target_interface_name, target_package_name)
                 )
                 continue
-            target_interface = target_project.get_interface(
-                short_target_interface_name
-            )
+            target_interface = target_project.get_interface(short_target_interface_name)
             if target_interface is None:
-                pc_logging.error(
-                    "Failed to find the target interface: %s"
-                    % target_interface_name
-                )
+                pc_logging.error("Failed to find the target interface: %s" % target_interface_name)
                 continue
             if target_interface.abstract:
-                pc_logging.error(
-                    "Cannot mate with an abstract interface: %s"
-                    % target_interface_name
-                )
+                pc_logging.error("Cannot mate with an abstract interface: %s" % target_interface_name)
                 continue
             project.ctx.add_mate(self, target_interface, mate_target_config)
 
@@ -563,9 +515,7 @@ class Interface:
 
             ocp_vscode = importlib.import_module("ocp_vscode")
             if ocp_vscode is None:
-                pc_logging.warning(
-                    'Failed to load "ocp_vscode". Giving up on connection to VS Code.'
-                )
+                pc_logging.warning('Failed to load "ocp_vscode". Giving up on connection to VS Code.')
             else:
                 try:
                     pc_logging.info('Visualizing in "OCP CAD Viewer"...')
@@ -580,9 +530,7 @@ class Interface:
                     )
                 except Exception as e:
                     pc_logging.warning(e)
-                    pc_logging.warning(
-                        'No VS Code or "OCP CAD Viewer" extension detected.'
-                    )
+                    pc_logging.warning('No VS Code or "OCP CAD Viewer" extension detected.')
 
     def show(self):
         asyncio.run(self.show_async())

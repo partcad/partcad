@@ -210,17 +210,17 @@ shell
 -----
 
   .. code-block:: shell
- 
+
     # custom.sh
     for part in $PART_LIST; do
-      pc render -t png $part 
+      pc render -t png $part
     done
 
   .. code-block:: shell
- 
+
     # custom.sh
     for assembly in $ASSEMBLY_LIST; do
-      pc render -t png -a $assembly 
+      pc render -t png -a $assembly
     done
 
 ==============
@@ -346,5 +346,5 @@ Publish packages
 It's very simple to publish your package to the public PartCAD repository.
 First, publish your package as a repo on GitHub.
 Then create a pull request in
-`the public PartCAD repo <https://github.com/openvmp/partcad-index>`_
+`the public PartCAD repo <https://github.com/partcad/partcad-index>`_
 to add a reference to your package.

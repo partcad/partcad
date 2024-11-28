@@ -17,9 +17,7 @@ class PartFactoryAiScad(PartFactoryScad, PartFactoryFeatureAi):
         # Override the path determined by the parent class to enable "enrich"
         config["path"] = config["name"] + ".scad"
 
-        with pc_logging.Action(
-            "InitAiScad", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitAiScad", target_project.name, config["name"]):
             PartFactoryFeatureAi.__init__(
                 self,
                 config,

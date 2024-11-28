@@ -75,9 +75,7 @@ async def cli_test_async(args, ctx, packages):
         if not args.object is None:
             if not ":" in args.object:
                 args.object = ":" + args.object
-            args.package, args.object = pc_utils.resolve_resource_path(
-                ctx.get_current_project_path(), args.object
-            )
+            args.package, args.object = pc_utils.resolve_resource_path(ctx.get_current_project_path(), args.object)
 
         prj = ctx.get_project(package)
         if args.object is None:

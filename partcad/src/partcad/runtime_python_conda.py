@@ -64,9 +64,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         if not self.initialized_conda:
             with pc_logging.Action("Conda", "create", self.version):
                 if self.conda_path is None:
-                    raise Exception(
-                        "ERROR: PartCAD is configured to use conda, but conda is missing"
-                    )
+                    raise Exception("ERROR: PartCAD is configured to use conda, but conda is missing")
 
                 try:
                     os.makedirs(self.path)

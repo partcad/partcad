@@ -198,17 +198,10 @@ def cli_list_sketches(args, ctx):
 
     output = "PartCAD sketches:\n"
     for project_name in ctx.projects:
-        if (
-            not args.recursive
-            and args.package is not None
-            and args.package != project_name
-        ):
+        if not args.recursive and args.package is not None and args.package != project_name:
             continue
 
-        if (
-            not args.recursive
-            and project_name != ctx.get_current_project_path()
-        ):
+        if not args.recursive and project_name != ctx.get_current_project_path():
             continue
 
         if (
@@ -244,9 +237,7 @@ def cli_list_sketches(args, ctx):
             line += " " + " " * (35 - len(sketch_name))
 
             desc = sketch.desc if sketch.desc is not None else ""
-            desc = desc.replace(
-                "\n", "\n" + " " * (80 if args.recursive else 44)
-            )
+            desc = desc.replace("\n", "\n" + " " * (80 if args.recursive else 44))
             line += "%s" % desc
             output += line + "\n"
             sketch_kinds = sketch_kinds + 1
@@ -276,17 +267,10 @@ def cli_list_interfaces(args, ctx):
 
     output = "PartCAD interfaces:\n"
     for project_name in ctx.projects:
-        if (
-            not args.recursive
-            and args.package is not None
-            and args.package != project_name
-        ):
+        if not args.recursive and args.package is not None and args.package != project_name:
             continue
 
-        if (
-            not args.recursive
-            and project_name != ctx.get_current_project_path()
-        ):
+        if not args.recursive and project_name != ctx.get_current_project_path():
             continue
 
         if (
@@ -322,9 +306,7 @@ def cli_list_interfaces(args, ctx):
             line += " " + " " * (35 - len(interface_name))
 
             desc = interface.desc if interface.desc is not None else ""
-            desc = desc.replace(
-                "\n", "\n" + " " * (80 if args.recursive else 44)
-            )
+            desc = desc.replace("\n", "\n" + " " * (80 if args.recursive else 44))
             line += "%s" % desc
             output += line + "\n"
             interface_kinds = interface_kinds + 1
@@ -355,11 +337,7 @@ def cli_list_mates(args, ctx):
     # finalized
     for package_name in ctx.projects:
         if not args.recursive:
-            if (
-                hasattr(args, "package")
-                and args.package is not None
-                and package_name != args.package
-            ):
+            if hasattr(args, "package") and args.package is not None and package_name != args.package:
                 continue
             if (
                 not hasattr(args, "package") or args.package is None
@@ -367,15 +345,11 @@ def cli_list_mates(args, ctx):
                 continue
 
         if args.recursive:
-            if (
-                hasattr(args, "package")
-                and args.package is not None
-                and not package_name.startswith(args.package)
-            ):
+            if hasattr(args, "package") and args.package is not None and not package_name.startswith(args.package):
                 continue
-            if (
-                not hasattr(args, "package") or args.package is None
-            ) and not package_name.startswith(ctx.get_current_project_path()):
+            if (not hasattr(args, "package") or args.package is None) and not package_name.startswith(
+                ctx.get_current_project_path()
+            ):
                 continue
 
         package = ctx.projects[package_name]
@@ -405,12 +379,8 @@ def cli_list_mates(args, ctx):
             if (
                 args.recursive
                 and (not hasattr(args, "package") or args.package is None)
-                and not source_package_name.startswith(
-                    ctx.get_current_project_path()
-                )
-                and not target_package_name.startswith(
-                    ctx.get_current_project_path()
-                )
+                and not source_package_name.startswith(ctx.get_current_project_path())
+                and not target_package_name.startswith(ctx.get_current_project_path())
             ):
                 continue
 
@@ -475,17 +445,10 @@ def cli_list_parts(args, ctx):
 
     output = "PartCAD parts:\n"
     for project_name in ctx.projects:
-        if (
-            not args.recursive
-            and args.package is not None
-            and args.package != project_name
-        ):
+        if not args.recursive and args.package is not None and args.package != project_name:
             continue
 
-        if (
-            not args.recursive
-            and project_name != ctx.get_current_project_path()
-        ):
+        if not args.recursive and project_name != ctx.get_current_project_path():
             continue
 
         if (
@@ -521,9 +484,7 @@ def cli_list_parts(args, ctx):
             line += " " + " " * (35 - len(part_name))
 
             desc = part.desc if part.desc is not None else ""
-            desc = desc.replace(
-                "\n", "\n" + " " * (84 if args.recursive else 44)
-            )
+            desc = desc.replace("\n", "\n" + " " * (84 if args.recursive else 44))
             line += "%s" % desc
             output += line + "\n"
             part_kinds = part_kinds + 1
@@ -551,17 +512,10 @@ def cli_list_assemblies(args, ctx):
 
     output = "PartCAD assemblies:\n"
     for project_name in ctx.projects:
-        if (
-            not args.recursive
-            and args.package is not None
-            and args.package != project_name
-        ):
+        if not args.recursive and args.package is not None and args.package != project_name:
             continue
 
-        if (
-            not args.recursive
-            and project_name != ctx.get_current_project_path()
-        ):
+        if not args.recursive and project_name != ctx.get_current_project_path():
             continue
 
         if (
@@ -597,9 +551,7 @@ def cli_list_assemblies(args, ctx):
             line += " " + " " * (35 - len(assy_name))
 
             desc = assy.desc if assy.desc is not None else ""
-            desc = desc.replace(
-                "\n", "\n" + " " * (84 if args.recursive else 44)
-            )
+            desc = desc.replace("\n", "\n" + " " * (84 if args.recursive else 44))
             line += "%s" % desc
             output += line + "\n"
             assy_kinds = assy_kinds + 1

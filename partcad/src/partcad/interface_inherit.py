@@ -29,11 +29,9 @@ class InterfaceInherits:
         self.instances = {}
         # Resolve the interface by name
         if ":" in name:
-            self.source_project_name, self.source_interface_name = (
-                resolve_resource_path(
-                    project.name,
-                    name,
-                )
+            self.source_project_name, self.source_interface_name = resolve_resource_path(
+                project.name,
+                name,
             )
         else:
             self.source_project_name = project.name
@@ -48,17 +46,12 @@ class InterfaceInherits:
             target_project = project.ctx.get_project(self.source_project_name)
             if target_project is None:
                 raise Exception(
-                    "Failed to find the project to inherit the interface from: %s"
-                    % self.source_project_name
+                    "Failed to find the project to inherit the interface from: %s" % self.source_project_name
                 )
-        self.interface = target_project.get_interface(
-            self.source_interface_name
-        )
+        self.interface = target_project.get_interface(self.source_interface_name)
 
         if self.interface is None:
-            raise Exception(
-                "Failed to find the interface to inherit: %s" % name
-            )
+            raise Exception("Failed to find the interface to inherit: %s" % name)
 
         pc_logging.debug("Inherited config: %s: %s" % (name, str(config)))
         if config is None:
@@ -81,12 +74,8 @@ class InterfaceInherits:
                 # TODO(clairbee): is this practical at all?
                 config = {instance_name: None for instance_name in config}
         elif not isinstance(config, dict):
-            raise Exception(
-                "Invalid 'inherits' section in the interface '%s'" % self.name
-            )
-        pc_logging.debug(
-            "Normalized inherited config: %s: %s" % (name, str(config))
-        )
+            raise Exception("Invalid 'inherits' section in the interface '%s'" % self.name)
+        pc_logging.debug("Normalized inherited config: %s: %s" % (name, str(config)))
 
         for instance_name, instance_config in config.items():
             offsets = []

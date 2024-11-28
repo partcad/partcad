@@ -20,9 +20,7 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
     source: str
 
     def __init__(self, ctx, source_project, target_project, config):
-        with pc_logging.Action(
-            "InitAlias", source_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitAlias", source_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config)
             # Complement the config object here if necessary
             self._create(config)
@@ -32,30 +30,21 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             else:
                 self.source_assembly_name = config["name"]
                 if not "project" in config:
-                    raise Exception(
-                        "Alias needs either the source part name or the source project name"
-                    )
+                    raise Exception("Alias needs either the source part name or the source project name")
 
             if "project" in config:
                 self.source_project_name = config["project"]
-                if (
-                    self.source_project_name == "this"
-                    or self.source_project_name == ""
-                ):
+                if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = self.project.name
             else:
                 if ":" in self.source_assembly_name:
-                    self.source_project_name, self.source_assembly_name = (
-                        resolve_resource_path(
-                            self.project.name,
-                            self.source_assembly_name,
-                        )
+                    self.source_project_name, self.source_assembly_name = resolve_resource_path(
+                        self.project.name,
+                        self.source_assembly_name,
                     )
                 else:
                     self.source_project_name = self.project.name
-            self.source = (
-                self.source_project_name + ":" + self.source_assembly_name
-            )
+            self.source = self.source_project_name + ":" + self.source_assembly_name
             config["source_resolved"] = self.source
 
             if self.source_project_name == self.project.name:

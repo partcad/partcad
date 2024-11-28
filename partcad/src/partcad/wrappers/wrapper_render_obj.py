@@ -26,9 +26,7 @@ def process(path, request):
         cq_obj = cq.Solid.makeBox(1, 1, 1)
         cq_obj.wrapped = request["wrapped"]
 
-        vertices, triangles = cq_obj.tessellate(
-            request["tolerance"], request["angularTolerance"]
-        )
+        vertices, triangles = cq_obj.tessellate(request["tolerance"], request["angularTolerance"])
 
         # b3d_obj = b3d.Shape(request["wrapped"])
         # vertices, triangles = b3d.Mesher._mesh_shape(

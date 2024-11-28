@@ -49,9 +49,7 @@ class PartFactoryFeatureAi(Ai):
         if "numGeometricModeling" in self.ai_config:
             self.num_geometric_modling = self.ai_config["numGeometricModeling"]
         else:
-            self.num_geometric_modeling = (
-                DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING
-            )
+            self.num_geometric_modeling = DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING
         if (
             user_config.max_geometric_modeling is not None
             and self.num_geometric_modeling > user_config.max_geometric_modeling
@@ -102,9 +100,7 @@ class PartFactoryFeatureAi(Ai):
         constructor to finalize the AI initialization. At the time of the call
         self.part and self.instantiate must be already defined."""
         self.part.generate = lambda path: self._create_file(path)
-        self.part.change = lambda path, change=None: self._change_file(
-            path, change
-        )
+        self.part.change = lambda path, change=None: self._change_file(path, change)
 
         # If uncommented out, this makes the package initialization
         # unaccceptably slow
@@ -153,9 +149,7 @@ class PartFactoryFeatureAi(Ai):
         tries = 0
         while len(modeling_options) < max_models and tries < max_tries:
             modeling_options.extend(self._csg_modeling())
-            pc_logging.info(
-                "Generated %d CSG modeling candidates" % len(modeling_options)
-            )
+            pc_logging.info("Generated %d CSG modeling candidates" % len(modeling_options))
             tries += 1
 
         # For each remaining geometric modeling option,
@@ -164,24 +158,18 @@ class PartFactoryFeatureAi(Ai):
         candidate_id = 0
         for modeling_option_idx, modeling_option in enumerate(modeling_options):
             pc_logging.debug(
-                "Generated the geometric modeling candidate %d: %s"
-                % (modeling_option_idx, modeling_option)
+                "Generated the geometric modeling candidate %d: %s" % (modeling_option_idx, modeling_option)
             )
 
             # Generate the models using the required language
             scripts = self._generate_script(modeling_option)
 
             for script in scripts:
-                pc_logging.debug(
-                    "Generated the script candidate %d: %s"
-                    % (candidate_id, script)
-                )
+                pc_logging.debug("Generated the script candidate %d: %s" % (candidate_id, script))
 
                 # Validate the image by rendering it,
                 # attempt to correct the script if rendering doesn't work
-                image_filename, script = self._validate_and_fix(
-                    script, candidate_id
-                )
+                image_filename, script = self._validate_and_fix(script, candidate_id)
                 # Check if the model was valid
                 if image_filename is not None:
                     # Record the valid model and the image
@@ -190,37 +178,26 @@ class PartFactoryFeatureAi(Ai):
                     # Once we generated a valid script and rendered the result,
                     # Attempt to change the script by comparing the result with
                     # the original request
-                    changed_scripts = self._change_script(
-                        modeling_option, script, image_filename
-                    )
+                    changed_scripts = self._change_script(modeling_option, script, image_filename)
                     for changed_script in changed_scripts:
                         pc_logging.debug(
-                            "Generated the changed script candidate %d: %s"
-                            % (candidate_id, changed_script)
+                            "Generated the changed script candidate %d: %s" % (candidate_id, changed_script)
                         )
 
                         # Validate the image by rendering it,
                         # attempt to correct the script if rendering doesn't work
-                        image_filename, changed_script = self._validate_and_fix(
-                            changed_script, candidate_id
-                        )
+                        image_filename, changed_script = self._validate_and_fix(changed_script, candidate_id)
                         # Check if the model was valid
                         if image_filename is not None:
                             # Record the valid model and the image
-                            script_candidates.append(
-                                (image_filename, changed_script)
-                            )
+                            script_candidates.append((image_filename, changed_script))
 
                 candidate_id += 1
 
-            pc_logging.info(
-                "So far %d valid script candidates" % len(script_candidates)
-            )
+            pc_logging.info("So far %d valid script candidates" % len(script_candidates))
 
         if len(script_candidates) == 0:
-            pc_logging.error(
-                "No valid script generated. Try changing the prompt."
-            )
+            pc_logging.error("No valid script generated. Try changing the prompt.")
             return
 
         if len(script_candidates) == 1:
@@ -247,9 +224,7 @@ class PartFactoryFeatureAi(Ai):
 
         image_filename, error_text = self._render_image(script, 0)
         if image_filename is None or error_text:
-            pc_logging.error(
-                "Failed to render the image for the script %s" % script
-            )
+            pc_logging.error("Failed to render the image for the script %s" % script)
             return
 
         script_candidates = []
@@ -257,13 +232,9 @@ class PartFactoryFeatureAi(Ai):
 
         # Attempt to change the script once more by comparing the result with
         # the original request
-        changed_scripts = self._change_script(
-            None, script, image_filename, change
-        )
+        changed_scripts = self._change_script(None, script, image_filename, change)
         for changed_script in changed_scripts:
-            pc_logging.debug(
-                "Generated the changed script: %s" % changed_script
-            )
+            pc_logging.debug("Generated the changed script: %s" % changed_script)
 
             # Validate the image by rendering it,
             # attempt to correct the script if rendering doesn't work
@@ -277,18 +248,14 @@ class PartFactoryFeatureAi(Ai):
                 script_candidates.append((new_image_filename, changed_script))
 
         if len(script_candidates) == 0:
-            pc_logging.error(
-                "No valid script generated. Try changing the prompt."
-            )
+            pc_logging.error("No valid script generated. Try changing the prompt.")
             return
 
         if len(script_candidates) == 1:
             new_script = script_candidates[0][1]
         else:
             # Compare the images and select the best one
-            new_script = self.select_best_image(
-                script_candidates, change=change
-            )
+            new_script = self.select_best_image(script_candidates, change=change)
 
         if new_script == script:
             pc_logging.info("The script was not changed")
@@ -324,12 +291,7 @@ DESCRIPTION END
         )
 
         if "properties" in self.config:
-            properties = "\n".join(
-                [
-                    "  %s: %s" % (k, v)
-                    for k, v in self.config["properties"].items()
-                ]
-            )
+            properties = "\n".join(["  %s: %s" % (k, v) for k, v in self.config["properties"].items()])
             prompt += (
                 """
 
@@ -342,7 +304,7 @@ The part is further described by the following properties:
         image_filenames = self.ai_config.get("images", [])
         if len(image_filenames) > 0:
             prompt += """
-            
+
 The part is further described by the images:
 """
             for image_filename in image_filenames:
@@ -392,7 +354,7 @@ Ensure that all primitives are placed in the correct coordinates and that all di
         image_filenames = self.ai_config.get("images", [])
         if len(image_filenames) > 0:
             prompt += """
-            
+
 The part is further described by the images:
 """
             for image_filename in image_filenames:
@@ -425,9 +387,7 @@ IMPORTANT: Output the %s itself and do not add any text or comments before or af
 
         return scripts
 
-    def _change_script(
-        self, csg_instructions, script, rendered_image, change=None
-    ):
+    def _change_script(self, csg_instructions, script, rendered_image, change=None):
         """This method changes the script given the original request and the produced script."""
 
         config = copy.copy(self.ai_config)
@@ -435,7 +395,7 @@ IMPORTANT: Output the %s itself and do not add any text or comments before or af
         prompt = """You are an AI assistant in an engineering department.
 You are asked to create a %s matching the given description%s.
 
-The given description follows (until DESCRIPTION END): 
+The given description follows (until DESCRIPTION END):
 %s
 DESCRIPTION END
 """ % (
@@ -535,11 +495,7 @@ Do not generate exactly the same script
         script = "\n".join(
             list(
                 filter(
-                    lambda l: (
-                        False
-                        if l.startswith("```") or l.startswith(" ```")
-                        else True
-                    ),
+                    lambda l: (False if l.startswith("```") or l.startswith(" ```") else True),
                     script.split("\n"),
                 )
             )
@@ -588,9 +544,7 @@ Do not generate exactly the same script
             correction_candidate_id = 0
             for _ in range(self.num_script_correction):
                 corrected_scripts = self._correct_script(script, error_text)
-                corrected_scripts = list(
-                    map(lambda s: self._sanitize_script(s), corrected_scripts)
-                )
+                corrected_scripts = list(map(lambda s: self._sanitize_script(s), corrected_scripts))
                 for corrected_script in corrected_scripts:
                     pc_logging.debug(
                         "Corrected the script candidate %d, correction candidate %d at depth %d: %s"
@@ -685,9 +639,7 @@ Very important not to produce exactly the same script: at least something has to
             nonlocal exception_text
             try:
                 coro = part.get_shape()
-                with pc_logging.Action(
-                    "Instantiate", part.project_name, part.name
-                ):
+                with pc_logging.Action("Instantiate", part.project_name, part.name):
                     shape = asyncio.run(coro)
                 if not shape is None:
                     try:
@@ -715,9 +667,7 @@ Very important not to produce exactly the same script: at least something has to
             )
         )
         if len(errors) > 0:
-            pc_logging.debug(
-                "There were errors while attemtping to render the image"
-            )
+            pc_logging.debug("There were errors while attemtping to render the image")
             pc_logging.debug("%s" % errors)
             for error in errors:
                 error_text += f"{error}\n"
@@ -725,14 +675,9 @@ Very important not to produce exactly the same script: at least something has to
         error_text = error_text + exception_text
         os.unlink(source_path)
         if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
-            pc_logging.info(
-                "Script candidate %d: failed to render the image" % candidate_id
-            )
+            pc_logging.info("Script candidate %d: failed to render the image" % candidate_id)
             return None, error_text
-        pc_logging.info(
-            "Script candidate %d: successfully rendered the image"
-            % candidate_id
-        )
+        pc_logging.info("Script candidate %d: successfully rendered the image" % candidate_id)
         return output_path, error_text
 
     def select_best_image(self, script_candidates, change=None):
@@ -792,9 +737,7 @@ Just the number.
 """
 
         # Ask AI to compare the images
-        pc_logging.info(
-            "Attempting to select the best script by comparing images"
-        )
+        pc_logging.info("Attempting to select the best script by comparing images")
         config = copy.copy(self.ai_config)
         if config["temperature"] > 0.1:
             config["temperature"] = 0.05

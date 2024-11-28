@@ -84,7 +84,7 @@ The corresponding marketplace page is `here <https://marketplace.visualstudio.co
 Public PartCAD repository
 =========================
 
-The public PartCAD repository is hosted at `GitHub <https://github.com/openvmp/partcad-index>`_.
+The public PartCAD repository is hosted at `GitHub <https://github.com/partcad/partcad-index>`_.
 If necessary, PartCAD tools are automatically retrieving the contents of this
 repository and all other required repositories and packages. No manual action is needed is need to `install` it.
 

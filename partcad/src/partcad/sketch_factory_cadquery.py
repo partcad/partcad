@@ -31,21 +31,15 @@ from cq_serialize import register as register_cq_helper
 
 
 class SketchFactoryCadquery(SketchFactoryPython):
-    def __init__(
-        self, ctx, source_project, target_project, config, can_create=False
-    ):
+    def __init__(self, ctx, source_project, target_project, config, can_create=False):
         python_version = source_project.python_version
         if python_version is None:
             # Stay one step ahead of the minimum required Python version
             python_version = "3.10"
         if python_version == "3.12" or python_version == "3.11":
-            pc_logging.debug(
-                "Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery"
-            )
+            pc_logging.debug("Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery")
             python_version = "3.10"
-        with pc_logging.Action(
-            "InitCadQuery", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitCadQuery", target_project.name, config["name"]):
             super().__init__(
                 ctx,
                 source_project,
@@ -61,14 +55,8 @@ class SketchFactoryCadquery(SketchFactoryPython):
         await super().instantiate(sketch)
 
         with pc_logging.Action("CadQuery", sketch.project_name, sketch.name):
-            if (
-                not os.path.exists(sketch.path)
-                or os.path.getsize(sketch.path) == 0
-            ):
-                pc_logging.error(
-                    "CadQuery script is empty or does not exist: %s"
-                    % sketch.path
-                )
+            if not os.path.exists(sketch.path) or os.path.getsize(sketch.path) == 0:
+                pc_logging.error("CadQuery script is empty or does not exist: %s" % sketch.path)
                 return None
 
             # Finish initialization of PythonRuntime
@@ -141,9 +129,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
                 register_cq_helper()
                 result = pickle.loads(response)
             except Exception as e:
-                sketch.error(
-                    "Exception while deserializing %s: %s" % (sketch.name, e)
-                )
+                sketch.error("Exception while deserializing %s: %s" % (sketch.name, e))
                 return None
 
             if not result["success"]:
@@ -178,9 +164,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
                             continue
 
                         # TODO(clairbee): add support for the below types
-                        if isinstance(shape, TopLoc_Location) or isinstance(
-                            shape, gp_Ax1
-                        ):
+                        if isinstance(shape, TopLoc_Location) or isinstance(shape, gp_Ax1):
                             continue
 
                         if (
@@ -194,13 +178,9 @@ class SketchFactoryCadquery(SketchFactoryPython):
                             # TODO(clairbee) Add all metadata types here
                             components_list.append(shape)
                         else:
-                            pc_logging.error(
-                                "Unsupported shape type: %s" % type(shape)
-                            )
+                            pc_logging.error("Unsupported shape type: %s" % type(shape))
                     except Exception as e:
-                        pc_logging.error(
-                            "Error adding shape to compound: %s" % e
-                        )
+                        pc_logging.error("Error adding shape to compound: %s" % e)
 
             process(result["shapes"], sketch.components)
 

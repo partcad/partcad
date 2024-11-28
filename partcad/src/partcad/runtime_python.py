@@ -111,19 +111,13 @@ class PythonRuntime(runtime.Runtime):
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     # TODO(clairbee): Lock the entire runtime instead
-                    await self.ensure_async_onced_locked(
-                        "ocp-tessellate==3.0.8"
-                    )
+                    await self.ensure_async_onced_locked("ocp-tessellate==3.0.8")
                     await self.ensure_async_onced_locked("cadquery==2.4.0")
                     await self.ensure_async_onced_locked("numpy==1.26.4")
-                    await self.ensure_async_onced_locked(
-                        "numpy-quaternion==2023.0.4"
-                    )
+                    await self.ensure_async_onced_locked("numpy-quaternion==2023.0.4")
                     await self.ensure_async_onced_locked("nptyping==2.0.1")
                     # await self.ensure_async_onced_locked("typing_extensions>=4.6.0,<5") # doesn't work on Windows
-                    await self.ensure_async_onced_locked(
-                        "typing_extensions==4.12.2"
-                    )
+                    await self.ensure_async_onced_locked("typing_extensions==4.12.2")
                     await self.ensure_async_onced_locked("build123d==0.7.0")
                     self.initialized = True
 
@@ -136,9 +130,7 @@ class PythonRuntime(runtime.Runtime):
             # The venv environment has to be created
             with VenvLock(self, session["hash"]):
                 if not os.path.exists(session["path"]):
-                    with pc_logging.Action(
-                        "v-env", self.version, session["name"]
-                    ):
+                    with pc_logging.Action("v-env", self.version, session["name"]):
                         # Create the venv environment
                         pc_logging.debug("Creating venv: %s" % session["path"])
                         self.run_onced(
@@ -191,20 +183,14 @@ class PythonRuntime(runtime.Runtime):
 
     async def run_async(self, cmd, stdin="", cwd=None, session=None):
         await self.once_async()
-        return await self.run_async_onced(
-            cmd, stdin=stdin, cwd=cwd, session=session
-        )
+        return await self.run_async_onced(cmd, stdin=stdin, cwd=cwd, session=session)
 
-    async def run_async_onced(
-        self, cmd, stdin="", cwd=None, session=None, path=None
-    ):
+    async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
             async with AsyncVenvLock(self, session["hash"]):
                 if not os.path.exists(session["path"]):
-                    with pc_logging.Action(
-                        "v-env", self.version, session["name"]
-                    ):
+                    with pc_logging.Action("v-env", self.version, session["name"]):
                         # Create the venv environment
                         pc_logging.debug("Creating venv: %s" % session["path"])
                         await self.run_async_onced(
@@ -217,9 +203,7 @@ class PythonRuntime(runtime.Runtime):
                         )
                 # Install of the dependencies into the venv environment
                 for dep in session["deps"]:
-                    await self.ensure_async_onced_locked(
-                        dep, path=session["path"]
-                    )
+                    await self.ensure_async_onced_locked(dep, path=session["path"])
 
         python_path = self.get_venv_python_path(session, path)
         cmd = [python_path, *self.python_flags, *cmd]
@@ -264,12 +248,8 @@ class PythonRuntime(runtime.Runtime):
         if path is None:
             path = self.path
 
-        python_package_hash = hashlib.sha256(
-            python_package.encode()
-        ).hexdigest()
-        guard_path = os.path.join(
-            path, ".partcad.installed." + python_package_hash
-        )
+        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()
+        guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
@@ -282,16 +262,12 @@ class PythonRuntime(runtime.Runtime):
                 if not path is None:
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
-                    self.run_onced(
-                        ["-m", "pip", "install", python_package], path=path
-                    )
+                    self.run_onced(["-m", "pip", "install", python_package], path=path)
                 pathlib.Path(guard_path).touch()
 
     async def ensure_async(self, python_package, session=None, path=None):
         await self.once_async()
-        await self.ensure_async_onced(
-            python_package, session=session, path=path
-        )
+        await self.ensure_async_onced(python_package, session=session, path=path)
 
     async def ensure_async_onced(self, python_package, session=None, path=None):
         if path is None:
@@ -299,12 +275,8 @@ class PythonRuntime(runtime.Runtime):
 
         # TODO(clairbee): expire the guard file after a certain time
 
-        python_package_hash = hashlib.sha256(
-            python_package.encode()
-        ).hexdigest()
-        guard_path = os.path.join(
-            path, ".partcad.installed." + python_package_hash
-        )
+        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()
+        guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
@@ -325,20 +297,14 @@ class PythonRuntime(runtime.Runtime):
                             )
                         pathlib.Path(guard_path).touch()
 
-    async def ensure_async_onced_locked(
-        self, python_package, session=None, path=None
-    ):
+    async def ensure_async_onced_locked(self, python_package, session=None, path=None):
         if path is None:
             path = self.path
 
         # TODO(clairbee): expire the guard file after a certain time
 
-        python_package_hash = hashlib.sha256(
-            python_package.encode()
-        ).hexdigest()
-        guard_path = os.path.join(
-            path, ".partcad.installed." + python_package_hash
-        )
+        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()
+        guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)

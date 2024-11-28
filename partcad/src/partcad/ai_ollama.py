@@ -66,9 +66,7 @@ class AiOllama:
     ):
         model_once(model)
 
-        pc_logging.info(
-            "Generating with Ollama: asking for %d alternatives", options_num
-        )
+        pc_logging.info("Generating with Ollama: asking for %d alternatives", options_num)
 
         if not ollama_once():
             return None
@@ -130,19 +128,13 @@ class AiOllama:
                     )
                 except httpx.ConnectError as e:
                     pc_logging.exception(e)
-                    pc_logging.error(
-                        "Failed to connect to Ollama. Is it running?"
-                    )
+                    pc_logging.error("Failed to connect to Ollama. Is it running?")
                     retry = True
                     time.sleep(15)
                 except ollama._types.ResponseError as e:
                     pc_logging.exception(e)
-                    pc_logging.error(
-                        "Failed to generate with Ollama: %s" % str(e)
-                    )
-                    pc_logging.warning(
-                        f"Consider running 'ollama run {model}' first..."
-                    )
+                    pc_logging.error("Failed to generate with Ollama: %s" % str(e))
+                    pc_logging.warning(f"Consider running 'ollama run {model}' first...")
                     if "not found" in str(e):
                         retry = True
                         time.sleep(15)

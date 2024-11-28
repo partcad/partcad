@@ -58,9 +58,7 @@ class SketchFactoryDxf(SketchFactoryFile):
                 )
                 shape = workplane.val().wrapped
             except Exception as e:
-                pc_logging.exception(
-                    "Failed to import the DXF file: %s: %s" % (self.path, e)
-                )
+                pc_logging.exception("Failed to import the DXF file: %s: %s" % (self.path, e))
                 shape = None
 
             self.ctx.stats_sketches_instantiated += 1

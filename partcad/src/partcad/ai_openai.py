@@ -96,9 +96,7 @@ class AiOpenAI:
                         "url": "data:%s;base64,%s"
                         % (
                             mimetypes.guess_type(filename, False)[0],
-                            base64.b64encode(
-                                Path(filename).read_bytes()
-                            ).decode(),
+                            base64.b64encode(Path(filename).read_bytes()).decode(),
                         ),
                         "detail": "high",
                     },

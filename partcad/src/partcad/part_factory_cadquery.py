@@ -26,21 +26,15 @@ from cq_serialize import register as register_cq_helper
 
 
 class PartFactoryCadquery(PartFactoryPython):
-    def __init__(
-        self, ctx, source_project, target_project, config, can_create=False
-    ):
+    def __init__(self, ctx, source_project, target_project, config, can_create=False):
         python_version = source_project.python_version
         if python_version is None:
             # Stay one step ahead of the minimum required Python version
             python_version = "3.10"
         if python_version == "3.12" or python_version == "3.11":
-            pc_logging.debug(
-                "Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery"
-            )
+            pc_logging.debug("Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery")
             python_version = "3.10"
-        with pc_logging.Action(
-            "InitCadQuery", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitCadQuery", target_project.name, config["name"]):
             super().__init__(
                 ctx,
                 source_project,
@@ -57,9 +51,7 @@ class PartFactoryCadquery(PartFactoryPython):
 
         with pc_logging.Action("CadQuery", part.project_name, part.name):
             if not os.path.exists(part.path) or os.path.getsize(part.path) == 0:
-                pc_logging.error(
-                    "CadQuery script is empty or does not exist: %s" % part.path
-                )
+                pc_logging.error("CadQuery script is empty or does not exist: %s" % part.path)
                 return None
 
             # Finish initialization of PythonRuntime
@@ -138,9 +130,7 @@ class PartFactoryCadquery(PartFactoryPython):
                 register_cq_helper()
                 result = pickle.loads(response)
             except Exception as e:
-                part.error(
-                    "Exception while deserializing %s: %s" % (part.name, e)
-                )
+                part.error("Exception while deserializing %s: %s" % (part.name, e))
                 return None
 
             if not result["success"]:

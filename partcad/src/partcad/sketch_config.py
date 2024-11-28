@@ -49,9 +49,7 @@ class SketchConfiguration(ShapeConfiguration):
                         "default": param_value,
                     }
                 # All params are float unless another type is explicitly speciifed
-                elif (
-                    isinstance(param_value, dict) and not "type" in param_value
-                ):
+                elif isinstance(param_value, dict) and not "type" in param_value:
                     param_value["type"] = "float"
 
         return ShapeConfiguration.normalize(name, config)

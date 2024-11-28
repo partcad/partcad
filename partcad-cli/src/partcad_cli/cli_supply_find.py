@@ -52,16 +52,12 @@ def cli_supply_find(args, ctx):
     if args.provider:
         provider = ctx.get_provider(args.provider)
         if not provider.is_qos_available(args.qos):
-            pc.logging.error(
-                f"Provider {provider.name} cannot provide qos: {args.qos}."
-            )
+            pc.logging.error(f"Provider {provider.name} cannot provide qos: {args.qos}.")
         asyncio.run(provider.load(cart))
         for part_spec in cart.parts.values():
             suppliers[str(part_spec)] = []
             if not asyncio.run(provider.is_part_available(part_spec)):
-                pc.logging.error(
-                    f"Provider {provider.name} cannot provide {part_spec.name}."
-                )
+                pc.logging.error(f"Provider {provider.name} cannot provide {part_spec.name}.")
                 return
             suppliers[str(part_spec)].append(provider.name)
     else:
@@ -71,9 +67,7 @@ def cli_supply_find(args, ctx):
     if args.json:
         print(json.dumps(suppliers))
     else:
-        pc.logging.info(
-            "The requested parts are available through the following suppliers:"
-        )
+        pc.logging.info("The requested parts are available through the following suppliers:")
         for spec_str, suppliers in suppliers.items():
             suppliers_str = ""
             for supplier in suppliers:
