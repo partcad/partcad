@@ -56,6 +56,8 @@ from typing import Any
 
 import cadquery as cq
 import OCP
+
+# pool = OCP.OSD.OSD_ThreadPool.DefaultPool_s(1)
 from OCP.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
 from OCP.BinTools import BinTools
 from OCP.gp import gp_Quaternion, gp_Trsf, gp_Vec

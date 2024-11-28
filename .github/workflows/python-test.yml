@@ -38,12 +38,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -U pytest
-          # Install all core and a subset of CLI dependencies, that are required for tests
-          pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
       - name: Install OS-specific dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -64,9 +58,27 @@ jobs:
           curl -o openscad.zip https://files.openscad.org/OpenSCAD-2021.01-x86-64.zip
           Expand-Archive -Force openscad.zip
           Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\openscad\openscad-2021.01
-          # curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
-          # mkdir openscad
-          # ./openscad-installer.exe /S /USERNAME=runneradmin /D=$env:GITHUB_WORKSPACE/openscad
+
+          # Conda
+          ## Uninstall Anaconda
+          conda init --reverse --all --user
+          conda init --reverse --all --system
+          ## Install Miniforge3
+          curl -L -o miniforge.exe https://github.com/conda-forge/miniforge/releases/download/24.9.2-0/Miniforge3-24.9.2-0-Windows-x86_64.exe
+          mkdir miniforge3
+          ./miniforge.exe /S /D=$env:GITHUB_WORKSPACE/miniforge3
+          Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\miniforge3\condabin
+      - name: Initialize conda
+        run: |
+          conda --set auto_activate_base false
+          conda init
+          conda info
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -U pytest
+          # Install all core and a subset of CLI dependencies, that are required for tests
+          pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
       # - name: Test with pytest
       #   env:
       #     PYTHONPATH: partcad/src
@@ -76,11 +88,6 @@ jobs:
       - name: Install CLI
         run: |
           pip install -U ./partcad ./partcad-cli
-      # - name: Refresh the environment (Windows only)
-      #   if: runner.os == 'Windows'
-      #   run: |
-      #     Import-Module $env:ChocolateyInstall\helpers\chocolateyProfile.psm1
-      #     refreshenv
       - name: Basic integration test for CLI
         run: |
           openscad --version

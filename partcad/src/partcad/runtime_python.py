@@ -71,8 +71,7 @@ class PythonRuntime(runtime.Runtime):
         self.exec_path = None
         # The name of the Python executable to search for in bin folders
         self.exec_name = "python" if os.name != "nt" else "python.exe"
-        self.python_flags = []
-        # self.python_flags = ["-Iu"]  # TODO(clairbee): add -P on 3.11+?
+        self.python_flags = ["-Iu"]  # TODO(clairbee): add -P on 3.11+?
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
