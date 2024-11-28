@@ -2,5 +2,7 @@
 
 set -euxo pipefail
 
-poetry --no-ansi --no-plugins install
-poetry --no-ansi --no-plugins run pytest --verbose
+poetry --no-ansi --no-interaction install
+poetry --no-ansi --no-interaction run pytest --verbose
+
+pre-commit run --show-diff-on-failure --color=always --all-files

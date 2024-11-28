@@ -1653,13 +1653,13 @@ all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2
 
 [[package]]
 name = "imageio"
-version = "2.36.0"
+version = "2.36.1"
 description = "Library for reading and writing a wide range of image, video, scientific, and volumetric data formats."
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "imageio-2.36.0-py3-none-any.whl", hash = "sha256:471f1eda55618ee44a3c9960911c35e647d9284c68f077e868df633398f137f0"},
-    {file = "imageio-2.36.0.tar.gz", hash = "sha256:1c8f294db862c256e9562354d65aa54725b8dafed7f10f02bb3ec20ec1678850"},
+    {file = "imageio-2.36.1-py3-none-any.whl", hash = "sha256:20abd2cae58e55ca1af8a8dcf43293336a59adf0391f1917bf8518633cfc2cdf"},
+    {file = "imageio-2.36.1.tar.gz", hash = "sha256:e4e1d231f47f9a9e16100b0f7ce1a86e8856fb4d1c0fa2c4365a316f1746be62"},
 ]
 
 [package.dependencies]

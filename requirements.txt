@@ -845,9 +845,9 @@ imageio-ffmpeg==0.5.1 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:5289f75c7f755b499653f3209fea4efd1430cba0e39831c381aad2d458f7a316 \
     --hash=sha256:7fa9132a291d5eb28c44553550deb40cbdab831f2a614e55360301a6582eb205 \
     --hash=sha256:89efe2c79979d8174ba8476deb7f74d74c331caee3fb2b65ba2883bec0737625
-imageio==2.36.0 ; python_version >= "3.10" and python_version < "4.0" \
-    --hash=sha256:1c8f294db862c256e9562354d65aa54725b8dafed7f10f02bb3ec20ec1678850 \
-    --hash=sha256:471f1eda55618ee44a3c9960911c35e647d9284c68f077e868df633398f137f0
+imageio==2.36.1 ; python_version >= "3.10" and python_version < "4.0" \
+    --hash=sha256:20abd2cae58e55ca1af8a8dcf43293336a59adf0391f1917bf8518633cfc2cdf \
+    --hash=sha256:e4e1d231f47f9a9e16100b0f7ce1a86e8856fb4d1c0fa2c4365a316f1746be62
 imagesize==1.4.1 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:0d8d18d08f840c19d0ee7ca1fd82490fdc3729b7ac93f49870406ddde8ef8d8b \
     --hash=sha256:69150444affb9cb0d5cc5a92b3676f0b2fb7cd9ae39e947a5e11a36b4497cd4a
