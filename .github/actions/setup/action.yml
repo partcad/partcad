@@ -32,7 +32,10 @@ runs:
           mkdir miniforge3
           ./miniforge.exe /S /D=$env:GITHUB_WORKSPACE/miniforge3
           Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\miniforge3\condabin
-          ./miniforge3/condabin/conda init
+          dir
+          dir miniforge3
+          dir miniforge3\condabin
+          $env:GITHUB_WORKSPACE\miniforge3\condabin\conda init
 
     - name: Activate miniforge (Windows)
       shell: bash
