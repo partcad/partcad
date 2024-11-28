@@ -99,7 +99,7 @@ class PythonRuntime(runtime.Runtime):
                 self.ensure_onced("cadquery==2.4.0")
                 self.ensure_onced("numpy==1.24.1")
                 self.ensure_onced("numpy-quaternion==2023.0.4")
-                self.ensure_onced("nptyping==1.4.4")
+                self.ensure_onced("nptyping==2.0.1")
                 # self.ensure_onced("typing_extensions>=4.6.0,<5") # doesn't work on Windows
                 self.ensure_onced("typing_extensions==4.12.2")
                 self.ensure_onced("build123d==0.7.0")
@@ -119,7 +119,7 @@ class PythonRuntime(runtime.Runtime):
                     await self.ensure_async_onced_locked(
                         "numpy-quaternion==2023.0.4"
                     )
-                    await self.ensure_async_onced_locked("nptyping==1.4.4")
+                    await self.ensure_async_onced_locked("nptyping==2.0.1")
                     # await self.ensure_async_onced_locked("typing_extensions>=4.6.0,<5") # doesn't work on Windows
                     await self.ensure_async_onced_locked(
                         "typing_extensions==4.12.2"

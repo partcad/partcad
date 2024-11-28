@@ -16,33 +16,6 @@ runs:
         activate-environment: pc-env
         python-version: ${{ matrix.python-version }}
 
-    # - name: Install Miniforge3 (non-Windows)
-    #   if: runner.os != 'Windows'
-    #   shell: bash
-    #   run: |
-    #       curl -o miniforge.sh https://github.com/conda-forge/miniforge/releases/download/24.9.2-0/Miniforge3-24.9.2-0-$(uname)-$(uname -m).sh
-    #       mkdir miniforge3
-    #       sh ./miniforge.sh -b
-    #       ./miniforge3/condabin/conda init --system
-    # - name: Install Miniforge3 (Windows)
-    #   if: runner.os == 'Windows'
-    #   shell: powershell
-    #   run: |
-    #       curl -o miniforge.exe https://github.com/conda-forge/miniforge/releases/download/24.9.2-0/Miniforge3-24.9.2-0-Windows-x86_64.exe
-    #       mkdir miniforge3
-    #       $process = Start-Process -FilePath "./miniforge.exe" -ArgumentList "/S /D=$env:GITHUB_WORKSPACE/miniforge3" -PassThru
-    #       Wait-Process -Id $process.Id
-    #       Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\miniforge3\condabin
-    #       dir
-    #       dir miniforge3
-    #       dir miniforge3\condabin
-    #       .\miniforge3\condabin\conda init --system
-
-    # - name: Test miniforge
-    #   shell: bash
-    #   run: |
-    #       conda info
-
     - uses: actions/cache@v3
       id: cache
       with:
@@ -51,33 +24,33 @@ runs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    # # Install dev dependencies
-    # - name: install dev dependencies
+    # Install dev dependencies
+    - name: install dev dependencies
+      shell: bash
+      run: |
+        pip install wheel mypy
+    # - name: Update Homebrew
+    #   if: matrix.os == 'macos-latest'
     #   shell: bash
     #   run: |
-    #     pip install wheel mypy
-    # # - name: Update Homebrew
+    #     brew update --preinstall
+    #     # cat "$(brew --repository)/Library/Taps/homebrew/homebrew-core/Formula/nlopt.rb" > .github/brew-formulae
+    # # - name: Configure Homebrew cache
     # #   if: matrix.os == 'macos-latest'
-    # #   shell: bash
-    # #   run: |
-    # #     brew update --preinstall
-    # #     # cat "$(brew --repository)/Library/Taps/homebrew/homebrew-core/Formula/nlopt.rb" > .github/brew-formulae
-    # # # - name: Configure Homebrew cache
-    # # #   if: matrix.os == 'macos-latest'
-    # # #   uses: actions/cache@v2
-    # # #   with:
-    # # #     path: |
-    # # #       ~/Library/Caches/Homebrew/nlopt--*
-    # # #       ~/Library/Caches/Homebrew/downloads/*--nlopt-*
-    # # #     key: brew-${{ hashFiles('.github/brew-formulae') }}
-    # # #     restore-keys: brew-
-    # # - name: Install Homebrew dependencies
-    # #   if: matrix.os == 'macos-latest'
-    # #   shell: bash
-    # #   run: |
-    # #     # env HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
-    # #     HOMEBREW_NO_AUTO_UPDATE=1 brew install gcc
-    # #     HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
+    # #   uses: actions/cache@v2
+    # #   with:
+    # #     path: |
+    # #       ~/Library/Caches/Homebrew/nlopt--*
+    # #       ~/Library/Caches/Homebrew/downloads/*--nlopt-*
+    # #     key: brew-${{ hashFiles('.github/brew-formulae') }}
+    # #     restore-keys: brew-
+    # - name: Install Homebrew dependencies
+    #   if: matrix.os == 'macos-latest'
+    #   shell: bash
+    #   run: |
+    #     # env HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
+    #     HOMEBREW_NO_AUTO_UPDATE=1 brew install gcc
+    #     HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
 
     # cadquery-ocp hack for MacOS with ARM
     - name: install macos dev dependencies

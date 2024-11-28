@@ -37,58 +37,97 @@ jobs:
       - name: Prepare environments
         shell: bash
         run: |
+          mamba init
+
+          mamba create -n env-build python=${{ matrix.python-version }} -y
+          mamba activate env-build
           python -m pip install --upgrade pip build
-          mkdir .venv
-          python -m venv .venv/build
-          (. .venv/build/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
-          python -m venv .venv/build-cli
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
-          python -m venv .venv/install
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
+          mamba deactivate
+
+          mamba create -n env-build-cli python=${{ matrix.python-version }} -y
+          mamba activate env-build-cli
+          python -m pip install --upgrade pip build
+          mamba deactivate
+
+          mamba create -n env-install python=${{ matrix.python-version }} -y
+          mamba activate env-install
+          python -m pip install --upgrade pip build
+          mamba deactivate
 
       # cadquery-ocp hack for MacOS with ARM
       - name: install cadquery-ocp on MacOS (Python 3.10)
         if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.10') }}
         shell: bash
         run: |
-          (. .venv/build/${{ env.BIN_DIR }}/activate && python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl)
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl)
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl)
+          mamba activate env-build
+          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
+          mamba deactivate
+
+          mamba activate env-build-cli
+          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
+          mamba deactivate
+
+          mamba activate install
+          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
+          mamba deactivate
+
       - name: install cadquery-ocp on MacOS (Python 3.11)
         if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.11') }}
         shell: bash
         run: |
-          (. .venv/build/${{ env.BIN_DIR }}/activate && python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl)
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl)
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl)
+          mamba activate env-build
+          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
+          mamba deactivate
+
+          mamba activate env-build-cli
+          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
+          mamba deactivate
+
+          mamba activate install
+          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
+          mamba deactivate
+
       - name: install cadquery-ocp on MacOS (Python 3.12)
         if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.12') }}
         shell: bash
         run: |
-          (. .venv/build/${{ env.BIN_DIR }}/activate && python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl)
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl)
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl)
+          mamba activate env-build
+          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
+          mamba deactivate
+
+          mamba activate env-build-cli
+          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
+          mamba deactivate
+
+          mamba activate install
+          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
+          mamba deactivate
 
       - name: Test building and packaging
         shell: bash
         run: |
           cp LICENSE.txt apache20.svg partcad
-          # cp LICENSE.txt partcad
-          # cp apache20.svg partcad
-          cp LICENSE.txt partcad-cli
-          cp apache20.svg partcad-cli
-          cp README.md partcad-cli
-          (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad && python -m build && cd .. && deactivate)
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad/requirements.txt && deactivate)
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad/dist partcad && deactivate)
-          (. .venv/build-cli/${{ env.BIN_DIR }}/activate && cd partcad-cli && python -m build && cd .. && deactivate)
+          mamba activate env-build
+          (cd partcad && python -m build)
+          mamba deactivate
+
+          cp LICENSE.txt apache20.svg README.md partcad-cli
+          mamba activate env-build-cli
+          python -m pip install -r partcad/requirements.txt
+          python -m pip install --no-index --find-links=partcad/dist ./partcad
+          (cd partcad-cli && python -m build)
+          mamba deactivate
+
       - name: Test installation
         shell: bash
         run: |
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad/requirements.txt     && deactivate)
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad/dist     partcad && deactivate)
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad-cli/requirements.txt && deactivate)
-          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli && deactivate)
+          mamba activate install
+          python -m pip install -r partcad/requirements.txt
+          python -m pip install --no-index --find-links=partcad/dist ./partcad
+          python -m pip install -r partcad-cli/requirements.txt
+          python -m pip install --no-index --find-links=partcad-cli/dist ./partcad-cli
+          mamba deactivate
+
       - name: Build documentation
         shell: bash
         run: |
