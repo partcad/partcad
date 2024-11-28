@@ -2,7 +2,7 @@
 #
 # OpenVMP, 2023
 #
-# Author: Roman Kuzmenko
+# Author: PartCAD Inc. <support@partcad.org>
 # Created: 2023-08-19
 #
 # Licensed under Apache License, Version 2.0.
@@ -23,7 +23,7 @@ test_config_local = {
 test_config_git = {
     "name": "/primitive_git",
     "type": "git",
-    "url": "https://github.com/openvmp/partcad",
+    "url": "https://github.com/partcad/partcad",
     "revision": "devel",
     "relPath": "examples/produce_part_cadquery_primitive",
 }

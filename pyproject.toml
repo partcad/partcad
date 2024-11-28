@@ -38,8 +38,7 @@ name = "partcad-dev"
 version = "0.1.0"
 description = "Development Environment for PartCAD"
 authors = [
-  "Roman Kuzmenko <support@partcad.org>",
-  "Alexander Ilyin <alexander@ilyin.eu>"
+  "PartCAD Inc. <support@partcad.org>",
 ]
 license = "Apache 2.0"
 readme = "README.md"
@@ -74,6 +73,7 @@ sphinx-autodoc-typehints = "1.12.0"
 sphinx-copybutton = "^0.5.2"
 sphinx-hoverxref = "^1.4.2"
 sphinx-design = "^0.6.1"
+mkdocs-material = "^9.5.46"
 
 [tool.poetry.group.partcad.dependencies]
 ocp-tessellate = "^3.0.8"

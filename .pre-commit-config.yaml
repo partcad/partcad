@@ -48,3 +48,11 @@ repos:
       types: [shell]
       args: ["-e", "SC1091"]  # Optional: exclude specific checks
       # args: ["--severity=warning"]  # Optional: show only errors and warnings
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+    -   id: shellcheck

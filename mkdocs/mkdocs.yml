@@ -1,0 +1,7 @@
+site_name: Technonomicon
+site_url: https://github.com/partcad/partcad
+
+theme: material
+markdown_extensions:
+  - pymdownx.tasklist:
+      custom_checkbox: true

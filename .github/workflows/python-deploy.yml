@@ -97,7 +97,7 @@ jobs:
       - name: Determine the release tag
         if: github.ref == 'refs/heads/main'
         run: |
-          git clone https://github.com/openvmp/partcad partcad-git;
+          git clone https://github.com/partcad/partcad partcad-git;
           cd partcad-git;
           echo "MERGED_TAG=$(git describe --abbrev=0)" >> $GITHUB_ENV
 
@@ -112,9 +112,11 @@ jobs:
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: "${{ github.ref == 'refs/heads/main' &&
+          repository-url:
+            "${{ github.ref == 'refs/heads/main' &&
             'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
             }}"
           user: __token__
-          password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY ||
+          password:
+            "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY ||
             secrets.TEST_PYPI_KEY }}"

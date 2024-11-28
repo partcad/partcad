@@ -27,7 +27,7 @@ Alternatively, manually create ``partcad.yaml`` with the following content:
       # Public PartCAD repository (reference it explicitly if required)
       pub:
         type: git
-        url: https://github.com/openvmp/partcad-index.git
+        url: https://github.com/partcad/partcad-index.git
 
 Now launch ``pc list`` to see the list of packages currently available in
 the public PartCAD repository.

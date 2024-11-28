@@ -1,7 +1,7 @@
 #
 # OpenVMP, 2023-2024
 #
-# Author: Roman Kuzmenko
+# Author: PartCAD Inc. <support@partcad.org>
 # Created: 2024-04-08
 #
 # Licensed under Apache License, Version 2.0.

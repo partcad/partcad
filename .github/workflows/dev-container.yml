@@ -1,5 +1,5 @@
 # https://github.com/devcontainers/ci/blob/main/docs/github-action.md
-name: 'Dev Container CI'
+name: "Dev Container CI"
 on:
   pull_request:
   push:
@@ -16,7 +16,6 @@ jobs:
       contents: read
       packages: write
     steps:
-
       - name: Checkout (GitHub)
         uses: actions/checkout@v3
 
@@ -33,6 +32,7 @@ jobs:
           imageName: ghcr.io/partcad/partcad-devcontainer
           cacheFrom: ghcr.io/partcad/partcad-devcontainer
           push: always
-          runCmd: |
-            poetry install
-            poetry run pytest --verbose
+          # TODO: @alexanderilyin: cache "poetry install"
+          # TODO: @alexanderilyin: Allure
+          # TODO: @alexanderilyin: Code Coverage
+          runCmd: .github/scripts/dev-container.sh

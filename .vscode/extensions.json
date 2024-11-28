@@ -1,22 +1,23 @@
 {
   "recommendations": [
-    // Python
-    "ms-python.vscode-pylance",
-    "ms-python.black-formatter",
-    "donjayamanne.python-environment-manager",
-    // CAD
     "bernhard-42.ocp-cad-viewer",
-    // YAML
-    "redhat.vscode-yaml",
-    // Markdown
-    "yzhang.markdown-all-in-one",
     "bierner.github-markdown-preview",
-    "bierner.markdown-preview-github-styles",
     "bierner.markdown-checkbox",
-    "bierner.markdown-yaml-preamble",
     "bierner.markdown-footnotes",
     "bierner.markdown-mermaid",
-    // Jinja2
+    "bierner.markdown-preview-github-styles",
+    "bierner.markdown-yaml-preamble",
+    "donjayamanne.python-environment-manager",
+    "esbenp.prettier-vscode",
+    "GitHub.copilot",
+    "GitHub.vscode-github-actions",
+    "GitHub.vscode-pull-request-github",
+    "ms-python.black-formatter",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "psioniq.psi-header",
+    "redhat.vscode-yaml",
     "samuelcolvin.jinjahtml",
+    "yzhang.markdown-all-in-one",
   ]
 }

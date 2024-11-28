@@ -1,5 +1,44 @@
 {
   "partcad.packagePath": "examples",
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "prettier.tabWidth": 4
+  },
+  "psi-header.config": {
+    "author": "PartCAD Inc.",
+    "authorEmail": "support@partcad.org",
+    "blankLinesAfter": 1,
+    "company": "PartCAD Inc.",
+    "copyrightHolder": "PartCAD Inc.",
+    "creationDateZero": "asIs",
+    "forceToTop": true,
+    "hostname": "https://partcad.org/",
+    "license": "Apache License, Version 2.0",
+    "spacesBetweenYears": false
+  },
+  "psi-header.lang-config": [
+    {
+      "begin": "",
+      "end": "",
+      "language": "python",
+      "prefix": "# "
+    }
+  ],
+  "psi-header.templates": [
+    {
+      "language": "python",
+      "template": [
+        "",
+        "OpenVMP, 2023-2024",
+        "",
+        "Author: <<author>> (<<authorEmail>>)",
+        "Created: <<date>>",
+        "",
+        "Licensed under Apache License, Version 2.0.",
+        "",
+      ]
+    }
+  ],
 
   "files.trimFinalNewlines": true,
   "files.encoding": "utf8",
@@ -10,7 +49,9 @@
   "editor.formatOnSave": true,
   "editor.formatOnType": true,
   "editor.autoIndent": "full",
-  "editor.rulers": [80],
+  "editor.rulers": [
+    120
+  ],
   "files.exclude": {
     ".git/**": true,
     "**/__pycache__": true,
@@ -44,7 +85,9 @@
     "partcad*/dist": true
   },
   "markdown.extension.toc.omittedFromToc": {
-    "README.md": ["# PartCAD"]
+    "README.md": [
+      "# PartCAD"
+    ]
   },
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter"
@@ -56,7 +99,12 @@
   "python.terminal.launchArgs": [],
   // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
   "OcpCadViewer.advanced.autostart": false,
-  "yaml.format.bracketSpacing": false,  // prevent YAML formatter from breaking Jinja2 templates
+  "yaml.format.bracketSpacing": false, // prevent YAML formatter from breaking Jinja2 templates
   "esbonio.sphinx.confDir": "",
-  "files.eol": "\n"
+  "files.eol": "\n",
+  "prettier.proseWrap": "always",
+  "prettier.printWidth": 120,
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  "python.envFile": "${workspaceFolder}/.env",
+
 }

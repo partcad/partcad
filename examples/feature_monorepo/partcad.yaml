@@ -4,7 +4,7 @@ import:
   pub:
     onlyInRoot: True
     type: git
-    url: https://github.com/openvmp/partcad-index.git
+    url: https://github.com/partcad/partcad-index.git
 
 parts:
   # This is a degenerate case pointing inside a child package, for testing purposes only.

@@ -1,7 +1,7 @@
 #
 # OpenVMP, 2024
 #
-# Author: Roman Kuzmenko
+# Author: PartCAD Inc. <support@partcad.org>
 # Created: 2024-03-23
 #
 # Licensed under Apache License, Version 2.0.
@@ -342,7 +342,7 @@ The part is further described by the following properties:
         image_filenames = self.ai_config.get("images", [])
         if len(image_filenames) > 0:
             prompt += """
-            
+
 The part is further described by the images:
 """
             for image_filename in image_filenames:
@@ -392,7 +392,7 @@ Ensure that all primitives are placed in the correct coordinates and that all di
         image_filenames = self.ai_config.get("images", [])
         if len(image_filenames) > 0:
             prompt += """
-            
+
 The part is further described by the images:
 """
             for image_filename in image_filenames:
@@ -435,7 +435,7 @@ IMPORTANT: Output the %s itself and do not add any text or comments before or af
         prompt = """You are an AI assistant in an engineering department.
 You are asked to create a %s matching the given description%s.
 
-The given description follows (until DESCRIPTION END): 
+The given description follows (until DESCRIPTION END):
 %s
 DESCRIPTION END
 """ % (
