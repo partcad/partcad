@@ -117,6 +117,7 @@ class PartFactoryCadquery(PartFactoryPython):
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
+            # TODO(clairbee): Move the following code to a separate method in wrapper.py
             response_serialized, errors = await self.runtime.run_async(
                 [
                     wrapper_path,

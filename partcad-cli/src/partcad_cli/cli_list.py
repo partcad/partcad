@@ -166,10 +166,6 @@ def cli_list(args, ctx):
     projects = ctx.get_all_packages()
     projects = sorted(projects, key=lambda p: p["name"])
 
-    # TODO(clairbee): remove the following workaround after replacing 'print'
-    # with corresponding logging calls
-    time.sleep(2)
-
     output = "PartCAD packages:\n"
     for project in projects:
         project_name = project["name"]
@@ -200,16 +196,18 @@ def cli_list_sketches(args, ctx):
     else:
         ctx.get_all_packages()
 
-    # TODO(clairbee): remove the following workaround after replacing 'print'
-    # with corresponding logging calls
-    time.sleep(2)
-
     output = "PartCAD sketches:\n"
     for project_name in ctx.projects:
         if (
             not args.recursive
             and args.package is not None
             and args.package != project_name
+        ):
+            continue
+
+        if (
+            not args.recursive
+            and project_name != ctx.get_current_project_path()
         ):
             continue
 
@@ -276,16 +274,18 @@ def cli_list_interfaces(args, ctx):
     else:
         ctx.get_all_packages()
 
-    # TODO(clairbee): remove the following workaround after replacing 'print'
-    # with corresponding logging calls
-    time.sleep(2)
-
     output = "PartCAD interfaces:\n"
     for project_name in ctx.projects:
         if (
             not args.recursive
             and args.package is not None
             and args.package != project_name
+        ):
+            continue
+
+        if (
+            not args.recursive
+            and project_name != ctx.get_current_project_path()
         ):
             continue
 
@@ -350,10 +350,6 @@ def cli_list_mates(args, ctx):
         ctx.get_assembly(args.used_by)
     else:
         ctx.get_all_packages()
-
-    # TODO(clairbee): remove the following workaround after replacing 'print'
-    # with corresponding logging calls
-    time.sleep(2)
 
     # Instantiate all interfaces in the relevant packages to get the mating data
     # finalized
@@ -477,16 +473,18 @@ def cli_list_parts(args, ctx):
     else:
         ctx.get_all_packages()
 
-    # TODO(clairbee): remove the following workaround after replacing 'print'
-    # with corresponding logging calls
-    time.sleep(2)
-
     output = "PartCAD parts:\n"
     for project_name in ctx.projects:
         if (
             not args.recursive
             and args.package is not None
             and args.package != project_name
+        ):
+            continue
+
+        if (
+            not args.recursive
+            and project_name != ctx.get_current_project_path()
         ):
             continue
 
@@ -545,15 +543,11 @@ def cli_list_assemblies(args, ctx):
     assy_kinds = 0
 
     if args.used_by is not None:
-        print("Instantiating %s..." % args.used_by)
+        pc.logging.info("Instantiating %s..." % args.used_by)
         # TODO(clairbee): do not call it twice in 'list-all'
         ctx.get_assembly(args.used_by)
     else:
         ctx.get_all_packages()
-
-    # TODO(clairbee): remove the following workaround after replacing 'print'
-    # with corresponding logging calls
-    time.sleep(2)
 
     output = "PartCAD assemblies:\n"
     for project_name in ctx.projects:
@@ -561,6 +555,12 @@ def cli_list_assemblies(args, ctx):
             not args.recursive
             and args.package is not None
             and args.package != project_name
+        ):
+            continue
+
+        if (
+            not args.recursive
+            and project_name != ctx.get_current_project_path()
         ):
             continue
 

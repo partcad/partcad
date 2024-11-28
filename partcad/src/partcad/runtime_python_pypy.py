@@ -17,6 +17,7 @@ class PyPyPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "pypy", version)
 
+        self.exec_name = "pypy" if os.name != "nt" else "pypy.exe"
         if not self.initialized:
             which = shutil.which("pypy")
             if which is None:
@@ -41,25 +42,3 @@ class PyPyPythonRuntime(runtime_python.PythonRuntime):
             except Exception as e:
                 shutil.rmtree(self.path)
                 raise e
-
-    def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        # TODO: python_path = self.get_venv_python_path(session, path)
-        return super().run_onced(
-            ["conda", "run", "--no-capture-output", "-p", self.path, "pypy"]
-            + cmd,
-            stdin,
-            cwd=cwd,
-            session=session,
-        )
-
-    async def run_async_onced(
-        self, cmd, stdin="", cwd=None, session=None, path=None
-    ):
-        # TODO: python_path = self.get_venv_python_path(session, path)
-        return await super().run_async_onced(
-            ["conda", "run", "--no-capture-output", "-p", self.path, "pypy"]
-            + cmd,
-            stdin,
-            cwd=cwd,
-            session=session,
-        )

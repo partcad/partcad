@@ -22,30 +22,32 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
         self.initialized_conda = self.initialized
         self.conda_path = shutil.which("mamba")
-        # if self.conda_path is None:
-        #     self.conda_cli = importlib.import_module("conda.cli.python_api")
-        #     self.conda_cli.run_command("config", "--quiet")
-        #     info_json, _, _ = self.conda_cli.run_command("info", "--json")
-        #     info = json.loads(info_json)
-        #     if "CONDA_EXE" in info["env_vars"]:
-        #         self.conda_path = info["env_vars"]["CONDA_EXE"]
-        #     else:
-        #         root_prefix = info["root_prefix"]
-        #         root_bin = os.path.join(root_prefix, "bin")
-        #         root_scripts = os.path.join(root_prefix, "Scripts")
-        #         search_paths = [
-        #             root_scripts,
-        #             root_bin,
-        #             root_prefix,
-        #         ]
-        #         if os.name == "nt":
-        #             search_path_strings = ";".join(search_paths)
-        #         else:
-        #             search_path_strings = ":".join(search_paths)
-        #         self.conda_path = shutil.which(
-        #             "conda",
-        #             path=search_path_strings,
-        #         )
+        if self.conda_path is None:
+            self.conda_path = shutil.which("conda")
+        if self.conda_path is None:
+            self.conda_cli = importlib.import_module("conda.cli.python_api")
+            self.conda_cli.run_command("config", "--quiet")
+            info_json, _, _ = self.conda_cli.run_command("info", "--json")
+            info = json.loads(info_json)
+            if "CONDA_EXE" in info["env_vars"]:
+                self.conda_path = info["env_vars"]["CONDA_EXE"]
+            else:
+                root_prefix = info["root_prefix"]
+                root_bin = os.path.join(root_prefix, "bin")
+                root_scripts = os.path.join(root_prefix, "Scripts")
+                search_paths = [
+                    root_scripts,
+                    root_bin,
+                    root_prefix,
+                ]
+                if os.name == "nt":
+                    search_path_strings = ";".join(search_paths)
+                else:
+                    search_path_strings = ":".join(search_paths)
+                self.conda_path = shutil.which(
+                    "conda",
+                    path=search_path_strings,
+                )
 
     def once(self):
         with self.lock:
@@ -115,45 +117,3 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 except Exception as e:
                     shutil.rmtree(self.path)
                     raise e
-
-    def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        python_path = self.get_venv_python_path(session, path)
-
-        return super().run_onced(
-            [
-                self.conda_path,
-                "run",
-                "--no-capture-output",
-                # "-vvvvvvvvv",
-                "-p",
-                self.path,
-                python_path,
-                *self.python_flags,
-            ]
-            + cmd,
-            stdin,
-            cwd=cwd,
-            session=session,
-        )
-
-    async def run_async_onced(
-        self, cmd, stdin="", cwd=None, session=None, path=None
-    ):
-        python_path = self.get_venv_python_path(session, path)
-
-        return await super().run_async_onced(
-            [
-                self.conda_path,
-                "run",
-                "--no-capture-output",
-                # "-vvvvvvvvv",
-                "-p",
-                self.path,
-                python_path,
-                *self.python_flags,
-            ]
-            + cmd,
-            stdin,
-            cwd=cwd,
-            session=session,
-        )

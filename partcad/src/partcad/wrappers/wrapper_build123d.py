@@ -44,7 +44,7 @@ def process(path, request):
     if "build_parameters" in request:
         build_parameters = request["build_parameters"]
 
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         script = f.read()
     for old, new in patch.items():
         script = re.sub(old, new, script, flags=re.MULTILINE)

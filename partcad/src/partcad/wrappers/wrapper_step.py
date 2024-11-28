@@ -8,7 +8,7 @@
 #
 
 # This script is executed within the python sandbox environment (python runtime)
-# to invoke `cadquery` scripts.
+# to read STEP files.
 
 import os
 import sys
