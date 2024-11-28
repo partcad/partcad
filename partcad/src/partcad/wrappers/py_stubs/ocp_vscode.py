@@ -317,9 +317,7 @@ def show_clear():
     pass
 
 
-def show_all(
-    variables=None, exclude=None, classes=None, _visual_debug=False, **kwargs
-):
+def show_all(variables=None, exclude=None, classes=None, _visual_debug=False, **kwargs):
     import inspect
     import re
 
@@ -345,10 +343,7 @@ def show_all(
             continue
 
         if name not in exclude:
-            if (
-                hasattr(obj, "_obj")
-                and obj._obj is None  # pylint: disable=protected-access
-            ):
+            if hasattr(obj, "_obj") and obj._obj is None:  # pylint: disable=protected-access
                 continue
 
             if hasattr(obj, "locations") and hasattr(obj, "local_locations"):
@@ -370,11 +365,7 @@ def show_all(
                 or is_cadquery(obj)
                 or is_build123d(obj)
                 or is_cadquery_assembly(obj)
-                or (
-                    hasattr(obj, "wrapped")
-                    and hasattr(obj, "position")
-                    and hasattr(obj, "direction")
-                )
+                or (hasattr(obj, "wrapped") and hasattr(obj, "position") and hasattr(obj, "direction"))
             ):
                 objects.append(obj)
                 names.append(name)

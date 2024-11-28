@@ -66,9 +66,7 @@ def cli_ai_regenerate(args, ctx):
 
     if not ":" in args.object:
         args.object = ":" + args.object
-    args.package, args.object = pc_utils.resolve_resource_path(
-        ctx.get_current_project_path(), args.object
-    )
+    args.package, args.object = pc_utils.resolve_resource_path(ctx.get_current_project_path(), args.object)
 
     package = ctx.get_project(args.package)
     obj = package.get_part(args.object)

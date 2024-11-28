@@ -198,7 +198,7 @@ The public repository
 
 The public PartCAD repository is created and maintained by the community
 based on the PartCAD standards and conventions. It is hosted on
-`GitHub <https://github.com/openvmp/partcad-index>`_.
+`GitHub <https://github.com/partcad/partcad-index>`_.
 
 The top levels of the package hierarchy are expected to be maintained by the
 PartCAD community.

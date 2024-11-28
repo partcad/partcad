@@ -65,8 +65,7 @@ class PartFactoryStep(PartFactoryFile):
 
             with PartFactoryStep.lock:
                 if (
-                    PartFactoryStep.count_inflight_simple
-                    < PartFactoryStep.MIN_SIMPLE_INFLIGHT
+                    PartFactoryStep.count_inflight_simple < PartFactoryStep.MIN_SIMPLE_INFLIGHT
                     or file_size < PartFactoryStep.MIN_SUBPROCESS_FILE_SIZE
                 ):
                     PartFactoryStep.count_inflight_simple += 1

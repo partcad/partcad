@@ -37,8 +37,7 @@ class SketchFactoryFile(SketchFactory):
 
         if not os.path.isdir(source_project.config_dir):
             raise Exception(
-                "ERROR: The project config directory must be a directory, found: '%s'"
-                % source_project.config_dir
+                "ERROR: The project config directory must be a directory, found: '%s'" % source_project.config_dir
             )
         self.path = os.path.join(source_project.config_dir, self.path)
 
@@ -47,17 +46,11 @@ class SketchFactoryFile(SketchFactory):
             # check if the file exists
             exists = os.path.exists(self.path)
             if not can_create and not exists:
-                raise Exception(
-                    "ERROR: The sketch path (%s) must exist" % self.path
-                )
+                raise Exception("ERROR: The sketch path (%s) must exist" % self.path)
             if exists and not os.path.isfile(self.path):
-                raise Exception(
-                    "ERROR: The sketch path (%s) must be a file" % self.path
-                )
+                raise Exception("ERROR: The sketch path (%s) must be a file" % self.path)
 
     async def instantiate(self, sketch):
         if not self.fileFactory is None and not os.path.exists(sketch.path):
-            with pc_logging.Action(
-                "File", self.target_project.name, sketch.name
-            ):
+            with pc_logging.Action("File", self.target_project.name, sketch.name):
                 await self.fileFactory.download(sketch.path)

@@ -65,10 +65,7 @@ class Part(ShapeWithAi):
         if (
             self.vendor is None
             and self.sku is None
-            and (
-                not "parameters" in self.config
-                or not property in self.config["parameters"]
-            )
+            and (not "parameters" in self.config or not property in self.config["parameters"])
         ):
             shape = await self.get_shape()
             # TODO(clairbee): derive the property from the model

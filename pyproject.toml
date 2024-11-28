@@ -1,6 +1,17 @@
 
 [tool.pytest.ini_options]
 pythonpath = "partcad/src"
+addopts = """
+    --junitxml=test-results/junit.xml
+    --html=test-results/report.html
+    --self-contained-html
+    --durations=0
+    --durations-min=1.0
+    --alluredir=allure-results
+    --cov=partcad
+    --cov-report=xml:test-results/coverage.xml
+    --cov-report=html:test-results/htmlcov
+    """
 filterwarnings = [
     "ignore:.*is a deprecated alias for.*:DeprecationWarning"
 ]
@@ -38,8 +49,7 @@ name = "partcad-dev"
 version = "0.1.0"
 description = "Development Environment for PartCAD"
 authors = [
-  "Roman Kuzmenko <support@partcad.org>",
-  "Alexander Ilyin <alexander@ilyin.eu>"
+  "PartCAD <support@partcad.org>",
 ]
 license = "Apache 2.0"
 readme = "README.md"
@@ -59,27 +69,32 @@ python = "^3.10"
 black = "^24.10.0"
 flake8 = "^7.1.1"
 isort = "^5.13.2"
+
+[tool.poetry.group.test.dependencies]
 pytest = "^8.3.3"
 pytest-cov = "^6.0.0"
-sphinx = "^8.1.3"
-sphinx-rtd-theme = "^3.0.2"
-readthedocs-sphinx-search = "^0.3.2"
+pytest-html = "^4.1.1"
+pytest-durations = "^1.3.1"
+allure-pytest = "^2.13.5"
+coverage = "^7.6.8"
 
 [tool.poetry.group.docs.dependencies]
 sphinx = "^8.1.3"
-sphinx-rtd-theme = ">=0.5.1"
+sphinx-rtd-theme = "^3.0.2"
 docutils = "^0.21.2"
 readthedocs-sphinx-search = "^0.3.2"
 sphinx-autodoc-typehints = "1.12.0"
 sphinx-copybutton = "^0.5.2"
 sphinx-hoverxref = "^1.4.2"
 sphinx-design = "^0.6.1"
+mkdocs-material = "^9.5.46"
+mdx-truly-sane-lists = "^1.3"
+sphinx-autobuild = "^2024.10.3"
 
 [tool.poetry.group.partcad.dependencies]
 ocp-tessellate = "^3.0.8"
 cadquery = ">=2.4.0"
 build123d = "0.7.0"
-scipy = ">=1.11.1"
 pyyaml = ">=6.0.1"
 gitpython = ">=3.1.40"
 ruamel-yaml = ">=0.18.5"

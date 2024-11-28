@@ -24,9 +24,7 @@ DEFAULT_CONFIG_FILENAME = "partcad.yaml"
 class Configuration:
     name: str
 
-    def __init__(
-        self, name, config_path=DEFAULT_CONFIG_FILENAME, include_paths=[]
-    ):
+    def __init__(self, name, config_path=DEFAULT_CONFIG_FILENAME, include_paths=[]):
         self.name = name
         self.config_obj = {}
         self.config_dir = config_path
@@ -34,17 +32,12 @@ class Configuration:
         self.broken = False
 
         if os.path.isdir(config_path):
-            self.config_path = os.path.join(
-                config_path, DEFAULT_CONFIG_FILENAME
-            )
+            self.config_path = os.path.join(config_path, DEFAULT_CONFIG_FILENAME)
         else:
             self.config_dir = os.path.dirname(os.path.abspath(config_path))
 
         if not os.path.isfile(self.config_path):
-            pc_logging.error(
-                "PartCAD configuration file is not found: '%s'"
-                % self.config_path
-            )
+            pc_logging.error("PartCAD configuration file is not found: '%s'" % self.config_path)
             self.broken = True
             return
 
@@ -57,9 +50,7 @@ class Configuration:
         loaders = [FileSystemLoader(self.config_dir + os.path.sep)]
         # TODO(clairbee): mark the build as non-hermetic if includePaths is used
         for include_path in include_paths:
-            include_path = (
-                os.path.join(self.config_dir, include_path) + os.path.sep
-            )
+            include_path = os.path.join(self.config_dir, include_path) + os.path.sep
             loaders.append(FileSystemLoader(include_path))
         loader = ChoiceLoader(loaders)
         template = Environment(loader=loader).from_string(config)

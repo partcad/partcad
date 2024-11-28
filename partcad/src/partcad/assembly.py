@@ -50,10 +50,7 @@ class Assembly(ShapeWithAi):
                 self.shape = None  # Invalidate if any
                 await pc_thread.run(self.instantiate, self)
                 if len(self.children) == 0:
-                    pc_logging.warning(
-                        "The assembly %s:%s is empty"
-                        % (self.project_name, self.name)
-                    )
+                    pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
 
     # add is a non-thread-safe method for end users to create custom Assemblies
     def add(
@@ -78,9 +75,7 @@ class Assembly(ShapeWithAi):
         async with self.locked():
             if hasattr(self, "project_name"):
                 # This is the top level assembly
-                with pc_logging.Action(
-                    "Assembly", self.project_name, self.name
-                ):
+                with pc_logging.Action("Assembly", self.project_name, self.name):
                     return await self._get_shape_real()
             else:
                 return await self._get_shape_real()
@@ -99,10 +94,7 @@ class Assembly(ShapeWithAi):
                 return item
 
             if len(self.children) == 0:
-                pc_logging.warning(
-                    "The assembly %s:%s is empty"
-                    % (self.project_name, self.name)
-                )
+                pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
             for child in self.children:
                 tasks.append(per_child(child))
 

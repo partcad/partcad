@@ -25,9 +25,7 @@ def process(path, request):
         b3d_obj.wrapped = request["wrapped"]
 
         viewport_origin = tuple(request["viewport_origin"])
-        visible, hidden = b3d_obj.project_to_viewport(
-            viewport_origin=viewport_origin
-        )
+        visible, hidden = b3d_obj.project_to_viewport(viewport_origin=viewport_origin)
         # visible = b3d_obj.project_to_viewport(
         #     viewport_origin=viewport_origin,
         #     ignore_hidden=True,

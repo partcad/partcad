@@ -5,10 +5,10 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: "_ai_.+\\.(py|scad)"
+        exclude: "^examples/|_ai_.+\\.(py|scad)"
         exclude_types: [svg]
       - id: end-of-file-fixer
-        exclude: "_ai_.+\\.(py|scad)"
+        exclude: "^examples/|_ai_.+\\.(py|scad)"
         exclude_types: [svg]
       - id: check-yaml
         exclude: "^partcad/tests/unit/data/project_config_(template|include).yaml$"
@@ -48,3 +48,11 @@ repos:
       types: [shell]
       args: ["-e", "SC1091"]  # Optional: exclude specific checks
       # args: ["--severity=warning"]  # Optional: show only errors and warnings
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+    -   id: shellcheck

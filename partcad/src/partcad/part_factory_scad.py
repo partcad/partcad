@@ -20,12 +20,8 @@ from . import logging as pc_logging
 
 
 class PartFactoryScad(PartFactoryFile):
-    def __init__(
-        self, ctx, source_project, target_project, config, can_create=False
-    ):
-        with pc_logging.Action(
-            "InitOpenSCAD", target_project.name, config["name"]
-        ):
+    def __init__(self, ctx, source_project, target_project, config, can_create=False):
+        with pc_logging.Action("InitOpenSCAD", target_project.name, config["name"]):
             super().__init__(
                 ctx,
                 source_project,
@@ -44,16 +40,12 @@ class PartFactoryScad(PartFactoryFile):
 
         with pc_logging.Action("OpenSCAD", part.project_name, part.name):
             if not os.path.exists(part.path) or os.path.getsize(part.path) == 0:
-                pc_logging.error(
-                    "OpenSCAD script is empty or does not exist: %s" % part.path
-                )
+                pc_logging.error("OpenSCAD script is empty or does not exist: %s" % part.path)
                 return None
 
             scad_path = shutil.which("openscad")
             if scad_path is None:
-                raise Exception(
-                    "OpenSCAD executable is not found. Please, install OpenSCAD first."
-                )
+                raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 
             stl_path = tempfile.mktemp(".stl")
             p = await asyncio.create_subprocess_exec(
@@ -77,9 +69,7 @@ class PartFactoryScad(PartFactoryFile):
                     pc_logging.debug("%s: %s" % (part.name, error_line))
 
             if not os.path.exists(stl_path) or os.path.getsize(stl_path) == 0:
-                part.error(
-                    "OpenSCAD failed to generate the STL file. Please, check the script."
-                )
+                part.error("OpenSCAD failed to generate the STL file. Please, check the script.")
                 return None
 
             try:

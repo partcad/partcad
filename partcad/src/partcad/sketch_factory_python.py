@@ -50,9 +50,7 @@ class SketchFactoryPython(SketchFactoryFile):
         """
 
         # Install dependencies of this package
-        await self.runtime.prepare_for_package(
-            self.project, session=self.session
-        )
+        await self.runtime.prepare_for_package(self.project, session=self.session)
         await self.runtime.prepare_for_shape(self.config, session=self.session)
 
     def info(self, sketch):

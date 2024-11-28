@@ -39,10 +39,7 @@ The design is stored in the folder "%s" and is named "%s".
             self.name,
         )
         if not self.desc is None:
-            prompt += (
-                'The design is accompanied by the following description: "%s". '
-                % self.desc
-            )
+            prompt += 'The design is accompanied by the following description: "%s". ' % self.desc
         prompt += """Create a text which describes the design displayed on the
 image so that a blind person (with background in mechanical engineering and
 computer aided design) can picture it in their mind.
@@ -53,11 +50,7 @@ Produce text which is ready to be narrated as is.
 """
 
         config = {
-            "model": (
-                "gpt-4o"
-                if not user_config.openai_api_key is None
-                else "gemini-1.5-pro"
-            ),
+            "model": ("gpt-4o" if not user_config.openai_api_key is None else "gemini-1.5-pro"),
         }
         summary = self.generate(
             "Desc",

@@ -48,10 +48,7 @@ class UserConfig:
         # description: sandboxing environment for invoking python scripts
         # values: [none | pypy | conda]
         # default: conda
-        if (
-            not shutil.which("conda") is None
-            or importlib.util.find_spec("conda") is not None
-        ):
+        if not shutil.which("conda") is None or importlib.util.find_spec("conda") is not None:
             self.python_runtime = "conda"
         else:
             self.python_runtime = "none"
@@ -109,9 +106,7 @@ class UserConfig:
         # values: <integer>
         # default: None
         if "maxGeometricModeling" in self.config_obj:
-            self.max_geometric_modeling = int(
-                self.config_obj["maxGeometricModeling"]
-            )
+            self.max_geometric_modeling = int(self.config_obj["maxGeometricModeling"])
         else:
             self.max_geometric_modeling = None
 
@@ -120,9 +115,7 @@ class UserConfig:
         # values: <integer>
         # default: None
         if "maxModelGeneration" in self.config_obj:
-            self.max_model_generation = int(
-                self.config_obj["maxModelGeneration"]
-            )
+            self.max_model_generation = int(self.config_obj["maxModelGeneration"])
         else:
             self.max_model_generation = None
 
@@ -131,9 +124,7 @@ class UserConfig:
         # values: <integer>
         # default: None
         if "maxScriptCorrection" in self.config_obj:
-            self.max_script_correction = int(
-                self.config_obj["maxScriptCorrection"]
-            )
+            self.max_script_correction = int(self.config_obj["maxScriptCorrection"])
         else:
             self.max_script_correction = None
 

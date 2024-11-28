@@ -63,9 +63,7 @@ def cli_supply_quote(args, ctx):
         preferred_suppliers = ctx.select_preferred_suppliers(suppliers)
         pc.logging.debug("Preferred suppliers: %s" % str(preferred_suppliers))
 
-    supplier_carts = asyncio.run(
-        ctx.prepare_supplier_carts(preferred_suppliers)
-    )
+    supplier_carts = asyncio.run(ctx.prepare_supplier_carts(preferred_suppliers))
     quotes = asyncio.run(ctx.supplier_carts_to_quotes(supplier_carts))
     pc.logging.debug("Quotes: %s" % str(quotes))
 

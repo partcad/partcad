@@ -25,9 +25,7 @@ from .utils import normalize_resource_path
 class AssemblyFactoryAssy(AssemblyFactoryFile):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):
-            super().__init__(
-                ctx, source_project, target_project, config, extension=".assy"
-            )
+            super().__init__(ctx, source_project, target_project, config, extension=".assy")
             # Complement the config object here if necessary
             self._create(config)
 
@@ -64,33 +62,24 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 fp.close()
 
                 # Resolve Jinja templates
-                template = Environment(
-                    loader=FileSystemLoader(
-                        os.path.dirname(self.path) + os.path.sep
-                    )
-                ).from_string(config)
+                template = Environment(loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep)).from_string(
+                    config
+                )
                 config = template.render(params)
 
                 # Parse the resulting config
                 try:
                     assy = yaml.safe_load(config)
                 except Exception as e:
-                    pc_logging.error(
-                        "ERROR: Failed to parse the assembly file %s"
-                        % self.path
-                    )
+                    pc_logging.error("ERROR: Failed to parse the assembly file %s" % self.path)
                 if assy is None:
                     assy = {}
             else:
-                pc_logging.error(
-                    "ERROR: Assembly file not found: %s" % self.path
-                )
+                pc_logging.error("ERROR: Assembly file not found: %s" % self.path)
 
             result = await self.handle_node(assembly, assy)
             if not result is None:
-                assembly.children.append(
-                    AssemblyChild(result[0], result[1], result[2])
-                )
+                assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
                 # Keep part reference counter for bill-of-materials purposes
                 result[0].ref_inc()
             else:
@@ -108,9 +97,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 f = await asyncio.tasks.wait([task])
                 result = f[0].pop().result()
                 if not result is None:
-                    assembly.children.append(
-                        AssemblyChild(result[0], result[1], result[2])
-                    )
+                    assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
                     # Keep part reference counter for bill-of-materials purposes
                     result[0].ref_inc()
 
@@ -145,16 +132,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         # "location" is an optional parameter for both parts and assemblies
         if "location" in node:
             l = node["location"]
-            location = b3d.Location(
-                (l[0][0], l[0][1], l[0][2]), (l[1][0], l[1][1], l[1][2]), l[2]
-            )
+            location = b3d.Location((l[0][0], l[0][1], l[0][2]), (l[1][0], l[1][1], l[1][2]), l[2])
         elif "connect" in node:
             connect = node["connect"]
             connect_with_iface = connect.get("with", None)
             if connect_with_iface is not None and ":" not in connect_with_iface:
-                connect_with_iface = (
-                    self.project.name + ":" + connect_with_iface
-                )
+                connect_with_iface = self.project.name + ":" + connect_with_iface
             connect_with_params = connect.get("withParams", None)
             connect_with_instance = connect.get("withInstance", None)
             connect_with_port = connect.get("withPort", None)
@@ -193,9 +176,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
         # Check if this node is for an assembly
         if "links" in node and not node["links"] is None:
-            item = Assembly(
-                {"name": name}
-            )  # TODO(clairbee): revisit why node["links"]) was used there
+            item = Assembly({"name": name})  # TODO(clairbee): revisit why node["links"]) was used there
             item.instantiate = lambda x: True
             await self.handle_node_list(item, node["links"])
         else:
@@ -213,9 +194,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     assy_name = node["package"] + ":" + assy_name
                 elif not ":" in assy_name:
                     assy_name = ":" + assy_name
-                assy_name = normalize_resource_path(
-                    self.project.name, assy_name
-                )
+                assy_name = normalize_resource_path(self.project.name, assy_name)
                 item = self.ctx._get_assembly(assy_name, params)
                 if item is None:
                     pc_logging.error("Assembly not found: %s" % name)
@@ -228,17 +207,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     part_name = node["package"] + ":" + part_name
                 elif not ":" in part_name:
                     part_name = ":" + part_name
-                part_name = normalize_resource_path(
-                    self.project.name, part_name
-                )
+                part_name = normalize_resource_path(self.project.name, part_name)
                 item = self.ctx._get_part(part_name, params)
                 if item is None:
-                    pc_logging.error(
-                        "Part not found: %s in %s" % (name, self.name)
-                    )
-                    raise Exception(
-                        "Part not found: %s in %s" % (name, self.name)
-                    )
+                    pc_logging.error("Part not found: %s in %s" % (name, self.name))
+                    raise Exception("Part not found: %s in %s" % (name, self.name))
             else:
                 item = None
 
@@ -270,16 +243,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         break
 
                 if target_part is None:
-                    pc_logging.error(
-                        "Target part not found: %s" % connect_to_name
-                    )
+                    pc_logging.error("Target part not found: %s" % connect_to_name)
                 else:
                     if hasattr(child, "location"):
                         target_part_location = child.location
                     else:
-                        target_part_location = b3d.Location(
-                            (0, 0, 0), (0, 0, 1), 0
-                        )
+                        target_part_location = b3d.Location((0, 0, 0), (0, 0, 1), 0)
 
                     # If there is no source interface specified,
                     # but there is only one present, then use it
@@ -287,42 +256,26 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         connect_with_iface is None
                         and item.with_ports is not None
                         and not "ports" in item.with_ports.config
-                        and len(list(item.with_ports.get_interfaces().keys()))
-                        == 1
+                        and len(list(item.with_ports.get_interfaces().keys())) == 1
                     ):
-                        connect_with_iface = list(
-                            item.with_ports.get_interfaces().keys()
-                        )[0]
-                        pc_logging.debug(
-                            "Using the only source interface: %s"
-                            % connect_with_iface
-                        )
+                        connect_with_iface = list(item.with_ports.get_interfaces().keys())[0]
+                        pc_logging.debug("Using the only source interface: %s" % connect_with_iface)
 
                     # If there is only one source port, then just use it.
                     if connect_with_port is None:
                         if len(list(item.with_ports.get_ports().keys())) == 1:
-                            connect_with_port = list(
-                                item.with_ports.get_ports().keys()
-                            )[0]
-                            pc_logging.debug(
-                                "Using the only source port: %s"
-                                % connect_with_port
-                            )
+                            connect_with_port = list(item.with_ports.get_ports().keys())[0]
+                            pc_logging.debug("Using the only source port: %s" % connect_with_port)
                             # If the instance is known and the port pattern is configured
                         elif connect_with_port_pattern is not None:
                             matched = []
                             for port in item.with_ports.get_ports().values():
-                                if fnmatch.fnmatch(
-                                    port, connect_with_port_pattern
-                                ):
+                                if fnmatch.fnmatch(port, connect_with_port_pattern):
                                     matched.append(port)
 
                             if len(matched) == 1:
                                 connect_with_port = matched[0]
-                                pc_logging.debug(
-                                    "Found source port by pattern: %s"
-                                    % connect_with_port
-                                )
+                                pc_logging.debug("Found source port by pattern: %s" % connect_with_port)
                             elif len(matched) > 1:
                                 pc_logging.debug(
                                     "Multiple source ports are matching the pattern, pending interface checks: %s"
@@ -331,12 +284,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
                     # If the source port is known, then use it
                     if not connect_with_port is None:
-                        source_port = item.with_ports.get_ports()[
-                            connect_with_port
-                        ]
-                        pc_logging.debug(
-                            "Configured source port: %s" % source_port.name
-                        )
+                        source_port = item.with_ports.get_ports()[connect_with_port]
+                        pc_logging.debug("Configured source port: %s" % source_port.name)
                     else:
                         # Source port is not configured.
                         # It needs to be determined below.
@@ -348,48 +297,25 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         connect_to_iface is None
                         and target_part.with_ports is not None
                         and not "ports" in target_part.with_ports.config
-                        and len(
-                            list(target_part.with_ports.get_interfaces().keys())
-                        )
-                        == 1
+                        and len(list(target_part.with_ports.get_interfaces().keys())) == 1
                     ):
-                        connect_to_iface = list(
-                            target_part.with_ports.get_interfaces().keys()
-                        )[0]
-                        pc_logging.debug(
-                            "Using the only target interface: %s"
-                            % connect_to_iface
-                        )
+                        connect_to_iface = list(target_part.with_ports.get_interfaces().keys())[0]
+                        pc_logging.debug("Using the only target interface: %s" % connect_to_iface)
 
                     # If there is only one target port, then just use it.
                     if connect_to_port is None:
-                        if (
-                            len(list(target_part.with_ports.get_ports().keys()))
-                            == 1
-                        ):
-                            connect_to_port = list(
-                                target_part.with_ports.get_ports().keys()
-                            )[0]
-                            pc_logging.debug(
-                                "Using the only target port: %s"
-                                % connect_to_port
-                            )
+                        if len(list(target_part.with_ports.get_ports().keys())) == 1:
+                            connect_to_port = list(target_part.with_ports.get_ports().keys())[0]
+                            pc_logging.debug("Using the only target port: %s" % connect_to_port)
                         elif connect_to_port_pattern is not None:
                             matched = []
-                            for (
-                                port
-                            ) in target_part.with_ports.get_ports().keys():
-                                if fnmatch.fnmatch(
-                                    port, connect_to_port_pattern
-                                ):
+                            for port in target_part.with_ports.get_ports().keys():
+                                if fnmatch.fnmatch(port, connect_to_port_pattern):
                                     matched.append(port)
 
                             if len(matched) == 1:
                                 connect_to_port = matched[0]
-                                pc_logging.debug(
-                                    "Found target port by pattern: %s"
-                                    % connect_to_port
-                                )
+                                pc_logging.debug("Found target port by pattern: %s" % connect_to_port)
                             elif len(matched) > 1:
                                 pc_logging.debug(
                                     "Multiple target ports are matching the pattern, pending interface checks: %s"
@@ -398,12 +324,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
                     # If the target port is configured, then use it
                     if not connect_to_port is None:
-                        target_port = target_part.with_ports.get_ports()[
-                            connect_to_port
-                        ]
-                        pc_logging.debug(
-                            "Configured target port: %s" % target_port.name
-                        )
+                        target_port = target_part.with_ports.get_ports()[connect_to_port]
+                        pc_logging.debug("Configured target port: %s" % target_port.name)
                     else:
                         # Target port is not configured.
                         # It needs to be determined below.
@@ -411,9 +333,9 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
                     # If we have either source or target interface/port missing,
                     # then we need to use mating information to determine them.
-                    if (
-                        connect_with_port is None and connect_with_iface is None
-                    ) or (connect_to_port is None and connect_to_iface is None):
+                    if (connect_with_port is None and connect_with_iface is None) or (
+                        connect_to_port is None and connect_to_iface is None
+                    ):
                         # FIXME(clairbee): Brake the following step up into two:
                         # 1. If we know the port name but not the interface,
                         #    learn which interface it belons to.
@@ -424,19 +346,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         (
                             source_candidate_interfaces,
                             target_candidate_interfaces,
-                        ) = self.project.ctx.find_mating_interfaces(
-                            item, target_part
-                        )
+                        ) = self.project.ctx.find_mating_interfaces(item, target_part)
 
                         # If it's the source interface that we need to auto-detect
-                        if (
-                            connect_with_port is None
-                            and connect_with_iface is None
-                        ):
+                        if connect_with_port is None and connect_with_iface is None:
                             if len(source_candidate_interfaces) == 1:
-                                connect_with_iface = (
-                                    source_candidate_interfaces.pop()
-                                )
+                                connect_with_iface = source_candidate_interfaces.pop()
                             elif len(source_candidate_interfaces) > 1:
                                 # FIXME(clairbee): what if we have patterns configured?
                                 pc_logging.debug(
@@ -444,16 +359,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                     % source_candidate_interfaces
                                 )
                             else:
-                                pc_logging.debug(
-                                    "No source interfaces are candidates for connection"
-                                )
+                                pc_logging.debug("No source interfaces are candidates for connection")
 
                         # If it's the target interface that we need to auto-detect
                         if connect_to_port is None and connect_to_iface is None:
                             if len(target_candidate_interfaces) == 1:
-                                connect_to_iface = (
-                                    target_candidate_interfaces.pop()
-                                )
+                                connect_to_iface = target_candidate_interfaces.pop()
                             elif len(target_candidate_interfaces) > 1:
                                 # FIXME(clairbee): what if we have patterns configured?
                                 pc_logging.debug(
@@ -461,36 +372,20 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                     % target_candidate_interfaces
                                 )
                             else:
-                                pc_logging.debug(
-                                    "No target interfaces are candidates for connection"
-                                )
+                                pc_logging.debug("No target interfaces are candidates for connection")
 
                     # Resolve interface names
                     if connect_with_iface is not None:
-                        source_iface = item.with_ports.get_interface(
-                            connect_with_iface
-                        )
-                        source_iface_obj = self.project.ctx.get_interface(
-                            connect_with_iface
-                        )
+                        source_iface = item.with_ports.get_interface(connect_with_iface)
+                        source_iface_obj = self.project.ctx.get_interface(connect_with_iface)
                     if connect_to_iface is not None:
-                        target_iface = target_part.with_ports.get_interface(
-                            connect_to_iface
-                        )
-                        target_iface_obj = self.project.ctx.get_interface(
-                            connect_to_iface
-                        )
+                        target_iface = target_part.with_ports.get_interface(connect_to_iface)
+                        target_iface_obj = self.project.ctx.get_interface(connect_to_iface)
 
                     # If we know the source interface but not the port
-                    if (
-                        connect_with_port is None
-                        and source_iface_obj is not None
-                    ):
+                    if connect_with_port is None and source_iface_obj is not None:
                         # If the instance is specified, then find it
-                        pc_logging.debug(
-                            "Source interface instances: %s"
-                            % source_iface.keys()
-                        )
+                        pc_logging.debug("Source interface instances: %s" % source_iface.keys())
 
                         # If there is an instance pattern configured
                         if (
@@ -500,22 +395,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         ):
                             matched = []
                             for instance in source_iface.values():
-                                if fnmatch.fnmatch(
-                                    instance, connect_with_instance_pattern
-                                ):
+                                if fnmatch.fnmatch(instance, connect_with_instance_pattern):
                                     matched.append(instance)
 
                             if len(matched) == 1:
                                 connect_with_instance = matched[0]
-                                pc_logging.debug(
-                                    "Found source instance by pattern: %s"
-                                    % connect_with_instance
-                                )
+                                pc_logging.debug("Found source instance by pattern: %s" % connect_with_instance)
                             elif len(matched) > 1:
-                                pc_logging.debug(
-                                    "Multiple source instances are matching the pattern: %s"
-                                    % matched
-                                )
+                                pc_logging.debug("Multiple source instances are matching the pattern: %s" % matched)
 
                             if connect_with_instance is None:
                                 pc_logging.error(
@@ -538,19 +425,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                     )
                                 )
                             else:
-                                source_iface_instance = source_iface[
-                                    connect_with_instance
-                                ]
+                                source_iface_instance = source_iface[connect_with_instance]
                         # If there is only one instance, then use it
                         elif len(list(source_iface.values())) == 1:
-                            source_iface_instance = list(source_iface.values())[
-                                0
-                            ]
+                            source_iface_instance = list(source_iface.values())[0]
                         elif len(list(source_iface.values())) > 1:
                             # This could be ok if we have a port name or pattern
                             pc_logging.debug(
-                                "Missing instance specification for the source interface: %s"
-                                % connect_with_iface
+                                "Missing instance specification for the source interface: %s" % connect_with_iface
                             )
 
                         # If the instance is known and it has only one port, then use it
@@ -559,9 +441,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             and connect_with_port is None
                             and len(list(source_iface_instance.values())) == 1
                         ):
-                            connect_with_port = list(
-                                source_iface_instance.values()
-                            )[0]
+                            connect_with_port = list(source_iface_instance.values())[0]
                         # If the instance is known and the port pattern is configured
                         elif (
                             source_iface_instance is not None
@@ -570,22 +450,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         ):
                             matched = []
                             for port in source_iface_instance.values():
-                                if fnmatch.fnmatch(
-                                    port, connect_with_port_pattern
-                                ):
+                                if fnmatch.fnmatch(port, connect_with_port_pattern):
                                     matched.append(port)
 
                             if len(matched) == 1:
                                 connect_with_port = matched[0]
-                                pc_logging.debug(
-                                    "Found source port by pattern: %s"
-                                    % connect_with_port
-                                )
+                                pc_logging.debug("Found source port by pattern: %s" % connect_with_port)
                             elif len(matched) > 1:
-                                pc_logging.debug(
-                                    "Multiple source ports are matching the pattern: %s"
-                                    % matched
-                                )
+                                pc_logging.debug("Multiple source ports are matching the pattern: %s" % matched)
 
                             if connect_with_port is None:
                                 pc_logging.error(
@@ -603,9 +475,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             and source_iface_obj.lead_port is not None
                         ):
                             for port in source_iface_instance.values():
-                                if fnmatch.fnmatch(
-                                    port, "*" + source_iface_obj.lead_port
-                                ):
+                                if fnmatch.fnmatch(port, "*" + source_iface_obj.lead_port):
                                     connect_with_port = port
                                     break
                             if connect_with_port is None:
@@ -622,10 +492,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     # If we know the target interface but not the port
                     if connect_to_port is None and target_iface_obj is not None:
                         # If the instance is specified, then find it
-                        pc_logging.debug(
-                            "Target interface instances: %s"
-                            % target_iface.keys()
-                        )
+                        pc_logging.debug("Target interface instances: %s" % target_iface.keys())
 
                         # If there is an instance pattern configured and there is only one match
                         if (
@@ -636,25 +503,15 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             matched = []
                             for instance in list(target_iface.keys()):
                                 pc_logging.debug("Instance: %s" % instance)
-                                pc_logging.debug(
-                                    "Pattern: %s" % connect_to_instance_pattern
-                                )
-                                if fnmatch.fnmatch(
-                                    instance, connect_to_instance_pattern
-                                ):
+                                pc_logging.debug("Pattern: %s" % connect_to_instance_pattern)
+                                if fnmatch.fnmatch(instance, connect_to_instance_pattern):
                                     matched.append(instance)
 
                             if len(matched) == 1:
                                 connect_to_instance = matched[0]
-                                pc_logging.debug(
-                                    "Found target instance by pattern: %s"
-                                    % connect_to_instance
-                                )
+                                pc_logging.debug("Found target instance by pattern: %s" % connect_to_instance)
                             elif len(matched) > 1:
-                                pc_logging.debug(
-                                    "Multiple target instances are matching the pattern: %s"
-                                    % matched
-                                )
+                                pc_logging.debug("Multiple target instances are matching the pattern: %s" % matched)
 
                             if connect_to_instance is None:
                                 pc_logging.error(
@@ -677,19 +534,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                     )
                                 )
                             else:
-                                target_iface_instance = target_iface[
-                                    connect_to_instance
-                                ]
+                                target_iface_instance = target_iface[connect_to_instance]
                         # If there is only one instance, then use it
                         elif len(list(target_iface.values())) == 1:
-                            target_iface_instance = list(target_iface.values())[
-                                0
-                            ]
+                            target_iface_instance = list(target_iface.values())[0]
                         elif len(list(target_iface.values())) > 1:
                             # This could be ok if we have a port name or pattern
                             pc_logging.debug(
-                                "Missing instance specification for the target interface: %s"
-                                % connect_to_iface
+                                "Missing instance specification for the target interface: %s" % connect_to_iface
                             )
 
                         # If the instance is known and it has only one port, then use it
@@ -698,9 +550,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             and connect_to_port is None
                             and len(list(target_iface_instance.values())) == 1
                         ):
-                            connect_to_port = list(
-                                target_iface_instance.values()
-                            )[0]
+                            connect_to_port = list(target_iface_instance.values())[0]
                         # If the instance is known and the port pattern is configured
                         elif (
                             target_iface_instance is not None
@@ -709,22 +559,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         ):
                             matched = []
                             for port in target_iface_instance.values():
-                                if fnmatch.fnmatch(
-                                    port, connect_to_port_pattern
-                                ):
+                                if fnmatch.fnmatch(port, connect_to_port_pattern):
                                     matched.append(port)
 
                             if len(matched) == 1:
                                 connect_to_port = matched[0]
-                                pc_logging.debug(
-                                    "Found target port by pattern: %s"
-                                    % connect_to_port
-                                )
+                                pc_logging.debug("Found target port by pattern: %s" % connect_to_port)
                             elif len(matched) > 1:
-                                pc_logging.debug(
-                                    "Multiple target ports are matching the pattern: %s"
-                                    % matched
-                                )
+                                pc_logging.debug("Multiple target ports are matching the pattern: %s" % matched)
 
                             if connect_to_port is None:
                                 pc_logging.error(
@@ -742,9 +584,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             and target_iface_obj.lead_port is not None
                         ):
                             for port in target_iface_instance.values():
-                                if fnmatch.fnmatch(
-                                    port, "*" + target_iface_obj.lead_port
-                                ):
+                                if fnmatch.fnmatch(port, "*" + target_iface_obj.lead_port):
                                     connect_to_port = port
                                     break
                             if connect_to_port is None:
@@ -772,30 +612,19 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         pc_logging.debug("Trying to match ports by name")
                         # Both interfaces are known but they have more than one port each.
                         # Let's find a matching pair of ports.
-                        source_ports = sorted(
-                            list(source_iface_instance.keys())
-                        )
-                        target_ports = sorted(
-                            list(target_iface_instance.keys())
-                        )
+                        source_ports = sorted(list(source_iface_instance.keys()))
+                        target_ports = sorted(list(target_iface_instance.keys()))
                         if source_ports == target_ports:
                             # FIXME(clairbee): so what? what if we have patterns configured?
                             # The interfaces have the same number of ports and the same names.
                             # We can connect them using any pair of matching ports.
-                            connect_with_port = source_iface_instance[
-                                source_ports[0]
-                            ]
-                            connect_to_port = target_iface_instance[
-                                target_ports[0]
-                            ]
+                            connect_with_port = source_iface_instance[source_ports[0]]
+                            connect_to_port = target_iface_instance[target_ports[0]]
                         else:
                             connect_with_port_index = -1
                             connect_to_port_index = -1
                             if len(source_ports) != 1:
-                                if (
-                                    connect_with_port_pattern is None
-                                    and connect_to_port_pattern is None
-                                ):
+                                if connect_with_port_pattern is None and connect_to_port_pattern is None:
                                     if len(source_ports) == len(target_ports):
                                         pc_logging.debug(
                                             "Connect %s to %s: port mating is not detected deterministically on BOTH ends, guessing alphabetically..."
@@ -811,16 +640,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
                                 if connect_with_port_pattern is not None:
                                     for i, port in enumerate(source_ports):
-                                        if fnmatch.fnmatch(
-                                            port, connect_with_port_pattern
-                                        ):
+                                        if fnmatch.fnmatch(port, connect_with_port_pattern):
                                             connect_with_port_index = i
                                             break
                                 if connect_to_port_pattern is not None:
                                     for i, port in enumerate(target_ports):
-                                        if fnmatch.fnmatch(
-                                            port, connect_to_port_pattern
-                                        ):
+                                        if fnmatch.fnmatch(port, connect_to_port_pattern):
                                             connect_to_port_index = i
                                             break
 
@@ -833,9 +658,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                         "Connect %s to %s: port selection is not detected on the target end, guessing alphabetically..."
                                         % (name, connect_to_name)
                                     )
-                                    connect_to_port_index = (
-                                        connect_with_port_index
-                                    )
+                                    connect_to_port_index = connect_with_port_index
                                 if (
                                     len(source_ports) == len(target_ports)
                                     and connect_with_port_index == -1
@@ -845,57 +668,31 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                         "Connect %s to %s: port selection is not detected on the source end, guessing alphabetically..."
                                         % (name, connect_to_name)
                                     )
-                                    connect_with_port_index = (
-                                        connect_to_port_index
-                                    )
+                                    connect_with_port_index = connect_to_port_index
 
                             if connect_with_port_index != -1:
-                                connect_with_port = source_iface_instance[
-                                    source_ports[connect_with_port_index]
-                                ]
+                                connect_with_port = source_iface_instance[source_ports[connect_with_port_index]]
                             if connect_to_port_index != -1:
-                                connect_to_port = target_iface_instance[
-                                    target_ports[connect_to_port_index]
-                                ]
+                                connect_to_port = target_iface_instance[target_ports[connect_to_port_index]]
 
                     # If the source port is determined, then use it
                     if not connect_with_port is None and source_port is None:
-                        source_port = item.with_ports.get_ports()[
-                            connect_with_port
-                        ]
-                        pc_logging.debug(
-                            "Found source port: %s" % source_port.name
-                        )
-                    if (
-                        connect_with_port is not None
-                        and connect_with_port_pattern is not None
-                    ):
-                        if not fnmatch.fnmatch(
-                            connect_with_port, connect_with_port_pattern
-                        ):
+                        source_port = item.with_ports.get_ports()[connect_with_port]
+                        pc_logging.debug("Found source port: %s" % source_port.name)
+                    if connect_with_port is not None and connect_with_port_pattern is not None:
+                        if not fnmatch.fnmatch(connect_with_port, connect_with_port_pattern):
                             pc_logging.error(
-                                "The determined source port does not match the pattern: %s"
-                                % connect_with_port_pattern
+                                "The determined source port does not match the pattern: %s" % connect_with_port_pattern
                             )
 
                     # If the target port is determined, then use it
                     if not connect_to_port is None and target_port is None:
-                        target_port = target_part.with_ports.get_ports()[
-                            connect_to_port
-                        ]
-                        pc_logging.debug(
-                            "Found target port: %s" % target_port.name
-                        )
-                    if (
-                        connect_to_port is not None
-                        and connect_to_port_pattern is not None
-                    ):
-                        if not fnmatch.fnmatch(
-                            connect_to_port, connect_to_port_pattern
-                        ):
+                        target_port = target_part.with_ports.get_ports()[connect_to_port]
+                        pc_logging.debug("Found target port: %s" % target_port.name)
+                    if connect_to_port is not None and connect_to_port_pattern is not None:
+                        if not fnmatch.fnmatch(connect_to_port, connect_to_port_pattern):
                             pc_logging.error(
-                                "The determined target port does not match the pattern: %s"
-                                % connect_to_port_pattern
+                                "The determined target port does not match the pattern: %s" % connect_to_port_pattern
                             )
 
                     # TODO(clairbee): before the next step, deduce the interface
@@ -904,19 +701,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     # Now calculate offsets based on params.
                     # This requires an interface object to be present, as that's where the params are defined.
                     # If the source interface params are passed, calculate the offsets
-                    if (
-                        source_iface_obj is not None
-                        and connect_with_params is not None
-                    ):
+                    if source_iface_obj is not None and connect_with_params is not None:
                         pc_logging.debug("Source params are found")
                         for (
                             param_name,
                             param_value,
                         ) in connect_with_params.items():
                             pc_logging.debug("Source param: %s" % param_name)
-                            param = source_iface_obj.params.get(
-                                param_name, None
-                            )
+                            param = source_iface_obj.params.get(param_name, None)
                             pc_logging.debug("Source param: %s" % param)
                             if param is not None:
                                 offsets = param.get_offsets(param_value)
@@ -924,22 +716,15 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                                 source_offsets.extend(offsets)
 
                     # If the target interface params are passed, calculate the offsets
-                    if (
-                        target_iface_obj is not None
-                        and connect_to_params is not None
-                    ):
+                    if target_iface_obj is not None and connect_to_params is not None:
                         pc_logging.debug("Target params are found")
                         for (
                             param_name,
                             param_value,
                         ) in connect_to_params.items():
                             pc_logging.debug("Target param: %s" % param_name)
-                            pc_logging.debug(
-                                "Target info: %s" % target_iface_obj.info()
-                            )
-                            param = target_iface_obj.params.get(
-                                param_name, None
-                            )
+                            pc_logging.debug("Target info: %s" % target_iface_obj.info())
+                            param = target_iface_obj.params.get(param_name, None)
                             pc_logging.debug("Target param: %s" % param)
                             if param is not None:
                                 offsets = param.get_offsets(param_value)
@@ -951,9 +736,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     ):
                         # One of the parts may have no parts declared.
                         # TODO(clairbee): Do we need to support this?
-                        pc_logging.warning(
-                            "Peer port auto-detection has failed: %s" % name
-                        )
+                        pc_logging.warning("Peer port auto-detection has failed: %s" % name)
 
                     turn_around = b3d.Location(
                         (0, 0, 0),
@@ -973,20 +756,14 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         )
 
                         trsf = target_part_location.wrapped.Transformation()
-                        trsf.Multiply(
-                            target_port.location.wrapped.Transformation()
-                        )
+                        trsf.Multiply(target_port.location.wrapped.Transformation())
                         trsf.Multiply(turn_around)
                         for target_offset in target_offsets:
-                            pc_logging.debug(
-                                "Target offset: %s" % target_offset
-                            )
+                            pc_logging.debug("Target offset: %s" % target_offset)
                             trsf.Multiply(target_offset)
                         for source_offset in source_offsets:
                             trsf.Multiply(source_offset)
-                        trsf.Multiply(
-                            source_port.location.wrapped.Transformation().Inverted()
-                        )
+                        trsf.Multiply(source_port.location.wrapped.Transformation().Inverted())
                         location = b3d.Location(trsf)
                     elif source_port is None and target_port is not None:
                         pc_logging.debug(
@@ -999,30 +776,21 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         )
 
                         trsf = target_part_location.wrapped.Transformation()
-                        trsf.Multiply(
-                            target_port.location.wrapped.Transformation()
-                        )
+                        trsf.Multiply(target_port.location.wrapped.Transformation())
                         trsf.Multiply(turn_around)
                         for target_offset in target_offsets:
                             trsf.Multiply(target_offset)
                         location = b3d.Location(trsf)
                     elif source_port is not None and target_port is None:
-                        pc_logging.debug(
-                            "Connected %s of %s to %s"
-                            % (connect_with_port, name, connect_to_name)
-                        )
+                        pc_logging.debug("Connected %s of %s to %s" % (connect_with_port, name, connect_to_name))
                         trsf = target_part_location.wrapped.Transformation()
                         trsf.Multiply(turn_around)
                         for source_offset in source_offsets:
                             trsf.Multiply(source_offset)
-                        trsf.Multiply(
-                            source_port.location.wrapped.Transformation().Inverted()
-                        )
+                        trsf.Multiply(source_port.location.wrapped.Transformation().Inverted())
                         location = b3d.Location(trsf)
                     elif source_port is None and target_port is None:
-                        pc_logging.debug(
-                            "Connected %s to %s" % (name, connect_to_name)
-                        )
+                        pc_logging.debug("Connected %s to %s" % (name, connect_to_name))
                         trsf = target_part_location.wrapped.Transformation()
                         trsf.Multiply(turn_around)
                         location = b3d.Location(trsf)

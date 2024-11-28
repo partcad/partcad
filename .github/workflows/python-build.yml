@@ -32,7 +32,7 @@ jobs:
       BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - name: Prepare environments
         shell: bash

@@ -25,12 +25,12 @@ jobs:
       BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: cache
         with:
           path: ~/.cache/pip
@@ -84,7 +84,7 @@ jobs:
 
     steps:
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -97,7 +97,7 @@ jobs:
       - name: Determine the release tag
         if: github.ref == 'refs/heads/main'
         run: |
-          git clone https://github.com/openvmp/partcad partcad-git;
+          git clone https://github.com/partcad/partcad partcad-git;
           cd partcad-git;
           echo "MERGED_TAG=$(git describe --abbrev=0)" >> $GITHUB_ENV
 
@@ -112,9 +112,8 @@ jobs:
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: "${{ github.ref == 'refs/heads/main' &&
-            'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
+          repository-url:
+            "${{ github.ref == 'refs/heads/main' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
             }}"
           user: __token__
-          password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY ||
-            secrets.TEST_PYPI_KEY }}"
+          password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY || secrets.TEST_PYPI_KEY }}"

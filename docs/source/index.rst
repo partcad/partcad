@@ -2,14 +2,14 @@
 PartCAD
 #######
 
-`PartCAD <https://github.com/openvmp/partcad>`_
+`PartCAD <https://github.com/partcad/partcad>`_
 is the first build system and package manager for CAD models
 and a framework for creating assemblies.
 It aims to complement Git with everything necessary to substitute
 commercial Product Lifecycle Management (PLM) tools.
 
 
-.. image:: https://github.com/openvmp/partcad/blob/main/docs/source/images/vscode1.png?raw=true             |
+.. image:: https://github.com/partcad/partcad/blob/main/docs/source/images/vscode1.png?raw=true             |
 
 PartCAD maintains information about mechanical parts and
 how they come together to form larger assemblies.

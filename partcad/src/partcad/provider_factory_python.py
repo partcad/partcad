@@ -52,9 +52,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             # Stay one step ahead of the minimum required Python version
             python_version = "3.10"
         if python_version == "3.12" or python_version == "3.11":
-            pc_logging.debug(
-                "Downgrading Python version to 3.10 to minimize compatibility issues"
-            )
+            pc_logging.debug("Downgrading Python version to 3.10 to minimize compatibility issues")
             python_version = "3.10"
 
         self.runtime = self.ctx.get_python_runtime(python_version)
@@ -77,9 +75,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
         """
 
         # Install dependencies of this package
-        await self.runtime.prepare_for_package(
-            self.project, session=self.session
-        )
+        await self.runtime.prepare_for_package(self.project, session=self.session)
         await self.runtime.prepare_for_shape(self.config, session=self.session)
 
         return await super().prepare_script(provider)
@@ -105,9 +101,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
         ):
             prepared = await self.prepare_script(provider)
             if not prepared:
-                pc_logging.error(
-                    "Failed to prepare %s of %s" % (script_name, provider.name)
-                )
+                pc_logging.error("Failed to prepare %s of %s" % (script_name, provider.name))
                 return None
 
             # Get the path to the wrapper script
@@ -183,9 +177,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
                 register_cq_helper()
                 result = pickle.loads(response)
             except Exception as e:
-                provider.error(
-                    "Exception while deserializing %s: %s" % (provider.name, e)
-                )
+                provider.error("Exception while deserializing %s: %s" % (provider.name, e))
                 return None
 
             if "exception" in result:

@@ -20,9 +20,7 @@ class SketchFactoryAlias(SketchFactory):
     source: str
 
     def __init__(self, ctx, source_project, target_project, config):
-        with pc_logging.Action(
-            "InitAlias", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitAlias", target_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config)
             # Complement the config object here if necessary
             self._create(config)
@@ -32,30 +30,21 @@ class SketchFactoryAlias(SketchFactory):
             else:
                 self.source_assembly_name = config["name"]
                 if not "project" in config:
-                    raise Exception(
-                        "Alias needs either the source sketch name or the source project name"
-                    )
+                    raise Exception("Alias needs either the source sketch name or the source project name")
 
             if "project" in config:
                 self.source_project_name = config["project"]
-                if (
-                    self.source_project_name == "this"
-                    or self.source_project_name == ""
-                ):
+                if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = source_project.name
             else:
                 if ":" in self.source_sketch_name:
-                    self.source_project_name, self.source_sketch_name = (
-                        resolve_resource_path(
-                            source_project.name,
-                            self.source_sketch_name,
-                        )
+                    self.source_project_name, self.source_sketch_name = resolve_resource_path(
+                        source_project.name,
+                        self.source_sketch_name,
                     )
                 else:
                     self.source_project_name = source_project.name
-            self.source = (
-                self.source_project_name + ":" + self.source_sketch_name
-            )
+            self.source = self.source_project_name + ":" + self.source_sketch_name
 
             if self.source_project_name == target_project.name:
                 self.sketch.desc = "Alias to %s" % self.source_sketch_name

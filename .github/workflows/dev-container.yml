@@ -1,38 +1,199 @@
 # https://github.com/devcontainers/ci/blob/main/docs/github-action.md
-name: 'Dev Container CI'
+name: "Dev Container CI"
 on:
   pull_request:
   push:
     branches:
       - main
       - devel
+env:
+  CONTAINER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-devcontainer
+  TOTAL_TIMEOUT: 900
+  INSTALL_TIMEOUT: 300
 
 jobs:
   build:
-    name: Build Dev Container and run PyTest
+    name: "Build: Dev Container"
     runs-on: ubuntu-latest
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
       packages: write
     steps:
-
       - name: Checkout (GitHub)
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and run Dev Container task
+      - name: Build Dev Container
         uses: devcontainers/ci@v0.3
         with:
-          imageName: ghcr.io/partcad/partcad-devcontainer
-          cacheFrom: ghcr.io/partcad/partcad-devcontainer
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          imageTag:
+            ${{ github.event.pull_request.number != '' && format('PR-{0}', github.event.pull_request.number) ||
+            github.ref_name }}
+          cacheFrom: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           push: always
+
+  install:
+    name: "Run: poetry install"
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: "Run: poetry install"
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          push: never
           runCmd: |
-            poetry install
-            poetry run pytest --verbose
+            start_time=$SECONDS
+            for i in {1..3}; do
+              if [ $((SECONDS - start_time)) -gt ${{ env.TOTAL_TIMEOUT }} ]; then
+                echo "Total timeout of ${{ env.TOTAL_TIMEOUT }}s exceeded"
+                exit 1
+              fi
+              echo "Attempt $i/3: Installing dependencies (timeout: ${{ env.INSTALL_TIMEOUT }})..."
+              if timeout ${{ env.INSTALL_TIMEOUT }} poetry --no-ansi --no-interaction install; then
+                echo "Installation successful on attempt $i"
+                exit 0
+              fi
+              echo "Attempt $i failed. Waiting $((i * 10)) seconds before retry..."
+              sleep $((i * 10))  # Exponential backoff
+            done
+            echo "All installation attempts failed after 3 tries"
+            exit 1
+
+  pytest:
+    name: "Run: pytest"
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Run PyTest
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          push: never
+          runCmd: |
+            mkdir -pv test-results
+            poetry --no-ansi --no-interaction run pytest --verbose --color=no
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+
+      - name: Generate Allure Report
+        if: always()
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          push: never
+          runCmd: |
+            if [ ! -d "allure-results" ]; then
+              echo "##[warning]allure-results directory not found. Skipping report generation."
+              exit 0
+            fi
+            if ! allure generate allure-results -o allure-report; then
+              echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
+            fi
+
+      - name: Publish Allure Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 7
+
+      - name: Upload coverage reports to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: test-results/coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          files: test-results/junit.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  pre-commit:
+    name: "Run: pre-commit"
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache pre-commit dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .pre-commit
+          key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pre-commit-
+      - name: Run pre-commit hooks
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          push: never
+          runCmd: pre-commit run --show-diff-on-failure --color=always --all-files

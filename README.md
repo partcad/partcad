@@ -8,20 +8,18 @@
 [![Documentation Status](https://readthedocs.org/projects/partcad/badge/?version=latest)](https://partcad.readthedocs.io/en/latest/?badge=latest)
 <a href="https://discord.gg/zdwyxkGM"><img alt="Discord" src="https://img.shields.io/discord/1091497262733074534?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
 
-[PartCAD] is **the first package manager for CAD models**
-and a framework for managing assemblies.
+[PartCAD] is **the first package manager for CAD models** and a framework for managing assemblies.
 
-It aims to complement Git with everything necessary for hardware development
-to substitute commercial Product Lifecycle Management (PLM) tools.
-It's a free versioning and change management solution for all your CAD needs,
-built around your CAD artifacts instead of being built into your CAD tool.
+It aims to complement Git with everything necessary for hardware development to substitute commercial Product Lifecycle
+Management (PLM) tools. It's a free versioning and change management solution for all your CAD needs, built around your
+CAD artifacts instead of being built into your CAD tool.
 
 Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](https://youtube.com/@PartCAD)💥💥.
 
 ## Join us!
 
-Stay informed and share feedback by joining [our Discord server](https://discord.gg/zdwyxkGM).
-<br/>
+Stay informed and share feedback by joining [our Discord server](https://discord.gg/zdwyxkGM). <br/>
+
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
 [![PartCAD Visual Studio Code extension](./docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
@@ -29,14 +27,14 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 ## Features
 
 - Multiple OSes supported
-  - [X] Windows
+  - [x] Windows
   - [x] Linux
-  - [x] MacOS
+  - [x] macOS
 - Collaboration on designs
   - [x] Versioning of CAD designs using `Git` _(like it's 2024 for real)_
-      - [x] Mechanics
-      - [ ] Electronics _(in progress)_
-      - [ ] Software _(in progress)_
+    - [x] Mechanics
+    - [ ] Electronics _(in progress)_
+    - [ ] Software _(in progress)_
   - [x] Automated generation of `Markdown` documentation
   - [x] Parametric (hardware and software) bill of materials
   - [x] Publish models online on PartCAD.org
@@ -61,7 +59,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Generating with LLM/GenAI
     - [x] Google AI (`Gemini`)
     - [x] OpenAI (`ChatGPT`)
-    - [x] Any model in [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`, `Code Llama` etc)
+    - [x] Any model in [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`,
+           `Code Llama` etc.)
 - Part and interface blueprints (2D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -84,15 +83,15 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 
 ## Installation
 
-Note: It's not required but highly recommended to have [conda] installed.
-If you experience any difficulty installing or using any PartCAD tool then make sure to install [conda].
+Note, it's not required but highly recommended that you have [conda] installed. If you experience any difficulty
+installing or using any PartCAD tool, then make sure to install [conda].
 
 ### Extension for Visual Studio Code
 
-This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing [its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad).
+This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing
+[its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad).
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
-
 
 ### Command-Line Interface
 
@@ -102,9 +101,12 @@ The recommended method to install PartCAD CLI tools for most users is:
 pip install -U partcad-cli
 ```
 
-- On **Windows**, install `Miniforge3` using `Register Miniforge3 as my default Python X.XX` and use this Python environment for PartCAD. Also set `LongPathsEnabled` to 1 at `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` using `Registry Editor`.
+- On **Windows**, install `Miniforge3` using `Register Miniforge3 as my default Python X.XX` and use this Python
+  environment for PartCAD. Also set `LongPathsEnabled` to 1 at
+  `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` using `Registry Editor`.
 - On **Ubuntu**, try `apt install libcairo2-dev python3-dev` if `pip install` fails to install `cairo`.
-- On **MacOS**, make sure XCode and command lines tools are installed. Also, use ``mamba`` should you experience difficulties on MacOS with the ARM architecture.
+- On **macOS**, make sure XCode and command lines tools are installed. Also, use `mamba` should you experience
+  difficulties on macOS with the ARM architecture.
 
 ### PartCAD development
 
@@ -119,7 +121,8 @@ python3 -m pip install -U -e ./partcad-cli
 
 ## Getting Started
 
-See the tutorials for [PartCAD command line tools](https://partcad.readthedocs.io/en/latest/tutorial.html#command-line) or [PartCAD Visual Studio Code extension](https://partcad.readthedocs.io/en/latest/tutorial.html#vs-code-extension).
+See the tutorials for [PartCAD command line tools](https://partcad.readthedocs.io/en/latest/tutorial.html#command-line)
+or [PartCAD Visual Studio Code extension](https://partcad.readthedocs.io/en/latest/tutorial.html#vs-code-extension).
 
 ## Have you read this page this far?
 

@@ -38,6 +38,6 @@ PartCAD can be perceived as consisting of four parts:
   long as they are maintained following the PartCAD standards and conventions
 
 - Libraries and frameworks to programmatically interact with PartCAD data in
-  public and private repositories 
+  public and private repositories
 
 Detailed documentation on all of the above can be found in the 'Design' section.

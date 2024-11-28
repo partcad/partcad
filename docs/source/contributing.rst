@@ -43,7 +43,7 @@ Develop Features
 ================
 
 Send a pull request to
-`the PartCAD's main Github repository <https://github.com/openvmp/partcad/>`_.
+`the PartCAD's main Github repository <https://github.com/partcad/partcad/>`_.
 
 Engage with the community on
 `PartCAD's Discord channel <https://discord.gg/AXbP47zYw5>`_

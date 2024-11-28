@@ -35,7 +35,7 @@ jobs:
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
       # BEGIN OS-SPECIFIC
@@ -75,6 +75,7 @@ jobs:
           pip install -U pytest
           # Install all core and a subset of CLI dependencies, that are required for tests
           pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
+          pip install -r partcad/requirements-dev.in
           mamba deactivate
 
       - name: Test with pytest

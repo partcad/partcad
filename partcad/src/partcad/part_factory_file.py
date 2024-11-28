@@ -35,8 +35,7 @@ class PartFactoryFile(PartFactory):
 
         if not os.path.isdir(source_project.config_dir):
             raise Exception(
-                "ERROR: The project config directory must be a directory, found: '%s'"
-                % source_project.config_dir
+                "ERROR: The project config directory must be a directory, found: '%s'" % source_project.config_dir
             )
         self.path = os.path.join(source_project.config_dir, self.path)
 
@@ -45,13 +44,9 @@ class PartFactoryFile(PartFactory):
             # check if the file exists
             exists = os.path.exists(self.path)
             if not can_create and not exists:
-                raise Exception(
-                    "ERROR: The part path (%s) must exist" % self.path
-                )
+                raise Exception("ERROR: The part path (%s) must exist" % self.path)
             if exists and not os.path.isfile(self.path):
-                raise Exception(
-                    "ERROR: The part path (%s) must be a file" % self.path
-                )
+                raise Exception("ERROR: The part path (%s) must be a file" % self.path)
 
     async def instantiate(self, part):
         if not self.fileFactory is None and not os.path.exists(part.path):

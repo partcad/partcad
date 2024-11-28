@@ -104,10 +104,7 @@ def cli_inspect(args, ctx):
         if args.package is None:
             pc_logging.error("Object %s not found" % args.object)
         else:
-            pc_logging.error(
-                "Object %s not found in package %s"
-                % (args.object, args.package)
-            )
+            pc_logging.error("Object %s not found in package %s" % (args.object, args.package))
     else:
         if args.verbal:
             if args.package is None:

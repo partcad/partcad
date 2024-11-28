@@ -3,7 +3,14 @@
   "build": { // 13:27.664
     "dockerfile": "./Dockerfile"
   },
+  "containerEnv": {
+    "PRE_COMMIT_HOME": "/workspaces/partcad/.pre-commit"
+  },
   "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "latest",
+      "installDirectlyFromGitHubRelease": true
+    },
     "ghcr.io/devcontainers/features/python:1": { // 06:25.200
       // https://github.com/devcontainers/features/tree/main/src/python
       "version": "3.10",
@@ -22,8 +29,60 @@
       "addCondaForge": false
     }
   },
-  "postCreateCommand": {
-    "Installing pre-commit hooks": "cd /workspaces/partcad && pre-commit install",
-    "Installing poetry dependencies": "cd /workspaces/partcad && poetry self add poetry-plugin-export"
+  "postCreateCommand": ".devcontainer/bootstrap.sh",
+  "customizations": {
+    "vscode": {
+        // <!-- prettier-ignore-start -->
+        "extensions": [
+        // CAD Viewer
+        "bernhard-42.ocp-cad-viewer",
+
+        // Python Environment
+        "donjayamanne.python-environment-manager",
+        "njpwerner.autodocstring",        // Python docstring generator
+        "kevinrose.vsc-python-indent",    // Better Python indentation
+        "ms-python.black-formatter",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+
+        // Code Formatting
+        "esbenp.prettier-vscode",
+        "streetsidesoftware.code-spell-checker",  // Because typos are worse than black holes
+
+        // GitHub Integration
+        "GitHub.copilot",
+        "GitHub.vscode-github-actions",
+        "GitHub.vscode-pull-request-github",
+
+        // File Headers
+        "psioniq.psi-header",
+
+        // Docker Support
+        "ms-azuretools.vscode-docker",
+
+        // YAML Support
+        "redhat.vscode-yaml",
+
+        // SVG Support
+        "jock.svg",
+
+        // Jinja Support
+        "samuelcolvin.jinjahtml",
+
+        // Markdown Support
+        "yzhang.markdown-all-in-one",
+        "bierner.github-markdown-preview",
+        "bierner.markdown-checkbox",
+        "bierner.markdown-footnotes",
+        "bierner.markdown-mermaid",
+        "bierner.markdown-preview-github-styles",
+        "bierner.markdown-yaml-preamble",
+
+        // Task Management
+        "Gruntfuggly.todo-tree",
+        "wayou.vscode-todo-highlight"    // Additional TODO highlighting
+      ]
+      // <!-- prettier-ignore-end -->
+    }
   }
 }

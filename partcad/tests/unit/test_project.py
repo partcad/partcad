@@ -15,14 +15,14 @@ import partcad as pc
 test_config_import_git = {
     "name": "/part_step",
     "type": "git",
-    "url": "https://github.com/openvmp/partcad",
+    "url": "https://github.com/partcad/partcad",
     "revision": "devel",
     "relPath": "examples/produce_part_step",
 }
 test_config_import_tar = {
     "name": "/part_step",
     "type": "tar",
-    "url": "https://github.com/openvmp/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz",
+    "url": "https://github.com/partcad/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz",
     "relPath": "partcad-7544a5a1e3d8909c9ecee9e87b30998c05d090ca/examples/part_step",
 }
 

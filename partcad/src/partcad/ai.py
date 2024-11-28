@@ -51,11 +51,7 @@ class Ai(AiGoogle, AiOpenAI, AiOllama):
         with pc_logging.Action("Ai" + action, package, item):
             # Determine the model to use
             provider = config.get("provider", None)
-            if (
-                "model" in config
-                and config["model"] is not None
-                and config["model"] != ""
-            ):
+            if "model" in config and config["model"] is not None and config["model"] != "":
                 model = config["model"]
             else:
                 if provider is None:
@@ -104,9 +100,7 @@ class Ai(AiGoogle, AiOpenAI, AiOllama):
                         num_options,
                     )
                 except Exception as e:
-                    pc_logging.error(
-                        "Failed to generate with Google: %s" % str(e)
-                    )
+                    pc_logging.error("Failed to generate with Google: %s" % str(e))
                     time.sleep(1)  # Safeguard against exceeding quota
 
             elif provider == "openai":
@@ -118,9 +112,7 @@ class Ai(AiGoogle, AiOpenAI, AiOllama):
                         num_options,
                     )
                 except Exception as e:
-                    pc_logging.error(
-                        "Failed to generate with OpenAI: %s" % str(e)
-                    )
+                    pc_logging.error("Failed to generate with OpenAI: %s" % str(e))
                     time.sleep(1)  # Safeguard against exceeding quota
 
             elif provider == "ollama":
@@ -132,14 +124,10 @@ class Ai(AiGoogle, AiOpenAI, AiOllama):
                         num_options,
                     )
                 except Exception as e:
-                    pc_logging.error(
-                        "Failed to generate with Ollama: %s" % str(e)
-                    )
+                    pc_logging.error("Failed to generate with Ollama: %s" % str(e))
 
             else:
-                pc_logging.error(
-                    "Failed to associate the model %s with the provider" % model
-                )
+                pc_logging.error("Failed to associate the model %s with the provider" % model)
 
             if result is None:
                 return []

@@ -46,9 +46,7 @@ def cli_status(args):
         def get_total():
             with pc_logging.Action("Status", "total"):
                 total = (get_size(path)) / 1048576.0
-                pc_logging.info(
-                    "Total internal data storage size: %.2fMB" % total
-                )
+                pc_logging.info("Total internal data storage size: %.2fMB" % total)
 
         def get_git():
             with pc_logging.Action("Status", "git"):
@@ -66,9 +64,7 @@ def cli_status(args):
             with pc_logging.Action("Status", "runtime"):
                 runtime_path = os.path.join(path, "runtime")
                 runtime_total = (get_size(runtime_path)) / 1048576.0
-                pc_logging.info(
-                    "Runtime environments size: %.2fMB" % runtime_total
-                )
+                pc_logging.info("Runtime environments size: %.2fMB" % runtime_total)
 
         # Create threads
         thread_total = threading.Thread(target=get_total)
