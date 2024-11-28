@@ -9,16 +9,11 @@ runs:
     #     python-version: ${{ matrix.python-version }}
     #     cache: pip
 
-    # # Miniconda
-    # - uses: conda-incubator/setup-miniconda@v3
-    #   with:
-    #     miniconda-version: latest
-    #     activate-environment: pc-conda-env
-    #     python-version: ${{ matrix.python-version }}
-
-    - uses: conda-forge/setup-miniconda@v1
+    # Miniconda
+    - uses: conda-incubator/setup-miniconda@v3
       with:
-        auto-update-conda: true
+        miniforge-version: latest
+        activate-environment: pc-env
         python-version: ${{ matrix.python-version }}
 
     # - name: Install Miniforge3 (non-Windows)
@@ -43,10 +38,10 @@ runs:
     #       dir miniforge3\condabin
     #       .\miniforge3\condabin\conda init --system
 
-    - name: Test miniforge
-      shell: bash
-      run: |
-          conda info
+    # - name: Test miniforge
+    #   shell: bash
+    #   run: |
+    #       conda info
 
     - uses: actions/cache@v3
       id: cache
