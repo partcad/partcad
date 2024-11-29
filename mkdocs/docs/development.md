@@ -92,17 +92,21 @@ pre-commit install
 #### CodeRabbit Commands (Invoked using PR comments)
 
 [CodeRabbit][11] is an AI-powered code reviewer that delivers context-aware feedback on pull requests within minutes,
-reducing the time and effort needed for manual code reviews. It provides a fresh perspective and catches issues that are
-often missed, enhancing the overall review quality. You can use following comments on PRs to interact with it:
+streamlining the code review process. It provides valuable insights and identifies issues that are often missed,
+enhancing the overall review quality. You can use following comments on PRs to interact with it:
 
--   `@coderabbitai summary` to regenerate the summary of the PR.
--   `@coderabbitai review` to trigger an incremental review. This is useful when automatic reviews are disabled for the
-    repository.
--   `@coderabbitai full review` to do a full review from scratch and review all the files again.
--   `@coderabbitai pause` to pause the reviews on a PR.
--   `@coderabbitai resume` to resume the paused reviews.
--   `@coderabbitai resolve` resolve all the CodeRabbit review comments.
--   `@coderabbitai configuration` to show the current CodeRabbit configuration for the repository.
+**Review Commands:**
+
+-   `@coderabbitai summary` - Generates a fresh PR summary.
+-   `@coderabbitai review` - Initiates an incremental review (useful for repos with disabled auto-reviews).
+-   `@coderabbitai full review` - Performs a comprehensive review of all files.
+
+**Control Commands:**
+
+-   `@coderabbitai pause` - Temporarily halts PR reviews.
+-   `@coderabbitai resume` - Continues previously paused reviews.
+-   `@coderabbitai resolve` - Resolves all the CodeRabbit review comments.
+-   `@coderabbitai configuration` - Displays the current CodeRabbit configuration for the repository.
 -   `@coderabbitai help` to get help.
 
 [1]: https://python-poetry.org/

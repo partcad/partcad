@@ -18,15 +18,16 @@ Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](ht
 
 ## Join us!
 
-Stay informed and share feedback by joining [our Discord server](https://discord.gg/zdwyxkGM). <br/> Subscribe on
-[LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
+Stay informed and share feedback by joining [our Discord server](https://discord.gg/zdwyxkGM).
+
+Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
 ## Features
 
 -   Multiple OSes supported
     -   [x] Windows
     -   [x] Linux
-    -   [x] MacOS
+    -   [x] macOS
 -   Collaboration on designs
     -   [x] Versioning of CAD designs using `Git` _(like it's 2024 for real)_
         -   [x] Mechanics
@@ -57,7 +58,7 @@ Stay informed and share feedback by joining [our Discord server](https://discord
         -   [x] Google AI (`Gemini`)
         -   [x] OpenAI (`ChatGPT`)
         -   [x] Any model published to [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`,
-                `Code Llama` etc)
+                `Code Llama` etc.)
 -   Part and interface blueprints (2D)
     -   Using scripting languages
         -   [x] [CadQuery]
@@ -80,8 +81,8 @@ Stay informed and share feedback by joining [our Discord server](https://discord
 
 ## Installation
 
-Note: It's not required but highly recommended to have [conda] installed. If you experience any difficulty installing or
-using any PartCAD tool then make sure to install [conda].
+Note: It's not required but highly recommended that you have [conda] installed. If you experience any difficulty
+installing or using any PartCAD tool, then make sure to install [conda].
 
 ### Extension for Visual Studio Code
 
@@ -103,8 +104,8 @@ pip install -U partcad-cli
 -   On **Windows**, PartCAD must be executed inside a [conda] environment. Also set `LongPathsEnabled` to 1 at
     `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` using `Registry Editor`.
 -   On **Ubuntu**, try `apt install libcairo2-dev python3-dev` if `pip install` fails to install `cairo`.
--   On **MacOS**, make sure XCode and command lines tools are installed. Also, use `mamba` should you experience
-    difficulties on MacOS with the ARM architecture.
+-   On **macOS**, make sure XCode and command lines tools are installed. Also, use `mamba` should you experience
+    difficulties on macOS with the ARM architecture.
 
 ### PartCAD development
 

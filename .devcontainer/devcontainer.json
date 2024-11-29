@@ -29,25 +29,42 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        // CAD Viewer
         "bernhard-42.ocp-cad-viewer",
+
+        // Python Environment
+        "donjayamanne.python-environment-manager",
+        "ms-python.black-formatter",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+
+        // Code Formatting
+        "esbenp.prettier-vscode",
+
+        // GitHub Integration
+        "GitHub.copilot",
+        "GitHub.vscode-github-actions",
+        "GitHub.vscode-pull-request-github",
+
+        // File Headers
+        "psioniq.psi-header",
+
+        // YAML Support
+        "redhat.vscode-yaml",
+
+        // Jinja Support
+        "samuelcolvin.jinjahtml",
+
+        // Markdown Support
+        "yzhang.markdown-all-in-one",
         "bierner.github-markdown-preview",
         "bierner.markdown-checkbox",
         "bierner.markdown-footnotes",
         "bierner.markdown-mermaid",
         "bierner.markdown-preview-github-styles",
         "bierner.markdown-yaml-preamble",
-        "donjayamanne.python-environment-manager",
-        "esbenp.prettier-vscode",
-        "GitHub.copilot",
-        "GitHub.vscode-github-actions",
-        "GitHub.vscode-pull-request-github",
-        "ms-python.black-formatter",
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-        "psioniq.psi-header",
-        "redhat.vscode-yaml",
-        "samuelcolvin.jinjahtml",
-        "yzhang.markdown-all-in-one",
+
+        // Task Management
         "Gruntfuggly.todo-tree"
       ]
     }

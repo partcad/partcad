@@ -25,7 +25,7 @@ jobs:
       BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v3
         with:
@@ -113,10 +113,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url:
-            "${{ github.ref == 'refs/heads/main' &&
-            'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
+            "${{ github.ref == 'refs/heads/main' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
             }}"
           user: __token__
-          password:
-            "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY ||
-            secrets.TEST_PYPI_KEY }}"
+          password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY || secrets.TEST_PYPI_KEY }}"
