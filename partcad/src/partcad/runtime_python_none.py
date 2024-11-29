@@ -31,23 +31,3 @@ class NonePythonRuntime(runtime_python.PythonRuntime):
         if not self.initialized:
             os.makedirs(self.path)
             self.initialized = True
-
-    def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        python_path = self.get_venv_python_path(session, path)
-        return super().run_onced(
-            [python_path] + self.python_flags + cmd,
-            stdin,
-            cwd=cwd,
-            session=session,
-        )
-
-    async def run_async_onced(
-        self, cmd, stdin="", cwd=None, session=None, path=None
-    ):
-        python_path = self.get_venv_python_path(session, path)
-        return await super().run_async_onced(
-            [python_path] + self.python_flags + cmd,
-            stdin,
-            cwd=cwd,
-            session=session,
-        )

@@ -71,8 +71,16 @@ class PythonRuntime(runtime.Runtime):
         self.exec_path = None
         # The name of the Python executable to search for in bin folders
         self.exec_name = "python" if os.name != "nt" else "python.exe"
-        self.python_flags = []
-        # self.python_flags = ["-Iu"]  # TODO(clairbee): add -P on 3.11+?
+
+        # Isolate this sandbox environment from the rest of the system
+        self.python_flags = ["-sOOIu"]
+
+        # TODO(clairbee): To improve portability, warn about uses of default encoding
+        # self.python_flags += ["-X", "warn_default_encoding=1"]
+
+        # TODO(clairbee): add -P on 3.11+
+        # if TODO version >= "3.11":
+        #     self.python_flags.append("-P")
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
@@ -89,9 +97,9 @@ class PythonRuntime(runtime.Runtime):
                 # TODO(clairbee): Lock the entire runtime instead
                 self.ensure_onced("ocp-tessellate==3.0.8")
                 self.ensure_onced("cadquery==2.4.0")
-                self.ensure_onced("numpy==1.24.1")
+                self.ensure_onced("numpy==1.26.4")
                 self.ensure_onced("numpy-quaternion==2023.0.4")
-                self.ensure_onced("nptyping==1.4.4")
+                self.ensure_onced("nptyping==2.0.1")
                 # self.ensure_onced("typing_extensions>=4.6.0,<5") # doesn't work on Windows
                 self.ensure_onced("typing_extensions==4.12.2")
                 self.ensure_onced("build123d==0.7.0")
@@ -107,11 +115,11 @@ class PythonRuntime(runtime.Runtime):
                         "ocp-tessellate==3.0.8"
                     )
                     await self.ensure_async_onced_locked("cadquery==2.4.0")
-                    await self.ensure_async_onced_locked("numpy==1.24.1")
+                    await self.ensure_async_onced_locked("numpy==1.26.4")
                     await self.ensure_async_onced_locked(
                         "numpy-quaternion==2023.0.4"
                     )
-                    await self.ensure_async_onced_locked("nptyping==1.4.4")
+                    await self.ensure_async_onced_locked("nptyping==2.0.1")
                     # await self.ensure_async_onced_locked("typing_extensions>=4.6.0,<5") # doesn't work on Windows
                     await self.ensure_async_onced_locked(
                         "typing_extensions==4.12.2"
@@ -123,7 +131,7 @@ class PythonRuntime(runtime.Runtime):
         self.once()
         return self.run_onced(cmd, stdin=stdin, cwd=cwd, session=session)
 
-    def run_onced(self, cmd, stdin="", cwd=None, session=None):
+    def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
             with VenvLock(self, session["hash"]):
@@ -145,6 +153,8 @@ class PythonRuntime(runtime.Runtime):
                 for dep in session["deps"]:
                     self.ensure_onced_locked(dep, path=session["path"])
 
+        python_path = self.get_venv_python_path(session, path)
+        cmd = [python_path, *self.python_flags, *cmd]
         pc_logging.debug("Running: %s", cmd)
         p = subprocess.Popen(
             cmd,
@@ -166,8 +176,8 @@ class PythonRuntime(runtime.Runtime):
 
         # if stdout:
         #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
-        # if stderr:
-        #     pc_logging.debug("Error in %s: %s" % (cmd, stderr))
+        if stderr:
+            pc_logging.debug("Error in %s: %s" % (cmd, stderr))
 
         # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
         # f = open("/tmp/log", "w")
@@ -185,7 +195,9 @@ class PythonRuntime(runtime.Runtime):
             cmd, stdin=stdin, cwd=cwd, session=session
         )
 
-    async def run_async_onced(self, cmd, stdin="", cwd=None, session=None):
+    async def run_async_onced(
+        self, cmd, stdin="", cwd=None, session=None, path=None
+    ):
         if session and session["dirty"]:
             # The venv environment has to be created
             async with AsyncVenvLock(self, session["hash"]):
@@ -209,11 +221,11 @@ class PythonRuntime(runtime.Runtime):
                         dep, path=session["path"]
                     )
 
+        python_path = self.get_venv_python_path(session, path)
+        cmd = [python_path, *self.python_flags, *cmd]
         pc_logging.debug("Running: %s", cmd)
         p = await asyncio.create_subprocess_exec(
-            # cmd,
-            cmd[0],
-            *cmd[1:],
+            *cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -231,8 +243,8 @@ class PythonRuntime(runtime.Runtime):
 
         # if stdout:
         #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
-        # if stderr:
-        #     pc_logging.error("Error in %s: %s" % (cmd, stderr))
+        if stderr:
+            pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
         # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
         # f = open("/tmp/log", "w")
@@ -270,7 +282,9 @@ class PythonRuntime(runtime.Runtime):
                 if not path is None:
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
-                    self.run_onced(["-m", "pip", "install", python_package])
+                    self.run_onced(
+                        ["-m", "pip", "install", python_package], path=path
+                    )
                 pathlib.Path(guard_path).touch()
 
     async def ensure_async(self, python_package, session=None, path=None):

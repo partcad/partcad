@@ -24,6 +24,8 @@ Stay informed and share feedback by joining [our Discord server](https://discord
 <br/>
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
+[![PartCAD Visual Studio Code extension](./docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
+
 ## Features
 
 - Multiple OSes supported
@@ -59,7 +61,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Generating with LLM/GenAI
     - [x] Google AI (`Gemini`)
     - [x] OpenAI (`ChatGPT`)
-    - [x] Any model published to [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`, `Code Llama` etc)
+    - [x] Any model in [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`, `Code Llama` etc)
 - Part and interface blueprints (2D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -91,7 +93,6 @@ This extension can be installed by searching for `PartCAD` in the VS Code extens
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
 
-[![PartCAD Visual Studio Code extension](./docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
 
 ### Command-Line Interface
 
@@ -101,7 +102,7 @@ The recommended method to install PartCAD CLI tools for most users is:
 pip install -U partcad-cli
 ```
 
-- On **Windows**, PartCAD must be executed inside a [conda] environment. Also set `LongPathsEnabled` to 1 at `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` using `Registry Editor`.
+- On **Windows**, install `Miniforge3` using `Register Miniforge3 as my default Python X.XX` and use this Python environment for PartCAD. Also set `LongPathsEnabled` to 1 at `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` using `Registry Editor`.
 - On **Ubuntu**, try `apt install libcairo2-dev python3-dev` if `pip install` fails to install `cairo`.
 - On **MacOS**, make sure XCode and command lines tools are installed. Also, use ``mamba`` should you experience difficulties on MacOS with the ARM architecture.
 

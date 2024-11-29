@@ -35,7 +35,7 @@ def process(path, request):
         #     b3d_obj, request["tolerance"], request["angularTolerance"]
         # )
 
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8", buffering=256 * 1024) as f:
             f.write("# OBJ file\n")
             for v in vertices:
                 f.write("v %.4f %.4f %.4f\n" % (v.x, v.y, v.z))
@@ -45,6 +45,7 @@ def process(path, request):
                 for i in p:
                     f.write(" %d" % (i + 1))
                 f.write("\n")
+            f.flush()
 
         return {
             "success": True,

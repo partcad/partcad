@@ -21,7 +21,9 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, "conda", version)
 
         self.initialized_conda = self.initialized
-        self.conda_path = shutil.which("conda")
+        self.conda_path = shutil.which("mamba")
+        if self.conda_path is None:
+            self.conda_path = shutil.which("conda")
         if self.conda_path is None:
             self.conda_cli = importlib.import_module("conda.cli.python_api")
             self.conda_cli.run_command("config", "--quiet")
@@ -115,43 +117,3 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 except Exception as e:
                     shutil.rmtree(self.path)
                     raise e
-
-    def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        python_path = self.get_venv_python_path(session, path)
-
-        return super().run_onced(
-            [
-                self.conda_path,
-                "run",
-                "--no-capture-output",
-                "-p",
-                self.path,
-                python_path,
-                *self.python_flags,
-            ]
-            + cmd,
-            stdin,
-            cwd=cwd,
-            session=session,
-        )
-
-    async def run_async_onced(
-        self, cmd, stdin="", cwd=None, session=None, path=None
-    ):
-        python_path = self.get_venv_python_path(session, path)
-
-        return await super().run_async_onced(
-            [
-                self.conda_path,
-                "run",
-                "--no-capture-output",
-                "-p",
-                self.path,
-                python_path,
-                *self.python_flags,
-            ]
-            + cmd,
-            stdin,
-            cwd=cwd,
-            session=session,
-        )

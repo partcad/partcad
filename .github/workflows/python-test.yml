@@ -37,50 +37,109 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -U pytest
-          # Install all core and a subset of CLI dependencies, that are required for tests
-          pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
+
+      # BEGIN OS-SPECIFIC
       - name: Install OS-specific dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y openscad
+
       - name: Install OS-specific dependencies (MacOS)
         if: runner.os == 'macOS'
         run: |
           brew install -f openscad || ( \
             rm /Users/runner/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
+
       - name: Install OS-specific dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
-          curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
-          ./openscad-installer.exe /S
+          # Prepare the registry
+          reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
+
+          # Install OpenSCAD
+          curl -o openscad.zip https://files.openscad.org/OpenSCAD-2021.01-x86-64.zip
+          Expand-Archive -Force openscad.zip
+          Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\openscad\openscad-2021.01
+      # END OS-SPECIFIC
+      #
+      - name: Install dependencies
+        shell: bash
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+
+          mamba create -n test python=${{ matrix.python-version }} -y
+          mamba activate test
+          python -m pip install --upgrade pip
+          pip install -U pytest
+          # Install all core and a subset of CLI dependencies, that are required for tests
+          pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
+          mamba deactivate
+
       - name: Test with pytest
         env:
           PYTHONPATH: partcad/src
           PYTHONWARNINGS: ignore
+        shell: bash
         run: |
-          pytest -x -p no:error-for-skips -p no:warnings
-      - name: Basic integration test for CLI
+          . ~/.bashrc
+          . ~/.bash_profile
+
+          mamba activate test
+          pytest -x -p no:error-for-skips -p no:warnings --ignore-glob="openscad*"
+          mamba deactivate
+
+      - name: Install CLI
+        shell: bash
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+
+          mamba activate test
           pip install -U ./partcad ./partcad-cli
+          mamba deactivate
+
+      - name: Basic integration test for CLI
+        shell: bash
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+
+          # Confirm that OpenSCAD works
+          openscad --version
+
+          mamba activate test
+
+          # BEGIN CLEAN PACKAGE
           mkdir new_pkg
           cd new_pkg
           pc --no-ansi init
           pc --no-ansi list-all -r
+          # END CLEAN PACKAGE
+
+          # BEGIN EXAMPLES
           cd ../examples
           pc --no-ansi list-all -r
           pc --no-ansi test -r
           pc --no-ansi render -r
-          # No testing resources for the below:
-          #if [ "$RUNNER_OS" == "Windows" ]; then
-          #  echo "Skipping additional tests on Windows: not enough resources on the runner";
-          #else
-          #  pc --no-ansi test -r --package /pub/examples;
-          #fi
+          # END EXAMPLES
+
+          mamba deactivate
+
+      - name: Basic integration test for CLI
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+
+          mamba activate test
+          # BEGIN PUBLIC REPO
+          cd examples
+          pc --no-ansi test -r --package /pub/examples
+          # END PUBLIC REPO
+          mamba deactivate
 
   # No testing resources for the below:
   #test-repo:

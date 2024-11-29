@@ -103,7 +103,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "numpy==1.24.1",
+                "numpy==1.26.4",
                 session=self.session,
             )
             await self.runtime.ensure_async(
@@ -111,7 +111,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "nptyping==1.4.4",
+                "nptyping==2.0.1",
                 session=self.session,
             )
             await self.runtime.ensure_async(

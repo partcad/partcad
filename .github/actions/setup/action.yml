@@ -3,18 +3,28 @@ name: "Setup"
 runs:
   using: "composite"
   steps:
-    - name: python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: pip
+    # - name: python
+    #   uses: actions/setup-python@v5
+    #   with:
+    #     python-version: ${{ matrix.python-version }}
+    #     cache: pip
 
     # Miniconda
     - uses: conda-incubator/setup-miniconda@v3
       with:
-        miniconda-version: latest
-        activate-environment: pc-conda-env
+        # mamba-version: "*"
+        miniforge-version: latest
+        channels: conda-forge,defaults
+        # activate-environment: env-test
         python-version: ${{ matrix.python-version }}
+        # auto-update-conda: true
+
+    - name: Init mamba
+      shell: bash
+      run: |
+        mamba init
+        touch ~/.bashrc
+        touch ~/.bash_profile
 
     - uses: actions/cache@v3
       id: cache
@@ -28,7 +38,14 @@ runs:
     - name: install dev dependencies
       shell: bash
       run: |
-        pip install wheel mypy
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba create -n env-test python=${{ matrix.python-version }} -y
+        mamba activate env-test
+        python -m ensurepip --upgrade
+        python -m pip install --upgrade pip wheel mypy setuptools
+        mamba deactivate
+
     # - name: Update Homebrew
     #   if: matrix.os == 'macos-latest'
     #   shell: bash
@@ -57,20 +74,38 @@ runs:
       if: startsWith(${{matrix.os}}, 'macos')
       shell: bash
       run: |
-        # pip install numpy swig
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba activate env-test
         pip install swig
+        mamba deactivate
+
     - name: install cadquery-ocp on MacOS (Python 3.10)
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.10') }}
       shell: bash
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba activate env-test
         pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
+        mamba deactivate
+
     - name: install cadquery-ocp on MacOS (Python 3.11)
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.11') }}
       shell: bash
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba activate env-test
         pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
+        mamba deactivate
+
     - name: install cadquery-ocp on MacOS (Python 3.12)
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.12') }}
       shell: bash
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba activate env-test
         pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
+        mamba deactivate

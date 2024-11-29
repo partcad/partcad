@@ -98,7 +98,7 @@ class PartFactoryCadquery(PartFactoryPython):
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "numpy==1.24.1",
+                "numpy==1.26.4",
                 session=self.session,
             )
             await self.runtime.ensure_async(
@@ -106,7 +106,7 @@ class PartFactoryCadquery(PartFactoryPython):
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "nptyping==1.4.4",
+                "nptyping==2.0.1",
                 session=self.session,
             )
             await self.runtime.ensure_async(
@@ -117,6 +117,7 @@ class PartFactoryCadquery(PartFactoryPython):
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
+            # TODO(clairbee): Move the following code to a separate method in wrapper.py
             response_serialized, errors = await self.runtime.run_async(
                 [
                     wrapper_path,
