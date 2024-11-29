@@ -107,7 +107,7 @@ enhancing the overall review quality. You can use the following commands on PRs 
 -   `@coderabbitai resume` - Continues previously paused reviews.
 -   `@coderabbitai resolve` - Resolves all the CodeRabbit review comments.
 -   `@coderabbitai configuration` - Displays the current CodeRabbit configuration for the repository.
--   `@coderabbitai help` to get help.
+-   `@coderabbitai help` - Displays available commands and usage information.
 
 [1]: https://python-poetry.org/
 [2]: https://python-poetry.org/docs/cli#shell

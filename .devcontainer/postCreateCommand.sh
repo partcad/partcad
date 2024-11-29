@@ -7,8 +7,10 @@
 # -o pipefail: Exit on pipe failures
 set -euxo pipefail
 
+WORKSPACE_DIR="${WORKSPACE_DIR:-/workspaces/partcad}"
+
 echo "Configuring Git safe directory..."
-if ! git config --global --add safe.directory /workspaces/partcad; then
+if ! git config --global --add safe.directory "${WORKSPACE_DIR}"; then
     echo "Failed to configure Git safe directory"
     exit 1
 fi
@@ -18,6 +20,12 @@ cd /workspaces/partcad || { echo "Failed to change directory"; exit 1; }
 install_component() {
     local component="$1"
     local command="$2"
+
+    # Input validation
+    if [[ -z "${component}" || -z "${command}" ]]; then
+        echo "Error: Component name and command are required"
+        exit 1
+    fi
 
     echo "Installing ${component}..."
     if ! eval "$command"; then

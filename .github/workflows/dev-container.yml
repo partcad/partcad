@@ -31,32 +31,52 @@ jobs:
       - name: Build Dev Container
         uses: devcontainers/ci@v0.3
         with:
-          imageName: ghcr.io/partcad/partcad-devcontainer
-          imageTag: "PR-${{ github.event.pull_request.number }}"
+          imageName: ${{ vars.CONTAINER_REGISTRY }}/${{ github.repository }}-devcontainer
+          imageTag:
+            ${{ github.event.pull_request.number != '' && format('PR-{0}', github.event.pull_request.number) ||
+            github.ref_name }}
           cacheFrom: ghcr.io/partcad/partcad-devcontainer
           push: always
   install:
-    # TODO: @alexanderilyin: cache "poetry install"
     name: Install Python dependencies
     runs-on: ubuntu-latest
     needs: build
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
       - name: Install Python dependencies using Poetry
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: ghcr.io/partcad/partcad-devcontainer:"PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "ghcr.io/partcad/partcad-devcontainer:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: |
             for i in {1..3}; do
               echo "Attempt $i: Installing dependencies..."
-              if poetry --no-ansi --no-interaction install; then
+              if timeout 300 poetry --no-ansi --no-interaction install; then
                 exit 0
               fi
-              sleep 5
+              sleep $((i * 10))  # Exponential backoff
             done
             exit 1
+
   pytest:
     name: Run pytest
     runs-on: ubuntu-latest
@@ -64,12 +84,32 @@ jobs:
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "ghcr.io/partcad/partcad-devcontainer:PR-${{ github.event.pull_request.number }}"
           push: never
-          runCmd: poetry --no-ansi --no-interaction run pytest --verbose
+          runCmd: |
+            mkdir -p test-results
+            poetry --no-ansi --no-interaction run pytest --verbose \
+              --junitxml=test-results/junit.xml \
+              --html=test-results/report.html
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: test-results/
+
   pre-commit:
     name: Run pre-commit
     runs-on: ubuntu-latest
@@ -77,6 +117,23 @@ jobs:
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache pre-commit dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            .pre-commit
+          key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pre-commit-
+
       - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
         with:
