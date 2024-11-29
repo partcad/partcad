@@ -158,7 +158,7 @@ jobs:
           . ~/.bashrc
           . ~/.bash_profile
 
-          mamba activate build
+          mamba activate env-test
           python -m pip install -r ./requirements.txt
           sphinx-build  -M html docs/source docs/build -n -W
           mamba deactivate
