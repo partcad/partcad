@@ -97,7 +97,7 @@ class PythonRuntime(runtime.Runtime):
                 # TODO(clairbee): Lock the entire runtime instead
                 self.ensure_onced("ocp-tessellate==3.0.8")
                 self.ensure_onced("cadquery==2.4.0")
-                self.ensure_onced("numpy==1.24.1")
+                self.ensure_onced("numpy==1.26.4")
                 self.ensure_onced("numpy-quaternion==2023.0.4")
                 self.ensure_onced("nptyping==2.0.1")
                 # self.ensure_onced("typing_extensions>=4.6.0,<5") # doesn't work on Windows
@@ -115,7 +115,7 @@ class PythonRuntime(runtime.Runtime):
                         "ocp-tessellate==3.0.8"
                     )
                     await self.ensure_async_onced_locked("cadquery==2.4.0")
-                    await self.ensure_async_onced_locked("numpy==1.24.1")
+                    await self.ensure_async_onced_locked("numpy==1.26.4")
                     await self.ensure_async_onced_locked(
                         "numpy-quaternion==2023.0.4"
                     )

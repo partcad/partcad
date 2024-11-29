@@ -107,7 +107,7 @@ class SketchFactoryBuild123d(SketchFactoryPython):
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "numpy==1.24.1",
+                "numpy==1.26.4",
                 session=self.session,
             )
             await self.runtime.ensure_async(
