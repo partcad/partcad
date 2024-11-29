@@ -22,10 +22,12 @@ runs:
       shell: bash
       run: |
         mamba init
+        touch ~/.bashrc
 
     - name: Create the default environment
       shell: bash
       run: |
+        . ~/.bashrc
         mamba create -n env-test python=${{ matrix.python-version }} -y
         mamba activate env-test
 
@@ -70,6 +72,7 @@ runs:
       if: startsWith(${{matrix.os}}, 'macos')
       shell: bash
       run: |
+        . ~/.bashrc
         mamba activate env-test
         pip install swig
         mamba deactivate
@@ -78,6 +81,7 @@ runs:
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.10') }}
       shell: bash
       run: |
+        . ~/.bashrc
         mamba activate env-test
         pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
         mamba deactivate
@@ -86,6 +90,7 @@ runs:
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.11') }}
       shell: bash
       run: |
+        . ~/.bashrc
         mamba activate env-test
         pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
         mamba deactivate
@@ -94,6 +99,7 @@ runs:
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.12') }}
       shell: bash
       run: |
+        . ~/.bashrc
         mamba activate env-test
         pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
         mamba deactivate
