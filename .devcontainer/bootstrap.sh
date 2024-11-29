@@ -3,9 +3,8 @@
 # Shell options for maximum safety:
 # -e: Exit on error
 # -u: Error on undefined variables
-# -x: Print commands before execution
 # -o pipefail: Exit on pipe failures
-set -euxo pipefail
+set -euo pipefail
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-/workspaces/partcad}"
 
@@ -21,8 +20,6 @@ if ! git config --global --add safe.directory "${WORKSPACE_DIR}"; then
     exit 1
 fi
 
-cd "${WORKSPACE_DIR}" || { echo "Failed to change directory"; exit 1; }
-
 install_component() {
     local component="$1"
     local command="$2"
@@ -34,9 +31,10 @@ install_component() {
     fi
 
     echo "Installing ${component}..."
-    if ! eval "$command"; then
-        echo "Failed to install ${component}"
-        exit 1
+    # shellcheck disable=SC2068
+    if ! ${command[@]}; then
+      echo "Failed to install ${component}"
+      exit 1
     fi
 }
 

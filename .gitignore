@@ -13,3 +13,4 @@ __pycache__
 /partcad/build
 /partcad/dist
 docs/build
+test-results/
