@@ -4,6 +4,7 @@
     "dockerfile": "./Dockerfile"
   },
   "containerEnv": {
+    "DOCKER_IMAGE_CACHE_BASELINE": "0.7.30-9-gc0a7bff",
     "PRE_COMMIT_HOME": "/workspaces/partcad/.pre-commit"
   },
   "features": {
