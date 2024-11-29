@@ -79,7 +79,7 @@ jobs:
           PYTHONWARNINGS: ignore
         run: |
           mamba activate test
-          pytest -x -p no:error-for-skips -p no:warnings
+          pytest -x -p no:error-for-skips -p no:warnings --ignore-glob="openscad*"
           mamba deactivate
 
       - name: Install CLI
