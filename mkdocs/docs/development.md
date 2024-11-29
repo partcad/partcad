@@ -2,7 +2,7 @@
 
 ## Documentation
 
-- `./docs/`: user documenttation, based on Sphinx and available at <https://partcad.readthedocs.io/>.
+- `./docs/`: user documentation, based on Sphinx and available at <https://partcad.readthedocs.io/>.
 - `./mkdocs/`: developer's handbook, based on [`mkdocs-material`][10].
 
 You can serve `mkdocs` docs locally with realtime updates:
@@ -18,11 +18,11 @@ poetry run mkdocs serve
 - `shellcheck`: used by [`pre-commit`][6]
 - `bash-completion`: used by [`click`][7]
 - `cmake`, `libcairo2-dev`, `pkg-config` `python3-dev`: used by [`pycairo`][5]
-  - `ffmpeg`, `libsm6`, `libxext6`: those probably as well.
+  - `ffmpeg`, `libsm6`, `libxext6`: those probably as well
 - `openscad`, `pypy3`, `pypy3-dev`: used by PartCAD
 - `graphviz`: was used by `gprof2dot`
 - `pipx`: used by [`poetry-plugin-export`][8]
-- `time`, `moreutils`: used in shell for troubleshooting.
+- `time`, `moreutils`: used in terminal for troubleshooting
 
 Dependencies are listed in `.devcontainer/apt.in`. You can install them:
 

@@ -20,6 +20,42 @@ if ! git config --global --add safe.directory "${WORKSPACE_DIR}"; then
     exit 1
 fi
 
+install_allure() {
+  local allure_url="https://github.com/allure-framework/allure2/releases/download/2.32.0/allure_2.32.0-1_all.deb"
+  local allure_deb="/tmp/allure.deb"
+
+  echo "Downloading Allure..."
+  if ! curl -JL -o "${allure_deb}" "${allure_url}"; then
+    echo "Failed to download Allure"
+    exit 1
+  fi
+
+  echo "Updating package list..."
+  if ! sudo apt update; then
+    echo "Failed to update package list"
+    exit 1
+  fi
+
+  echo "Installing required dependencies..."
+  if ! sudo apt install --yes default-jre-headless; then
+    echo "Failed to install required dependencies"
+    exit 1
+  fi
+
+  echo "Installing Allure..."
+  if ! sudo dpkg -i "${allure_deb}"; then
+    echo "Failed to install Allure. Attempting to fix broken dependencies..."
+    if ! sudo apt --fix-broken install --yes; then
+      echo "Failed to fix broken dependencies"
+      exit 1
+    fi
+  fi
+
+  echo "Allure installed successfully"
+}
+
+install_allure
+
 install_component() {
     local component="$1"
     local command="$2"
@@ -62,6 +98,7 @@ echo "
 ╚═════════════════════════════════════════════════════════╝
 
 - Workspace: ${WORKSPACE_DIR}
+- Allure: $(allure --version)
 - Pre-commit: $(pre-commit --version)
 - Poetry: $(poetry --version)
 - Plugins: $(poetry self show plugins)

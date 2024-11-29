@@ -131,7 +131,9 @@ jobs:
       - name: Generate Allure Report
         if: always()
         run: |
-          allure generate allure-results -o allure-report || true
+          if ! allure generate allure-results -o allure-report; then
+            echo "Warning: Allure report generation failed. This won't fail the build, but please investigate."
+          fi
 
       - name: Publish Allure Report
         if: always()

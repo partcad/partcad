@@ -81,7 +81,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 
 ## Installation
 
-Note: It's not required but highly recommended that you have [conda] installed. If you experience any difficulty
+Note, it's not required but highly recommended that you have [conda] installed. If you experience any difficulty
 installing or using any PartCAD tool, then make sure to install [conda].
 
 ### Extension for Visual Studio Code

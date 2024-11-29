@@ -1,7 +1,17 @@
 
 [tool.pytest.ini_options]
 pythonpath = "partcad/src"
-addopts = "--junitxml=test-results/junit.xml --html=test-results/report.html --self-contained-html --durations=0 --durations-min=1.0 --alluredir=allure-results --cov=partcad --cov-report=xml:test-results/coverage.xml --cov-report=html:test-results/htmlcov"
+addopts = """
+    --junitxml=test-results/junit.xml
+    --html=test-results/report.html
+    --self-contained-html
+    --durations=0
+    --durations-min=1.0
+    --alluredir=allure-results
+    --cov=partcad
+    --cov-report=xml:test-results/coverage.xml
+    --cov-report=html:test-results/htmlcov
+    """
 filterwarnings = [
     "ignore:.*is a deprecated alias for.*:DeprecationWarning"
 ]

@@ -36,7 +36,7 @@ the main purpose of the product.
 These are improvements that don’t necessarily add new functionality but refine existing workflows, reduce friction, and
 increase efficiency for users.
 
-- [ ] Check how to have this added to Image in different workflow so we compile Python only once.
+- [x] Check how to have this added to Image in different workflow so we compile Python only once.
       [`#discussion_r1860174599`](https://github.com/partcad/partcad/pull/213#discussion_r1860174599)
   - [ ] Release "base" Dev Container image from `main` or `devel` branches.
 - [ ] Describe package release flow using [Gitgraph Diagrams](https://mermaid.js.org/syntax/gitgraph.html)
@@ -47,7 +47,7 @@ increase efficiency for users.
       [`#discussion_r1860160455`](https://github.com/partcad/partcad/pull/213#discussion_r1860160455)
 - [x] Move build commands to dedicated shell file.
       [`#discussion_r1858401259`](https://github.com/partcad/partcad/pull/213#discussion_r1858401259)
-- [x] IDE settings should go to .vscode/ so the could be changed w/o rebuilding an image.
+- [x] IDE settings should go to .vscode/ so they could be changed w/o rebuilding an image.
       [`#discussion_r1858382800`](https://github.com/partcad/partcad/pull/213#discussion_r1858382800)
 - [x] `$PATH` problems should be solved.
       [`#discussion_r1858376864`](https://github.com/partcad/partcad/pull/213#discussion_r1858376864)
@@ -57,7 +57,7 @@ increase efficiency for users.
 Nice-to-have features that add a layer of delight or polish to the software. These are not essential for core
 functionality but can significantly enhance the user experience or make the product stand out.
 
-- [ ] Run `pre-commit` workflow in Dev Container.
+- [x] Run `pre-commit` workflow in Dev Container.
 - [ ] All used deepspacecatel code should be transferred to PartCAD.
       [`#discussion_r1858374297`](https://github.com/partcad/partcad/pull/213#discussion_r1858374297)
 - [ ] Create separate ticket for poetry-multiproject
