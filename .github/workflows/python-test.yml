@@ -64,7 +64,10 @@ jobs:
       # END OS-SPECIFIC
       #
       - name: Install dependencies
+        shell: bash
         run: |
+          . ~/.bashrc
+
           mamba create -n test python=${{ matrix.python-version }} -y
           mamba activate test
           python -m pip install --upgrade pip
@@ -77,19 +80,28 @@ jobs:
         env:
           PYTHONPATH: partcad/src
           PYTHONWARNINGS: ignore
+        shell: bash
         run: |
+          . ~/.bashrc
+
           mamba activate test
           pytest -x -p no:error-for-skips -p no:warnings --ignore-glob="openscad*"
           mamba deactivate
 
       - name: Install CLI
+        shell: bash
         run: |
+          . ~/.bashrc
+
           mamba activate test
           pip install -U ./partcad ./partcad-cli
           mamba deactivate
 
       - name: Basic integration test for CLI
+        shell: bash
         run: |
+          . ~/.bashrc
+
           # Confirm that OpenSCAD works
           openscad --version
 
@@ -113,7 +125,10 @@ jobs:
 
       - name: Basic integration test for CLI
         if: runner.os == 'Linux'
+        shell: bash
         run: |
+          . ~/.bashrc
+
           mamba activate test
           # BEGIN PUBLIC REPO
           pc --no-ansi test -r --package /pub/examples;
