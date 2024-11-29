@@ -17,7 +17,7 @@ runs:
         channels: conda-forge,defaults
         # activate-environment: env-test
         python-version: ${{ matrix.python-version }}
-        auto-update-conda: true
+        # auto-update-conda: true
 
     - name: Init mamba
       shell: bash
