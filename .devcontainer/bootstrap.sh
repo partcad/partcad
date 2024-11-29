@@ -40,6 +40,8 @@ if ! pre-commit --version >/dev/null 2>&1; then
     echo "Pre-commit verification failed"
     exit 1
 fi
+# Log installed version
+echo "Pre-commit version: $(pre-commit --version)"
 
 install_component "poetry export plugin" "poetry self add poetry-plugin-export"
 # Verify poetry plugin installation
@@ -47,5 +49,7 @@ if ! poetry self show plugins | grep -q "poetry-plugin-export"; then
     echo "Poetry plugin verification failed"
     exit 1
 fi
+# Log installed version
+echo "Poetry version: $(poetry --version)"
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Dev container post-create setup completed successfully. Humor settings: optimal"
