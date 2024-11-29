@@ -28,7 +28,8 @@
   "postCreateCommand": ".devcontainer/postCreateCommand.sh",
   "customizations": {
     "vscode": {
-      "extensions": [
+        // <!-- prettier-ignore-start -->
+        "extensions": [
         // CAD Viewer
         "bernhard-42.ocp-cad-viewer",
 
@@ -49,6 +50,9 @@
         // File Headers
         "psioniq.psi-header",
 
+        // Docker Support
+        "ms-azuretools.vscode-docker",
+
         // YAML Support
         "redhat.vscode-yaml",
 
@@ -67,6 +71,7 @@
         // Task Management
         "Gruntfuggly.todo-tree"
       ]
+      // <!-- prettier-ignore-end -->
     }
   }
 }

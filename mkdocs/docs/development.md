@@ -93,7 +93,7 @@ pre-commit install
 
 [CodeRabbit][11] is an AI-powered code reviewer that delivers context-aware feedback on pull requests within minutes,
 streamlining the code review process. It provides valuable insights and identifies issues that are often missed,
-enhancing the overall review quality. You can use following comments on PRs to interact with it:
+enhancing the overall review quality. You can use the following commands on PRs to interact with it:
 
 **Review Commands:**
 
