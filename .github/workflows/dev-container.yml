@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
@@ -48,7 +48,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
@@ -90,7 +90,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
@@ -125,7 +125,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}

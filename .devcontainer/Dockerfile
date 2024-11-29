@@ -6,6 +6,7 @@ FROM mcr.microsoft.com/devcontainers/python:3.10-bookworm
 LABEL org.opencontainers.image.source "https://github.com/partcad/partcad/"
 LABEL org.opencontainers.image.description "Dev Container for PartCAD"
 LABEL org.opencontainers.image.licenses "Apache 2.0"
+LABEL org.opencontainers.image.documentation "https://partcad.readthedocs.io"
 
 COPY --from=hadolint /bin/hadolint /usr/local/bin/hadolint
 
