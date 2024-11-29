@@ -1,5 +1,6 @@
 __pycache__
 .conda
+.coverage
 .ocp_vscode
 .partcad
 .pre-commit
@@ -12,5 +13,7 @@ __pycache__
 /partcad-cli/dist
 /partcad/build
 /partcad/dist
+allure-report/
+allure-results/
 docs/build
 test-results/

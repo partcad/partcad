@@ -2,7 +2,7 @@
   "partcad.packagePath": "examples",
   "[markdown]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "prettier.tabWidth": 4
+    "prettier.tabWidth": 2
   },
   "psi-header.config": {
     "author": "PartCAD Inc.",

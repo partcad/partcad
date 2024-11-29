@@ -10,7 +10,6 @@ env:
   CONTAINER_REGISTRY: ghcr.io
 
 jobs:
-  # TODO: @alexanderilyin: Add Allure reports
   # TODO: @alexanderilyin: Add Code Coverage reports
   build:
     name: Build Dev Container
@@ -74,12 +73,15 @@ jobs:
           push: never
           runCmd: |
             for i in {1..3}; do
-              echo "Attempt $i: Installing dependencies..."
+              echo "Attempt $i/3: Installing dependencies (timeout: 300s)..."
               if timeout 300 poetry --no-ansi --no-interaction install; then
+                echo "Installation successful on attempt $i"
                 exit 0
               fi
+              echo "Attempt $i failed. Waiting $((i * 10)) seconds before retry..."
               sleep $((i * 10))  # Exponential backoff
             done
+            echo "All installation attempts failed after 3 tries"
             exit 1
 
   pytest:
@@ -116,9 +118,7 @@ jobs:
           push: never
           runCmd: |
             mkdir -pv test-results
-            poetry --no-ansi --no-interaction run pytest --verbose \
-              --junitxml=test-results/junit.xml \
-              --html=test-results/report.html
+            poetry --no-ansi --no-interaction run pytest --verbose
 
       - name: Upload test results
         if: always()
@@ -127,6 +127,27 @@ jobs:
           name: test-results
           path: test-results/
           retention-days: 7
+
+      - name: Generate Allure Report
+        if: always()
+        run: |
+          allure generate allure-results -o allure-report || true
+
+      - name: Publish Allure Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 7
+
+      # TODO: @alexanderilyin: Enable once Codecov app is installed
+      # - name: Upload Coverage to Codecov
+      #   if: always()
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     files: test-results/coverage.xml
+      #     token: ${{ secrets.CODECOV_TOKEN }}
 
   pre-commit:
     name: Run pre-commit
@@ -151,7 +172,6 @@ jobs:
           key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pre-commit-
-
       - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
         with:

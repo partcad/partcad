@@ -146,6 +146,36 @@ files = [
 ]
 
 [[package]]
+name = "allure-pytest"
+version = "2.13.5"
+description = "Allure pytest integration"
+optional = false
+python-versions = "*"
+files = [
+    {file = "allure-pytest-2.13.5.tar.gz", hash = "sha256:0ef8e1790c44a988db6b83c4d4f5e91451e2c4c8ea10601dfa88528d23afcf6e"},
+    {file = "allure_pytest-2.13.5-py3-none-any.whl", hash = "sha256:94130bac32964b78058e62cf4b815ad97a5ac82a065e6dd2d43abac2be7640fc"},
+]
+
+[package.dependencies]
+allure-python-commons = "2.13.5"
+pytest = ">=4.5.0"
+
+[[package]]
+name = "allure-python-commons"
+version = "2.13.5"
+description = "('Contains the API for end users as well as helper functions and classes to build Allure adapters for Python test frameworks',)"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "allure-python-commons-2.13.5.tar.gz", hash = "sha256:a232e7955811f988e49a4c1dd6c16cce7e9b81d0ea0422b1e5654d3254e2caf3"},
+    {file = "allure_python_commons-2.13.5-py3-none-any.whl", hash = "sha256:8b0e837b6e32d810adec563f49e1d04127a5b6770e0232065b7cb09b9953980d"},
+]
+
+[package.dependencies]
+attrs = ">=16.0.0"
+pluggy = ">=0.4.0"
+
+[[package]]
 name = "annotated-types"
 version = "0.7.0"
 description = "Reusable constraint types to use with typing.Annotated"
@@ -2247,6 +2277,20 @@ files = [
 ]
 
 [[package]]
+name = "mdx-truly-sane-lists"
+version = "1.3"
+description = "Extension for Python-Markdown that makes lists truly sane. Custom indents for nested lists and fix for messy linebreaks."
+optional = false
+python-versions = "*"
+files = [
+    {file = "mdx_truly_sane_lists-1.3-py3-none-any.whl", hash = "sha256:b9546a4c40ff8f1ab692f77cee4b6bfe8ddf9cccf23f0a24e71f3716fe290a37"},
+    {file = "mdx_truly_sane_lists-1.3.tar.gz", hash = "sha256:b661022df7520a1e113af7c355c62216b384c867e4f59fb8ee7ad511e6e77f45"},
+]
+
+[package.dependencies]
+Markdown = ">=2.6"
+
+[[package]]
 name = "mergedeep"
 version = "1.3.4"
 description = "A deep merge function for 🐍."
@@ -3536,6 +3580,20 @@ pytest = ">=4.6"
 
 [package.extras]
 testing = ["fields", "hunter", "process-tests", "pytest-xdist", "virtualenv"]
+
+[[package]]
+name = "pytest-durations"
+version = "1.3.1"
+description = "Pytest plugin reporting fixtures and test functions execution time."
+optional = false
+python-versions = ">=3.8.1"
+files = [
+    {file = "pytest_durations-1.3.1-py3-none-any.whl", hash = "sha256:3d1e60d5955174f3d98975296ca6370f7f03a5424b1d4356097f5da85c0df302"},
+    {file = "pytest_durations-1.3.1.tar.gz", hash = "sha256:80f078dd96520cc7e2bb766d1cb6370781141dd8d3a2add2cb50d90b7f920dcd"},
+]
+
+[package.dependencies]
+pytest = ">=4.6"
 
 [[package]]
 name = "pytest-html"
@@ -5020,4 +5078,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "77bcbe2460bbc6819550a909c1fe51f446322a0245dc13df293ac62fd691afae"
+content-hash = "0e124fb36e88e1527b412fcf0bb9a2cbe26aaad60c0d895d67efb62e0372c1e5"

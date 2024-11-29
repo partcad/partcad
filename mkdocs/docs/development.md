@@ -2,8 +2,8 @@
 
 ## Documentation
 
--   `./docs/`: user documenttation, based on Sphinx and available at <https://partcad.readthedocs.io/>.
--   `./mkdocs/`: developer's handbook, based on [`mkdocs-material`][10].
+- `./docs/`: user documenttation, based on Sphinx and available at <https://partcad.readthedocs.io/>.
+- `./mkdocs/`: developer's handbook, based on [`mkdocs-material`][10].
 
 You can serve `mkdocs` docs locally with realtime updates:
 
@@ -15,14 +15,14 @@ poetry run mkdocs serve
 
 ## Host Dependencies
 
--   `shellcheck`: used by [`pre-commit`][6]
--   `bash-completion`: used by [`click`][7]
--   `cmake`, `libcairo2-dev`, `pkg-config` `python3-dev`: used by [`pycairo`][5]
-    -   `ffmpeg`, `libsm6`, `libxext6`: those probably as well.
--   `openscad`, `pypy3`, `pypy3-dev`: used by PartCAD
--   `graphviz`: was used by `gprof2dot`
--   `pipx`: used by [`poetry-plugin-export`][8]
--   `time`, `moreutils`: used in shell for troubleshooting.
+- `shellcheck`: used by [`pre-commit`][6]
+- `bash-completion`: used by [`click`][7]
+- `cmake`, `libcairo2-dev`, `pkg-config` `python3-dev`: used by [`pycairo`][5]
+  - `ffmpeg`, `libsm6`, `libxext6`: those probably as well.
+- `openscad`, `pypy3`, `pypy3-dev`: used by PartCAD
+- `graphviz`: was used by `gprof2dot`
+- `pipx`: used by [`poetry-plugin-export`][8]
+- `time`, `moreutils`: used in shell for troubleshooting.
 
 Dependencies are listed in `.devcontainer/apt.in`. You can install them:
 
@@ -61,9 +61,9 @@ and project configuration into one tool, offering a streamlined workflow. It aut
 virtual environments and distinguishes between production and development dependencies. Most frequent commands you'll
 use:
 
--   [`poetry install`][3] — reads the `poetry.lock` file to install the exact versions of dependencies.
--   [`poetry shell ...`][2] — spawns a shell within the project’s virtual environment.
--   [`poetry add ...`][4] — adds required packages to your `pyproject.toml` and installs them.
+- [`poetry install`][3] — reads the `poetry.lock` file to install the exact versions of dependencies.
+- [`poetry shell ...`][2] — spawns a shell within the project’s virtual environment.
+- [`poetry add ...`][4] — adds required packages to your `pyproject.toml` and installs them.
 
 ## Git
 
@@ -92,22 +92,31 @@ pre-commit install
 #### CodeRabbit Commands (Invoked using PR comments)
 
 [CodeRabbit][11] is an AI-powered code reviewer that delivers context-aware feedback on pull requests within minutes,
-streamlining the code review process. It provides valuable insights and identifies issues that are often missed,
-enhancing the overall review quality. You can use the following commands on PRs to interact with it:
+streamlining the code review process.
+
+It provides valuable insights and identifies issues that are often missed, enhancing the overall review quality. You can
+use the following commands on PRs to interact with it:
 
 **Review Commands:**
 
--   `@coderabbitai summary` - Generates a fresh PR summary.
--   `@coderabbitai review` - Initiates an incremental review (useful for repos with disabled auto-reviews).
--   `@coderabbitai full review` - Performs a comprehensive review of all files.
+- `@coderabbitai summary` - Generates a fresh PR summary.
+- `@coderabbitai review` - Initiates an incremental review of new changes only (useful for repos with disabled
+  auto-reviews).
+- `@coderabbitai full review` - Performs a comprehensive review of all files, regardless of previous reviews.
 
-**Control Commands:**
+**Review Flow Control:**
 
--   `@coderabbitai pause` - Temporarily halts PR reviews.
--   `@coderabbitai resume` - Continues previously paused reviews.
--   `@coderabbitai resolve` - Resolves all the CodeRabbit review comments.
--   `@coderabbitai configuration` - Displays the current CodeRabbit configuration for the repository.
--   `@coderabbitai help` - Displays available commands and usage information.
+- `@coderabbitai pause` - Temporarily halts PR reviews.
+- `@coderabbitai resume` - Continues previously paused reviews.
+
+**Management Commands:**
+
+- `@coderabbitai resolve` - Resolves all the CodeRabbit review comments.
+- `@coderabbitai configuration` - Displays the current CodeRabbit configuration for the repository.
+
+**Help:**
+
+- `@coderabbitai help` - Displays available commands and usage information.
 
 [1]: https://python-poetry.org/
 [2]: https://python-poetry.org/docs/cli#shell

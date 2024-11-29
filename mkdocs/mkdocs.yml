@@ -3,5 +3,6 @@ site_url: https://github.com/partcad/partcad
 
 theme: material
 markdown_extensions:
+  - mdx_truly_sane_lists:
   - pymdownx.tasklist:
       custom_checkbox: true

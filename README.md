@@ -24,60 +24,60 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 
 ## Features
 
--   Multiple OSes supported
-    -   [x] Windows
-    -   [x] Linux
-    -   [x] macOS
--   Collaboration on designs
-    -   [x] Versioning of CAD designs using `Git` _(like it's 2024 for real)_
-        -   [x] Mechanics
-        -   [ ] Electronics _(in progress)_
-        -   [ ] Software _(in progress)_
-    -   [x] Automated generation of `Markdown` documentation
-    -   [x] Parametric (hardware and software) bill of materials
-    -   [x] Publish models online on PartCAD.org
-    -   [ ] Publish models online on your website _(in progress)_
-    -   [ ] Publish configurable parts and assemblies online _(in progress)_
-    -   [ ] Purchase of assemblies and parts online, both marketplace and SaaS _(in progress)_
-    -   [x] Automated purchase of parts via CLI
--   Assembly models (3D)
-    -   [x] Using specialized `Assembly YAML` format
-        -   [x] Automatically maintaining the bill of materials
-        -   [ ] Generating user-friendly visual assembly instructions _(in progress)_
-    -   [ ] Generating with LLM/GenAI _(in progress)_
--   Part models (3D)
-    -   Using scripting languages
-        -   [x] [CadQuery]
-        -   [x] [build123d]
-        -   [x] [OpenSCAD]
-    -   Using legacy CAD files
-        -   [x] `STEP`
-        -   [x] `STL`
-        -   [x] `3MF`
-    -   Generating with LLM/GenAI
-        -   [x] Google AI (`Gemini`)
-        -   [x] OpenAI (`ChatGPT`)
-        -   [x] Any model published to [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`,
-                `Code Llama` etc.)
--   Part and interface blueprints (2D)
-    -   Using scripting languages
-        -   [x] [CadQuery]
-        -   [x] [build123d]
-    -   Using legacy file formats:
-        -   [x] `DXF`
-        -   [x] `SVG`
--   Other features
-    -   Object-Oriented Programming approach to maintaining part interfaces and mating information
-    -   Live preview of 3D models while working in Visual Studio Code
-    -   Render 2D and 3D to images
-        -   [x] `SVG`
-        -   [x] `PNG`
-    -   Export 3D models to CAD files
-        -   [x] `STEP`
-        -   [x] `STL`
-        -   [x] `3MF`
-        -   [x] `ThreeJS`
-        -   [x] `OBJ`
+- Multiple OSes supported
+  - [x] Windows
+  - [x] Linux
+  - [x] macOS
+- Collaboration on designs
+  - [x] Versioning of CAD models using `Git` _(like it's 2024 for real)_
+    - [x] Mechanics
+    - [ ] Electronics _(in progress)_
+    - [ ] Software _(in progress)_
+  - [x] Automated generation of `Markdown` documentation
+  - [x] Parametric (hardware and software) bill of materials
+  - [x] Publish models online on PartCAD.org
+  - [ ] Publish models online on your website _(in progress)_
+  - [ ] Publish configurable parts and assemblies online _(in progress)_
+  - [ ] Purchase of assemblies and parts online, both marketplace and SaaS _(in progress)_
+  - [x] Automated purchase of parts via CLI
+- Assembly models (3D)
+  - [x] Using specialized `Assembly YAML` format
+    - [x] Automatically maintaining the bill of materials
+    - [ ] Generating user-friendly visual assembly instructions _(in progress)_
+  - [ ] Generating with LLM/GenAI _(in progress)_
+- Part models (3D)
+  - Using scripting languages
+    - [x] [CadQuery]
+    - [x] [build123d]
+    - [x] [OpenSCAD]
+  - Using legacy CAD files
+    - [x] `STEP`
+    - [x] `STL`
+    - [x] `3MF`
+  - Generating with LLM/GenAI
+    - [x] Google AI (`Gemini`)
+    - [x] OpenAI (`ChatGPT`)
+    - [x] Any model published to [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`,
+          `Code Llama` etc.)
+- Part and interface blueprints (2D)
+  - Using scripting languages
+    - [x] [CadQuery]
+    - [x] [build123d]
+  - Using legacy file formats:
+    - [x] `DXF`
+    - [x] `SVG`
+- Other features
+  - Object-Oriented Programming approach to maintaining part interfaces and mating information
+  - Live preview of 3D models while working in Visual Studio Code
+  - Render 2D and 3D to images
+    - [x] `SVG`
+    - [x] `PNG`
+  - Export 3D models to CAD files
+    - [x] `STEP`
+    - [x] `STL`
+    - [x] `3MF`
+    - [x] `ThreeJS`
+    - [x] `OBJ`
 
 ## Installation
 
@@ -101,11 +101,11 @@ The recommended method to install PartCAD CLI tools for most users is:
 pip install -U partcad-cli
 ```
 
--   On **Windows**, PartCAD must be executed inside a [conda] environment. Also set `LongPathsEnabled` to 1 at
-    `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` using `Registry Editor`.
--   On **Ubuntu**, try `apt install libcairo2-dev python3-dev` if `pip install` fails to install `cairo`.
--   On **macOS**, make sure XCode and command lines tools are installed. Also, use `mamba` should you experience
-    difficulties on macOS with the ARM architecture.
+- On **Windows**, PartCAD must be executed inside a [conda] environment. Also set `LongPathsEnabled` to 1 at
+  `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem` using `Registry Editor`.
+- On **Ubuntu**, try `apt install libcairo2-dev python3-dev` if `pip install` fails to install `cairo`.
+- On **macOS**, make sure XCode and command lines tools are installed. Also, use `mamba` should you experience
+  difficulties on macOS with the ARM architecture.
 
 ### PartCAD development
 

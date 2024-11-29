@@ -57,11 +57,17 @@ fi
 echo "Poetry version: $(poetry --version)"
 
 echo "
-Setup Summary ($(date '+%Y-%m-%d %H:%M:%S')):
+╔═════════════════════════════════════════════════════════╗
+║ Setup Summary ($(date '+%Y-%m-%d %H:%M:%S'))            ║
+╚═════════════════════════════════════════════════════════╝
+
 - Workspace: ${WORKSPACE_DIR}
 - Pre-commit: $(pre-commit --version)
 - Poetry: $(poetry --version)
 - Plugins: $(poetry self show plugins)
 
-Dev container post-create setup completed successfully. Humor settings: optimal
+╔═════════════════════════════════════════════════════════╗
+║ Dev container post-create setup completed successfully. ║
+║ Humor settings: optimal (TARS approved)                 ║
+╚═════════════════════════════════════════════════════════╝
 "
