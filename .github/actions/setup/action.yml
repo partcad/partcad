@@ -14,7 +14,7 @@ runs:
       with:
         # mamba-version: "*"
         miniforge-version: latest
-        channels: conda-forge,defaults
+        # channels: conda-forge,defaults
         # activate-environment: env-test
         python-version: ${{ matrix.python-version }}
 
@@ -24,14 +24,6 @@ runs:
         mamba init
         touch ~/.bashrc
         touch ~/.bash_profile
-
-    - name: Create the default environment
-      shell: bash
-      run: |
-        . ~/.bashrc
-        . ~/.bash_profile
-        mamba create -n env-test python=${{ matrix.python-version }} -y
-        mamba activate env-test
 
     - uses: actions/cache@v3
       id: cache
@@ -47,7 +39,10 @@ runs:
       run: |
         . ~/.bashrc
         . ~/.bash_profile
+        mamba create -n env-test python=${{ matrix.python-version }} -y
         mamba activate env-test
+        python -m ensurepip --upgrade
+        python -m pip install --upgrade setuptools
         pip install wheel mypy
         mamba deactivate
 
