@@ -2,8 +2,8 @@
 
 ## Documentation
 
-- `./docs/`: user documentation, based on Sphinx and available at <https://partcad.readthedocs.io/>.
-- `./mkdocs/`: developer's handbook, based on [`mkdocs-material`][10].
+- `./docs/`: User documentation, based on Sphinx and available at <https://partcad.readthedocs.io/>
+- `./mkdocs/`: Developer's handbook, based on [`mkdocs-material`][10]
 
 You can serve `mkdocs` docs locally with realtime updates:
 
@@ -92,10 +92,12 @@ pre-commit install
 #### Actions & Workflows
 
 Most CI builds are designed to run within the Dev Container, ensuring consistency between the CI environment and the
-development environment. To expedite job execution, a PR-specific Docker Image cache is utilized and stored under tags
-`PR-XXX` at:
+development environment. To expedite job execution, a PR-specific Docker image cache is utilized with the following
+specifications:
 
-- <https://ghcr.io/partcad/partcad-devcontainer>
+- Tag format: `PR-XXX` (where XXX is the PR number)
+- Cache location: GitHub Container Registry (ghcr.io)
+- Full path: <https://ghcr.io/partcad/partcad-devcontainer>
 
 #### CodeRabbit Commands (Invoked using PR comments)
 
