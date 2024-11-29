@@ -136,7 +136,8 @@ jobs:
 
           mamba activate test
           # BEGIN PUBLIC REPO
-          pc --no-ansi test -r --package /pub/examples;
+          cd examples
+          pc --no-ansi test -r --package /pub/examples
           # END PUBLIC REPO
           mamba deactivate
 
