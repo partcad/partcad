@@ -135,7 +135,7 @@ jobs:
           mamba activate env-build-cli
           cp LICENSE.txt apache20.svg README.md partcad-cli
           python -m pip install -r partcad/requirements.txt
-          python -m pip install --no-index --find-links=partcad/dist ./partcad
+          python -m pip install --no-index --find-links=partcad/dist partcad
           (cd partcad-cli && python -m build)
           mamba deactivate
 
@@ -147,9 +147,9 @@ jobs:
 
           mamba activate env-test
           python -m pip install -r partcad/requirements.txt
-          python -m pip install --no-index --find-links=partcad/dist ./partcad
+          python -m pip install --no-index --find-links=partcad/dist partcad
           python -m pip install -r partcad-cli/requirements.txt
-          python -m pip install --no-index --find-links=partcad-cli/dist ./partcad-cli
+          python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli
           mamba deactivate
 
       - name: Build documentation
