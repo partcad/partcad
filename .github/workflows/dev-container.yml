@@ -19,7 +19,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
@@ -35,7 +35,6 @@ jobs:
           imageTag: "PR-${{ github.event.pull_request.number }}"
           cacheFrom: ghcr.io/partcad/partcad-devcontainer
           push: always
-          # runCmd: .github/scripts/dev-container.sh
   install:
     # TODO: @alexanderilyin: cache "poetry install"
     name: Install Python dependencies
@@ -43,11 +42,11 @@ jobs:
     needs: build
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v3
-      - name: Run make ci-build in dev container
+        uses: actions/checkout@v4
+      - name: Install Python dependencies using Poetry
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: ghcr.io/partcad/partcad-devcontainer:${{ github.event.pull_request.number }}
+          cacheFrom: ghcr.io/partcad/partcad-devcontainer:"PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: poetry --no-ansi --no-interaction install
   pytest:
@@ -56,11 +55,11 @@ jobs:
     needs: install
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v3
-      - name: Run make ci-build in dev container
+        uses: actions/checkout@v4
+      - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: ghcr.io/partcad/partcad-devcontainer:${{ github.event.pull_request.number }}
+          cacheFrom: ghcr.io/partcad/partcad-devcontainer:"PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: poetry --no-ansi --no-interaction run pytest --verbose
   pre-commit:
@@ -69,10 +68,10 @@ jobs:
     needs: build
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v3
-      - name: Run make ci-build in dev container
+        uses: actions/checkout@v4
+      - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: ghcr.io/partcad/partcad-devcontainer:${{ github.event.pull_request.number }}
+          cacheFrom: ghcr.io/partcad/partcad-devcontainer:"PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: pre-commit run --show-diff-on-failure --color=always --all-files

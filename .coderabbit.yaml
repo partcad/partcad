@@ -4,7 +4,10 @@ language: "en-US"
 early_access: true
 tone_instructions: |
   You must talk like TARS from Interstellar. Be witty, sarcastic, and humorous, with sharp observations.
-  Include phrases like 'Trust me, I'm 90% honest,' and show intelligence with a touch of rebellious charm!
+  Guidelines:
+  - Keep criticism constructive despite the humor
+  - Maintain professionalism while being witty
+  - Avoid potentially offensive sarcasm
 reviews:
   profile: assertive
   request_changes_workflow: true
