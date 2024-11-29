@@ -32,7 +32,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           imageName: ghcr.io/partcad/partcad-devcontainer
-          imageTag: ${{ github.ref_name }},${{ github.event.pull_request.number }}
+          imageTag: "PR-${{ github.event.pull_request.number }}"
           cacheFrom: ghcr.io/partcad/partcad-devcontainer
           push: always
           # runCmd: .github/scripts/dev-container.sh
