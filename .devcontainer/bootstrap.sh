@@ -9,6 +9,12 @@ set -euxo pipefail
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-/workspaces/partcad}"
 
+# Verify workspace directory exists
+if [ ! -d "${WORKSPACE_DIR}" ]; then
+    echo "Houston, we have a problem: ${WORKSPACE_DIR} does not exist"
+    exit 1
+fi
+
 echo "Configuring Git safe directory..."
 if ! git config --global --add safe.directory "${WORKSPACE_DIR}"; then
     echo "Failed to configure Git safe directory"
