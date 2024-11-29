@@ -42,7 +42,7 @@ runs:
         mamba create -n env-test python=${{ matrix.python-version }} -y
         mamba activate env-test
         python -m ensurepip --upgrade
-        python -m pip install --upgrade setuptools
+        python -m pip install --upgrade pip setuptools
         pip install wheel mypy
         mamba deactivate
 

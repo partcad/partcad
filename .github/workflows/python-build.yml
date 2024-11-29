@@ -42,11 +42,13 @@ jobs:
 
           mamba create -n env-build python=${{ matrix.python-version }} -y
           mamba activate env-build
+          python -m ensurepip --upgrade
           python -m pip install --upgrade pip build setuptools
           mamba deactivate
 
           mamba create -n env-build-cli python=${{ matrix.python-version }} -y
           mamba activate env-build-cli
+          python -m ensurepip --upgrade
           python -m pip install --upgrade pip build setuptools
           mamba deactivate
 
