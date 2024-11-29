@@ -38,6 +38,7 @@ increase efficiency for users.
 
 -   [ ] Check how to have this added to Image in different workflow so we compile Python only once.
         [`#discussion_r1860174599`](https://github.com/partcad/partcad/pull/213#discussion_r1860174599)
+    -   [ ] Release "base" Dev Container image from `main` or `devel` branches.
 -   [ ] Describe package release flow using [Gitgraph Diagrams](https://mermaid.js.org/syntax/gitgraph.html)
         [`1311532481266188319`](https://discord.com/channels/1308854595987968051/1308857684547600384/1311532481266188319)
 -   [x] Add hadolint in pre-commit hooks.
