@@ -42,8 +42,7 @@ runs:
         mamba create -n env-test python=${{ matrix.python-version }} -y
         mamba activate env-test
         python -m ensurepip --upgrade
-        python -m pip install --upgrade pip setuptools
-        pip install wheel mypy
+        python -m pip install --upgrade pip wheel mypy setuptools
         mamba deactivate
 
     # - name: Update Homebrew
