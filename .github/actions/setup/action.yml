@@ -43,7 +43,11 @@ runs:
     - name: install dev dependencies
       shell: bash
       run: |
+        . ~/.bashrc
+        mamba activate env-test
         pip install wheel mypy
+        mamba deactivate
+
     # - name: Update Homebrew
     #   if: matrix.os == 'macos-latest'
     #   shell: bash

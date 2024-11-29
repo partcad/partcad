@@ -37,6 +37,8 @@ jobs:
       - name: Prepare environments
         shell: bash
         run: |
+          . ~/.bashrc
+
           mamba create -n env-build python=${{ matrix.python-version }} -y
           mamba activate env-build
           python -m pip install --upgrade pip build
@@ -58,6 +60,8 @@ jobs:
         if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.10') }}
         shell: bash
         run: |
+          . ~/.bashrc
+
           mamba activate env-build
           python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
           mamba deactivate
@@ -75,6 +79,8 @@ jobs:
         if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.11') }}
         shell: bash
         run: |
+          . ~/.bashrc
+
           mamba activate env-build
           python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
           mamba deactivate
@@ -92,6 +98,8 @@ jobs:
         if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.12') }}
         shell: bash
         run: |
+          . ~/.bashrc
+
           mamba activate env-build
           python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
           mamba deactivate
@@ -108,13 +116,15 @@ jobs:
       - name: Test building and packaging
         shell: bash
         run: |
-          cp LICENSE.txt apache20.svg partcad
+          . ~/.bashrc
+
           mamba activate env-build
+          cp LICENSE.txt apache20.svg partcad
           (cd partcad && python -m build)
           mamba deactivate
 
-          cp LICENSE.txt apache20.svg README.md partcad-cli
           mamba activate env-build-cli
+          cp LICENSE.txt apache20.svg README.md partcad-cli
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist ./partcad
           (cd partcad-cli && python -m build)
@@ -123,6 +133,8 @@ jobs:
       - name: Test installation
         shell: bash
         run: |
+          . ~/.bashrc
+
           mamba activate env-test
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist ./partcad
@@ -133,6 +145,8 @@ jobs:
       - name: Build documentation
         shell: bash
         run: |
+          . ~/.bashrc
+
           mamba activate build
           python -m pip install -r ./requirements.txt
           sphinx-build  -M html docs/source docs/build -n -W
