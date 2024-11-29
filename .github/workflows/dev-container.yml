@@ -48,7 +48,15 @@ jobs:
         with:
           cacheFrom: ghcr.io/partcad/partcad-devcontainer:"PR-${{ github.event.pull_request.number }}"
           push: never
-          runCmd: poetry --no-ansi --no-interaction install
+          runCmd: |
+            for i in {1..3}; do
+              echo "Attempt $i: Installing dependencies..."
+              if poetry --no-ansi --no-interaction install; then
+                exit 0
+              fi
+              sleep 5
+            done
+            exit 1
   pytest:
     name: Run pytest
     runs-on: ubuntu-latest
@@ -59,7 +67,7 @@ jobs:
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: ghcr.io/partcad/partcad-devcontainer:"PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "ghcr.io/partcad/partcad-devcontainer:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: poetry --no-ansi --no-interaction run pytest --verbose
   pre-commit:
@@ -72,6 +80,6 @@ jobs:
       - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: ghcr.io/partcad/partcad-devcontainer:"PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "ghcr.io/partcad/partcad-devcontainer:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: pre-commit run --show-diff-on-failure --color=always --all-files
