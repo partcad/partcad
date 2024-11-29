@@ -6,6 +6,8 @@ on:
     branches:
       - main
       - devel
+env:
+  CONTAINER_REGISTRY: ghcr.io
 
 jobs:
   # TODO: @alexanderilyin: Add Allure reports
@@ -24,18 +26,18 @@ jobs:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
-          registry: ghcr.io
+          registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Dev Container
         uses: devcontainers/ci@v0.3
         with:
-          imageName: ${{ vars.CONTAINER_REGISTRY }}/${{ github.repository }}-devcontainer
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-devcontainer
           imageTag:
             ${{ github.event.pull_request.number != '' && format('PR-{0}', github.event.pull_request.number) ||
             github.ref_name }}
-          cacheFrom: ghcr.io/partcad/partcad-devcontainer
+          cacheFrom: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-devcontainer
           push: always
   install:
     name: Install Python dependencies
@@ -48,7 +50,7 @@ jobs:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
-          registry: ghcr.io
+          registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -65,7 +67,9 @@ jobs:
       - name: Install Python dependencies using Poetry
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "ghcr.io/partcad/partcad-devcontainer:PR-${{ github.event.pull_request.number }}"
+          cacheFrom:
+            "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-devcontainer:PR-${{ github.event.pull_request.number
+            }}"
           push: never
           runCmd: |
             for i in {1..3}; do
@@ -88,14 +92,16 @@ jobs:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
-          registry: ghcr.io
+          registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "ghcr.io/partcad/partcad-devcontainer:PR-${{ github.event.pull_request.number }}"
+          cacheFrom:
+            "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-devcontainer:PR-${{ github.event.pull_request.number
+            }}"
           push: never
           runCmd: |
             mkdir -p test-results
@@ -121,7 +127,7 @@ jobs:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
-          registry: ghcr.io
+          registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -137,6 +143,8 @@ jobs:
       - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "ghcr.io/partcad/partcad-devcontainer:PR-${{ github.event.pull_request.number }}"
+          cacheFrom:
+            "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-devcontainer:PR-${{ github.event.pull_request.number
+            }}"
           push: never
           runCmd: pre-commit run --show-diff-on-failure --color=always --all-files
