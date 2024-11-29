@@ -67,6 +67,7 @@ jobs:
         shell: bash
         run: |
           . ~/.bashrc
+          . ~/.bash_profile
 
           mamba create -n test python=${{ matrix.python-version }} -y
           mamba activate test
@@ -83,6 +84,7 @@ jobs:
         shell: bash
         run: |
           . ~/.bashrc
+          . ~/.bash_profile
 
           mamba activate test
           pytest -x -p no:error-for-skips -p no:warnings --ignore-glob="openscad*"
@@ -92,6 +94,7 @@ jobs:
         shell: bash
         run: |
           . ~/.bashrc
+          . ~/.bash_profile
 
           mamba activate test
           pip install -U ./partcad ./partcad-cli
@@ -101,6 +104,7 @@ jobs:
         shell: bash
         run: |
           . ~/.bashrc
+          . ~/.bash_profile
 
           # Confirm that OpenSCAD works
           openscad --version
@@ -128,6 +132,7 @@ jobs:
         shell: bash
         run: |
           . ~/.bashrc
+          . ~/.bash_profile
 
           mamba activate test
           # BEGIN PUBLIC REPO

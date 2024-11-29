@@ -14,7 +14,7 @@ runs:
       with:
         # mamba-version: "*"
         miniforge-version: latest
-        # channels: conda-forge,defaults
+        channels: conda-forge,defaults
         # activate-environment: env-test
         python-version: ${{ matrix.python-version }}
 
@@ -23,11 +23,13 @@ runs:
       run: |
         mamba init
         touch ~/.bashrc
+        touch ~/.bash_profile
 
     - name: Create the default environment
       shell: bash
       run: |
         . ~/.bashrc
+        . ~/.bash_profile
         mamba create -n env-test python=${{ matrix.python-version }} -y
         mamba activate env-test
 
@@ -44,6 +46,7 @@ runs:
       shell: bash
       run: |
         . ~/.bashrc
+        . ~/.bash_profile
         mamba activate env-test
         pip install wheel mypy
         mamba deactivate
@@ -77,6 +80,7 @@ runs:
       shell: bash
       run: |
         . ~/.bashrc
+        . ~/.bash_profile
         mamba activate env-test
         pip install swig
         mamba deactivate
@@ -86,6 +90,7 @@ runs:
       shell: bash
       run: |
         . ~/.bashrc
+        . ~/.bash_profile
         mamba activate env-test
         pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
         mamba deactivate
@@ -95,6 +100,7 @@ runs:
       shell: bash
       run: |
         . ~/.bashrc
+        . ~/.bash_profile
         mamba activate env-test
         pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
         mamba deactivate
@@ -104,6 +110,7 @@ runs:
       shell: bash
       run: |
         . ~/.bashrc
+        . ~/.bash_profile
         mamba activate env-test
         pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
         mamba deactivate
