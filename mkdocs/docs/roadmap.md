@@ -41,7 +41,7 @@ increase efficiency for users.
   - [ ] Release "base" Dev Container image from `main` or `devel` branches.
 - [ ] Describe package release flow using [Gitgraph Diagrams](https://mermaid.js.org/syntax/gitgraph.html)
       [`1311532481266188319`](https://discord.com/channels/1308854595987968051/1308857684547600384/1311532481266188319)
-- [x] Add hadolint in pre-commit hooks.
+- [x] Add `hadolint` in pre-commit hooks.
       [`#discussion_r1860234701`](https://github.com/partcad/partcad/pull/213#discussion_r1860234701)
 - [x] Replace with apt-compile.sh
       [`#discussion_r1860160455`](https://github.com/partcad/partcad/pull/213#discussion_r1860160455)
@@ -57,8 +57,7 @@ increase efficiency for users.
 Nice-to-have features that add a layer of delight or polish to the software. These are not essential for core
 functionality but can significantly enhance the user experience or make the product stand out.
 
-- [x] Run `pre-commit` workflow in Dev Container.
-- [ ] All used deepspacecatel code should be transferred to PartCAD.
+- [ ] All DeepSpaceCartel code should be transferred to PartCAD.
       [`#discussion_r1858374297`](https://github.com/partcad/partcad/pull/213#discussion_r1858374297)
 - [ ] Create separate ticket for poetry-multiproject
       [`#discussion_r1858404314`](https://github.com/partcad/partcad/pull/213#discussion_r1858404314)
@@ -74,3 +73,4 @@ functionality but can significantly enhance the user experience or make the prod
       [`#discussion_r1860183016`](https://github.com/partcad/partcad/pull/213#discussion_r1860183016)
 - [ ] Add error check to `git config user.email`
       [`#discussion_r1860179677`](https://github.com/partcad/partcad/pull/213#discussion_r1860179677)
+- [x] Run `pre-commit` workflow in Dev Container.

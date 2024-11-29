@@ -72,7 +72,13 @@ jobs:
             }}"
           push: never
           runCmd: |
+            TOTAL_TIMEOUT=900  # 15 minutes total timeout
+            start_time=$SECONDS
             for i in {1..3}; do
+              if [ $((SECONDS - start_time)) -gt $TOTAL_TIMEOUT ]; then
+                echo "Total timeout of ${TOTAL_TIMEOUT}s exceeded"
+                exit 1
+              fi
               echo "Attempt $i/3: Installing dependencies (timeout: 300s)..."
               if timeout 300 poetry --no-ansi --no-interaction install; then
                 echo "Installation successful on attempt $i"
