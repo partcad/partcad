@@ -89,6 +89,14 @@ pre-commit install
 
 ### GitHub
 
+#### Actions & Workflows
+
+Most CI builds are designed to run within the Dev Container, ensuring consistency between the CI environment and the
+development environment. To expedite job execution, a PR-specific Docker Image cache is utilized and stored under tags
+`PR-XXX` at:
+
+- <https://ghcr.io/partcad/partcad-devcontainer>
+
 #### CodeRabbit Commands (Invoked using PR comments)
 
 [CodeRabbit][11] is an AI-powered code reviewer that delivers context-aware feedback on pull requests within minutes,

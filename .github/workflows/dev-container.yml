@@ -35,11 +35,11 @@ jobs:
       - name: Build Dev Container
         uses: devcontainers/ci@v0.3
         with:
-          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_REGISTRY }}
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           imageTag:
             ${{ github.event.pull_request.number != '' && format('PR-{0}', github.event.pull_request.number) ||
             github.ref_name }}
-          cacheFrom: ${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_REGISTRY }}
+          cacheFrom: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           push: always
 
   install:
@@ -70,8 +70,7 @@ jobs:
       - name: Install Python dependencies using Poetry
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom:
-            "${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_REGISTRY }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: |
             start_time=$SECONDS
@@ -119,8 +118,7 @@ jobs:
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom:
-            "${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_REGISTRY }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: |
             mkdir -pv test-results
@@ -137,6 +135,12 @@ jobs:
       - name: Generate Allure Report
         if: always()
         run: |
+          if [ ! -d "allure-results" ]; then
+            echo "Warning: allure-results directory not found. Skipping report generation."
+            exit 0
+          fi
+          if ! allure generate allure-results -o allure-report; then
+            echo "Warning: Allure report generation failed. This won't fail the build, but please investigate."
           if ! allure generate allure-results -o allure-report; then
             echo "Warning: Allure report generation failed. This won't fail the build, but please investigate."
           fi
@@ -183,7 +187,6 @@ jobs:
       - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom:
-            "${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_REGISTRY }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: pre-commit run --show-diff-on-failure --color=always --all-files

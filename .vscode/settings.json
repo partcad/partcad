@@ -106,5 +106,8 @@
   "prettier.printWidth": 120,
   "python.terminal.activateEnvInCurrentTerminal": true,
   "python.envFile": "${workspaceFolder}/.env",
+  "cSpell.words": [
+    "coderabbitai"
+  ],
 
 }
