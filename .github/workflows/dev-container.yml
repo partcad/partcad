@@ -13,7 +13,6 @@ env:
   INSTALL_TIMEOUT: 300
 
 jobs:
-  # TODO: @alexanderilyin: Add Code Coverage reports
   build:
     name: "Build: Dev Container"
     runs-on: ubuntu-latest
