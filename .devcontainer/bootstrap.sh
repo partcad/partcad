@@ -9,13 +9,13 @@ set -euxo pipefail
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-/workspaces/partcad}"
 
-# Verify workspace directory exists
-if [ ! -d "${WORKSPACE_DIR}" ]; then
-    echo "Houston, we have a problem: ${WORKSPACE_DIR} does not exist"
+echo "Configuring Git safe directory: ${WORKSPACE_DIR}"
+if ! git config --global --add safe.directory "${WORKSPACE_DIR}"; then
+    echo "Failed to configure Git safe directory. Ensure Git is installed and you have proper permissions."
     exit 1
 fi
 
-echo "Configuring Git safe directory..."
+cd "${WORKSPACE_DIR}" || { echo "Failed to change directory to ${WORKSPACE_DIR}. Please verify the directory exists."; exit 1; }
 if ! git config --global --add safe.directory "${WORKSPACE_DIR}"; then
     echo "Failed to configure Git safe directory"
     exit 1
@@ -58,4 +58,12 @@ fi
 # Log installed version
 echo "Poetry version: $(poetry --version)"
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') - Dev container post-create setup completed successfully. Humor settings: optimal"
+echo "
+Setup Summary ($(date '+%Y-%m-%d %H:%M:%S')):
+- Workspace: ${WORKSPACE_DIR}
+- Pre-commit: $(pre-commit --version)
+- Poetry: $(poetry --version)
+- Plugins: $(poetry self show plugins)
+
+Dev container post-create setup completed successfully. Humor settings: optimal
+"
