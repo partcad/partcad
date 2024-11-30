@@ -83,7 +83,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             "--json",
                             "-p",
                             self.path,
-                            "python==%s" % self.version is self.is_mamba else "python=%s" % self.version,
+                            "python==%s" % self.version if self.is_mamba else "python=%s" % self.version,
                         ],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
