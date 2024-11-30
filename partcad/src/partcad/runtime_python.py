@@ -61,6 +61,7 @@ class PythonRuntime(runtime.Runtime):
             version = "%d.%d" % (sys.version_info.major, sys.version_info.minor)
         super().__init__(ctx, "py-" + sandbox + "-" + version)
         self.version = version
+        self.is_mamba = False
 
         # Runtimes are meant to be executed from dedicated threads, outside of
         # the asyncio event loop. So a threading lock is appropriate here.
@@ -74,9 +75,6 @@ class PythonRuntime(runtime.Runtime):
 
         # Isolate this sandbox environment from the rest of the system
         self.python_flags = ["-sOOIu"]
-
-        # TODO(clairbee): Initialize the environment variables properly, includeing PATH
-        self.python_flags += ["--no-warn-script-location"]
 
         # TODO(clairbee): To improve portability, warn about uses of default encoding
         # self.python_flags += ["-X", "warn_default_encoding=1"]

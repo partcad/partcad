@@ -22,7 +22,11 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
         self.initialized_conda = self.initialized
         self.conda_path = shutil.which("mamba")
-        if self.conda_path is None:
+        if self.conda_path is not None:
+            self.is_mamba = True
+            # TODO(clairbee): Initialize the environment variables properly, including PATH
+            self.python_flags += ["--no-warn-script-location"]
+        else:
             self.conda_path = shutil.which("conda")
         if self.conda_path is None:
             self.conda_cli = importlib.import_module("conda.cli.python_api")
@@ -79,7 +83,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             "--json",
                             "-p",
                             self.path,
-                            "python==%s" % self.version,
+                            "python==%s" % self.version is self.is_mamba else "python=%s" % self.version,
                         ],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
