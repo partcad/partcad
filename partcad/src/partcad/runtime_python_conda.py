@@ -79,7 +79,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             "--json",
                             "-p",
                             self.path,
-                            "python=%s" % self.version,
+                            "python==%s" % self.version,
                         ],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
