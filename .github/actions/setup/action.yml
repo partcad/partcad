@@ -4,12 +4,6 @@ description: "Setup the environment for the build"
 runs:
   using: "composite"
   steps:
-    # - name: python
-    #   uses: actions/setup-python@v5
-    #   with:
-    #     python-version: ${{ matrix.python-version }}
-    #     cache: pip
-
     # Miniconda
     - uses: conda-incubator/setup-miniconda@v3
       with:

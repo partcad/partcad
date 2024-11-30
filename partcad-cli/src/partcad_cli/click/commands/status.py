@@ -52,10 +52,10 @@ def get_tar():
 
 
 def get_runtime():
-    with logging.Action("Status", "runtime"):
-        runtime_path = os.path.join(path, "runtime")
+    with logging.Action("Status", "sandbox"):
+        runtime_path = os.path.join(path, "sandbox")
         runtime_total = (get_size(runtime_path)) / 1048576.0
-        logging.info("Runtime environments size: %.2fMB" % runtime_total)
+        logging.info("Sandbox environments size: %.2fMB" % runtime_total)
 
 
 @click.command(help="Display the state of internal data used by PartCAD")

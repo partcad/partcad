@@ -75,6 +75,9 @@ class PythonRuntime(runtime.Runtime):
         # Isolate this sandbox environment from the rest of the system
         self.python_flags = ["-sOOIu"]
 
+        # TODO(clairbee): Initialize the environment variables properly, includeing PATH
+        self.python_flags += ["--no-warn-script-location"]
+
         # TODO(clairbee): To improve portability, warn about uses of default encoding
         # self.python_flags += ["-X", "warn_default_encoding=1"]
 
@@ -94,7 +97,6 @@ class PythonRuntime(runtime.Runtime):
         with self.lock:
             if not self.initialized:
                 # Preinstall the most common packages to avoid race conditions
-                # TODO(clairbee): Lock the entire runtime instead
                 self.ensure_onced("ocp-tessellate==3.0.9")
                 self.ensure_onced("nlopt==2.9.0")
                 self.ensure_onced("cadquery==2.5.2")
@@ -110,7 +112,6 @@ class PythonRuntime(runtime.Runtime):
             async with self.get_async_lock():
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
-                    # TODO(clairbee): Lock the entire runtime instead
                     await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
                     await self.ensure_async_onced_locked("nlopt==2.9.0")
                     await self.ensure_async_onced_locked("cadquery==2.5.2")
