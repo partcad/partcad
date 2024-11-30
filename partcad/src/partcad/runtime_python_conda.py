@@ -25,7 +25,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         if self.conda_path is not None:
             self.is_mamba = True
             # TODO(clairbee): Initialize the environment variables properly, including PATH
-            self.python_flags += ["--no-warn-script-location"]
+            # self.python_flags += ["--no-warn-script-location"]
         else:
             self.conda_path = shutil.which("conda")
         if self.conda_path is None:

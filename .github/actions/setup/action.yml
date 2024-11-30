@@ -7,12 +7,9 @@ runs:
     # Miniconda
     - uses: conda-incubator/setup-miniconda@v3
       with:
-        # mamba-version: "*"
         miniforge-version: latest
         channels: conda-forge,defaults
-        # activate-environment: env-test
         python-version: ${{ matrix.python-version }}
-        # auto-update-conda: true
 
     - name: Init mamba
       shell: bash
