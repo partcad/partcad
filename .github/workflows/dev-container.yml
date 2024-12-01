@@ -18,7 +18,7 @@ env:
   INSTALL_TIMEOUT: 300
 
 jobs:
-  build:
+  dev-container-build:
     name: "Build: Dev Container"
     runs-on: ubuntu-24.04
     permissions:
@@ -46,10 +46,10 @@ jobs:
           cacheFrom: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           push: always
 
-  install:
+  poetry-install:
     name: "Run: poetry install"
     runs-on: ubuntu-24.04
-    needs: build
+    needs: dev-container-build
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -97,7 +97,7 @@ jobs:
   pytest:
     name: "Run: pytest"
     runs-on: ubuntu-24.04
-    needs: install
+    needs: poetry-install
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -130,13 +130,17 @@ jobs:
             poetry --no-ansi --no-interaction show --tree
             poetry --no-ansi --no-interaction run pytest --verbose --color=no
 
-      - name: Upload test results
+      - name: Upload test results & coverage reports to github and codecov
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/upload-test-results
         with:
           name: test-results
           path: test-results/
           retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
 
       - name: Generate Allure Report
         if: always()
@@ -149,7 +153,7 @@ jobs:
               echo "##[warning]allure-results directory not found. Skipping report generation."
               exit 0
             fi
-            if ! allure generate allure-results -o allure-report; then
+            if ! allure generate --config .devcontainer/allure.ymlallure-results -o allure-report; then
               echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
             fi
 
@@ -157,28 +161,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: allure-report
+          name: pytest-allure-report
           path: allure-report/
           retention-days: 7
-
-      - name: Upload coverage reports to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          files: test-results/coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
-        with:
-          files: test-results/junit.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
 
   pre-commit:
     name: "Run: pre-commit"
     runs-on: ubuntu-24.04
-    needs: build
+    needs: dev-container-build
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -203,6 +193,159 @@ jobs:
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
+          # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
+          env: |
+            SKIP=poetry-export,poetry-lock
           runCmd:
             pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
             --all-files
+
+  behave:
+    name: "Run: behave"
+    runs-on: ubuntu-24.04
+    needs: poetry-install
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Start SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+
+      - name: Run Behave
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          push: never
+          env: |
+            # TODO-25: Workaround for "Host key verification failed."
+            GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+          runCmd: |
+            # TODO-26: PC-186: Allow to configure git clone protocol in settings
+            git config --global url."git@github.com:".insteadOf "https://github.com/"
+            mkdir -pv test-results
+            poetry --no-ansi --no-interaction run behave
+
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
+
+      - name: Generate Allure Report
+        if: always()
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          push: never
+          runCmd: |
+            if [ ! -d "allure-results" ]; then
+              echo "##[warning]allure-results directory not found. Skipping report generation."
+              exit 0
+            fi
+            if ! allure generate --config .devcontainer/allure.ymlallure-results -o allure-report; then
+              echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
+            fi
+
+      - name: Publish Allure Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: behave-allure-report
+          path: allure-report/
+          retention-days: 7
+
+  nox:
+    strategy:
+      fail-fast: false
+      matrix:
+        # NOTE: OS below is the one which runs the container, not the one inside the container
+        # TODO: @alexanderilyin: Add more OSes via https://github.com/partcad/devcontainers-templates
+        os: [ubuntu-24.04]
+        python-version:
+          # TODO: Enable 3.10 when pytest job is deprecated
+          # - "3.10"
+          - "3.11"
+          - "3.12"
+    name: "Run: nox"
+    runs-on: ${{ matrix.os }}
+    needs: poetry-install
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      # TODO: @alexanderilyin Add caching for: "Creating virtual environment (virtualenv) using python3.11 in .nox/pytest-3-11"
+
+      - name: Run Nox
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          push: never
+          runCmd: |
+            poetry --no-ansi --no-interaction run nox --python ${{ matrix.python-version }}
+
+      # - name: Generate Allure Report
+      #   if: always()
+      #   uses: devcontainers/ci@v0.3
+      #   with:
+      #     cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+      #     push: never
+      #     runCmd: |
+      #       if [ ! -d "allure-results" ]; then
+      #         echo "##[warning]allure-results directory not found. Skipping report generation."
+      #         exit 0
+      #       fi
+      #       if ! allure generate --config .devcontainer/allure.ymlallure-results -o allure-report; then
+      #         echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
+      #       fi
+
+      # - name: Publish Allure Report
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: pytest-allure-report
+      #     path: allure-report/
+      #     retention-days: 7

@@ -26,35 +26,43 @@ getting tested on Linux, MacOS and Windows.
 
 The commands and options supported by PartCAD CLI:
 
-.. code-block:: shell
+.. code-block:: text
 
-  $ pc help
-  usage: pc [-h] [-v] [--no-ansi] [-p CONFIG_PATH] {add,add-part,add-assembly,init,info,install,update,list,list-all,list-parts,list-assemblies,render,inspect,status} ...
+  $ pc --help
 
-  PartCAD command line tool
+   Usage: partcad [OPTIONS] COMMAND [ARGS]...
 
-  positional arguments:
-    {add,add-part,add-assembly,init,info,install,update,list,list-all,list-parts,list-assemblies,render,inspect,status}
-      add                 Import a package
-      add-part            Add a part
-      add-assembly        Add an assembly
-      init                Initialize a new PartCAD package in this directory
-      info                Show detailed info on a part, assembly or scene
-      install             Download and prepare all imported packages
-      update              Update all imported packages
-      list                List imported packages
-      list-all            List available parts, assemblies and scenes
-      list-parts          List available parts
-      list-assemblies     List available assemblies
-      render              Render the selected or all parts, assemblies and scenes in this package
-      inspect             Visualize a part, assembly or scene
-      status              Display the state of internal data used by PartCAD
 
-  options:
-    -h, --help            show this help message and exit
-    -v                    Increase the level of verbosity
-    --no-ansi             Plain logging output. Do not use colors or animations.
-    -p CONFIG_PATH        Package path (a YAML file or a directory with 'partcad.yaml')
+   ██████╗  █████╗ ██████╗ ████████╗ ██████╗ █████╗ ██████╗
+   ██╔══██╗██╔══██╗██╔══██╗╚══██╔══╝██╔════╝██╔══██╗██╔══██╗
+   ██████╔╝███████║██████╔╝   ██║   ██║     ███████║██║  ██║
+   ██╔═══╝ ██╔══██║██╔══██╗   ██║   ██║     ██╔══██║██║  ██║
+   ██║     ██║  ██║██║  ██║   ██║   ╚██████╗██║  ██║██████╔╝
+   ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝╚═════╝
+
+  ╭─ Options ───────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │            -v                     Increase verbosity level                                                  │
+  │            -q                     Decrease verbosity level                                                  │
+  │ --no-ansi                         Produce plain text logs without colors or animations                      │
+  │            -p  PATH               Specify the package path (YAML file or directory with 'partcad.yaml')     │
+  │ --format       [time|path|level]  Set the log prefix format                                                 │
+  │ --help                            Show this message and exit.                                               │
+  ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+  ╭─ Commands ──────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ add         Add a package, part, or assembly                                                                │
+  │ ai          Execute AI-related commands                                                                     │
+  │ info        Show detailed information about a part, assembly, or scene                                      │
+  │ init        Create a new PartCAD package in the current directory                                           │
+  │ inspect     View a part, assembly, or scene visually                                                        │
+  │ install     Download and set up all imported packages                                                       │
+  │ list        List components                                                                                 │
+  │ render      Generate a rendered view of parts, assemblies, or scenes in the package                         │
+  │ status      Show the current state of PartCAD's internal data                                               │
+  │ supply      Manage supplier-related tasks                                                                   │
+  │ test        Run tests on a part, assembly, or scene                                                         │
+  │ update      Refresh all imported packages                                                                   │
+  │ version     Display the versions of the PartCAD Python Module and CLI, then exit                            │
+  ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 
 =============

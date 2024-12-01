@@ -1,9 +1,147 @@
 {
-  "partcad.packagePath": "examples",
+  // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
+  "OcpCadViewer.advanced.autostart": false,
+  "[feature]": {
+    // Formatting is difficult with multi-line strings wrapped in """ (triple quotes)
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "modifications"
+  },
+  "[go]": {
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    },
+    "editor.formatOnSave": true,
+    "editor.insertSpaces": false
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
   "[markdown]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "prettier.tabWidth": 2
   },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  // TODO-38: https://github.com/redhat-developer/vscode-yaml/issues/1075
+  // "[yaml]": {
+  //   "editor.defaultFormatter": "redhat.vscode-yaml"
+  // },
+  "atlascode.bitbucket.enabled": false,
+  "atlascode.jira.enabled": true,
+  "cSpell.enabledFileTypes": {
+    "feature": true
+  },
+  "cSpell.words": [
+    "ADDOPTS",
+    "Automathor",
+    "autouse",
+    "capsys",
+    "coderabbitai",
+    "deprioritized",
+    "devel",
+    "eamodio",
+    "ensurepip",
+    "gource",
+    "Gruntfuggly",
+    "hadolint",
+    "hamcrest",
+    "kevinrose",
+    "libx",
+    "manylinux",
+    "miniforge",
+    "mkdocs",
+    "mypy",
+    "njpwerner",
+    "nlopt",
+    "NOCOMMIT",
+    "nptyping",
+    "packagecloud",
+    "pfscad",
+    "pfstl",
+    "pipefail",
+    "pyproject",
+    "pythonw",
+    "Regen",
+    "renderable",
+    "ruamel",
+    "setuptools",
+    "timebox",
+    "Topo",
+    "ultrafast",
+    "vcodec",
+    "virtualenv",
+    "wayou",
+    "xdist"
+  ],
+  "codeium.enableConfig": {
+    "*": true,
+    "feature": true,
+    "log": true,
+    "markdown": true
+  },
+  "diffEditor.hideUnchangedRegions.enabled": true,
+  "editor.accessibilitySupport": "off",
+  "editor.autoIndent": "full",
+  "editor.detectIndentation": false,
+  "editor.fontFamily": "'Hack Nerd Font Mono'",
+  "editor.formatOnSave": true,
+  "editor.formatOnType": true,
+  "editor.insertSpaces": true,
+  "editor.renderFinalNewline": "dimmed",
+  "editor.rulers": [
+    120
+  ],
+  "editor.tabSize": 2,
+  "editor.useTabStops": false,
+  "esbonio.server.enableDevTools": true,
+  "esbonio.server.logLevel": "debug",
+  "esbonio.server.pythonPath": "${workspaceFolder}/partcad-cli/.venv/bin/python3.10",
+  "esbonio.server.showDeprecationWarnings": true,
+  "esbonio.server.updateBehavior": "promptAlways",
+  "esbonio.server.updateFrequency": "daily",
+  "esbonio.sphinx.confDir": "docs/source",
+  "esbonio.sphinx.forceFullBuild": true,
+  "esbonio.sphinx.keepGoing": true,
+  "esbonio.sphinx.srcDir": "docs/source",
+  "files.encoding": "utf8",
+  "files.eol": "\n",
+  "files.exclude": {
+    "**/*.egg-info": true,
+    "**/.partcad": true,
+    "**/.pytest_cache": true,
+    "**/LICENSE.txt": true,
+    "**/__pycache__": true,
+    "**/apache20.svg": true,
+    ".conda": true,
+    ".git/**": true,
+    ".ocp_vscode": true,
+    ".tox": true,
+    ".venv": true,
+    "docs/build": true,
+    "partcad*/build": true,
+    "partcad*/dist": true
+  },
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "git.autofetch": true,
+  "githubPullRequests.experimental.chat": true,
+  "githubPullRequests.pullBranch": "never",
+  "markdown.extension.toc.omittedFromToc": {
+    ".github/README.md": [
+      "# PartCAD"
+    ]
+  },
+  "partcad.packagePath": "examples",
+  "partcad.pythonSandbox": "conda",
+  "prettier.printWidth": 120,
+  "prettier.proseWrap": "always",
   "psi-header.config": {
     "author": "PartCAD",
     "authorEmail": "support@partcad.org",
@@ -35,96 +173,57 @@
         "Created: <<date>>",
         "",
         "Licensed under Apache License, Version 2.0.",
-        "",
+        ""
       ]
     }
   ],
-  "files.trimFinalNewlines": true,
-  "files.encoding": "utf8",
-  "editor.useTabStops": false,
-  "editor.detectIndentation": false,
-  "editor.tabSize": 2,
-  "editor.insertSpaces": true,
-  "editor.formatOnSave": true,
-  "editor.formatOnType": true,
-  "editor.autoIndent": "full",
-  "editor.rulers": [
-    120
+  "python.analysis.extraPaths": [
+    "./partcad/src"
   ],
-  "files.exclude": {
-    ".git/**": true,
-    "**/__pycache__": true,
-    "**/*.egg-info": true,
-    "**/.pytest_cache": true,
-    "**/apache20.svg": true,
-    "**/LICENSE.txt": true,
-    ".ocp_vscode": true,
-    ".conda": true,
-    ".venv": true,
-    ".tox": true,
-    "**/.partcad": true,
-    "docs/build": true,
-    "partcad*/build": true,
-    "partcad*/dist": true
-  },
-  "search.exclude": {
-    ".git/**": true,
-    "**/__pycache__": true,
-    "**/*.egg-info": true,
-    "**/.pytest_cache": true,
-    "**/apache20.svg": true,
-    "**/LICENSE.txt": true,
-    ".ocp_vscode": true,
-    ".conda": true,
-    ".venv": true,
-    ".tox": true,
-    "**/.partcad": true,
-    "docs/build": true,
-    "partcad*/build": true,
-    "partcad*/dist": true
-  },
-  "markdown.extension.toc.omittedFromToc": {
-    "README.md": [
-      "# PartCAD"
-    ]
-  },
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter"
-  },
-  "python.testing.pytestArgs": [],
-  "python.testing.unittestEnabled": false,
-  "python.testing.pytestEnabled": true,
+  "python.envFile": "${workspaceFolder}/.env",
+  // https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage
+  "python.experiments.optInto": [
+    "pythonTestAdapter"
+  ],
+  "python.terminal.activateEnvInCurrentTerminal": true,
   "python.terminal.executeInFileDir": true,
   "python.terminal.launchArgs": [],
-  // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
-  "OcpCadViewer.advanced.autostart": false,
-  "yaml.format.bracketSpacing": false, // prevent YAML formatter from breaking Jinja2 templates
-  "esbonio.sphinx.confDir": "",
-  "files.eol": "\n",
-  "prettier.proseWrap": "always",
-  "prettier.printWidth": 120,
-  "python.terminal.activateEnvInCurrentTerminal": true,
-  "python.envFile": "${workspaceFolder}/.env",
-  "cSpell.words": [
-    "coderabbitai",
-    "devel",
-    "ensurepip",
-    "gource",
-    "libx",
-    "manylinux",
-    "mkdocs",
-    "mypy",
-    "nlopt",
-    "NOCOMMIT",
-    "pfscad",
-    "pfstl",
-    "pipefail",
-    "pyproject",
-    "Regen",
-    "renderable",
-    "ruamel",
-    "setuptools",
-    "ultrafast",
-    "vcodec"
-  ],
+  "python.testing.pytestArgs": [],
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  // "redhat.telemetry.enabled": false,
+  "remote.autoForwardPortsSource": "hybrid",
+  "remote.extensionKind": {
+    "codecov.codecov": [
+      "ui"
+    ]
+  },
+  "search.exclude": {
+    "**/*.egg-info": true,
+    "**/.partcad": true,
+    "**/.pytest_cache": true,
+    "**/LICENSE.txt": true,
+    "**/__pycache__": true,
+    "**/apache20.svg": true,
+    ".conda": true,
+    ".git/**": true,
+    ".ocp_vscode": true,
+    ".tox": true,
+    ".venv": true,
+    "docs/build": true,
+    "partcad*/build": true,
+    "partcad*/dist": true
+  },
+  // "security.workspace.trust.untrustedFiles": "open",
+  "svg.preview.mode": "svg",
+  "terminal.integrated.fontFamily": "'Hack Nerd Font Mono'",
+  "terminal.integrated.scrollback": 100000,
+  "testing.automaticallyOpenPeekView": "never",
+  // "yaml.format.bracketSpacing": false,
+  "testing.automaticallyOpenTestResults": "neverOpen", // prevent YAML formatter from breaking Jinja2 templates
+  "testing.followRunningTest": false,
+  // "testing.openTesting": "neverOpen",
+  "workbench.colorTheme": "GitHub Dark",
+  "yaml.format.bracketSpacing": false // prevent YAML formatter from breaking Jinja2 templates
+  // "yaml.format.bracketSpacing": false,
 }

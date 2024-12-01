@@ -83,11 +83,16 @@ class PartFactoryBuild123d(PartFactoryPython):
 
             # Serialize the request
             register_cq_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            pickle_string = pickle.dumps(request)
+            request_serialized = base64.b64encode(pickle_string).decode()
 
+            # TODO: @alexanderilyin: those should be read from the package/part config?
             await self.runtime.ensure_async(
                 "ocp-tessellate==3.0.8",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "nlopt==2.7.1",
                 session=self.session,
             )
             await self.runtime.ensure_async(
@@ -115,15 +120,22 @@ class PartFactoryBuild123d(PartFactoryPython):
                 "build123d==0.7.0",
                 session=self.session,
             )
+            # PC-194: @alexanderilyin: pin down all the versions
+            await self.runtime.ensure_async(
+                "cadquery-ocp==7.7.2",
+                session=self.session,
+            )
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
+            command = [
+                wrapper_path,
+                os.path.abspath(part.path),
+                os.path.abspath(cwd),
+            ]
+            pc_logging.debug("Command was: %s" % command)
             response_serialized, errors = await self.runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(part.path),
-                    os.path.abspath(cwd),
-                ],
+                command,
                 request_serialized,
             )
             if len(errors) > 0:

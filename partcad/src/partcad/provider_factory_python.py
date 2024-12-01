@@ -130,8 +130,15 @@ class ProviderFactoryPython(ProviderFactoryFile):
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
+            # TODO-199: Use a requirements.txt or pyproject.toml for version specifications
+            # TODO-200: Create a version resolution mechanism that can handle dependency conflicts
+            # TODO-201: Implement a version update strategy for security patches
             await self.runtime.ensure_async(
                 "ocp-tessellate==3.0.8",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "nlopt==2.7.1",
                 session=self.session,
             )
             await self.runtime.ensure_async(

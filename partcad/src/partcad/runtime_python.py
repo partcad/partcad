@@ -96,6 +96,7 @@ class PythonRuntime(runtime.Runtime):
                 # Preinstall the most common packages to avoid race conditions
                 # TODO(clairbee): Lock the entire runtime instead
                 self.ensure_onced("ocp-tessellate==3.0.8")
+                self.ensure_onced("nlopt==2.7.1")
                 self.ensure_onced("cadquery==2.4.0")
                 self.ensure_onced("numpy==1.26.4")
                 self.ensure_onced("numpy-quaternion==2023.0.4")
@@ -112,6 +113,7 @@ class PythonRuntime(runtime.Runtime):
                     # Preinstall the most common packages to avoid
                     # TODO(clairbee): Lock the entire runtime instead
                     await self.ensure_async_onced_locked("ocp-tessellate==3.0.8")
+                    await self.ensure_async_onced_locked("nlopt==2.7.1")
                     await self.ensure_async_onced_locked("cadquery==2.4.0")
                     await self.ensure_async_onced_locked("numpy==1.26.4")
                     await self.ensure_async_onced_locked("numpy-quaternion==2023.0.4")
@@ -339,6 +341,7 @@ class PythonRuntime(runtime.Runtime):
             for req in reqs:
                 dependencies.append(req.strip())
         else:
+            # TODO-218: @alexanderilyin: Add support for --hash=... in requirements.txt
             requirements_path = os.path.join(project.path, "requirements.txt")
             if os.path.exists(requirements_path):
                 with open(requirements_path) as f:

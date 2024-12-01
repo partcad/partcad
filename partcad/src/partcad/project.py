@@ -1083,13 +1083,15 @@ class Project(project_config.Configuration):
 
         for elem in config:
             if elem == "import":
+                if config["import"] is None:
+                    config["import"] = {}
                 imports = config["import"]
                 imports[alias] = {
                     location_param: location,
                     "type": location_type,
                 }
                 break  # no need to iterate further
-        with open(self.config_path) as fp:
+        with open(self.config_path, "w") as fp:
             yaml.dump(config, fp)
             fp.close()
 
@@ -1448,7 +1450,7 @@ class Project(project_config.Configuration):
             if format == "readme" or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
 
-    async def render(
+    def render(
         self,
         sketches=None,
         interfaces=None,
@@ -1457,7 +1459,7 @@ class Project(project_config.Configuration):
         format=None,
         output_dir=None,
     ):
-        await self.render_async(sketches, interfaces, parts, assemblies, format, output_dir)
+        asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
 
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:

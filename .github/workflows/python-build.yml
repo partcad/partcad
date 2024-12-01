@@ -132,12 +132,12 @@ jobs:
           . ~/.bash_profile
 
           mamba activate env-build
-          cp LICENSE.txt apache20.svg partcad
+          cp .github/LICENSE.txt .github/apache20.svg partcad
           (cd partcad && python -m build)
           mamba deactivate
 
           mamba activate env-build-cli
-          cp LICENSE.txt apache20.svg README.md partcad-cli
+          cp .github/LICENSE.txt .github/apache20.svg .github/README.md partcad-cli
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
           (cd partcad-cli && python -m build)
@@ -163,6 +163,7 @@ jobs:
           . ~/.bash_profile
 
           mamba activate env-test
-          python -m pip install -r ./requirements.txt
+          # python -m pip install -r .devcontainer/requirements.txt
+          python -m pip install -r docs/requirements.txt
           sphinx-build  -M html docs/source docs/build -n -W
           mamba deactivate
