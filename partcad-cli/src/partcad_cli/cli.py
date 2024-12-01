@@ -11,19 +11,14 @@
 import argparse
 import logging
 import sys
-
 import partcad as pc
-from partcad.user_config import user_config
+
+from .cli_ai_regenerate import *
+import partcad.logging as pc_logging
 
 from .cli_add import *
-from .cli_ai_regenerate import *
-from .cli_init import *
-from .cli_info import *
-from .cli_install import *
 from .cli_list import *
-from .cli_render import *
 from .cli_inspect import *
-from .cli_status import *
 from .cli_supply_find import *
 from .cli_supply_caps import *
 from .cli_supply_order import *
@@ -75,13 +70,8 @@ def main():
         help="Print PartCAD version and exit",
     )
     cli_help_add(subparsers)
-    cli_help_init(subparsers)
-    cli_help_info(subparsers)
-    cli_help_install(subparsers)
     cli_help_list(subparsers)
-    cli_help_render(subparsers)
     cli_help_inspect(subparsers)
-    cli_help_status(subparsers)
     cli_help_test(subparsers)
 
     # AI subcommands
@@ -129,21 +119,6 @@ def main():
             pc.logging.setLevel(logging.INFO)
 
     try:
-        # First, handle the commands that don't require a context or initialize it
-        # in their own way
-        if args.command == "init":
-            cli_init(args)
-            return
-        elif args.command == "status":
-            cli_status(args)
-            return
-        elif args.command == "version":
-            pc.logging.info("PartCAD version: %s" % pc.__version__)
-            return
-
-        if args.command == "install" or args.command == "update":
-            user_config.force_update = True
-
         # Initialize the context
         if not args.config_path is None:
             ctx = pc.init(args.config_path)
@@ -171,14 +146,6 @@ def main():
                 print("Unknown AI command.\n")
                 parser.print_help()
 
-        elif args.command == "info":
-            with pc.logging.Process("Info", "this"):
-                cli_info(args, ctx)
-
-        elif args.command == "install" or args.command == "update":
-            with pc.logging.Process("Install", "this"):
-                cli_install(args, ctx)
-
         elif args.command == "list":
             with pc.logging.Process("List", "this"):
                 cli_list(args, ctx)
@@ -186,34 +153,10 @@ def main():
         elif args.command == "list-all":
             with pc.logging.Process("ListAll", "this"):
                 cli_list_sketches(args, ctx)
-                cli_list_interfaces(args, ctx)
-                cli_list_mates(args, ctx)
-                cli_list_parts(args, ctx)
-                cli_list_assemblies(args, ctx)
 
         elif args.command == "list-sketches":
             with pc.logging.Process("ListSketches", "this"):
                 cli_list_sketches(args, ctx)
-
-        elif args.command == "list-interfaces":
-            with pc.logging.Process("ListInterfaces", "this"):
-                cli_list_interfaces(args, ctx)
-
-        elif args.command == "list-mates":
-            with pc.logging.Process("ListMates", "this"):
-                cli_list_mates(args, ctx)
-
-        elif args.command == "list-parts":
-            with pc.logging.Process("ListParts", "this"):
-                cli_list_parts(args, ctx)
-
-        elif args.command == "list-assemblies":
-            with pc.logging.Process("ListAssy", "this"):
-                cli_list_assemblies(args, ctx)
-
-        elif args.command == "render":
-            with pc.logging.Process("Render", "this"):
-                cli_render(args, ctx)
 
         elif args.command == "inspect":
             with pc.logging.Process("inspect", "this"):
