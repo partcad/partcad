@@ -1,11 +1,11 @@
 {
   "name": "PartCAD Dev Container",
   "build": { // 13:27.664
-    "dockerfile": "./Dockerfile"
+  "cacheFrom": "ghcr.io/partcad/partcad-devcontainer:devel",
+  "dockerfile": "./Dockerfile"
   },
   "containerEnv": {
     "PRE_COMMIT_HOME": "/workspaces/partcad/.pre-commit"
-//     "PATH": "${containerEnv:PATH}:${containerEnv:HOME}/miniconda3/bin"
   },
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {
@@ -74,7 +74,6 @@
         "samuelcolvin.jinjahtml",
 
         // Markdown Support
-        "yzhang.markdown-all-in-one",
         "bierner.github-markdown-preview",
         "bierner.markdown-checkbox",
         "bierner.markdown-footnotes",
@@ -82,20 +81,21 @@
         "bierner.markdown-preview-github-styles",
         "bierner.markdown-yaml-preamble",
         "chintans98.markdown-jira",
-
-        // Task Management
-        "Gruntfuggly.todo-tree",
-        "wayou.vscode-todo-highlight",    // Additional TODO highlighting
-
-        // Atlassian Integration
-        "Atlassian.atlascode",
+        "yzhang.markdown-all-in-one",
 
         // Documentation Support
         "swyddfa.esbonio",
         "lextudio.restructuredtext",
         "trond-snekvik.simple-rst",
 
-        // Code Analysis
+        // Task Management
+        "Gruntfuggly.todo-tree",
+        "wayou.vscode-todo-highlight",
+
+        // Integration Tools
+        "Atlassian.atlascode",
+
+        // Development Tools
         "Codeium.codeium",
         "hediet.debug-visualizer",
         "bbenoist.vagrant",

@@ -38,7 +38,9 @@ jobs:
           imageTag:
             ${{ github.event.pull_request.number != '' && format('PR-{0}', github.event.pull_request.number) ||
             github.ref_name }}
-          cacheFrom: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          cacheFrom: |
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:devel"
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: always
 
   install:
@@ -69,7 +71,9 @@ jobs:
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: |
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:devel"
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: |
             start_time=$SECONDS
@@ -117,7 +121,9 @@ jobs:
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: |
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:devel"
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: |
             mkdir -pv test-results
@@ -135,7 +141,9 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: |
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:devel"
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -194,6 +202,8 @@ jobs:
       - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: |
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:devel"
+            "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: pre-commit run --show-diff-on-failure --color=always --all-files

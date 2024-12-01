@@ -1,5 +1,4 @@
 {
-  // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
   "OcpCadViewer.advanced.autostart": false,
   "[feature]": {
     // Need to find a way to keep formatting in """
@@ -41,7 +40,8 @@
     "feature": true
   },
   "cSpell.words": [
-    "coderabbitai"
+    "coderabbitai",
+    "devel"
   ],
   "codeQL.telemetry.enableTelemetry": true,
   "codeium.enableConfig": {
@@ -144,11 +144,16 @@
   "python.analysis.extraPaths": [
     "./partcad/src"
   ],
+  "python.analysis.typeCheckingMode": "basic",
   "python.envFile": "${workspaceFolder}/.env",
   "python.terminal.activateEnvInCurrentTerminal": true,
   "python.terminal.executeInFileDir": true,
   "python.terminal.launchArgs": [],
-  "python.testing.pytestArgs": [],
+  "python.testing.pytestArgs": [
+    "--verbosity=2",
+    "--showlocals",
+    "--capture=no"
+  ],
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
   "redhat.telemetry.enabled": false,

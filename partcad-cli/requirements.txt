@@ -1,6 +1,7 @@
-click
-ocp_vscode
+click==8.1.7
+rich-click==1.8.4
+ocp_vscode==2.6.1
 partcad==0.7.32
-renderlab
-rlPyCairo
-svglib
+renderlab==0.1.20230421184216
+rlPyCairo==0.3.0
+svglib==1.5.1
