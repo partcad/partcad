@@ -11,6 +11,13 @@ solving blockers and refining functionality to align with user needs and project
 These are the elements that deliver the primary value to users, solving their most significant problems or fulfilling
 the main purpose of the product.
 
+- [ ] Walk through [Tutorial] in clean VM.
+  - There was missing `sudo apt-get install openscad`.
+  - Create Behave test for Tutorial?
+- [ ] Add Quick Start section on https://partcad.org/
+- [ ] Add FAQ section in `./docs` and explain how to:
+  - Default windows Python can't compile some of the PartCAD dependencies.
+  - Why Part cat contaminates my host env? - Conda for sandboxing, on mac - mamba.
 - [x] Replace `https://github.com/openvmp/...` with `https://github.com/partcad/...`
 - [x] Replace 80 to 120 everywhere
       [`#discussion_r1860553570`](https://github.com/partcad/partcad/pull/213#discussion_r1860553570).
@@ -58,6 +65,7 @@ increase efficiency for users.
 Nice-to-have features that add a layer of delight or polish to the software. These are not essential for core
 functionality but can significantly enhance the user experience or make the product stand out.
 
+- - [Improve logging in Poetry glibc version check](https://github.com/python-poetry/poetry/issues/9837)
 - [ ] All DeepSpaceCartel code should be transferred to PartCAD.
       [`#discussion_r1858374297`](https://github.com/partcad/partcad/pull/213#discussion_r1858374297)
 - [ ] Create separate ticket for poetry-multiproject
@@ -75,3 +83,5 @@ functionality but can significantly enhance the user experience or make the prod
 - [ ] Add error check to `git config user.email`
       [`#discussion_r1860179677`](https://github.com/partcad/partcad/pull/213#discussion_r1860179677)
 - [x] Run `pre-commit` workflow in Dev Container.
+
+[Tutorial]: https://partcad.readthedocs.io/en/latest/tutorial.html

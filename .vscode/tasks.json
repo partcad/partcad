@@ -1,0 +1,82 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "componentType",
+      "type": "pickString",
+      "description": "What command do you want to run?",
+      "options": [
+        "version",
+        "init"
+      ],
+      "default": "version"
+    },
+    {
+      "type": "promptString",
+      "id": "filename",
+      "description": "Filename."
+      // "default": "my-new-component"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "snakeviz: Load %filename%",
+      "type": "shell",
+      "command": "snakeviz",
+      "args": [
+        "${input:filename}"
+      ]
+      // snakeviz pc-version.prof
+    },
+    {
+      "label": "cProfile: partcad %command%",
+      "type": "shell",
+      // TODO: @alexanderilyin: create bash script which will generate command
+      "command": "python",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PYTHONPATH": "${workspaceFolder}/.venv/bin/python"
+        },
+        // "shell": {
+        // "executable": "bash",
+        // "args": [
+        //   "-c",
+        //   "python -m cProfile -o partcad-version.prof $(command -v partcad) version"
+        // ]
+        // }
+      },
+      "args": [
+        "-m",
+        "cProfile",
+        "-o",
+        "partcad-${input:componentType}.prof",
+        "/workspaces/partcad/.venv/bin/partcad", // "$(command -v partcad)",
+        "${input:componentType}"
+      ],
+      // python -m cProfile -o pc-version.prof $(command -v pc) version
+      // snakeviz pc-version.prof
+      // "windows": {
+      //   "command": ".\\scripts\\test.cmd"
+      // },
+      "group": "none",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    }
+    // {
+    //   "type": "python",
+    //   "tsconfig": "tsconfig.json",
+    //   // "problemMatcher": [
+    //   //   "$tsc"
+    //   // ],
+    //   "group": {
+    //     "kind": "none",
+    //     "isDefault": false
+    //   }
+    // }
+  ]
+}

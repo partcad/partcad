@@ -5,6 +5,7 @@
   },
   "containerEnv": {
     "PRE_COMMIT_HOME": "/workspaces/partcad/.pre-commit"
+//     "PATH": "${containerEnv:PATH}:${containerEnv:HOME}/miniconda3/bin"
   },
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {
@@ -27,6 +28,9 @@
       // https://github.com/devcontainers/features/tree/main/src/conda
       "version": "latest",
       "addCondaForge": false
+    },
+    "ghcr.io/deep-space-cartel/devcontainers-features/starship:latest": {
+      "version": "latest"
     }
   },
   "postCreateCommand": ".devcontainer/bootstrap.sh",
@@ -77,10 +81,26 @@
         "bierner.markdown-mermaid",
         "bierner.markdown-preview-github-styles",
         "bierner.markdown-yaml-preamble",
+        "chintans98.markdown-jira",
 
         // Task Management
         "Gruntfuggly.todo-tree",
-        "wayou.vscode-todo-highlight"    // Additional TODO highlighting
+        "wayou.vscode-todo-highlight",    // Additional TODO highlighting
+
+        // Atlassian Integration
+        "Atlassian.atlascode",
+
+        // Documentation Support
+        "swyddfa.esbonio",
+        "lextudio.restructuredtext",
+        "trond-snekvik.simple-rst",
+
+        // Code Analysis
+        "Codeium.codeium",
+        "hediet.debug-visualizer",
+        "bbenoist.vagrant",
+        "ryanluker.vscode-coverage-gutters",
+        "alexkrechik.cucumberautocomplete"
       ]
       // <!-- prettier-ignore-end -->
     }

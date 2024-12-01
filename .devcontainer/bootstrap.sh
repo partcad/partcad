@@ -94,6 +94,13 @@ if ! poetry self show plugins | grep -q "poetry-plugin-export"; then
     echo "Poetry plugin verification failed"
     exit 1
 fi
+install_component "poetry multiproject plugin" "poetry self add poetry-multiproject-plugin"
+# Verify poetry plugin installation
+if ! poetry self show plugins | grep -q "poetry-multiproject-plugin"; then
+    echo "Poetry plugin verification failed"
+    exit 1
+fi
+
 # Log installed version
 echo "Poetry version: $(poetry --version)"
 
