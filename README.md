@@ -7,6 +7,7 @@
 [![Deployment to PyPI](https://github.com/openvmp/partcad/actions/workflows/python-deploy.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/python-deploy.yml)
 [![Documentation Status](https://readthedocs.org/projects/partcad/badge/?version=latest)](https://partcad.readthedocs.io/en/latest/?badge=latest)
 <a href="https://discord.gg/zdwyxkGM"><img alt="Discord" src="https://img.shields.io/discord/1091497262733074534?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
+[![codecov](https://codecov.io/gh/partcad/partcad/graph/badge.svg?token=08EWECVNDK)](https://codecov.io/gh/partcad/partcad)
 
 [PartCAD] is **the first package manager for CAD models** and a framework for managing assemblies.
 
