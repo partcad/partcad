@@ -51,7 +51,7 @@
     "markdown": true
   },
   "diffEditor.hideUnchangedRegions.enabled": true,
-  "dotfiles.repository": "deep-space-cartel/dotfiles",
+  "dotfiles.repository": "deepspacecartel/dotfiles",
   "editor.accessibilitySupport": "off",
   "editor.autoIndent": "full",
   "editor.detectIndentation": false,

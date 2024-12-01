@@ -29,7 +29,7 @@
       "version": "latest",
       "addCondaForge": false
     },
-    "ghcr.io/deep-space-cartel/devcontainers-features/starship:latest": {
+    "ghcr.io/deepspacecartel/devcontainers-features/starship:latest": {
       "version": "latest"
     }
   },
