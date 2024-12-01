@@ -43,6 +43,7 @@ the main purpose of the product.
 These are improvements that don’t necessarily add new functionality but refine existing workflows, reduce friction, and
 increase efficiency for users.
 
+- [ ] Automate `git lfs install`.
 - [ ] Move allure and poetry plugins to Dockerfile.
 - [x] Check how to have this added to Image in different workflow so we compile Python only once.
       [`#discussion_r1860174599`](https://github.com/partcad/partcad/pull/213#discussion_r1860174599)

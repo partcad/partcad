@@ -15,6 +15,4 @@ Feature: `pc version` command
     And STDERR should contain "PartCAD CLI version:"
     And command takes less than "2" seconds
     And the command should exit with a status code of "0"
-
-# TODO: @alexanderilyin: find a way to compare cli version with the package version
-# python -c 'import partcad; print(partcad.__version__)'
+    And CLI version matches package version

@@ -8,15 +8,27 @@ Feature: `pc add package` command
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
 
+  Scenario: Add package with invalid URL
+    When I run "partcad add invalid-package https://invalid-url.git"
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "Invalid repository URL"
+
+  Scenario: Add duplicate package
+    Given I have added the OpenVMP-robots package
+    When I run "partcad add OpenVMP-robots https://github.com/openvmp/openvmp-models.git"
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "Package already exists"
+
   @success @pc-init @pc-install @pc-list
-  Scenario: List packages in uninitialized directory
+  Scenario: Add and verify package in uninitialized directory
     Given a file named "partcad.yaml" does not exist
     When I run "partcad --no-ansi init -p"
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should be created
     When I run "partcad add OpenVMP-robots https://github.com/openvmp/openvmp-models.git"
     Then the command should exit with a status code of "0"
-    # And a file named "$PWD/partcad.yaml" should have content:
+    And the package should be downloaded successfully
+    And the package structure should be valid
     And a file named "partcad.yaml" should have YAML content:
       """
       import:
@@ -31,3 +43,8 @@ Feature: `pc add package` command
     And STDOUT should contain "PartCAD packages:"
     And STDOUT should contain "OpenVMP-robots"
     And STDOUT should not contain "<none>"
+    And STDOUT should match the pattern:
+      """
+      PartCAD packages:
+      - OpenVMP-robots \(git: https://github\.com/openvmp/openvmp-models\.git\)
+      """

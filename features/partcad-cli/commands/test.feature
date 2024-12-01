@@ -6,4 +6,8 @@ Feature: `pc test` command
     And I have temporary $HOME in "/tmp/sandbox/home"
 
   Scenario: `pc test -s /pub/std/metric/m:m3`
-    Given steps for testing
+    Given I have a valid PartCAD configuration
+    When I execute "pc test -s /pub/std/metric/m:m3"
+    Then the command should exit with code 0
+    And the output should contain "Test completed successfully"
+    And no errors should be reported

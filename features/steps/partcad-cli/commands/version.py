@@ -1,4 +1,5 @@
 from behave import given, when, then
+from behave.runner import Context
 import logging
 from features.utils import expandvars
 
@@ -48,3 +49,16 @@ def step_impl(context, substring):
 @then('the command should exit with a status code of "{exit_code}"')
 def step_impl(context, exit_code):
     assert context.result.returncode == int(exit_code)
+
+
+@then("CLI version matches package version")
+def step_impl(context: Context) -> None:
+    import subprocess
+    import partcad
+
+    cli_version = subprocess.check_output(["partcad", "version"], stderr=subprocess.STDOUT).decode()
+    package_version = partcad.__version__
+
+    assert package_version in cli_version, (
+        f"CLI version ({cli_version}) doesn't match " f"package version ({package_version})"
+    )

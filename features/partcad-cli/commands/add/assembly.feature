@@ -13,6 +13,11 @@ Feature: `pc add assembly` command
       parts:
       assemblies:
       """
+# TODO: Error case: Adding an assembly with invalid YAML syntax
+# TODO: Error case: Adding an assembly with non-existent referenced parts
+# TODO: Error case: Adding an assembly with duplicate name
+# TODO: Success case: Adding multiple assemblies
+# TODO: Success case: Adding an assembly with relative file paths
 
   @ai-openscad
   Scenario: Add assembly from `logo.assy` file
@@ -43,3 +48,26 @@ Feature: `pc add assembly` command
         logo:
           type: assy
       """
+
+  @ai-openscad @failure
+  Scenario: Fail to add assembly with invalid YAML syntax
+    Given a file named "invalid.assy" with content:
+      """
+      links:
+        - this is not valid yaml
+      """
+    When I run "partcad add-assembly assy invalid.assy"
+    Then the command should exit with a status code of "1"
+    And STDERR should contain "Invalid YAML syntax"
+
+  @ai-openscad @failure
+  Scenario: Fail to add assembly with missing referenced parts
+    Given a file named "missing.assy" with content:
+      """
+      links:
+        - part: /nonexistent_part:bone
+          location: [[0, 0, 0], [0, 0, 1], 0]
+      """
+    When I run "partcad add-assembly assy missing.assy"
+    Then the command should exit with a status code of "1"
+    And STDERR should contain "Referenced part not found"

@@ -24,7 +24,16 @@ Feature: `pc info` command
     And STDOUT should contain "'name': 'fastener/hexhead-din931',"
     And STDOUT should contain "'orig_name': 'fastener/hexhead-din931',"
 
-# pc info -s /pub/std/metric/m:m3
-# pc info -i /pub/std/metric/m:m3-screw
-# TODO: @alexanderilyin: Add scenario for 'pc info -i ...'
-# TODO: @alexanderilyin: Add scenario for 'pc info -S ...'
+  @pc-info
+  Scenario: Show simplified part information
+    When I run "partcad info -s /pub/std/metric/m:m3"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain only essential fields
+    And STDOUT should not contain detailed specifications
+
+  @pc-info
+  Scenario: Show interactive part information
+    When I run "partcad info -i /pub/std/metric/m:m3-screw"
+    Then the command should exit with a status code of "0"
+    And an interactive viewer should be launched
+    And the viewer should display the part model

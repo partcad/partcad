@@ -41,7 +41,10 @@
     "feature": true
   },
   "cSpell.words": [
-    "coderabbitai"
+    "coderabbitai",
+    "hamcrest",
+    "mkdocs",
+    "packagecloud"
   ],
   "codeQL.telemetry.enableTelemetry": true,
   "codeium.enableConfig": {

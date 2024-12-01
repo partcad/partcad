@@ -8,8 +8,8 @@ Feature: `pc list packages` command
   @failure @pc-list
   Scenario: List packages in uninitialized directory
     When I run "partcad --no-ansi list"
-    # TODO: @alexanderilyin: consider converting this scenario to a failure
-    Then the command should exit with a status code of "0"
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "Not a PartCAD project directory"
     And STDOUT should not contain "PartCAD packages:"
     And STDOUT should not contain "<none>"
 
@@ -23,3 +23,13 @@ Feature: `pc list packages` command
     Then the command should exit with a status code of "0"
     And STDOUT should not contain "PartCAD packages:"
     And STDOUT should not contain "<none>"
+
+  @success @pc-init @pc-list
+  Scenario: List multiple installed packages
+    Given I have initialized a PartCAD project
+    And I have installed package "foo@1.0.0"
+    And I have installed package "bar@2.0.0"
+    When I run "partcad --no-ansi list"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "foo (1.0.0)"
+    And STDOUT should contain "bar (2.0.0)"

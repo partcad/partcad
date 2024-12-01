@@ -104,12 +104,27 @@ fi
 # Log installed version
 echo "Poetry version: $(poetry --version)"
 
+# Install Git LFS
+echo "Installing Git LFS..."
+if ! curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash; then
+  echo "Failed to add Git LFS repository"
+  exit 1
+fi
+
+if ! sudo apt-get install -y git-lfs; then
+  echo "Failed to install Git LFS"
+  exit 1
+fi
+
+echo "Git LFS installed successfully"
+
 echo "
 ╔═════════════════════════════════════════════════════════╗
 ║ Setup Summary ($(date '+%Y-%m-%d %H:%M:%S'))                    ║
 ╚═════════════════════════════════════════════════════════╝
 
 - Workspace: ${WORKSPACE_DIR}
+- Git LFS: $(git lfs version)
 - Allure: $(allure --version)
 - Pre-commit: $(pre-commit --version)
 - Poetry: $(poetry --version)

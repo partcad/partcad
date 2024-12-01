@@ -96,11 +96,12 @@
         "trond-snekvik.simple-rst",
 
         // Code Analysis
+        "alexkrechik.cucumberautocomplete",
+        "bbenoist.vagrant",
+        "codecov.codecov",
         "Codeium.codeium",
         "hediet.debug-visualizer",
-        "bbenoist.vagrant",
-        "ryanluker.vscode-coverage-gutters",
-        "alexkrechik.cucumberautocomplete"
+        "ryanluker.vscode-coverage-gutters"
       ]
       // <!-- prettier-ignore-end -->
     }

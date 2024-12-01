@@ -29,7 +29,8 @@ htop
 
 ### VS Code
 
-Use `remote-containers.rebuildAndReopenInContainer` aka "Dev Containers: Rebuild and Reopen in Container" to start Docker Container with all necessary tooling and dependencies.
+Use `remote-containers.rebuildAndReopenInContainer` aka "Dev Containers: Rebuild and Reopen in Container" to start
+Docker Container with all necessary tooling and dependencies.
 
 ## Documentation
 
@@ -40,9 +41,9 @@ Use `remote-containers.rebuildAndReopenInContainer` aka "Dev Containers: Rebuild
   sphinx-autobuild --host 0.0.0.0 --open-browser -b html "source" "build"
   ```
 
-  > `--host 0.0.0.0` is required in case if you running `sphinx-autobuild` in Dev Containers and accessing HTML using host browser. Docs will be served on http://127.0.0.1:8000/.
-  > There is also [`sphinx-serve`] Python module which also could be used for similar
-  > functionality.
+  > `--host 0.0.0.0` is required in case if you running `sphinx-autobuild` in Dev Containers and accessing HTML using
+  > host browser. Docs will be served on http://127.0.0.1:8000/. There is also [`sphinx-serve`] Python module which also
+  > could be used for similar functionality.
 
 - `./mkdocs/`: Developer's handbook, based on [`mkdocs-material`] You can serve `mkdocs` docs locally with realtime
   updates:
@@ -107,7 +108,8 @@ use:
 
 ### Behavior-Driven Development (BDD)
 
-Behavior tests are written in Gherkin language ([philosophy]) and stored in `./features` dir as `.feature` files. To run tests, you need to use `behave` package:
+Behavior tests are written in Gherkin language ([philosophy]) and stored in `./features` dir as `.feature` files. To run
+tests, you need to use `behave` package:
 
 ```bash
 poetry install --group=dev
@@ -250,6 +252,12 @@ python -m pip install partcad-cli
 
 ## Git
 
+### LFS
+
+- [Installing Git Large File Storage]
+- [Installing on Linux using packagecloud]
+- [Configuring Git Large File Storage]
+
 ### Hooks
 
 We use the [`pre-commit`] tool to ensure consistent code quality and adherence to coding standards by automatically
@@ -347,3 +355,8 @@ use the following commands on PRs to interact with it:
 [limit of 75 files]: https://github.com/partcad/partcad/pull/219#issuecomment-2507628294
 [Poetry]: https://python-poetry.org/
 [philosophy]: https://behave.readthedocs.io/en/latest/philosophy/
+[Installing on Linux using packagecloud]: https://github.com/git-lfs/git-lfs/blob/main/INSTALLING.md
+[Installing Git Large File Storage]:
+  https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage?platform=linux
+[Configuring Git Large File Storage]:
+  https://docs.github.com/en/repositories/working-with-files/managing-large-files/configuring-git-large-file-storage
