@@ -36,7 +36,3 @@ Feature: `pc list parts` command
     When I run "partcad list parts"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Invalid configuration"
-
-  Background: Create temporary $HOME and working directory
-    Given I am in "/tmp/sandbox/behave" directory
-    And I have temporary $HOME in "/tmp/sandbox/home"

@@ -235,6 +235,11 @@ You will be able to get hints where to narrow the digging:
 
 ## Conda
 
+[workbench.action.showCommands](vscode://vscode.commands.executeCommand?command=workbench.action.showCommands)
+
+Use `Python: Select Interpreter` aka `python.setInterpreter` to select host Python interpreter. This is needed to clean
+`$PATH` from `.venv/bin`.
+
 You can create isolated env and install specific version of `partcad-cli` for testing:
 
 ```bash
@@ -243,10 +248,9 @@ You can create isolated env and install specific version of `partcad-cli` for te
 
 export TESTBED_DIR=/tmp/testbed
 mkdir -pv "${TESTBED_DIR}" && cd "${TESTBED_DIR}"
-conda create --yes --name testbed python=3.11
+conda create --yes --name testbed python=3.10
 conda info --envs
 conda activate testbed
-# python -m venv testbed
 python -m pip install partcad-cli
 ```
 
@@ -257,6 +261,14 @@ python -m pip install partcad-cli
 - [Installing Git Large File Storage]
 - [Installing on Linux using packagecloud]
 - [Configuring Git Large File Storage]
+
+### Encountered X files that should have been pointers, but weren't:
+
+This could be fixed with the following command:
+
+```bash
+git add --renormalize .
+```
 
 ### Hooks
 

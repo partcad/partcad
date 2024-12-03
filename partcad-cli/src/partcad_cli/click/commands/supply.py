@@ -4,7 +4,7 @@ from partcad_cli.click.loader import Loader
 
 
 class SupplyCommands(Loader):
-    COMMANDS_FOLDER = os.path.join(Loader.COMMANDS_FOLDER, "add")
+    COMMANDS_FOLDER = os.path.join(Loader.COMMANDS_FOLDER, "supply")
 
 
 @click.command(cls=SupplyCommands, help="- Supplier related commands")

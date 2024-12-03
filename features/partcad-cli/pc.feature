@@ -13,10 +13,10 @@ Feature: `pc` command
     And STDOUT should contain "Decrease the level of verbosity"
     And STDOUT should contain "Plain logging output. Do not use colors or animations."
     And STDOUT should contain "Package path (a YAML file or a directory with"
-    And STDOUT should contain "Format output with prefixes"
-    And STDOUT should contain "Initialize a new package"
-    And STDOUT should contain "Install package dependencies"
-    And STDOUT should contain "List available packages"
+    And STDOUT should contain "Log prefix format"
+    And STDOUT should contain "Initialize a new PartCAD package in this directory "
+    And STDOUT should contain "Download and prepare all imported packages "
+    And STDOUT should contain "List components"
 
   @pc-verbose @pc-status
   Scenario: Show DEBUG messages with increased verbosity

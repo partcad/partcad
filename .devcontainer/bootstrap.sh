@@ -8,6 +8,8 @@ set -euo pipefail
 
 WORKSPACE_DIR="${WORKSPACE_DIR:-/workspaces/partcad}"
 
+conda init
+
 echo "Configuring Git safe directory: ${WORKSPACE_DIR}"
 if ! git config --global --add safe.directory "${WORKSPACE_DIR}"; then
     echo "Failed to configure Git safe directory. Ensure Git is installed and you have proper permissions."

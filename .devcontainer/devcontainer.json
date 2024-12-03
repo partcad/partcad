@@ -36,8 +36,11 @@
   "postCreateCommand": ".devcontainer/bootstrap.sh",
   "customizations": {
     "vscode": {
-        // <!-- prettier-ignore-start -->
-        "extensions": [
+      "settings": {
+        "dotfiles.repository": "deepspacecartel/dotfiles",
+      },
+      // <!-- prettier-ignore-start -->
+      "extensions": [
         // CAD Viewer
         "bernhard-42.ocp-cad-viewer",
 
