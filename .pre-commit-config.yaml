@@ -1,6 +1,12 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
+default_install_hook_types: [pre-commit, prepare-commit-msg]
 repos:
+  - repo: https://github.com/partcad/pre-commit
+    rev: v1.7.1
+    hooks:
+      - id: prepare-commit-msg
+        args: ["--open-source", "--commit-msg-filename"]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -19,40 +25,42 @@ repos:
       - id: check-symlinks
       - id: detect-private-key
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.29.4
+    rev: 0.30.0
     hooks:
       - id: check-dependabot
       - id: check-github-actions
       - id: check-github-workflows
   - repo: https://github.com/python-poetry/poetry
-    rev: 1.8.4 # add version here
+    rev: 1.8.0
     hooks:
       - id: poetry-check
       - id: poetry-lock
       - id: poetry-export
-        args: [
-          "--format=requirements.txt",
-          "--output=requirements.txt",
-          "--with=dev",
-          "--with=partcad",
-          "--with=cli",
-          "--with=docs"
-        ]
+        args:
+          [
+            "--format=requirements.txt",
+            "--output=requirements.txt",
+            "--with=dev",
+            "--with=test",
+            "--with=partcad",
+            "--with=cli",
+            "--with=docs",
+          ]
       - id: poetry-install
   - repo: local
     hooks:
-    - id: shellcheck
-      name: ShellCheck
-      entry: shellcheck
-      language: system
-      types: [shell]
-      args: ["-e", "SC1091"]  # Optional: exclude specific checks
-      # args: ["--severity=warning"]  # Optional: show only errors and warnings
+      - id: shellcheck
+        name: ShellCheck
+        entry: shellcheck
+        language: system
+        types: [shell]
+        args: ["-e", "SC1091"] # Optional: exclude specific checks
+        # args: ["--severity=warning"]  # Optional: show only errors and warnings
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.12.0
+    rev: v2.13.1-beta
     hooks:
       - id: hadolint
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.10.0.1
     hooks:
-    -   id: shellcheck
+      - id: shellcheck
