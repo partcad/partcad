@@ -13,10 +13,6 @@ import partcad as pc
 
 
 def cli_help_list(subparsers):
-    parser_list = subparsers.add_parser(
-        "list",
-        help="List imported packages",
-    )
     parser_list_all = subparsers.add_parser(
         "list-all",
         help="List available parts, assemblies and scenes",
@@ -158,32 +154,6 @@ def cli_help_list(subparsers):
         type=str,
         nargs="?",
     )
-
-
-def cli_list(args, ctx):
-    pkg_count = 0
-
-    projects = ctx.get_all_packages()
-    projects = sorted(projects, key=lambda p: p["name"])
-
-    output = "PartCAD packages:\n"
-    for project in projects:
-        project_name = project["name"]
-
-        line = "\t%s" % project_name
-        padding_size = 60 - len(project_name)
-        if padding_size < 4:
-            padding_size = 4
-        line += " " * padding_size
-        desc = project["desc"]
-        desc = desc.replace("\n", "\n" + " " * 68)
-        line += "%s" % desc
-        output += line + "\n"
-        pkg_count = pkg_count + 1
-
-    if pkg_count < 1:
-        output += "\t<none>\n"
-    pc.logging.info(output)
 
 
 def cli_list_sketches(args, ctx):

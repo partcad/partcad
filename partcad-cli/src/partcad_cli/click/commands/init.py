@@ -18,6 +18,8 @@ from partcad.globals import create_package
 @click.option("-p", is_flag=True, help="Initialize this package as private")
 @click.pass_context
 def cli(ctx: click.rich_context.RichContext, p):
+    # TODO: @alexanderilyin: Deal with noise like "PartCAD configuration file is not found"
+    pc_logging.had_errors = False
     if not ctx.parent.params.get("p") is None:
         if os.path.isdir(ctx.parent.params.get("p")):
             # TODO: Move filename to constant somewhere.

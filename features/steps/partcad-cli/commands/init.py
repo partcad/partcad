@@ -61,6 +61,7 @@ def step_impl(context, command):
 
     logging.debug(f"Command output: {result.stdout}")
     logging.debug(f"Command error: {result.stderr}")
+    logging.debug(f"Command return code: {result.returncode}")
 
     # Store the result in the context for further steps
     context.result = result

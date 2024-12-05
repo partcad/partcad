@@ -4,6 +4,25 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
+    //
+    {
+      "name": "Debug: partcad behavex",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/.venv/bin/behavex",
+      "args": [
+        // TODO: @alexanderilyin: use $input to make it possible to run any feature file
+        "--parallel-processes=2",
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      // "env": {
+        // "PATH": "${workspaceFolder}/.venv/bin/:${env:PATH}",
+        // "PYTHONPATH": "${env:PATH}"
+      // }
+      "justMyCode": false
+    },
     {
       "name": "Debug: partcad behave",
       "type": "debugpy",

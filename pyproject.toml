@@ -82,6 +82,7 @@ behavex = "^4.0.8"
 allure-behave = "^2.13.5"
 pytest-xdist = "^3.6.1"
 pyhamcrest = "^2.1.0"
+strip-ansi = "^0.1.1"
 
 [tool.poetry.group.docs.dependencies]
 sphinx = "^8.1.3"

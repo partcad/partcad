@@ -1,8 +1,16 @@
 import rich_click as click
+import sys
+import yaml
 import partcad as pc
 import coloredlogs, logging
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
+
+help_config = click.RichHelpConfiguration(
+    text_markup="rich",
+    show_arguments=True,
+)
+help_config.dump_to_globals()
 
 
 @click.command(cls=Loader)
@@ -16,7 +24,7 @@ from partcad_cli.click.loader import Loader
 @click.option(
     "-p",
     type=click.Path(exists=True),
-    help="Package path (a YAML file or a directory with 'partcad.yaml')",
+    help="xxx Package path (a YAML file or a directory with 'partcad.yaml')",
 )
 @click.option(
     "--format",
@@ -102,13 +110,44 @@ def cli(ctx, v, q, no_ansi, p, format):
     if ctx.invoked_subcommand in commands_with_context:
         from partcad.globals import init
 
-        if p is None:
-            ctx.obj = init()
-        else:
-            ctx.obj = init(p)
+        try:
+            if p is None:
+                ctx.obj = init()
+            else:
+                ctx.obj = init(p)
+        except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
+            exc = click.BadParameter("Invalid configuration file", ctx=ctx, param=p, param_hint=None)
+            exc.exit_code = 2
+            raise exc
+        except Exception as e:
+            pc.logging.error(e)
+            raise click.Abort()
 
 
-cli.context_settings = {"show_default": True}
+# class StderrHelpFormatter(click.RichHelpFormatter):
+#   pass
+
+# class StderrContext(click.RichContext):
+#   formatter_class = StderrHelpFormatter
+#   def get_help(self):
+#     help_text = super().get_help()
+#     sys.stderr.write(help_text)
+# return ""
+# @click.command(context_settings={"context_class": StderrContext})
+# cli.context_class = StderrContext
+cli.context_settings = {
+    "show_default": True,
+    # terminal_width
+    # max_content_width
+    # "": StderrContext,
+}
+
+
+@cli.result_callback()
+def process_result(result, v, q, no_ansi, p, format):
+    if pc.logging.had_errors:
+        raise click.Abort()
+
 
 if __name__ == "__main__":
     cli()

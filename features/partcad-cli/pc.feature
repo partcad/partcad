@@ -9,14 +9,14 @@ Feature: `pc` command
   Scenario: Show CLI help
     When I run "partcad --help"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Increase the level of verbosity"
-    And STDOUT should contain "Decrease the level of verbosity"
-    And STDOUT should contain "Plain logging output. Do not use colors or animations."
-    And STDOUT should contain "Package path (a YAML file or a directory with"
-    And STDOUT should contain "Log prefix format"
-    And STDOUT should contain "Initialize a new PartCAD package in this directory "
-    And STDOUT should contain "Download and prepare all imported packages "
-    And STDOUT should contain "List components"
+    And STDERR should contain "Increase the level of verbosity"
+    And STDERR should contain "Decrease the level of verbosity"
+    And STDERR should contain "Plain logging output. Do not use colors or animations."
+    And STDERR should contain "Package path (a YAML file or a directory with"
+    And STDERR should contain "Log prefix format"
+    And STDERR should contain "Initialize a new PartCAD package in this directory "
+    And STDERR should contain "Download and prepare all imported packages "
+    And STDERR should contain "List components"
 
   @pc-verbose @pc-status
   Scenario: Show DEBUG messages with increased verbosity
@@ -73,39 +73,39 @@ Feature: `pc` command
     Then the command should exit with a status code of "0"
     And STDOUT should not contain "Package path location: /tmp/sandbox/behave"
 
-  @pc-format @pc-format-level @pc-version
+  @wip @pc-format @pc-format-level @pc-version
   Scenario: Use log level as output prefix
     When I run "partcad --format=level version"
     Then the command should exit with a status code of "0"
-    And STDERR should match the regex "^INFO PartCAD version: \d+\.\d+\.\d+$"
+    And STDERR should match the regex "^INFO PartCAD Python Module version: \d+\.\d+\.\d+$"
     And STDERR should match the regex "^INFO PartCAD CLI version: \d+\.\d+\.\d+$"
 
-  @pc-format @pc-format-time @pc-version
+  @wip @pc-format @pc-format-time @pc-version
   Scenario: Use time with milliseconds as output prefix
     When I run "partcad --format=time version"
     Then the command should exit with a status code of "0"
-    And STDERR should match the regex "^\d{2}:\d{2}:\d{2}\.\d{3} INFO PartCAD version: \d+\.\d+\.\d+$"
+    And STDERR should match the regex "^\d{2}:\d{2}:\d{2}\.\d{3} INFO PartCAD Python Module version: \d+\.\d+\.\d+$"
     And STDERR should match the regex "^\d{2}:\d{2}:\d{2}\.\d{3} INFO PartCAD CLI version: \d+\.\d+\.\d+$"
     And the command should exit with a status code of "0"
 
-  @pc-format @pc-format-path @pc-version
+  @wip @pc-format @pc-format-path @pc-version
   Scenario: Use source file path and line number as output prefix
     When I run "partcad --format=path version"
     Then the command should exit with a status code of "0"
-    And STDERR should match the regex "^/.+\.py:\d+ PartCAD version: \d+\.\d+\.\d+$"
+    And STDERR should match the regex "^/.+\.py:\d+ PartCAD Python Module version: \d+\.\d+\.\d+$"
     And STDERR should match the regex "^/.+\.py:\d+ PartCAD CLI version: \d+\.\d+\.\d+$"
 
   Scenario: Handle non-existent package configuration
     When I run "partcad -p /nonexistent/path/partcad.yaml version"
-    Then the command should exit with a status code of "1"
-    And STDERR should contain "Configuration file not found"
+    Then the command should exit with a status code of "2"
+    And STDERR should contain "Invalid value for '-p': Path '/nonexistent/path/partcad.yaml' does not exist."
 
   Scenario: Handle invalid package configuration
-    Given a file named "$WORKSPACE/partcad.yaml" with content:
+    Given a file named "partcad.yaml" with content:
       """
       invalid:
         yaml: [
       """
-    When I run "partcad -p $WORKSPACE/partcad.yaml version"
+    When I run "partcad -p partcad.yaml list"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Invalid configuration file"

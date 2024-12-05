@@ -12,9 +12,6 @@ import argparse
 import logging
 import sys
 import partcad as pc
-
-import partcad.logging as pc_logging
-
 from .cli_add import *
 from .cli_list import *
 from .cli_inspect import *
@@ -64,10 +61,6 @@ def main():
 
     # Top level commands
     subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser(
-        "version",
-        help="Print PartCAD version and exit",
-    )
     cli_help_add(subparsers)
     cli_help_list(subparsers)
     cli_help_inspect(subparsers)
@@ -136,10 +129,6 @@ def main():
             with pc.logging.Process("AddAssy", "this"):
                 cli_add_assembly(args, ctx)
 
-        elif args.command == "list":
-            with pc.logging.Process("List", "this"):
-                cli_list(args, ctx)
-
         elif args.command == "list-all":
             with pc.logging.Process("ListAll", "this"):
                 cli_list_sketches(args, ctx)
@@ -181,8 +170,6 @@ def main():
 
     if not args.no_ansi:
         pc.logging_ansi_terminal_fini()
-    if pc.logging.had_errors:
-        sys.exit(1)
 
 
 if __name__ == "__main__":

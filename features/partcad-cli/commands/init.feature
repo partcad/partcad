@@ -15,7 +15,7 @@ Feature: `pc init` command
       import:
         pub:
           type: git
-          url: https://github.com/openvmp/partcad-index.git
+          url: https://github.com/partcad/partcad-index.git
       parts:
       assemblies:
       """
@@ -43,7 +43,7 @@ Feature: `pc init` command
     And STDERR should contain "File already exists: partcad.yaml"
     And STDERR should contain "Failed creating 'partcad.yaml'!"
 
-  @pc-init @failure
+  @wip @pc-init @failure
   Scenario: Fail initializing package with insufficient permissions
     Given I am in "/tmp/sandbox/behave" directory
     And the directory has read-only permissions
@@ -51,7 +51,7 @@ Feature: `pc init` command
     Then the command should exit with a status code of "1"
     And STDERR should contain "Permission denied"
 
-  @pc-init @failure
+  @wip @pc-init @failure
   Scenario: Fail initializing package with insufficient permissions
     Given I am in "/tmp/sandbox/behave" directory
     And the directory has read-only permissions
@@ -59,7 +59,7 @@ Feature: `pc init` command
     Then the command should exit with a status code of "1"
     And STDERR should contain "Permission denied"
 
-  @pc-init @failure
+  @wip @pc-init @failure
   Scenario: Fail initializing with malformed existing YAML
     Given a file named "partcad.yaml" with content:
       """

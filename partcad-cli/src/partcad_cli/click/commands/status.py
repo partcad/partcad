@@ -30,7 +30,7 @@ def get_size(start_path="."):
     return total_size
 
 
-@click.command(help="* Display the state of internal data used by PartCAD")
+@click.command(help="Display the state of internal data used by PartCAD")
 def cli():
     with pc_logging.Process("Status", "this"):
         pc_logging.info("PartCAD version: %s" % version)

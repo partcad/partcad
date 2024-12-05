@@ -4,12 +4,22 @@ Feature: `pc list parts` command
   Background: Create temporary environment and initialize project
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
-    And a file named "partcad.yaml" does not exist
-    When I run "partcad --no-ansi init"
-    Then the command should exit with a status code of "0"
-    And a file named "partcad.yaml" should be created
-    When I run "partcad --no-ansi install"
-    Then the command should exit with a status code of "0"
+    And a file named "partcad.yaml" with content:
+      """
+      import:
+        raspberrypi:
+          desc: Raspberry Pi
+          # TODO: @alexanderilyin: Allow 'type: git' to be omitted and auto-detect
+          type: git
+          url: https://github.com/partcad/partcad-electronics-sbcs-raspberrypi
+      """
+    # TODO: @alexanderilyin: Add case for whole /pub:
+    # And a file named "partcad.yaml" does not exist
+    # When I run "partcad --no-ansi init"
+    # Then the command should exit with a status code of "0"
+    # And a file named "partcad.yaml" should be created
+    # When I run "partcad --no-ansi install"
+    # Then the command should exit with a status code of "0"
 
   @success @pc-list @pc-list-parts
   Scenario: List parts
@@ -34,5 +44,5 @@ Feature: `pc list parts` command
       invalid: yaml: content
       """
     When I run "partcad list parts"
-    Then the command should exit with a status code of "1"
-    And STDERR should contain "Invalid configuration"
+    Then the command should exit with a status code of "2"
+    And STDERR should contain "Invalid configuration file"

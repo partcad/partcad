@@ -1083,13 +1083,15 @@ class Project(project_config.Configuration):
 
         for elem in config:
             if elem == "import":
+                if config["import"] is None:
+                    config["import"] = {}
                 imports = config["import"]
                 imports[alias] = {
                     location_param: location,
                     "type": location_type,
                 }
                 break  # no need to iterate further
-        with open(self.config_path) as fp:
+        with open(self.config_path, "w") as fp:
             yaml.dump(config, fp)
             fp.close()
 
