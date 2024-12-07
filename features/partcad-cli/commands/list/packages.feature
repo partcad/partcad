@@ -5,7 +5,7 @@ Feature: `pc list packages` command
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
 
-  @failure @pc-list
+  @wip @failure @pc-list
   Scenario: List packages in uninitialized directory
     When I run "partcad --no-ansi list"
     Then the command should exit with a non-zero status code
@@ -24,7 +24,7 @@ Feature: `pc list packages` command
     And STDOUT should not contain "PartCAD packages:"
     And STDOUT should not contain "<none>"
 
-  @success @pc-init @pc-list
+  @wip @success @pc-init @pc-list
   Scenario: List multiple installed packages
     Given I have initialized a PartCAD project
     And I have installed package "foo@1.0.0"

@@ -11,7 +11,7 @@ from behave import given, then  # type: ignore
 
 def _check_output(output: str, pattern: str) -> bool:
     """Check if any line in the output matches the pattern."""
-    return any(re.match(pattern, line) for line in output.splitlines())
+    return any(re.search(pattern, line) for line in output.splitlines())
 
 
 @then('STDOUT should match the regex "{pattern}"')

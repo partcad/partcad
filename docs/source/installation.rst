@@ -28,6 +28,7 @@ The commands and options supported by PartCAD CLI:
 
 .. code-block:: shell
 
+  # TODO: @alexanderilyin: This should be updated.
   $ pc help
   usage: pc [-h] [-v] [--no-ansi] [-p CONFIG_PATH] {add,add-part,add-assembly,init,info,install,update,list,list-all,list-parts,list-assemblies,render,inspect,status} ...
 

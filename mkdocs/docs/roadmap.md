@@ -11,6 +11,10 @@ solving blockers and refining functionality to align with user needs and project
 These are the elements that deliver the primary value to users, solving their most significant problems or fulfilling
 the main purpose of the product.
 
+- [ ] Add "Steps" in AI modifications, similar how Photoshop deals with history of changes.
+- [ ] Do not spam to all terminals with `partcad` "build" output.
+  - [ ] "$PART_NAME: Showing the part"
+- [ ] Handle Ctrl-C gracefully during build.
 - [ ] Walk through [Tutorial] in clean VM.
   - There was missing `sudo apt-get install openscad`.
   - Create Behave test for Tutorial?
@@ -43,6 +47,14 @@ the main purpose of the product.
 These are improvements that don’t necessarily add new functionality but refine existing workflows, reduce friction, and
 increase efficiency for users.
 
+- [ ] Allow create package/directory in PartCAD Explorer.
+- [ ] Allow to abort AI generation process.
+- [ ] PartCAD Panel is empty the UI during AI generation.
+- [ ] Allow to remove part in PartCAD / Explorer
+- [ ] `ERROR: Can't add files outside of the package`
+  - [ ] Do not allow to set path in Command Pallette to "outside of the package"
+- [ ] INFO: Script candidate 0: failed to render the image
+  - [ ] Convert to warning
 - [ ] Automate `git lfs install`.
 - [ ] Move allure and poetry plugins to Dockerfile.
 - [x] Check how to have this added to Image in different workflow so we compile Python only once.

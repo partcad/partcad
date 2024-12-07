@@ -30,7 +30,7 @@
       "program": "${workspaceFolder}/.venv/bin/behave",
       "args": [
         // TODO: @alexanderilyin: use $input to make it possible to run any feature file
-        "features/partcad-cli/pc.feature",
+        "features/partcad-cli/commands/status.feature",
       ],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",

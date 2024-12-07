@@ -1,4 +1,4 @@
-@wip @cli @add-package
+@cli @add-package
 Feature: `pc add package` command
   As a user
   I want to add an import to a project

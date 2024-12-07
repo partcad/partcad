@@ -12,6 +12,10 @@ from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin py
 
 @given('I am in "{directory}" directory')
 def step_impl(context: Context, directory):
+    """
+    Provides:
+    - context.test_dir: temporary directory for the test
+    """
     # TODO: @alexanderilyin: use dedicated object for test directories
     # Create a temporary directory for the test
     os.makedirs(directory, exist_ok=True)
@@ -30,41 +34,6 @@ def step_impl(context: Context, directory):
     # TODO: @alexanderilyin: mention in docs
     if os.environ.get("BEHAVE_NO_CLEANUP", "0") != "1":
         context.add_cleanup(shutil.rmtree, context.test_dir)
-
-
-@when('I run "{command}"')
-def step_impl(context, command):
-    command = expandvars(command, context)
-    # We need to keep current environment variables
-    # TODO: @alexanderilyin: merge this with features/steps/partcad-cli/commands/version.py
-    env = dict(os.environ)
-    if hasattr(context, "home_dir"):
-        # Override the HOME variable
-        env["HOME"] = context.home_dir
-
-    # logging.debug(f"ENV: {env}")
-    logging.debug(f"Running command: {command} in {context.test_dir}")
-
-    start_time = time.time()
-    # Run the command in the shell
-    result = subprocess.run(
-        command,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        cwd=context.test_dir,
-        env=env,
-    )
-    end_time = time.time()
-    context.duration = end_time - start_time
-
-    logging.debug(f"Command output: {result.stdout}")
-    logging.debug(f"Command error: {result.stderr}")
-    logging.debug(f"Command return code: {result.returncode}")
-
-    # Store the result in the context for further steps
-    context.result = result
 
 
 @then('a file named "{filename}" should be created')

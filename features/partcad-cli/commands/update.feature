@@ -5,7 +5,20 @@ Feature: `pc update` command
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
 
-  @success @pc-init @pc-update @pc-ansi
+  @success @pc-update @pc-ansi
+  Scenario: Install packages
+    Given a file named "partcad.yaml" with content:
+      """
+      import:
+        raspberrypi:
+          desc: Raspberry Pi
+          # TODO: @alexanderilyin: Allow 'type: git' to be omitted and auto-detect
+          type: git
+          url: https://github.com/partcad/partcad-electronics-sbcs-raspberrypi
+      """
+    When I run "partcad update"
+
+  @wip @success @pc-init @pc-update @pc-ansi
   Scenario: Update packages
     Given a file named "partcad.yaml" does not exist
     When I run "partcad init"

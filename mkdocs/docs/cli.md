@@ -115,33 +115,33 @@ took 2s
 
 ### Steps
 
-| `features/partcad-cli/...`         | Passed | Failed | Undefined | Coverage | `@wip` | `@success` | `@failure` | `@help` |
-| ---------------------------------- | ------ | ------ | --------- | -------- | ------ | ---------- | ---------- | ------- |
-| `pc.feature`                       | 57     | 0      | 0         | N/A      | 19     |            |            |         |
-| `commands/version.feature`         | 8      | 0      | 0         | N/A      | 0      |            |            |         |
-| `commands/add/package.feature`     | 19     | 0      | 0         | N/A      | 0      |            |            |         |
-| `commands/add/part.feature`        | 0      | 0      | 0         | N/A      | 185    |            |            |         |
-| `commands/add/assembly.feature`    | 0      | 0      | 0         | N/A      | 30     |            |            |         |
-| `commands/init.feature`            | 22     | 0      | 0         | N/A      | 20     |            |            |         |
-| `commands/info.feature`            | 0      | 0      | 0         | N/A      | 30     |            |            |         |
-| `commands/install.feature`         | 7      | 0      | 0         | N/A      | 25     |            |            |         |
-| `commands/update.feature`          | 9      | 0      | 0         | N/A      | 0      |            |            |         |
-| `commands/list/packages.feature`   | 15     | 0      | 4         | N/A      | 7      |            |            |         |
-| `commands/list/all.feature`        | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
-| `commands/list/sketches.feature`   | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
-| `commands/list/interfaces.feature` | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
-| `commands/list/mates.feature`      | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
-| `commands/list/parts.feature`      | 23     | 0      | 0         | N/A      | 0      |            |            |         |
-| `commands/list/assemblies.feature` | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
-| `commands/render.feature`          | 0      | 0      | 0         | N/A      | 72     |            |            |         |
-| `commands/inspect.feature`         | 0      | 0      | 0         | N/A      | 304    |            |            |         |
-| `commands/status.feature`          | 22     | 0      | 6         | N/A      | 7      |            |            |         |
-| `commands/test.feature`            | 0      | 0      | 0         | N/A      | 7      |            |            |         |
-| `commands/ai/regenerate.feature`   | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
-| `commands/supply/find.feature`     | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
-| `commands/supply/caps.feature`     | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
-| `commands/supply/quote.feature`    | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
-| `commands/supply/order.feature`    | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| `features/partcad-cli/commands/...` | Passed | Failed | Undefined | Coverage | `@wip` | `@success` | `@failure` | `@help` |
+| ----------------------------------- | ------ | ------ | --------- | -------- | ------ | ---------- | ---------- | ------- |
+| ✔ `../pc.feature`                   | 57     | 0      | 0         | N/A      | 19     |            |            |         |
+| ✔ `version.feature`                 | 8      | 0      | 0         | N/A      | 0      |            |            |         |
+| ✔ `add/package.feature`             | 19     | 0      | 0         | N/A      | 0      |            |            |         |
+| ✔ `add/part.feature`                | 12     | 0      | 0         | N/A      | 185    |            |            |         |
+| 🚧 `add/assembly.feature`           | 0      | 0      | 0         | N/A      | 30     |            |            |         |
+| ✔ `init.feature`                    | 22     | 0      | 0         | N/A      | 20     |            |            |         |
+| ❌ `info.feature`                   | 0      | 0      | 0         | N/A      | 30     |            |            |         |
+| ✔ `install.feature`                 | 7      | 0      | 0         | N/A      | 25     |            |            |         |
+| ✔ `update.feature`                  | 9      | 0      | 0         | N/A      | 0      |            |            |         |
+| ✔ `list/packages.feature`           | 15     | 0      | 4         | N/A      | 7      |            |            |         |
+| ❌ `list/all.feature`               | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| ❌ `list/sketches.feature`          | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| ❌ `list/interfaces.feature`        | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| ❌ `list/mates.feature`             | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| ✔ `list/parts.feature`              | 23     | 0      | 0         | N/A      | 0      |            |            |         |
+| ❌ `list/assemblies.feature`        | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| ❌ `render.feature`                 | 0      | 0      | 0         | N/A      | 72     |            |            |         |
+| 🚧 `inspect.feature`                | 0      | 0      | 0         | N/A      | 304    |            |            |         |
+| ✔ `status.feature`                  | 15     | 0      | 0         | N/A      | 20     |            |            |         |
+| ❌ `test.feature`                   | 0      | 0      | 0         | N/A      | 7      |            |            |         |
+| ❌ `ai/regenerate.feature`          | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| ❌ `supply/find.feature`            | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| ❌ `supply/caps.feature`            | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| ❌ `supply/quote.feature`           | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
+| ❌ `supply/order.feature`           | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
 
 ## Roadmap
 

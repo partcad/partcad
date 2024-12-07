@@ -2,18 +2,11 @@ import rich_click as click
 import partcad as pc
 
 
-@click.command()
-@click.argument("alias", type=str)
-@click.argument("location", type=str)
+# TODO: @alexanderilyin: Patch rich_click to support help strings for arguments
+@click.command(help="Import a package")
+@click.argument("alias", type=str)  # help="Alias to be used to reference the package"
+@click.argument("location", type=str)  # help="Path or URL to the package"
 @click.pass_obj
 def cli(ctx, alias, location):
-    """
-    Import a package
-
-    \b
-    ----------------
-    ALIAS: Alias to be used to reference the package.
-    LOCATION: Path or URL to the package.
-    """
     prj = ctx.get_project(pc.ROOT)
     prj.add_import(alias, location)

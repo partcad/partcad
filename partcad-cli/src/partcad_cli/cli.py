@@ -12,7 +12,6 @@ import argparse
 import logging
 import sys
 import partcad as pc
-from .cli_add import *
 from .cli_list import *
 from .cli_inspect import *
 from .cli_supply_find import *
@@ -61,7 +60,6 @@ def main():
 
     # Top level commands
     subparsers = parser.add_subparsers(dest="command")
-    cli_help_add(subparsers)
     cli_help_list(subparsers)
     cli_help_inspect(subparsers)
     cli_help_test(subparsers)
@@ -117,19 +115,7 @@ def main():
             ctx = pc.init()
 
         # Handle the command
-        if args.command == "add":
-            with pc.logging.Process("Add", "this"):
-                cli_add(args, ctx)
-
-        elif args.command == "add-part":
-            with pc.logging.Process("AddPart", "this"):
-                cli_add_part(args, ctx)
-
-        elif args.command == "add-assembly":
-            with pc.logging.Process("AddAssy", "this"):
-                cli_add_assembly(args, ctx)
-
-        elif args.command == "list-all":
+        if args.command == "list-all":
             with pc.logging.Process("ListAll", "this"):
                 cli_list_sketches(args, ctx)
 

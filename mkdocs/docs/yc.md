@@ -13,6 +13,50 @@
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/B5tU2447OK8?si=BmlIEWepUazuu6Hw&amp;controls=0" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
+## TODO
+
+This is the buissness this is
+
+- Shehab is pre-sale engineer.
+- I'm focusing on engineering and design?
+
+  - Operations, infrastructure, quality assurance.
+
+- Are we lowering entry barriers?
+- Who is suffering and how?
+- Competitors.
+
+1. We need list with numbers.
+2. We need to assign roles to people.
+3. Why Etsy can't make a multi-party marketplaces.
+   1. Productions capacity.
+
+- Who is our customer?
+  - Early adopters are engineers who currently use CAD.
+  - Later everyone is a customer.
+- Language barriers.
+- I can't make educated guesses for manufacturing.
+
+- Allows to connect people from different industries
+- Distributed manufacturing.
+- Define what "Multi-sided marketplace" is.
+  - Batman suite.
+  - Iron man suite.
+  - Example of the bunk bed.
+- - Blue collar workers become entrepreneurs.
+- Some analogies with AWS where you can rent capacity you need right now.
+- What is the product?
+  - Collaboration and productivity tool for engineers.
+  - NextGen CAD
+  - Online Store
+  - Multi-party marketplace.
+- How many users you have? How many clients you have
+
+  - Short example?
+  - In US 140k engineering businesses
+  - How many DIY are there?
+  - We estimate it as XXX users.
+
 - Instead of rehearsing, make progress:
   - @alexanderilyin: Improved CLI interface
     - Added functional testing for all current existing functionality

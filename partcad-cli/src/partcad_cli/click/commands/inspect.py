@@ -14,7 +14,7 @@ import partcad.logging as pc_logging
 
 # TODO: @clairbee: fix type checking here
 # TODO: @alexanderilyin: https://stackoverflow.com/a/37491504/25671117
-@click.command()
+@click.command(help="Visualize a part, assembly or scene")
 @click.option(
     "-V",
     "--verbal",
@@ -61,16 +61,10 @@ import partcad.logging as pc_logging
     metavar="<param_name>=<param_value>",
     help="Assign a value to the parameter",
 )
-@click.argument("object", type=str, required=False)
+@click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
+@click.pass_context
 @click.pass_obj
-def cli(ctx, verbal, package, interface, assembly, sketch, params, object):
-    """
-    Visualize a part, assembly or scene
-
-    \b
-    ----------------
-    OBJECT: Part (default), assembly or scene to test
-    """
+def cli(ctx, context, verbal, package, interface, assembly, sketch, params, object):
     params = {}
     if not params is None:
         for kv in params:
@@ -109,7 +103,7 @@ def cli(ctx, verbal, package, interface, assembly, sketch, params, object):
             summary = obj.get_summary(package_obj)
             pc_logging.info("Summary: %s" % summary)
             # TODO: @alexanderilyin: Test with dedicated test scenario
-            if not ctx.parent.params.get("q"):
+            if not context.parent.params.get("q"):
                 print("%s" % summary)
         else:
             obj.show()
