@@ -10,7 +10,6 @@
 
 import argparse
 import logging
-import sys
 import partcad as pc
 from .cli_list import *
 from .cli_inspect import *

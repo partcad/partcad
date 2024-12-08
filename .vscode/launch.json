@@ -62,6 +62,23 @@
       },
       "justMyCode": false
     },
+    // partcad info cube
+    {
+      "name": "Debug: partcad info cube",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "args": [
+        "info",
+        "cube"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "env": {
+        "PYTHONPATH": "${env:PATH}"
+      }
+    },
     // partcad -p /workspaces/partcad/examples render --package /produce_assembly_assy -t readme -O ./ -a :logo_embedded
     {
       "name": "Debug: partcad render",

@@ -135,6 +135,10 @@ class ProviderFactoryPython(ProviderFactoryFile):
                 session=self.session,
             )
             await self.runtime.ensure_async(
+                "nlopt==2.7.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
                 "cadquery==2.4.0",
                 session=self.session,
             )

@@ -62,11 +62,9 @@ Feature: `pc add assembly` command
       """
       cat << EOF > primitive.assy
       links:
-        - package: ../produce_part_cadquery_primitive
-          part: cube
+        - part: cube
           location: [[0,0,0], [0,0,1], 0]
-        - package: ../produce_part_cadquery_primitive
-          part: cylinder
+        - part: cylinder
           location: [[0,0,5], [0,0,1], 0]
       EOF
       """

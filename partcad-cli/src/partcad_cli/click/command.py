@@ -1,5 +1,4 @@
 import rich_click as click
-import sys
 import yaml
 import partcad as pc
 import coloredlogs, logging

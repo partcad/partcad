@@ -44,7 +44,7 @@ took 2s
 
 ## New command line interface
 
-```
+```text
 ⬢ [Docker] ❯ partcad --help
 
  Usage: partcad [OPTIONS] COMMAND [ARGS]...
@@ -146,8 +146,9 @@ took 2s
 ## Roadmap
 
 - [ ] Write help to STDERR
-  - [ ] https://github.com/ewels/rich-click/pull/217
+  - [ ] Add stream configuration options in [rich-click PR #217](https://github.com/ewels/rich-click/pull/217)
 - [ ] Add `--help` scenario to all commands.
-- [ ] Make `version` work without `--format level`
-  - [ ] Use `pc_logger`
+  - [ ] Each `$command.feature` should have a `--help` scenario
 - [ ] Run `partcad list all` as `partcad list`
+- [x] Make `version` work without `--format level`
+  - [x] Use `pc_logger`
