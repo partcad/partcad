@@ -1,6 +1,8 @@
-import rich_click as click  # import click
+import rich_click as click
+from partcad import logging
 
 
-@click.command(help="- Import a package, add a part or assembly.")
+@click.command(help="Order from suppliers")
 def cli():
-    pass
+    with logging.Process("SupplyOrder", "this"):
+        pass

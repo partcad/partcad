@@ -11,6 +11,10 @@ help_config = click.RichHelpConfiguration(
 )
 help_config.dump_to_globals()
 
+# Initialize plugins that are not enabled by default
+# TODO: @alexanderilyin: figure out what this is for
+pc.plugins.export_png = pc.PluginExportPngReportlab()
+
 
 @click.command(cls=Loader)
 @click.option("-v", is_flag=True, help="Increase the level of verbosity")
@@ -44,7 +48,9 @@ def cli(ctx, v, q, no_ansi, p, format):
     ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝╚═════╝
 
     """
+    # TODO: @clairbee add a config option to change logging mechanism and level
     if no_ansi:
+        logging.getLogger("partcad").propagate = True
         logging.basicConfig()
     else:
         if format is not None:
@@ -145,6 +151,10 @@ cli.context_settings = {
 
 @cli.result_callback()
 def process_result(result, v, q, no_ansi, p, format):
+    # TODO: @alexanderilyin: What is this for?
+    if not no_ansi:
+        pc.logging_ansi_terminal_fini()
+
     if pc.logging.had_errors:
         raise click.Abort()
 

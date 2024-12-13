@@ -1,15 +1,5 @@
 import rich_click as click  # import click
-
-#
-# OpenVMP, 2023
-#
-# Author: Roman Kuzmenko
-# Created: 2023-12-23
-#
-# Licensed under Apache License, Version 2.0.
-#
-
-import partcad.logging as pc_logging
+import partcad.logging as logging
 
 
 # TODO: @clairbee: fix type checking here
@@ -65,45 +55,46 @@ import partcad.logging as pc_logging
 @click.pass_context
 @click.pass_obj
 def cli(ctx, context, verbal, package, interface, assembly, sketch, params, object):
-    params = {}
-    if not params is None:
-        for kv in params:
-            k, v = kv.split("=")
-            params[k] = v
+    with logging.Process("inspect", "this"):
+        params = {}
+        if not params is None:
+            for kv in params:
+                k, v = kv.split("=")
+                params[k] = v
 
-    if package is None:
-        if ":" in object:
-            path = object
-        else:
-            path = ":" + object
-    else:
-        path = package + ":" + object
-
-    if assembly:
-        obj = ctx.get_assembly(path, params=params)
-    elif interface:
-        obj = ctx.get_interface(path)
-    elif sketch:
-        obj = ctx.get_sketch(path, params=params)
-    else:
-        obj = ctx.get_part(path, params=params)
-
-    if obj is None:
         if package is None:
-            pc_logging.error("Object %s not found" % object)
-        else:
-            pc_logging.error("Object %s not found in package %s" % (object, package))
-    else:
-        if verbal:
-            if package is None:
-                package_obj = ctx.get_project("/")
+            if ":" in object:
+                path = object
             else:
-                package_obj = ctx.get_project(package)
-
-            summary = obj.get_summary(package_obj)
-            pc_logging.info("Summary: %s" % summary)
-            # TODO: @alexanderilyin: Test with dedicated test scenario
-            if not context.parent.params.get("q"):
-                print("%s" % summary)
+                path = ":" + object
         else:
-            obj.show()
+            path = package + ":" + object
+
+        if assembly:
+            obj = ctx.get_assembly(path, params=params)
+        elif interface:
+            obj = ctx.get_interface(path)
+        elif sketch:
+            obj = ctx.get_sketch(path, params=params)
+        else:
+            obj = ctx.get_part(path, params=params)
+
+        if obj is None:
+            if package is None:
+                logging.error("Object %s not found" % object)
+            else:
+                logging.error("Object %s not found in package %s" % (object, package))
+        else:
+            if verbal:
+                if package is None:
+                    package_obj = ctx.get_project("/")
+                else:
+                    package_obj = ctx.get_project(package)
+
+                summary = obj.get_summary(package_obj)
+                logging.info("Summary: %s" % summary)
+                # TODO: @alexanderilyin: Test with dedicated test scenario
+                if not context.parent.params.get("q"):
+                    print("%s" % summary)
+            else:
+                obj.show()

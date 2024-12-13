@@ -14,11 +14,10 @@ from partcad_cli.click.commands.list.sketches import cli as list_sketches
 @click.command(help="List all available parts, assemblies and scenes")
 # TODO: @alexanderilyin: Add all the same options
 def cli():
-    if all:
-        runner = CliRunner()
-        runner.invoke(list_assemblies, ["--recursive"])
-        runner.invoke(list_interfaces, ["--recursive"])
-        runner.invoke(list_mates, ["--recursive"])
-        runner.invoke(list_packages, ["--recursive"])
-        runner.invoke(list_parts, ["--recursive"])
-        runner.invoke(list_sketches, ["--recursive"])
+    runner = CliRunner()
+    runner.invoke(list_assemblies, ["--recursive"])
+    runner.invoke(list_interfaces, ["--recursive"])
+    runner.invoke(list_mates, ["--recursive"])
+    runner.invoke(list_packages, ["--recursive"])
+    runner.invoke(list_parts, ["--recursive"])
+    runner.invoke(list_sketches, ["--recursive"])

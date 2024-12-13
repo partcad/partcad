@@ -136,7 +136,7 @@ took 2s
 | ✔ `render.feature`                  | 0      | 0      | 0         | N/A      | 72     |            |            |         |
 | 🚧 `inspect.feature`                | 0      | 0      | 0         | N/A      | 304    |            |            |         |
 | ✔ `status.feature`                  | 15     | 0      | 0         | N/A      | 20     |            |            |         |
-| ❌ `test.feature`                   | 0      | 0      | 0         | N/A      | 7      |            |            |         |
+| 🚧 `test.feature`                   | 0      | 0      | 0         | N/A      | 7      |            |            |         |
 | ❌ `ai/regenerate.feature`          | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
 | ❌ `supply/find.feature`            | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |
 | ❌ `supply/caps.feature`            | N/A    | N/A    | N/A       | N/A      | N/A    |            |            |         |

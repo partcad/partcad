@@ -4,7 +4,7 @@ import rich_click as click
 import partcad as pc
 
 
-@click.command()
+@click.command(help="Regenerate a sketch, part or assembly")
 @click.option(
     "-P",
     "--package",
@@ -37,16 +37,11 @@ import partcad as pc
     help="The object is a scene",
     is_flag=True,
 )
-@click.argument("object", type=str, required=False)
+@click.argument(
+    "object", type=str, required=False
+)  # help="Path to the part (default), assembly or scene to regenerate"
 @click.pass_obj
 def cli(ctx, sketch, interface, assembly, scene, package, object):
-    """
-    Regenerate a sketch, part or assembly
-
-    \b
-    ----------------
-    OBJECT: Path to the part (default), assembly or scene to regenerate
-    """
     if sketch or interface or assembly or scene:
         pc_logging.error("This object type is not yet supported")
         return

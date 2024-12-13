@@ -1,4 +1,5 @@
 from rich_click import RichGroup
+import rich_click as click
 import logging
 import os
 
@@ -19,8 +20,11 @@ class Loader(RichGroup):
         ns = {}
         fn = os.path.join(self.COMMANDS_FOLDER, name + ".py")
         logging.debug(f"Loading {fn}")
-        # TODO: @alexanderilyin need to add try catch here for better UX.
-        with open(fn) as f:
-            code = compile(f.read(), fn, "exec")
-            eval(code, ns, ns)
-        return ns["cli"]
+        try:
+            with open(fn) as f:
+                code = compile(f.read(), fn, "exec")
+                eval(code, ns, ns)
+            return ns["cli"]
+        except Exception as e:
+            logging.exception(e)
+            raise click.ClickException(f"Failed to load command '{name}': {e}")
