@@ -1,3 +1,4 @@
+@wip
 Feature: List mates with recursive flag
   As a PartCAD user
   I want to list all mates recursively

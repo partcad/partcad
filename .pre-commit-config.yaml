@@ -3,7 +3,7 @@
 default_install_hook_types: [pre-commit, prepare-commit-msg]
 repos:
   - repo: https://github.com/partcad/pre-commit
-    rev: v1.7.1
+    rev: v1.8.2
     hooks:
       - id: prepare-commit-msg
         args: ["--open-source", "--commit-msg-filename"]

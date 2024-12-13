@@ -110,10 +110,11 @@ def cli(ctx, v, q, no_ansi, p, format):
         from partcad.globals import init
 
         try:
-            if p is None:
-                ctx.obj = init()
-            else:
-                ctx.obj = init(p)
+            ctx.obj = init(p)
+            # if p is None:
+            #     ctx.obj = init()
+            # else:
+            #     ctx.obj = init(p)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
             exc = click.BadParameter("Invalid configuration file", ctx=ctx, param=p, param_hint=None)
             exc.exit_code = 2

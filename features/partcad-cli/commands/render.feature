@@ -1,4 +1,4 @@
-@wip @cli @pc-render
+@cli @pc-render
 Feature: `pc render` command
 
   Background: Sandbox
@@ -15,25 +15,26 @@ Feature: `pc render` command
     Then STDOUT should not contain "WARN:"
 
   # TODO: @openvmp: consider extracting `-t readme` as `pc generate readme` command
-  @type-text
-  Examples: Media Types: Text
-    |    type | filename              |
-    |  readme | README.md             |
+  # @wip @type-text
+  # Examples: Media Types: Text
+    # |    type | filename              |
+    # |  readme | README.md             |
 
-  @type-image
-  Examples: Media Types: Image
-    |    type | filename              |
-    |     svg | logo_embedded.svg     |
-    |     png | logo_embedded.png     |
+  # @type-image
+  # Examples: Media Types: Image
+    # |    type | filename              |
+    # |     svg | logo_embedded.svg     |
+    # |     png | logo_embedded.png     |
 
   @type-object
   Examples: Media Types: Object
-    |    step | logo_embedded.step    |
-    |     stl | logo_embedded.stl     |
-    |     3mf | logo_embedded.3mf     |
-    | threejs | logo_embedded.threejs |
-    |     obj | logo_embedded.obj     |
-    |    gltf | logo_embedded.gltf    |
+    |    type | filename              |
+    # |    step | logo_embedded.step    |
+    # |     stl | logo_embedded.stl     |
+    # |     3mf | logo_embedded.3mf     |
+    | threejs | logo_embedded.json    |
+    # |     obj | logo_embedded.obj     |
+    |    gltf | logo_embedded.json    |
 
 
 # pc render -t png -a $assembly

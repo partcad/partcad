@@ -248,9 +248,9 @@ You can create isolated env and install specific version of `partcad-cli` for te
 
 export TESTBED_DIR=/tmp/testbed
 mkdir -pv "${TESTBED_DIR}" && cd "${TESTBED_DIR}"
-conda create --yes --name testbed python=3.10
+conda create --yes --name baseline python=3.10
 conda info --envs
-conda activate testbed
+conda activate baseline
 python -m pip install partcad-cli
 ```
 

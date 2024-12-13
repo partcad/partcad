@@ -1,6 +1,72 @@
-import rich_click as click  # import click
+import rich_click as click
+from partcad import logging
+from partcad.logging import Process
 
 
 @click.command(help="List available assemblies")
-def cli():
-    pass
+@click.option("-r", "--recursive", is_flag=True, help="Recursively process all imported packages")
+@click.option(
+    "-u", "--used_by", type=str, required=False, help="Only process objects used by the given assembly or scene."
+)
+@click.argument("package", type=str, required=False)  # help="Package to retrieve the object from"
+@click.pass_obj
+def cli(ctx, recursive, used_by, package):
+    with Process("ListAssy", "this"):
+        assy_count = 0
+        assy_kinds = 0
+
+        if used_by is not None:
+            logging.info("Instantiating %s..." % used_by)
+            # TODO(clairbee): do not call it twice in 'list-all'
+            ctx.get_assembly(used_by)
+        else:
+            ctx.get_all_packages()
+
+        output = "PartCAD assemblies:\n"
+        for project_name in ctx.projects:
+            if not recursive and package is not None and package != project_name:
+                continue
+
+            if not recursive and project_name != ctx.get_current_project_path():
+                continue
+
+            if recursive and package is not None and not project_name.startswith(package):
+                continue
+
+            if recursive and package is None and not project_name.startswith(ctx.get_current_project_path()):
+                continue
+
+            project = ctx.projects[project_name]
+
+            for assy_name, assy in project.assemblies.items():
+                if used_by is not None and assy.count == 0:
+                    continue
+
+                line = "\t"
+                if recursive:
+                    line += "%s" % project_name
+                    line += " " + " " * (35 - len(project_name))
+                line += "%s" % assy_name
+                if used_by is not None:
+                    assy = project.assemblies[assy_name]
+                    line += "(%d)" % assy.count
+                    assy_count = assy_count + assy.count
+                line += " " + " " * (35 - len(assy_name))
+
+                desc = assy.desc if assy.desc is not None else ""
+                desc = desc.replace("\n", "\n" + " " * (84 if recursive else 44))
+                line += "%s" % desc
+                output += line + "\n"
+                assy_kinds = assy_kinds + 1
+
+        if assy_kinds > 0:
+            if used_by is None:
+                output += "Total: %d\n" % assy_kinds
+            else:
+                output += "Total: %d assemblies of %d kinds\n" % (
+                    assy_count,
+                    assy_kinds,
+                )
+        else:
+            output += "\t<none>\n"
+        logging.info(output)

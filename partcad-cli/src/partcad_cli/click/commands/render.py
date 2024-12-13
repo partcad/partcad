@@ -12,7 +12,7 @@ import partcad.utils as pc_utils
 import partcad.logging as pc_logging
 
 
-@click.command()
+@click.command(help="Render the selected or all parts, assemblies and scenes in this package")
 @click.option(
     "-p",
     "--create-dirs",
@@ -79,16 +79,9 @@ import partcad.logging as pc_logging
     help="The object is a scene",
     is_flag=True,
 )
-@click.argument("object", type=str, required=False)
+@click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
-    """
-    Render the selected or all parts, assemblies and scenes in this package
-
-    \b
-    ----------------
-    OBJECT: Part (default), assembly or scene to test
-    """
     with pc_logging.Process("Render", "this"):
         ctx.option_create_dirs = create_dirs
         package = package if package is not None else ""

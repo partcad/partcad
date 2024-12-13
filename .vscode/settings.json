@@ -42,9 +42,11 @@
   },
   "cSpell.words": [
     "coderabbitai",
+    "deprioritized",
     "hamcrest",
     "mkdocs",
-    "packagecloud"
+    "packagecloud",
+    "timebox"
   ],
   "codeQL.telemetry.enableTelemetry": true,
   "codeium.enableConfig": {
@@ -179,5 +181,6 @@
   "testing.followRunningTest": false,
   "testing.openTesting": "neverOpen",
   "workbench.colorTheme": "GitHub Dark",
-  "yaml.format.bracketSpacing": false // prevent YAML formatter from breaking Jinja2 templates
+  "yaml.format.bracketSpacing": false,
+  "testing.automaticallyOpenTestResults": "neverOpen" // prevent YAML formatter from breaking Jinja2 templates
 }

@@ -1,16 +1,20 @@
 # Roadmap
 
-## In Progress
+- https://en.wikipedia.org/wiki/MoSCoW_method
 
-These items are actively being worked on by the team, whether they involve coding, design, testing, or review. Progress
-is being tracked to ensure timely completion, and these items are not yet ready for release. The focus here is on
-solving blockers and refining functionality to align with user needs and project goals.
+## Must-have / Core
 
-## Core
+Non-negotiable needs for the project. Product won’t work without an initiative, or the release becomes useless without
+it. These are the elements that deliver the primary value to users, solving their most significant problems or
+fulfilling the main purpose of the product.
 
-These are the elements that deliver the primary value to users, solving their most significant problems or fulfilling
-the main purpose of the product.
+> Tasks are critical to the current delivery [timebox] in order for it to be a success. If even one requirement is not
+> included, the project delivery should be considered a failure (note: requirements can be downgraded from Must have, by
+> agreement with all relevant stakeholders; for example, when new requirements are deemed more important). MUST can also
+> be considered an acronym for the Minimum Usable Subset.
 
+- [ ] Run missing renders automatically for `pc render -t readme`
+- [ ] Add search/filter to "Explore" panel.
 - [ ] Add "Steps" in AI modifications, similar how Photoshop deals with history of changes.
 - [ ] Do not spam to all terminals with `partcad` "build" output.
   - [ ] "$PART_NAME: Showing the part"
@@ -42,10 +46,21 @@ the main purpose of the product.
 - [x] Mention in docs pre-commit hooks auto-install.
       [`#discussion_r1860175130`](https://github.com/partcad/partcad/pull/213#discussion_r1860175130)
 
-## Quality of Life
+## Should have / Quality of Life
+
+Should-have initiatives are just a step below must-haves. They are essential to the product, but they are not vital. If
+left out, the product or project still functions. However, the initiatives may add significant value.
+
+“Should-have” initiatives are different from “must-have” initiatives in that they can get scheduled for a future release
+without impacting the current one. For example, performance improvements, minor bug fixes, or new functionality may be
+“should-have” initiatives. Without them, the product still works.
 
 These are improvements that don’t necessarily add new functionality but refine existing workflows, reduce friction, and
 increase efficiency for users.
+
+> Requirements are important but not necessary for delivery in the current delivery [timebox]. While Should have
+> requirements can be as important as Must have, they are often not as time-critical or there may be another way to
+> satisfy the requirement so that it can be held back until a future delivery [timebox].
 
 - [ ] Allow create package/directory in PartCAD Explorer.
 - [ ] Allow to abort AI generation process.
@@ -73,10 +88,20 @@ increase efficiency for users.
 - [x] `$PATH` problems should be solved.
       [`#discussion_r1858376864`](https://github.com/partcad/partcad/pull/213#discussion_r1858376864)
 
-## Bells & Whistles
+## Could have / Bells & Whistles
+
+Another way of describing “could-have” initiatives is nice-to-haves. “Could-have” initiatives are not necessary to the
+core function of the product. However, compared with “should-have” initiatives, they have a much smaller impact on the
+outcome if left out.
+
+So, initiatives placed in the “could-have” category are often the first to be deprioritized if a project in the
+“should-have” or “must-have” category ends up larger than expected.
 
 Nice-to-have features that add a layer of delight or polish to the software. These are not essential for core
 functionality but can significantly enhance the user experience or make the product stand out.
+
+> Requirements labelled as Could have are desirable but not necessary and could improve the user experience or customer
+> satisfaction for a little development cost. These will typically be included if time and resources permit.
 
 - - [Improve logging in Poetry glibc version check](https://github.com/python-poetry/poetry/issues/9837)
 - [ ] All DeepSpaceCartel code should be transferred to PartCAD.
@@ -97,4 +122,11 @@ functionality but can significantly enhance the user experience or make the prod
       [`#discussion_r1860179677`](https://github.com/partcad/partcad/pull/213#discussion_r1860179677)
 - [x] Run `pre-commit` workflow in Dev Container.
 
+## Won't have (this time)
+
+> Requirements labelled as Won't have, have been agreed by stakeholders as the least-critical, lowest-payback items, or
+> not appropriate at that time. As a result, Won't have requirements are not planned into the schedule for the next
+> delivery timebox. Won't have requirements are either dropped or reconsidered for inclusion in a later timebox.
+
 [Tutorial]: https://partcad.readthedocs.io/en/latest/tutorial.html
+[timebox]: https://en.wikipedia.org/wiki/Timeboxing
