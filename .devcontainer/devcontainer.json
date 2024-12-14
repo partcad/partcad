@@ -71,7 +71,7 @@
         "ms-azuretools.vscode-docker",
 
         // YAML Support
-        "redhat.vscode-yaml",
+        // "redhat.vscode-yaml", # command 'jumpToSchema' already exists
 
         // SVG Support
         "jock.svg",
