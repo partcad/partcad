@@ -2,6 +2,7 @@ __pycache__
 .conda
 .coverage
 .ocp_vscode
+.op/
 .partcad
 .pre-commit
 .pytest_cache

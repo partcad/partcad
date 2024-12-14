@@ -1,5 +1,16 @@
 # Development
 
+## 1Password
+
+```bash
+op account add
+# Enter your sign-in address (example.1password.com): my.1password.com
+# Enter the email address for your account on my.1password.com: ...
+# Enter the Secret Key for alexander@ilyin.eu on my.1password.com: ...
+# Enter the password for alexander@ilyin.eu at my.1password.com:
+eval $(op signin)
+```
+
 ## Environments
 
 ### WSL2

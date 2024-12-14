@@ -1,11 +1,13 @@
 {
   "name": "PartCAD Dev Container",
-  "build": { // 13:27.664
+  "build": {
+    // 13:27.664
     "dockerfile": "./Dockerfile"
   },
   "containerEnv": {
+    // https://developer.1password.com/docs/cli/config-directories/
+    "OP_CONFIG_DIR": "/workspaces/partcad/.op",
     "PRE_COMMIT_HOME": "/workspaces/partcad/.pre-commit"
-//     "PATH": "${containerEnv:PATH}:${containerEnv:HOME}/miniconda3/bin"
   },
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {
@@ -14,6 +16,7 @@
     },
     "ghcr.io/devcontainers/features/python:1": {
       "installTools": true,
+      "toolsToInstall": ["pre-commit", "poetry"],
       "version": "3.10"
     },
     "ghcr.io/devcontainers/features/conda:1": {
@@ -34,7 +37,10 @@
   "customizations": {
     "vscode": {
       "settings": {
-        "dotfiles.repository": "deepspacecartel/dotfiles",
+        "dotfiles.repository": "deepspacecartel/dotfiles"
+      },
+      "remote.extensionKind": {
+        "codecov.codecov": ["ui"]
       },
       // <!-- prettier-ignore-start -->
       "extensions": [
@@ -43,15 +49,15 @@
 
         // Python Environment
         "donjayamanne.python-environment-manager",
-        "njpwerner.autodocstring",        // Python docstring generator
-        "kevinrose.vsc-python-indent",    // Better Python indentation
+        "njpwerner.autodocstring", // Python docstring generator
+        "kevinrose.vsc-python-indent", // Better Python indentation
         "ms-python.black-formatter",
         "ms-python.python",
         "ms-python.vscode-pylance",
 
         // Code Formatting
         "esbenp.prettier-vscode",
-        "streetsidesoftware.code-spell-checker",  // Because typos are worse than black holes
+        "streetsidesoftware.code-spell-checker", // Because typos are worse than black holes
 
         // GitHub Integration
         "GitHub.copilot",
@@ -85,7 +91,7 @@
 
         // Task Management
         "Gruntfuggly.todo-tree",
-        "wayou.vscode-todo-highlight",    // Additional TODO highlighting
+        "wayou.vscode-todo-highlight", // Additional TODO highlighting
 
         // Atlassian Integration
         "Atlassian.atlascode",
