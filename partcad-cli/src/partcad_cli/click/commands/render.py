@@ -9,7 +9,7 @@
 
 import rich_click as click
 import partcad.utils as pc_utils
-import partcad.logging as pc_logging
+import partcad.logging as logging
 
 
 @click.command(help="Generate a rendered view of parts, assemblies, or scenes in the package")
@@ -82,7 +82,7 @@ import partcad.logging as pc_logging
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
-    with pc_logging.Process("Render", "this"):
+    with logging.Process("Render", "this"):
         ctx.option_create_dirs = create_dirs
         package = package if package is not None else ""
         if recursive:
@@ -127,6 +127,7 @@ def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interf
                     parts.append(object)
 
                 prj = ctx.get_project(package)
+                # TODO: @alexanderilyin: Use scene
                 prj.render(
                     sketches=sketches,
                     interfaces=interfaces,
@@ -137,19 +138,10 @@ def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interf
                 )
 
 
-#
-# OpenVMP, 2023-2024
-#
-# Author: Roman Kuzmenko
-# Created: 2023-12-23
-#
-# Licensed under Apache License, Version 2.0.
-#
-
 import argparse
 import asyncio
 
-import partcad.logging as pc_logging
+import partcad.logging as logging
 import partcad.utils as pc_utils
 
 
@@ -273,7 +265,7 @@ async def cli_render_async(args, ctx, packages):
 
             prj = ctx.get_project(package)
             if prj is None:
-                pc_logging.error("%s is not found" % package)
+                logging.error("%s is not found" % package)
             else:
                 tasks.append(
                     prj.render(

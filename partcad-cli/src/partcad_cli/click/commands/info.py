@@ -1,6 +1,6 @@
 import rich_click as click
 from pprint import pformat
-import partcad.logging as pc_logging
+import partcad.logging as logging
 
 
 # TODO: https://stackoverflow.com/a/37491504/25671117
@@ -55,11 +55,11 @@ def cli(ctx, package, interface, assembly, sketch, scene, object, params):  # , 
 
     if obj is None:
         if package is None:
-            pc_logging.error("Object %s not found" % object)
+            logging.error("Object %s not found" % object)
         else:
-            pc_logging.error("Object %s not found in package %s" % (object, package))
+            logging.error("Object %s not found in package %s" % (object, package))
     else:
-        pc_logging.info("CONFIGURATION: %s" % pformat(obj.config))
+        logging.info("CONFIGURATION: %s" % pformat(obj.config))
         info = obj.info()
         for k, v in info.items():
-            pc_logging.info("INFO: %s: %s" % (k, pformat(v)))
+            logging.info("INFO: %s: %s" % (k, pformat(v)))

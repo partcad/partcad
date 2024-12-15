@@ -9,7 +9,7 @@
 import rich_click as click  # import click
 import os
 import partcad as pc
-import partcad.logging as pc_logging
+import partcad.logging as logging
 from partcad.globals import create_package
 
 
@@ -19,7 +19,7 @@ from partcad.globals import create_package
 @click.pass_context
 def cli(ctx: click.rich_context.RichContext, p):
     # TODO: @alexanderilyin: Deal with noise like "PartCAD configuration file is not found"
-    pc_logging.had_errors = False
+    logging.had_errors = False
     if not ctx.parent.params.get("p") is None:
         if os.path.isdir(ctx.parent.params.get("p")):
             # TODO: Move filename to constant somewhere.
@@ -30,4 +30,4 @@ def cli(ctx: click.rich_context.RichContext, p):
         dst_path = "partcad.yaml"
 
     if not create_package(dst_path, p):
-        pc_logging.error("Failed creating '%s'!" % dst_path)
+        logging.error("Failed creating '%s'!" % dst_path)

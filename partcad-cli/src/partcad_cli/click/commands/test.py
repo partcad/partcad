@@ -7,23 +7,20 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-
 import rich_click as click
 import partcad.utils as pc_utils
 from partcad import logging as logging
-
-import argparse
 import asyncio
-
-import partcad.logging as pc_logging
-import partcad.utils as pc_utils
 
 
 async def cli_test_async(ctx, packages, sketch, interface, assembly, scene, object):
+    """
+    TODO: @alexanderilyin: Add scene support
+    """
     tasks = []
     for package in packages:
-        if not object is None:
-            if not ":" in object:
+        if object is not None:
+            if ":" not in object:
                 object = ":" + object
             package, object = pc_utils.resolve_resource_path(ctx.get_current_project_path(), object)
 
@@ -43,7 +40,7 @@ async def cli_test_async(ctx, packages, sketch, interface, assembly, scene, obje
                 shape = prj.get_part(object)
 
             if shape is None:
-                pc_logging.error("%s is not found" % object)
+                logging.error(f"{object} is not found")
             else:
                 tasks.append(shape.test_async())
 
@@ -65,12 +62,7 @@ def cli(ctx, package, recursive, sketch, interface, assembly, scene, object):
         if recursive:
             start_package = ctx.get_project_abs_path(package)
             all_packages = ctx.get_all_packages(start_package)
-            packages = list(
-                map(
-                    lambda p: p["name"],
-                    list(all_packages),
-                )
-            )
+            packages = [p["name"] for p in all_packages]
         else:
             packages = [package]
 

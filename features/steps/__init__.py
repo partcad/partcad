@@ -9,5 +9,5 @@ for loader, module_name, _ in pkgutil.walk_packages(PATH):
     try:
         _module = loader.find_module(module_name).load_module(module_name)
         globals()[module_name] = _module
-    except Exception as e:
-        raise ImportError(f"Failed to load module {module_name}: {e}")
+    except (ImportError, SyntaxError) as e:
+        raise ImportError(f"Failed to load module {module_name}") from e

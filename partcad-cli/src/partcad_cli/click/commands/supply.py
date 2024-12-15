@@ -8,5 +8,5 @@ class SupplyCommands(Loader):
 
 
 @click.command(cls=SupplyCommands, help="Manage supplier-related tasks")
-def cli():
+def cli() -> None:
     pass

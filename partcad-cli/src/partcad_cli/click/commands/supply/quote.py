@@ -23,6 +23,10 @@ import sys
 )
 @click.pass_obj
 def cli(ctx, api, qos, provider, specs):
+    """
+    TODO: Implementing Network Error Handling
+    """
+
     with pc.logging.Process("SupplyQuote", "this"):
         cart = ProviderCart(qos=qos)
         asyncio.run(cart.add_objects(ctx, specs))
@@ -78,16 +82,9 @@ def cli(ctx, api, qos, provider, specs):
                         continue
                     price = quote.result["price"]
                     cart_id = quote.result["cartId"]
-                    pc.logging.info(
-                        "\t\t%s: %s: $%0.2f"
-                        % (
-                            supplier,
-                            cart_id,
-                            price,
-                        )
-                    )
+                    pc.logging.info(f"\t\t{supplier}: {cart_id}: ${price:.2f}")
                 else:
-                    pc.logging.info(f"\t\tNo provider found:")
+                    pc.logging.info("No provider found:")
 
                 for part in quote.cart.parts.values():
                     pc.logging.info(f"\t\t\t{part.name}#{part.count}")

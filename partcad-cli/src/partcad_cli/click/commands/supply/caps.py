@@ -13,6 +13,10 @@ from partcad.provider_request_caps import ProviderRequestCaps
 )
 @click.pass_obj
 def cli(ctx, providers):
+    # TODO: Create tests for: Multiple provider scenarios
+    # TODO: Create tests for: Error handling cases
+    # TODO: Create tests for: Async behavior testing
+    # TODO: Create tests for: Input validation
     with logging.Process("SupplyCaps", "this"):
         for provider_spec in providers:
             provider = ctx.get_provider(provider_spec)

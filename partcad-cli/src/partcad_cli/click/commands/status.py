@@ -1,21 +1,22 @@
 # OpenVMP, 2023
 #
-# Author: Roman Kuzmenko, Aleksand Ilin
+# Author: Roman Kuzmenko, Aleksandr Ilin
 # Created: 2024-02-18
 #
 # Licensed under Apache License, Version 2.0.
 #
 
 
-import rich_click as click  # import click
+import rich_click as click
 
 import os
 import threading
-import logging
 
 from partcad import __version__ as version
-import partcad.logging as pc_logging
+import partcad.logging as logging
 import partcad.user_config as user_config
+
+path = user_config.internal_state_dir
 
 
 def get_size(start_path="."):
@@ -30,38 +31,41 @@ def get_size(start_path="."):
     return total_size
 
 
-@click.command(help="Show the current state of PartCAD's internal data")
-def cli():
-    with pc_logging.Process("Status", "this"):
-        pc_logging.info("PartCAD version: %s" % version)
+def get_total():
+    with logging.Action("Status", "total"):
+        total = (get_size(path)) / 1048576.0
+        logging.info("Total internal data storage size: %.2fMB" % total)
 
-        # TODO: @alexanderilyin: show loaded partcad.yaml
-        # TODO: @alexanderilyin: update test features/partcad-cli/pc.feature
-        path = user_config.internal_state_dir
-        pc_logging.info("Internal data storage location: %s" % path)
 
-        def get_total():
-            with pc_logging.Action("Status", "total"):
-                total = (get_size(path)) / 1048576.0
-                pc_logging.info("Total internal data storage size: %.2fMB" % total)
+def get_git():
+    with logging.Action("Status", "git"):
+        git_path = os.path.join(path, "git")
+        git_total = (get_size(git_path)) / 1048576.0
+        logging.info("Git cache size: %.2fMB" % git_total)
 
-        def get_git():
-            with pc_logging.Action("Status", "git"):
-                git_path = os.path.join(path, "git")
-                git_total = (get_size(git_path)) / 1048576.0
-                pc_logging.info("Git cache size: %.2fMB" % git_total)
 
-        def get_tar():
-            with pc_logging.Action("Status", "tar"):
-                tar_path = os.path.join(path, "tar")
-                tar_total = (get_size(tar_path)) / 1048576.0
-                pc_logging.info("Tar cache size: %.2fMB" % tar_total)
+def get_tar():
+    with logging.Action("Status", "tar"):
+        tar_path = os.path.join(path, "tar")
+        tar_total = (get_size(tar_path)) / 1048576.0
+        logging.info("Tar cache size: %.2fMB" % tar_total)
 
-        def get_runtime():
-            with pc_logging.Action("Status", "runtime"):
-                runtime_path = os.path.join(path, "runtime")
-                runtime_total = (get_size(runtime_path)) / 1048576.0
-                pc_logging.info("Runtime environments size: %.2fMB" % runtime_total)
+
+def get_runtime():
+    with logging.Action("Status", "runtime"):
+        runtime_path = os.path.join(path, "runtime")
+        runtime_total = (get_size(runtime_path)) / 1048576.0
+        logging.info("Runtime environments size: %.2fMB" % runtime_total)
+
+
+@click.command(help="Display the state of internal data used by PartCAD")
+def cli() -> None:
+    with logging.Process("Status", "this"):
+
+        logging.info(f"PartCAD version: {version}")
+
+        # TODO: @alexanderilyin: show detail about loaded partcad.yaml
+        logging.info("Internal data storage location: %s" % path)
 
         # Create threads
         thread_total = threading.Thread(target=get_total)

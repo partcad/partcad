@@ -1,4 +1,4 @@
-import partcad.logging as pc_logging
+import partcad.logging as logging
 import partcad.utils as pc_utils
 import rich_click as click
 import partcad as pc
@@ -43,7 +43,7 @@ import partcad as pc
 @click.pass_obj
 def cli(ctx, sketch, interface, assembly, scene, package, object):
     if sketch or interface or assembly or scene:
-        pc_logging.error("This object type is not yet supported")
+        logging.error("This object type is not yet supported")
         return
 
     if not ":" in object:

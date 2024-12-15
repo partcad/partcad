@@ -5,6 +5,7 @@ import asyncio
 from partcad.provider_data_cart import ProviderCart
 import partcad as pc
 import json
+from typing import Any, List
 
 
 @click.command(help="Find suppliers")
@@ -17,7 +18,7 @@ import json
     nargs=-1,
 )  # help="Part (default) or assembly to quote, with options"
 @click.pass_obj
-def cli(ctx, api, qos, provider, specs):
+def cli(ctx: Any, api: bool, qos: str, provider: str, specs: List[str]) -> None:
     with logging.Process("SupplyFind", "this"):
         cart = ProviderCart()
         asyncio.run(cart.add_objects(ctx, specs))
@@ -36,14 +37,14 @@ def cli(ctx, api, qos, provider, specs):
                 suppliers[str(part_spec)].append(provider.name)
         else:
             suppliers = asyncio.run(ctx.find_suppliers(cart, qos))
-            pc.logging.debug("Suppliers: %s" % str(suppliers))
+            pc.logging.debug(f"Suppliers: {suppliers}")
 
         if api:
             print(json.dumps(suppliers))
         else:
             pc.logging.info("The requested parts are available through the following suppliers:")
-            for spec_str, suppliers in suppliers.items():
+            for spec_str, supplier_list in suppliers.items():
                 suppliers_str = ""
-                for supplier in suppliers:
+                for supplier in supplier_list:
                     suppliers_str += "\n\t\t" + str(supplier)
                 pc.logging.info(f"{spec_str}:{suppliers_str}")

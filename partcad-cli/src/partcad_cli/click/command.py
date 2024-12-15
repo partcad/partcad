@@ -1,7 +1,9 @@
 import rich_click as click
 import yaml
 import partcad as pc
-import coloredlogs, logging
+import coloredlogs
+import logging
+
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
 
@@ -10,6 +12,16 @@ help_config = click.RichHelpConfiguration(
     show_arguments=True,
 )
 help_config.dump_to_globals()
+
+# https://github.com/ewels/rich-click/blob/main/examples/03_groups_sorting.py
+# click.rich_click.COMMAND_GROUPS = {
+#     "partcad": [
+#         {"name": "Project Management", "commands": ["add", "init", "install", "update", "list"]},
+#         {"name": "Design and Analysis", "commands": ["inspect", "info", "test", "render"]},
+#         {"name": "Manufacturing & Generative AI", "commands": ["supply", "ai"]},
+#         {"name": "Utility", "commands": ["status", "version"]},
+#     ]
+# }
 
 # Initialize plugins that are not enabled by default
 # TODO: @alexanderilyin: figure out what this is for
