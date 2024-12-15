@@ -193,6 +193,9 @@ jobs:
             ${{ runner.os }}-pre-commit-
       - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
+        env:
+          # TODO: Add custom @dependabot-like job to open PR to update dependencies
+          SKIP: poetry-export,poetry-lock
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
