@@ -41,6 +41,11 @@ Feature: `pc add package` command
     Then the command should exit with a status code of "0"
     And STDOUT should contain "https://github.com/openvmp/openvmp-models.git"
     # And the package should be downloaded successfully
+    # And the directory "OpenVMP-robots" should exist
+    # And the file "OpenVMP-robots/package.yaml" should exist
+    # And the directory "OpenVMP-robots/.git" should exist
+    # And STDOUT should contain "Successfully installed OpenVMP-robots"
+
     When I run "partcad list packages"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "PartCAD packages:"
@@ -53,3 +58,11 @@ Feature: `pc add package` command
     #   PartCAD packages:
     #   - OpenVMP-robots \(git: https://github\.com/openvmp/openvmp-models\.git\)
     #   """
+
+# And the directory "OpenVMP-robots" should exist
+# And the file "OpenVMP-robots/package.yaml" should exist
+# And the file "OpenVMP-robots/package.yaml" should have YAML content:
+#   """
+#   name: OpenVMP-robots
+#   version: 1.0.0
+#   """

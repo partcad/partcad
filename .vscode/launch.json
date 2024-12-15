@@ -3,6 +3,29 @@
   // Hover to view descriptions of existing attributes.
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
+  // https://code.visualstudio.com/docs/editor/debugging#_compound-launch-configurations
+  "compounds": [
+    // {
+    //   "name": "Debug: PartCAD Development",
+    //   "configurations": ["Debug: partcad status", "Debug: partcad init", "Debug: partcad add --help"]
+    // },
+    // {
+    //   "name": "Debug: PartCAD Testing",
+    //   "configurations": ["Debug: partcad behavex", "Debug: partcad behave"]
+    // },
+    // {
+    //   "name": "Debug: PartCAD Rendering",
+    //   "configurations": ["Debug: partcad inspect", "Debug: partcad render"]
+    // },
+    // {
+    //   "name": "Debug: PartCAD Full Suite",
+    //   "configurations": ["Debug: partcad status", "Debug: partcad init"]
+    // },
+    // {
+    //   "name": "Debug: PartCAD Testing",
+    //   "configurations": ["Debug: partcad behavex", "Debug: partcad behave"]
+    // }
+  ],
   "configurations": [
     //
     {
@@ -12,16 +35,17 @@
       "program": "${workspaceFolder}/.venv/bin/behavex",
       "args": [
         // TODO: @alexanderilyin: use $input to make it possible to run any feature file
-        "--parallel-processes=2",
+        "--parallel-processes=${env:PARTCAD_PARALLEL_PROCESSES:-2}"
       ],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
       // "env": {
-        // "PATH": "${workspaceFolder}/.venv/bin/:${env:PATH}",
-        // "PYTHONPATH": "${env:PATH}"
+      // "PATH": "${workspaceFolder}/.venv/bin/:${env:PATH}",
+      // "PYTHONPATH": "${env:PATH}"
+      // "PARTCAD_DEBUG": "1"
       // }
-      "justMyCode": false
+      "justMyCode": true
     },
     {
       "name": "Debug: partcad behave",
@@ -30,12 +54,14 @@
       "program": "${workspaceFolder}/.venv/bin/behave",
       "args": [
         // TODO: @alexanderilyin: use $input to make it possible to run any feature file
-        "features/partcad-cli/commands/status.feature",
+        "features/partcad-cli/commands/status.feature"
       ],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
       "env": {
+        "PYDEVD_WARN_EVALUATION_TIMEOUT": "60",
+        "PYDEVD_UNBLOCK_THREADS_TIMEOUT": "60",
         "PATH": "${workspaceFolder}/.venv/bin/:${env:PATH}",
         "PYTHONPATH": "${env:PATH}"
       }
@@ -45,15 +71,8 @@
       "name": "Debug: partcad inspect",
       "type": "debugpy",
       "request": "launch",
-      "program": "partcad-cli/src/partcad_cli/click/command.py",
-      "args": [
-        "-p",
-        "examples",
-        "inspect",
-        "--package",
-        "/produce_part_cadquery_primitive",
-        ":cube"
-      ],
+      "program": "${workspaceFolder}/partcad-cli/src/partcad_cli/click/command.py",
+      "args": ["-p", "examples", "inspect", "--package", "${workspaceFolder}/produce_part_cadquery_primitive", ":cube"],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
@@ -68,10 +87,7 @@
       "type": "debugpy",
       "request": "launch",
       "program": "partcad-cli/src/partcad_cli/click/command.py",
-      "args": [
-        "info",
-        "cube"
-      ],
+      "args": ["info", "cube"],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
@@ -87,16 +103,16 @@
       "program": "partcad-cli/src/partcad_cli/click/command.py",
       "args": [
         "-p",
-        "/workspaces/partcad/examples",
+        "${workspaceFolder}/examples",
         "render",
         "--package",
         "/produce_assembly_assy",
         "-t",
         "readme",
         "-O",
-        "./",
+        "${workspaceFolder}/",
         "-a",
-        ":logo_embedded",
+        ":logo_embedded"
       ],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
@@ -110,9 +126,7 @@
       "type": "debugpy",
       "request": "launch",
       "program": "partcad-cli/src/partcad_cli/click/command.py",
-      "args": [
-        "status"
-      ],
+      "args": ["status"],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
@@ -125,9 +139,7 @@
       "type": "debugpy",
       "request": "launch",
       "program": "partcad-cli/src/partcad_cli/click/command.py",
-      "args": [
-        "init"
-      ],
+      "args": ["init"],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
@@ -140,10 +152,7 @@
       "type": "debugpy",
       "request": "launch",
       "program": "partcad-cli/src/partcad_cli/click/command.py",
-      "args": [
-        "add",
-        "--help"
-      ],
+      "args": ["add", "--help"],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",

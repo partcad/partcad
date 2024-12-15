@@ -6,31 +6,36 @@
   },
   "containerEnv": {
     // https://developer.1password.com/docs/cli/config-directories/
-    "OP_CONFIG_DIR": "/workspaces/partcad/.op",
-    "PRE_COMMIT_HOME": "/workspaces/partcad/.pre-commit"
+    "OP_CONFIG_DIR": "${containerWorkspaceFolder}/.op",
+    "PRE_COMMIT_HOME": "${containerWorkspaceFolder}/.pre-commit"
   },
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {
       "installDirectlyFromGitHubRelease": true,
-      "version": "latest"
+      "version": "v2.63.2"
     },
     "ghcr.io/devcontainers/features/python:1": {
       "installTools": true,
-      "toolsToInstall": ["pre-commit", "poetry"],
+      "optimize": true,
       "version": "3.10"
     },
     "ghcr.io/devcontainers/features/conda:1": {
-      "version": "latest"
+      "version": "24.11.1"
     },
     "ghcr.io/deepspacecartel/devcontainers-features/starship:latest": {
-      "version": "latest"
+      "version": "v1.21.1"
     },
     "ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
-      "jqVersion": "latest",
-      "yqVersion": "latest",
-      "gojqVersion": "latest",
-      "xqVersion": "latest",
-      "jaqVersion": "latest"
+      "jqVersion": "1.7.1",
+      "yqVersion": "v4.44.6",
+      "gojqVersion": "none",
+      "xqVersion": "none",
+      "jaqVersion": "none"
+    },
+    "ghcr.io/devcontainers/features/git-lfs:1": {
+      "autoPull": true,
+      "installDirectlyFromGitHubRelease": true,
+      "version": "v3.6.0"
     }
   },
   "postCreateCommand": ".devcontainer/bootstrap.sh",
@@ -44,6 +49,9 @@
       },
       // <!-- prettier-ignore-start -->
       "extensions": [
+        // PartCAD TODO: Move extension to PartCAD organization
+        "OpenVMP.partcad",
+
         // CAD Viewer
         "bernhard-42.ocp-cad-viewer",
 
@@ -71,7 +79,7 @@
         "ms-azuretools.vscode-docker",
 
         // YAML Support
-        // "redhat.vscode-yaml", # command 'jumpToSchema' already exists
+        // "redhat.vscode-yaml", # TODO:command 'jumpToSchema' already exists
 
         // SVG Support
         "jock.svg",
@@ -105,7 +113,6 @@
         "alexkrechik.cucumberautocomplete",
         "bbenoist.vagrant",
         "codecov.codecov",
-        "Codeium.codeium",
         "hediet.debug-visualizer",
         "ryanluker.vscode-coverage-gutters"
       ]

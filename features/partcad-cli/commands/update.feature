@@ -30,3 +30,20 @@ Feature: `pc update` command
     # Then STDERR should contain "Cloning the GIT repo:"
     # Then STDERR should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
+
+  @wip @failure @pc-update
+  Scenario: Update fails due to network error
+    Given I am in "/tmp/sandbox/behave" directory
+    And I have temporary $HOME in "/tmp/sandbox/home"
+    When I run "partcad update" with simulated network failure
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "Network error"
+
+  @wip @failure @pc-update
+  Scenario: Update fails due to version conflict
+    Given I am in "/tmp/sandbox/behave" directory
+    And I have temporary $HOME in "/tmp/sandbox/home"
+    And I have a package with version conflict
+    When I run "partcad update"
+    Then the command should exit with a non-zero status code
+    And STDERR should contain "Version conflict detected"

@@ -232,47 +232,47 @@ jobs:
             mkdir -pv test-results
             poetry --no-ansi --no-interaction run behave
 
-      # - name: Upload test results
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: test-results
-      #     path: test-results/
-      #     retention-days: 7
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
 
-      # - name: Generate Allure Report
-      #   if: always()
-      #   uses: devcontainers/ci@v0.3
-      #   with:
-      #     cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
-      #     push: never
-      #     runCmd: |
-      #       if [ ! -d "allure-results" ]; then
-      #         echo "##[warning]allure-results directory not found. Skipping report generation."
-      #         exit 0
-      #       fi
-      #       if ! allure generate allure-results -o allure-report; then
-      #         echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
-      #       fi
+      - name: Generate Allure Report
+        if: always()
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          push: never
+          runCmd: |
+            if [ ! -d "allure-results" ]; then
+              echo "##[warning]allure-results directory not found. Skipping report generation."
+              exit 0
+            fi
+            if ! allure generate allure-results -o allure-report; then
+              echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
+            fi
 
-      # - name: Publish Allure Report
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: allure-report
-      #     path: allure-report/
-      #     retention-days: 7
+      - name: Publish Allure Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 7
 
-      # - name: Upload coverage reports to Codecov
-      #   if: ${{ !cancelled() }}
-      #   uses: codecov/codecov-action@v5
-      #   with:
-      #     files: test-results/coverage.xml
-      #     token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage reports to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          files: test-results/coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
-      # - name: Upload test results to Codecov
-      #   if: ${{ !cancelled() }}
-      #   uses: codecov/test-results-action@v1
-      #   with:
-      #     files: test-results/junit.xml
-      #     token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          files: test-results/junit.xml
+          token: ${{ secrets.CODECOV_TOKEN }}

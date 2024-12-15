@@ -279,7 +279,6 @@ Feature: `pc add part` command
       translate (v= [0,0,0])  cube (size = 10);
       """
     When I run "partcad add part scad test.scad"
-    # TODO: @alexanderilyin: Add validation that 'test.scad' exists
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """

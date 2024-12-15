@@ -15,3 +15,15 @@ Feature: List mates with recursive flag
     When I run "pc list-mates -r"
     Then the command should succeed
     And the output should match the non-recursive listing
+
+  Scenario: List mates in empty project
+    Given I have an empty project
+    When I run "pc list-mates -r"
+    Then the command should succeed
+    And the output should indicate no mates found
+
+  Scenario: Handle invalid mate structure
+    Given I have a project with circular mate references
+    When I run "pc list-mates -r"
+    Then the command should fail gracefully
+    And the error message should describe the circular reference

@@ -152,6 +152,12 @@ took 2s
 - [ ] Run `partcad list all` as `partcad list`
 - [x] Make `version` work without `--format level`
   - [x] Use `pc_logger`
+- [ ] Configure 1Password CLI completions
+  - [ ] `op completion ...`
+- [ ] Create Dev Container Feature to install 1Password CLI
+  - [ ] https://developer.1password.com/docs/cli/get-started/#step-1-install-1password-cli
+- [ ] Convert all TODOs to issues
+- [ ] Update https://partcad.readthedocs.io
 
 ## Closure
 

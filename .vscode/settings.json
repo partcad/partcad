@@ -1,9 +1,11 @@
 {
+  "githubPullRequests.experimental.chat": true,
   // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
   "OcpCadViewer.advanced.autostart": false,
   "[feature]": {
-    // Need to find a way to keep formatting in """
-    "editor.formatOnSave": false
+    // Formatting is difficult with multi-line strings wrapped in """ (triple quotes)
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "modifications"
   },
   "[go]": {
     "editor.codeActionsOnSave": {
@@ -28,20 +30,16 @@
   "[typescriptreact]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "[yaml]": {
-    "editor.defaultFormatter": "redhat.vscode-yaml"
-  },
-  "amazonQ.importRecommendationForInlineCodeSuggestions": false,
-  "amazonQ.shareContentWithAWS": false,
-  "amazonQ.showInlineCodeSuggestionsWithCodeReferences": false,
-  "amazonQ.telemetry": false,
+  // TODO: https://github.com/redhat-developer/vscode-yaml/issues/1075
+  // "[yaml]": {
+  //   "editor.defaultFormatter": "redhat.vscode-yaml"
+  // },
   "atlascode.bitbucket.enabled": false,
   "atlascode.jira.enabled": true,
   "cSpell.enabledFileTypes": {
     "feature": true
   },
   "cSpell.words": ["coderabbitai", "deprioritized", "hamcrest", "mkdocs", "packagecloud", "timebox"],
-  "codeQL.telemetry.enableTelemetry": true,
   "codeium.enableConfig": {
     "*": true,
     "feature": true,
@@ -61,7 +59,7 @@
   "editor.useTabStops": false,
   "esbonio.server.enableDevTools": true,
   "esbonio.server.logLevel": "debug",
-  "esbonio.server.pythonPath": "/workspaces/partcad/partcad-cli/.venv/bin/python3.10",
+  "esbonio.server.pythonPath": "${workspaceFolder}/partcad-cli/.venv/bin/python3.10",
   "esbonio.server.showDeprecationWarnings": true,
   "esbonio.server.updateBehavior": "promptAlways",
   "esbonio.server.updateFrequency": "daily",
@@ -90,13 +88,11 @@
   "files.trimFinalNewlines": true,
   "git.autofetch": true,
   "githubPullRequests.pullBranch": "never",
-  "go.toolsManagement.autoUpdate": true,
   "markdown.extension.toc.omittedFromToc": {
     "README.md": ["# PartCAD"]
   },
-  "openapi.approvedHostnames": [],
   "partcad.packagePath": "examples",
-  "partcad.pythonSandbox": "pypy",
+  "partcad.pythonSandbox": "conda",
   "prettier.printWidth": 120,
   "prettier.proseWrap": "always",
   "psi-header.config": {
@@ -142,7 +138,7 @@
   "python.testing.pytestArgs": [],
   "python.testing.pytestEnabled": true,
   "python.testing.unittestEnabled": false,
-  "redhat.telemetry.enabled": false,
+  // "redhat.telemetry.enabled": false,
   "remote.autoForwardPortsSource": "hybrid",
   "search.exclude": {
     "**/*.egg-info": true,
@@ -160,14 +156,14 @@
     "partcad*/build": true,
     "partcad*/dist": true
   },
-  "security.workspace.trust.untrustedFiles": "open",
+  // "security.workspace.trust.untrustedFiles": "open",
   "svg.preview.mode": "svg",
   "terminal.integrated.fontFamily": "'Hack Nerd Font Mono'",
-  "terminal.integrated.scrollback": 10000000,
+  "terminal.integrated.scrollback": 100000,
   "testing.automaticallyOpenPeekView": "never",
   "testing.followRunningTest": false,
-  "testing.openTesting": "neverOpen",
+  // "testing.openTesting": "neverOpen",
   "workbench.colorTheme": "GitHub Dark",
-  "yaml.format.bracketSpacing": false,
+  // "yaml.format.bracketSpacing": false,
   "testing.automaticallyOpenTestResults": "neverOpen" // prevent YAML formatter from breaking Jinja2 templates
 }

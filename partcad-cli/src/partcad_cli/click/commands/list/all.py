@@ -21,3 +21,24 @@ def cli():
     runner.invoke(list_packages, ["--recursive"])
     runner.invoke(list_parts, ["--recursive"])
     runner.invoke(list_sketches, ["--recursive"])
+
+    # commands = [
+    #     (list_assemblies, "Assemblies"),
+    #     (list_interfaces, "Interfaces"),
+    #     (list_mates, "Mates"),
+    #     (list_packages, "Packages"),
+    #     (list_parts, "Parts"),
+    #     (list_sketches, "Sketches"),
+    # ]
+
+    # runner = CliRunner()
+    # exit_code = 0
+
+    # for cmd, name in commands:
+    #     click.echo(f"\n=== {name} ===")
+    #     result = runner.invoke(cmd, ["--recursive"])
+    #     if result.exit_code != 0:
+    #         click.echo(f"Error listing {name.lower()}: {result.output}", err=True)
+    #         exit_code = 1
+
+    # return exit_code

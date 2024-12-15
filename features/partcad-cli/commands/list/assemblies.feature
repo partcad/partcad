@@ -109,3 +109,16 @@ Feature: `pc list assemblies` command
 #     When I run "pc list-assemblies -r"
 #     Then I should see a list of all assemblies
 #     And the output should include nested assemblies
+
+  @wip
+  Scenario: List empty project
+    Given I have an empty PartCAD project
+    When I run "pc list-assemblies -r"
+    Then I should see "No assemblies found"
+
+  @wip
+  Scenario: List with depth limit
+    Given I have a PartCAD project with nested assemblies
+    When I run "pc list-assemblies -r --depth 2"
+    Then I should see assemblies up to depth 2
+    And deeper nested assemblies should not be listed

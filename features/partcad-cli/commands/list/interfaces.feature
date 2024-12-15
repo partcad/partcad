@@ -47,3 +47,8 @@ Feature: `pc list interfaces` command
 #     When I run "pc list-interfaces -r"
 #     Then I should see a list of all interfaces
 #     And the output should include nested interfaces
+
+#    Then the output should contain interface paths
+#    And each interface should show its version
+#    And nested interfaces should be indented
+#    And the output should be sorted alphabetically

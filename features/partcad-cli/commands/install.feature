@@ -7,6 +7,7 @@ Feature: `pc install` command
 
   @success @pc-init @pc-install @pc-ansi
   Scenario: Install packages
+    # TODO: Check if pc is using shallow cloning with --depth 1
     Given a file named "partcad.yaml" with content:
       """
       import:

@@ -90,6 +90,15 @@ Feature: `pc info` command
       partcad info -a primitive
       """
     Then the command should exit with a status code of "0"
+# And STDOUT should contain "cube" in the parts list
+# And STDOUT should contain "cylinder" in the parts list
+# And STDOUT should contain valid location coordinates
+# When I run command with invalid assembly name:
+# """
+# partcad info -a nonexistent
+# """
+# Then the command should exit with a non-zero status code
+
 
   # Background: Initialize Public PartCAD project
   #   Given I am in "/tmp/sandbox/behave" directory

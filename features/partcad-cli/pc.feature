@@ -104,3 +104,17 @@ Feature: `pc` command
     When I run "partcad -p partcad.yaml list"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Invalid configuration file"
+
+  @wip
+  Scenario: Handle empty package configuration
+    Given a file named "partcad.yaml" with content:
+      """
+      """
+    When I run "partcad -p partcad.yaml list packages"
+    Then the command should exit with a status code of "1"
+    And STDERR should contain "Empty configuration file"
+
+  Scenario: Handle non-existent package configuration
+    When I run "partcad -p /nonexistent/path/partcad.yaml version"
+    Then the command should exit with a status code of "2"
+    And STDERR should contain "Invalid value for '-p': Path '/nonexistent/path/partcad.yaml' does not exist."

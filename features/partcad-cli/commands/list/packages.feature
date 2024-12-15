@@ -33,3 +33,21 @@ Feature: `pc list packages` command
     Then the command should exit with a status code of "0"
     And STDOUT should contain "foo (1.0.0)"
     And STDOUT should contain "bar (2.0.0)"
+
+  @wip @success @pc-init @pc-list
+  Scenario: List packages with circular dependencies
+    Given I have initialized a PartCAD project
+    And I have installed package "foo@1.0.0" which depends on "bar@1.0.0"
+    And I have installed package "bar@1.0.0" which depends on "foo@1.0.0"
+    When I run "partcad --no-ansi list"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Circular dependency detected"
+
+  @wip @success @pc-init @pc-list
+  Scenario: List packages with version conflicts
+    Given I have initialized a PartCAD project
+    And I have installed package "foo@1.0.0" which requires "baz@1.0.0"
+    And I have installed package "bar@1.0.0" which requires "baz@2.0.0"
+    When I run "partcad --no-ansi list"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Version conflict detected"
