@@ -41,10 +41,10 @@ def step_impl(context, variable, directory):  # type: ignore
     try:
         os.makedirs(directory, exist_ok=True)
     except OSError as e:
-        raise RuntimeError(f"Failed to create directory {directory}: {e}")
+        raise RuntimeError(f"Failed to create directory {directory}: {e}") from e
 
     context.env[variable] = tempfile.mkdtemp(
         prefix="partcad-cli-",
         dir=directory,
     )
-    logging.debug(f"Created temporary workspace: {context.env[variable]}")
+    logging.debug("Created temporary workspace: %s", context.env[variable])

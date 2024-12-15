@@ -1,4 +1,4 @@
-from behave import given, when, then
+from behave import given, then
 from hamcrest import assert_that, equal_to
 from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin python.autoComplete.extraPaths
 import logging

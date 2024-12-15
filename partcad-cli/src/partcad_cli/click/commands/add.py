@@ -9,5 +9,5 @@ class AddCommands(Loader):
 
 
 @click.command(cls=AddCommands, help="Add a package, part, or assembly")
-def cli():
+def cli() -> None:
     pass

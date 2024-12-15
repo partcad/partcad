@@ -16,7 +16,7 @@ def cli(ctx, recursive, used_by, package):
         assy_kinds = 0
 
         if used_by is not None:
-            logging.info("Instantiating %s..." % used_by)
+            logging.info(f"Instantiating {used_by}...")
             # TODO(clairbee): do not call it twice in 'list-all'
             ctx.get_assembly(used_by)
         else:
@@ -44,9 +44,9 @@ def cli(ctx, recursive, used_by, package):
 
                 line = "\t"
                 if recursive:
-                    line += "%s" % project_name
+                    line += f"{project_name}"
                     line += " " + " " * (35 - len(project_name))
-                line += "%s" % assy_name
+                line += f"{assy_name}"
                 if used_by is not None:
                     assy = project.assemblies[assy_name]
                     line += "(%d)" % assy.count
@@ -55,18 +55,15 @@ def cli(ctx, recursive, used_by, package):
 
                 desc = assy.desc if assy.desc is not None else ""
                 desc = desc.replace("\n", "\n" + " " * (84 if recursive else 44))
-                line += "%s" % desc
+                line += f"desc"
                 output += line + "\n"
                 assy_kinds = assy_kinds + 1
 
         if assy_kinds > 0:
             if used_by is None:
-                output += "Total: %d\n" % assy_kinds
+                output += f"Total: {assy_kinds}\n"
             else:
-                output += "Total: %d assemblies of %d kinds\n" % (
-                    assy_count,
-                    assy_kinds,
-                )
+                output += f"Total: {assy_count} assemblies of {assy_kinds} kinds\n"
         else:
             output += "\t<none>\n"
         logging.info(output)

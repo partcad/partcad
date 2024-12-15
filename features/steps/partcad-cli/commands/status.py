@@ -1,6 +1,6 @@
 import os
 import yaml
-from behave import given, when, then
+from behave import then
 
 
 @then('a file named "{filename}" should be created with content')

@@ -16,7 +16,7 @@ def cli(ctx, recursive, used_by, package):
         interface_kinds = 0
 
         if used_by is not None:
-            logging.info("Instantiating %s..." % used_by)
+            logging.info(f"Instantiating {used_by}...")
             ctx.get_assembly(used_by)
         else:
             ctx.get_all_packages()
@@ -43,29 +43,26 @@ def cli(ctx, recursive, used_by, package):
 
                 line = "\t"
                 if recursive:
-                    line += "%s" % project_name
+                    line += f"{project_name}"
                     line += " " + " " * (35 - len(project_name))
-                line += "%s" % interface_name
+                line += f"{interface_name}"
                 if used_by is not None:
                     interface = project.get_interface(interface_name)
-                    line += "(%d)" % interface.count
+                    line += f"({interface.count})"
                     interface_count = interface_count + interface.count
                 line += " " + " " * (35 - len(interface_name))
 
                 desc = interface.desc if interface.desc is not None else ""
                 desc = desc.replace("\n", "\n" + " " * (80 if recursive else 44))
-                line += "%s" % desc
+                line += f"{desc}"
                 output += line + "\n"
                 interface_kinds = interface_kinds + 1
 
         if interface_kinds > 0:
             if used_by is None:
-                output += "Total: %d\n" % interface_kinds
+                output += f"Total: {interface_kinds}\n"
             else:
-                output += "Total: %d interfaces of %d kinds\n" % (
-                    interface_count,
-                    interface_kinds,
-                )
+                output += f"Total: {interface_count} interfaces of {interface_kinds} kinds\n"
         else:
             output += "\t<none>\n"
         logging.info(output)

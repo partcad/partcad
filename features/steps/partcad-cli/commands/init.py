@@ -1,13 +1,10 @@
-from behave import given, when, then
+from behave import given, then
 from behave.runner import Context
-import time
 import yaml
 import logging
 import tempfile
 import os
 import shutil
-import subprocess
-from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin python.autoComplete.extraPaths
 
 
 @given('I am in "{directory}" directory')
@@ -40,7 +37,8 @@ def step_impl(context: Context, directory):
 def step_impl(context, filename):
     # Check if the file exists in the current directory
     file_path = os.path.join(context.test_dir, filename)
-    assert os.path.isfile(file_path), f"File '{filename}' was not created"
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError(f"File '{filename}' was not created")
 
 
 @given('a file named "{filename}" does not exist')
@@ -93,12 +91,14 @@ def step_impl(context):
     with open(file_path, "r") as file:
         try:
             yaml_content = yaml.safe_load(file)
-            assert yaml_content is not None, "YAML content is empty or invalid"
+            if yaml_content is None:
+                raise ValueError("YAML content is empty or invalid")
 
             # Check if the 'import.pub' key is not present
             import_section = yaml_content.get("import")
             import_missing = import_section is None
             import_without_pub = import_section is not None and "pub" not in import_section
-            assert import_missing or import_without_pub, "'import.pub' key should not be present in the YAML content"
+            if not (import_missing or import_without_pub):
+                raise ValueError("'import.pub' key should not be present")
         except yaml.YAMLError as exc:
-            assert False, f"Error parsing YAML content: {exc}"
+            raise ValueError(f"Error parsing YAML content: {exc}") from exc

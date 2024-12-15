@@ -15,7 +15,7 @@ def cli(ctx, recursive, used_by, package):
         mating_kinds = 0
 
         if used_by is not None:
-            logging.info("Instantiating %s..." % used_by)
+            logging.info(f"Instantiating {used_by}...")
             ctx.get_assembly(used_by)
         else:
             ctx.get_all_packages()
@@ -42,6 +42,7 @@ def cli(ctx, recursive, used_by, package):
         output = "PartCAD mating interfaces:\n"
         for source_interface_name in ctx.mates:
             source_package_name = source_interface_name.split(":")[0]
+            # TODO: @alexanderilyin: Use interface short name
             short_source_interface_name = source_interface_name.split(":")[1]
 
             for target_interface_name in ctx.mates[source_interface_name]:

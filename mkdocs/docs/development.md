@@ -15,21 +15,7 @@ eval $(op signin)
 
 ### WSL2
 
-You can use PowerShell in order to show running environment:
-
-```bash
-wsl --list --verbose
-```
-
-You can get terminal inside WSL environment by name:
-
-```bash
-wsl -d docker-desktop
-```
-
-![WSL2 Connect](./assets/images/wsl2-connect.png)
-
-In order to see details about processes you can install `htop`:
+Use PowerShell to show running environments:
 
 ```bash
 apk add htop
@@ -138,6 +124,10 @@ or use `behavex` to speedup tests execution:
 
 - https://github.com/hrcorval/behavex
 - https://github.com/hrcorval/behavex/issues/182
+- [behavex repository](https://github.com/hrcorval/behavex)
+- [behavex issue #182](https://github.com/hrcorval/behavex/issues/182)
+- [Allure Report](https://allurereport.org/)
+- [pytest-cov documentation](https://pytest-cov.readthedocs.io/)
 
 ```bash
 behavex
@@ -159,7 +149,7 @@ behave -f steps.catalog --dry-run --no-summary -q
 #### Best Practices
 
 - Do not use `And`, use `Given`, `When` or `Then` explicitly.
-  - This will allow to avoid unexpected behavior when comment out some steps.
+  - This helps avoid unexpected behavior when commenting out steps.
 
 ### Tests Generation
 
@@ -308,10 +298,10 @@ pre-commit install
 
 ```ini
 [safe]
-	directory = /workspaces/partcad
+  directory = /workspaces/partcad
 [user]
-	email = username@partcad.org
-	name = First Last
+  email = username@partcad.org
+  name = First Last
 ```
 
 ```bash

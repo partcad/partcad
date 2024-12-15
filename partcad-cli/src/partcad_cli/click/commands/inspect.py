@@ -1,4 +1,4 @@
-import rich_click as click  # import click
+import rich_click as click
 import partcad.logging as logging
 
 
@@ -38,12 +38,12 @@ import partcad.logging as logging
     help="The object is an assembly",
     is_flag=True,
 )
-# @click.option(
-#     "-S",
-#     "--scene",
-#     help="The object is a scene",
-#     is_flag=True,
-# )
+@click.option(
+    "-S",
+    "--scene",
+    help="The object is a scene",
+    is_flag=True,
+)
 @click.option(
     "-p",
     "--param",
@@ -54,13 +54,13 @@ import partcad.logging as logging
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_context
 @click.pass_obj
-def cli(ctx, context, verbal, package, interface, assembly, sketch, params, object):
+def cli(ctx, context, verbal, package, interface, assembly, sketch, scene, params, object):
     with logging.Process("inspect", "this"):
-        params = {}
-        if not params is None:
+        param_dict = {}
+        if params is not None:
             for kv in params:
                 k, v = kv.split("=")
-                params[k] = v
+                param_dict[k] = v
 
         if package is None:
             if ":" in object:

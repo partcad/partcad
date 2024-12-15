@@ -129,17 +129,13 @@ def cli(ctx, v, q, no_ansi, p, format):
 
         try:
             ctx.obj = init(p)
-            # if p is None:
-            #     ctx.obj = init()
-            # else:
-            #     ctx.obj = init(p)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
             exc = click.BadParameter("Invalid configuration file", ctx=ctx, param=p, param_hint=None)
             exc.exit_code = 2
-            raise exc
+            raise exc from e
         except Exception as e:
             pc.logging.error(e)
-            raise click.Abort()
+            raise click.Abort from e
 
 
 # class StderrHelpFormatter(click.RichHelpFormatter):

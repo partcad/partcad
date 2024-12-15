@@ -5,10 +5,9 @@ from partcad.user_config import user_config
 
 
 @click.command(help="Download and set up all imported packages")
-@click.pass_obj  # partcad
-@click.pass_context  # click
-def cli(click: click.Context, partcad: Context):
+@click.pass_obj
+def cli(ctx: Context) -> None:
     # TODO: @alexanderilyin: Use something like 'click.command.name'
     with Process("Install", "this"):
         user_config.force_update = True
-        partcad.get_all_packages()
+        ctx.get_all_packages()

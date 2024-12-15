@@ -6,9 +6,8 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-import rich_click as click  # import click
+import rich_click as click
 import os
-import partcad as pc
 import partcad.logging as logging
 from partcad.globals import create_package
 

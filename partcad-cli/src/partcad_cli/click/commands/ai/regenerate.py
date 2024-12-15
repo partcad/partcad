@@ -1,7 +1,6 @@
 import partcad.logging as logging
 import partcad.utils as pc_utils
 import rich_click as click
-import partcad as pc
 
 
 @click.command(help="Regenerate a sketch, part or assembly")
@@ -43,7 +42,10 @@ import partcad as pc
 @click.pass_obj
 def cli(ctx, sketch, interface, assembly, scene, package, object):
     if sketch or interface or assembly or scene:
-        logging.error("This object type is not yet supported")
+        object_type = "sketch" if sketch else "interface" if interface else "assembly" if assembly else "scene"
+        logging.error(
+            f"Regeneration of {object_type} objects is not yet supported. " "Currently, only parts can be regenerated."
+        )
         return
 
     if not ":" in object:

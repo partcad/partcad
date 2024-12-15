@@ -8,5 +8,5 @@ class AiCommands(Loader):
 
 
 @click.command(cls=AiCommands, help="Execute AI-related commands")
-def cli():
+def cli() -> None:
     pass

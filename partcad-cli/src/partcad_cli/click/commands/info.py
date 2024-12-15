@@ -30,17 +30,14 @@ import partcad.logging as logging
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to show"
 @click.pass_obj
 def cli(ctx, package, interface, assembly, sketch, scene, object, params):  # , path
-    params = {}
-    if not params is None:
+    param_dict = {}
+    if params is not None:
         for kv in params:
             k, v = kv.split("=")
-            params[k] = v
+            param_dict[k] = v
 
     if package is None:
-        if ":" in object:
-            path = object
-        else:
-            path = ":" + object
+        path = object if ":" in object else ":" + object
     else:
         path = package + ":" + object
 
@@ -55,11 +52,11 @@ def cli(ctx, package, interface, assembly, sketch, scene, object, params):  # , 
 
     if obj is None:
         if package is None:
-            logging.error("Object %s not found" % object)
+            logging.error(f"Object {object} not found")
         else:
-            logging.error("Object %s not found in package %s" % (object, package))
+            logging.error(f"Object {object} not found in package {package}")
     else:
-        logging.info("CONFIGURATION: %s" % pformat(obj.config))
+        logging.info(f"CONFIGURATION: {pformat(obj.config)}")
         info = obj.info()
         for k, v in info.items():
-            logging.info("INFO: %s: %s" % (k, pformat(v)))
+            logging.info(f"INFO: {k}: {pformat(v)}")
