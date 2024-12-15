@@ -8,7 +8,7 @@ def test_version():
     result = runner.invoke(cli, ["version"])
     assert result.exit_code == 0
     haystack = [
-        "PartCAD version: %s" % __version__,
+        "PartCAD Python Module version: %s" % __version__,
         "PartCAD CLI version: %s" % __version__,
     ]
     for needle in haystack:

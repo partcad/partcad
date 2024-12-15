@@ -39,7 +39,7 @@
       "version": "3.6.0"
     }
   },
-  "postCreateCommand": ".devcontainer/bootstrap.sh",
+  "postCreateCommand": ".devcontainer/bootstrap.sh", // TODO: Move to Dockerfile to save 20s
   "customizations": {
     "vscode": {
       "settings": {

@@ -150,7 +150,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: allure-report
+          name: pytest-allure-report
           path: allure-report/
           retention-days: 7
 
@@ -193,12 +193,12 @@ jobs:
             ${{ runner.os }}-pre-commit-
       - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
-        env:
-          # TODO: Add custom @dependabot-like job to open PR to update dependencies
-          SKIP: poetry-export,poetry-lock
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
+          env: |
+            SKIP=poetry-export,poetry-lock
+          # TODO: Add custom @dependabot-like job to open PR to update dependencies
           runCmd: pre-commit run --show-diff-on-failure --color=always --all-files
 
   behave:
@@ -262,7 +262,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: allure-report
+          name: behave-allure-report
           path: allure-report/
           retention-days: 7
 
