@@ -17,7 +17,7 @@
     "ghcr.io/devcontainers/features/python:1": {
       "installTools": true,
       "optimize": true,
-      "version": "3.10"
+      "version": "none" // Python is provided by the base image, we don't need to build it from sources
     },
     "ghcr.io/devcontainers/features/conda:1": {
       "version": "24.5.0" // GH has 24.11.1
@@ -27,7 +27,7 @@
     },
     "ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
       "jqVersion": "1.7.1",
-      "yqVersion": "v4.44.6",
+      "yqVersion": "4.44.6",
       "gojqVersion": "none",
       "xqVersion": "none",
       "jaqVersion": "none"
