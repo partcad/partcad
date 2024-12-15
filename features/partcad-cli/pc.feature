@@ -9,14 +9,14 @@ Feature: `pc` command
   Scenario: Show CLI help
     When I run "partcad --help"
     Then the command should exit with a status code of "0"
-    And STDERR should contain "Increase the level of verbosity"
-    And STDERR should contain "Decrease the level of verbosity"
-    And STDERR should contain "Plain logging output. Do not use colors or animations."
-    And STDERR should contain "Package path (a YAML file or a directory with"
-    And STDERR should contain "Log prefix format"
-    And STDERR should contain "Initialize a new PartCAD package in this directory "
-    And STDERR should contain "Download and prepare all imported packages "
-    And STDERR should contain "List components"
+    And STDOUT should contain "Increase verbosity level"
+    And STDOUT should contain "Decrease verbosity level"
+    And STDOUT should contain "Produce plain text logs without colors or animations"
+    And STDOUT should contain "Specify the package path (YAML file or directory with 'partcad.yaml')"
+    And STDOUT should contain "Set the log prefix format"
+    And STDOUT should contain "Create a new PartCAD package in the current directory "
+    And STDOUT should contain "Download and set up all imported packages "
+    And STDOUT should contain "List components"
 
   @pc-verbose @pc-status
   Scenario: Show DEBUG messages with increased verbosity
@@ -35,30 +35,25 @@ Feature: `pc` command
   Scenario: Do not show INFO messages with decreased verbosity
     When I run "partcad -q status"
     Then the command should exit with a status code of "0"
-    # TODO: @alexanderilyin: check that INFO prefix is not present
-    And STDOUT should not contain "PartCAD version:"
-    And STDOUT should not contain "Internal data storage location: /tmp/sandbox/home/partcad-cli-"
-    And STDOUT should not contain "Tar cache size:"
-    And STDOUT should not contain "Git cache size:"
-    And STDOUT should not contain "Runtime environments size:"
-    And STDOUT should not contain "Total internal data storage size:"
-    And STDOUT should not contain "DONE: Status: this:"
+    And STDOUT should not contain "INFO:partcad:PartCAD version:"
+    And STDOUT should not contain "INFO:partcad:Internal data storage location: /tmp/sandbox/home/partcad-cli-"
+    And STDOUT should not contain "INFO:partcad:Tar cache size:"
+    And STDOUT should not contain "INFO:partcad:Git cache size:"
+    And STDOUT should not contain "INFO:partcad:Runtime environments size:"
+    And STDOUT should not contain "INFO:partcad:Total internal data storage size:"
+    And STDOUT should not contain "INFO:partcad:DONE: Status: this:"
 
   @pc-no-ansi @pc-status
   Scenario: Do not show ANSI codes
     When I run "partcad --no-ansi status"
     Then the command should exit with a status code of "0"
-    # TODO: @alexanderilyin: strip ANSI codes and compare
-    And the following messages should not be present:
-      """
-      PartCAD version:
-      Internal data storage location: /tmp/sandbox/home/partcad-cli
-      Tar cache size:
-      Git cache size:
-      Runtime environments size:
-      Total internal data storage size:
-      DONE: Status: this:
-      """
+    And STDERR should contain "INFO:partcad:PartCAD version:"
+    And STDERR should contain "INFO:partcad:Internal data storage location: /tmp/sandbox/home/partcad-cli-"
+    And STDERR should contain "INFO:partcad:Tar cache size:"
+    And STDERR should contain "INFO:partcad:Git cache size:"
+    And STDERR should contain "INFO:partcad:Runtime environments size:"
+    And STDERR should contain "INFO:partcad:Total internal data storage size:"
+    And STDERR should contain "INFO:partcad:DONE: Status: this:"
 
   @pc-path @pc-version
   Scenario: Read package configuration from arbitrary location

@@ -5,6 +5,7 @@ Feature: `pc add assembly` command
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
 
+  @wip @PC-162
   Scenario: Add assembly from `logo.assy` file
     When I run command:
       """

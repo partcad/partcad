@@ -4,7 +4,7 @@ from partcad.context import Context
 from partcad.user_config import user_config
 
 
-@click.command(help="* Download and prepare all imported packages")
+@click.command(help="Download and set up all imported packages")
 @click.pass_obj  # partcad
 @click.pass_context  # click
 def cli(click: click.Context, partcad: Context):

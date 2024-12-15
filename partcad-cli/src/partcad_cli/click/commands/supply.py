@@ -7,6 +7,6 @@ class SupplyCommands(Loader):
     COMMANDS_FOLDER = os.path.join(Loader.COMMANDS_FOLDER, "supply")
 
 
-@click.command(cls=SupplyCommands, help="- Supplier related commands")
+@click.command(cls=SupplyCommands, help="Manage supplier-related tasks")
 def cli():
     pass

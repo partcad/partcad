@@ -37,7 +37,9 @@ Feature: `pc list parts` command
     And STDOUT should contain "Total:"
     And STDOUT should not contain "<none>"
 
-  @failure @pc-list @pc-list-parts
+  # https://partcad.atlassian.net/browse/PC-163
+  # https://github.com/ewels/rich-click/pull/217
+  @wip @PC-163 @ewels/rich-click#217  @failure @pc-list @pc-list-parts
   Scenario: List parts with invalid configuration
     Given a file named "partcad.yaml" with content:
       """
@@ -45,4 +47,4 @@ Feature: `pc list parts` command
       """
     When I run "partcad list parts"
     Then the command should exit with a status code of "2"
-    And STDERR should contain "Invalid configuration file"
+    And STDOUT should contain "Invalid configuration file"

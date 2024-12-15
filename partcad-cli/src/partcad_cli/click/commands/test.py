@@ -50,7 +50,7 @@ async def cli_test_async(ctx, packages, sketch, interface, assembly, scene, obje
     await asyncio.gather(*tasks)
 
 
-@click.command(help="Test a part, assembly or scene")
+@click.command(help="Run tests on a part, assembly, or scene")
 @click.option("--package", "-P", help="Package to retrieve the object from", type=str, default="")
 @click.option("--recursive", "-r", help="Recursively test all imported packages", is_flag=True)
 @click.option("--sketch", "-s", help="The object is a sketch", is_flag=True)

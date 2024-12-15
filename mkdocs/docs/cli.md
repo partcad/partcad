@@ -14,10 +14,10 @@ positional arguments:
     add                 Import a package
     add-part            Add a part
     add-assembly        Add an assembly
-    init                Initialize a new PartCAD package in this directory
-    info                Show detailed info on a part, assembly or scene
-    install             Download and prepare all imported packages
-    update              Update all imported packages
+    init                Create a new PartCAD package in the current directory
+    info                Show detailed information about a part, assembly, or scene
+    install             Download and set up all imported packages
+    update              Refresh all imported packages
     list                List imported packages
     list-all            List available parts, assemblies and scenes
     list-sketches       List available sketches
@@ -25,19 +25,19 @@ positional arguments:
     list-mates          List available mating interfaces
     list-parts          List available parts
     list-assemblies     List available assemblies
-    render              Render the selected or all parts, assemblies and scenes in this package
-    inspect             Visualize a part, assembly or scene
-    status              Display the state of internal data used by PartCAD
-    test                Render the selected or all parts, assemblies and scenes in this package
-    ai                  AI related commands
-    supply              Supplier related commands
+    render              Generate a rendered view of parts, assemblies, or scenes in the package
+    inspect             View a part, assembly, or scene visually
+    status              Show the current state of PartCAD's internal data
+    test                Generate a rendered view of parts, assemblies, or scenes in the package
+    ai                  Execute AI-related commands
+    supply              Manage supplier-related tasks
 
 options:
   -h, --help            show this help message and exit
-  -v                    Increase the level of verbosity
-  -q                    Decrease the level of verbosity
-  --no-ansi             Plain logging output. Do not use colors or animations.
-  -p CONFIG_PATH        Package path (a YAML file or a directory with 'partcad.yaml')
+  -v                    Increase verbosity level
+  -q                    Decrease verbosity level
+  --no-ansi             Produce plain text logs without colors or animations
+  -p CONFIG_PATH        Specify the package path (YAML file or directory with 'partcad.yaml')
 
 took 2s
 ```
@@ -58,25 +58,25 @@ took 2s
  ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝╚═════╝
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│            -v                     Increase the level of verbosity                                                    │
-│            -q                     Decrease the level of verbosity                                                    │
-│ --no-ansi                         Plain logging output. Do not use colors or animations.                             │
-│            -p  PATH               Package path (a YAML file or a directory with 'partcad.yaml')                      │
-│ --format       [time|path|level]  Log prefix format                                                                  │
+│            -v                     Increase verbosity level                                                    │
+│            -q                     Decrease verbosity level                                                    │
+│ --no-ansi                         Produce plain text logs without colors or animations                             │
+│            -p  PATH               Specify the package path (YAML file or directory with 'partcad.yaml')                      │
+│ --format       [time|path|level]  Set the log prefix format                                                                  │
 │ --help                            Show this message and exit.                                                        │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ add                               Import a package, add a part or assembly.                                          │
-│ info                              Show detailed info on a part, assembly or scene                                    │
-│ init                              Initialize a new PartCAD package in this directory                                 │
-│ inspect                           Visualize a part, assembly or scene                                                │
-│ install                           Download and prepare all imported packages                                         │
+│ add                               Add a package, part, or assembly                                          │
+│ info                              Show detailed information about a part, assembly, or scene                                    │
+│ init                              Create a new PartCAD package in the current directory                                 │
+│ inspect                           View a part, assembly, or scene visually                                                │
+│ install                           Download and set up all imported packages                                         │
 │ list                              List components                                                                    │
-│ render                            Render the selected or all parts, assemblies and scenes in this package            │
-│ status                            Display the state of internal data used by PartCAD                                 │
-│ supply                            Supplier related commands                                                          │
-│ test                              Render the selected or all parts, assemblies and scenes in this package            │
-│ update                            Update all imported packages                                                       │
+│ render                            Generate a rendered view of parts, assemblies, or scenes in the package            │
+│ status                            Show the current state of PartCAD's internal data                                 │
+│ supply                            Manage supplier-related tasks                                                          │
+│ test                              Generate a rendered view of parts, assemblies, or scenes in the package            │
+│ update                            Refresh all imported packages                                                       │
 │ version                           Print PartCAD & PartCAD CLI versions and exit                                      │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
@@ -152,3 +152,25 @@ took 2s
 - [ ] Run `partcad list all` as `partcad list`
 - [x] Make `version` work without `--format level`
   - [x] Use `pc_logger`
+
+## Closure
+
+- [ ] Install new CLI as `pc`.
+  - [ ] Update command name in `*.feature`.
+- [ ] Cleanup `*.feature` tests.
+  - [ ] Fix tests where possible.
+    - [x] `features/partcad-cli/pc.feature:9`: Show CLI help
+    - [x] `features/partcad-cli/pc.feature:35`: Do not show INFO messages with decreased verbosity
+    - [x] `features/partcad-cli/pc.feature:47`: Do not show ANSI codes
+    - [x] `features/partcad-cli/commands/add/assembly.feature:8`: Add assembly from `logo.assy` file
+      - [ ] `PC-162`
+    - [x] `features/partcad-cli/commands/list/parts.feature:41`: List parts with invalid configuration
+      - [ ] https://partcad.atlassian.net/browse/PC-163
+      - [ ] https://github.com/ewels/rich-click/pull/217
+    - [x] `features/partcad-cli/commands/supply/quote.feature:6`: Generate quote for available parts
+      - [ ] https://partcad.atlassian.net/browse/PC-164
+    - [x] `features/partcad-cli/commands/supply/quote.feature:13`: Handle quote for unavailable parts
+      - [ ] https://partcad.atlassian.net/browse/PC-164
+  - [x] Add `@wip` to tests that are not yet finished.
+- [ ] Update `./docs`
+- [ ] Run `behave` in CI.

@@ -7,6 +7,6 @@ class AiCommands(Loader):
     COMMANDS_FOLDER = os.path.join(Loader.COMMANDS_FOLDER, "ai")
 
 
-@click.command(cls=AiCommands, help="- Import a package, add a part or assembly.")
+@click.command(cls=AiCommands, help="Execute AI-related commands")
 def cli():
     pass

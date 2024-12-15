@@ -12,7 +12,7 @@ import partcad.utils as pc_utils
 import partcad.logging as pc_logging
 
 
-@click.command(help="Render the selected or all parts, assemblies and scenes in this package")
+@click.command(help="Generate a rendered view of parts, assemblies, or scenes in the package")
 @click.option(
     "-p",
     "--create-dirs",
@@ -156,7 +156,7 @@ import partcad.utils as pc_utils
 def cli_help_render(subparsers: argparse.ArgumentParser):
     parser_render = subparsers.add_parser(
         "render",
-        help="Render the selected or all parts, assemblies and scenes in this package",
+        help="Generate a rendered view of parts, assemblies, or scenes in the package",
     )
     parser_render.add_argument(
         "-p",

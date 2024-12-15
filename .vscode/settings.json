@@ -167,7 +167,7 @@
   "testing.automaticallyOpenPeekView": "never",
   "testing.followRunningTest": false,
   "testing.openTesting": "neverOpen",
-  "workbench.colorTheme": "GitHub Dark Dimmed",
+  "workbench.colorTheme": "GitHub Dark",
   "yaml.format.bracketSpacing": false,
   "testing.automaticallyOpenTestResults": "neverOpen" // prevent YAML formatter from breaking Jinja2 templates
 }

@@ -17,21 +17,21 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
 
 
 @click.command(cls=Loader)
-@click.option("-v", is_flag=True, help="Increase the level of verbosity")
-@click.option("-q", is_flag=True, help="Decrease the level of verbosity")
+@click.option("-v", is_flag=True, help="Increase verbosity level")
+@click.option("-q", is_flag=True, help="Decrease verbosity level")
 @click.option(
     "--no-ansi",
     is_flag=True,
-    help="Plain logging output. Do not use colors or animations.",
+    help="Produce plain text logs without colors or animations",
 )
 @click.option(
     "-p",
     type=click.Path(exists=True),
-    help="xxx Package path (a YAML file or a directory with 'partcad.yaml')",
+    help="Specify the package path (YAML file or directory with 'partcad.yaml')",
 )
 @click.option(
     "--format",
-    help="Log prefix format",
+    help="Set the log prefix format",
     type=click.Choice(["time", "path", "level"]),
     default=None,
     show_envvar=True,

@@ -4,7 +4,7 @@ import partcad.logging as logging
 
 # TODO: @clairbee: fix type checking here
 # TODO: @alexanderilyin: https://stackoverflow.com/a/37491504/25671117
-@click.command(help="Visualize a part, assembly or scene")
+@click.command(help="View a part, assembly, or scene visually")
 @click.option(
     "-V",
     "--verbal",

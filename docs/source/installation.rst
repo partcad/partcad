@@ -39,23 +39,23 @@ The commands and options supported by PartCAD CLI:
       add                 Import a package
       add-part            Add a part
       add-assembly        Add an assembly
-      init                Initialize a new PartCAD package in this directory
-      info                Show detailed info on a part, assembly or scene
-      install             Download and prepare all imported packages
-      update              Update all imported packages
+      init                Create a new PartCAD package in the current directory
+      info                Show detailed information about a part, assembly, or scene
+      install             Download and set up all imported packages
+      update              Refresh all imported packages
       list                List imported packages
       list-all            List available parts, assemblies and scenes
       list-parts          List available parts
       list-assemblies     List available assemblies
-      render              Render the selected or all parts, assemblies and scenes in this package
-      inspect             Visualize a part, assembly or scene
-      status              Display the state of internal data used by PartCAD
+      render              Generate a rendered view of parts, assemblies, or scenes in the package
+      inspect             View a part, assembly, or scene visually
+      status              Show the current state of PartCAD's internal data
 
   options:
     -h, --help            show this help message and exit
-    -v                    Increase the level of verbosity
-    --no-ansi             Plain logging output. Do not use colors or animations.
-    -p CONFIG_PATH        Package path (a YAML file or a directory with 'partcad.yaml')
+    -v                    Increase verbosity level
+    --no-ansi             Produce plain text logs without colors or animations
+    -p CONFIG_PATH        Specify the package path (YAML file or directory with 'partcad.yaml')
 
 
 =============

@@ -13,7 +13,7 @@ import partcad.logging as pc_logging
 from partcad.globals import create_package
 
 
-@click.command(help="* Initialize a new PartCAD package in this directory")
+@click.command(help="Create a new PartCAD package in the current directory")
 # TODO: All long options everywhere
 @click.option("-p", is_flag=True, help="Initialize this package as private")
 @click.pass_context

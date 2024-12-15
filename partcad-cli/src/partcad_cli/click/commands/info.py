@@ -5,7 +5,7 @@ import partcad.logging as pc_logging
 
 # TODO: https://stackoverflow.com/a/37491504/25671117
 # TODO: @alexanderilyin: Replace -i, -a, -s, -S with --type
-@click.command(help="Show detailed info on a part, assembly or scene")
+@click.command(help="Show detailed information about a part, assembly, or scene")
 @click.option(
     "-P",
     "--package",
