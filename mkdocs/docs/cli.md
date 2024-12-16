@@ -37,3 +37,8 @@
   - [x] Add `@wip` to tests that are not yet finished.
 - [ ] Update `./docs`
 - [ ] Run `behave` in CI.
+- "Critical Path?" from some book.
+  - Closure: fix value, merge PR & etc.
+  - Short term aka immediate Goals
+- Get rid of `partcad-cli` and `commands`
+- [ ] TODO: Fix `behave`

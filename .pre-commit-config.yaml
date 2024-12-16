@@ -1,6 +1,8 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 default_install_hook_types: [pre-commit, prepare-commit-msg]
+# TODO: Add hook to run pytest via xdist
+# TODO: Add hook to run behave via behavex
 repos:
   - repo: https://github.com/partcad/pre-commit
     rev: v1.8.2

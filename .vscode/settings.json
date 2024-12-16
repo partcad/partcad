@@ -49,7 +49,8 @@
     "hamcrest",
     "mkdocs",
     "packagecloud",
-    "timebox"
+    "timebox",
+    "xdist"
   ],
   "codeium.enableConfig": {
     "*": true,
