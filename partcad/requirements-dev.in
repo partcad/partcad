@@ -1,5 +1,6 @@
-pytest-cov
-pytest-html
-pytest-durations
 allure-pytest
+click
 coverage
+pytest-cov
+pytest-durations
+pytest-html

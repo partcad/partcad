@@ -26,7 +26,7 @@ getting tested on Linux, MacOS and Windows.
 
 The commands and options supported by PartCAD CLI:
 
-.. code-block:: shell
+.. code-block:: text
 
   $ pc --help
 
