@@ -11,17 +11,10 @@ Feature: `pc` command
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Increase verbosity level"
     And STDOUT should contain "Decrease verbosity level"
-# TODO: @alexanderilyin: ANSI check is failing in the CI:
-# Traceback (most recent call last):
-#   File "/workspaces/partcad/.venv/lib/python3.10/site-packages/behave/model.py", line 1329, in run
-#     match.run(runner.context)
-#   File "/workspaces/partcad/.venv/lib/python3.10/site-packages/behave/matchers.py", line 98, in run
-#     self.func(context, *args, **kwargs)
-#   File "/workspaces/partcad/features/steps/partcad-cli/commands/version.py", line 19, in step_impl
-#     assert substring in strip_ansi(context.result.stdout)
-# AssertionError
-# And STDOUT should contain "Produce plain text logs without colors or animations"
-    And STDOUT should contain "Specify the package path (YAML file or directory with 'partcad.yaml')"
+    # TODO: Due to different terminal size in CI ' or animations' is wrapped to the next line
+    And STDOUT should contain "Produce plain text logs without colors"
+    # TODO: Due to different terminal size in CI' (YAML file or directory with 'partcad.yaml')' is wrapped to the next line
+    And STDOUT should contain "Specify the package path"
     And STDOUT should contain "Set the log prefix format"
     And STDOUT should contain "Create a new PartCAD package in the current directory "
     And STDOUT should contain "Download and set up all imported packages "
