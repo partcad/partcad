@@ -23,7 +23,7 @@
     "ghcr.io/devcontainers/features/conda:1": {
       "version": "24.5.0" // GH has 24.11.1
     },
-    "ghcr.io/deepspacecartel/devcontainers-features/starship:latest": {
+    "ghcr.io/deepspacecartel/devcontainers-features/starship:2": {
       "version": "v1.21.1"
     },
     "ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {

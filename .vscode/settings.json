@@ -1,4 +1,6 @@
 {
+  // https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage
+  "python.experiments.optInto": ["pythonTestAdapter"],
   "githubPullRequests.experimental.chat": true,
   // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
   "OcpCadViewer.advanced.autostart": false,
@@ -39,7 +41,16 @@
   "cSpell.enabledFileTypes": {
     "feature": true
   },
-  "cSpell.words": ["coderabbitai", "deprioritized", "hamcrest", "mkdocs", "packagecloud", "timebox"],
+  "cSpell.words": [
+    "ADDOPTS",
+    "capsys",
+    "coderabbitai",
+    "deprioritized",
+    "hamcrest",
+    "mkdocs",
+    "packagecloud",
+    "timebox"
+  ],
   "codeium.enableConfig": {
     "*": true,
     "feature": true,

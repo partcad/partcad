@@ -27,7 +27,28 @@
     // }
   ],
   "configurations": [
-    //
+    {
+      // https://code.visualstudio.com/docs/python/testing#_debug-tests
+      "name": "Python: Debug Tests",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "env": {
+        "PYTEST_ADDOPTS": "--no-cov",
+        // "PYDEVD_WARN_EVALUATION_TIMEOUT": "60",
+        // "PYDEVD_UNBLOCK_THREADS_TIMEOUT": "60",
+
+        // TODO: Error in ['/home/vscode/.partcad/runtime/partcad-python-conda-3.12/bin/python', '-sOOIu', '-m', 'pip', 'install', 'nptyping==2.0.1']:
+        // TODO: 0.00s - Debugger warning: It seems that frozen modules are being used, which may
+        // TODO: 0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+        // TODO: 0.00s - to python to disable frozen modules.
+        // TODO: 0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+        "PYDEVD_DISABLE_FILE_VALIDATION": "1"
+      },
+      "purpose": ["debug-test"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
     {
       "name": "Debug: partcad behavex",
       "type": "debugpy",
@@ -60,8 +81,6 @@
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
       "env": {
-        "PYDEVD_WARN_EVALUATION_TIMEOUT": "60",
-        "PYDEVD_UNBLOCK_THREADS_TIMEOUT": "60",
         "PATH": "${workspaceFolder}/.venv/bin/:${env:PATH}",
         "PYTHONPATH": "${env:PATH}"
       }

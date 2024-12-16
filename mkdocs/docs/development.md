@@ -29,6 +29,11 @@ htop
 Use `remote-containers.rebuildAndReopenInContainer` aka "Dev Containers: Rebuild and Reopen in Container" to start
 Docker Container with all necessary tooling and dependencies.
 
+- [Run tests in parallel](https://code.visualstudio.com/docs/python/testing#_run-tests-in-parallel)
+- [Run tests with coverage](https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage)
+- [Debug tests](https://code.visualstudio.com/docs/python/testing#_debug-tests)
+  - [`pytest` configuration settings](https://code.visualstudio.com/docs/python/testing#_pytest-configuration-settings)
+
 ## Documentation
 
 - `./docs/`: User documentation, based on Sphinx and available at <https://partcad.readthedocs.io/>
