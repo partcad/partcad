@@ -1,0 +1,41 @@
+name: "Setup prerequisites"
+description: "Prepare OS packages"
+
+runs:
+  using: "composite"
+  steps:
+
+      - name: Install prerequisites
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install libcairo2-dev pkg-config python3-dev
+
+      - name: Install prerequisites
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
+
+          mamba create -n env-build python=${{ matrix.python-version }} -y
+          mamba activate env-build
+          python -m ensurepip --upgrade
+          python -m pip install --upgrade pip wheel mypy setuptools
+          python -m pip install --upgrade build
+          mamba deactivate
+
+          mamba create -n env-build-cli python=${{ matrix.python-version }} -y
+          mamba activate env-build-cli
+          python -m ensurepip --upgrade
+          python -m pip install --upgrade pip wheel mypy setuptools
+          python -m pip install --upgrade build
+          mamba deactivate
+
+          # Done in action.yml
+          # mamba create -n env-test python=${{ matrix.python-version }} -y
+          # mamba activate env-test
+          # python -m pip install --upgrade build
+          # mamba deactivate

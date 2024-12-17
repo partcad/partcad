@@ -59,48 +59,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
 
-      # BEGIN OS-SPECIFIC
-      - name: Install OS-specific dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y openscad
-
-      - name: Install OS-specific dependencies (MacOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install -f openscad || ( \
-            rm /Users/runner/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
-
-      - name: Install OS-specific dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: .github/scripts/openscad.ps1
-        timeout-minutes: 1
-      # END OS-SPECIFIC
-      #
-      - name: Install dependencies
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          mamba create -n test python=${{ matrix.python-version }} -y
-          mamba activate test
-          python -m pip install --upgrade pip
-          pip install -U pytest
-          # Install all core and a subset of CLI dependencies, that are required for tests
-          pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
-          pip install -r partcad/requirements-dev.in
-          mamba deactivate
-
-      - name: Start SSH Agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+      # - name: Start SSH Agent
+      #   uses: webfactory/ssh-agent@v0.9.0
+      #   with:
+      #     ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
 
       - name: Test with pytest
         env:
@@ -115,11 +80,12 @@ jobs:
           # shellcheck disable=SC1090
           . ~/.bash_profile
 
-          # TODO-31: PC-186: Allow to configure git clone protocol in settings
-          git config --global url."git@github.com:".insteadOf "https://github.com/"
+          # # TODO-31: PC-186: Allow to configure git clone protocol in settings
+          # git config --global url."git@github.com:".insteadOf "https://github.com/"
+          git config --global protocol.version 2
 
           mamba activate test
-          pytest -x -p no:error-for-skips -p no:warnings --ignore-glob="openscad*"
+          pytest -x -p no:error-for-skips -p no:warnings
           mamba deactivate
 
       - name: Install CLI
@@ -134,103 +100,6 @@ jobs:
           # NOTE: When troubleshooting, use `--editable` flag
           pip install --upgrade ./partcad ./partcad-cli
           mamba deactivate
-
-      - name: Basic integration test for CLI
-        env:
-          # TODO-32: Workaround for "Host key verification failed."
-          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          # Display Executed Commands
-          set -x
-
-          # Confirm that OpenSCAD works
-          openscad --version
-
-          mamba activate test
-
-          # BEGIN CLEAN PACKAGE
-          mkdir new_pkg
-          cd new_pkg
-          pc --no-ansi init
-          pc --no-ansi list all -r
-          # END CLEAN PACKAGE
-
-          # BEGIN EXAMPLES
-          cd ../examples
-          pc --no-ansi list all -r
-          pc --no-ansi test -r
-          pc --no-ansi render -r
-          # END EXAMPLES
-
-          mamba deactivate
-
-      - name: Basic integration test for CLI
-        if: runner.os == 'Linux'
-        env:
-          # TODO-33: Workaround for "Host key verification failed."
-          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          # Display Executed Commands
-          set -x
-
-          mamba activate test
-          # BEGIN PUBLIC REPO
-          cd examples
-          pc --no-ansi test -r --package //pub/examples
-          # END PUBLIC REPO
-          mamba deactivate
-
-  # No testing resources for the below:
-  #test-repo:
-  #  strategy:
-  #    fail-fast: false
-  #    matrix:
-  #      os: ["ubuntu-24.04-m"]
-  #      python-version: ["3.12"]
-  #  runs-on: ${{ matrix.os }}
-  #  if: "!startsWith(github.event.head_commit.message, 'Version updated')"
-  #  steps:
-  #    - uses: actions/checkout@v3
-  #    - uses: ./.github/actions/setup
-  #    - name: Install dependencies
-  #      run: |
-  #        python -m pip install --upgrade pip
-  #        pip install -U pytest
-  #        pip install -r partcad/requirements.txt
-  #        # Install a subset of CLI dependencies, that are required for tests
-  #        pip install svglib rlPyCairo renderlab
-  #        # pip install -r partcad-cli/requirements.txt
-  #    - name: Install OS-specific dependencies (Linux)
-  #      if: runner.os == 'Linux'
-  #      run: |
-  #        sudo apt-get update
-  #        sudo apt-get install -y openscad
-  #    - name: Install OS-specific dependencies (MacOS)
-  #      if: runner.os == 'macOS'
-  #      run: |
-  #        brew install openscad
-  #    - name: Install OS-specific dependencies (Windows)
-  #      if: runner.os == 'Windows'
-  #      run: |
-  #        curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
-  #        ./openscad-installer.exe
-  #    - name: Test the entire repository
-  #      run: |
-  #        pip install -U ./partcad ./partcad-cli
-  #        cd examples
-  #        pc --no-ansi test -r --package //pub
 
   poetry-install:
     name: "Run: poetry install"
@@ -430,7 +299,8 @@ jobs:
 
           runCmd: |
             # TODO-26: PC-186: Allow to configure git clone protocol in settings
-            git config --global url."git@github.com:".insteadOf "https://github.com/"
+            # git config --global url."git@github.com:".insteadOf "https://github.com/"
+            git config --global protocol.version 2
             mkdir -pv behave-results
             poetry --no-ansi --no-interaction run coverage run $(poetry run which behave)
             poetry --no-ansi --no-interaction run coverage xml --data-file=./.coverage -o behave-results/coverage.xml
@@ -575,7 +445,7 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           runCmd: |
-            mkdir -pv test-results
+            mkdir -pv pc-test-results
             poetry --no-ansi --no-interaction show --tree
             # TODO: Use similar 'coverage run' in behave steps when calling pc
             poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r /)"

@@ -1,0 +1,232 @@
+# CI on Linux, MacOS and Windows
+name: CI # Keep the action badge icon short
+
+on:
+  push:
+    branches: ["main", "devel"]
+  pull_request:
+    branches: ["main", "devel"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+strategy: &strategy
+  fail-fast: false
+  matrix:
+    os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+    python-version:
+      - "3.10"
+      - "3.11"
+      - "3.12"
+      - "3.13"
+    exclude:
+      # Reduce costs by testing one version of Python on MacOS
+      - os: "macos-13"
+        python-version: "3.11"
+      - os: "macos-13"
+        python-version: "3.12"
+      - os: "macos-latest"
+        python-version: "3.11"
+      - os: "macos-latest"
+        python-version: "3.12"
+      - os: "windows-latest"
+        python-version: "3.11"
+      - os: "windows-latest"
+        python-version: "3.12"
+
+reusableSteps:
+  - &uploadTestResults
+    name: Upload test results & coverage reports to github and codecov
+    if: always()
+    uses: ./.github/actions/upload-test-results
+    with:
+      name: test-results
+      path: test-results/
+      retention-days: 7
+      status: ${{ job.status }}
+      token: ${{ secrets.CODECOV_TOKEN }}
+      codecov-files: test-results/junit.xml
+      coverage-report: test-results/coverage.xml
+
+jobs:
+  test-setup:
+    strategy: *strategy
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
+
+      - name: Prepare folders
+        shell: bash
+        run: |
+          mkdir -pv test-results
+
+  test-pytest:
+    strategy: *strategy
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    needs: test-setup
+    timeout-minutes: 15
+
+    steps:
+      - name: Test with pytest
+        env:
+          PYTHONPATH: partcad/src
+          PYTHONWARNINGS: ignore
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
+
+          DIR=$(pwd)
+          mamba activate test
+          pytest -x -p no:error-for-skips -p no:warnings
+          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          mamba deactivate
+
+      - *uploadTestResults
+
+  test-behave:
+    strategy: *strategy
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    needs: test-setup
+    timeout-minutes: 20
+
+    steps:
+      - name: Test with behave
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
+
+          DIR=$(pwd)
+          mamba activate test
+          coverage run behave
+          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          mamba deactivate
+
+      - *uploadTestResults
+
+  test-cli-setup:
+    strategy: *strategy
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    needs: test-setup
+    timeout-minutes: 5
+
+    steps:
+      - name: Install CLI
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
+
+          mamba activate test
+          pip install -U ./partcad ./partcad-cli
+          mamba deactivate
+
+  test-examples-partcad:
+    strategy: *strategy
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    needs: test-cli-setup
+    timeout-minutes: 10
+
+      - name: Basic integration test for CLI (PartCAD examples)
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
+
+          DIR=$(pwd)
+          mamba activate test
+
+          # BEGIN CLEAN PACKAGE
+          mkdir new_pkg
+          cd new_pkg
+          coverage run pc --no-ansi init
+          coverage run pc --no-ansi list-all -r
+          # END CLEAN PACKAGE
+
+          # BEGIN PARTCAD EXAMPLES
+          cd ../examples
+          coverage run pc --no-ansi list-all -r
+          coverage run pc --no-ansi test -r
+          coverage run pc --no-ansi render -r
+          # END PARTCAD EXAMPLES
+
+          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          mamba deactivate
+
+      - *uploadTestResults
+
+  test-examples-all:
+    strategy: *strategy
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    needs: test-cli-setup
+    timeout-minutes: 10
+
+      - name: Basic integration test for CLI (all examples)
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
+
+          DIR=$(pwd)
+          mamba activate test
+          # BEGIN ALL EXAMPLES
+          cd examples
+          coverage run pc --no-ansi test -r --package /pub/examples
+          # END ALL EXAMPLES
+
+          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          mamba deactivate
+
+      - *uploadTestResults
+
+  test-entire-repo:
+    strategy: *strategy
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    needs: test-cli-setup
+    timeout-minutes: 30
+
+      - name: Test the entire repository
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
+
+          DIR=$(pwd)
+          mamba activate test
+          # BEGIN PUBLIC REPO
+          cd examples
+          coverage run pc --no-ansi test -r --package /pub
+          # END PUBLIC REPO
+
+          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          mamba deactivate
+
+
+      - *uploadTestResults

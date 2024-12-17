@@ -1,9 +1,10 @@
-name: "Setup"
-description: "Setup the environment for the build"
+name: "Setup Python"
+description: "Prepare the Python environment"
 
 runs:
   using: "composite"
   steps:
+
     # Miniconda
     - uses: conda-incubator/setup-miniconda@v3
       with:
@@ -27,6 +28,9 @@ runs:
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.*') }}
         restore-keys: |
           ${{ runner.os }}-pip-
+
+    # TODO(clairbee): Cache mamba packages
+    # TODO(clairbee): Cache the mamba environment?
 
     # Install dev dependencies
     - name: install dev dependencies
@@ -63,44 +67,3 @@ runs:
     #     # env HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
     #     HOMEBREW_NO_AUTO_UPDATE=1 brew install gcc
     #     HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
-
-    # cadquery-ocp hack for MacOS with ARM
-    - name: install macos dev dependencies
-      if: startsWith(${{matrix.os}}, 'macos')
-      shell: bash
-      run: |
-        . ~/.bashrc
-        . ~/.bash_profile
-        mamba activate env-test
-        pip install swig
-        mamba deactivate
-
-    - name: install cadquery-ocp on MacOS (Python 3.10)
-      if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.10') }}
-      shell: bash
-      run: |
-        . ~/.bashrc
-        . ~/.bash_profile
-        mamba activate env-test
-        pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
-        mamba deactivate
-
-    - name: install cadquery-ocp on MacOS (Python 3.11)
-      if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.11') }}
-      shell: bash
-      run: |
-        . ~/.bashrc
-        . ~/.bash_profile
-        mamba activate env-test
-        pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
-        mamba deactivate
-
-    - name: install cadquery-ocp on MacOS (Python 3.12)
-      if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.12') }}
-      shell: bash
-      run: |
-        . ~/.bashrc
-        . ~/.bash_profile
-        mamba activate env-test
-        pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
-        mamba deactivate
