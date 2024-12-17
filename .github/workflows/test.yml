@@ -162,12 +162,12 @@ jobs:
           mkdir new_pkg
           cd new_pkg
           coverage run pc --no-ansi init
-          coverage run pc --no-ansi list-all -r
+          coverage run pc --no-ansi list all -r
           # END CLEAN PACKAGE
 
           # BEGIN PARTCAD EXAMPLES
           cd ../examples
-          coverage run pc --no-ansi list-all -r
+          coverage run pc --no-ansi list all -r
           coverage run pc --no-ansi test -r
           coverage run pc --no-ansi render -r
           # END PARTCAD EXAMPLES
