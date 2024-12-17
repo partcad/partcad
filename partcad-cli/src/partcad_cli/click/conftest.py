@@ -1,6 +1,11 @@
 import pytest
 from click.testing import CliRunner, Result
 from typing import Iterator
+from partcad.logging import reset_errors
+
+
+def setup_function():
+    reset_errors()
 
 
 @pytest.fixture
