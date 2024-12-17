@@ -1,6 +1,6 @@
 allure-pytest
 click
-coverage
+coloredlogs
 pytest-cov
 pytest-durations
 pytest-html
