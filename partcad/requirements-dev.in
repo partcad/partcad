@@ -4,3 +4,4 @@ coverage
 pytest-cov
 pytest-durations
 pytest-html
+rich-click
