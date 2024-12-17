@@ -60,7 +60,7 @@ packages = [
 ]
 
 [tool.poetry.scripts]
-pc = 'partcad_cli:main_cli'
+pc = 'partcad_cli.click.command:cli'
 partcad = 'partcad_cli.click.command:cli'
 
 [tool.poetry.dependencies]
