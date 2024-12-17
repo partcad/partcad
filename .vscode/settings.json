@@ -1,6 +1,8 @@
 {
   // https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage
-  "python.experiments.optInto": ["pythonTestAdapter"],
+  "python.experiments.optInto": [
+    "pythonTestAdapter"
+  ],
   "githubPullRequests.experimental.chat": true,
   // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
   "OcpCadViewer.advanced.autostart": false,
@@ -43,6 +45,7 @@
   },
   "cSpell.words": [
     "ADDOPTS",
+    "autouse",
     "capsys",
     "coderabbitai",
     "deprioritized",
@@ -66,7 +69,9 @@
   "editor.formatOnSave": true,
   "editor.formatOnType": true,
   "editor.insertSpaces": true,
-  "editor.rulers": [120],
+  "editor.rulers": [
+    120
+  ],
   "editor.tabSize": 2,
   "editor.useTabStops": false,
   "esbonio.server.enableDevTools": true,
@@ -101,7 +106,9 @@
   "git.autofetch": true,
   "githubPullRequests.pullBranch": "never",
   "markdown.extension.toc.omittedFromToc": {
-    "README.md": ["# PartCAD"]
+    "README.md": [
+      "# PartCAD"
+    ]
   },
   "partcad.packagePath": "examples",
   "partcad.pythonSandbox": "conda",
@@ -142,7 +149,9 @@
       ]
     }
   ],
-  "python.analysis.extraPaths": ["./partcad/src"],
+  "python.analysis.extraPaths": [
+    "./partcad/src"
+  ],
   "python.envFile": "${workspaceFolder}/.env",
   "python.terminal.activateEnvInCurrentTerminal": true,
   "python.terminal.executeInFileDir": true,

@@ -121,9 +121,7 @@ jobs:
           push: never
           runCmd: |
             mkdir -pv test-results
-            # TODO: Fix problem with failing command_test.py when running all tests
-            poetry --no-ansi --no-interaction run pytest --verbose --color=no partcad-cli/
-            poetry --no-ansi --no-interaction run pytest --verbose --color=no partcad/
+            poetry --no-ansi --no-interaction run pytest --verbose --color=no
 
       # TODO: Create .github/workflows/upload-test-results.yml
       # TODO: Move the common upload steps there
