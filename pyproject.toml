@@ -26,15 +26,6 @@ exclude = ".venv"
 extend-ignore = "E203"
 max-line-length = 120
 
-[tool.behave]
-tags = "~@wip"
-logging_level = "DEBUG"
-log_capture = true
-paths = ["features/"]
-
-[tool.behave.formatters]
-allure = "allure_behave.formatter:AllureFormatter"
-
 [tool.pylint."messages control"]
 ignore = ["setup.py", "__init__.py"]
 disable = "all"
