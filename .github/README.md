@@ -22,7 +22,7 @@ Stay informed and share feedback by joining [our Discord server](https://discord
 
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
-[![PartCAD Visual Studio Code extension](./docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
+[![PartCAD Visual Studio Code extension](../docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
 
 ## Features
 
@@ -59,8 +59,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Generating with LLM/GenAI
     - [x] Google AI (`Gemini`)
     - [x] OpenAI (`ChatGPT`)
-    - [x] Any model in [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`,
-           `Code Llama` etc.)
+    - [x] Any model in [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`, `Code Llama` etc.)
 - Part and interface blueprints (2D)
   - Using scripting languages
     - [x] [CadQuery]
