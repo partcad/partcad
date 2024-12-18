@@ -235,6 +235,8 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: |
+            # TODO: PC-186: Allow to configure git clone protocol in settings
+            git config --global url."git@github.com:".insteadOf "https://github.com/"
             mkdir -pv test-results
             poetry --no-ansi --no-interaction run behave
 

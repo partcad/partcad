@@ -61,7 +61,7 @@ fi
 GIT_DIR=$(git rev-parse --show-toplevel)
 
 # Define the signers file location next to the .git directory
-SIGNERS_FILE="$GIT_DIR/.git_allowed_signers"
+SIGNERS_FILE="$GIT_DIR/.devcontainer/signers"
 
 # Set up the allowedSignersFile
 if [[ ! -f "$SIGNERS_FILE" ]]; then
