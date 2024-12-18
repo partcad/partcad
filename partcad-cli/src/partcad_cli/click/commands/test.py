@@ -54,7 +54,7 @@ async def cli_test_async(ctx, packages, sketch, interface, assembly, scene, obje
 @click.option("--interface", "-i", help="The object is an interface", is_flag=True)
 @click.option("--assembly", "-a", help="The object is an assembly", is_flag=True)
 @click.option("--scene", "-S", help="The object is a scene", is_flag=True)
-@click.argument("object", type=str)  # help="Part (default), assembly or scene to test"
+@click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_obj
 def cli(ctx, package, recursive, sketch, interface, assembly, scene, object):
     with logging.Process("Test", "this"):
