@@ -229,6 +229,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-poetry-
 
+      - name: Start SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+
+      # Add your steps here that require SSH access
+      - name: Run a command that requires SSH
+        run: git clone git@github.com:your-repo/your-private-repo.git
+
       - name: Run Behave
         uses: devcontainers/ci@v0.3
         with:

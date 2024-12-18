@@ -78,6 +78,11 @@ jobs:
           pip install -r partcad/requirements-dev.in
           mamba deactivate
 
+      - name: Start SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+
       - name: Test with pytest
         env:
           PYTHONPATH: partcad/src
