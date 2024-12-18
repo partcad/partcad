@@ -116,12 +116,12 @@ jobs:
           mkdir new_pkg
           cd new_pkg
           pc --no-ansi init
-          pc --no-ansi list-all -r
+          pc --no-ansi list all -r
           # END CLEAN PACKAGE
 
           # BEGIN EXAMPLES
           cd ../examples
-          pc --no-ansi list-all -r
+          pc --no-ansi list all -r
           pc --no-ansi test -r
           pc --no-ansi render -r
           # END EXAMPLES
