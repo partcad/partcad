@@ -9,34 +9,34 @@ from partcad_cli.click.commands.list.parts import cli as list_parts
 from partcad_cli.click.commands.list.sketches import cli as list_sketches
 
 
+@click.option(
+    "-u",
+    "used_by",
+    help="Only process objects used by the given assembly or scene.",
+    type=str,
+    required=False,
+)
+@click.option(
+    "-r",
+    "recursive",
+    is_flag=True,
+    help="Recursively process all imported packages",
+)
+@click.argument("package", type=str, required=False)
 @click.command(help="List all available parts, assemblies and scenes")
-def cli() -> None:
+def cli(used_by, recursive) -> None:
     """List all available parts, assemblies and scenes recursively."""
     runner = CliRunner()
-    runner.invoke(list_assemblies, ["--recursive"])
-    runner.invoke(list_interfaces, ["--recursive"])
-    runner.invoke(list_mates, ["--recursive"])
-    runner.invoke(list_packages, ["--recursive"])
-    runner.invoke(list_parts, ["--recursive"])
-    runner.invoke(list_sketches, ["--recursive"])
+    options = []
 
-    # commands = [
-    #     (list_assemblies, "Assemblies"),
-    #     (list_interfaces, "Interfaces"),
-    #     (list_mates, "Mates"),
-    #     (list_packages, "Packages"),
-    #     (list_parts, "Parts"),
-    #     (list_sketches, "Sketches"),
-    # ]
+    if recursive:
+        options.append("--recursive")
+    if used_by:
+        options.append("--used_by")
 
-    # runner = CliRunner()
-    # exit_code = 0
-
-    # for cmd, name in commands:
-    #     click.echo(f"\n=== {name} ===")
-    #     result = runner.invoke(cmd, ["--recursive"])
-    #     if result.exit_code != 0:
-    #         click.echo(f"Error listing {name.lower()}: {result.output}", err=True)
-    #         exit_code = 1
-
-    # return exit_code
+    runner.invoke(list_assemblies, options)
+    runner.invoke(list_interfaces, options)
+    runner.invoke(list_mates, options)
+    runner.invoke(list_packages, options)
+    runner.invoke(list_parts, options)
+    runner.invoke(list_sketches, options)
