@@ -24,7 +24,7 @@ from partcad_cli.click.commands.list.sketches import cli as list_sketches
 )
 @click.argument("package", type=str, required=False)
 @click.command(help="List all available parts, assemblies and scenes")
-def cli(used_by, recursive) -> None:
+def cli(used_by, recursive, package) -> None:
     """List all available parts, assemblies and scenes recursively."""
     runner = CliRunner()
     options = []
@@ -33,6 +33,8 @@ def cli(used_by, recursive) -> None:
         options.append("--recursive")
     if used_by:
         options.append("--used_by")
+    if package:
+        options.append(package)
 
     runner.invoke(list_assemblies, options)
     runner.invoke(list_interfaces, options)
