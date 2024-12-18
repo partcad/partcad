@@ -293,7 +293,7 @@ pre-commit installed at .git/hooks/pre-commit
 You also can install them manually:
 
 ```bash
-pre-commit install
+pre-commit install --config .devcontainer/.pre-commit-config.yaml
 ```
 
 ### Commit Signing

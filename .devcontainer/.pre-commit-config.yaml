@@ -41,8 +41,8 @@ repos:
       - id: poetry-export
         args:
           [
-            "--format=requirements.txt",
-            "--output=requirements.txt",
+            "--format=.devcontainer/requirements.txt",
+            "--output=.devcontainer/requirements.txt",
             "--with=dev",
             "--with=test",
             "--with=partcad",

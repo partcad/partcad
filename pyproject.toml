@@ -21,6 +21,20 @@ filterwarnings = [
 line-length = 120
 target-version = ['py310']
 
+[tool.flake8]
+exclude = ".venv"
+extend-ignore = "E203"
+max-line-length = 120
+
+[tool.behave]
+tags = "~@wip"
+logging_level = "DEBUG"
+log_capture = true
+paths = ["features/"]
+
+[tool.behave.formatters]
+allure = "allure_behave.formatter:AllureFormatter"
+
 [tool.pylint."messages control"]
 ignore = ["setup.py", "__init__.py"]
 disable = "all"
@@ -53,7 +67,7 @@ authors = [
   "PartCAD <support@partcad.org>",
 ]
 license = "Apache 2.0"
-readme = "README.md"
+readme = ".github/README.md"
 packages = [
   { include = "partcad", from = "partcad/src" },
   { include = "partcad_cli", from = "partcad-cli/src" }

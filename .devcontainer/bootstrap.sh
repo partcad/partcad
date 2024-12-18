@@ -84,7 +84,8 @@ install_component() {
     fi
 }
 
-install_component "pre-commit hooks" "pre-commit install"
+# https://github.com/pre-commit/pre-commit/pull/3368#issuecomment-2550125917
+install_component "pre-commit hooks" "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
 # Verify pre-commit installation
 if ! pre-commit --version >/dev/null 2>&1; then
     echo "Pre-commit verification failed"

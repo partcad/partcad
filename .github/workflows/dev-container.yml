@@ -145,7 +145,7 @@ jobs:
               echo "##[warning]allure-results directory not found. Skipping report generation."
               exit 0
             fi
-            if ! allure generate allure-results -o allure-report; then
+            if ! allure generate --config .devcontainer/allure.ymlallure-results -o allure-report; then
               echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
             fi
 
@@ -268,7 +268,7 @@ jobs:
               echo "##[warning]allure-results directory not found. Skipping report generation."
               exit 0
             fi
-            if ! allure generate allure-results -o allure-report; then
+            if ! allure generate --config .devcontainer/allure.ymlallure-results -o allure-report; then
               echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
             fi
 

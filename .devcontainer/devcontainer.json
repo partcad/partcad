@@ -46,16 +46,16 @@
         "dotfiles.repository": "deepspacecartel/dotfiles"
       },
       "remote.extensionKind": {
-        "codecov.codecov": ["ui"]
+        "codecov.codecov": [
+          "ui"
+        ]
       },
       // <!-- prettier-ignore-start -->
       "extensions": [
         // PartCAD TODO: Move extension to PartCAD organization
         "OpenVMP.partcad",
-
         // CAD Viewer
         "bernhard-42.ocp-cad-viewer",
-
         // Python Environment
         "donjayamanne.python-environment-manager",
         "njpwerner.autodocstring", // Python docstring generator
@@ -63,31 +63,23 @@
         "ms-python.black-formatter",
         "ms-python.python",
         "ms-python.vscode-pylance",
-
         // Code Formatting
         "esbenp.prettier-vscode",
         "streetsidesoftware.code-spell-checker", // Because typos are worse than black holes
-
         // GitHub Integration
         "GitHub.copilot",
         "GitHub.vscode-github-actions",
         "GitHub.vscode-pull-request-github",
-
         // File Headers
         "psioniq.psi-header",
-
         // Docker Support
         "ms-azuretools.vscode-docker",
-
         // YAML Support
         // "redhat.vscode-yaml", # TODO:command 'jumpToSchema' already exists
-
         // SVG Support
         "jock.svg",
-
         // Jinja Support
         "samuelcolvin.jinjahtml",
-
         // Markdown Support
         "yzhang.markdown-all-in-one",
         "bierner.github-markdown-preview",
@@ -97,19 +89,15 @@
         "bierner.markdown-preview-github-styles",
         "bierner.markdown-yaml-preamble",
         "chintans98.markdown-jira",
-
         // Task Management
         "Gruntfuggly.todo-tree",
         "wayou.vscode-todo-highlight", // Additional TODO highlighting
-
         // Atlassian Integration
         "Atlassian.atlascode",
-
         // Documentation Support
         "swyddfa.esbonio",
         "lextudio.restructuredtext",
         "trond-snekvik.simple-rst",
-
         // Code Analysis
         "alexkrechik.cucumberautocomplete",
         "bbenoist.vagrant",

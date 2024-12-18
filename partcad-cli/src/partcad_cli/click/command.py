@@ -121,6 +121,7 @@ def cli(ctx, v, q, no_ansi, p, format):
         "install",
         "list",
         "render",
+        "test",
         "update",
     ]
 
