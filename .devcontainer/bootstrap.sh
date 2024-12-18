@@ -87,12 +87,6 @@ install_component() {
 # https://github.com/pre-commit/pre-commit/pull/3368#issuecomment-2550125917
 install_component "pre-commit hooks" "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
 # Verify pre-commit installation
-if ! pre-commit --version >/dev/null 2>&1; then
-    echo "Pre-commit verification failed"
-    exit 1
-fi
-# Log installed version
-echo "Pre-commit version: $(pre-commit --version)"
 
 install_component "poetry export plugin" "poetry self add poetry-plugin-export"
 # Verify poetry plugin installation

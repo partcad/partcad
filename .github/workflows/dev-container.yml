@@ -202,7 +202,9 @@ jobs:
           env: |
             SKIP=poetry-export,poetry-lock
           # TODO: Add custom @dependabot-like job to open PR to update dependencies
-          runCmd: pre-commit run --show-diff-on-failure --color=always --all-files
+          runCmd:
+            pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
+            --all-files
 
   behave:
     name: "Run: behave"

@@ -112,6 +112,9 @@ jobs:
           mamba deactivate
 
       - name: Basic integration test for CLI
+        env:
+          # TODO: Workaround for "Host key verification failed."
+          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         shell: bash
         run: |
           . ~/.bashrc
@@ -140,6 +143,9 @@ jobs:
 
       - name: Basic integration test for CLI
         if: runner.os == 'Linux'
+        env:
+          # TODO: Workaround for "Host key verification failed."
+          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         shell: bash
         run: |
           . ~/.bashrc
