@@ -87,6 +87,8 @@ jobs:
         env:
           PYTHONPATH: partcad/src
           PYTHONWARNINGS: ignore
+          # TODO: Workaround for "Host key verification failed."
+          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         shell: bash
         run: |
           . ~/.bashrc
