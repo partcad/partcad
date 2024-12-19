@@ -110,6 +110,7 @@ jobs:
           path: |
             ~/.cache/pypoetry
             .venv
+          # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
           key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
           restore-keys: |
             ${{ runner.os }}-poetry-
@@ -121,6 +122,7 @@ jobs:
           push: never
           runCmd: |
             mkdir -pv test-results
+            poetry --no-ansi --no-interaction show --tree
             poetry --no-ansi --no-interaction run pytest --verbose --color=no
 
       - name: Upload test results
@@ -196,4 +198,6 @@ jobs:
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
-          runCmd: pre-commit run --show-diff-on-failure --color=always --all-files
+          runCmd:
+            pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
+            --all-files
