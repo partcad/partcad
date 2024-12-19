@@ -1,4 +1,9 @@
 {
+  "remote.extensionKind": {
+    "codecov.codecov": [
+      "ui"
+    ]
+  },
   // https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage
   "python.experiments.optInto": [
     "pythonTestAdapter"

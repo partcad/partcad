@@ -1,54 +1,16 @@
 {
   "name": "PartCAD Dev Container",
-  "build": {
-    // 13:27.664
-    "dockerfile": "./Dockerfile"
+  "image": "ghcr.io/partcad/devcontainer-partcad:latest",
+  "postCreateCommand": {
+    "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
   },
-  "containerEnv": {
-    // https://developer.1password.com/docs/cli/config-directories/
-    "OP_CONFIG_DIR": "${containerWorkspaceFolder}/.op",
-    "PRE_COMMIT_HOME": "${containerWorkspaceFolder}/.pre-commit"
-  },
-  "features": {
-    "ghcr.io/devcontainers/features/github-cli:1": {
-      "installDirectlyFromGitHubRelease": true,
-      "version": "2.63.2"
-    },
-    "ghcr.io/devcontainers/features/python:1": {
-      "installTools": true,
-      "toolsToInstall": "pre-commit,poetry",
-      "optimize": true,
-      "version": "none" // Python is provided by the base image, we don't need to build it from sources
-    },
-    "ghcr.io/devcontainers/features/conda:1": {
-      "version": "24.5.0" // GH has 24.11.1
-    },
-    "ghcr.io/deepspacecartel/devcontainers-features/starship:2": {
-      "version": "v1.21.1"
-    },
-    "ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
-      "jqVersion": "1.7.1",
-      "yqVersion": "4.44.6",
-      "gojqVersion": "none",
-      "xqVersion": "none",
-      "jaqVersion": "none"
-    },
-    "ghcr.io/devcontainers/features/git-lfs:1": {
-      "autoPull": true,
-      "installDirectlyFromGitHubRelease": true,
-      "version": "3.6.0"
-    }
-  },
-  "postCreateCommand": ".devcontainer/bootstrap.sh", // TODO: Move to Dockerfile to save 20s
+  // "mounts": [
+  //   "source=op,target=${containerWorkspaceFolder}/.op,type=volume"
+  // ],
   "customizations": {
     "vscode": {
       "settings": {
         "dotfiles.repository": "deepspacecartel/dotfiles"
-      },
-      "remote.extensionKind": {
-        "codecov.codecov": [
-          "ui"
-        ]
       },
       // <!-- prettier-ignore-start -->
       "extensions": [
