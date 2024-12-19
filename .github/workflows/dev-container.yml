@@ -121,6 +121,7 @@ jobs:
           push: never
           runCmd: |
             mkdir -pv test-results
+            poetry --no-ansi --no-interaction show --tree
             poetry --no-ansi --no-interaction run pytest --verbose --color=no
 
       - name: Upload test results
