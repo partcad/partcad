@@ -6,12 +6,13 @@
     "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
   },
   // "mounts": [
+  //   // TODO: @alexanderilyin: mount ~/.cache/$APP_NAME from persistent named volume
   //   "source=op,target=${containerWorkspaceFolder}/.op,type=volume"
   // ],
   "customizations": {
     "vscode": {
       "settings": {
-        "dotfiles.repository": "deepspacecartel/dotfiles"
+        "dotfiles.repository": "partcad/dotfiles"
       },
       // <!-- prettier-ignore-start -->
       "extensions": [
