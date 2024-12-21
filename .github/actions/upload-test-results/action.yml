@@ -23,6 +23,9 @@ inputs:
   coverage-report:
     description: Path to the coverage reports to upload to Codecov.
     required: true
+  token:
+    description: Codecov token.
+    required: true
 
 runs:
   using: 'composite'
@@ -39,11 +42,11 @@ runs:
       uses: codecov/codecov-action@v5
       with:
         files: ${{ inputs.coverage-report }}
-        token: ${{ secrets.CODECOV_TOKEN }}
+        token: ${{ inputs.token }}
 
     - name: Upload test results to Codecov
       if: ${{ inputs.status }} != 'cancelled'
       uses: codecov/test-results-action@v1
       with:
         files: ${{ inputs.codecov-files }}
-        token: ${{ secrets.CODECOV_TOKEN }}
+        token: ${{ inputs.token }}

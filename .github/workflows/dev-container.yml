@@ -131,6 +131,7 @@ jobs:
           path: test-results/
           retention-days: 7
           status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
           codecov-files: test-results/junit.xml
           coverage-report: test-results/coverage.xml
 
@@ -246,6 +247,7 @@ jobs:
           path: test-results/
           retention-days: 7
           status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
           codecov-files: test-results/junit.xml
           coverage-report: test-results/coverage.xml
 
