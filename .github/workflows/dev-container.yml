@@ -123,16 +123,16 @@ jobs:
             mkdir -pv test-results
             poetry --no-ansi --no-interaction run pytest --verbose --color=no
 
-      # TODO: Create .github/workflows/upload-test-results.yml
-      # TODO: Move the common upload steps there
-      # TODO: Reference it from both pytest and behave jobs
-      - name: Upload test results
+      - name: Upload test results & coverage reports to github and codecov
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/upload-test-results
         with:
           name: test-results
           path: test-results/
           retention-days: 7
+          status: ${{ job.status }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
 
       - name: Generate Allure Report
         if: always()
@@ -157,19 +157,6 @@ jobs:
           path: allure-report/
           retention-days: 7
 
-      - name: Upload coverage reports to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          files: test-results/coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
-        with:
-          files: test-results/junit.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
 
   pre-commit:
     name: "Run: pre-commit"
@@ -251,13 +238,16 @@ jobs:
             mkdir -pv test-results
             poetry --no-ansi --no-interaction run behave
 
-      - name: Upload test results
+      - name: Upload test results & coverage reports to github and codecov
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: ./.github/actions/upload-test-results
         with:
           name: test-results
           path: test-results/
           retention-days: 7
+          status: ${{ job.status }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
 
       - name: Generate Allure Report
         if: always()
@@ -281,17 +271,3 @@ jobs:
           name: behave-allure-report
           path: allure-report/
           retention-days: 7
-
-      - name: Upload coverage reports to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
-        with:
-          files: test-results/coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
-        with:
-          files: test-results/junit.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
