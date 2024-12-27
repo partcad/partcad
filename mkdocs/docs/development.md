@@ -136,6 +136,18 @@ use the following commands on PRs to interact with it:
 
 - `@coderabbitai help` - Displays available commands and usage information.
 
+#### Gource
+
+1. Install Gource:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install --yes gource ffmpeg
+   ```
+2. Generate the video:
+   ```bash
+   gource -1280x720 --seconds-per-day 1 --auto-skip-seconds 1 --file-idle-time 0 --key --title "PartCAD" -o - | ffmpeg -y -r 60 -f image2pipe -vcodec ppm -i - -vcodec libx264 -preset ultrafast -pix_fmt yuv420p gource_video_3.mp4
+   ```
+
 [`cadquery-ocp`]: https://pypi.org/project/cadquery-ocp/
 [`click`]: https://pypi.org/project/click/
 [`mkdocs-material`]: https://squidfunk.github.io/mkdocs-material/
