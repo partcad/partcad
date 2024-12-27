@@ -6,6 +6,11 @@ on:
     branches:
       - main
       - devel
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 env:
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
