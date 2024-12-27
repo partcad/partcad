@@ -229,8 +229,8 @@ class Project(project_config.Configuration):
             return
 
         children = list()
-        subfolders = [f.name for f in os.scandir(self.config_dir) if f.is_dir()]
-        for subdir in list(subfolders):
+        sub_folders = [f.name for f in os.scandir(self.config_dir) if f.is_dir()]
+        for subdir in list(sub_folders):
             if os.path.exists(
                 os.path.join(
                     self.config_dir,
@@ -265,7 +265,7 @@ class Project(project_config.Configuration):
                 source_interface_name = self.name + ":" + source_interface_name
             source_package_name, short_source_interface_name = resolve_resource_path(self.name, source_interface_name)
 
-            # Short-circut the case when the source package is the current one
+            # Short-circuit the case when the source package is the current one
             # to avoid recursive package loading
             if source_package_name == self.name:
                 source_package = self
@@ -892,8 +892,8 @@ class Project(project_config.Configuration):
             factory.instantiate("provider", config["type"], self.ctx, self, self, config)
 
     # TODO(clairbee): either call init_*_by_config or call
-    #                  factory->instantite everywhere.
-    #                  Recall what waas the thinking about it when the factory
+    #                  factory->instantiate everywhere.
+    #                  Recall what was the thinking about it when the factory
     #                  class was introduced.
 
     def init_provider_by_config(self, config, source_project=None):
@@ -1044,7 +1044,7 @@ class Project(project_config.Configuration):
             return self.providers[result_name]
 
     def get_suppliers(self, part_spec):
-        # TODO(clirbee): return the eligible subset of suppliers
+        # TODO(clairbee): return the eligible subset of suppliers
         # part_name = part_spec["name"]
         return self.suppliers
 
