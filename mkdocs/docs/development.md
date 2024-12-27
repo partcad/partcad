@@ -138,14 +138,51 @@ use the following commands on PRs to interact with it:
 
 #### Gource
 
+Gource is a software version control visualization tool that creates an animated tree of your repository's commit
+history, turning your development timeline into something resembling an interstellar journey through code.
+
 1. Install Gource:
+
    ```bash
    sudo apt-get update
    sudo apt-get install --yes gource ffmpeg
+
+   # Verify Installation
+   gource --help | head -n1
+   ffmpeg -version
    ```
-2. Generate the video:
+
+2. Run Visualization:
+
    ```bash
-   gource -1280x720 --seconds-per-day 1 --auto-skip-seconds 1 --file-idle-time 0 --key --title "PartCAD" -o - | ffmpeg -y -r 60 -f image2pipe -vcodec ppm -i - -vcodec libx264 -preset ultrafast -pix_fmt yuv420p gource_video_3.mp4
+   #!/usr/bin/env bash
+
+   set -euo pipefail
+
+   RESOLUTION="1280x720" # Set video resolution
+   TITLE="PartCAD" # Set video title
+   OUTPUT="partcad_visualization.mp4" # Set output file name
+   SECONDS_PER_DAY=1 # Each day takes 1 second
+   AUTO_SKIP_SECONDS=1 # Skip periods without activity
+   FILE_IDLE_TIME=0 # Remove files immediately when idle
+   FPS=60 # 60 FPS for smooth playback
+
+   gource \
+     -${RESOLUTION} \
+     --seconds-per-day "${SECONDS_PER_DAY}" \
+     --auto-skip-seconds "${AUTO_SKIP_SECONDS}" \
+     --file-idle-time "${FILE_IDLE_TIME}" \
+     --key \
+     --title "${TITLE}" \
+     -o - | \
+   ffmpeg -y \
+     -r "${FPS}" \
+     -f image2pipe \
+     -vcodec ppm -i - \
+     -vcodec libx264 \
+     -preset ultrafast \
+     -pix_fmt yuv420p \
+     "${OUTPUT}"
    ```
 
 [`cadquery-ocp`]: https://pypi.org/project/cadquery-ocp/
