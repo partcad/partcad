@@ -1448,7 +1448,7 @@ class Project(project_config.Configuration):
             if format == "readme" or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
 
-    def render(
+    async def render(
         self,
         sketches=None,
         interfaces=None,
@@ -1457,7 +1457,7 @@ class Project(project_config.Configuration):
         format=None,
         output_dir=None,
     ):
-        asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
+        await self.render_async(sketches, interfaces, parts, assemblies, format, output_dir)
 
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:
