@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13] # macos-latest has an issue with nlopt
+        os: [ubuntu-24.04, windows-latest, macos-13] # macos-latest has an issue with nlopt
         python-version:
           - "3.10"
           # - "3.11"
@@ -25,7 +25,7 @@ jobs:
           - os: "macos-13"
             python-version: "3.12"
           # PC-190: No module named 'OCP.OCP'; 'OCP' is not a package
-          - os: "ubuntu-latest"
+          - os: "ubuntu-24.04"
             python-version: "3.12"
           # Reduce costs by testing one version of Python on MacOS
           - os: "macos-13"
@@ -153,7 +153,7 @@ jobs:
   #  strategy:
   #    fail-fast: false
   #    matrix:
-  #      os: ["ubuntu-latest-m"]
+  #      os: ["ubuntu-24.04-m"]
   #      python-version: ["3.12"]
   #  runs-on: ${{ matrix.os }}
   #  if: "!startsWith(github.event.head_commit.message, 'Version updated')"

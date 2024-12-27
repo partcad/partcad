@@ -15,7 +15,7 @@ env:
 jobs:
   build:
     name: "Build: Dev Container"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
@@ -43,7 +43,7 @@ jobs:
 
   install:
     name: "Run: poetry install"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     steps:
       - name: Checkout (GitHub)
@@ -91,7 +91,7 @@ jobs:
 
   pytest:
     name: "Run: pytest"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: install
     steps:
       - name: Checkout (GitHub)
@@ -172,7 +172,7 @@ jobs:
 
   pre-commit:
     name: "Run: pre-commit"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     steps:
       - name: Checkout (GitHub)
