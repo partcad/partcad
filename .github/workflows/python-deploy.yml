@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-24.04]
         python-version: ["3.11"]
     runs-on: ${{ matrix.os }}
     env:
@@ -62,14 +62,14 @@ jobs:
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli && deactivate)
       # Upload artifact from the selected OS/Python version combination only
       - name: Upload "partcad"
-        if: "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'"
-        uses: actions/upload-artifact@v3
+        if: "matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.11'"
+        uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions
           path: partcad/dist/
       - name: Upload "partcad-cli"
-        if: "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'"
-        uses: actions/upload-artifact@v3
+        if: "matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.11'"
+        uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions
           path: partcad-cli/dist/
@@ -78,7 +78,7 @@ jobs:
     name: Publish to PyPI
     needs:
       - build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: pypi
 

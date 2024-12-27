@@ -10,13 +10,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13] # macos-latest has an issue with nlopt
-        # os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-24.04, windows-latest, macos-13] # macos-latest has an issue with nlopt
+        # os: [ubuntu-24.04, windows-latest, macos-latest]
         # TODO(clairbee): Add pypy versions to the matrix?
         python-version: ["3.10", "3.12"]
         #python-version: ["3.10", "3.11", "3.12"]
