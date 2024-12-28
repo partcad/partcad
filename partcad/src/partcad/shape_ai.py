@@ -58,7 +58,7 @@ Produce text which is ready to be narrated as is.
             self.name,
             prompt,
             config,
-            image_filenames=[image_filename],
+            # image_filenames=[image_filename],
         )
         return summary[0] if len(summary) > 0 else "Failed to summarize"
 

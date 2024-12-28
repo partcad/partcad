@@ -1,24 +1,34 @@
 {
   "name": "PartCAD Dev Container",
-  // TODO: @alexanderilyin switch to SemVer in image tags
-  "image": "ghcr.io/partcad/devcontainer-partcad:latest",
+  "build": {
+    "dockerfile": "./Dockerfile"
+  },
+  "remoteEnv": {
+    // TODO: @alexanderilyin do not patch PATH here but make `mamba` discoverable.
+    "PATH": "${containerEnv:PATH}:/home/vscode/miniforge3/bin"
+  },
   "postCreateCommand": {
     "setup-utils": "sudo apt-get update && sudo apt-get install -y file xxd",
+    "~/.cache": "sudo chown -R $(whoami):$(whoami) /home/$(whoami)/.cache"
+  },
+  "postStartCommand": {
     "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
   },
-  // "mounts": [
-  //   // TODO: @alexanderilyin: mount ~/.cache/$APP_NAME from persistent named volume
-  //   "source=op,target=${containerWorkspaceFolder}/.op,type=volume"
-  // ],
+  "mounts": [
+    "source=automathor-cache,target=/home/vscode/.cache,type=volume",
+    "source=automathor-config,target=/home/vscode/.config,type=volume"
+  ],
   "customizations": {
     "vscode": {
       "settings": {
-        "dotfiles.repository": "partcad/dotfiles"
+        "dotfiles.repository": "deepspacecartel/dotfiles"
       },
       // <!-- prettier-ignore-start -->
       "extensions": [
-        // PartCAD TODO: Move extension to PartCAD organization
+        // PartCAD TODO-19: Move extension to PartCAD organization
         "OpenVMP.partcad",
+        // Git Tools
+        "eamodio.gitlens",
         // CAD Viewer
         "bernhard-42.ocp-cad-viewer",
         // Python Environment
@@ -40,7 +50,7 @@
         // Docker Support
         "ms-azuretools.vscode-docker",
         // YAML Support
-        // "redhat.vscode-yaml", # TODO:command 'jumpToSchema' already exists
+        // "redhat.vscode-yaml", # TODO-20:command 'jumpToSchema' already exists
         // SVG Support
         "jock.svg",
         // Jinja Support

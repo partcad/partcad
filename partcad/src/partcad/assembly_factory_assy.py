@@ -336,7 +336,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     if (connect_with_port is None and connect_with_iface is None) or (
                         connect_to_port is None and connect_to_iface is None
                     ):
-                        # FIXME(clairbee): Brake the following step up into two:
+                        # FIXME: PC-10:
+                        # Brake the following step up into two:
                         # 1. If we know the port name but not the interface,
                         #    learn which interface it belons to.
                         # 2. Get the list of interface for each part for which

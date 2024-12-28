@@ -1,0 +1,11 @@
+allure:
+  directory: allure-results
+  clean: true
+  links:
+    - pattern: "https://partcad.atlassian.net/browse/{}"
+      type: issue
+      name: Issue
+  report:
+    title: "PartCAD Allure Report"
+    description: "Combined test results for PartCAD"
+    logo: "https://partcad.org/static/media/logo.ae965d5f99a132f8187e.png"

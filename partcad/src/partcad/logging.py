@@ -31,6 +31,16 @@ warn = lambda *a, **kw: logging.getLogger("partcad").warn(*a, **kw)
 warning = lambda *a, **kw: logging.getLogger("partcad").warning(*a, **kw)
 
 
+def reset_errors():
+    """
+    Reset the error tracking.
+
+    This should be called before running a new test.
+    """
+    global had_errors
+    had_errors = False
+
+
 def _track_error(args):
     global had_errors
     if args and len(args) > 1 and "conda run pythonw" in args[0]:

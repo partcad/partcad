@@ -2,6 +2,7 @@ __pycache__
 .conda
 .coverage
 .ocp_vscode
+.op/
 .partcad
 .pre-commit
 .pytest_cache
@@ -9,6 +10,7 @@ __pycache__
 .venv
 .vs/
 *.egg-info
+*.prof
 *.pyc
 /partcad-cli/build
 /partcad-cli/dist
@@ -17,4 +19,5 @@ __pycache__
 allure-report/
 allure-results/
 docs/build
+output
 test-results/

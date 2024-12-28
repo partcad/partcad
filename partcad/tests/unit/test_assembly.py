@@ -9,6 +9,8 @@
 #
 
 import asyncio
+import pytest
+import sys
 
 import partcad as pc
 

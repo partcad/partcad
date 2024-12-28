@@ -49,7 +49,6 @@ __all__ = [
     "assembly_factory",
     "assembly_factory_python",
     "scene",
-    "main_cli",
     "plugins",
     "exception",
 ]

@@ -23,6 +23,8 @@ runs:
     - name: Init mamba
       shell: bash
       run: |
+        command -v mamba
+        mamba --version
         mamba init
         touch ~/.bashrc
         touch ~/.bash_profile

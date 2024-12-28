@@ -1,5 +1,7 @@
-pytest-cov
-pytest-html
-pytest-durations
 allure-pytest
-coverage
+click
+coloredlogs
+pytest-cov
+pytest-durations
+pytest-html
+rich-click
