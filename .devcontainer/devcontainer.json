@@ -3,6 +3,7 @@
   // TODO: @alexanderilyin switch to SemVer in image tags
   "image": "ghcr.io/partcad/devcontainer-partcad:latest",
   "postCreateCommand": {
+    "setup-utils": "sudo apt-get update && sudo apt-get install -y file xxd",
     "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
   },
   // "mounts": [

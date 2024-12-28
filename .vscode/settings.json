@@ -39,7 +39,6 @@
       ]
     }
   ],
-
   "files.trimFinalNewlines": true,
   "files.encoding": "utf8",
   "editor.useTabStops": false,
@@ -107,7 +106,25 @@
   "python.terminal.activateEnvInCurrentTerminal": true,
   "python.envFile": "${workspaceFolder}/.env",
   "cSpell.words": [
-    "coderabbitai"
+    "coderabbitai",
+    "devel",
+    "ensurepip",
+    "gource",
+    "libx",
+    "manylinux",
+    "mkdocs",
+    "mypy",
+    "nlopt",
+    "NOCOMMIT",
+    "pfscad",
+    "pfstl",
+    "pipefail",
+    "pyproject",
+    "Regen",
+    "renderable",
+    "ruamel",
+    "setuptools",
+    "ultrafast",
+    "vcodec"
   ],
-
 }
