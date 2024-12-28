@@ -43,9 +43,9 @@ Docker Container with all necessary tooling and dependencies.
   sphinx-autobuild --host 0.0.0.0 --open-browser -b html "source" "build"
   ```
 
-  > `--host 0.0.0.0` is required in case if you running `sphinx-autobuild` in Dev Containers and accessing HTML using
-  > host browser. Docs will be served on http://127.0.0.1:8000/. There is also [`sphinx-serve`] Python module which also
-  > could be used for similar functionality.
+  > Note: `--host 0.0.0.0` is required when running `sphinx-autobuild` in Dev Containers and accessing HTML using the
+  > host browser. Documentation will be served at [http://127.0.0.1:8000/](http://127.0.0.1:8000/). Alternatively, the
+  > [`sphinx-serve`] Python module provides similar functionality.
 
 - `./mkdocs/`: Developer's handbook, based on [`mkdocs-material`] You can serve `mkdocs` docs locally with realtime
   updates:
@@ -88,7 +88,7 @@ sudo ./apt-compile.sh
 
 Wheels in [`cadquery-ocp`] v7.7.2 require glibc to be v2.35 or newer:
 
-```
+```text
 Skipping wheel cadquery_ocp-7.7.2-cp310-cp310-manylinux_2_35_x86_64.whl as this is not supported by the current environment
 ```
 
@@ -127,8 +127,6 @@ parallel behave ::: $(echo $(find features -type f -name '\*.feature'))
 
 or use `behavex` to speedup tests execution:
 
-- https://github.com/hrcorval/behavex
-- https://github.com/hrcorval/behavex/issues/182
 - [behavex repository](https://github.com/hrcorval/behavex)
 - [behavex issue #182](https://github.com/hrcorval/behavex/issues/182)
 - [Allure Report](https://allurereport.org/)
@@ -158,7 +156,7 @@ behave -f steps.catalog --dry-run --no-summary -q
 
 ### Tests Generation
 
-You can use [GitHub.copilot] to generate tests boiler plate using prompts like following:
+You can use [GitHub.copilot] to generate tests boilerplate using prompts like the following:
 
 > _Generate gherkin test for {filename}._
 
@@ -166,8 +164,8 @@ You can use [GitHub.copilot] to generate tests boiler plate using prompts like f
 
 ### Test Reports
 
-- https://allurereport.org/
-- https://pytest-cov.readthedocs.io/
+[Allure Report](https://allurereport.org/)
+[pytest-cov documentation](https://pytest-cov.readthedocs.io/)
 
 ```bash
 allure serve allure-results
@@ -175,8 +173,8 @@ allure serve allure-results
 
 ### End-to-End Testing
 
-- https://download.virtualbox.org/virtualbox/7.0.22/VirtualBox-7.0.22-165102-Win.exe
-- https://developer.hashicorp.com/vagrant/install?product_intent=vagrant
+- [VirtualBox Download](https://download.virtualbox.org/virtualbox/7.0.22/VirtualBox-7.0.22-165102-Win.exe)
+- [Vagrant Installation Guide](https://developer.hashicorp.com/vagrant/install?product_intent=vagrant)
 
 ### Profiling
 
@@ -210,11 +208,16 @@ flameprof -o /tmp/pc-version.svg -r $(command -v pc) version
 
 #### pyprof2calltree
 
-- https://github.com/pwaller/pyprof2calltree/
+- [pyprof2calltree repository](https://github.com/pwaller/pyprof2calltree/)
 
 #### `print("HERE")` & `ts`
 
-But if you really want cut to the chase... Instrument sources manually:
+When quick debugging is needed and traditional profilers would be overkill, you can instrument sources manually. This
+method is particularly useful for:
+
+- Quick identification of bottlenecks.
+- Debugging in production-like environments where profilers can't be attached.
+- Getting timestamps for specific code paths.
 
 ```python
 import inspect
@@ -241,10 +244,16 @@ You will be able to get hints where to narrow the digging:
 
 ## Conda
 
+This step is crucial for cleaning the `$PATH` from `.venv/bin` and ensuring proper environment isolation.
 [workbench.action.showCommands](vscode://vscode.commands.executeCommand?command=workbench.action.showCommands)
 
-Use `Python: Select Interpreter` aka `python.setInterpreter` to select host Python interpreter. This is needed to clean
-`$PATH` from `.venv/bin`.
+To properly set up your Python environment in VSCode:
+
+1. Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Search for and select `Python: Select Interpreter`
+3. Choose the host Python interpreter
+
+This is needed to clean `$PATH` from `.venv/bin`.
 
 You can create isolated env and install specific version of `partcad-cli` for testing:
 
@@ -298,8 +307,8 @@ pre-commit install --config .devcontainer/.pre-commit-config.yaml
 
 ### Commit Signing
 
-- https://blog.1password.com/git-commit-signing/
-- https://developer.1password.com/docs/ssh/git-commit-signing/
+- [1Password Git Commit Signing Guide](https://blog.1password.com/git-commit-signing/)
+- [1Password SSH Git Commit Signing Documentation](https://developer.1password.com/docs/ssh/git-commit-signing/)
 
 ```ini
 [safe]
@@ -357,6 +366,55 @@ use the following commands on PRs to interact with it:
 **Help:**
 
 - `@coderabbitai help` - Displays available commands and usage information.
+
+### Gource
+
+Gource is a software version control visualization tool that creates an animated tree of your repository's commit
+history, turning your development timeline into something resembling an interstellar journey through code.
+
+1. Install Gource:
+
+   ```bash
+   sudo apt-get update
+   sudo apt-get install --yes gource ffmpeg
+
+   # Verify Installation
+   gource --help | head -n1
+   ffmpeg -version
+   ```
+
+2. Run Visualization:
+
+   ```bash
+   #!/usr/bin/env bash
+
+   set -euo pipefail
+
+   RESOLUTION="1280x720" # Set video resolution
+   TITLE="PartCAD" # Set video title
+   OUTPUT="partcad_visualization.mp4" # Set output file name
+   SECONDS_PER_DAY=1 # Each day takes 1 second
+   AUTO_SKIP_SECONDS=1 # Skip periods without activity
+   FILE_IDLE_TIME=0 # Remove files immediately when idle
+   FPS=60 # 60 FPS for smooth playback
+
+   gource \
+     -${RESOLUTION} \
+     --seconds-per-day "${SECONDS_PER_DAY}" \
+     --auto-skip-seconds "${AUTO_SKIP_SECONDS}" \
+     --file-idle-time "${FILE_IDLE_TIME}" \
+     --key \
+     --title "${TITLE}" \
+     -o - | \
+   ffmpeg -y \
+     -r "${FPS}" \
+     -f image2pipe \
+     -vcodec ppm -i - \
+     -vcodec libx264 \
+     -preset ultrafast \
+     -pix_fmt yuv420p \
+     "${OUTPUT}"
+   ```
 
 ## Task Management
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-- https://en.wikipedia.org/wiki/MoSCoW_method
+- [MoSCoW method](https://en.wikipedia.org/wiki/MoSCoW_method)
 
 ## Must-have / Core
 
@@ -62,10 +62,10 @@ increase efficiency for users.
 > requirements can be as important as Must have, they are often not as time-critical or there may be another way to
 > satisfy the requirement so that it can be held back until a future delivery [timebox].
 
-- [ ] Allow create package/directory in PartCAD Explorer.
+- [ ] Allow creating package/directory in PartCAD Explorer.
 - [ ] Allow to abort AI generation process.
-- [ ] PartCAD Panel is empty the UI during AI generation.
-- [ ] Allow to remove part in PartCAD / Explorer
+- [ ] PartCAD Panel shows empty UI during AI generation.
+- [ ] Allow removing parts in PartCAD Explorer
 - [ ] `ERROR: Can't add files outside of the package`
   - [ ] Do not allow to set path in Command Pallette to "outside of the package"
 - [ ] INFO: Script candidate 0: failed to render the image
