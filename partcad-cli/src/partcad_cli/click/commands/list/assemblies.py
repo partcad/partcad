@@ -17,7 +17,7 @@ def cli(ctx, recursive, used_by, package):
 
         if used_by is not None:
             logging.info(f"Instantiating {used_by}...")
-            # TODO(clairbee): do not call it twice in 'list-all'
+            # TODO(clairbee): do not call it twice in 'list all'
             ctx.get_assembly(used_by)
         else:
             ctx.get_all_packages()

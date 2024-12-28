@@ -81,7 +81,6 @@ Feature: `pc add assembly` command
       partcad inspect -V cube
       """
     Then the command should exit with a status code of "0"
-    # ERROR: Error in ['/home/vscode/.partcad/runtime/partcad-python-conda-3.10/v-env-8a5edab282632443219e051e4ade2d1d5bbc671c781051bf1437897cbdfea0f1/bin/python', '-sOOIu', '-m', 'pip', 'install', 'numpy==1.26.4']: ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
     When I run command:
       """
       partcad inspect -V cylinder

@@ -35,7 +35,8 @@ def reset_errors():
     """
     Reset the error tracking.
 
-    This should be called before running a new test.
+    This should be called before running a new test. This function modifies a global variable and should be called
+    with appropriate thread safety considerations.
     """
     global had_errors
     had_errors = False
