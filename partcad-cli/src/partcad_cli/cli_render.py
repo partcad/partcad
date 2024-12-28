@@ -21,7 +21,7 @@ def cli_help_render(subparsers: argparse.ArgumentParser):
     )
     parser_render.add_argument(
         "-p",
-        help="Create the neccessary directory structure if it is missing",
+        help="Create the necessary directory structure if it is missing",
         dest="create_dirs",
         action="store_true",
     )
