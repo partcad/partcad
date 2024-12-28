@@ -107,10 +107,14 @@
   "python.envFile": "${workspaceFolder}/.env",
   "cSpell.words": [
     "coderabbitai",
+    "devel",
+    "ensurepip",
     "gource",
     "libx",
     "manylinux",
     "mkdocs",
+    "mypy",
+    "nlopt",
     "NOCOMMIT",
     "pfscad",
     "pfstl",
@@ -119,6 +123,7 @@
     "Regen",
     "renderable",
     "ruamel",
+    "setuptools",
     "ultrafast",
     "vcodec"
   ],
