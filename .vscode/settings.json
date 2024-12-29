@@ -23,9 +23,11 @@
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter"
   },
+  "typescript.tsc.autoDetect": "off",
   "[typescript]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
+  "eslint.workingDirectories": ["${workspaceFolder}/partcad-ide-vscode"],
   "[typescriptreact]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
@@ -131,8 +133,16 @@
     ".tox": true,
     ".venv": true,
     "docs/build": true,
+    "partcad*/requirements.txt": true,
     "partcad*/build": true,
-    "partcad*/dist": true
+    "partcad*/dist": true,
+    "partcad-ide-vscode/bundled/libs": true,
+    "partcad-ide-vscode/.nox": true,
+    "partcad-ide-vscode/out": true,
+    "partcad-ide-vscode/dist": true,
+    "partcad-ide-vscode/node_modules": true,
+    "partcad-ide-vscode/.conda": true,
+    "partcad-ide-vscode/partcad.vsix": true
   },
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
@@ -184,7 +194,9 @@
     }
   ],
   "python.analysis.extraPaths": [
-    "./partcad/src"
+    "./partcad/src",
+    "./partcad-cli/src",
+    "./partcad-ide-vscode/bindled/libs"
   ],
   "python.envFile": "${workspaceFolder}/.env",
   // https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage
@@ -218,11 +230,18 @@
     ".venv": true,
     "docs/build": true,
     "partcad*/build": true,
-    "partcad*/dist": true
+    "partcad*/dist": true,
+    "partcad-ide-vscode/bundled/libs": true,
+    "partcad-ide-vscode/.nox": true,
+    "partcad-ide-vscode/out": true,
+    "partcad-ide-vscode/dist": true,
+    "partcad-ide-vscode/node_modules": true,
+    "partcad-ide-vscode/.conda": true,
+    "partcad-ide-vscode/partcad.vsix": true
   },
   // "security.workspace.trust.untrustedFiles": "open",
   "svg.preview.mode": "svg",
-  "terminal.integrated.fontFamily": "'Hack Nerd Font Mono'",
+  "terminal.integrated.fontFamily": "monospace",
   "terminal.integrated.scrollback": 100000,
   "testing.automaticallyOpenPeekView": "never",
   // "yaml.format.bracketSpacing": false,

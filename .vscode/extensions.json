@@ -18,5 +18,9 @@
     "bierner.markdown-mermaid",
     // Jinja2
     "samuelcolvin.jinjahtml",
+    // From the VS Code extension template
+    "dbaeumer.vscode-eslint",
+    "amodio.tsl-problem-matcher",
+    "esbenp.prettier-vscode",
   ]
 }

@@ -30,3 +30,23 @@ replace = "__version__: str = \"{new_version}\""
 filename = "partcad-cli/src/partcad_cli/__init__.py"
 search = "__version__: str = \"{current_version}\""
 replace = "__version__: str = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-ide-vscode/package.json"
+search = "version\": \"{current_version}\""
+replace = "version\": \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-ide-vscode/package.json"
+search = "v{current_version} is not found"
+replace = "v{new_version} is not found"
+
+[[tool.bumpversion.files]]
+filename = "partcad-ide-vscode/bundled/tool/lsp_server.py"
+search = "version=\"{current_version}\""
+replace = "version=\"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-ide-vscode/bundled/tool/lsp_server.py"
+search = "(>={current_version})"
+replace = "(>={new_version})"
