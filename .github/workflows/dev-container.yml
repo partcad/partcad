@@ -19,6 +19,7 @@ env:
 
 jobs:
   dev-container-build:
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     name: "Build: Dev Container"
     # TODO:https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller/about-actions-runner-controller#creating-your-own-runner-image
     runs-on: ubuntu-24.04
