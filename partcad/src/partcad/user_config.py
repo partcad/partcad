@@ -128,5 +128,10 @@ class UserConfig:
         else:
             self.max_script_correction = None
 
+        # option: import.git.retry
+        # description: retry settings for git clone
+        # values: <dict>
+        # default: {}
+        self.git_retry_config = self.config_obj.get("git", {}).get("clone", {}).get("retry", {})
 
 user_config = UserConfig()
