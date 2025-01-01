@@ -29,8 +29,8 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
 
 
 @click.command(cls=Loader)
-@click.option("-v", is_flag=True, help="Increase verbosity level")
-@click.option("-q", is_flag=True, help="Decrease verbosity level")
+@click.option("-v", "--verbose", is_flag=True, help="Increase verbosity level")
+@click.option("-q", "--quiet", is_flag=True, help="Decrease verbosity level")
 @click.option(
     "--no-ansi",
     is_flag=True,
@@ -38,6 +38,7 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
 )
 @click.option(
     "-p",
+    "--package",
     type=click.Path(exists=True),
     help="Specify the package path (YAML file or directory with 'partcad.yaml')",
 )
@@ -49,7 +50,7 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     show_envvar=True,
 )
 @click.pass_context
-def cli(ctx, v, q, no_ansi, p, format):
+def cli(ctx, verbose, quiet, no_ansi, package, format):
     """
     \b
     ██████╗  █████╗ ██████╗ ████████╗ ██████╗ █████╗ ██████╗
@@ -94,10 +95,10 @@ def cli(ctx, v, q, no_ansi, p, format):
 
         logging_ansi_terminal_init()
 
-    if q:
+    if quiet:
         pc.logging.setLevel(logging.CRITICAL + 1)
     else:
-        if v:
+        if verbose:
             pc.logging.setLevel(logging.DEBUG)
         else:
             pc.logging.setLevel(logging.INFO)
@@ -130,9 +131,9 @@ def cli(ctx, v, q, no_ansi, p, format):
         from partcad.globals import init
 
         try:
-            ctx.obj = init(p)
+            ctx.obj = init(package)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
-            exc = click.BadParameter("Invalid configuration file", ctx=ctx, param=p, param_hint=None)
+            exc = click.BadParameter("Invalid configuration file", ctx=ctx, param=package, param_hint=None)
             exc.exit_code = 2
             raise exc from e
         except Exception as e:
@@ -160,7 +161,7 @@ cli.context_settings = {
 
 
 @cli.result_callback()
-def process_result(result, v, q, no_ansi, p, format):
+def process_result(result, verbose, quiet, no_ansi, package, format):
     # TODO-89: @alexanderilyin: What is this for?
     if not no_ansi:
         pc.logging_ansi_terminal_fini()

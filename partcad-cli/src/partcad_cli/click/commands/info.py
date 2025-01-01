@@ -13,10 +13,10 @@ import partcad.logging as logging
     help="Package to retrieve the object from",
     default=None,
 )
-@click.option("-i", "interface", is_flag=True, help="The object is an interface")
-@click.option("-a", "assembly", is_flag=True, help="The object is an assembly")
-@click.option("-s", "sketch", is_flag=True, help="The object is a sketch")
-@click.option("-S", "scene", is_flag=True, help="The object is a scene")
+@click.option("-i", "--interface", "interface", is_flag=True, help="The object is an interface")
+@click.option("-a", "--assembly", "assembly", is_flag=True, help="The object is an assembly")
+@click.option("-s", "--sketch", "sketch", is_flag=True, help="The object is a sketch")
+@click.option("-S", "--scene", "scene", is_flag=True, help="The object is a scene")
 @click.option(
     "-p",
     "--param",
