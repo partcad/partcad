@@ -13,14 +13,12 @@ import sys
 @click.option("--json", "-j", "api", help="Produce JSON output", is_flag=True)
 @click.option("--qos", "-q", help="Requested quality of service", type=str)
 @click.option("--provider", "-p", help="Provider to use", type=str)
-@click.option(
-    "--specs",
-    "-s",
+@click.argument(
+    "specs",
     metavar="object[[,material],count]",
     type=str,
-    multiple=True,
-    help="Part (default) or assembly to quote, with options",
-)
+    nargs=-1,
+)  # help="Part (default) or assembly to quote, with options",
 @click.pass_obj
 def cli(ctx, api, qos, provider, specs):
     """

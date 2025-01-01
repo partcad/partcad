@@ -66,7 +66,7 @@ Now let's add a declaration of this part to ``partcad.yaml``.
 
   .. code-block:: shell
 
-    pc add-part scad test.scad
+    pc add part scad test.scad
 
 
 Inspect the part

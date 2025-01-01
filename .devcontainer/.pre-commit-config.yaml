@@ -67,3 +67,18 @@ repos:
     rev: v0.10.0.1
     hooks:
       - id: shellcheck
+
+  # GitGuardian Shield Configuration:
+  #   - Pre-commit hooks: https://github.com/GitGuardian/ggshield/blob/main/.pre-commit-hooks.yaml
+  #   - Example config: https://github.com/GitGuardian/ggshield/blob/main/pre-commit-config.local-example.yml
+  #   - Integration guide: https://docs.gitguardian.com/ggshield-docs/integrations/git-hooks/pre-commit
+  - repo: https://github.com/gitguardian/ggshield
+    rev: v1.34.0
+    hooks:
+      - id: ggshield
+        language_version: python3
+        stages: [pre-commit]
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.5
+    hooks:
+      - id: actionlint

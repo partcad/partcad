@@ -121,6 +121,7 @@ def cli(ctx, v, q, no_ansi, p, format):
         "install",
         "list",
         "render",
+        "supply",  # Actually context is needed for "quote" but for now it it is what it is
         "test",
         "update",
     ]

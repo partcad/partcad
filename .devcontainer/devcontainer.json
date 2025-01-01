@@ -15,8 +15,10 @@
     "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
   },
   "mounts": [
-    "source=automathor-cache,target=/home/vscode/.cache,type=volume",
-    "source=automathor-config,target=/home/vscode/.config,type=volume"
+    // TODO: For some reason this leads to tests hanging in the CI.
+    // "source=partcad-partcad,target=/home/vscode/.partcad,type=volume",
+    "source=partcad-cache,target=/home/vscode/.cache,type=volume",
+    "source=partcad-config,target=/home/vscode/.config,type=volume"
   ],
   "customizations": {
     "vscode": {
