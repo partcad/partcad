@@ -14,7 +14,6 @@ import os
 import time
 import pathlib
 import threading
-import time
 
 from . import project_factory as pf
 from . import logging as pc_logging
@@ -27,7 +26,10 @@ git_error_patterns = [
     # Network issue (RPC failed)
     r"error: RPC failed; curl \d+ .* stream \d+ was not closed cleanly: .* \(err \d+\)",
     # Host resolution problem
-    r"fatal: unable to access '(https?://github.com/|git@github.com:)[a-zA-Z0-9./_-]+': Could not resolve host: .+",
+    r"fatal: unable to access 'https?://github.com/[a-zA-Z0-9./_-]+': Could not resolve host: .+",
+    r"fatal: Could not resolve host: .+",
+    r"fatal: Could not read from remote repository.",
+
     # Partial data transfer issue
     r"error: \d+ bytes of body are still expected",
     # Timeout issue
@@ -187,9 +189,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             time.sleep(patience)
                         else:
                             pc_logging.error("Failed to update repo after %s retries" % attempt)
-                    except Exception as e:
-                        pc_logging.error("Failed to update repo\n%s" % e)
-                    # Fall back to using the previous copy
+                            # Fall back to using the previous copy
                 else:
                     # Clone the repository if it's not cached yet.
                     try:
@@ -216,9 +216,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             time.sleep(patience)
                         else:
                             pc_logging.error("Failed to clone repo after %d retries", attempt)
-                            raise RuntimeError("Failed to clone repo: %s" % e)
-                    except Exception as e:
-                        raise RuntimeError("Failed to clone repo: %s" % e)
+                            raise RuntimeError(f"Failed to clone repo: {e}") from e
                 attempt += 1
         if not self.import_rel_path is None:
             cache_path = os.path.join(cache_path, self.import_rel_path)
