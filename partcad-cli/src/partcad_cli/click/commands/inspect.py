@@ -48,6 +48,7 @@ import partcad.logging as logging
     "-p",
     "--param",
     "params",
+    multiple=True,
     metavar="<param_name>=<param_value>",
     help="Assign a value to the parameter",
 )
@@ -71,13 +72,13 @@ def cli(ctx, context, verbal, package, interface, assembly, sketch, scene, param
             path = package + ":" + object
 
         if assembly:
-            obj = ctx.get_assembly(path, params=params)
+            obj = ctx.get_assembly(path, params=param_dict)
         elif interface:
             obj = ctx.get_interface(path)
         elif sketch:
-            obj = ctx.get_sketch(path, params=params)
+            obj = ctx.get_sketch(path, params=param_dict)
         else:
-            obj = ctx.get_part(path, params=params)
+            obj = ctx.get_part(path, params=param_dict)
 
         if obj is None:
             if package is None:

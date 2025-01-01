@@ -30,20 +30,21 @@ jobs:
           - os: "macos-13"
             python-version: "3.12"
           # PC-190: No module named 'OCP.OCP'; 'OCP' is not a package
-          - os: "ubuntu-24.04"
-            python-version: "3.12"
+          # - os: "ubuntu-24.04"
+          #   python-version: "3.12"
           # Reduce costs by testing one version of Python on MacOS
           - os: "macos-13"
             python-version: "3.10"
-          - os: "macos-13"
-            python-version: "3.11"
+          # - os: "macos-13"
+          #   python-version: "3.11"
           # False negatives on Windows for pytest result evaluation
-          - os: "windows-latest"
-            python-version: "3.11"
+          # - os: "windows-latest"
+          #   python-version: "3.11"
           - os: "windows-latest"
             python-version: "3.12"
     runs-on: ${{ matrix.os }}
-    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    timeout-minutes: 30
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -71,13 +72,16 @@ jobs:
           # Install OpenSCAD
           curl -o openscad.zip https://files.openscad.org/OpenSCAD-2021.01-x86-64.zip
           Expand-Archive -Force openscad.zip
+          # shellcheck disable=SC1001,SC2086
           Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\openscad\openscad-2021.01
       # END OS-SPECIFIC
       #
       - name: Install dependencies
         shell: bash
         run: |
+          # shellcheck disable=SC1090
           . ~/.bashrc
+          # shellcheck disable=SC1090
           . ~/.bash_profile
 
           mamba create -n test python=${{ matrix.python-version }} -y
@@ -103,7 +107,9 @@ jobs:
           GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         shell: bash
         run: |
+          # shellcheck disable=SC1090
           . ~/.bashrc
+          # shellcheck disable=SC1090
           . ~/.bash_profile
 
           # TODO-31: PC-186: Allow to configure git clone protocol in settings
@@ -116,7 +122,9 @@ jobs:
       - name: Install CLI
         shell: bash
         run: |
+          # shellcheck disable=SC1090
           . ~/.bashrc
+          # shellcheck disable=SC1090
           . ~/.bash_profile
 
           mamba activate test
@@ -130,7 +138,9 @@ jobs:
           GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         shell: bash
         run: |
+          # shellcheck disable=SC1090
           . ~/.bashrc
+          # shellcheck disable=SC1090
           . ~/.bash_profile
 
           # Display Executed Commands
@@ -164,7 +174,9 @@ jobs:
           GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
         shell: bash
         run: |
+          # shellcheck disable=SC1090
           . ~/.bashrc
+          # shellcheck disable=SC1090
           . ~/.bash_profile
 
           # Display Executed Commands

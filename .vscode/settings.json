@@ -3,7 +3,7 @@
   "OcpCadViewer.advanced.autostart": false,
   "[feature]": {
     // Formatting is difficult with multi-line strings wrapped in """ (triple quotes)
-    "editor.formatOnSave": true,
+    "editor.formatOnSave": false,
     "editor.formatOnSaveMode": "modifications"
   },
   "[go]": {
@@ -44,10 +44,12 @@
     "autouse",
     "capsys",
     "coderabbitai",
+    "CQGI",
     "deprioritized",
     "devel",
     "eamodio",
     "ensurepip",
+    "ggshield",
     "gource",
     "Gruntfuggly",
     "hadolint",
@@ -66,18 +68,22 @@
     "pfscad",
     "pfstl",
     "pipefail",
+    "pyflakes",
     "pyproject",
     "pythonw",
     "Regen",
     "renderable",
     "ruamel",
+    "sandboxed",
     "setuptools",
+    "startswith",
     "timebox",
     "Topo",
     "ultrafast",
     "vcodec",
     "virtualenv",
     "wayou",
+    "worktrees",
     "xdist"
   ],
   "codeium.enableConfig": {

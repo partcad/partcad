@@ -59,7 +59,7 @@ The following configuration is optional:
 
 PartCAD AI agents are designed to query AI multiple times,
 so that a range of options is considered and the best result is found.
-The following configuration options can be used to influence that bahavior:
+The following configuration options can be used to influence that behavior:
 
   .. code-block:: yaml
 
@@ -83,8 +83,8 @@ The generated part definitions are persisted as Python or CAD scripts.
     # Initialize the package
     pc init
     # Define the part but do not generate it yet
-    pc add-part ai-openscad --ai google --desc "Pixel phone case of a surprising shape" "generated-case.scad"
-    # Inspect the part. It triggers part generationg on demand.
+    pc add part ai-openscad --ai google --desc "Pixel phone case of a surprising shape" "generated-case.scad"
+    # Inspect the part. It triggers part generating on demand.
     pc inspect "generated-case"
 
 To use ChatGPT instead of Gemini, pass "openai" instead of "google" as the "--ai" parameter.

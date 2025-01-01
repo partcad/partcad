@@ -23,7 +23,7 @@ jobs:
           python-version: "3.10"
       - name: Setup env variables
         run: |
-          echo "SKIPBUMP=FALSE" >> $GITHUB_ENV
+          echo "SKIPBUMP=FALSE" >> "${GITHUB_ENV}"
 
       - name: Install dependencies
         run: |
@@ -43,7 +43,7 @@ jobs:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           bump-my-version bump --config-file .devcontainer/.bumpversion.toml --config-file .devcontainer/.bumpversion.toml major
-          echo "SKIPBUMP=TRUE" >> $GITHUB_ENV
+          echo "SKIPBUMP=TRUE" >> "${GITHUB_ENV}"
         if: startsWith(github.event.head_commit.message, '[MAJOR]')
 
       - name: Bump Minor Version
@@ -51,7 +51,7 @@ jobs:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           bump-my-version bump --config-file .devcontainer/.bumpversion.toml minor
-          echo "SKIPBUMP=TRUE" >> $GITHUB_ENV
+          echo "SKIPBUMP=TRUE" >> "${GITHUB_ENV}"
         if: startsWith(github.event.head_commit.message, '[FEATURE]')
 
       # Default action

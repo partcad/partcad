@@ -11,8 +11,8 @@ Feature: `pc version` command
   @pc-version @success
   Scenario: Show version information
     When I run "partcad version"
-    Then STDOUT should contain "INFO:  PartCAD Python Module version: 0.7.32"
-    And STDOUT should contain "INFO:  PartCAD CLI version: 0.7.32"
+    Then STDOUT should match the regex "PartCAD Python Module version: \d+\.\d+.\d+"
+    And STDOUT should match the regex "PartCAD CLI version: \d+\.\d+.\d+"
     # TODO-84: @alexanderilyin Make version run under "0.5" seconds
     And command takes less than "3" seconds
     And the command should exit with a status code of "0"

@@ -14,3 +14,9 @@ COPY --from=jira /bin/jira /usr/local/bin/jira
 RUN \
   curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" \
   && sudo -u vscode bash "Miniforge3-$(uname)-$(uname -m).sh" -b -p /home/vscode/miniforge3
+
+# hadolint ignore=DL3004
+RUN \
+  sudo apt-get update \
+  && sudo apt-get install --yes moreutils \
+  && sudo rm -rf /var/lib/apt/lists/*

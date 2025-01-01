@@ -10,6 +10,7 @@ def step_impl(context, max_duration):
     assert context.duration < float(max_duration)
 
 
+@then("STDOUT should contain '{substring}'")
 @then('STDOUT should contain "{substring}"')
 def step_impl(context, substring):
     # TODO-72: @alexanderilyin: refactor & unify all output matching related steps

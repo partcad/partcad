@@ -20,7 +20,9 @@ env:
 jobs:
   dev-container-build:
     name: "Build: Dev Container"
+    # TODO:https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller/about-actions-runner-controller#creating-your-own-runner-image
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
@@ -49,6 +51,7 @@ jobs:
   poetry-install:
     name: "Run: poetry install"
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     needs: dev-container-build
     steps:
       - name: Checkout (GitHub)
@@ -97,6 +100,7 @@ jobs:
   pytest:
     name: "Run: pytest"
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     needs: poetry-install
     steps:
       - name: Checkout (GitHub)
@@ -128,7 +132,7 @@ jobs:
           runCmd: |
             mkdir -pv test-results
             poetry --no-ansi --no-interaction show --tree
-            poetry --no-ansi --no-interaction run pytest --verbose --color=no
+            poetry --no-ansi --no-interaction run pytest --verbose --color=no | ts -i %.S | ts -s
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
@@ -168,6 +172,7 @@ jobs:
   pre-commit:
     name: "Run: pre-commit"
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     needs: dev-container-build
     steps:
       - name: Checkout (GitHub)
@@ -194,8 +199,9 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
+          # TODO: Run ggshield and/or other secrets scanning tools as separate job
           env: |
-            SKIP=poetry-export,poetry-lock
+            SKIP=poetry-export,poetry-lock,ggshield
           runCmd:
             pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
             --all-files
@@ -203,6 +209,7 @@ jobs:
   behave:
     name: "Run: behave"
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     needs: poetry-install
     steps:
       - name: Checkout (GitHub)
@@ -294,6 +301,7 @@ jobs:
           - "3.12"
     name: "Run: nox"
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     needs: poetry-install
     steps:
       - name: Checkout (GitHub)
