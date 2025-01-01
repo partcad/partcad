@@ -100,7 +100,7 @@ jobs:
   pytest:
     name: "Run: pytest"
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     needs: poetry-install
     steps:
       - name: Checkout (GitHub)
@@ -301,7 +301,7 @@ jobs:
           - "3.12"
     name: "Run: nox"
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 10
     needs: poetry-install
     steps:
       - name: Checkout (GitHub)
