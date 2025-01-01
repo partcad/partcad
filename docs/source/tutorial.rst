@@ -87,6 +87,15 @@ Now the part can be exported:
 
     pc render -t stl :test
 
+Reset partcad
+---------------------
+
+PartCAD maintains an internal state to keep track of dependencies of a project. This state can be reset using the command below.
+
+  .. code-block:: shell
+
+    pc reset
+
 =================
 VS Code Extension
 =================

@@ -1,5 +1,5 @@
 import rich_click as click
-from partcad.logging import Process
+from partcad.logging import Process, info
 from partcad.context import Context
 from partcad.user_config import user_config
 
@@ -11,3 +11,5 @@ def cli(ctx: Context) -> None:
     with Process("Install", "this"):
         user_config.force_update = True
         ctx.get_all_packages()
+        if ctx.stats_git_ops:
+            info(f"Git operations: {ctx.stats_git_ops}")

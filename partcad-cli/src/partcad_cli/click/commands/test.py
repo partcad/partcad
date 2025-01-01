@@ -62,6 +62,8 @@ def cli(ctx, package, recursive, sketch, interface, assembly, scene, object):
         if recursive:
             start_package = ctx.get_project_abs_path(package)
             all_packages = ctx.get_all_packages(start_package)
+            if ctx.stats_git_ops:
+                logging.info(f"Git operations: {ctx.stats_git_ops}")
             packages = [p["name"] for p in all_packages]
         else:
             packages = [package]

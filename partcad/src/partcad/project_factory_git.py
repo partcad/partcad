@@ -108,6 +108,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             short_branch_name = branch_name[branch_name.find("/") + 1 :]
                             pc_logging.debug("Refreshing the GIT branch: %s" % short_branch_name)
                             origin.pull(short_branch_name)
+                            self.ctx.stats_git_ops += 1
                             os.utime(guard_path, (now, now))
                     else:
                         # Import a specific revision
@@ -127,6 +128,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             origin.fetch()
                             repo.git.checkout(self.import_revision, force=True)
                             origin.pull(force=True, rebase=True)
+                            self.ctx.stats_git_ops += 1
                             os.utime(guard_path, (now, now))
                         else:
                             # No update was performed
@@ -151,6 +153,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                 try:
                     pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
                     repo = Repo.clone_from(repo_url, cache_path)
+                    self.ctx.stats_git_ops += 1
                     if not self.import_revision is None:
                         repo.git.checkout(self.import_revision, force=True)
                         after = self.import_revision
