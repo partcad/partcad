@@ -24,6 +24,44 @@ possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).
 
 
+=======================
+Installing Dependencies
+=======================
+
+Cloning over SSH is faster and more reliable because it uses an efficient
+protocol with lower overhead, supports compression, and maintains stable
+connections via key-based authentication. SSH avoids HTTPS rate limits,
+handles firewalls better, and eliminates credential prompts, making it
+ideal for large repositories or frequent interactions.
+
+If you have SSH keys configured then you can add the following
+to the ~/.partcad/config.yaml:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    import:
+      overrides:
+        url:
+          "git@github.com:": "https://github.com/"
+
+===========================
+Git Configuration Overrides
+===========================
+
+By default, PartCAD uses the system's Git configuration when importing packages
+using git. If you want to override these configurations, you can add your
+overrides in ``~/.partcad/config.yaml`` as shown below:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    git:
+      config:
+        "user.name": "John Doe"
+        "user.email": "johndoe@example.com"
+        ...
+
 =============
 Generative AI
 =============

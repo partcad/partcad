@@ -37,6 +37,55 @@ Feature: `pc install` command
     Then STDERR should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
 
+  @wip @success @pc-init @pc-install @pc-ansi
+  Scenario: Install packages with ssh
+    Given a file named "partcad.yaml" with content:
+      """
+      import:
+        raspberrypi:
+          desc: Raspberry Pi
+          type: git
+          url: https://github.com/partcad/partcad-electronics-sbcs-raspberrypi
+      """
+    And a user configuration file named "config.yaml" with content:
+      """
+      import:
+        overrides:
+          url:
+            "git@github.com:": "https://github.com/"
+      """
+    When I run "partcad install"
+    Then STDOUT should contain "Cloning the GIT repo:"
+    Then STDOUT should contain "git@github.com:"
+    Then STDOUT should contain "DONE: Install: this:"
+    Then the command should exit with a status code of "0"
+
+  @success @pc-init @pc-install @pc-ansi
+  Scenario: Override git configuration
+    Given a file named "partcad.yaml" with content:
+      """
+      import:
+        raspberrypi:
+          desc: Raspberry Pi
+          type: git
+          url: https://github.com/partcad/partcad-electronics-sbcs-raspberrypi
+      """
+    And a user configuration file named "config.yaml" with content:
+      """
+      git:
+        config:
+          "user.name": "John Doe"
+          "user.email": "johndoe@example.com"
+      """
+    When I run "partcad install"
+    Then STDOUT should contain "Cloning the GIT repo:"
+    Then STDOUT should contain "DONE: Install: this:"
+    Then the command should exit with a status code of "0"
+    When I run "git -C ~/.partcad/git/*/ config --get user.name"
+    Then STDOUT should contain "John Doe"
+    When I run "git -C ~/.partcad/git/*/ config --get user.email"
+    Then STDOUT should contain "johndoe@example.com"
+
   @wip @failure @pc-install
   Scenario: Install non-existent package
     Given I am in "/tmp/sandbox/behave" directory
