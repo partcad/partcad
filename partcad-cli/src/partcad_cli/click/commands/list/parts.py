@@ -7,6 +7,7 @@ from partcad.logging import Process
 @click.command(help="List available parts")
 @click.option(
     "-u",
+    "--used_by",
     "used_by",
     help="Only process objects used by the given assembly or scene.",
     type=str,
@@ -14,6 +15,7 @@ from partcad.logging import Process
 )
 @click.option(
     "-r",
+    "--recursive",
     "recursive",
     is_flag=True,
     help="Recursively process all imported packages",
