@@ -15,6 +15,14 @@ def step_impl(context, filename):
         logging.debug(f"Creating file: {filename}")
         file.write(content)
 
+@given('a user configuration file named "{filename}" with content')
+def step_impl(context, filename):
+    content = context.text
+    filename = expandvars(filename, context)
+    filename = os.path.join(context.user_config_dir, filename)
+    with open(filename, "w") as file:
+        logging.debug(f"Creating file: {filename}")
+        file.write(content)
 
 @then('a file named "{file_path}" should have YAML content')
 def step_impl(context, file_path):

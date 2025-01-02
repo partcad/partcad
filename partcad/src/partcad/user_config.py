@@ -128,5 +128,25 @@ class UserConfig:
         else:
             self.max_script_correction = None
 
+        # option: git.config
+        # description: git configuration for git
+        # values: <dict>
+        # default: {}
+        self.git_config = self.config_obj.get("git", {}).get("config", {})
+        if self.git_config is None:
+            self.git_config = {}
+
+        # option: import.overrides
+        # description: overrides for import settings
+        # values: <dict>
+        # default: {}
+        self.import_overrides = self.config_obj.get("import", {}).get("overrides", {})
+        if self.import_overrides is None:
+            self.import_overrides = {}
+        # option: import.git.retry
+        # description: retry settings for git clone
+        # values: <dict>
+        # default: {}
+        self.git_retry_config = self.config_obj.get("git", {}).get("clone", {}).get("retry", {})
 
 user_config = UserConfig()
