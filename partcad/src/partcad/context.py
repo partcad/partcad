@@ -42,6 +42,7 @@ class Context(project_config.Configuration):
     stats_providers: int
     stats_provider_queries: int
     stats_memory: int
+    stats_git_ops: int
 
     # name is the package path (not a filesystem path) of the root package
     # in case it's configured to be something other than '/' (default)
@@ -119,6 +120,7 @@ class Context(project_config.Configuration):
         self.stats_providers = 0
         self.stats_provider_queries = 0
         self.stats_memory = 0
+        self.stats_git_ops = 0
 
         self.mates = {}
         # self.projects contains all projects known to this context

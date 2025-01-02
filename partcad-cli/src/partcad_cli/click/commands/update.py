@@ -1,7 +1,6 @@
 import rich_click as click
 from partcad.context import Context
 from partcad.user_config import user_config
-from partcad.user_config import user_config
 from partcad import logging as logging
 
 
@@ -15,6 +14,8 @@ def cli(ctx: Context):
     user_config.force_update = True
     try:
         packages = ctx.get_all_packages()
+        if ctx.stats_git_ops:
+            logging.info(f"Git operations: {ctx.stats_git_ops}")
         logging.info(f"Successfully updated {len(packages)} packages")
     except Exception as e:
         logging.error(f"Error updating packages: {str(e)}")
