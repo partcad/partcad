@@ -18,6 +18,7 @@ import threading
 from . import project_factory as pf
 from . import logging as pc_logging
 from .user_config import user_config
+from shlex import quote
 
 global_cache_lock = threading.Lock()
 cache_locks = {}
@@ -67,12 +68,32 @@ class GitImportConfiguration:
         self.import_revision = self.config_obj.get("revision")
         self.import_rel_path = self.config_obj.get("relPath")
 
+        self._apply_import_overrides()
+
+    def _apply_import_overrides(self):
+        # applying url overrides
+        url_override = user_config.import_overrides.get("url", {})
+        if url_override:
+            for key, value in url_override.items():
+                if value in self.import_config_url:
+                    self.import_config_url = self.import_config_url.replace(value, key)
+
+    def _git_config_options(self) -> list[str]:
+        params = []
+        for key, value in user_config.git_config.items():
+            if key.find("url") != -1 and key.find("insteadOf") != -1:
+                continue
+
+             # Use shlex.quote to properly escape shell arguments
+            params.append(f"-c {quote(key)}={quote(str(value))}")
+        return params
 
 class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
     def __init__(self, ctx, parent, config):
         pf.ProjectFactory.__init__(self, ctx, parent, config)
         GitImportConfiguration.__init__(self)
 
+        self.git_config_options: list[str] = self._git_config_options()
         self.path = self._clone_or_update_repo(self.import_config_url)
 
         # Complement the config object here if necessary
@@ -194,7 +215,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     # Clone the repository if it's not cached yet.
                     try:
                         pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
-                        repo = Repo.clone_from(repo_url, cache_path)
+                        repo = Repo.clone_from(repo_url, cache_path, multi_options=self.git_config_options, allow_unsafe_options=True)
                         if not self.import_revision is None:
                             repo.git.checkout(self.import_revision, force=True)
                             after = self.import_revision
