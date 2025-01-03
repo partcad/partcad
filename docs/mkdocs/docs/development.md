@@ -164,8 +164,8 @@ You can use [GitHub.copilot] to generate tests boilerplate using prompts like th
 
 ### Test Reports
 
-[Allure Report](https://allurereport.org/)
-[pytest-cov documentation](https://pytest-cov.readthedocs.io/)
+- [Allure Report](https://allurereport.org/)
+- [pytest-cov documentation](https://pytest-cov.readthedocs.io/)
 
 ```bash
 allure serve allure-results
@@ -372,6 +372,14 @@ use the following commands on PRs to interact with it:
 Gource is a software version control visualization tool that creates an animated tree of your repository's commit
 history, turning your development timeline into something resembling an interstellar journey through code.
 
+Additionally, there is a [`gource-visualization.yml`](.github/workflows/gource-visualization.yml) workflow which runs at
+the beginning of each week and generates visual representations of the repository's development history using Gource:
+
+- Runs automatically every Monday at 00:00 UTC.
+- Can be triggered manually with customizable visualization parameters.
+- Generates an MP4 video artifact that's available for 7 days.
+- Provides insights into the project's evolution and development patterns.
+
 1. Install Gource:
 
    ```bash
@@ -399,7 +407,7 @@ history, turning your development timeline into something resembling an interste
    FPS=60 # 60 FPS for smooth playback
 
    gource \
-     -${RESOLUTION} \
+     --viewport "${RESOLUTION}" \
      --seconds-per-day "${SECONDS_PER_DAY}" \
      --auto-skip-seconds "${AUTO_SKIP_SECONDS}" \
      --file-idle-time "${FILE_IDLE_TIME}" \
@@ -415,6 +423,11 @@ history, turning your development timeline into something resembling an interste
      -pix_fmt yuv420p \
      "${OUTPUT}"
    ```
+
+#### Upload to YouTube
+
+- [YouTube Data API v3](https://console.cloud.google.com/marketplace/product/google/youtube.googleapis.com)
+- [Upload Video via GH Action](https://chatgpt.com/share/6774b2f3-b748-8001-a434-3aa069a696b3)
 
 ## Task Management
 

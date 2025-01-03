@@ -1,6 +1,7 @@
 {
   "name": "PartCAD Dev Container",
   "build": {
+    "cacheFrom": "ghcr.io/partcad/devcontainer-partcad:latest",
     "dockerfile": "./Dockerfile"
   },
   "remoteEnv": {
