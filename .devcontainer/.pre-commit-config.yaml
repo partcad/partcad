@@ -21,7 +21,7 @@ repos:
         exclude_types: [svg]
       - id: check-yaml
         exclude: "^mkdocs.yml|partcad/tests/unit/data/project_config_(template|include).yaml$"
-        args: ["--unsafe"]
+        args: ["--unsafe"] # TODO: Remove once there is better solution for '!!python/name:...' in mkdocs.yml
       - id: check-added-large-files
       # https://github.com/docker/for-mac/issues/5029
       # - id: check-executables-have-shebangs
