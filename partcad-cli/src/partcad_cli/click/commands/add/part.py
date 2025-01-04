@@ -10,6 +10,7 @@ from pathlib import Path
     type=str,
     help="The part description (also used by LLMs).",
     required=False,
+    show_envvar=True,
 )
 @click.option(
     "--ai",
@@ -22,6 +23,7 @@ from pathlib import Path
     ),
     help="Generative AI provider.",
     required=False,
+    show_envvar=True,
 )
 # TODO-93: @alexanderilyin: Make this optional and detect the kind from the PATH
 @click.argument(

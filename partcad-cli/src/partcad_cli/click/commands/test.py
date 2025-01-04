@@ -48,12 +48,49 @@ async def cli_test_async(ctx, packages, sketch, interface, assembly, scene, obje
 
 
 @click.command(help="Run tests on a part, assembly, or scene")
-@click.option("--package", "-P", help="Package to retrieve the object from", type=str, default="")
-@click.option("--recursive", "-r", help="Recursively test all imported packages", is_flag=True)
-@click.option("--sketch", "-s", help="The object is a sketch", is_flag=True)
-@click.option("--interface", "-i", help="The object is an interface", is_flag=True)
-@click.option("--assembly", "-a", help="The object is an assembly", is_flag=True)
-@click.option("--scene", "-S", help="The object is a scene", is_flag=True)
+@click.option(
+    "--package",
+    "-P",
+    type=str,
+    default="",
+    show_envvar=True,
+    help="Package to retrieve the object from",
+)
+@click.option(
+    "--recursive",
+    "-r",
+    is_flag=True,
+    show_envvar=True,
+    help="Recursively test all imported packages",
+)
+@click.option(
+    "--sketch",
+    "-s",
+    is_flag=True,
+    show_envvar=True,
+    help="The object is a sketch",
+)
+@click.option(
+    "--interface",
+    "-i",
+    is_flag=True,
+    show_envvar=True,
+    help="The object is an interface",
+)
+@click.option(
+    "--assembly",
+    "-a",
+    is_flag=True,
+    show_envvar=True,
+    help="The object is an assembly",
+)
+@click.option(
+    "--scene",
+    "-S",
+    is_flag=True,
+    show_envvar=True,
+    help="The object is a scene",
+)
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_obj
 def cli(ctx, package, recursive, sketch, interface, assembly, scene, object):

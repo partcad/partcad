@@ -15,12 +15,14 @@ from partcad_cli.click.commands.list.sketches import cli as list_sketches
     help="Only process objects used by the given assembly or scene.",
     type=str,
     required=False,
+    show_envvar=True,
 )
 @click.option(
     "-r",
     "--recursive",
     is_flag=True,
     help="Recursively process all imported packages",
+    show_envvar=True,
 )
 @click.argument("package", type=str, required=False, default=".")
 @click.command(help="List all available parts, assemblies and scenes")

@@ -156,6 +156,40 @@ Or their more script-friendly variants:
     pc -q --no-ansi inspect -V /pub/robotics/parts/gobilda:structure/u_channel_2
     pc -q --no-ansi inspect -V -a /pub/robotics/parts/gobilda:examples/wormgear
 
+=====================
+Environment Variables
+=====================
+
+PartCAD allows you to set CLI options and override user configurations specified in
+``~/.partcad/config.yaml`` using environment variables. This can be particularly
+useful for setting configurations dynamically or in environments where modifying
+configuration files is not feasible.
+
+Generally, all of PartCAD's environment variables are prefixed with ``PC``.
+
+For CLI options, the environment variable prefix depends on the command being
+used. You can use the `--help` option to determine the corresponding environment
+variable for each CLI option.
+
+    Here are some examples:
+
+      .. code-block:: bash
+
+        # Equivalent to: pc add part --desc "testing" scad test.scad
+        PC_ADD_PART_DESC="testing" pc add part scad test.scad
+
+Note that, these environment variables will be overridden if the CLI option is specified.
+
+For user configurations, the environment variables are of the format ``PC`` followed by the
+configuration option name(in uppercase). For example, to override the ``googleApiKey`` configuration,
+you would set the environment variable ``PC_GOOGLEAPIKEY``.
+
+Note that environment variable names are case-sensitive. Always use uppercase letters
+for the ``PC`` prefix and the rest of the variable name, as shown in the examples above.
+
+In this case, these environment variables will take precedence over the values specified in
+``~/.partcad/config.yaml``.
+
 ========
 Security
 ========
