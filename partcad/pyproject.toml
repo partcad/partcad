@@ -4,7 +4,7 @@ version = "0.7.40"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "cad", "design", "openscad", "step", "stl"]
-requires-python = ">=3.10"
+requires-python = "==3.12"
 license = {file = "LICENSE.txt"}
 authors = [
   {name = "PartCAD", email = "support@partcad.org" }
