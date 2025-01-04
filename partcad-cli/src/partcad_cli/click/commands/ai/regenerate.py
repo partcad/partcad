@@ -11,30 +11,35 @@ import rich_click as click
     type=str,
     help="Package to retrieve the object from",
     default=None,
+    show_envvar=True,
 )
 @click.option(
     "-s",
     "--sketch",
     help="The object is a sketch",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-i",
     "--interface",
     help="The object is an interface",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-a",
     "--assembly",
     help="The object is an assembly",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-S",
     "--scene",
     help="The object is a scene",
     is_flag=True,
+    show_envvar=True,
 )
 @click.argument(
     "object", type=str, required=False

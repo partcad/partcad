@@ -19,12 +19,14 @@ import partcad.logging as logging
     "--create-dirs",
     help="Create the necessary directory structure if it is missing",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-O",
     "--output-dir",
     help="Create artifacts in the given output directory",
     type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    show_envvar=True,
 )
 @click.option(
     "-t",
@@ -43,42 +45,49 @@ import partcad.logging as logging
             "gltf",
         ]
     ),
+    show_envvar=True,
 )
 @click.option(
     "-P",
     "--package",
     help="Package to retrieve the object from",
     type=str,
+    show_envvar=True,
 )
 @click.option(
     "-r",
     "--recursive",
     help="Recursively test all imported packages",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-s",
     "--sketch",
     help="The object is a sketch",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-i",
     "--interface",
     help="The object is an interface",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-a",
     "--assembly",
     help="The object is an assembly",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-S",
     "--scene",
     help="The object is a scene",
     is_flag=True,
+    show_envvar=True,
 )
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj

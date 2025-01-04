@@ -4,9 +4,20 @@ from partcad.logging import Process
 
 
 @click.command(help="List available assemblies")
-@click.option("-r", "--recursive", is_flag=True, help="Recursively process all imported packages")
 @click.option(
-    "-u", "--used_by", type=str, required=False, help="Only process objects used by the given assembly or scene."
+    "-r",
+    "--recursive",
+    is_flag=True,
+    help="Recursively process all imported packages",
+    show_envvar=True,
+)
+@click.option(
+    "-u",
+    "--used_by",
+    type=str,
+    required=False,
+    help="Only process objects used by the given assembly or scene.",
+    show_envvar=True,
 )
 @click.argument("package", type=str, required=False, default=".")  # help="Package to retrieve the object from"
 @click.pass_obj

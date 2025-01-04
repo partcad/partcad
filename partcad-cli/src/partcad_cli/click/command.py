@@ -29,16 +29,29 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
 
 
 @click.command(cls=Loader)
-@click.option("-v", "--verbose", is_flag=True, help="Increase verbosity level")
-@click.option("-q", "--quiet", is_flag=True, help="Decrease verbosity level")
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    help="Increase verbosity level",
+    show_envvar=True,
+)
+@click.option(
+    "-q",
+    "--quiet",
+    is_flag=True, help="Decrease verbosity level",
+    show_envvar=True,
+)
 @click.option(
     "--no-ansi",
     is_flag=True,
     help="Produce plain text logs without colors or animations",
+    show_envvar=True,
 )
 @click.option(
     "-p",
     "--package",
+    show_envvar=True,
     type=click.Path(exists=True),
     help="Specify the package path (YAML file or directory with 'partcad.yaml')",
 )
@@ -155,6 +168,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
 # cli.context_class = StderrContext
 cli.context_settings = {
     "show_default": True,
+    "auto_envvar_prefix": "PC",
     # terminal_width
     # max_content_width
     # "": StderrContext,

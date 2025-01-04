@@ -72,7 +72,7 @@ class GitImportConfiguration:
 
     def _apply_import_overrides(self):
         # applying url overrides
-        url_override = user_config.import_overrides.get("url", {})
+        url_override = user_config.get("import.overrides.url")
         if url_override:
             for key, value in url_override.items():
                 if value in self.import_config_url:
@@ -80,7 +80,10 @@ class GitImportConfiguration:
 
     def _git_config_options(self) -> list[str]:
         params = []
-        for key, value in user_config.git_config.items():
+        git_config = user_config.get('git.config')
+        if git_config is None:
+            return params
+        for key, value in git_config.items():
             if key.find("url") != -1 and key.find("insteadOf") != -1:
                 continue
 
@@ -137,8 +140,8 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
         with cache_lock:
             attempt = 0
-            max_retries = user_config.git_retry_config.get("max", 1)
-            patience = user_config.git_retry_config.get("patience", 1)
+            max_retries = user_config.get_int('git.clone.retry.max')
+            patience = user_config.get_float('git.clone.retry.patience')
             while attempt <= max_retries:
                 # Check if the repository is already cached.
                 if os.path.exists(cache_path):

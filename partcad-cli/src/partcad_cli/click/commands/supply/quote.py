@@ -10,9 +10,28 @@ import sys
 
 
 @click.command(help="Get a quote from suppliers")
-@click.option("--json", "-j", "api", help="Produce JSON output", is_flag=True)
-@click.option("--qos", "-q", help="Requested quality of service", type=str)
-@click.option("--provider", "-p", help="Provider to use", type=str)
+@click.option(
+    "--json",
+    "-j",
+    "api",
+    help="Produce JSON output",
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--qos",
+    "-q",
+    help="Requested quality of service",
+    type=str,
+    show_envvar=True,
+)
+@click.option(
+    "--provider",
+    "-p",
+    help="Provider to use",
+    type=str,
+    show_envvar=True,
+)
 @click.argument(
     "specs",
     metavar="object[[,material],count]",

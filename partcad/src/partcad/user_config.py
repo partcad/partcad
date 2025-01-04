@@ -10,18 +10,19 @@ import importlib.util
 import os
 from pathlib import Path
 import shutil
-import yaml
+import vyper
 
 from . import logging as pc_logging
 
 
-class UserConfig:
+class UserConfig(vyper.Vyper):
     @staticmethod
     def get_config_dir():
         return os.path.join(Path.home(), ".partcad")
 
     def __init__(self):
-        self.config_obj = {}
+        super().__init__()
+        self.set_config_type("yaml")
 
         config_path = os.path.join(
             UserConfig.get_config_dir(),
@@ -29,124 +30,90 @@ class UserConfig:
         )
         if os.path.exists(config_path):
             try:
-                self.config_obj = yaml.safe_load(open(config_path, "r"))
-                if self.config_obj is None:
-                    self.config_obj = {}
+                with open(config_path, "r") as f:
+                    self.read_config(f)
             except Exception as e:
                 pc_logging.error("ERROR: Failed to parse %s" % config_path)
+
+        if shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
+            self.set_default("pythonSandbox", "conda")
+        else:
+            self.set_default("pythonSandbox", "none")
+
+        self.set_default("internalStateDir", UserConfig.get_config_dir())
+        self.set_default("forceUpdate", False)
+
+        self.set_env_prefix("pc")
+        self.automatic_env()
 
         # option: threadsMax
         # description: the maximum number of processing threads to use (not a strict limit)
         # values: >2
         # default: min(7, <cpu threads count - 1>)
         self.threads_max = None
-
-        if "threadsMax" in self.config_obj:
-            self.threads_max = int(self.config_obj["threadsMax"])
+        if self.is_set("threadsMax"):
+            self.threads_max = self.get_int("threadsMax")
 
         # option: pythonSandbox
         # description: sandboxing environment for invoking python scripts
         # values: [none | pypy | conda]
         # default: conda
-        if not shutil.which("conda") is None or importlib.util.find_spec("conda") is not None:
-            self.python_runtime = "conda"
-        else:
-            self.python_runtime = "none"
-
-        if "pythonSandbox" in self.config_obj:
-            self.python_runtime = self.config_obj["pythonSandbox"]
+        self.python_runtime = self.get("pythonSandbox")
 
         # option: internalStateDir
         # description: folder to store all temporary files
         # values: <path>
         # default: '.partcad' folder in the home directory
-        if "internalStateDir" in self.config_obj:
-            self.internal_state_dir = self.config_obj["internalStateDir"]
-        else:
-            self.internal_state_dir = UserConfig.get_config_dir()
+        self.internal_state_dir = self.get("internalStateDir")
 
         # option: forceUpdate
         # description: update all repositories even if they are fresh
         # values: [True | False]
         # default: False
-        if "forceUpdate" in self.config_obj:
-            self.force_update = self.config_obj["forceUpdate"]
-        else:
-            self.force_update = False
+        self.force_update = self.get_bool("forceUpdate")
 
         # option: googleApiKey
         # description: GOOGLE API key for AI services
         # values: <string>
         # default: None
-        if "googleApiKey" in self.config_obj:
-            self.google_api_key = self.config_obj["googleApiKey"]
-        else:
-            self.google_api_key = None
+        self.google_api_key = self.get("googleApiKey")
 
         # option: openaiApiKey
         # description: OpenAI API key for AI services
         # values: <string>
         # default: None
-        if "openaiApiKey" in self.config_obj:
-            self.openai_api_key = self.config_obj["openaiApiKey"]
-        else:
-            self.openai_api_key = None
+        self.openai_api_key = self.get("openaiApiKey")
 
         # option: ollamaNumThread
         # description: Ask Ollama to use the given number of CPU threads
         # values: <integer>
         # default: None
-        if "ollamaNumThread" in self.config_obj:
-            self.ollama_num_thread = int(self.config_obj["ollamaNumThread"])
-        else:
-            self.ollama_num_thread = None
+        self.ollama_num_thread = None
+        if self.is_set("ollamaNumThread"):
+            self.ollama_num_thread = self.get_int("ollamaNumThread")
 
         # option: maxGeometricModeling
         # description: the number of attempts for geometric modelling
         # values: <integer>
         # default: None
-        if "maxGeometricModeling" in self.config_obj:
-            self.max_geometric_modeling = int(self.config_obj["maxGeometricModeling"])
-        else:
-            self.max_geometric_modeling = None
+        self.max_geometric_modeling = None
+        if self.is_set("maxGeometricModeling"):
+            self.max_geometric_modeling = self.get_int("maxGeometricModeling")
 
         # option: maxModelGeneration
         # description: the number of attempts for CAD script generation
         # values: <integer>
         # default: None
-        if "maxModelGeneration" in self.config_obj:
-            self.max_model_generation = int(self.config_obj["maxModelGeneration"])
-        else:
-            self.max_model_generation = None
+        self.max_model_generation = None
+        if self.is_set("maxModelGeneration"):
+            self.max_model_generation = self.get_int("maxModelGeneration")
 
         # option: maxScriptCorrection
         # description: the number of attempts to incrementally fix the script if it's not working
         # values: <integer>
         # default: None
-        if "maxScriptCorrection" in self.config_obj:
-            self.max_script_correction = int(self.config_obj["maxScriptCorrection"])
-        else:
-            self.max_script_correction = None
-
-        # option: git.config
-        # description: git configuration for git
-        # values: <dict>
-        # default: {}
-        self.git_config = self.config_obj.get("git", {}).get("config", {})
-        if self.git_config is None:
-            self.git_config = {}
-
-        # option: import.overrides
-        # description: overrides for import settings
-        # values: <dict>
-        # default: {}
-        self.import_overrides = self.config_obj.get("import", {}).get("overrides", {})
-        if self.import_overrides is None:
-            self.import_overrides = {}
-        # option: import.git.retry
-        # description: retry settings for git clone
-        # values: <dict>
-        # default: {}
-        self.git_retry_config = self.config_obj.get("git", {}).get("clone", {}).get("retry", {})
+        self.max_script_correction = None
+        if self.is_set("maxScriptCorrection"):
+            self.max_script_correction = self.get_int("maxScriptCorrection")
 
 user_config = UserConfig()
