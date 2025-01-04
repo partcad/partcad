@@ -1,4 +1,8 @@
 {
+  "yaml.customTags": [
+    "tag:yaml.org,2002:python/name:material.extensions.emoji.to_svg",
+    "tag:yaml.org,2002:python/name:material.extensions.emoji.twemoji"
+  ],
   // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
   "OcpCadViewer.advanced.autostart": false,
   "[feature]": {
@@ -68,6 +72,7 @@
     "pfscad",
     "pfstl",
     "pipefail",
+    "practicies",
     "pyflakes",
     "pyproject",
     "pythonw",
@@ -79,6 +84,7 @@
     "startswith",
     "timebox",
     "Topo",
+    "twemoji",
     "ultrafast",
     "vcodec",
     "virtualenv",

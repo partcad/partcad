@@ -20,7 +20,8 @@ repos:
         exclude: "^examples/|_ai_.+\\.(py|scad)"
         exclude_types: [svg]
       - id: check-yaml
-        exclude: "^partcad/tests/unit/data/project_config_(template|include).yaml$"
+        exclude: "^mkdocs.yml|partcad/tests/unit/data/project_config_(template|include).yaml$"
+        args: ["--unsafe"]
       - id: check-added-large-files
       # https://github.com/docker/for-mac/issues/5029
       # - id: check-executables-have-shebangs

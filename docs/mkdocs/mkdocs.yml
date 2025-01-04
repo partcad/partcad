@@ -1,8 +1,128 @@
 site_name: PartCAD
 site_url: https://github.com/partcad/partcad
+repo_url: https://github.com/partcad/partcad
+edit_uri: edit/devel/docs/mkdocs
 
-theme: material
+copyright: >
+  Copyright &copy; 2024 - 2025 PartCAD – <a href="#__consent">Change cookie settings</a>
+
+# TODO: Setup contributors https://squidfunk.github.io/mkdocs-material/setup/adding-a-git-repository/#document-contributors
+# TODO: Setup authors https://squidfunk.github.io/mkdocs-material/setup/adding-a-git-repository/#document-authors
+# TODO: Setup Giscus https://squidfunk.github.io/mkdocs-material/setup/adding-a-comment-system/
+
+plugins:
+  - search
+  - tags:
+      tags_file: tags.md
+  - blog:
+      # authors_profiles: true # insiders-4.46.0
+  # - social:
+  #     cards_layout: default
+theme:
+  features:
+    - navigation.tabs
+    - content.action.edit
+    - navigation.footer
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.tracking
+    - toc.follow
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    # - navigation.tabs
+  logo: assets/logo-black-on-amber.png
+  language: en
+  font:
+    text: Jetbrains Mono
+    code: Roboto Mono
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      primary: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+extra:
+  social:
+    - icon: fontawesome/brands/linkedin
+      link: https://linkedin.com/company/partcad
+    - icon: fontawesome/brands/youtube
+      link: https://youtube.com/@PartCAD
+    - icon: fontawesome/brands/github
+      link: https://github.com/partcad
+    - icon: fontawesome/brands/chrome
+      link: https://partcad.org/
+    - icon: fontawesome/brands/threads
+      link: https://threads.net/@partcadofficial
+    - icon: fontawesome/brands/x-twitter
+      link: https://x.com/PartCAD
+    - icon: fontawesome/brands/instagram
+      link: https://instagram.com/partcadofficial
+    - icon: fontawesome/brands/facebook
+      link: https://www.facebook.com/profile.php?id=61568171037701
+    - icon: fontawesome/brands/tiktok
+      link: https://tiktok.com/@partcad
+    - icon: simple/readthedocs
+      link: https://partcad.readthedocs.io/en/latest/?badge=latest
+    - icon: material/microsoft-visual-studio-code
+      link: https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/9AEu3vF7rv
+    - icon: fontawesome/brands/docker
+      link: https://hub.docker.com/u/partcad
+  version:
+    # TODO: https://squidfunk.github.io/mkdocs-material/setup/setting-up-versioning/
+    provider: mike
+  consent:
+    title: Cookie consent
+    description: >-
+      We use cookies to recognize your repeated visits and preferences, as well as to measure the effectiveness of our
+      documentation and whether users find what they're searching for. With your consent, you're helping us to make our
+      documentation better.
+  analytics:
+    provider: google
+    property: G-XXXXXXXXXX # TODO: Replace with Google Analytics ID
+    feedback:
+      title: Was this page helpful?
+      ratings:
+        - icon: material/emoticon-happy-outline
+          name: This page was helpful
+          data: 1
+          note: >-
+            Thanks for your feedback!
+        - icon: material/emoticon-sad-outline
+          name: This page could be improved
+          data: 0
+          note: >-
+            Thanks for your feedback! Help us improve this page by using our <a href="What could be improved?"
+            target="_blank" rel="noopener">feedback form</a>.
+
 markdown_extensions:
+  - toc:
+      permalink: "¶"
+  - abbr
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - attr_list
+  - def_list
+  - footnotes
+  - tables
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - mdx_truly_sane_lists:
       nested_indent: 2
       truly_sane: true
