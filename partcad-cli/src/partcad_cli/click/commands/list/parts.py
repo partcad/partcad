@@ -20,10 +20,12 @@ from partcad.logging import Process
     is_flag=True,
     help="Recursively process all imported packages",
 )
-@click.argument("package", type=str, required=False)  # help='Package to retrieve the object from'
+@click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
 def cli(ctx, used_by, recursive, package):
-    with Process("ListParts", "this"):
+    package = ctx.get_project(package).name
+
+    with Process("ListParts", package):
         part_count = 0
         part_kinds = 0
 
@@ -33,19 +35,12 @@ def cli(ctx, used_by, recursive, package):
         else:
             ctx.get_all_packages()
 
-        # TODO-104: @openvmp: remove the following workaround after replacing 'print'
-        # with corresponding logging calls
-        time.sleep(2)
-
         output = "PartCAD parts:\n"
         for project_name in ctx.projects:
-            if not recursive and package is not None and package != project_name:
+            if not recursive and package != project_name:
                 continue
 
-            if recursive and package is not None and not project_name.startswith(package):
-                continue
-
-            if recursive and package is None and not project_name.startswith(ctx.get_current_project_path()):
+            if recursive and not project_name.startswith(package):
                 continue
 
             project = ctx.projects[project_name]

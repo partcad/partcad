@@ -22,7 +22,7 @@ from partcad_cli.click.commands.list.sketches import cli as list_sketches
     is_flag=True,
     help="Recursively process all imported packages",
 )
-@click.argument("package", type=str, required=False)
+@click.argument("package", type=str, required=False, default=".")
 @click.command(help="List all available parts, assemblies and scenes")
 @click.pass_obj
 def cli(ctx, used_by, recursive, package) -> None:
@@ -39,10 +39,10 @@ def cli(ctx, used_by, recursive, package) -> None:
 
     catch_exceptions = False
 
-    runner.invoke(list_assemblies, options, catch_exceptions=catch_exceptions, obj=ctx)
+    runner.invoke(list_packages, catch_exceptions=catch_exceptions, obj=ctx)
+    runner.invoke(list_sketches, options, catch_exceptions=catch_exceptions, obj=ctx)
     runner.invoke(list_interfaces, options, catch_exceptions=catch_exceptions, obj=ctx)
+    runner.invoke(list_parts, options, catch_exceptions=catch_exceptions, obj=ctx)
+    runner.invoke(list_assemblies, options, catch_exceptions=catch_exceptions, obj=ctx)
     # TODO: @alexanderilyin: TypeError: startswith first arg must be str or a tuple of str, not Project
     # runner.invoke(list_mates, options, catch_exceptions=catch_exceptions, obj=ctx)
-    runner.invoke(list_packages, catch_exceptions=catch_exceptions, obj=ctx)
-    runner.invoke(list_parts, options, catch_exceptions=catch_exceptions, obj=ctx)
-    runner.invoke(list_sketches, options, catch_exceptions=catch_exceptions, obj=ctx)
