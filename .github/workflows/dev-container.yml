@@ -200,9 +200,8 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
-          # TODO: Run ggshield and/or other secrets scanning tools as separate job
           env: |
-            SKIP=poetry-export,poetry-lock,ggshield
+            SKIP=pytest,behave,poetry-export,poetry-lock,ggshield
           runCmd:
             pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
             --all-files
