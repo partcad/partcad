@@ -1,0 +1,32 @@
+desc: >
+  This example demonstrates how to define 3D parts by sweeping 2D sketches.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect dxf
+    pc inspect cylinder
+    pc inspect clock
+    ```
+
+parts:
+  pipe:
+    desc: Sweep a circle sketch to create a pipe.
+    type: sweep
+    sketch: ../produce_sketch_basic:circle_04
+    ratio: 0.9
+    axis: [[0, 0, 20], [0, 0, 20], [20, 0, 0], [20, 20, 0], [0, 20, 0]]
+  dxf:
+    desc: Sweep a DXF sketch to create a 3D part.
+    type: sweep
+    sketch: ../produce_sketch_dxf:dxf_01
+    axis: [[0, 0, 10], [10, 0, 0]]
+  clock:
+    desc: Sweep a clock sketch to create a 3D clock.
+    type: sweep
+    sketch: ../produce_sketch_build123d:clock
+    axis: [[0, 0, 1]]
+
+render:
+  readme:
+  svg:

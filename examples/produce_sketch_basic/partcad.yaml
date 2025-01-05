@@ -29,6 +29,18 @@ sketches:
       x: 2
       y: 2
       radius: 2
+  circle_04:
+    type: basic
+    desc: Create a circle with an inner radius
+    circle: 5
+    inner:
+      circle: 3
+  circle_05:
+    type: basic
+    desc: Create a circle with an inner radius
+    circle: 5
+    inner:
+      square: 2
   square_01:
     type: basic
     desc: The shortest way to create a basic square in PartCAD
