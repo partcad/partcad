@@ -1,19 +1,9 @@
-#
-# OpenVMP, 2023-2024
-#
-# Author: Aleksandr Ilin (ailin@partcad.org)
-# Created: Fri Nov 22 2024
-#
-# Licensed under Apache License, Version 2.0.
-#
-
 import rich_click as click
-import partcad.utils as pc_utils
 import partcad.logging as logging
+import partcad.utils as pc_utils
 
 
-# TODO-105: @alexanderilyin: Replace --scene, --interface, --assembly, --sketch with a single option --type
-@click.command(help="Render a 2D projection of parts, assemblies, or scenes onto a plane")
+@click.command(help="Export 3D view of parts, assemblies, or scenes in the package")
 @click.option(
     "-p",
     "--create-dirs",
@@ -32,9 +22,12 @@ import partcad.logging as logging
     help="The type of file to export",
     type=click.Choice(
         [
-            "readme",
-            "svg",
-            "png"
+            "step",
+            "stl",
+            "3mf",
+            "threejs",
+            "obj",
+            "gltf",
         ]
     ),
 )
@@ -77,7 +70,7 @@ import partcad.logging as logging
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
 def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
-    with logging.Process("Render", "this"):
+    with logging.Process("Export", "this"):
         ctx.option_create_dirs = create_dirs
         package = package if package is not None else ""
         if recursive:

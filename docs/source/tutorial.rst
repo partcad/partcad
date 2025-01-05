@@ -85,7 +85,7 @@ Now the part can be exported:
 
   .. code-block:: shell
 
-    pc render -t stl :test
+    pc export -t stl :test
 
 Reset partcad
 ---------------------
