@@ -26,8 +26,8 @@ Feature: `pc list parts` command
     When I run "partcad list parts"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "PartCAD parts:"
-    And STDOUT should contain "Total:"
-    And STDOUT should not contain "<none>"
+    And STDOUT should not contain "Total:"
+    And STDOUT should contain "<none>"
 
   @success @pc-list @pc-list-parts @pc-list-parts-recursively
   Scenario: List parts recursively

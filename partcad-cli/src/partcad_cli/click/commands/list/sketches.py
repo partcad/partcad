@@ -17,10 +17,12 @@ from partcad import logging
     required=False,
     help="Only process objects used by the given assembly or scene.",
 )
-@click.argument("package", type=str, required=False)  # help="Package to retrieve the object from"
+@click.argument("package", type=str, required=False, default=".")  # help="Package to retrieve the object from"
 @click.pass_obj
 def cli(ctx, recursive, used_by, package):
-    with Process("ListSketches", "this"):
+    package = ctx.get_project(package).name
+
+    with Process("ListSketches", package):
         sketch_count = 0
         sketch_kinds = 0
 
@@ -32,16 +34,10 @@ def cli(ctx, recursive, used_by, package):
 
         output = "PartCAD sketches:\n"
         for project_name in ctx.projects:
-            if not recursive and package is not None and package != project_name:
+            if not recursive and package != project_name:
                 continue
 
-            if not recursive and project_name != ctx.get_current_project_path():
-                continue
-
-            if recursive and package is not None and not project_name.startswith(package):
-                continue
-
-            if recursive and package is None and not project_name.startswith(ctx.get_current_project_path()):
+            if recursive and not project_name.startswith(package):
                 continue
 
             project = ctx.projects[project_name]

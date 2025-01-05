@@ -8,10 +8,12 @@ from partcad.logging import Process
 @click.option(
     "-u", "--used_by", type=str, required=False, help="Only process objects used by the given assembly or scene."
 )
-@click.argument("package", type=str, required=False)  # help="Package to retrieve the object from"
+@click.argument("package", type=str, required=False, default=".")  # help="Package to retrieve the object from"
 @click.pass_obj
 def cli(ctx, recursive, used_by, package):
-    with Process("ListMates", "this"):
+    package = ctx.get_project(package).name
+
+    with Process("ListMates", package):
         mating_kinds = 0
 
         if used_by is not None:
@@ -23,17 +25,11 @@ def cli(ctx, recursive, used_by, package):
         # Instantiate all interfaces in the relevant packages to get the mating data
         # finalized
         for package_name in ctx.projects:
-            if not recursive:
-                if package is not None and package_name != package:
-                    continue
-                if (package is None) and package_name != ctx.get_current_project_path():
-                    continue
+            if not recursive and package_name != package:
+                continue
 
-            if recursive:
-                if package is not None and not package_name.startswith(package):
-                    continue
-                if package is None and not package_name.startswith(ctx.get_current_project_path()):
-                    continue
+            if recursive and not package_name.startswith(package):
+                continue
 
             package = ctx.projects[package_name]
             for interface_name in package.interfaces:

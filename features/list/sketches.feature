@@ -32,7 +32,7 @@ Feature: `pc list assemblies` command
     Then STDOUT should contain "circle_01"
     Then STDOUT should contain "The shortest way to create a basic circle in PartCAD"
     Then STDOUT should contain "Total: 1"
-    Then STDOUT should contain "DONE: ListSketches: this:"
+    Then STDOUT should contain "DONE: ListSketches: /:"
 
 # Feature: List sketches recursively
 #   As a PartCAD user
