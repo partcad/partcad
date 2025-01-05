@@ -46,7 +46,7 @@ Feature: `pc add package` command
     # And the directory "OpenVMP-robots/.git" should exist
     # And STDOUT should contain "Successfully installed OpenVMP-robots"
 
-    When I run "partcad list packages"
+    When I run "partcad list packages -r"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "PartCAD packages:"
     And STDOUT should contain "OpenVMP-robots"
