@@ -276,7 +276,7 @@ jobs:
               echo "##[warning]allure-results directory not found. Skipping report generation."
               exit 0
             fi
-            if ! allure generate --config .devcontainer/allure.ymlallure-results -o allure-report; then
+            if ! allure generate --config .devcontainer/allure.yml allure-results -o allure-report; then
               echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
             fi
 
@@ -358,3 +358,52 @@ jobs:
       #     name: pytest-allure-report
       #     path: allure-report/
       #     retention-days: 7
+
+  integration-tests:
+    name: "Run: integration tests"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: poetry-install
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Run Integration Tests
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          push: never
+          runCmd: |
+            mkdir -pv test-results
+            poetry --no-ansi --no-interaction show --tree
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(which pc) test -r -P . && coverage xml -o test-results/coverage.xml)"
+
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml

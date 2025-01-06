@@ -63,7 +63,6 @@ class PartFactorySweep(PartFactory):
 
                 # Convert path points to TColgp_Array1OfPnt
                 from OCP.TColgp import TColgp_Array1OfPnt
-                from OCP.TColStd import TColStd_Array1OfReal
                 from OCP.gp import gp_Pnt
 
                 # Decide how many points to create
@@ -171,7 +170,7 @@ class PartFactorySweep(PartFactory):
                 shape = compound
 
             except Exception as e:
-                pc_logging.exception("Failed to create a swept part: %s" % e)
+                pc_logging.exception(f"Failed to create a swept part: {e}")
 
             self.ctx.stats_parts_instantiated += 1
 
