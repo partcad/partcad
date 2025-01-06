@@ -124,7 +124,7 @@ The basic sketches are defined using the following syntax:
     <sketch-name>:
       type: basic
       desc: <(optional) textual description>
-      # The below are mutualy exclusive options
+      # The below are mutually exclusive options
       circle: <(optional) radius>
       circle:  # alternative syntax
         radius: <radius>
@@ -140,8 +140,15 @@ The basic sketches are defined using the following syntax:
         side-y: <y edge size>
         x: <(optional) x offset>
         y: <(optional) y offset>
+      inner: <(optional) inner shape>
+        circle: <(optional) radius>
+           ...
+        square: <(optional) edge size>
+           ...
+        rectangle: <(optional)>
+           ...
 
-There must be only one field ``circle``, ``square`` or ``rectangle``.
+There must be only one field ``circle``, ``square`` or ``rectangle`` at the top level of the sketch or in the ``inner`` field.
 
 DXF
 ---
@@ -229,8 +236,8 @@ Abstract interfaces
 
 Abstract interfaces can't be implemented by parts directly.
 They also can't be used for mating with other interfaces.
-They are a convinence feature so that a property can be implemented once
-but inherited mutiple times by all child interfaces.
+They are a convenience feature so that a property can be implemented once
+but inherited multiple times by all child interfaces.
 
 Port visualization
 ------------------
@@ -314,7 +321,7 @@ There is a list of predefined parameters that are easy to use:
           default: <(optional) default value>
 
 However custom parameters can be defined to use an arbitrary direction vector
-and an arbitary offset or rotation.
+and an arbitrary offset or rotation.
 
 .. code-block:: yaml
 
@@ -376,7 +383,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|stl|3mf>
+      type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|stl|3mf|extrude|sweep>
       desc: <(optional) textual description, also used by AI>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       # ... type-specific options ...
@@ -412,7 +419,7 @@ Define parts with CodeCAD scripts using the following syntax:
       showObject: <(optional) the name of the object to show using "show_object(...)">
       patch:
         # ...regexp substitutions to apply...
-        "patern": "repl"
+        "pattern": "repl"
       pythonRequirements: <(python scripts only) the list of dependencies to install>
       parameters:
         <param name>:
@@ -510,6 +517,57 @@ Define parts with CAD files using the following syntax:
 |                                                                                      |       # type: 3mf         |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
+Extrude
+-------
+
+Define parts by extruding a sketch using the following syntax:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: extrude
+      sketch: <name of the sketch to extrude>
+      depth: <depth of the extrusion>
+
++---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| Example                   | Result                                                                                                                  |
++===========================+=========================================================================================================================+
+| .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_extrude/dxf.svg?raw=true                  |
+|                           |   :height: 256                                                                                                          |
+|   parts:                  |                                                                                                                         |
+|     dxf:                  |                                                                                                                         |
+|       type: extrude       |                                                                                                                         |
+|       sketch: dxf_01      |                                                                                                                         |
+|       depth: 10           |                                                                                                                         |
++---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+Sweep
+-----
+
+Define parts by sweeping a sketch using the following syntax:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: sweep
+      sketch: <name of the sketch to sweep>
+      axis: [[0, 0, 10], [10, 0, 0]] # the sweep path defined as a list of vectors
+      ratio: <(optional, >0.5, <1.0) the placement of additional points along the vectors for better approximation>
+
++---------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| Example                                                                   | Result                                                                                                                  |
++===========================================================================+=========================================================================================================================+
+| .. code-block:: yaml                                                      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_sweep/pipe.svg?raw=true                   |
+|                                                                           |   :height: 256                                                                                                          |
+|   parts:                                                                  |                                                                                                                         |
+|     pipe:                                                                 |                                                                                                                         |
+|       type: sweep                                                         |                                                                                                                         |
+|       sketch: section                                                     |                                                                                                                         |
+|       axis: [[0, 0, 20], [0, 0, 20], [20, 0, 0], [20, 20, 0], [0, 20, 0]] |                                                                                                                         |
++---------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
 References
 ----------
 
@@ -552,7 +610,7 @@ Parameters
 Each part may have a list of parameters that are passed into the scripts to
 modify the part.
 The parameters can be of types ``string``, ``float``, ``int`` and ``bool``.
-The parameter values can be restricted by specifying the list of possibe values
+The parameter values can be restricted by specifying the list of possible values
 in ``enum``.
 The initial parameter value is set using ``default``.
 
@@ -568,8 +626,8 @@ The initial parameter value is set using ``default``.
           default: <default value>
 
 There are several parameter names that are reserved for values used in
-visualisation, simulation calculations and, if applicable, manufacturing
-(also referred to as ``MCFTT prameters`` using their first letters):
+visualization, simulation calculations and, if applicable, manufacturing
+(also referred to as ``MCFTT parameters`` using their first letters):
 
 - ``material``
 
@@ -608,7 +666,7 @@ If the part has variable MCFTT parameters depending on the surface,
 then either this part must be broken down into multiple parts,
 or the values must be derived from CAD files/scripts (not implemented yet).
 In the latter case the part will not be eligible for manufacturing features,
-unless a specific manufacturing service provider recognises (vendor,SKU) values
+unless a specific manufacturing service provider recognizes (vendor,SKU) values
 and have received corresponding manufacturing instructions out-of-band.
 
 The MCFTT parameters are not required and have no impact on parts that have
@@ -709,7 +767,7 @@ Providers are declared in ``partcad.yaml`` using the following syntax:
           enum: <(optional) list of possible values>
           default: <default value>
 
-``enrich`` providers are just references to other providers with some prameters
+``enrich`` providers are just references to other providers with some parameters
 modified to specific values.
 
 ``store`` and ``manufacturer`` providers are implemented as Python scripts.
@@ -831,7 +889,7 @@ can be defined explicitly using the `path` parameter:
   parts:
     part-name:
       type: step
-      path: alternatative-path.step
+      path: alternative-path.step
 
 When the source file is not present in the package source repository
 but needs to be pulled from a remote location, the following options can be used:

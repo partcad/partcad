@@ -219,9 +219,7 @@ class SketchFactoryBasic(SketchFactory):
                 # Build the face
                 face_builder = BRepBuilderAPI_MakeFace(outer_wire, True)
                 for inner_wire in inner_wires:
-                    if not inner_wire.is_closed:
-                        raise ValueError("Cannot build face(s): inner wire is not closed")
-                    face_builder.Add(inner_wire.wrapped)
+                    face_builder.Add(inner_wire)
 
                 face_builder.Build()
                 if not face_builder.IsDone():

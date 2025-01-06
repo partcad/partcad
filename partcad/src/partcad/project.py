@@ -33,6 +33,7 @@ from .sketch_factory_cadquery import SketchFactoryCadquery
 from . import part
 from . import part_config
 from .part_factory_extrude import PartFactoryExtrude
+from .part_factory_sweep import PartFactorySweep
 from . import part_factory_scad as pfscad
 from . import part_factory_step as pfs
 from . import part_factory_stl as pfstl
@@ -560,6 +561,8 @@ class Project(project_config.Configuration):
             pfscad.PartFactoryScad(self.ctx, source_project, self, config)
         elif config["type"] == "extrude":
             PartFactoryExtrude(self.ctx, source_project, self, config)
+        elif config["type"] == "sweep":
+            PartFactorySweep(self.ctx, source_project, self, config)
         elif config["type"] == "alias":
             pfa.PartFactoryAlias(self.ctx, source_project, self, config)
         elif config["type"] == "enrich":
