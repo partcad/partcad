@@ -530,6 +530,18 @@ Define parts by extruding a sketch using the following syntax:
       sketch: <name of the sketch to extrude>
       depth: <depth of the extrusion>
 
++---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| Example                   | Result                                                                                                                  |
++===========================+=========================================================================================================================+
+| .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_extrude/dxf.svg?raw=true                  |
+|                           |   :height: 256                                                                                                          |
+|   parts:                  |                                                                                                                         |
+|     dxf:                  |                                                                                                                         |
+|       type: extrude       |                                                                                                                         |
+|       sketch: dxf_01      |                                                                                                                         |
+|       depth: 10           |                                                                                                                         |
++---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
 Sweep
 -----
 
@@ -543,6 +555,18 @@ Define parts by sweeping a sketch using the following syntax:
       sketch: <name of the sketch to sweep>
       axis: [[0, 0, 10], [10, 0, 0]] # the sweep path defined as a list of vectors
       ratio: <(optional, >0.5, <1.0) the placement of additional points along the vectors for better approximation>
+
++---------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| Example                                                                   | Result                                                                                                                  |
++===========================================================================+=========================================================================================================================+
+| .. code-block:: yaml                                                      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_sweep/pipe.svg?raw=true                   |
+|                                                                           |   :height: 256                                                                                                          |
+|   parts:                                                                  |                                                                                                                         |
+|     pipe:                                                                 |                                                                                                                         |
+|       type: sweep                                                         |                                                                                                                         |
+|       sketch: section                                                     |                                                                                                                         |
+|       axis: [[0, 0, 20], [0, 0, 20], [20, 0, 0], [20, 20, 0], [0, 20, 0]] |                                                                                                                         |
++---------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
 References
 ----------
