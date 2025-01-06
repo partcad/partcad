@@ -394,7 +394,7 @@ jobs:
           runCmd: |
             mkdir -pv test-results
             poetry --no-ansi --no-interaction show --tree
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(which pc) test -r -P . && coverage xml -o test-results/coverage.xml)"
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) test -r -P . && coverage xml -o test-results/coverage.xml)"
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
