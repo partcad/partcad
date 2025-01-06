@@ -394,9 +394,10 @@ jobs:
           runCmd: |
             mkdir -pv test-results
             poetry --no-ansi --no-interaction show --tree
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r /)"
             poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r)"
             poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r)"
-            poetry --no-ansi --no-interaction run coverage xml -data-file=examples/.coverage -o test-results/coverage.xml
+            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o test-results/coverage.xml
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
