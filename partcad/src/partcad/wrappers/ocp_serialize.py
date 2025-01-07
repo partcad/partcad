@@ -56,27 +56,6 @@ from typing import Any
 
 import OCP
 
-# FIXME(clairbee): remove imports of OCP submodules
-
-# # pool = OCP.OSD.OSD_ThreadPool.DefaultPool_s(1)
-# from OCP.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
-# from OCP.BinTools import BinTools
-# from OCP.gp import gp_Quaternion, gp_Trsf, gp_Vec
-# from OCP.TopLoc import TopLoc_Location
-# from OCP.TopoDS import (
-#     TopoDS,
-#     TopoDS_Compound,
-#     TopoDS_CompSolid,
-#     TopoDS_Edge,
-#     TopoDS_Face,
-#     TopoDS_Shape,
-#     TopoDS_Shell,
-#     TopoDS_Solid,
-#     TopoDS_Vertex,
-#     TopoDS_Wire,
-# )
-
-# import OCP.TopAbs as ta
 
 downcast_LUT = {
     OCP.TopAbs.TopAbs_VERTEX: OCP.TopoDS.TopoDS.Vertex_s,

@@ -488,11 +488,17 @@ class Shape(ShapeConfiguration):
                 if not project is None:
                     project.ctx.ensure_dirs_for_file(filepath)
 
-                BRepMesh_IncrementalMesh(obj, tolerance, True, angularTolerance, True)
+                BRepMesh_IncrementalMesh(
+                    obj,
+                    tolerance,
+                    isRelative=True,
+                    angularDeflection=angularTolerance,
+                    isInParallel=True,
+                )
 
                 writer = StlAPI_Writer()
                 writer.ASCIIMode = ascii
-                writer.Write(filepath)
+                writer.Write(obj, filepath)
 
             await pc_thread.run(do_render_stl)
 
