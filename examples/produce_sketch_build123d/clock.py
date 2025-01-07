@@ -34,7 +34,7 @@ license:
 # [Code]
 
 from build123d import *
-from ocp_vscode import show
+from ocp_vscode import show_object
 
 clock_radius = 10
 with BuildSketch() as minute_indicator:
@@ -61,5 +61,5 @@ with BuildSketch() as clock_face:
                 mode=Mode.SUBTRACT,
             )
 
-show(clock_face)
+show_object(clock_face)
 # [End]

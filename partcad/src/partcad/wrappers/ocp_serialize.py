@@ -54,42 +54,43 @@ import copyreg
 from io import BytesIO
 from typing import Any
 
-import cadquery as cq
 import OCP
 
-# pool = OCP.OSD.OSD_ThreadPool.DefaultPool_s(1)
-from OCP.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
-from OCP.BinTools import BinTools
-from OCP.gp import gp_Quaternion, gp_Trsf, gp_Vec
-from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import (
-    TopoDS,
-    TopoDS_Compound,
-    TopoDS_CompSolid,
-    TopoDS_Edge,
-    TopoDS_Face,
-    TopoDS_Shape,
-    TopoDS_Shell,
-    TopoDS_Solid,
-    TopoDS_Vertex,
-    TopoDS_Wire,
-)
+# FIXME(clairbee): remove imports of OCP submodules
 
-import OCP.TopAbs as ta
+# # pool = OCP.OSD.OSD_ThreadPool.DefaultPool_s(1)
+# from OCP.TopAbs import TopAbs_Orientation, TopAbs_ShapeEnum
+# from OCP.BinTools import BinTools
+# from OCP.gp import gp_Quaternion, gp_Trsf, gp_Vec
+# from OCP.TopLoc import TopLoc_Location
+# from OCP.TopoDS import (
+#     TopoDS,
+#     TopoDS_Compound,
+#     TopoDS_CompSolid,
+#     TopoDS_Edge,
+#     TopoDS_Face,
+#     TopoDS_Shape,
+#     TopoDS_Shell,
+#     TopoDS_Solid,
+#     TopoDS_Vertex,
+#     TopoDS_Wire,
+# )
+
+# import OCP.TopAbs as ta
 
 downcast_LUT = {
-    ta.TopAbs_VERTEX: TopoDS.Vertex_s,
-    ta.TopAbs_EDGE: TopoDS.Edge_s,
-    ta.TopAbs_WIRE: TopoDS.Wire_s,
-    ta.TopAbs_FACE: TopoDS.Face_s,
-    ta.TopAbs_SHELL: TopoDS.Shell_s,
-    ta.TopAbs_SOLID: TopoDS.Solid_s,
-    ta.TopAbs_COMPOUND: TopoDS.Compound_s,
-    ta.TopAbs_COMPSOLID: TopoDS.CompSolid_s,
+    OCP.TopAbs.TopAbs_VERTEX: OCP.TopoDS.TopoDS.Vertex_s,
+    OCP.TopAbs.TopAbs_EDGE: OCP.TopoDS.TopoDS.Edge_s,
+    OCP.TopAbs.TopAbs_WIRE: OCP.TopoDS.TopoDS.Wire_s,
+    OCP.TopAbs.TopAbs_FACE: OCP.TopoDS.TopoDS.Face_s,
+    OCP.TopAbs.TopAbs_SHELL: OCP.TopoDS.TopoDS.Shell_s,
+    OCP.TopAbs.TopAbs_SOLID: OCP.TopoDS.TopoDS.Solid_s,
+    OCP.TopAbs.TopAbs_COMPOUND: OCP.TopoDS.TopoDS.Compound_s,
+    OCP.TopAbs.TopAbs_COMPSOLID: OCP.TopoDS.TopoDS.CompSolid_s,
 }
 
 
-def shapetype(obj: TopoDS_Shape) -> TopAbs_ShapeEnum:
+def shapetype(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopAbs.TopAbs_ShapeEnum:
     """Return TopoDS_Shape's TopAbs_ShapeEnum"""
     if obj.IsNull():
         raise ValueError("Null TopoDS_Shape object")
@@ -97,7 +98,7 @@ def shapetype(obj: TopoDS_Shape) -> TopAbs_ShapeEnum:
     return obj.ShapeType()
 
 
-def downcast(obj: TopoDS_Shape) -> TopoDS_Shape:
+def downcast(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopoDS.TopoDS_Shape:
     """Downcasts a TopoDS object to suitable specialized type
 
     Args:
@@ -113,20 +114,9 @@ def downcast(obj: TopoDS_Shape) -> TopoDS_Shape:
     return return_value
 
 
-def _inflate_shape(data: bytes):
-    with BytesIO(data) as bio:
-        return cq.Shape.importBrep(bio)
-
-
-def _reduce_shape(shape: cq.Shape):
-    with BytesIO() as stream:
-        shape.exportBrep(stream)
-        return _inflate_shape, (stream.getvalue(),)
-
-
 def _inflate_topods(data: bytes):
     with BytesIO(data) as bio:
-        shape = TopoDS_Shape()
+        shape = OCP.TopoDS.TopoDS_Shape()
         builder = OCP.BRep.BRep_Builder()
         OCP.BRepTools.BRepTools.Read_s(shape, bio, builder)
         return downcast(shape)
@@ -145,9 +135,7 @@ def _inflate_transform(*values: float):
 
 
 def _reduce_transform(transform: OCP.gp.gp_Trsf):
-    return _inflate_transform, tuple(
-        transform.Value(i, j) for i in range(1, 4) for j in range(1, 5)
-    )
+    return _inflate_transform, tuple(transform.Value(i, j) for i in range(1, 4) for j in range(1, 5))
 
 
 def _inflate_Gtransform(*values):
@@ -259,19 +247,8 @@ def _reduce_xyz(dir: OCP.gp.gp_XYZ):
 
 def register():
     """
-    Registers pickle support functions for common CadQuery and OCCT objects.
+    Registers pickle support functions for common OCCT objects.
     """
-
-    for cls in (
-        cq.Edge,
-        cq.Compound,
-        cq.Shell,
-        cq.Face,
-        cq.Solid,
-        cq.Vertex,
-        cq.Wire,
-    ):
-        copyreg.pickle(cls, _reduce_shape)
 
     copyreg.pickle(OCP.gp.gp_Pnt, _reduce_pnt)
     copyreg.pickle(OCP.gp.gp_Vec, _reduce_vec)
@@ -283,26 +260,22 @@ def register():
     copyreg.pickle(OCP.gp.gp_Ax3, _reduce_ax3)
     copyreg.pickle(OCP.gp.gp_Pln, _reduce_pln)
 
-    copyreg.pickle(cq.Vector, lambda vec: (cq.Vector, vec.toTuple()))
     copyreg.pickle(OCP.gp.gp_Trsf, _reduce_transform)
     copyreg.pickle(OCP.gp.gp_GTrsf, _reduce_Gtransform)
     copyreg.pickle(
-        cq.Location, lambda loc: (cq.Location, (loc.wrapped.Transformation(),))
-    )
-    copyreg.pickle(
-        TopLoc_Location,
-        lambda loc: (TopLoc_Location, (loc.Transformation(),)),
+        OCP.TopLoc.TopLoc_Location,
+        lambda loc: (OCP.TopLoc.TopLoc_Location, (loc.Transformation(),)),
     )
 
     for cls in (
-        TopoDS_Shape,
-        TopoDS_Compound,
-        TopoDS_CompSolid,
-        TopoDS_Solid,
-        TopoDS_Shell,
-        TopoDS_Face,
-        TopoDS_Wire,
-        TopoDS_Edge,
-        TopoDS_Vertex,
+        OCP.TopoDS.TopoDS_Shape,
+        OCP.TopoDS.TopoDS_Compound,
+        OCP.TopoDS.TopoDS_CompSolid,
+        OCP.TopoDS.TopoDS_Solid,
+        OCP.TopoDS.TopoDS_Shell,
+        OCP.TopoDS.TopoDS_Face,
+        OCP.TopoDS.TopoDS_Wire,
+        OCP.TopoDS.TopoDS_Edge,
+        OCP.TopoDS.TopoDS_Vertex,
     ):
         copyreg.pickle(cls, _reduce_topods)

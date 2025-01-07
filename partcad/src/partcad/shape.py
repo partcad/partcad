@@ -7,7 +7,6 @@
 # Licensed under Apache License, Version 2.0.
 
 import contextlib
-import cadquery as cq
 import build123d as b3d
 
 import asyncio
@@ -29,7 +28,7 @@ from . import sync_threads as pc_thread
 from . import wrapper
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from cq_serialize import register as register_cq_helper
+from ocp_serialize import register as register_ocp_helper
 
 
 class Shape(ShapeConfiguration):
@@ -37,7 +36,7 @@ class Shape(ShapeConfiguration):
     desc: str
     svg_path: str
     svg_url: str
-    # shape: None | b3d.TopoDS_Shape | OCP.TopoDS.TopoDS_Solid
+    # shape: None | OCP.TopoDS.TopoDS_Solid
 
     errors: list[str]
 
@@ -100,7 +99,9 @@ class Shape(ShapeConfiguration):
             shape = b3d_solid.wrapped
         return shape
 
-    async def get_cadquery(self) -> cq.Shape:
+    async def get_cadquery(self):
+        import cadquery as cq
+
         cq_solid = cq.Solid.makeBox(1, 1, 1)
         cq_solid.wrapped = await self.get_wrapped()
         return cq_solid
@@ -242,7 +243,7 @@ class Shape(ShapeConfiguration):
             "line_weight": line_weight,
             "viewport_origin": viewport_origin,
         }
-        register_cq_helper()
+        register_ocp_helper()
         picklestring = pickle.dumps(request)
         request_serialized = base64.b64encode(picklestring).decode()
 
@@ -250,8 +251,7 @@ class Shape(ShapeConfiguration):
         # as this is expected to be hermetic.
         # Stick to the version where CadQuery and build123d are known to work.
         runtime = ctx.get_python_runtime(version="3.10")
-        await runtime.ensure_async("nlopt==2.7.1")  # SVG wrapper requires cq-serialize
-        await runtime.ensure_async("cadquery==2.4.0")  # SVG wrapper requires cq-serialize
+        await runtime.ensure_async("cadquery-ocp==7.7.2")
         await runtime.ensure_async("build123d==0.7.0")
         response_serialized, errors = await runtime.run_async(
             [
@@ -417,13 +417,26 @@ class Shape(ShapeConfiguration):
         with pc_logging.Action("RenderSTEP", self.project_name, self.name):
             step_opts, filepath = self.render_getopts("step", ".step", project, filepath)
 
-            cq_obj = await self.get_cadquery()
+            obj = await self.get_wrapped()
 
             def do_render_step():
-                nonlocal project, filepath, cq_obj
+                nonlocal project, filepath, obj
+                from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
+                from OCP.Interface import Interface_Static
+
                 if not project is None:
                     project.ctx.ensure_dirs_for_file(filepath)
-                cq.exporters.export(cq_obj, filepath)
+
+                pcurves = 1
+                if "write_pcurves" in step_opts and not step_opts["write_pcurves"]:
+                    pcurves = 0
+                precision_mode = step_opts.get("precision_mode", 0)
+
+                writer = STEPControl_Writer()
+                Interface_Static.SetIVal_s("write.surfacecurve.mode", pcurves)
+                Interface_Static.SetIVal_s("write.precision.mode", precision_mode)
+                writer.Transfer(obj, STEPControl_AsIs)
+                writer.Write(filepath)
 
             await pc_thread.run(do_render_step)
 
@@ -442,34 +455,44 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
+        ascii=None,
     ):
         with pc_logging.Action("RenderSTL", self.project_name, self.name):
             stl_opts, filepath = self.render_getopts("stl", ".stl", project, filepath)
 
             if tolerance is None:
                 if "tolerance" in stl_opts and not stl_opts["tolerance"] is None:
-                    tolerance = stl_opts["tolerance"]
+                    tolerance = float(stl_opts["tolerance"])
                 else:
                     tolerance = 0.1
 
             if angularTolerance is None:
                 if "angularTolerance" in stl_opts and not stl_opts["angularTolerance"] is None:
-                    angularTolerance = stl_opts["angularTolerance"]
+                    angularTolerance = float(stl_opts["angularTolerance"])
                 else:
                     angularTolerance = 0.1
 
-            cq_obj = await self.get_cadquery()
+            if ascii is None:
+                if "ascii" in stl_opts and not stl_opts["ascii"] is None:
+                    ascii = bool(stl_opts["ascii"])
+                else:
+                    ascii = False
+
+            obj = await self.get_wrapped()
 
             def do_render_stl():
-                nonlocal cq_obj, project, filepath, tolerance, angularTolerance
+                nonlocal obj, project, filepath, tolerance, angularTolerance, ascii
+                from OCP.BRepMesh import BRepMesh_IncrementalMesh
+                from OCP.StlAPI import StlAPI_Writer
+
                 if not project is None:
                     project.ctx.ensure_dirs_for_file(filepath)
-                cq.exporters.export(
-                    cq_obj,
-                    filepath,
-                    tolerance=tolerance,
-                    angularTolerance=angularTolerance,
-                )
+
+                BRepMesh_IncrementalMesh(obj, tolerance, True, angularTolerance, True)
+
+                writer = StlAPI_Writer()
+                writer.ASCIIMode = ascii
+                writer.Write(filepath)
 
             await pc_thread.run(do_render_stl)
 
@@ -506,20 +529,43 @@ class Shape(ShapeConfiguration):
                 else:
                     angularTolerance = 0.1
 
-            cq_obj = await self.get_cadquery()
+            obj = await self.get_wrapped()
 
-            def do_render_3mf():
-                nonlocal cq_obj, project, filepath, tolerance, angularTolerance
-                if not project is None:
-                    project.ctx.ensure_dirs_for_file(filepath)
-                cq.exporters.export(
-                    cq_obj,
-                    filepath,
-                    tolerance=tolerance,
-                    angularTolerance=angularTolerance,
-                )
+            if not project is None:
+                project.ctx.ensure_dirs_for_file(filepath)
 
-            await pc_thread.run(do_render_3mf)
+            wrapper_path = wrapper.get("render_3mf.py")
+            request = {
+                "wrapped": obj,
+                "tolerance": tolerance,
+                "angularTolerance": angularTolerance,
+            }
+            register_ocp_helper()
+            picklestring = pickle.dumps(request)
+            request_serialized = base64.b64encode(picklestring).decode()
+
+            # We don't care about customer preferences much here
+            # as this is expected to be hermetic.
+            # Stick to the version where CadQuery and build123d are known to work.
+            runtime = ctx.get_python_runtime(version="3.10")
+            await runtime.ensure_async("cadquery-ocp==7.7.2")
+            await runtime.ensure_async("cadquery==2.4.0")
+            response_serialized, errors = await runtime.run_async(
+                [
+                    wrapper_path,
+                    os.path.abspath(filepath),
+                ],
+                request_serialized,
+            )
+            sys.stderr.write(errors)
+
+            response = base64.b64decode(response_serialized)
+            result = pickle.loads(response)
+
+            if not result["success"]:
+                pc_logging.error("Render3MF failed: %s: %s" % (self.name, result["exception"]))
+            if "exception" in result and not result["exception"] is None:
+                pc_logging.exception(result["exception"])
 
     def render_3mf(
         self,
@@ -554,21 +600,38 @@ class Shape(ShapeConfiguration):
                 else:
                     angularTolerance = 0.1
 
-            cq_obj = await self.get_cadquery()
+            obj = await self.get_wrapped()
+            wrapper_path = wrapper.get("render_threejs.py")
+            request = {
+                "wrapped": obj,
+                "tolerance": tolerance,
+                "angularTolerance": angularTolerance,
+            }
+            register_ocp_helper()
+            picklestring = pickle.dumps(request)
+            request_serialized = base64.b64encode(picklestring).decode()
 
-            def do_render_threejs():
-                nonlocal cq_obj, project, filepath, tolerance, angularTolerance
-                if not project is None:
-                    project.ctx.ensure_dirs_for_file(filepath)
-                cq.exporters.export(
-                    cq_obj,
-                    filepath,
-                    tolerance=tolerance,
-                    angularTolerance=angularTolerance,
-                    exportType=cq.exporters.ExportTypes.TJS,
-                )
+            # We don't care about customer preferences much here
+            # as this is expected to be hermetic.
+            # Stick to the version where CadQuery and build123d are known to work.
+            runtime = ctx.get_python_runtime(version="3.10")
+            await runtime.ensure_async("cadquery-ocp==7.7.2")
+            response_serialized, errors = await runtime.run_async(
+                [
+                    wrapper_path,
+                    os.path.abspath(filepath),
+                ],
+                request_serialized,
+            )
+            sys.stderr.write(errors)
 
-            await pc_thread.run(do_render_threejs)
+            response = base64.b64decode(response_serialized)
+            result = pickle.loads(response)
+
+            if not result["success"]:
+                pc_logging.error("RenderThreeJS failed: %s: %s" % (self.name, result["exception"]))
+            if "exception" in result and not result["exception"] is None:
+                pc_logging.exception(result["exception"])
 
     def render_threejs(
         self,
@@ -610,7 +673,7 @@ class Shape(ShapeConfiguration):
                 "tolerance": tolerance,
                 "angularTolerance": angularTolerance,
             }
-            register_cq_helper()
+            register_ocp_helper()
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
@@ -618,8 +681,7 @@ class Shape(ShapeConfiguration):
             # as this is expected to be hermetic.
             # Stick to the version where CadQuery and build123d are known to work.
             runtime = ctx.get_python_runtime(version="3.10")
-            await runtime.ensure_async("nlopt==2.7.1")
-            await runtime.ensure_async("cadquery==2.4.0")
+            await runtime.ensure_async("cadquery-ocp==7.7.2")
             response_serialized, errors = await runtime.run_async(
                 [
                     wrapper_path,
@@ -633,7 +695,7 @@ class Shape(ShapeConfiguration):
             result = pickle.loads(response)
 
             if not result["success"]:
-                pc_logging.error("RenderOBJ faled: %s: %s" % (self.name, result["exception"]))
+                pc_logging.error("RenderOBJ failed: %s: %s" % (self.name, result["exception"]))
             if "exception" in result and not result["exception"] is None:
                 pc_logging.exception(result["exception"])
 

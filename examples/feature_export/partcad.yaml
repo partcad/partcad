@@ -13,7 +13,7 @@ render:
     width: 128
     height: 256
   stl: ./
-  # step: ./ # TODO(clairbee): fix CadQuery's noisyness
+  # step: ./ # TODO(clairbee): fix CadQuery's noisiness
   3mf: ./
   threejs: ./
   obj: ./

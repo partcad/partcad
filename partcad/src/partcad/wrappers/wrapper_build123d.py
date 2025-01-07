@@ -15,10 +15,8 @@ import os
 import re
 import sys
 
-from cadquery import cqgi
-import build123d
-
 sys.path.append(os.path.dirname(__file__))
+import custom_cqgi
 import wrapper_common
 import py_stubs.ocp_vscode  # Make 'sys.modules["py_stubs.ocp_vscode"]' available
 from ocp_tessellate.ocp_utils import (
@@ -68,7 +66,7 @@ def process(path, request):
         )
 
     # Execute the script
-    script_object = cqgi.parse(script)
+    script_object = custom_cqgi.parse(script)
     build_result = script_object.build(build_parameters=build_parameters)
 
     if not build_result.success:

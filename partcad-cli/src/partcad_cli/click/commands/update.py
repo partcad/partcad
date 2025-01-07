@@ -16,7 +16,7 @@ def cli(ctx: Context):
         packages = ctx.get_all_packages()
         if ctx.stats_git_ops:
             logging.info(f"Git operations: {ctx.stats_git_ops}")
-        logging.info(f"Successfully updated {len(packages)} packages")
+        logging.info(f"Successfully updated {len(list(packages))} packages")
     except Exception as e:
         logging.error(f"Error updating packages: {str(e)}")
         raise click.Abort()
