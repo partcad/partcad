@@ -40,9 +40,9 @@ Below are some examples of consuming existing modules:
 
   - [Import PartCAD parts in CadQuery scripts](./consume_cadquery/)
 
-- Python scripts that use buid123d:
+- Python scripts that use build123d:
 
-  - [Import PartCAD parts in buid123d scripts](./consume_build123d/)
+  - [Import PartCAD parts in build123d scripts](./consume_build123d/)
 
 - Any other Python script:
   - [Import PartCAD parts in Python scripts](./consume_standalone/)

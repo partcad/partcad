@@ -8,7 +8,7 @@
 #
 
 import asyncio
-from path import Path
+from pathlib import Path
 import tempfile
 
 from .ai import Ai
