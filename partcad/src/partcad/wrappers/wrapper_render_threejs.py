@@ -1,8 +1,8 @@
 #
-# OpenVMP, 2024
+# OpenVMP, 2025
 #
 # Author: Roman Kuzmenko
-# Created: 2024-03-16
+# Created: 2025-01-07
 #
 # Licensed under Apache License, Version 2.0.
 #
@@ -12,6 +12,7 @@
 
 import os
 import sys
+import json
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
@@ -27,21 +28,25 @@ def process(path, request):
 
         vertices, triangles = tessellate(obj, request["tolerance"], request["angularTolerance"])
 
-        # b3d_obj = b3d.Shape(request["wrapped"])
-        # vertices, triangles = b3d.Mesher._mesh_shape(
-        #     b3d_obj, request["tolerance"], request["angularTolerance"]
-        # )
+        result = {
+            "vertices": [],
+            "faces": [],
+            "nVertices": len(vertices),
+            "nFaces": len(triangles),
+        }
 
+        # add vertices
+        for [x, y, z] in vertices:
+            result["vertices"].append([x, y, z])
+
+        # add triangles
+        for [i, j, k] in triangles:
+            # 0 means just a triangle
+            result["faces"].append([0, i, j, k])
+
+        json_str = json.dumps(result)
         with open(path, "w", encoding="utf-8", buffering=256 * 1024) as f:
-            f.write("# OBJ file\n")
-            for v in vertices:
-                f.write("v %.4f %.4f %.4f\n" % (v[0], v[1], v[2]))
-            for p in triangles:
-                f.write("f")
-                for i in p:
-                    f.write(" %d" % (i + 1))
-                f.write("\n")
-            f.flush()
+            f.write(json_str)
 
         return {
             "success": True,

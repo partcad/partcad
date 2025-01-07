@@ -7,24 +7,40 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import cadquery as cq
+import base64
+import os
+import pickle
+import sys
 
+from . import wrapper
 from . import logging as pc_logging
-from .sketch_factory_file import SketchFactoryFile
+from .sketch_factory_python import SketchFactoryPython
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
+from ocp_serialize import register as register_ocp_helper
 
 
-class SketchFactoryDxf(SketchFactoryFile):
+class SketchFactoryDxf(SketchFactoryPython):
     tolerance = 0.000001
     include = []
     exclude = []
 
-    def __init__(self, ctx, source_project, target_project, config):
+    def __init__(self, ctx, source_project, target_project, config, can_create=False):
         with pc_logging.Action("InitDXF", target_project.name, config["name"]):
+            python_version = source_project.python_version
+            if python_version is None:
+                # Stay one step ahead of the minimum required Python version
+                python_version = "3.10"
+            if python_version == "3.12" or python_version == "3.11":
+                pc_logging.debug("Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery")
+                python_version = "3.10"
             super().__init__(
                 ctx,
                 source_project,
                 target_project,
                 config,
+                can_create=can_create,
+                python_version=python_version,
                 extension=".dxf",
             )
 
@@ -50,13 +66,39 @@ class SketchFactoryDxf(SketchFactoryFile):
 
         with pc_logging.Action("DXF", sketch.project_name, sketch.name):
             try:
-                workplane = cq.importers.importDXF(
-                    self.path,
-                    tol=self.tolerance,
-                    include=self.include,
-                    exclude=self.exclude,
+                wrapper_path = wrapper.get("import_dxf.py")
+
+                request = {
+                    "path": self.path,
+                    "tolerance": self.tolerance,
+                    "include": self.include,
+                    "exclude": self.exclude,
+                }
+                register_ocp_helper()
+                picklestring = pickle.dumps(request)
+                request_serialized = base64.b64encode(picklestring).decode()
+
+                await self.runtime.ensure_async("cadquery-ocp==7.7.2")
+                await self.runtime.ensure_async("cadquery==2.4.0")
+                response_serialized, errors = await self.runtime.run_async(
+                    [
+                        wrapper_path,
+                        os.path.abspath(self.path),
+                        os.path.abspath(self.project.config_dir),
+                    ],
+                    request_serialized,
                 )
-                shape = workplane.val().wrapped
+                sys.stderr.write(errors)
+
+                response = base64.b64decode(response_serialized)
+                register_ocp_helper()
+                result = pickle.loads(response)
+
+                if not result["success"]:
+                    pc_logging.error(result["exception"])
+                    raise Exception(result["exception"])
+
+                shape = result["shape"]
             except Exception as e:
                 pc_logging.exception("Failed to import the DXF file: %s: %s" % (self.path, e))
                 shape = None

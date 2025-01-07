@@ -27,7 +27,7 @@ from . import wrapper
 from . import logging as pc_logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from cq_serialize import register as register_cq_helper
+from ocp_serialize import register as register_ocp_helper
 
 
 class PartFactoryBuild123d(PartFactoryPython):
@@ -82,7 +82,7 @@ class PartFactoryBuild123d(PartFactoryPython):
             request["patch"] = patch
 
             # Serialize the request
-            register_cq_helper()
+            register_ocp_helper()
             pickle_string = pickle.dumps(request)
             request_serialized = base64.b64encode(pickle_string).decode()
 
@@ -93,6 +93,10 @@ class PartFactoryBuild123d(PartFactoryPython):
             )
             await self.runtime.ensure_async(
                 "nlopt==2.7.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery-ocp==7.7.2",
                 session=self.session,
             )
             await self.runtime.ensure_async(
@@ -118,11 +122,6 @@ class PartFactoryBuild123d(PartFactoryPython):
             )
             await self.runtime.ensure_async(
                 "build123d==0.7.0",
-                session=self.session,
-            )
-            # PC-194: @alexanderilyin: pin down all the versions
-            await self.runtime.ensure_async(
-                "cadquery-ocp==7.7.2",
                 session=self.session,
             )
             cwd = self.project.config_dir
@@ -151,7 +150,7 @@ class PartFactoryBuild123d(PartFactoryPython):
             try:
                 # pc_logging.error("Response: %s" % response_serialized)
                 response = base64.b64decode(response_serialized)
-                register_cq_helper()
+                register_ocp_helper()
                 result = pickle.loads(response)
             except Exception as e:
                 part.error("Exception while deserializing %s: %s" % (part.name, e))

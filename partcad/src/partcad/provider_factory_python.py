@@ -13,7 +13,7 @@ import pickle
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from cq_serialize import register as register_cq_helper
+from ocp_serialize import register as register_ocp_helper
 
 from .provider_factory_file import ProviderFactoryFile
 from .runtime_python import PythonRuntime
@@ -34,13 +34,14 @@ class ProviderFactoryPython(ProviderFactoryFile):
         config,
         can_create=False,
         python_version=None,
+        extension=".py",
     ):
         super().__init__(
             ctx,
             source_project,
             target_project,
             config,
-            extension=".py",
+            extension=extension,
             can_create=can_create,
         )
         self.cwd = config.get("cwd", None)
@@ -126,7 +127,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             # request["patch"] = patch
 
             # Serialize the request
-            register_cq_helper()
+            register_ocp_helper()
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
@@ -139,6 +140,10 @@ class ProviderFactoryPython(ProviderFactoryFile):
             )
             await self.runtime.ensure_async(
                 "nlopt==2.7.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery-ocp==7.7.2",
                 session=self.session,
             )
             await self.runtime.ensure_async(
@@ -181,7 +186,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
 
             try:
                 response = base64.b64decode(response_serialized)
-                register_cq_helper()
+                register_ocp_helper()
                 result = pickle.loads(response)
             except Exception as e:
                 provider.error("Exception while deserializing %s: %s" % (provider.name, e))

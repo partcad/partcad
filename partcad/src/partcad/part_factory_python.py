@@ -23,13 +23,14 @@ class PartFactoryPython(PartFactoryFile):
         config,
         can_create=False,
         python_version=None,
+        extension=".py",
     ):
         super().__init__(
             ctx,
             source_project,
             target_project,
             config,
-            extension=".py",
+            extension=extension,
             can_create=can_create,
         )
         self.cwd = config.get("cwd", None)

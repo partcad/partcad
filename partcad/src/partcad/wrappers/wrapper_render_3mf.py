@@ -1,8 +1,8 @@
 #
-# OpenVMP, 2024
+# PartCAD, 2025
 #
 # Author: Roman Kuzmenko
-# Created: 2024-03-16
+# Created: 2025-01-07
 #
 # Licensed under Apache License, Version 2.0.
 #
@@ -12,6 +12,8 @@
 
 import os
 import sys
+
+import cadquery as cq
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
@@ -25,23 +27,15 @@ def process(path, request):
     try:
         obj = request["wrapped"]
 
-        vertices, triangles = tessellate(obj, request["tolerance"], request["angularTolerance"])
+        cq_solid = cq.Solid.makeBox(1, 1, 1)
+        cq_solid.wrapped = obj
 
-        # b3d_obj = b3d.Shape(request["wrapped"])
-        # vertices, triangles = b3d.Mesher._mesh_shape(
-        #     b3d_obj, request["tolerance"], request["angularTolerance"]
-        # )
-
-        with open(path, "w", encoding="utf-8", buffering=256 * 1024) as f:
-            f.write("# OBJ file\n")
-            for v in vertices:
-                f.write("v %.4f %.4f %.4f\n" % (v[0], v[1], v[2]))
-            for p in triangles:
-                f.write("f")
-                for i in p:
-                    f.write(" %d" % (i + 1))
-                f.write("\n")
-            f.flush()
+        cq.exporters.export(
+            cq_solid,
+            path,
+            tolerance=request["tolerance"],
+            angularTolerance=request["angularTolerance"],
+        )
 
         return {
             "success": True,
