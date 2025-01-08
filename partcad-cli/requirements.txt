@@ -1,6 +1,6 @@
 click
 ocp_vscode
-partcad==0.7.43
+partcad==0.7.44
 renderlab
 rlPyCairo
 svglib
