@@ -4,7 +4,7 @@ repo_url: https://github.com/partcad/partcad
 edit_uri: edit/devel/docs/mkdocs
 
 copyright: >
-  Copyright &copy; 2024 - 2025 PartCAD – <a href="#__consent">Change cookie settings</a>
+  Copyright &copy; 2023 - {{ year }} PartCAD - <a href="#__consent">Change cookie settings</a>
 
 # TODO: Setup contributors https://squidfunk.github.io/mkdocs-material/setup/adding-a-git-repository/#document-contributors
 # TODO: Setup authors https://squidfunk.github.io/mkdocs-material/setup/adding-a-git-repository/#document-authors
@@ -16,8 +16,6 @@ plugins:
       tags_file: tags.md
   - blog:
       # authors_profiles: true # insiders-4.46.0
-  # - social:
-  #     cards_layout: default
 theme:
   features:
     - content.action.edit
@@ -35,8 +33,8 @@ theme:
   logo: assets/logo-black-on-amber.png
   language: en
   font:
-    text: Jetbrains Mono
-    code: Roboto Mono
+    text: ["Jetbrains Mono", "Roboto", "system-ui", "sans-serif"]
+    code: ["Roboto Mono", "Consolas", "Monaco", "monospace"]
   name: material
   palette:
     # Palette toggle for light mode
@@ -92,6 +90,7 @@ extra:
       documentation better.
   analytics:
     # https://github.com/partcad/internal-web-main/blob/ae5174ec6788e479ab2db36a1042f99c777e18bc/src/App.js#L27
+    # TODO: Consider privacy-focused alternatives like Plausible or Umami for better GDPR compliance.
     provider: google
     property: G-V9Z6425XPR
     feedback:

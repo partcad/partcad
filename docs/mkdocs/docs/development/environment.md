@@ -27,7 +27,10 @@ If you do not have previous experience with Docker, then here is good place to s
 ### Engine
 
 If your primary development system is Linux then you can install Docker daemon directly on your host, see [Install] for
-more details on how to install it in distributution you're using.
+more details on how to install it in the distribution you're using. Minimum required versions:
+
+- Docker Engine: v27.4.0 or higher
+- Docker Desktop for Mac/Windows: 4.37.1 or higher
 
 !!! quote
 
