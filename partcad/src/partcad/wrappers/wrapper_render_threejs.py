@@ -44,8 +44,10 @@ def process(path, request):
             # 0 means just a triangle
             result["faces"].append([0, i, j, k])
 
+        BUFFER_SIZE = 256 * 1024  # 256KB buffer for file writes
+
         json_str = json.dumps(result)
-        with open(path, "w", encoding="utf-8", buffering=256 * 1024) as f:
+        with open(path, "w", encoding="utf-8", buffering=BUFFER_SIZE) as f:
             f.write(json_str)
 
         return {
