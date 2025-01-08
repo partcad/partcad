@@ -47,6 +47,7 @@ jobs:
           (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
           python -m venv .venv/install
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
+          apt install --yes libcairo2-dev python3-dev
       - name: Test building and packaging
         run: |
           (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad && python -m build && cd .. && deactivate)
