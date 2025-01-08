@@ -2,13 +2,11 @@
 
 [![License](https://github.com/openvmp/partcad/blob/main/apache20.svg?raw=true)](./LICENSE.txt)
 
-[![CI on MacOS and Windows](https://github.com/openvmp/partcad/actions/workflows/python-test.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/python-test.yml)
-[![CI on Linux](https://github.com/partcad/partcad/actions/workflows/dev-container.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/dev-container.yml)
+[![CI on Linux, MacOS and Windows](https://github.com/openvmp/partcad/actions/workflows/python-test.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/python-test.yml)
 [![CD on Linux, MacOS and Windows](https://github.com/openvmp/partcad/actions/workflows/python-build.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/python-build.yml)
 [![Deployment to PyPI](https://github.com/openvmp/partcad/actions/workflows/python-deploy.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/python-deploy.yml)
 [![Documentation Status](https://readthedocs.org/projects/partcad/badge/?version=latest)](https://partcad.readthedocs.io/en/latest/?badge=latest)
-<a href="https://discord.gg/zdwyxkGM"><img alt="Discord" src="https://img.shields.io/discord/1091497262733074534?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
-[![Nox](https://img.shields.io/badge/%F0%9F%A6%8A-Nox-D85E00.svg)](https://github.com/wntrblm/nox)
+<a href="https://discord.gg/h5qhbHtygj"><img alt="Discord" src="https://img.shields.io/discord/1091497262733074534?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
 
 [PartCAD] is **the first package manager for CAD models** and a framework for managing assemblies.
 
@@ -20,8 +18,8 @@ Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](ht
 
 ## Join us!
 
-Stay informed and share feedback by joining [our Discord server](https://discord.gg/zdwyxkGM). <br/>
-
+Stay informed and share feedback by joining [our Discord server](https://discord.gg/h5qhbHtygj).
+<br/>
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
 [![PartCAD Visual Studio Code extension](../docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)

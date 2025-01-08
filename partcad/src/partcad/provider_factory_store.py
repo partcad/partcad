@@ -37,6 +37,7 @@ class ProviderFactoryStore(ProviderFactoryPython):
             self.provider.query_order = self.query_order
 
     async def is_part_available(self, cart_item: ProviderCartItem):
+        pc_logging.debug("Checking availability of %s" % cart_item)
         request = ProviderRequestAvail(
             self.name,
             cart_item.vendor,

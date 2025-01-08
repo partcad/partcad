@@ -4,21 +4,12 @@ description: "Setup the environment for the build"
 runs:
   using: "composite"
   steps:
-    # - name: python
-    #   uses: actions/setup-python@v5
-    #   with:
-    #     python-version: ${{ matrix.python-version }}
-    #     cache: pip
-
     # Miniconda
     - uses: conda-incubator/setup-miniconda@v3
       with:
-        # mamba-version: "*"
         miniforge-version: latest
         channels: conda-forge,defaults
-        # activate-environment: env-test
         python-version: ${{ matrix.python-version }}
-        # auto-update-conda: true
 
     - name: Init mamba
       shell: bash

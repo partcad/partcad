@@ -61,6 +61,7 @@ class PythonRuntime(runtime.Runtime):
             version = "%d.%d" % (sys.version_info.major, sys.version_info.minor)
         super().__init__(ctx, "python-" + sandbox + "-" + version)
         self.version = version
+        self.is_mamba = False
 
         # Runtimes are meant to be executed from dedicated threads, outside of
         # the asyncio event loop. So a threading lock is appropriate here.
@@ -94,7 +95,6 @@ class PythonRuntime(runtime.Runtime):
         with self.lock:
             if not self.initialized:
                 # Preinstall the most common packages to avoid race conditions
-                # TODO(clairbee): Lock the entire runtime instead
                 self.ensure_onced("ocp-tessellate==3.0.8")
                 self.ensure_onced("nlopt==2.7.1")
                 self.ensure_onced("cadquery==2.4.0")
@@ -111,7 +111,6 @@ class PythonRuntime(runtime.Runtime):
             async with self.get_async_lock():
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
-                    # TODO(clairbee): Lock the entire runtime instead
                     await self.ensure_async_onced_locked("ocp-tessellate==3.0.8")
                     await self.ensure_async_onced_locked("nlopt==2.7.1")
                     await self.ensure_async_onced_locked("cadquery==2.4.0")
