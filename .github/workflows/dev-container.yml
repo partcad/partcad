@@ -131,7 +131,8 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
           push: never
           runCmd: |
-            mkdir -pv test-results
+            # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
+            mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
             poetry --no-ansi --no-interaction run pytest --verbose --color=no | ts -i %.S | ts -s
 
@@ -139,13 +140,13 @@ jobs:
         if: always()
         uses: ./.github/actions/upload-test-results
         with:
-          name: test-results
-          path: test-results/
+          name: pytest-results
+          path: pytest-results/
           retention-days: 7
           status: ${{ job.status }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: test-results/junit.xml
-          coverage-report: test-results/coverage.xml
+          codecov-files: pytest-results/junit.xml
+          coverage-report: pytest-results/coverage.xml
 
       - name: Generate Allure Report
         if: always()
@@ -250,20 +251,21 @@ jobs:
           runCmd: |
             # TODO-26: PC-186: Allow to configure git clone protocol in settings
             git config --global url."git@github.com:".insteadOf "https://github.com/"
-            mkdir -pv test-results
-            poetry --no-ansi --no-interaction run behave
+            mkdir -pv behave-results
+            poetry --no-ansi --no-interaction run coverage run $(poetry run which behave)
+            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o behave-results/coverage.xml
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
         uses: ./.github/actions/upload-test-results
         with:
-          name: test-results
-          path: test-results/
+          name: behave-results
+          path: behave-results/
           retention-days: 7
           status: ${{ job.status }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: test-results/junit.xml
-          coverage-report: test-results/coverage.xml
+          codecov-files: behave-results/junit.xml
+          coverage-report: behave-results/coverage.xml
 
       - name: Generate Allure Report
         if: always()
@@ -360,7 +362,7 @@ jobs:
       #     retention-days: 7
 
   integration-tests:
-    name: "Run: integration tests"
+    name: "Run: pc"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: poetry-install
@@ -386,7 +388,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-poetry-
 
-      - name: Run Integration Tests
+      - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
@@ -394,19 +396,20 @@ jobs:
           runCmd: |
             mkdir -pv test-results
             poetry --no-ansi --no-interaction show --tree
+            # TODO: Use similar 'coverage run' in behave steps when calling pc
             poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r /)"
             poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r)"
             poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r)"
-            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o test-results/coverage.xml
+            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
         uses: ./.github/actions/upload-test-results
         with:
-          name: test-results
-          path: test-results/
+          name: pc-test-results
+          path: pc-test-results/
           retention-days: 7
           status: ${{ job.status }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: test-results/junit.xml
-          coverage-report: test-results/coverage.xml
+          codecov-files: pc-test-results/junit.xml
+          coverage-report: pc-test-results/coverage.xml
