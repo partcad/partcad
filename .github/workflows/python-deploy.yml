@@ -72,7 +72,7 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.11' }}
         uses: actions/upload-artifact@v4
         with:
-          name: python-package-distributions
+          name: python-package-distributions-cli
           path: partcad-cli/dist/
 
   publish-to-pypi:
@@ -89,7 +89,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Download all the dists
+      - name: Download lib dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist
+
+      - name: Download cli dists
         uses: actions/download-artifact@v4
         with:
           name: python-package-distributions
