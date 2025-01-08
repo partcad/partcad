@@ -490,9 +490,9 @@ class Shape(ShapeConfiguration):
 
                 BRepMesh_IncrementalMesh(
                     obj,
-                    tolerance,
+                    theLinDeflection=tolerance,
                     isRelative=True,
-                    angularDeflection=angularTolerance,
+                    theAngDeflection=angularTolerance,
                     isInParallel=True,
                 )
 

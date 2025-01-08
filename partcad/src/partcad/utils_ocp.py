@@ -64,8 +64,13 @@ def tessellate(
         angularTolerance = 0.1
 
     if not BRepTools.Triangulation_s(shape, tolerance):
-        BRepMesh_IncrementalMesh(shape, tolerance, False, angularTolerance, True)
-
+        BRepMesh_IncrementalMesh(
+            shape,
+            theLinDeflection=tolerance,
+            isRelative=False,
+            theAngDeflection=angularTolerance,
+            isInParallel=True,
+        )
     vertices: List[Tuple[float, float, float]] = []
     triangles: List[Tuple[int, int, int]] = []
     offset = 0
