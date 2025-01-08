@@ -266,7 +266,10 @@ mkdir -pv "${TESTBED_DIR}" && cd "${TESTBED_DIR}"
 conda create --yes --name testbed python=3.10
 conda info --envs
 conda activate testbed
+# Install Released Dev Version
 python -m pip install -i https://test.pypi.org/simple/ partcad-cli
+# Install Unreleased Dev Version
+python -m pip install -U -e /workspaces/partcad/partcad -e /workspaces/partcad/partcad-cli
 ```
 
 ## Git
