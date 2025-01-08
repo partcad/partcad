@@ -146,15 +146,14 @@ jobs:
 
             patch /usr/local/python/3.10.16/lib/python3.10/site-packages/youtube_video_upload/__main__.py < changes.patch
 
-            mkdir -p /tmp/secrets
-            SECRETS_DIR="/tmp/secrets"
-            mkdir -p "${SECRETS_DIR}"
+            SECRETS_DIR="$(mktemp -d)"
             CREDENTIALS_FILE="${SECRETS_DIR}/credentials.json"
+            chmod 700 "${SECRETS_DIR}"
 
             # Ensure cleanup happens even if the script fails
-            trap 'rm -fv "${CREDENTIALS_FILE}" || true' EXIT
+            trap 'rm -rf "${SECRETS_DIR}" || true' EXIT
 
-            echo "${{ secrets.YOUTUBE_CREDENTIALS_BASE64 }}" | base64 --decode > /tmp/secrets/credentials.json
-            chmod 600 /tmp/secrets/credentials.json
+            echo "${{ secrets.YOUTUBE_CREDENTIALS_BASE64 }}" | base64 --decode > "${CREDENTIALS_FILE}"
+            chmod 600 "${CREDENTIALS_FILE}"
 
             python -m youtube_video_upload example.yaml

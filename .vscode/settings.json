@@ -59,6 +59,7 @@
     "manylinux",
     "miniforge",
     "mkdocs",
+    "mktemp",
     "mypy",
     "njpwerner",
     "nlopt",
