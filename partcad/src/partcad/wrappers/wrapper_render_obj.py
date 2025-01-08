@@ -35,7 +35,7 @@ def process(path, request):
         with open(path, "w", encoding="utf-8", buffering=256 * 1024) as f:
             f.write("# OBJ file\n")
             for v in vertices:
-                f.write("v %.4f %.4f %.4f\n" % (v[0], v[1], v[2]))
+                f.write(f"v {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}\n")
             for p in triangles:
                 f.write("f")
                 for i in p:

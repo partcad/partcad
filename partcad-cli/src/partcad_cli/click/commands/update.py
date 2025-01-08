@@ -14,9 +14,10 @@ def cli(ctx: Context):
     user_config.force_update = True
     try:
         packages = ctx.get_all_packages()
+        packages_list = list(packages)
         if ctx.stats_git_ops:
             logging.info(f"Git operations: {ctx.stats_git_ops}")
-        logging.info(f"Successfully updated {len(list(packages))} packages")
+        logging.info(f"Successfully updated {len(packages_list)} packages")
     except Exception as e:
         logging.error(f"Error updating packages: {str(e)}")
         raise click.Abort()
