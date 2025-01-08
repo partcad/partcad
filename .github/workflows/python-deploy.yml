@@ -98,7 +98,7 @@ jobs:
       - name: Download cli dists
         uses: actions/download-artifact@v4
         with:
-          name: python-package-distributions
+          name: python-package-distributions-cli
           path: dist
 
       - name: Determine the release tag
