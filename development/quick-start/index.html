@@ -55,7 +55,7 @@
   
   
 
-<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-XXXXXXXXXX"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-XXXXXXXXXX",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
+<script id="__analytics">function __md_analytics(){function e(){dataLayer.push(arguments)}window.dataLayer=window.dataLayer||[],e("js",new Date),e("config","G-V9Z6425XPR"),document.addEventListener("DOMContentLoaded",(function(){document.forms.search&&document.forms.search.query.addEventListener("blur",(function(){this.value&&e("event","search",{search_term:this.value})}));document$.subscribe((function(){var t=document.forms.feedback;if(void 0!==t)for(var a of t.querySelectorAll("[type=submit]"))a.addEventListener("click",(function(a){a.preventDefault();var n=document.location.pathname,d=this.getAttribute("data-md-value");e("event","feedback",{page:n,data:d}),t.firstElementChild.disabled=!0;var r=t.querySelector(".md-feedback__note [data-md-value='"+d+"']");r&&(r.hidden=!1)})),t.hidden=!1})),location$.subscribe((function(t){e("config","G-V9Z6425XPR",{page_path:t.pathname})}))}));var t=document.createElement("script");t.async=!0,t.src="https://www.googletagmanager.com/gtag/js?id=G-V9Z6425XPR",document.getElementById("__analytics").insertAdjacentElement("afterEnd",t)}</script>
   
     <script>if("undefined"!=typeof __md_analytics){var consent=__md_get("__consent");consent&&consent.analytics&&__md_analytics()}</script>
   
@@ -238,7 +238,7 @@
   
     
   
-  Welcome
+  Handbook
 
       </a>
     </li>
@@ -355,7 +355,7 @@
         
   
   <span class="md-ellipsis">
-    Welcome
+    Handbook
   </span>
   
 
@@ -707,13 +707,13 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#clone-git-repository" class="md-nav__link">
+  <a href="#retrieve-the-source-code" class="md-nav__link">
     <span class="md-ellipsis">
-      Clone Git Repository
+      Retrieve the Source Code
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Clone Git Repository">
+    <nav class="md-nav" aria-label="Retrieve the Source Code">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -884,13 +884,13 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#clone-git-repository" class="md-nav__link">
+  <a href="#retrieve-the-source-code" class="md-nav__link">
     <span class="md-ellipsis">
-      Clone Git Repository
+      Retrieve the Source Code
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Clone Git Repository">
+    <nav class="md-nav" aria-label="Retrieve the Source Code">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1069,16 +1069,16 @@
 <li>Open Pull Request.</li>
 <li>Meet PR Merge Criteria.</li>
 </ol>
-<h2 id="clone-git-repository">Clone Git Repository<a class="headerlink" href="#clone-git-repository" title="Permanent link">¶</a></h2>
-<p>Due to differences in Docker setup on Linux vs other system this step has different best practicies. Please follow
-section for your OS below, and once you have cloned repository VS Code will start Dev Container.</p>
-<p>Current size of base Docker Image with all system level dependencies baked-in is 2.83 GB, main highlights are:</p>
+<h2 id="retrieve-the-source-code">Retrieve the Source Code<a class="headerlink" href="#retrieve-the-source-code" title="Permanent link">¶</a></h2>
+<p>Due to variations in Docker setup across operating systems, this step has distinct best practices. Please follow the
+section for your OS below. Once you have cloned the repository, VS Code will start the Dev Container.</p>
+<p>Current size of base Docker Image with all system-level dependencies baked in is 2.83 GB, main highlights are:</p>
 <ul>
-<li>Debian Bookwork: 116.56 Mb</li>
-<li>Common Utils: 251.11 Mb</li>
-<li>Git: 423.87 Mb</li>
-<li>APT Packages: 770.56 Mb</li>
-<li>Python: 411.28 Mb</li>
+<li>APT Packages: 770.56 MB</li>
+<li>Git: 423.87 MB</li>
+<li>Python: 411.28 MB</li>
+<li>Common Utils: 251.11 MB</li>
+<li>Debian (Bookwork): 116.56 MB</li>
 </ul>
 <h3 id="mac-windows">Mac &amp; Windows<a class="headerlink" href="#mac-windows" title="Permanent link">¶</a></h3>
 <div class="admonition warning">
@@ -1107,13 +1107,13 @@ environment.</p>
 project depends on and it will manage (install/update) them for you. Poetry offers a lockfile to ensure repeatable
 installs, and can build your project for distribution.</p>
 </div>
-<p>Once Dev Container is started you will be able to open terminal, with current working directory at <code>/workspaces/partcad</code>
-containing source files. In order to install Python packages you have to run the following:</p>
+<p>Once the Dev Container is started, open a shell session in the Terminal view of VS Code. The current working directory
+will be <code>/workspaces/partcad</code> containing the source files. To install Python packages, run the following:</p>
 <div class="highlight"><pre><span></span><code>$<span class="w"> </span>poetry<span class="w"> </span>install
 </code></pre></div>
-<p>It will create virtual environment in <code>.venv/</code> directory and download about 1.6G dependencies. Once all dependencies are
-downloaded Poetry will also install current package in editable mode, and you will see the following:</p>
-<div class="highlight"><pre><span></span><code>Installing the current project: partcad-dev (0.1.0)
+<p>It will create virtual environment in <code>.venv/</code> directory and download about 1.5 GB dependencies. Once all dependencies
+are downloaded Poetry will also install current package in editable mode, and you will see the following:</p>
+<div class="highlight"><pre><span></span><code>Installing the current project: partcad-dev (0.7.40)
 </code></pre></div>
 <h2 id="activate-environment">Activate Environment<a class="headerlink" href="#activate-environment" title="Permanent link">¶</a></h2>
 <p>In order to update your <code>$PATH</code> and be able to run commandline tools such as <code>pytest</code> you need to activate virtual
@@ -1139,13 +1139,20 @@ testing for applications and libraries.</p>
 </div>
 <h3 id="pytest">pytest<a class="headerlink" href="#pytest" title="Permanent link">¶</a></h3>
 <p>If you <a href="#activate-environment">activated virtual environment</a> you can just run <code>pytest</code> from terminal.</p>
-<p>You also can use built-in <strong>Testing</strong> integration to be able to run and debug tests via VS Code UI, but for that you
-will have to select correct Python Interpreter first by running <code>Python: Select Interpreter</code> from Command Palette and
-point it to <code>('.venv': Poetry) .venv/bin/python</code>.</p>
+<p>You can also use VS Code's built-in <strong>Testing</strong> integration to run and debug tests via the UI. To set this up:</p>
+<ol>
+<li>Open the Command Palette (<code>Ctrl+Shift+P</code> or <code>Cmd+Shift+P</code>)</li>
+<li>Run <code>Python: Select Interpreter</code></li>
+<li>Select <code>('.venv': Poetry) .venv/bin/python</code> from the list</li>
+</ol>
 <p>You also can run <code>pytest</code> without activating environment via Poetry, for example:</p>
 <div class="highlight"><pre><span></span><code>$<span class="w"> </span>poetry<span class="w"> </span>run<span class="w"> </span>pytest
 </code></pre></div>
 <h3 id="behave">Behave<a class="headerlink" href="#behave" title="Permanent link">¶</a></h3>
+<p>To run functional tests using <code>behave</code>, execute the following command in the terminal:</p>
+<div class="highlight"><pre><span></span><code>$<span class="w"> </span>behave
+</code></pre></div>
+<p>Feature definitions and step implementations are located in the <code>./features</code> directory.</p>
 <h2 id="commit-push-changes">Commit &amp; Push Changes<a class="headerlink" href="#commit-push-changes" title="Permanent link">¶</a></h2>
 <p>You can commit changes from either terminal or VS Code UI which will trigger local git hooks managed by <code>pre-commit</code> to
 enforce coding standards and catch some of the problems early.</p>
@@ -1157,9 +1164,12 @@ enforce coding standards and catch some of the problems early.</p>
 <p>Configuration file is located at <code>.devcontainer/.pre-commit-config.yaml</code> were you can see all supported hooks.</p>
 <div class="admonition info">
 <p class="admonition-title">Info</p>
-<p>In rare cases you might have to <a href="https://pre-commit.com/#temporarily-disabling-hooks">temporarily disable hooks</a> but remember this they also run in CI and required to
-pass before PR could be merged. This will allow you to skip individual hooks.</p>
-<p>Another option is <a href="https://git-scm.com/book/fa/v2/Customizing-Git-Git-Hooks#_committing_workflow_hooks">git commit --no-verify</a> which will skip all hooks at once.</p>
+<p>In rare cases, you might need to temporarily disable hooks. There are two options:</p>
+<ol>
+<li>Use <a href="https://pre-commit.com/#temporarily-disabling-hooks">temporarily disable hooks</a> to skip specific individual hooks</li>
+<li>Use <a href="https://git-scm.com/book/fa/v2/Customizing-Git-Git-Hooks#_committing_workflow_hooks">git commit --no-verify</a> to skip all hooks at once</li>
+</ol>
+<p>Remember: These hooks are required to pass in CI before PR merge.</p>
 </div>
 <h2 id="open-pull-request">Open Pull Request<a class="headerlink" href="#open-pull-request" title="Permanent link">¶</a></h2>
 <p>There are multiple options how PR could be opened, please refer to the following to choose option which works best for
@@ -1524,7 +1534,7 @@ maintainers, following are related GH docs:</p>
       </div>
       <script>var consent=__md_get("__consent");if(consent)for(var input of document.forms.consent.elements)input.name&&(input.checked=consent[input.name]||!1);else"file:"!==location.protocol&&setTimeout((function(){document.querySelector("[data-md-component=consent]").hidden=!1}),250);var form=document.forms.consent;for(var action of["submit","reset"])form.addEventListener(action,(function(e){if(e.preventDefault(),"reset"===e.type)for(var n of document.forms.consent.elements)n.name&&(n.checked=!1);__md_set("__consent",Object.fromEntries(Array.from(new FormData(form).keys()).map((function(e){return[e,!0]})))),location.hash="",location.reload()}))</script>
     
-    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "content.action.edit", "navigation.footer", "navigation.instant", "navigation.instant.prefetch", "navigation.instant.progress", "navigation.tracking", "toc.follow", "navigation.top", "search.suggest", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    <script id="__config" type="application/json">{"base": "../..", "features": ["content.action.edit", "navigation.footer", "navigation.instant", "navigation.instant.prefetch", "navigation.instant.progress", "navigation.tabs", "navigation.top", "navigation.tracking", "search.highlight", "search.share", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
       <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
