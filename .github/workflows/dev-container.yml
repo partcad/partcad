@@ -15,6 +15,7 @@ concurrency:
 env:
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
+  IMAGE_TAG: ${{ github.head_ref || github.sha }}
   TOTAL_TIMEOUT: 900
   INSTALL_TIMEOUT: 300
 
@@ -44,9 +45,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
-          imageTag:
-            ${{ github.event.pull_request.number != '' && format('PR-{0}', github.event.pull_request.number) ||
-            github.ref_name }}
+          imageTag: ${{ env.IMAGE_TAG }}
           cacheFrom: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           push: always
 
@@ -79,7 +78,7 @@ jobs:
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           runCmd: |
             start_time=$SECONDS
@@ -129,7 +128,7 @@ jobs:
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           runCmd: |
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
@@ -153,7 +152,7 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -199,7 +198,7 @@ jobs:
       - name: Run pre-commit hooks
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
           # TODO: Run ggshield and/or other secrets scanning tools as separate job
@@ -243,7 +242,7 @@ jobs:
       - name: Run Behave
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           env: |
             # TODO-25: Workaround for "Host key verification failed."
@@ -271,7 +270,7 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -333,7 +332,7 @@ jobs:
       - name: Run Nox
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           runCmd: |
             poetry --no-ansi --no-interaction run nox --python ${{ matrix.python-version }}
@@ -342,7 +341,7 @@ jobs:
       #   if: always()
       #   uses: devcontainers/ci@v0.3
       #   with:
-      #     cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+      #     cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
       #     push: never
       #     runCmd: |
       #       if [ ! -d "allure-results" ]; then
@@ -391,7 +390,7 @@ jobs:
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:PR-${{ github.event.pull_request.number }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           runCmd: |
             mkdir -pv test-results
