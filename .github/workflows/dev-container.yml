@@ -41,6 +41,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "latest"
+
       - name: Build Dev Container
         uses: devcontainers/ci@v0.3
         with:
