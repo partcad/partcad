@@ -31,37 +31,6 @@ Feature: `pc render` command
     |     png | logo_embedded.png     |
 
 
-  @type-object
-  Examples: Media Type: .step
-    |    type | filename              |
-    |    step | logo_embedded.step    |
-
-  @type-object
-  Examples: Media Type: .stl
-    |    type | filename              |
-    |     stl | logo_embedded.stl     |
-
-  @type-object
-  Examples: Media Type: .3mf
-    |    type | filename              |
-    |     3mf | logo_embedded.3mf     |
-
-  @type-object
-  Examples: Media Type: .json (Three.js)
-    |    type | filename              |
-    | threejs | logo_embedded.json    |
-
-  @type-object
-  Examples: Media Type: .obj
-    |    type | filename              |
-    |     obj | logo_embedded.obj     |
-
-  @type-object
-  Examples: Media Type: .json (glTF)
-    |    type | filename              |
-    |    gltf | logo_embedded.json    |
-
-
 # pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t readme -a :logo_embedded
 # pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t svg -a :logo_embedded
 # pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t png -a :logo_embedded

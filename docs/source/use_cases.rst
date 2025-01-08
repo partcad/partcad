@@ -76,12 +76,12 @@ There is currently no support for ``cq-server``.
 Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if there is
 any other tool we should support.
 
-=============
-Export models
-=============
+==================
+Render projections
+==================
 
-Individual parts, assemblies and scenes can be rendered and exported into the
-following formats:
+The result of 2D projection of individual parts, assemblies and scenes onto a plane
+(3D to 2D) can be rendered to an image in any of the following formats:
 
 - Vector images
 
@@ -91,7 +91,13 @@ following formats:
 
   - PNG
 
-- 3D models
+
+=============
+Export models
+=============
+
+Individual parts, assemblies and scenes can also can be exported into 3D
+model file formats, including:
 
   - `STEP <https://en.wikipedia.org/wiki/ISO_10303>`_
   - `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_
@@ -104,8 +110,8 @@ in the future.
 
   .. code-block:: shell
 
-    pc render -t stl <part path>
-    pc render -t step -a <assembly path>
+    pc export -t stl <part path>
+    pc export -t step -a <assembly path>
 
 ==============
 Consume models
@@ -122,8 +128,8 @@ STEP or 3MF files and, then, import them into the CAD Design GUI of your choice.
   .. code-block:: shell
 
     # Some "export to a file" examples:
-    pc render [-P <package>] -t stl <part>
-    pc render [-P <package>] -t step -a <assembly>
+    pc export [-P <package>] -t stl <part>
+    pc export [-P <package>] -t step -a <assembly>
 
 Python: CadQuery
 ----------------
