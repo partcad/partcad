@@ -111,7 +111,8 @@ pip install -U partcad-cli
 
 ### PartCAD development
 
-Refer to the [Quick Start] guide for instructions on adding and testing new features.
+Refer to the [Quick Start] guide for step-by-step instructions on setting up your development environment, adding
+features, and running tests.
 
 ## Getting Started
 
