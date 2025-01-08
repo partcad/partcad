@@ -1,4 +1,7 @@
-# Development
+# Braindump
+
+A collection of development-related notes, commands, and best practices gathered through our journey. Like a ship's log,
+but for code.
 
 ## 1Password
 

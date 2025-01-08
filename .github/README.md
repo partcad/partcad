@@ -111,14 +111,7 @@ pip install -U partcad-cli
 
 ### PartCAD development
 
-The recommended first steps for PartCAD developers are:
-
-```shell
-git clone https://github.com/openvmp/partcad.git
-cd partcad
-python3 -m pip install -U -e ./partcad
-python3 -m pip install -U -e ./partcad-cli
-```
+Refer to the [Quick Start] guide for instructions on adding and testing new features.
 
 ## Getting Started
 
@@ -145,3 +138,4 @@ Give us a star for our hard work!
 [OpenSCAD]: https://openscad.org/
 [STEP]: https://en.wikipedia.org/wiki/ISO_10303
 [OpenCASCADE]: https://www.opencascade.com/
+[Quick Start]: https://partcad.github.io/partcad/development/quick-start/
