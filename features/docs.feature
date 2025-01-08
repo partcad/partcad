@@ -63,24 +63,30 @@ Feature: `pc render` command
      And STDOUT should contain 'No VS Code or "OCP CAD Viewer" extension detected.'
      And STDOUT should contain 'DONE: inspect: this'
 
-   @docs-design
-  Scenario: Design: Objects in a cart
-    When I run "pc init"
-    Then the command should exit with a status code of "0"
-    When I run command:
-      """
-      pc supply quote \
-        --provider /pub/svc/commerce/gobilda:gobilda \
-        /pub/robotics/multimodal/openvmp/robots/don1:assembly-wormgear#10
-      """
-    # TODO: We don't have enough XXX stock on hand for the quantity you selected
-    # @alexanderilyin: Well... now I start thinking that during tests we don't really need to go to the live provider
-    # and can get avail with simple local HTTP mock (could be started as python script). This will make those tests
-    # reproducible, fast and wont lead to billing.
-    Then the command should exit with a status code of "1"
-     And STDOUT should contain 'DONE: SupplyQuote: this:'
-     And STDOUT should contain 'The following quotes are received:'
-     And STDOUT should contain '/pub/svc/commerce/gobilda:gobilda: No quote received'
+  # @alexanderilyin: Well... now I start thinking that during tests we don't really need to go to the live provider
+  # and can get avail with simple local HTTP mock (could be started as python script). This will make those tests
+  # reproducible, fast and wont lead to billing.
+  #
+  #  @docs-design
+  # Scenario: Design: Objects in a cart
+  #   When I run "pc init"
+  #   Then the command should exit with a status code of "0"
+  #   When I run command:
+  #     """
+  #     pc supply quote \
+  #       --provider /pub/svc/commerce/gobilda:gobilda \
+  #       /pub/robotics/multimodal/openvmp/robots/don1:assembly-wormgear#10
+  #     """
+  #   # TODO: We don't have enough XXX stock on hand for the quantity you selected
+  #   # When broken (out of stock):
+  #   # Then the command should exit with a status code of "1"
+  #   #  And STDOUT should contain 'DONE: SupplyQuote: this:'
+  #   #  And STDOUT should contain 'The following quotes are received:'
+  #   #  And STDOUT should contain '/pub/svc/commerce/gobilda:gobilda: No quote received'
+  #   Then the command should exit with a status code of "0"
+  #    And STDOUT should contain 'DONE: SupplyQuote:'
+  #    And STDOUT should contain 'The following quotes are received:'
+  #    And STDOUT should not contain '/pub/svc/commerce/gobilda:gobilda: No quote received'
 
   # TODO: This depends on ~/.partcad/config.yaml:googleApiKey
   # @alexanderilyin: I'm still not sure if it's okay to use live 3rd parties services during PR checks but from other

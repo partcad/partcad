@@ -23,7 +23,6 @@
 #
 
 from typing import Tuple, List
-import sys
 
 
 def extent_or_size(obj):
@@ -81,7 +80,7 @@ def tessellate(
         if poly is None:
             continue
         Trsf = loc.Transformation()
-        reverse = True if f.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else False
+        reverse = f.Orientation() == TopAbs_Orientation.TopAbs_REVERSED
 
         # add vertices
         vertices += [
