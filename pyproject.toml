@@ -3,13 +3,13 @@
 pythonpath = "partcad/src"
 addopts = """
     --alluredir=allure-results
-    --cov-report=html:test-results/htmlcov
-    --cov-report=xml:test-results/coverage.xml
+    --cov-report=html:pytest-results/htmlcov
+    --cov-report=xml:pytest-results/coverage.xml
     --cov=partcad
     --durations-min=1.0
     --durations=0
-    --html=test-results/report.html
-    --junitxml=test-results/junit.xml
+    --html=pytest-results/report.html
+    --junitxml=pytest-results/junit.xml
     --log-cli-level=DEBUG
     --self-contained-html
     """

@@ -19,6 +19,9 @@ __pycache__
 /partcad/dist
 allure-report/
 allure-results/
+behave-results/
 docs/build
 output
+pc-test-results/
+pytest-results/
 test-results/

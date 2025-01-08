@@ -63,7 +63,7 @@ Feature: `pc render` command
      And STDOUT should contain 'No VS Code or "OCP CAD Viewer" extension detected.'
      And STDOUT should contain 'DONE: inspect: this'
 
-   @docs-design
+  @wip @docs-design @pc-241
   Scenario: Design: Objects in a cart
     When I run "pc init"
     Then the command should exit with a status code of "0"
