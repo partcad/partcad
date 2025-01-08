@@ -253,8 +253,7 @@ jobs:
             # TODO-26: PC-186: Allow to configure git clone protocol in settings
             git config --global url."git@github.com:".insteadOf "https://github.com/"
             mkdir -pv behave-results
-            poetry --no-ansi --no-interaction run coverage run $(poetry run which behave)
-            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o behave-results/coverage.xml
+            poetry --no-ansi --no-interaction run behave
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
