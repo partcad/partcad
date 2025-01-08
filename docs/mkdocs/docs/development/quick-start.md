@@ -149,7 +149,7 @@ enforce coding standards and catch some of the problems early.
 
     [pre-commit] is a framework for managing and maintaining multi-language pre-commit hooks.
 
-Configuration file is located at `.devcontainer/.pre-commit-config.yaml` were you can see all supported hooks.
+Configuration file is located at `.devcontainer/.pre-commit-config.yaml` where you can see all supported hooks.
 
 !!! info
 
