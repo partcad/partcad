@@ -37,9 +37,17 @@ jobs:
         run: |
           # Replace / with - if ref is present; fallback to SHA
           if [ -n "${HEAD_REF}" ]; then
-            tag="${ref//\//-}"
+            echo "DEBUG: Generating tag from HEAD_REF: ${HEAD_REF}"
+            tag="${HEAD_REF//\//-}"
           else
+            echo "DEBUG: Using SHA as fallback: ${{ github.sha }}"
             tag="${{ github.sha }}"
+          fi
+          echo "DEBUG: Final IMAGE_TAG: $tag"
+          # Validate tag format (lowercase, numbers, dashes only)
+          if ! echo "$tag" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
+            echo "::error::Invalid tag format: $tag"
+            exit 1
           fi
           echo "IMAGE_TAG=$tag" >> "$GITHUB_ENV"
 
