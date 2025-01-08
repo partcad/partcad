@@ -26,6 +26,7 @@ class ImportConfiguration:
                 raise ValueError("Import configuration type is not set")
         self.import_config_type = config_obj.get("type")
         self.import_config_is_root = config_obj.get("isRoot", False)
+        self.import_config_url = config_obj.get("url")
         self.include_paths = self.config_obj.get("includePaths", [])
         self.inherited_config = config_obj.get("inheritedConfig", {})
         if parent and not self.inherited_config:
@@ -59,6 +60,7 @@ class ProjectFactory(ImportConfiguration):
         # Make the project config inherit some properties of the import config
         self.project.config_obj["type"] = self.import_config_type
         self.project.config_obj["isRoot"] = self.import_config_is_root
+        self.project.config_obj["url"] = self.import_config_url
 
     def _save(self):
         self.ctx.projects[self.name] = self.project
