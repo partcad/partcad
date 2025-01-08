@@ -69,6 +69,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "latest"
+
       - name: Cache Python Environment
         uses: actions/cache@v4
         with:
@@ -117,6 +121,10 @@ jobs:
           registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "latest"
 
       - name: Cache Python Environment
         uses: actions/cache@v4
@@ -191,6 +199,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "latest"
+
       - name: Cache pre-commit dependencies
         uses: actions/cache@v4
         with:
@@ -227,6 +239,10 @@ jobs:
           registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "latest"
 
       - name: Cache Python Environment
         uses: actions/cache@v4
@@ -319,6 +335,10 @@ jobs:
           registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "latest"
 
       - name: Cache Python Environment
         uses: actions/cache@v4
