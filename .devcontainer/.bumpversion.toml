@@ -33,10 +33,10 @@ replace = "__version__: str = \"{new_version}\""
 
 [[tool.bumpversion.files]]
 filename = "docs/mkdocs/docs/development/quick-start.md"
-search = "__version__: str = \"{current_version}\""
-replace = "__version__: str = \"{new_version}\""
+search = "Installing the current project: partcad-dev ({current_version})"
+replace = "Installing the current project: partcad-dev ({new_version})"
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
-search = "__version__: str = \"{current_version}\""
-replace = "__version__: str = \"{new_version}\""
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
