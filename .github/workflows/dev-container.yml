@@ -15,7 +15,6 @@ concurrency:
 env:
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
-  IMAGE_TAG: ${{ github.head_ref || github.sha }}
   TOTAL_TIMEOUT: 900
   INSTALL_TIMEOUT: 300
 
@@ -31,6 +30,19 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Set Environment Variables
+        id: tag
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # Replace / with - if ref is present; fallback to SHA
+          if [ -n "${HEAD_REF}" ]; then
+            tag="${ref//\//-}"
+          else
+            tag="${{ github.sha }}"
+          fi
+          echo "IMAGE_TAG=$tag" >> "$GITHUB_ENV"
+
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
 
