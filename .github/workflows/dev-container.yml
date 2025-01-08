@@ -31,25 +31,28 @@ jobs:
       packages: write
     steps:
       - name: Set Environment Variables
-        id: tag
         env:
           HEAD_REF: ${{ github.head_ref }}
         run: |
           # Replace / with - if ref is present; fallback to SHA
           if [ -n "${HEAD_REF}" ]; then
             echo "DEBUG: Generating tag from HEAD_REF: ${HEAD_REF}"
-            tag="${HEAD_REF//\//-}"
+            TAG="${HEAD_REF//\//-}"
           else
             echo "DEBUG: Using SHA as fallback: ${{ github.sha }}"
-            tag="${{ github.sha }}"
+            TAG="${{ github.sha }}"
           fi
-          echo "DEBUG: Final IMAGE_TAG: $tag"
+
+          # Convert to lowercase
+          TAG=$(echo "${TAG}" | tr '[:upper:]' '[:lower:]')
+          echo "DEBUG: Final IMAGE_TAG: $TAG"
+
           # Validate tag format (lowercase, numbers, dashes only)
-          if ! echo "$tag" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
-            echo "::error::Invalid tag format: $tag"
+          if ! echo "$TAG" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
+            echo "::error::Invalid tag format: $TAG"
             exit 1
           fi
-          echo "IMAGE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
