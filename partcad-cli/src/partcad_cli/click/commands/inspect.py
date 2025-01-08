@@ -11,6 +11,7 @@ import partcad.logging as logging
     "verbal",
     is_flag=True,
     help="Produce a verbal output instead of a visual one",
+    show_envvar=True,
 )
 @click.option(
     "-P",
@@ -19,30 +20,35 @@ import partcad.logging as logging
     type=str,
     help="Package to retrieve the object from",
     default=None,
+    show_envvar=True,
 )
 @click.option(
     "-s",
     "--sketch",
     help="The object is a sketch",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-i",
     "--interface",
     help="The object is an interface",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-a",
     "--assembly",
     help="The object is an assembly",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-S",
     "--scene",
     help="The object is a scene",
     is_flag=True,
+    show_envvar=True,
 )
 @click.option(
     "-p",
@@ -51,6 +57,7 @@ import partcad.logging as logging
     multiple=True,
     metavar="<param_name>=<param_value>",
     help="Assign a value to the parameter",
+    show_envvar=True,
 )
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_context

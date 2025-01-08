@@ -15,6 +15,7 @@ jinja2
 requests
 aiofiles
 aiohttp
+vyper-config==1.2.1
 
 # Google AI
 google.generativeai

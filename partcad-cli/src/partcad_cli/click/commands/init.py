@@ -14,7 +14,13 @@ from partcad.globals import create_package
 
 @click.command(help="Create a new PartCAD package in the current directory")
 # TODO-95: All long options everywhere
-@click.option("-p", "--private", is_flag=True, help="Initialize this package as private")
+@click.option(
+    "-p",
+    "--private",
+    is_flag=True,
+    help="Initialize this package as private",
+    show_envvar=True,
+)
 @click.pass_context
 def cli(ctx: click.rich_context.RichContext, private):
     # TODO-96: @alexanderilyin: Deal with noise like "PartCAD configuration file is not found"

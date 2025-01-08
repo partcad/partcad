@@ -10,7 +10,7 @@
 import base64
 import importlib
 import httpx
-from path import Path
+from pathlib import Path
 import re
 import threading
 import time

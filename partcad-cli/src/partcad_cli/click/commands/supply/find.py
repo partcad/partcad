@@ -9,9 +9,24 @@ from typing import Any, List
 
 
 @click.command(help="Find suppliers")
-@click.option("--json", "-j", "api", help="Produce JSON output", is_flag=True)
-@click.option("--qos", help="Requested quality of service")
-@click.option("--provider", help="Provider to use")
+@click.option(
+    "--json",
+    "-j",
+    "api",
+    help="Produce JSON output",
+    is_flag=True,
+    show_envvar=True,
+)
+@click.option(
+    "--qos",
+    help="Requested quality of service",
+    show_envvar=True,
+)
+@click.option(
+    "--provider",
+    help="Provider to use",
+    show_envvar=True,
+)
 @click.argument(
     "specs",
     metavar="object[[,material],count]",

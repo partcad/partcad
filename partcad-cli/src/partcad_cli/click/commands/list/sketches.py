@@ -9,6 +9,7 @@ from partcad import logging
     "--recursive",
     is_flag=True,
     help="Recursively process all imported packages",
+    show_envvar=True,
 )
 @click.option(
     "-u",
@@ -16,6 +17,7 @@ from partcad import logging
     type=str,
     required=False,
     help="Only process objects used by the given assembly or scene.",
+    show_envvar=True,
 )
 @click.argument("package", type=str, required=False, default=".")  # help="Package to retrieve the object from"
 @click.pass_obj

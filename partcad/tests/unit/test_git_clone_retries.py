@@ -1,3 +1,4 @@
+from collections import defaultdict
 import pytest
 import tempfile
 import partcad as pc
@@ -83,15 +84,25 @@ fake_git_errors = [
 
 test_git_retry_config = {"max": 5, "patience": 0.1}
 
+@pytest.fixture
+def git_config() -> callable:
+    def _git_config(key: str, /, *args, **kwargs) -> dict | str:
+        temp = defaultdict(dict, {
+            "git.clone.retry.max": test_git_retry_config["max"],
+            "git.clone.retry.patience": test_git_retry_config["patience"],
+        })
+        return temp[key]
+    return _git_config
+
 @pytest.mark.parametrize("git_error", fake_git_errors)
-def test_project_import_git_clone_retry_failure(git_error: GitCommandError):
+def test_project_import_git_clone_retry_failure(git_error: GitCommandError, git_config):
     def side_effect(*args, **kwargs):
         side_effect.counter += 1
         raise git_error
     side_effect.counter = 0
 
     with patch("git.Repo.clone_from", side_effect=side_effect) as mock_clone_from, \
-         patch.object(pc.user_config, "git_retry_config", test_git_retry_config), \
+         patch.object(pc.user_config, "get", side_effect=git_config), \
          tempfile.TemporaryDirectory() as temp_dir, \
          patch.object(pc.user_config, "internal_state_dir", temp_dir), \
          pytest.raises(RuntimeError):
@@ -104,7 +115,7 @@ def test_project_import_git_clone_retry_failure(git_error: GitCommandError):
     assert mock_clone_from.call_count == test_git_retry_config["max"] + 1
 
 
-def test_project_import_git_clone_retry_then_success():
+def test_project_import_git_clone_retry_then_success(git_config):
     fail_count = 3
     def side_effect(*args, **kwargs):
         side_effect.counter += 1
@@ -114,7 +125,7 @@ def test_project_import_git_clone_retry_then_success():
     side_effect.counter = 0
 
     with patch("git.Repo.clone_from", side_effect=side_effect) as mock_clone_from, \
-         patch.object(pc.user_config, "git_retry_config", test_git_retry_config), \
+         patch.object(pc.user_config, "get", side_effect=git_config), \
          tempfile.TemporaryDirectory() as temp_dir, \
          patch.object(pc.user_config, "internal_state_dir", temp_dir), \
          patch("builtins.open", mock_open(read_data="")):

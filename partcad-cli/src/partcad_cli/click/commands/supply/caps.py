@@ -9,7 +9,12 @@ from partcad.provider_request_caps import ProviderRequestCaps
 
 @click.command(help="Get capabilities of the provider")
 @click.option(
-    "--providers", "-p", metavar="provider[;key=value]", help="Providers to query for capabilities", multiple=True
+    "--providers",
+    "-p",
+    metavar="provider[;key=value]",
+    help="Providers to query for capabilities",
+    multiple=True,
+    show_envvar=True,
 )
 @click.pass_obj
 def cli(ctx, providers):
