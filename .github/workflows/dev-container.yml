@@ -1,6 +1,7 @@
 # https://github.com/devcontainers/ci/blob/main/docs/github-action.md
 name: "Dev Container CI"
 on:
+  merge_group:
   pull_request:
   push:
     branches:

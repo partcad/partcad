@@ -2,6 +2,7 @@
 name: CD # Keep the action badge icon short
 
 on:
+  merge_group:
   push:
     branches: ["main", "devel"]
   pull_request:
