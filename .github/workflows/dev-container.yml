@@ -52,6 +52,12 @@ jobs:
             echo "::error::Invalid tag format: $TAG"
             exit 1
           fi
+          if [ ${#tag} -gt 128 ]; then
+            echo "::error::Tag length exceeds Docker's 128 character limit: ${#tag} characters"
+            exit 1
+          fi
+
+          # Export tag to be used in subsequent jobs
           echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
 
       - name: Checkout (GitHub)
