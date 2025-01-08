@@ -30,3 +30,13 @@ replace = "__version__: str = \"{new_version}\""
 filename = "partcad-cli/src/partcad_cli/__init__.py"
 search = "__version__: str = \"{current_version}\""
 replace = "__version__: str = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "docs/mkdocs/docs/development/quick-start.md"
+search = "__version__: str = \"{current_version}\""
+replace = "__version__: str = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = "__version__: str = \"{current_version}\""
+replace = "__version__: str = \"{new_version}\""

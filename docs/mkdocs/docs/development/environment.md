@@ -46,8 +46,8 @@ more details on how to install it in distributution you're using.
 
 ### Desktop
 
-If you working in macOS or Windows, you still can install Engine, but that would require managing local Linux VM. Docker
-Desktop provides convenient solution and handles required virtualization for you:
+If you're working on macOS or Windows, you can still install Engine, but that would require managing a local Linux VM.
+Docker Desktop provides a convenient solution and handles the required virtualization for you:
 
 - [Install on Mac]
 - [Install on Windows]

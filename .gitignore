@@ -21,6 +21,7 @@ allure-report/
 allure-results/
 behave-results/
 docs/build
+docs/mkdocs/site/
 output
 pc-test-results/
 pytest-results/

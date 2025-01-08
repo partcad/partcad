@@ -20,19 +20,18 @@ plugins:
   #     cards_layout: default
 theme:
   features:
-    - navigation.tabs
     - content.action.edit
     - navigation.footer
     - navigation.instant
     - navigation.instant.prefetch
     - navigation.instant.progress
-    - navigation.tracking
-    - toc.follow
+    - navigation.tabs
     - navigation.top
-    - search.suggest
+    - navigation.tracking
     - search.highlight
     - search.share
-    # - navigation.tabs
+    - search.suggest
+    - toc.follow
   logo: assets/logo-black-on-amber.png
   language: en
   font:
@@ -92,8 +91,9 @@ extra:
       documentation and whether users find what they're searching for. With your consent, you're helping us to make our
       documentation better.
   analytics:
+    # https://github.com/partcad/internal-web-main/blob/ae5174ec6788e479ab2db36a1042f99c777e18bc/src/App.js#L27
     provider: google
-    property: G-XXXXXXXXXX # TODO: Replace with Google Analytics ID
+    property: G-V9Z6425XPR
     feedback:
       title: Was this page helpful?
       ratings:

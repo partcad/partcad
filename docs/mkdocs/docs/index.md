@@ -6,21 +6,15 @@ hide:
   - tabs
 ---
 
-# Welcome
+# Handbook
 
-[PartCAD] is **the first package manager for CAD models** and a framework for managing assemblies.
+Welcome to the **PartCAD Developer's Handbook**. This page is intended for developers contributing to the PartCAD
+project. If you are looking for user guides or corporate information, please visit the following links:
 
-It aims to complement Git with everything necessary for hardware development to substitute commercial Product Lifecycle
-Management (PLM) tools.
-
-It's a free versioning and change management solution for all your CAD needs, built around your CAD artifacts instead of
-being built into your CAD tool:
-
-- :simple-readthedocs: Browse [documentation].
-- :fontawesome-brands-chrome: Visit [website].
+- :simple-readthedocs: Browse the [user guide].
+- :fontawesome-brands-chrome: Visit the [corporate page].
 - :simple-youtube: Watch our [demos].
 
 [demos]: https://youtube.com/@PartCAD
-[documentation]: https://partcad.readthedocs.io/en/latest/?badge=latest
-[website]: https://partcad.org/
-[PartCAD]: https://partcad.org/
+[user guide]: https://partcad.readthedocs.io/en/latest/?badge=latest
+[corporate page]: https://partcad.org/

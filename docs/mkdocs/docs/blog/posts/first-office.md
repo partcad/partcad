@@ -8,13 +8,13 @@ categories:
 tags:
   - Office
 # slug: first-office
-links:
-  - plugins/search.md
-  - insiders/how-to-sponsor.md
+# links:
+#   - plugins/search.md
+#   - insiders/how-to-sponsor.md
 pin: false
 ---
 
-# PartCAD has new home!
+# PartCAD has a new home!
 
 PartCAD has new home! If you happen to visit San Jose and you want to chat in person about taking ownership over
 engineering and manufacturing data, how to design for manufacturing, then stop by our new office at 99 S Almaden Blvd,

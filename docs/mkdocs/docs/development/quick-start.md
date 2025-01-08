@@ -21,18 +21,18 @@ Overall process starting from setting up environment till merging changes in def
 7. Open Pull Request.
 8. Meet PR Merge Criteria.
 
-## Clone Git Repository
+## Retrieve the Source Code
 
-Due to differences in Docker setup on Linux vs other system this step has different best practicies. Please follow
-section for your OS below, and once you have cloned repository VS Code will start Dev Container.
+Due to variations in Docker setup across operating systems, this step has distinct best practices. Please follow the
+section for your OS below. Once you have cloned the repository, VS Code will start the Dev Container.
 
-Current size of base Docker Image with all system level dependencies baked-in is 2.83 GB, main highlights are:
+Current size of base Docker Image with all system-level dependencies baked in is 2.83 GB, main highlights are:
 
-- Debian Bookwork: 116.56 Mb
-- Common Utils: 251.11 Mb
-- Git: 423.87 Mb
-- APT Packages: 770.56 Mb
-- Python: 411.28 Mb
+- APT Packages: 770.56 MB
+- Git: 423.87 MB
+- Python: 411.28 MB
+- Common Utils: 251.11 MB
+- Debian (Bookwork): 116.56 MB
 
 ### Mac & Windows
 
@@ -65,18 +65,18 @@ We are using [Poetry] to manage dependencies and virtual environments.
     project depends on and it will manage (install/update) them for you. Poetry offers a lockfile to ensure repeatable
     installs, and can build your project for distribution.
 
-Once Dev Container is started you will be able to open terminal, with current working directory at `/workspaces/partcad`
-containing source files. In order to install Python packages you have to run the following:
+Once the Dev Container is started, open a shell session in the Terminal view of VS Code. The current working directory
+will be `/workspaces/partcad` containing the source files. To install Python packages, run the following:
 
 ```bash
 $ poetry install
 ```
 
-It will create virtual environment in `.venv/` directory and download about 1.6G dependencies. Once all dependencies are
-downloaded Poetry will also install current package in editable mode, and you will see the following:
+It will create virtual environment in `.venv/` directory and download about 1.5 GB dependencies. Once all dependencies
+are downloaded Poetry will also install current package in editable mode, and you will see the following:
 
 ```text
-Installing the current project: partcad-dev (0.1.0)
+Installing the current project: partcad-dev (0.7.40)
 ```
 
 ## Activate Environment
@@ -116,9 +116,11 @@ We are using both Unit and Functional testing with main tools being [pytest] & [
 
 If you [activated virtual environment] you can just run `pytest` from terminal.
 
-You also can use built-in **Testing** integration to be able to run and debug tests via VS Code UI, but for that you
-will have to select correct Python Interpreter first by running `Python: Select Interpreter` from Command Palette and
-point it to `('.venv': Poetry) .venv/bin/python`.
+You can also use VS Code's built-in **Testing** integration to run and debug tests via the UI. To set this up:
+
+1. Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Run `Python: Select Interpreter`
+3. Select `('.venv': Poetry) .venv/bin/python` from the list
 
 You also can run `pytest` without activating environment via Poetry, for example:
 
@@ -127,6 +129,14 @@ $ poetry run pytest
 ```
 
 ### Behave
+
+To run functional tests using `behave`, execute the following command in the terminal:
+
+```bash
+$ behave
+```
+
+Feature definitions and step implementations are located in the `./features` directory.
 
 ## Commit & Push Changes
 
@@ -143,10 +153,12 @@ Configuration file is located at `.devcontainer/.pre-commit-config.yaml` were yo
 
 !!! info
 
-    In rare cases you might have to [temporarily disable hooks] but remember this they also run in CI and required to
-    pass before PR could be merged. This will allow you to skip individual hooks.
+    In rare cases, you might need to temporarily disable hooks. There are two options:
 
-    Another option is [git commit --no-verify] which will skip all hooks at once.
+    1. Use [temporarily disable hooks] to skip specific individual hooks
+    2. Use [git commit --no-verify] to skip all hooks at once
+
+    Remember: These hooks are required to pass in CI before PR merge.
 
 ## Open Pull Request
 
