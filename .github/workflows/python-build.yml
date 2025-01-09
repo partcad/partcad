@@ -2,6 +2,9 @@
 name: CD # Keep the action badge icon short
 
 on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *" # Run daily at midnight
   merge_group:
   push:
     branches: ["main", "devel"]
