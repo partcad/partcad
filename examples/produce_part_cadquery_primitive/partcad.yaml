@@ -17,7 +17,8 @@ parts:
         default: 10.0
       length:
         default: 10.0
-      height: 10.0
+      height:
+        default: 10.0
     aliases: ["box"]
   brick:
     type: enrich
