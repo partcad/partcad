@@ -19,7 +19,7 @@ Ideas and Feedback
 ==================
 
 Share your ideas and feedback using
-`the #partcad channel <https://discord.gg/AXbP47zYw5>`_ of the OpenVMP's Discord server.
+`the #partcad channel <https://discord.gg/9AEu3vF7rv>`_ of the OpenVMP's Discord server.
 
 Participate in Decision Making
 ==============================
@@ -46,7 +46,7 @@ Send a pull request to
 `the PartCAD's main Github repository <https://github.com/partcad/partcad/>`_.
 
 Engage with the community on
-`PartCAD's Discord channel <https://discord.gg/AXbP47zYw5>`_
+`PartCAD's Discord channel <https://discord.gg/9AEu3vF7rv>`_
 if you need help deciding what could be the best project for you to work on.
 
 Documentation and Tutorials
