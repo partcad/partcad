@@ -3,8 +3,8 @@
 set -euxo pipefail
 
 # TODO: Avoid hardcoding
-USER_NAME=node  # $(id -un)
-USER_GROUP=node # $(id -gn)
+USER_NAME=vscode  # $(id -un)
+USER_GROUP=vscode # $(id -gn)
 
 mkdir -pv "$XDG_RUNTIME_DIR"
 chmod -c 700 "$XDG_RUNTIME_DIR"
