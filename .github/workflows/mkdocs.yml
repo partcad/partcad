@@ -59,4 +59,4 @@ jobs:
 
             # Build & Deploy Documentation
             cd docs/mkdocs
-            mkdocs gh-deploy --force
+            poetry run mkdocs gh-deploy --force
