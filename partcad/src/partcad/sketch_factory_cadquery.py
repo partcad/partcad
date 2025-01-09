@@ -27,7 +27,7 @@ from . import wrapper
 from . import logging as pc_logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from cq_serialize import register as register_cq_helper
+from ocp_serialize import register as register_ocp_helper
 
 
 class SketchFactoryCadquery(SketchFactoryPython):
@@ -78,7 +78,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
             request["patch"] = patch
 
             # Serialize the request
-            register_cq_helper()
+            register_ocp_helper()
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
@@ -88,6 +88,10 @@ class SketchFactoryCadquery(SketchFactoryPython):
             )
             await self.runtime.ensure_async(
                 "nlopt==2.7.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery-ocp==7.7.2",
                 session=self.session,
             )
             await self.runtime.ensure_async(
@@ -130,7 +134,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
             try:
                 # pc_logging.error("Response: %s" % response_serialized)
                 response = base64.b64decode(response_serialized)
-                register_cq_helper()
+                register_ocp_helper()
                 result = pickle.loads(response)
             except Exception as e:
                 sketch.error("Exception while deserializing %s: %s" % (sketch.name, e))

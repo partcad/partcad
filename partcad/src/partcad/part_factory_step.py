@@ -7,7 +7,12 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import cadquery as cq
+from OCP.TopoDS import (
+    TopoDS_Builder,
+    TopoDS_Compound,
+)
+import OCP.IFSelect
+from OCP.STEPControl import STEPControl_Reader
 
 import base64
 import os
@@ -21,7 +26,7 @@ from . import wrapper
 from .part_factory_file import PartFactoryFile
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from cq_serialize import register as register_cq_helper
+from ocp_serialize import register as register_ocp_helper
 
 # TODO(clairbee): revisit whether it still provides any performance benefits
 #                 in Python 3.13+ (is GIL still a problem?)
@@ -82,11 +87,10 @@ class PartFactoryStep(PartFactoryFile):
                 wrapper_path = wrapper.get("step.py")
 
                 request = {"build_parameters": {}}
-                register_cq_helper()
+                register_ocp_helper()
                 picklestring = pickle.dumps(request)
                 request_serialized = base64.b64encode(picklestring).decode()
 
-                # await self.runtime.ensure_async("cadquery==2.4.0")
                 response_serialized, errors = await self.runtime.run_async(
                     [
                         wrapper_path,
@@ -98,7 +102,7 @@ class PartFactoryStep(PartFactoryFile):
                 sys.stderr.write(errors)
 
                 response = base64.b64decode(response_serialized)
-                register_cq_helper()
+                register_ocp_helper()
                 result = pickle.loads(response)
 
                 if not result["success"]:
@@ -133,7 +137,21 @@ class PartFactoryStep(PartFactoryFile):
                 time.sleep(0.0001)
                 # TODO(clairbee): remove sleep calls when GIL is fixed in CQ
 
-                shape = cq.importers.importStep(self.path).val().wrapped
+                reader = STEPControl_Reader()
+
+                readStatus = reader.ReadFile(self.path)
+                if readStatus != OCP.IFSelect.IFSelect_RetDone:
+                    raise ValueError("STEP File could not be loaded")
+                for i in range(reader.NbRootsForTransfer()):
+                    reader.TransferRoot(i + 1)
+
+                builder = TopoDS_Builder()
+                compound = TopoDS_Compound()
+                builder.MakeCompound(compound)
+                for i in range(reader.NbShapes()):
+                    occ_shape = reader.Shape(i + 1)
+                    builder.Add(compound, occ_shape)
+                shape = compound
 
             with PartFactoryStep.lock:
                 if do_subprocess:

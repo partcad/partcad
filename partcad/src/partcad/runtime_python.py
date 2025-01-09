@@ -97,6 +97,7 @@ class PythonRuntime(runtime.Runtime):
                 # TODO(clairbee): Lock the entire runtime instead
                 self.ensure_onced("ocp-tessellate==3.0.8")
                 self.ensure_onced("nlopt==2.7.1")
+                self.ensure_onced("cadquery-ocp==7.7.2")
                 self.ensure_onced("cadquery==2.4.0")
                 self.ensure_onced("numpy==1.26.4")
                 self.ensure_onced("numpy-quaternion==2023.0.4")
@@ -114,6 +115,7 @@ class PythonRuntime(runtime.Runtime):
                     # TODO(clairbee): Lock the entire runtime instead
                     await self.ensure_async_onced_locked("ocp-tessellate==3.0.8")
                     await self.ensure_async_onced_locked("nlopt==2.7.1")
+                    await self.ensure_async_onced_locked("cadquery-ocp==7.7.2")
                     await self.ensure_async_onced_locked("cadquery==2.4.0")
                     await self.ensure_async_onced_locked("numpy==1.26.4")
                     await self.ensure_async_onced_locked("numpy-quaternion==2023.0.4")
@@ -150,6 +152,7 @@ class PythonRuntime(runtime.Runtime):
         python_path = self.get_venv_python_path(session, path)
         cmd = [python_path, *self.python_flags, *cmd]
         pc_logging.debug("Running: %s", cmd)
+        # pc_logging.debug("stdin: %s", stdin)
         p = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -210,6 +213,7 @@ class PythonRuntime(runtime.Runtime):
         python_path = self.get_venv_python_path(session, path)
         cmd = [python_path, *self.python_flags, *cmd]
         pc_logging.debug("Running: %s", cmd)
+        # pc_logging.debug("stdin: %s", stdin)
         p = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=subprocess.PIPE,
