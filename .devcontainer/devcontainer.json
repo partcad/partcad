@@ -13,6 +13,11 @@
     "~/.cache": "sudo chown -R $(whoami):$(whoami) /home/$(whoami)/.cache"
   },
   "postStartCommand": {
+    "Install esbenp.prettier-vscode dependencies": "npm install",
+    "Install pre-commit hooks": "pre-commit install",
+    "Start D-Bus": "sudo service dbus start & dbus-daemon --session --address=$DBUS_SESSION_BUS_ADDRESS --nofork --nopidfile --syslog-only && sleep",
+    "Install Nvidia Drivers": "# TODO: sudo apt-get install nvidia-driver-515",
+    "Install Python dependencies": "pip install --break-system-packages python-jsonrpc-server",
     "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
   },
   "mounts": [
@@ -21,10 +26,19 @@
     "source=partcad-cache,target=/home/vscode/.cache,type=volume",
     "source=partcad-config,target=/home/vscode/.config,type=volume"
   ],
+  "features": {
+    "ghcr.io/partcad/devcontainers-features/apt:2": {
+      "packages": "shellcheck bash-completion python3-pytest python3-hamcrest"
+    },
+    "ghcr.io/partcad/devcontainers-features/pip:2": {
+      "location": "/opt/pip",
+      "packages": "pre-commit nox"
+    }
+  },
   "customizations": {
     "vscode": {
       "settings": {
-        "dotfiles.repository": "deepspacecartel/dotfiles"
+        "dotfiles.repository": "partcad/dotfiles"
       },
       // <!-- prettier-ignore-start -->
       "extensions": [
@@ -81,7 +95,13 @@
         "bbenoist.vagrant",
         "codecov.codecov",
         "hediet.debug-visualizer",
-        "ryanluker.vscode-coverage-gutters"
+        "ryanluker.vscode-coverage-gutters",
+        // VS Code Extension Development
+        "amodio.tsl-problem-matcher",
+        "dbaeumer.vscode-eslint",
+        "foxundermoon.shell-format",
+        "ms-vscode.extension-test-runner",
+        "timonwong.shellcheck"
       ]
       // <!-- prettier-ignore-end -->
     }

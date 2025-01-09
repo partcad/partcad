@@ -1,4 +1,4 @@
-* text=lf
+* text=lf eol=lf
 *.step binary
 *.stl binary
 **/*.jpg filter=lfs diff=lfs merge=lfs -text

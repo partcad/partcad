@@ -65,26 +65,53 @@ saving the file makes it displayed in the OCP CAD Viewer view.
 ## Inspecting published PartCAD packages
 
 To see a good example of a package with parts, it is recommended to browse
-``pub`` -> ``robotics`` -> ``parts`` -> ``gobilda``.
+`pub` -> `robotics` -> `parts` -> `gobilda`.
 
 To see a basic example of a package with assemblies, it is recommended to browse
-``pub`` -> ``furniture`` -> ``workspace`` -> ``basic``.
+`pub` -> `furniture` -> `workspace` -> `basic`.
 Please, note, that there are customizable parameters that can be tweaked in the PartCAD Inspector view
 (the bottom left view).
 
 To see an example of a package with more complex assemblies, it is recommended to browse
-``pub`` -> ``robotics`` -> ``multimodal`` -> ``openvmp`` -> ``robots`` -> ``don1``.
+`pub` -> `robotics` -> `multimodal` -> `openvmp` -> `robots` -> `don1`.
 Please, note, that it takes A LOT OF resources to render the full `robot` assembly.
-It's easier to test some parts of the robot like ``link-lower-arm`` or ``link-base``.
+It's easier to test some parts of the robot like `link-lower-arm` or `link-base`.
 
 ## Implementation notes
 
-### Failed to load PartCAD: _nlopt
+### Failed to load PartCAD: \_nlopt
 
 If you see the above error message then you are probably using Windows and not using Conda.
 Please, switch to a Python environment created with Conda and Python >=3.9 and <=3.11.
 
+## Manual Testing
+
+Package extension:
+
+```bash
+conda info --envs1
+# TODO: partcad (Python module) does not install on 3.13
+conda create -n partcad python=3.10
+conda activate partcad
+export PATH=$CONDA_PREFIX/bin:$PATH
+
+# dependencies for src/test/python_tests
+python -m pip install -U lsprotocol pygls packaging pytest pyhamcrest python-jsonrpc-server nox
+# dependencies for PartCAD VSCode Extension
+python -m pip install -U partcad # took 1m18s to install
+
+npm run vsce-package # took 1m4s
+code --install-extension partcad.vsix
+```
+
+## Unit Testing
+
+```bash
+xvfb-run -a npm test # TODO: Add to VS Code Tasks
+nox # Runs Python tests
+```
+
 ## More documentation
 
 To learn more about PartCAD and for a more detailed tutorial,
-see [the PartCAD documentation website](https://partcad.readthedocs.io/).com/openvmp/partcad).
+see [the PartCAD documentation website](https://partcad.readthedocs.io/).

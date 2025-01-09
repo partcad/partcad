@@ -60,7 +60,13 @@ def get_initialization_options():
     server_info = package_json["serverInfo"]
     server_id = server_info["module"]
 
-    properties = package_json["contributes"]["configuration"]["properties"]
+    properties = {}
+    if isinstance(package_json["contributes"]["configuration"], dict):
+      properties = package_json["contributes"]["configuration"]["properties"]
+    elif isinstance(package_json["contributes"]["configuration"], list):
+      for section in package_json["contributes"]["configuration"]:
+        properties.update(section["properties"])
+
     setting = {}
     for prop in properties:
         name = prop[len(server_id) + 1 :]

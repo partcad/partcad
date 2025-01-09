@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.7.33",
+  "version": "0.7.50",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -45,8 +45,8 @@
   ],
   "extensionDependencies": [
     "ms-python.python",
-    "bernhard-42.ocp-cad-viewer",
-    "antyos.openscad"
+    "antyos.openscad",
+    "bernhard-42.ocp-cad-viewer"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -81,9 +81,10 @@
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
+    "lint": "eslint src",
     "format-check": "prettier --check 'src/**/*.ts' 'build/**/*.yml' '.github/**/*.yml'",
-    "test": "node ./out/test/runTest.js",
+    "test": "vscode-test",
+    "x-test": "xvfb-run -a npm test",
     "vsce-package": "vsce package -o partcad.vsix"
   },
   "contributes": {
@@ -129,7 +130,7 @@
               "Use pypy to create a sandboxed environment.",
               "Do not create a sandboxed environment. Use the current Python environment instead."
             ],
-            "scope": "machine",
+            "scope": "resource",
             "type": "string"
           }
         }
@@ -141,13 +142,13 @@
           "partcad.googleApiKey": {
             "default": "",
             "description": "Google AI API key.",
-            "scope": "machine",
+            "scope": "resource",
             "type": "string"
           },
           "partcad.openaiApiKey": {
             "default": "",
             "description": "OpenAI API key.",
-            "scope": "machine",
+            "scope": "resource",
             "type": "string"
           }
         }
@@ -170,7 +171,7 @@
               "Show regular informational messages.",
               "Show errors only."
             ],
-            "scope": "machine",
+            "scope": "resource",
             "type": "string"
           },
           "partcad.packagePath": {
@@ -191,7 +192,7 @@
               "Update all dependencies on each run.",
               "Update dependencies once a day."
             ],
-            "scope": "machine",
+            "scope": "resource",
             "type": "string"
           },
           "partcad.importStrategy": {
@@ -205,7 +206,7 @@
               "Always use the bundled version of `partcad`.",
               "Use `partcad` from environment, fallback to bundled version only if `partcad` not available in the environment."
             ],
-            "scope": "window",
+            "scope": "resource",
             "type": "string"
           },
           "partcad.interpreter": {
@@ -232,7 +233,7 @@
               "Notifications are shown for errors and warnings.",
               "Notifications are show for anything that the server chooses to show."
             ],
-            "scope": "machine",
+            "scope": "resource",
             "type": "string"
           }
         }
@@ -576,7 +577,7 @@
       },
       {
         "view": "partcadExplorer",
-        "contents": "PartCAD Python module v0.7.33 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD Python module](command:partcad.startInstall)",
+        "contents": "PartCAD Python module v0.8.0 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD Python module](command:partcad.startInstall)",
         "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled"
       },
       {
@@ -643,19 +644,20 @@
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
-    "@types/vscode": "1.78.0",
     "@types/glob": "^8.1.0",
-    "@types/node": "16.x",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.1",
+    "@types/node": "^22.9.0",
+    "@types/vscode": "1.78.0",
+    "@typescript-eslint/eslint-plugin": "^8.14.0",
+    "@typescript-eslint/parser": "^8.14.0",
+    "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
-    "@vscode/vsce": "^2.31.1",
-    "eslint": "^8.57.0",
-    "glob": "^10.4.2",
+    "@vscode/vsce": "^3.2.1",
+    "eslint": "^9.14.0",
+    "glob": "^11.0.0",
     "prettier": "^3.3.3",
-    "typescript": "^5.5.3",
     "ts-loader": "^9.5.1",
-    "webpack": "^5.93.0",
+    "typescript": "^5.6.3",
+    "webpack": "^5.96.1",
     "webpack-cli": "^5.1.4"
   }
 }
