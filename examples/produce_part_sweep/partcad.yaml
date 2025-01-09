@@ -1,5 +1,6 @@
 desc: >
   This example demonstrates how to define 3D parts by sweeping 2D sketches.
+partcad: ">=0.7.50"
 
 docs:
   usage: |

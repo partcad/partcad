@@ -36,7 +36,7 @@ jobs:
         run: |
           # Replace / with - if ref is present; fallback to SHA
           if [ -n "${HEAD_REF}" ]; then
-            echo "DEBUG: Generating tag from HEAD_REF: ${HEAD_REF}"
+            echo "DEBUG: Generating TAG from HEAD_REF: ${HEAD_REF}"
             TAG="${HEAD_REF//\//-}"
           else
             echo "DEBUG: Using SHA as fallback: ${{ github.sha }}"
