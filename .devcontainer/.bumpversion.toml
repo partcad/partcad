@@ -45,3 +45,23 @@ replace = "version = \"{new_version}\""
 filename = "examples/partcad.yaml"
 search = "partcad: \">={current_version}\""
 replace = "partcad: \">={new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-ide-vscode/package.json"
+search = "version\": \"{current_version}\""
+replace = "version\": \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-ide-vscode/package.json"
+search = "v{current_version} is not found"
+replace = "v{new_version} is not found"
+
+[[tool.bumpversion.files]]
+filename = "partcad-ide-vscode/bundled/tool/lsp_server.py"
+search = "version=\"{current_version}\""
+replace = "version=\"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-ide-vscode/bundled/tool/lsp_server.py"
+search = "(>={current_version})"
+replace = "(>={new_version})"

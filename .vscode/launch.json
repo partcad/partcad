@@ -25,6 +25,20 @@
     //   "name": "Debug: PartCAD Testing",
     //   "configurations": ["Debug: partcad behavex", "Debug: partcad behave"]
     // }
+    {
+      "name": "Debug Extension and Python",
+      "configurations": [
+        "Python debug server (hidden)",
+        "Debug Extension (hidden)"
+      ],
+      "stopAll": true,
+      "preLaunchTask": "npm: watch",
+      "presentation": {
+        "hidden": false,
+        "group": "",
+        "order": 1
+      }
+    }
   ],
   "configurations": [
     {
@@ -215,6 +229,41 @@
       "python": "${workspaceFolder}/.venv/bin/python",
       "env": {
         "PYTHONPATH": "${env:PATH}"
+      }
+    },
+    {
+      "name": "Debug Extension (hidden)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/partcad-ide-vscode/dist/**/*.js"
+      ],
+      "env": {
+        "USE_DEBUGPY": "True"
+      },
+      "presentation": {
+        "hidden": true,
+        "group": "",
+        "order": 4
+      },
+      "localRoot": "${workspaceFolder}/partcad-ide-vscode"
+    },
+    {
+      "name": "Python debug server (hidden)",
+      "type": "debugpy",
+      "request": "attach",
+      "listen": {
+        "host": "localhost",
+        "port": 5678
+      },
+      "justMyCode": true,
+      "presentation": {
+        "hidden": true,
+        "group": "",
+        "order": 4
       }
     }
   ]
