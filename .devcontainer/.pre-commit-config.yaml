@@ -85,3 +85,16 @@ repos:
     rev: v1.7.5
     hooks:
       - id: actionlint
+  - repo: local
+    hooks:
+      - id: eslint
+        files: \.ts$
+        name: eslint
+        language: system
+        entry: npm run lint
+      # TODO: Add this back in when `npm run x-test` is fast
+      # - id: x-test
+      #   files: \.ts$
+      #   name: x-test
+      #   language: system
+      #   entry: npm run x-test

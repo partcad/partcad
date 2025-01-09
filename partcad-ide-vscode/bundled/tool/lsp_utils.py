@@ -48,7 +48,9 @@ _site_paths = tuple(
 
 def is_same_path(file_path1, file_path2) -> bool:
     """Returns true if two paths are the same."""
-    return os.path.normcase(os.path.normpath(file_path1)) == os.path.normcase(os.path.normpath(file_path2))
+    return os.path.normcase(os.path.normpath(file_path1)) == os.path.normcase(
+        os.path.normpath(file_path2)
+    )
 
 
 def is_current_interpreter(executable) -> bool:
@@ -80,7 +82,9 @@ class CustomIO(io.TextIOWrapper):
 
     name = None
 
-    def __init__(self, name, encoding="utf-8", newline=None, mirror=None, is_errors=False):
+    def __init__(
+        self, name, encoding="utf-8", newline=None, mirror=None, is_errors=False
+    ):
         self._buffer = io.BytesIO()
         self._buffer.name = name
         self._mirror = mirror
@@ -154,7 +158,9 @@ def _run_module(
 ) -> RunResult:
     """Runs as a module."""
     str_output = CustomIO("<stdout>", encoding="utf-8", mirror=add_stdout)
-    str_error = CustomIO("<stderr>", encoding="utf-8", mirror=add_stderr, is_errors=True)
+    str_error = CustomIO(
+        "<stderr>", encoding="utf-8", mirror=add_stderr, is_errors=True
+    )
 
     try:
         with substitute_attr(sys, "argv", argv):
@@ -205,7 +211,9 @@ def run_module(
             )
 
 
-def run_path(argv: Sequence[str], use_stdin: bool, cwd: str, source: str = None) -> RunResult:
+def run_path(
+    argv: Sequence[str], use_stdin: bool, cwd: str, source: str = None
+) -> RunResult:
     """Runs as an executable."""
     if use_stdin:
         with subprocess.Popen(

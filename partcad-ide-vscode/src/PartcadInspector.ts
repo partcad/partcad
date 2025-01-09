@@ -94,7 +94,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                             )
                             .then(
                                 () => {
-                                    progress.report({ message: 'Inspecting the sketch...', increment: 20 });
+                                    progress.report({ message: 'Showing the sketch...', increment: 20 });
                                     return vscode.commands.executeCommand('partcad.showSketch', {
                                         pkg: packageName,
                                         name: sketchName,
@@ -113,7 +113,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                                 },
                             );
                     } else {
-                        progress.report({ message: 'Inspecting the sketch...', increment: 20 });
+                        progress.report({ message: 'Showing the sketch...', increment: 20 });
                         vscode.commands
                             .executeCommand('partcad.showSketch', { pkg: packageName, name: sketchName, params })
                             .then(
@@ -209,7 +209,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                             )
                             .then(
                                 () => {
-                                    progress.report({ message: 'Inspecting the interface...', increment: 20 });
+                                    progress.report({ message: 'Showing the interface...', increment: 20 });
                                     return vscode.commands.executeCommand('partcad.showInterface', {
                                         pkg: packageName,
                                         name: intfName,
@@ -228,7 +228,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                                 },
                             );
                     } else {
-                        progress.report({ message: 'Inspecting the interface...', increment: 20 });
+                        progress.report({ message: 'Showing the interface...', increment: 20 });
                         vscode.commands
                             .executeCommand('partcad.showInterface', { pkg: packageName, name: intfName, params })
                             .then(
@@ -324,7 +324,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                             )
                             .then(
                                 () => {
-                                    progress.report({ message: 'Inspecting the part...', increment: 20 });
+                                    progress.report({ message: 'Showing the part...', increment: 20 });
                                     return vscode.commands.executeCommand('partcad.showPart', {
                                         pkg: packageName,
                                         name: partName,
@@ -343,7 +343,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                                 },
                             );
                     } else {
-                        progress.report({ message: 'Inspecting the part...', increment: 20 });
+                        progress.report({ message: 'Showing the part...', increment: 20 });
                         vscode.commands
                             .executeCommand('partcad.showPart', { pkg: packageName, name: partName, params })
                             .then(
@@ -439,7 +439,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                             )
                             .then(
                                 () => {
-                                    progress.report({ message: 'Inspecting the assembly...', increment: 20 });
+                                    progress.report({ message: 'Showing the assembly...', increment: 20 });
                                     return vscode.commands.executeCommand('partcad.showAssembly', {
                                         pkg: packageName,
                                         name: assemblyName,
@@ -458,7 +458,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                                 },
                             );
                     } else {
-                        progress.report({ message: 'Inspecting the assembly...', increment: 20 });
+                        progress.report({ message: 'Showing assembly...', increment: 20 });
                         vscode.commands
                             .executeCommand('partcad.showAssembly', { pkg: packageName, name: assemblyName, params })
                             .then(

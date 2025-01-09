@@ -29,6 +29,7 @@
   },
   "typescript.tsc.autoDetect": "off",
   "[typescript]": {
+    "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "eslint.workingDirectories": [
@@ -106,7 +107,7 @@
   "editor.accessibilitySupport": "off",
   "editor.autoIndent": "full",
   "editor.detectIndentation": false,
-  "editor.fontFamily": "'Hack Nerd Font Mono'",
+  "editor.fontFamily": "'Hack Nerd Font Mono', monospace",
   "editor.formatOnSave": true,
   "editor.formatOnType": true,
   "editor.insertSpaces": true,
@@ -204,7 +205,7 @@
   "python.analysis.extraPaths": [
     "./partcad/src",
     "./partcad-cli/src",
-    "./partcad-ide-vscode/bindled/libs"
+    "./partcad-ide-vscode/bundled/libs"
   ],
   "python.envFile": "${workspaceFolder}/.env",
   // https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage
@@ -257,6 +258,21 @@
   "testing.followRunningTest": false,
   // "testing.openTesting": "neverOpen",
   "workbench.colorTheme": "GitHub Dark",
-  "yaml.format.bracketSpacing": false // prevent YAML formatter from breaking Jinja2 templates
+  "yaml.format.bracketSpacing": false, // prevent YAML formatter from breaking Jinja2 templates
   // "yaml.format.bracketSpacing": false,
+  // Suggestions from @alexanderilyin
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[shellscript]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
+  "[dockerfile]": {
+    "editor.defaultFormatter": "ms-azuretools.vscode-docker"
+  },
+  "python.testing.cwd": "${workspaceFolder}",
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
+  // "editor.defaultFormatter": null,
+  "prettier.prettierPath": "./partcad-ide-vscode/node_modules/prettier"
 }

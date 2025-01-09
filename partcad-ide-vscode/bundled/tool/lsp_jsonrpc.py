@@ -58,7 +58,9 @@ class JsonWriter:
         with self._lock:
             content = json.dumps(data)
             length = len(content.encode("utf-8"))
-            self._writer.write(f"{CONTENT_LENGTH}{length}\r\n\r\n{content}".encode("utf-8"))
+            self._writer.write(
+                f"{CONTENT_LENGTH}{length}\r\n\r\n{content}".encode("utf-8")
+            )
             self._writer.flush()
 
 
@@ -193,7 +195,9 @@ def _get_json_rpc(workspace: str) -> Union[JsonRpc, None]:
         return None
 
 
-def get_or_start_json_rpc(workspace: str, interpreter: Sequence[str], cwd: str) -> Union[JsonRpc, None]:
+def get_or_start_json_rpc(
+    workspace: str, interpreter: Sequence[str], cwd: str
+) -> Union[JsonRpc, None]:
     """Gets an existing JSON-RPC connection or starts one and return it."""
     res = _get_json_rpc(workspace)
     if not res:
@@ -244,7 +248,9 @@ def run_over_json_rpc(
     data = rpc.receive_data()
 
     if data["id"] != msg_id:
-        return RpcRunResult("", f"Invalid result for request: {json.dumps(msg, indent=4)}")
+        return RpcRunResult(
+            "", f"Invalid result for request: {json.dumps(msg, indent=4)}"
+        )
 
     result = data["result"] if "result" in data else ""
     if "error" in data:

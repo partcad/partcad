@@ -40,11 +40,8 @@ const extensionConfig = {
             },
             {
                 test: /\.css$/,
-                use: [
-                    'style-loader',
-                    'css-loader'
-                ]
-            }
+                use: ['style-loader', 'css-loader'],
+            },
         ],
     },
     devtool: 'source-map',
