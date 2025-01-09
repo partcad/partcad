@@ -53,4 +53,4 @@ __all__ = [
     "exception",
 ]
 
-__version__: str = "0.7.50"
+__version__: str = "0.7.52"

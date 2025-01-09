@@ -1,6 +1,9 @@
 # https://github.com/devcontainers/ci/blob/main/docs/github-action.md
 name: "Dev Container CI"
 on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *" # Run daily at midnight
   merge_group:
   pull_request:
   push:

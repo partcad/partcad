@@ -1,13 +1,13 @@
 # PartCAD <!-- omit in toc -->
 
-[![License](https://github.com/openvmp/partcad/blob/main/apache20.svg?raw=true)](./LICENSE.txt)
+[![License](https://github.com/partcad/partcad/blob/main/apache20.svg?raw=true)](./LICENSE.txt)
 
-[![CI on MacOS and Windows](https://github.com/openvmp/partcad/actions/workflows/python-test.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/python-test.yml)
-[![CI on Linux](https://github.com/partcad/partcad/actions/workflows/dev-container.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/dev-container.yml)
-[![CD on Linux, MacOS and Windows](https://github.com/openvmp/partcad/actions/workflows/python-build.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/python-build.yml)
-[![Deployment to PyPI](https://github.com/openvmp/partcad/actions/workflows/python-deploy.yml/badge.svg)](https://github.com/openvmp/partcad/actions/workflows/python-deploy.yml)
+[![CI on macOS and Windows](https://github.com/partcad/partcad/actions/workflows/python-test.yml/badge.svg?event=schedule)](https://github.com/partcad/partcad/actions/workflows/python-test.yml?query=event%3Aschedule)
+[![CI on Linux](https://github.com/partcad/partcad/actions/workflows/dev-container.yml/badge.svg?event=schedule)](https://github.com/partcad/partcad/actions/workflows/dev-container.yml?query=event%3Aschedule)
+[![CD on Linux, macOS and Windows](https://github.com/partcad/partcad/actions/workflows/python-build.yml/badge.svg?event=schedule)](https://github.com/partcad/partcad/actions/workflows/python-build.yml?query=event%3Aschedule)
+[![Deployment to PyPI](https://github.com/partcad/partcad/actions/workflows/python-deploy.yml/badge.svg)](https://github.com/partcad/partcad/actions/workflows/python-deploy.yml)
 [![Documentation Status](https://readthedocs.org/projects/partcad/badge/?version=latest)](https://partcad.readthedocs.io/en/latest/?badge=latest)
-<a href="https://discord.gg/zdwyxkGM"><img alt="Discord" src="https://img.shields.io/discord/1091497262733074534?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
+<a href="https://discord.gg/9AEu3vF7rv"><img alt="Discord" src="https://img.shields.io/discord/1091497262733074534?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
 [![Nox](https://img.shields.io/badge/%F0%9F%A6%8A-Nox-D85E00.svg)](https://github.com/wntrblm/nox)
 
 [PartCAD] is **the first package manager for CAD models** and a framework for managing assemblies.
@@ -20,7 +20,7 @@ Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](ht
 
 ## Join us!
 
-Stay informed and share feedback by joining [our Discord server](https://discord.gg/zdwyxkGM). <br/>
+Stay informed and share feedback by joining [our Discord server](https://discord.gg/9AEu3vF7rv). <br/>
 
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
