@@ -82,7 +82,7 @@
         // Docker Support
         "ms-azuretools.vscode-docker",
         // YAML Support
-        // "redhat.vscode-yaml", # TODO-20:command 'jumpToSchema' already exists
+        "redhat.vscode-yaml", // TODO-20:command 'jumpToSchema' already exists
         // SVG Support
         "jock.svg",
         // Jinja Support
