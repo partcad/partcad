@@ -30,9 +30,9 @@ Feature: `pc add sketch` command
   #     """
   #     dependencies:
   #     sketches:
-  #     parts:
   #       test:
   #         type: scad
+  #     parts:
   #     assemblies:
   #     """
 
@@ -312,8 +312,8 @@ Feature: `pc add sketch` command
   #     """
   #     dependencies:
   #     sketches:
-  #     parts:
   #       test:
   #         type: scad
+  #     parts:
   #     assemblies:
   #     """

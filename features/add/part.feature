@@ -82,6 +82,7 @@ Feature: `pc add part` command
     And a file named "partcad.yaml" should have YAML content:
       """
       dependencies:
+      sketches:
       parts:
         generated-case:
           type: ai-openscad

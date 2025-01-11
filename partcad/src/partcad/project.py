@@ -224,7 +224,7 @@ class Project(project_config.Configuration):
     #             self.path + "/" + self.config_obj["cover"]["package"]
     #         ).get_cover()
 
-    def get_child_project_names(self):
+    def get_child_project_names(self, absolute: bool = True):
         if self.broken:
             pc_logging.info("Ignoring the broken package: %s" % self.name)
             return
@@ -239,7 +239,7 @@ class Project(project_config.Configuration):
                     consts.DEFAULT_PACKAGE_CONFIG,
                 )
             ):
-                children.append(self.name + "/" + subdir)
+                children.append(self.name + "/" + subdir if absolute else subdir)
 
         if "dependencies" in self.config_obj and not self.config_obj["dependencies"] is None:
             dependencies = self.config_obj["dependencies"]
@@ -249,14 +249,17 @@ class Project(project_config.Configuration):
                     dependencies,
                 )
                 dependencies = list(filtered)
-            children.extend(
-                list(
-                    map(
-                        lambda project_name: self.name + "/" + project_name,
-                        dependencies,
+            if absolute:
+                children.extend(
+                    list(
+                        map(
+                            lambda project_name: self.name + "/" + project_name,
+                            dependencies,
+                        )
                     )
                 )
-            )
+            else:
+                children.extend(list(dependencies))
         return children
 
     def init_mates(self):
@@ -1531,10 +1534,11 @@ class Project(project_config.Configuration):
             lines += [""]
 
         if self.config_obj.get("dependencies", None) is not None and not "packages" in exclude:
-            dependencies = self.config_obj["dependencies"]
+            dependencies = copy.copy(self.config_obj["dependencies"])
+            child_packages = self.get_child_project_names(absolute=False)
             display_dependencies = []
-            for alias in dependencies:
-                if dependencies[alias].get("onlyInRoot", False):
+            for alias in child_packages:
+                if alias in dependencies and dependencies[alias].get("onlyInRoot", False) and self.name != "/":
                     continue
                 display_dependencies.append(alias)
 
@@ -1542,17 +1546,17 @@ class Project(project_config.Configuration):
                 lines += ["## Sub-Packages"]
                 lines += [""]
                 for alias in display_dependencies:
-                    import_config = dependencies[alias]
+                    import_config = dependencies.get(alias, {})
                     columns = []
 
                     if "type" not in import_config or import_config["type"] == "local":
                         lines += [
-                            "### [%s](./%s)"
+                            "### [%s](%s)"
                             % (
-                                import_config["name"],
+                                alias,
                                 os.path.join(
                                     return_path,
-                                    import_config["path"],
+                                    import_config.get("path", alias),
                                     "README.md",
                                 ),
                             )
@@ -1560,12 +1564,14 @@ class Project(project_config.Configuration):
                     elif import_config["type"] == "git":
                         lines += ["### [%s](%s)" % (import_config["name"], import_config["url"])]
                     else:
-                        lines += ["### %s" % import_config["name"]]
+                        lines += ["### %s" % import_config.get("name", alias)]
 
                     if "desc" in import_config:
                         columns += [import_config["desc"]]
                     elif not columns:
-                        columns += ["***Not documented yet.***"]
+                        # TODO(clairbee): is there an easy and reiable way to pull the descriptions from sub-packages?
+                        # columns += ["***Not documented yet.***"]
+                        pass
 
                     if len(columns) > 1:
                         lines += ["<table><tr>"]

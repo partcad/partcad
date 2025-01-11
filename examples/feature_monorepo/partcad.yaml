@@ -11,3 +11,8 @@ parts:
   package-a/cube:
     type: cadquery
     desc: This is a cube from examples
+
+render:
+  readme:
+    exclude:
+      - parts

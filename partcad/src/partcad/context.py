@@ -350,7 +350,7 @@ class Context(project_config.Configuration):
         # First, iterate all explicitly mentioned "dependencies"s.
         # Do it before iterating subdirectories, as it may kick off a long
         # background task.
-        if "dependencies" in project.config_obj and not project.config_obj["dependencies"] is None:
+        if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
             dependencies = project.config_obj["dependencies"]
             if not project.config_obj.get("isRoot", False):
                 filtered = filter(
@@ -411,7 +411,7 @@ class Context(project_config.Configuration):
     def get_all_packages(self, parent_name=None):
         # See if we need to preload any "onlyInRoot" packages
         # TODO(clairbee): parallelize preloading too?
-        if "dependencies" in self.config_obj and not self.config_obj["dependencies"] is None:
+        if "dependencies" in self.config_obj and self.config_obj["dependencies"] is not None:
             dependencies = self.config_obj["dependencies"]
             for prj_name in dependencies:
                 if "onlyInRoot" in dependencies[prj_name]:
