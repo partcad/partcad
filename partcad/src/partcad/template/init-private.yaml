@@ -4,6 +4,8 @@
 # url: <package's or maintainer's url>
 # manufacturable: <are objects in this package manufacturable? true or false>
 
+private: True
+
 dependencies:
   # Add dependencies here
   # <package-name>:
