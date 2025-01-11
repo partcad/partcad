@@ -3,7 +3,6 @@ import yaml
 import partcad as pc
 import coloredlogs
 import logging
-import sys
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader

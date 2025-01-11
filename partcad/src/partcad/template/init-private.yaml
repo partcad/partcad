@@ -29,7 +29,7 @@ parts:
   #   desc: <(optional) textual description, also used by AI>
   #   path: <(optional) the source file path, "{part name}.{ext}" otherwise>
   #   # ... type-specific options ...
-  #   offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
+  #   offset: <OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
   #   # The below syntax is similar to the one used for interfaces,
   #   # with the only exception being the word "implements" instead of "inherits".
@@ -37,12 +37,12 @@ parts:
   #     <interface name>: <instance name>
   #     <other interface name>: # instance name is implied to be be empty ("")
   #     <yet another interface>:
-  #       <instance name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+  #       <instance name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
   #   ports: # (optional) the list of ports in addition to the inherited ones
-  #     <port name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
-  #     <other port name>: # [[0,0,0], [0,0,1], 0] is implied
+  #     <port name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+  #     <other port name>: # [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle] is implied
   #     <another port name>:
-  #       location: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+  #       location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
   #       sketch: <(optional) name of the sketch used for visualization>
 
 assemblies:

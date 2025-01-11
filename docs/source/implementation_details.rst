@@ -1,7 +1,11 @@
+.. _implementation_details:
+
 Implementation Details
 ######################
 
 The following information is useful for PartCAD contributors.
+
+.. _location:
 
 ======================
 Coordinates / Location

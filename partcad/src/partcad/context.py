@@ -284,7 +284,7 @@ class Context(project_config.Configuration):
                     return result
         else:
             # Otherwise, iterate all subfolders and check if any of them are packages
-            if "dependencies" in project.config_obj and not project.config_obj["dependencies"] is None:
+            if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
                 dependencies = project.config_obj["dependencies"]
                 # TODO(clairbee): revisit if this code path is needed when the
                 #                 user explicitly asked for a particular package
@@ -296,13 +296,13 @@ class Context(project_config.Configuration):
                 #     )
                 #     dependencies = list(filtered)
                 for prj_name in dependencies:
-                    pc_logging.debug("Checking the dependency: %s vs %s..." % (prj_name, next_import))
+                    pc_logging.debug(f"Checking the dependency: {prj_name} vs {next_import}...")
                     if prj_name != next_import:
                         continue
                     prj_conf = project.config_obj["dependencies"][prj_name]
                     if prj_conf.get("onlyInRoot", False):
                         next_project_path = "/" + prj_name
-                    pc_logging.debug("Loading the dependency: %s..." % next_project_path)
+                    pc_logging.debug(f"Loading the dependency: {next_project_path}...")
                     if "name" in prj_conf:
                         prj_conf["orig_name"] = prj_conf["name"]
                     prj_conf["name"] = next_project_path

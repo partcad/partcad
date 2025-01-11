@@ -207,12 +207,12 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
         <parent interface name>: <instance name>
         <other interface name>: # instance name is implied to be empty ("")
         <yet another interface>:
-          <instance name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          <instance name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
       ports:  # (optional) the list of ports in addition to the inherited ones
-        <port name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
-        <other port name>: # [[0,0,0], [0,0,1], 0] is implied
+        <port name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+        <other port name>: # [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle] is implied
         <another port name>:
-          location: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
       parameters:
         moveX: # (optional) offset along X
@@ -387,7 +387,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       desc: <(optional) textual description, also used by AI>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       # ... type-specific options ...
-      offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
       # The below syntax is similar to the one used for interfaces,
       # with the only exception being the word "implements" instead of "inherits".
@@ -395,17 +395,17 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
         <interface name>: <instance name>
         <other interface name>: # instance name is implied to be be empty ("")
         <yet another interface>:
-          <instance name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          <instance name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
       ports: # (optional) the list of ports in addition to the inherited ones
-        <port name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
-        <other port name>: # [[0,0,0], [0,0,1], 0] is implied
+        <port name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+        <other port name>: # [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle] is implied
         <another port name>:
-          location: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
 Depending on the type of the part, the configuration may have different options.
 
-See "Implementation Detail" for more information on the OCCT Location object.
+See :ref:`location` for more information on the OCCT Location object.
 
 CAD Scripts
 -----------
@@ -695,7 +695,7 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
           default: <default value>
-      offset: <(optional) OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
 The ``assy`` type is used to define assemblies in `Assembly YAML` format.
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
@@ -714,7 +714,7 @@ Here is an example of an assembly definition:
         length:
           type: float
           default: 100.0
-      offset: [[0,0,0], [0,0,1], 0]
+      offset: [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
 
 In this example, an assembly named ``example_assembly`` is defined with a parameter ``length`` and an offset.
 
