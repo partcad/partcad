@@ -1,16 +1,58 @@
-import:
+# See https://partcad.readthedocs.io/en/latest/configuration.html for more information
+# name: <package name>
+# desc: <package description>
+# url: <package's or maintainer's url>
+
+dependencies:
   # Add dependencies here
-  #     <package-name>:
-  #         desc: <package description>               # optional
-  #         type: <local|git|tar>
-  #         path: <relative path>                     # type:local only
-  #         url: <url of the package>                 # type:git|tar only
-  #         relPath: <relative path within the repo>  # type:git|tar only
-  #         web: <package's or maintainer's url>      # optional
-  #         poc: <maintainer's email>                 # optional
+  # <package-name>:
+  #   desc: <package description>               # optional
+  #   type: <local|git|tar>
+  #   path: <relative path>                     # type:local only
+  #   url: <url of the package>                 # type:git|tar only
+  #   relPath: <relative path within the repo>  # type:git|tar only
+  #   web: <package's or maintainer's url>      # optional
+  #   poc: <maintainer's email>                 # optional
+
+sketches:
+  # Add sketches here
+  # <sketch-name>:
+  #   type: <basic|dxf|svg|cadquery|build123d>
+  #   desc: <(optional) textual description>
+  #   path: <(optional) the source file path, "{sketch name}.{ext}" otherwise>
+  #   # ... type-specific options ...
 
 parts:
   # Add parts here
+  # <part name>:
+  #   type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|stl|3mf>
+  #   desc: <(optional) textual description, also used by AI>
+  #   path: <(optional) the source file path, "{part name}.{ext}" otherwise>
+  #   # ... type-specific options ...
+  #   offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
+
+  #   # The below syntax is similar to the one used for interfaces,
+  #   # with the only exception being the word "implements" instead of "inherits".
+  #   implements: # (optional) the list of interfaces to implement
+  #     <interface name>: <instance name>
+  #     <other interface name>: # instance name is implied to be be empty ("")
+  #     <yet another interface>:
+  #       <instance name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+  #   ports: # (optional) the list of ports in addition to the inherited ones
+  #     <port name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+  #     <other port name>: # [[0,0,0], [0,0,1], 0] is implied
+  #     <another port name>:
+  #       location: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+  #       sketch: <(optional) name of the sketch used for visualization>
 
 assemblies:
   # Add assemblies here
+  # <assembly name>:
+  #   type: assy  # Assembly YAML
+  #   path: <(optional) the source file path>
+  #   parameters:  # (optional)
+  #     <param name>:
+  #       type: <string|float|int|bool>
+  #       enum: <(optional) list of possible values>
+  #       default: <default value>
+  #   offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">

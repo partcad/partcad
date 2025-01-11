@@ -3,6 +3,7 @@ import yaml
 import partcad as pc
 import coloredlogs
 import logging
+import sys
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
@@ -39,7 +40,8 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
 @click.option(
     "-q",
     "--quiet",
-    is_flag=True, help="Decrease verbosity level",
+    is_flag=True,
+    help="Decrease verbosity level",
     show_envvar=True,
 )
 @click.option(
@@ -130,7 +132,6 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
     commands_with_context = [
         "add",
         "info",
-        "init",
         "inspect",
         "install",
         "list",
@@ -139,7 +140,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
         "supply",  # Actually context is needed for "quote" but for now it it is what it is
         "test",
         "update",
-        "reset"
+        "reset",
     ]
 
     if ctx.invoked_subcommand in commands_with_context:
@@ -182,12 +183,11 @@ def process_result(result, verbose, quiet, no_ansi, package, format):
     if not no_ansi:
         pc.logging_ansi_terminal_fini()
 
-    if pc.logging.had_errors:
+    # Abort if there was at least one error reported during the exeution time.
+    # `result` is needed for the case when the command was not correct.
+    if pc.logging.had_errors or result:
         raise click.Abort()
 
 
 if __name__ == "__main__":
     cli()
-    # TODO-90: @alexanderilyin: add a test for this
-    # if pc_logging.had_errors:
-    #     sys.exit(1)

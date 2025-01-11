@@ -50,7 +50,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
   pythonVersion: <(optional) python version for sandboxing if applicable>
   pythonRequirements: <(python scripts only) the list of dependencies to install>
 
-  import:
+  dependencies:
       <dependency-name>:
           desc: <(optional) textual description>
           type: <(optional) git|tar|local, can be guessed by path or url>
@@ -70,7 +70,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
 Dependencies
 ============
 
-Here are some examples of references to imported packages:
+Here are some examples of a dependency declaration in ``partcad.yaml``:
 
 .. role:: raw-html(raw)
     :format: html
@@ -78,22 +78,22 @@ Here are some examples of references to imported packages:
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | Method             | Example                                                                                               |
 +====================+=======================================================================================================+
-|| Local files       | .. code-block:: yaml                                                                                  |
+|| Local package     | .. code-block:: yaml                                                                                  |
 || (in the same      |                                                                                                       |
-|| source code       |   import:                                                                                             |
+|| source code       |   dependencies:                                                                                       |
 || repository)       |     other_directory:                                                                                  |
 |                    |       path: ../../other                                                                               |
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | GIT repository     | .. code-block:: yaml                                                                                  |
 | :raw-html:`<br />` |                                                                                                       |
-| (HTTPS, SSH)       |   import:                                                                                             |
+| (HTTPS, SSH)       |   dependencies:                                                                                       |
 |                    |     other_repo:                                                                                       |
 |                    |         url: https://github.com/partcad/partcad                                                       |
 |                    |         relPath: examples  # where to "cd"                                                            |
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | Hosted tar ball    | .. code-block:: yaml                                                                                  |
 | :raw-html:`<br />` |                                                                                                       |
-| (HTTPS)            |   import:                                                                                             |
+| (HTTPS)            |   dependencies:                                                                                       |
 |                    |     other_archive:                                                                                    |
 |                    |       url: https://github.com/partcad/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz |
 +--------------------+-------------------------------------------------------------------------------------------------------+
@@ -405,6 +405,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
 Depending on the type of the part, the configuration may have different options.
 
+See "Implementation Detail" for more information on the OCCT Location object.
+
 CAD Scripts
 -----------
 
@@ -677,10 +679,10 @@ The MCFTT parameters are not required and have no impact on parts that have
 Assemblies
 ==========
 
-Assembly YAML
--------------
+Declare assemblies
+------------------
 
-Assemblies are declared in ``partcad.yaml`` using the following syntax:
+Assemblies are defined using the ``partcad.yaml`` file in the package folder. The syntax for defining assemblies is as follows:
 
 .. code-block:: yaml
 
@@ -693,9 +695,33 @@ Assemblies are declared in ``partcad.yaml`` using the following syntax:
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
           default: <default value>
-      offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
+      offset: <(optional) OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
 
-Here is an example:
+The ``assy`` type is used to define assemblies in `Assembly YAML` format.
+The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
+The optional ``offset`` parameter specifies the location of the assembly using an OCCT Location object.
+See "Implementation Detail" for more information on the OCCT Location object.
+
+Here is an example of an assembly definition:
+
+.. code-block:: yaml
+
+  assemblies:
+    example_assembly:
+      type: assy
+      path: example.assy
+      parameters:
+        length:
+          type: float
+          default: 100.0
+      offset: [[0,0,0], [0,0,1], 0]
+
+In this example, an assembly named ``example_assembly`` is defined with a parameter ``length`` and an offset.
+
+Assembly YAML
+-------------
+
+Here is an example of an assembly defined using `Assembly YAML`:
 
 +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Configuration                                     | Result                                                                                                                  |

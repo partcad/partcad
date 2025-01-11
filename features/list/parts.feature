@@ -6,7 +6,7 @@ Feature: `pc list parts` command
     And I have temporary $HOME in "/tmp/sandbox/home"
     And a file named "partcad.yaml" with content:
       """
-      import:
+      dependencies:
         raspberrypi:
           desc: Raspberry Pi
           # TODO-58: @alexanderilyin: Allow 'type: git' to be omitted and auto-detect

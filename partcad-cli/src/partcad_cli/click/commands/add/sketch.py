@@ -3,7 +3,7 @@ import partcad as pc
 from pathlib import Path
 
 
-@click.command(help="Add a part")
+@click.command(help="Add a sketch")
 @click.option(
     "--desc",
     "desc",
@@ -32,25 +32,24 @@ from pathlib import Path
         [
             "cadquery",
             "build123d",
-            "scad",
-            "step",
-            "stl",
-            "3mf",
+            "dxf",
+            "svg",
+            "basic",
             "ai-cadquery",
             "ai-openscad",
         ]
     ),
-    # help="Type of the part",
+    # help="Type of the sketch",
 )
 @click.argument("path", type=str)  # help="Path to the file"
 @click.pass_obj
 def cli(ctx, desc, kind, provider, path):
     prj = ctx.get_project(pc.ROOT)
-    with pc.logging.Process("AddPart", prj.name):
+    with pc.logging.Process("AddSketch", prj.name):
         config = {}
         if desc:
             config["desc"] = desc
         if provider:
             config["provider"] = provider
-        if prj.add_part(kind, path, config):
+        if prj.add_sketch(kind, path, config):
             Path(path).touch()

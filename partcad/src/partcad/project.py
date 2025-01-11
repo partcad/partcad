@@ -241,19 +241,19 @@ class Project(project_config.Configuration):
             ):
                 children.append(self.name + "/" + subdir)
 
-        if "import" in self.config_obj and not self.config_obj["import"] is None:
-            imports = self.config_obj["import"]
+        if "dependencies" in self.config_obj and not self.config_obj["dependencies"] is None:
+            dependencies = self.config_obj["dependencies"]
             if not self.config_obj.get("isRoot", False):
                 filtered = filter(
-                    lambda x: "onlyInRoot" not in imports[x] or not imports[x]["onlyInRoot"],
-                    imports,
+                    lambda x: "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"],
+                    dependencies,
                 )
-                imports = list(filtered)
+                dependencies = list(filtered)
             children.extend(
                 list(
                     map(
                         lambda project_name: self.name + "/" + project_name,
-                        imports,
+                        dependencies,
                     )
                 )
             )
@@ -1084,16 +1084,14 @@ class Project(project_config.Configuration):
             config = yaml.load(fp)
             fp.close()
 
-        for elem in config:
-            if elem == "import":
-                if config["import"] is None:
-                    config["import"] = {}
-                imports = config["import"]
-                imports[alias] = {
-                    location_param: location,
-                    "type": location_type,
-                }
-                break  # no need to iterate further
+        if "import" in config and "dependencies" not in config:
+            config["dependencies"] = config["import"]
+        if config["dependencies"] is None:
+            config["dependencies"] = {}
+        config["dependencies"][alias] = {
+            location_param: location,
+            "type": location_type,
+        }
         with open(self.config_path, "w") as fp:
             yaml.dump(config, fp)
             fp.close()
@@ -1114,7 +1112,7 @@ class Project(project_config.Configuration):
             path = path[1:]
 
         name = path
-        if name.endswith(".%s" % extension):
+        if name.lower().endswith((".%s" % extension).lower()):
             name = name[: -len(extension) - 1]
 
         return True, path, name
@@ -1132,9 +1130,17 @@ class Project(project_config.Configuration):
         else:
             ext = kind
 
-        valid, path, name = self._validate_path(path, ext)
-        if not valid:
-            return False
+        if ext:
+            # This is a file type.
+            # Remove the extension from the name.
+            valid, path, name = self._validate_path(path, ext)
+            if not valid:
+                return False
+        else:
+            # This is not a file type.
+            # The user provided value is not a path. It's just the name itself.
+            name = path
+            path = None
 
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
@@ -1164,6 +1170,21 @@ class Project(project_config.Configuration):
             fp.close()
 
         return True
+
+    def add_sketch(self, kind: str, path: str, config={}) -> bool:
+        pc_logging.info("Adding the sketch %s of type %s" % (path, kind))
+        ext_by_kind = {
+            "cadquery": "py",
+            "build123d": "py",
+            "basic": None,
+        }
+        return self._add_component(
+            kind,
+            path,
+            "sketches",
+            ext_by_kind,
+            config,
+        )
 
     def add_part(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the part %s of type %s" % (path, kind))
@@ -1509,19 +1530,19 @@ class Project(project_config.Configuration):
             lines += [usage]
             lines += [""]
 
-        if self.config_obj.get("import", None) is not None and not "packages" in exclude:
-            imports = self.config_obj["import"]
-            display_imports = []
-            for alias in imports:
-                if imports[alias].get("onlyInRoot", False):
+        if self.config_obj.get("dependencies", None) is not None and not "packages" in exclude:
+            dependencies = self.config_obj["dependencies"]
+            display_dependencies = []
+            for alias in dependencies:
+                if dependencies[alias].get("onlyInRoot", False):
                     continue
-                display_imports.append(alias)
+                display_dependencies.append(alias)
 
-            if display_imports:
+            if display_dependencies:
                 lines += ["## Sub-Packages"]
                 lines += [""]
-                for alias in display_imports:
-                    import_config = imports[alias]
+                for alias in display_dependencies:
+                    import_config = dependencies[alias]
                     columns = []
 
                     if "type" not in import_config or import_config["type"] == "local":

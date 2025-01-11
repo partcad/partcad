@@ -23,7 +23,7 @@ Alternatively, manually create ``partcad.yaml`` with the following content:
   .. code-block:: yaml
 
     # partcad.yaml
-    import:
+    dependencies:
       # Public PartCAD repository (reference it explicitly if required)
       pub:
         type: git

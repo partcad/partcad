@@ -9,13 +9,14 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should be created with content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
       assemblies:
       """
 
   @scad @success
-  Scenario: Add cadquery Part from "example.py" file
+  Scenario: Add OpenSCAD Part from "example.scad" file
     Given a file named "test.scad" with content:
       """
       translate (v= [0,0,0])  cube (size = 10);
@@ -23,10 +24,11 @@ Feature: `pc add part` command
     When I run "partcad add part scad test.scad"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Adding the part test.scad of type scad"
-    And STDOUT should contain "DONE: AddPart: this:"
+    And STDOUT should contain "DONE: AddPart: /:"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
         test:
           type: scad
@@ -79,7 +81,7 @@ Feature: `pc add part` command
     # And a file named "$PWD/partcad.yaml" should have content:
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
       parts:
         generated-case:
           type: ai-openscad
@@ -88,7 +90,7 @@ Feature: `pc add part` command
       assemblies:
       """
 
-  @wip @cadquery
+  @cadquery
   Scenario: Add cadquery Part from "example.py" file
     Given a file named "example.py" with content:
       """
@@ -99,14 +101,15 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
         example:
           type: cadquery
       assemblies:
       """
 
-  @wip @build123d
+  @build123d
   Scenario: Add build123d Part from "example.py" file
     Given a file named "example.py" with content:
       """
@@ -117,14 +120,15 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
         example:
           type: build123d
       assemblies:
       """
 
-  @wip @step
+  @step
   Scenario: Add STEP Part from "part.step" file
     Given a file named "part.step" with content:
       """
@@ -134,14 +138,15 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
         part:
           type: step
       assemblies:
       """
 
-  @wip @stl
+  @stl
   Scenario: Add STL Part from "model.stl" file
     Given a file named "model.stl" with content:
       """
@@ -159,14 +164,15 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
         model:
           type: stl
       assemblies:
       """
 
-  @wip @3mf
+  @3mf
   Scenario: Add 3MF Part from "design.3mf" file
     Given a file named "design.3mf" with content:
       """
@@ -176,7 +182,8 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
         design:
           type: 3mf
@@ -189,7 +196,8 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
         custom-part:
           type: ai-cadquery
@@ -282,7 +290,8 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
         test:
           type: scad

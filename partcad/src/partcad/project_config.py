@@ -87,6 +87,10 @@ class Configuration:
         if not "render" in self.config_obj or self.config_obj["render"] is None:
             self.config_obj["render"] = {}
 
+        # Backward compatibility for "import" -> "dependencies" renaming
+        if "import" in self.config_obj and "dependencies" not in self.config_obj:
+            self.config_obj["dependencies"] = self.config_obj["import"]
+
         # option: "partcad"
         # description: the version of PartCAD required to handle this package
         # values: string initializer for packaging.specifiers.SpecifierSet

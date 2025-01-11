@@ -3,11 +3,26 @@ Implementation Details
 
 The following information is useful for PartCAD contributors.
 
+======================
+Coordinates / Location
+======================
+
+PartCAD uses OpenCASCADE Location objects (TopLoc_Location) to represent locations of objects in 3D space.
+
+Example: [[1, 2, 3], [4, 5, 6], 70]
+
+The above list represents a location with the following components:
+
+1. "[1, 2, 3]": Translation or offset (in millimeters) along the X, Y, and Z axes
+2. "[4, 5, 6]": The X, Y and Z sizes of the vector to rotate around
+3. "70": The angle of rotation around the above vector
+
+
 ================================
 Internal geometry representation
 ================================
 
-PartCAD maintains parts as OCCT objects. Similar to ``wrapped`` objects found
+PartCAD maintains parts as OpenCASCADE objects. Similar to ``wrapped`` objects found
 in ``CadQuery`` and ``build123d``.
 
 ===========

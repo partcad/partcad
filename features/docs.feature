@@ -12,7 +12,7 @@ Feature: `pc render` command
     When I run command:
       """
       cat <<EOF > partcad.yaml
-      import:
+      dependencies:
         # Public PartCAD repository (reference it explicitly if required)
         pub:
           type: git
