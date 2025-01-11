@@ -94,6 +94,9 @@ def step_impl(context):
             if yaml_content is None:
                 raise ValueError("YAML content is empty or invalid")
 
+            if yaml_content.get("private") is not True:
+                raise ValueError("The package must be marked as private")
+
             # Check if the 'import.pub' key is not present
             import_section = yaml_content.get("dependencies")
             import_missing = import_section is None
