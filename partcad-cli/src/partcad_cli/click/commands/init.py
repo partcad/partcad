@@ -23,8 +23,6 @@ from partcad.globals import create_package
 )
 @click.pass_context
 def cli(ctx: click.rich_context.RichContext, private):
-    # TODO-96: @alexanderilyin: Deal with noise like "PartCAD configuration file is not found"
-    logging.had_errors = False
     if not ctx.parent.params.get("package") is None:
         if os.path.isdir(ctx.parent.params.get("package")):
             # TODO-97: Move filename to constant somewhere.

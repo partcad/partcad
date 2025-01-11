@@ -87,6 +87,14 @@ class Configuration:
         if not "render" in self.config_obj or self.config_obj["render"] is None:
             self.config_obj["render"] = {}
 
+        # Backward compatibility for "import" -> "dependencies" renaming
+        if "import" in self.config_obj and "dependencies" not in self.config_obj:
+            pc_logging.warning(
+                f"{name}: 'import' key is deprecated and will be removed in future versions. Use 'dependencies' instead.",
+            )
+            self.config_obj["dependencies"] = self.config_obj["import"]
+            del self.config_obj["import"]  # Clean up old key
+
         # option: "partcad"
         # description: the version of PartCAD required to handle this package
         # values: string initializer for packaging.specifiers.SpecifierSet

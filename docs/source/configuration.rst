@@ -50,7 +50,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
   pythonVersion: <(optional) python version for sandboxing if applicable>
   pythonRequirements: <(python scripts only) the list of dependencies to install>
 
-  import:
+  dependencies:
       <dependency-name>:
           desc: <(optional) textual description>
           type: <(optional) git|tar|local, can be guessed by path or url>
@@ -70,7 +70,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
 Dependencies
 ============
 
-Here are some examples of references to imported packages:
+Here are some examples of a dependency declaration in ``partcad.yaml``:
 
 .. role:: raw-html(raw)
     :format: html
@@ -78,22 +78,22 @@ Here are some examples of references to imported packages:
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | Method             | Example                                                                                               |
 +====================+=======================================================================================================+
-|| Local files       | .. code-block:: yaml                                                                                  |
+|| Local package     | .. code-block:: yaml                                                                                  |
 || (in the same      |                                                                                                       |
-|| source code       |   import:                                                                                             |
+|| source code       |   dependencies:                                                                                       |
 || repository)       |     other_directory:                                                                                  |
 |                    |       path: ../../other                                                                               |
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | GIT repository     | .. code-block:: yaml                                                                                  |
 | :raw-html:`<br />` |                                                                                                       |
-| (HTTPS, SSH)       |   import:                                                                                             |
+| (HTTPS, SSH)       |   dependencies:                                                                                       |
 |                    |     other_repo:                                                                                       |
 |                    |         url: https://github.com/partcad/partcad                                                       |
 |                    |         relPath: examples  # where to "cd"                                                            |
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | Hosted tar ball    | .. code-block:: yaml                                                                                  |
 | :raw-html:`<br />` |                                                                                                       |
-| (HTTPS)            |   import:                                                                                             |
+| (HTTPS)            |   dependencies:                                                                                       |
 |                    |     other_archive:                                                                                    |
 |                    |       url: https://github.com/partcad/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz |
 +--------------------+-------------------------------------------------------------------------------------------------------+
@@ -207,12 +207,12 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
         <parent interface name>: <instance name>
         <other interface name>: # instance name is implied to be empty ("")
         <yet another interface>:
-          <instance name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          <instance name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
       ports:  # (optional) the list of ports in addition to the inherited ones
-        <port name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
-        <other port name>: # [[0,0,0], [0,0,1], 0] is implied
+        <port name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+        <other port name>: # [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle] is implied
         <another port name>:
-          location: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
       parameters:
         moveX: # (optional) offset along X
@@ -387,7 +387,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       desc: <(optional) textual description, also used by AI>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       # ... type-specific options ...
-      offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
       # The below syntax is similar to the one used for interfaces,
       # with the only exception being the word "implements" instead of "inherits".
@@ -395,15 +395,17 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
         <interface name>: <instance name>
         <other interface name>: # instance name is implied to be be empty ("")
         <yet another interface>:
-          <instance name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          <instance name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
       ports: # (optional) the list of ports in addition to the inherited ones
-        <port name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
-        <other port name>: # [[0,0,0], [0,0,1], 0] is implied
+        <port name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+        <other port name>: # [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle] is implied
         <another port name>:
-          location: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
 Depending on the type of the part, the configuration may have different options.
+
+See :ref:`location` for more information on the OCCT Location object.
 
 CAD Scripts
 -----------
@@ -677,10 +679,10 @@ The MCFTT parameters are not required and have no impact on parts that have
 Assemblies
 ==========
 
-Assembly YAML
--------------
+Declare assemblies
+------------------
 
-Assemblies are declared in ``partcad.yaml`` using the following syntax:
+Assemblies are defined using the ``partcad.yaml`` file in the package folder. The syntax for defining assemblies is as follows:
 
 .. code-block:: yaml
 
@@ -693,9 +695,33 @@ Assemblies are declared in ``partcad.yaml`` using the following syntax:
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
           default: <default value>
-      offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
-Here is an example:
+The ``assy`` type is used to define assemblies in `Assembly YAML` format.
+The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
+The optional ``offset`` parameter specifies the location of the assembly using an OCCT Location object.
+See "Implementation Detail" for more information on the OCCT Location object.
+
+Here is an example of an assembly definition:
+
+.. code-block:: yaml
+
+  assemblies:
+    example_assembly:
+      type: assy
+      path: example.assy
+      parameters:
+        length:
+          type: float
+          default: 100.0
+      offset: [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+
+In this example, an assembly named ``example_assembly`` is defined with a parameter ``length`` and an offset.
+
+Assembly YAML
+-------------
+
+Here is an example of an assembly defined using `Assembly YAML`:
 
 +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Configuration                                     | Result                                                                                                                  |

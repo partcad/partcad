@@ -65,12 +65,12 @@ def step_impl(context, filename):
 
 #             # Check the structure of the YAML content
 #             # TODO-68: @alexanderilyin: move this to a separate step
-#             expected_structure = {"import", "parts", "assemblies"}
+#             expected_structure = {"dependencies", "sketches", "parts", "assemblies"}
 #             assert expected_structure.issubset(yaml_content.keys()), "YAML content does not match expected structure"
 
 #             # # Check that pub repo we added
 #             # expected_content = {
-#             #     "import": {"pub": {"type": "git", "url": "https://github.com/openvmp/partcad-index.git"}}
+#             #     "dependencies": {"pub": {"type": "git", "url": "https://github.com/openvmp/partcad-index.git"}}
 #             # }
 #             # assert yaml_content == expected_content, "YAML content does not match expected private package structure"
 #         except yaml.YAMLError as exc:
@@ -95,7 +95,7 @@ def step_impl(context):
                 raise ValueError("YAML content is empty or invalid")
 
             # Check if the 'import.pub' key is not present
-            import_section = yaml_content.get("import")
+            import_section = yaml_content.get("dependencies")
             import_missing = import_section is None
             import_without_pub = import_section is not None and "pub" not in import_section
             if not (import_missing or import_without_pub):

@@ -17,7 +17,7 @@ Feature: `pc test` command
   Scenario: `Recursively test all imported packages`
     Given a file named "partcad.yaml" with content:
       """
-      import:
+      dependencies:
         raspberrypi:
           desc: Raspberry Pi
           type: git

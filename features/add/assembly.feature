@@ -100,7 +100,7 @@ Feature: `pc add assembly` command
 #     Then the command should exit with a status code of "0"
 #     And a file named "partcad.yaml" should be created with content:
 #       """
-#       import:
+#       dependencies:
 #       parts:
 #       assemblies:
 #       """
@@ -133,7 +133,7 @@ Feature: `pc add assembly` command
 #     Then the command should exit with a status code of "0"
 #     And a file named "partcad.yaml" should have YAML content:
 #       """
-#       import:
+#       dependencies:
 #       parts:
 #       assemblies:
 #         logo:

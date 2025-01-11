@@ -10,12 +10,14 @@ Feature: `pc init` command
     Given a file named "partcad.yaml" does not exist
     When I run "partcad --no-ansi init"
     Then the command should exit with a status code of "0"
+    And STDERR should not contain "PartCAD configuration file is not found"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
         pub:
           type: git
           url: https://github.com/partcad/partcad-index.git
+      sketches:
       parts:
       assemblies:
       """
@@ -27,7 +29,8 @@ Feature: `pc init` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
       assemblies:
       """

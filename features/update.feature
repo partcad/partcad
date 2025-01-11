@@ -9,7 +9,7 @@ Feature: `pc update` command
   Scenario: Install packages
     Given a file named "partcad.yaml" with content:
       """
-      import:
+      dependencies:
         raspberrypi:
           desc: Raspberry Pi
           # TODO-81: @alexanderilyin: Allow 'type: git' to be omitted and auto-detect

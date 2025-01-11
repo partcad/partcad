@@ -1,6 +1,6 @@
 desc: Demonstrates how to create a monorepo with multiple packages in it
 
-import:
+dependencies:
   pub:
     onlyInRoot: True
     type: git
@@ -11,3 +11,8 @@ parts:
   package-a/cube:
     type: cadquery
     desc: This is a cube from examples
+
+render:
+  readme:
+    exclude:
+      - parts

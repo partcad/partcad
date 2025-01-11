@@ -10,7 +10,7 @@ Feature: `pc install` command
     # TODO-55: Check if pc is using shallow cloning with --depth 1
     Given a file named "partcad.yaml" with content:
       """
-      import:
+      dependencies:
         raspberrypi:
           desc: Raspberry Pi
           # TODO-56: @alexanderilyin: Allow 'type: git' to be omitted and auto-detect
@@ -41,7 +41,7 @@ Feature: `pc install` command
   Scenario: Install packages with ssh
     Given a file named "partcad.yaml" with content:
       """
-      import:
+      dependencies:
         raspberrypi:
           desc: Raspberry Pi
           type: git
@@ -49,7 +49,7 @@ Feature: `pc install` command
       """
     And a user configuration file named "config.yaml" with content:
       """
-      import:
+      dependencies:
         overrides:
           url:
             "git@github.com:": "https://github.com/"
@@ -64,7 +64,7 @@ Feature: `pc install` command
   Scenario: Override git configuration
     Given a file named "partcad.yaml" with content:
       """
-      import:
+      dependencies:
         raspberrypi:
           desc: Raspberry Pi
           type: git

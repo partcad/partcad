@@ -70,7 +70,7 @@ class Context(project_config.Configuration):
             self.lock.release()
 
     def __init__(self, root_path=None, search_root=True):
-        """Initializes the context and imports the root project."""
+        """Initializes the context and loads the root project."""
         root_file = ""
         if root_path is None:
             # Find the top folder containing "partcad.yaml"
@@ -284,25 +284,25 @@ class Context(project_config.Configuration):
                     return result
         else:
             # Otherwise, iterate all subfolders and check if any of them are packages
-            if "import" in project.config_obj and not project.config_obj["import"] is None:
-                imports = project.config_obj["import"]
+            if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
+                dependencies = project.config_obj["dependencies"]
                 # TODO(clairbee): revisit if this code path is needed when the
                 #                 user explicitly asked for a particular package
                 # if not project.config_obj.get("isRoot", False):
                 #     filtered = filter(
-                #         lambda x: "onlyInRoot" not in imports[x]
-                #         or not imports[x]["onlyInRoot"],
-                #         imports,
+                #         lambda x: "onlyInRoot" not in dependencies[x]
+                #         or not dependencies[x]["onlyInRoot"],
+                #         dependencies,
                 #     )
-                #     imports = list(filtered)
-                for prj_name in imports:
-                    pc_logging.debug("Checking the import: %s vs %s..." % (prj_name, next_import))
+                #     dependencies = list(filtered)
+                for prj_name in dependencies:
+                    pc_logging.debug(f"Checking the dependency: {prj_name} vs {next_import}...")
                     if prj_name != next_import:
                         continue
-                    prj_conf = project.config_obj["import"][prj_name]
+                    prj_conf = project.config_obj["dependencies"][prj_name]
                     if prj_conf.get("onlyInRoot", False):
                         next_project_path = "/" + prj_name
-                    pc_logging.debug("Importing: %s..." % next_project_path)
+                    pc_logging.debug(f"Loading the dependency: {next_project_path}...")
                     if "name" in prj_conf:
                         prj_conf["orig_name"] = prj_conf["name"]
                     prj_conf["name"] = next_project_path
@@ -347,28 +347,28 @@ class Context(project_config.Configuration):
             pc_logging.warn("Ignoring the broken package: %s" % project.name)
             return []
 
-        # First, iterate all explicitly mentioned "import"s.
+        # First, iterate all explicitly mentioned "dependencies"s.
         # Do it before iterating subdirectories, as it may kick off a long
         # background task.
-        if "import" in project.config_obj and not project.config_obj["import"] is None:
-            imports = project.config_obj["import"]
+        if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
+            dependencies = project.config_obj["dependencies"]
             if not project.config_obj.get("isRoot", False):
                 filtered = filter(
-                    lambda x: "onlyInRoot" not in imports[x] or not imports[x]["onlyInRoot"],
-                    imports,
+                    lambda x: "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"],
+                    dependencies,
                 )
-                imports = list(filtered)
+                dependencies = list(filtered)
 
-            for prj_name in imports:
-                prj_conf = project.config_obj["import"][prj_name]
+            for prj_name in dependencies:
+                prj_conf = project.config_obj["dependencies"][prj_name]
 
                 if prj_conf.get("onlyInRoot", False):
                     next_project_path = "/" + prj_name
                 else:
                     next_project_path = get_child_project_path(project.name, prj_name)
                 if next_project_path == self.name:
-                    # Avoid circular imports of the root package
-                    # TODO(clairbee): fix circular imports in general
+                    # Avoid circular dependencies of the root package
+                    # TODO(clairbee): fix circular dependencies in general
                     continue
                 pc_logging.debug("Importing: %s..." % next_project_path)
 
@@ -411,10 +411,10 @@ class Context(project_config.Configuration):
     def get_all_packages(self, parent_name=None):
         # See if we need to preload any "onlyInRoot" packages
         # TODO(clairbee): parallelize preloading too?
-        if "import" in self.config_obj and not self.config_obj["import"] is None:
-            imports = self.config_obj["import"]
-            for prj_name in imports:
-                if "onlyInRoot" in imports[prj_name]:
+        if "dependencies" in self.config_obj and self.config_obj["dependencies"] is not None:
+            dependencies = self.config_obj["dependencies"]
+            for prj_name in dependencies:
+                if "onlyInRoot" in dependencies[prj_name]:
                     if parent_name is None:
                         if self.name == "/":
                             # preload

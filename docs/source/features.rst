@@ -40,7 +40,7 @@ to the ~/.partcad/config.yaml:
   .. code-block:: yaml
 
     # ~/.partcad/config.yaml
-    import:
+    dependencies:
       overrides:
         url:
           "git@github.com:": "https://github.com/"

@@ -10,11 +10,11 @@ from partcad.user_config import user_config
 @click.pass_obj
 def cli(ctx: Context) -> None:
     with Process("Reset", "this"):
-        for _, package_info in ctx.config_obj.get("import", {}).items():
+        for _, package_info in ctx.config_obj.get("dependencies", {}).items():
             import_type = package_info["type"]
             cache_dir = os.path.join(user_config.internal_state_dir, import_type)
             if os.path.exists(cache_dir):
-                info(f"Removing cached {import_type} imports: '{cache_dir}'")
+                info(f"Removing cached {import_type} dependencies: '{cache_dir}'")
                 shutil.rmtree(cache_dir)
 
         runtime_dir = os.path.join(user_config.internal_state_dir, "runtime")

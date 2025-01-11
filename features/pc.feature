@@ -62,7 +62,8 @@ Feature: `pc` command
     Given "WORKSPACE" env var is set to the temp dir "/tmp/sandbox/tmp"
     And a file named "$WORKSPACE/partcad.yaml" with content:
       """
-      import:
+      dependencies:
+      sketches:
       parts:
       assemblies:
       """

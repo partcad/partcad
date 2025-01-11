@@ -8,6 +8,6 @@ class AddCommands(Loader):
     COMMANDS_FOLDER = os.path.join(Loader.COMMANDS_FOLDER, "add")
 
 
-@click.command(cls=AddCommands, help="Add a package, part, or assembly")
+@click.command(cls=AddCommands, help="Add a dependency, sketch, part, or assembly")
 def cli() -> None:
     pass

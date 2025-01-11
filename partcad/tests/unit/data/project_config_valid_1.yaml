@@ -1,2 +1,4 @@
 # This configuration file has the version requirements that always pass
 partcad: ">=0.1.0"
+
+dependencies:

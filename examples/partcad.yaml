@@ -14,9 +14,9 @@ name: /pub/examples/partcad
 cover:
   package: feature_interface
 
-import:
+dependencies:
   pub:
     onlyInRoot: True
     type: git
     url: https://github.com/openvmp/partcad-index.git
-  # NOTE: The subdirectories automatically become imports of the "local" type
+  # NOTE: The subdirectories automatically become dependencies of the "local" type

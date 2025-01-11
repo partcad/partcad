@@ -11,21 +11,27 @@ Packages
 ========
 
 All data in PartCAD is bundled into 'packages'.
+
 Packages are organized in a hierarchical structure where some packages may
-"import" a list of other packages.
-The top-level package is called "/". If a package called "/package" imports a
-child package called "sub-package" then such package will be called
+define "dependencies" that become "child" packages.
+The top-level package is called "/". If a package called "/package" has a
+dependency called "sub-package" then such a sub-package will be called
 "/package/sub-package".
 
-The package is described using the configuration file ``partcad.yaml`` placed
+Each package is described using the configuration file ``partcad.yaml`` placed
 in the package folder.
 
 Sketches
 ========
 
-PartCAD uses 2D sketches to create 3D models (e.g. via `extrude`) and to maintain
+PartCAD uses 2D sketches to create 3D models (e.g. via `extrude` or `sweep`) and to maintain
 various metadata (such as the geometry of interfaces between parts,
 arbitrary part metadata like camera view angles and so on).
+
+- Basic shapes
+
+  - Outer shape: `circle`, `rectangle`, `square`
+  - Optional inner shape: `circle`, `rectangle`, `square`
 
 - Files
 
@@ -35,6 +41,7 @@ arbitrary part metadata like camera view angles and so on).
 - Scripts
 
   - `build123d <https://github.com/gumyr/build123d>`_
+  - `CadQuery <https://github.com/CadQuery/cadquery>`_
 
 Interfaces
 ==========
