@@ -26,7 +26,7 @@ class AiContentFile:
 
         # Switch to lowercase to normalize the file extension in the URL
         lower_url = url.lower()
-        if lower_url.startswith("http://") or lower_url.startswith("https://"):
+        if lower_url.startswith(("http://", "https://")):
             response = requests.get(self.url, allow_redirects=True, timeout=15)
             if response.status_code == 200:
                 self.filename = tempfile.NamedTemporaryFile(suffix=self.suffix, delete=True, delete_on_close=False)
@@ -44,7 +44,7 @@ class AiContentFile:
         if lower_url.endswith(".png"):
             self.is_image = True
             self.suffix = ".png"
-        elif lower_url.endswith(".jpg") or lower_url.endswith(".jpeg"):
+        elif lower_url.endswith((".jpg", ".jpeg")):
             self.is_image = True
             self.suffix = ".jpg"
         elif lower_url.endswith(".mp4"):

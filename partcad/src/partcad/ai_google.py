@@ -100,7 +100,11 @@ class AiGoogle(AiContentProcessor):
                 return google_genai.upload_file(content.filename)
             if content.is_video:
                 video_content = google_genai.upload_file(content.filename)
+                start_time = time.time()
+                timeout = 300  # 5 minutes timeout
                 while video_content.state.name == "PROCESSING":
+                    if time.time() - start_time > timeout:
+                        raise TimeoutError("Video processing timeout exceeded")
                     time.sleep(5)
                     video_content = google_genai.get_file(video_content.name)
                 return video_content
