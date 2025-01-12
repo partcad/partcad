@@ -29,6 +29,7 @@ PartCAD aims to maintain three ways to manage the configuration files:
 
 The complete syntax of configuration files is described below.
 
+.. _packages:
 
 ========
 Packages
@@ -37,7 +38,7 @@ Packages
 The package is defined using the configuration file ``partcad.yaml`` placed
 in the package folder.
 Besides the package properties and, optionally, a list of imported dependencies,
-``partcad.yaml`` declares parts and assemblies contained in this package.
+``partcad.yaml`` declares a list of :ref:`objects` contained in this package.
 
 
 .. code-block:: yaml
@@ -97,6 +98,130 @@ Here are some examples of a dependency declaration in ``partcad.yaml``:
 |                    |     other_archive:                                                                                    |
 |                    |       url: https://github.com/partcad/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz |
 +--------------------+-------------------------------------------------------------------------------------------------------+
+
+Each dependency becomes a subpackage of the current package. All subfolders of the current package are considered
+subpackages (of the type `local`) if they contain a ``partcad.yaml`` file. Subfolders do not need to be explicitly
+declared as a dependency, but may be declared to provide a more detailed description.
+
+.. _objects:
+
+=======
+Objects
+=======
+
+PartCAD :ref:`packages` may contain the following objects:
+
+- :ref:`sketches` are 2D objects that can be used to create 3D objects (e.g. using :ref:`extrude` or :ref:`sweep`),
+  but can also be used to aid visualization of :ref:`interfaces` or to provide detailed instructions for AI actors.
+
+- :ref:`interfaces` are abstract objects that describe the endpoint of a connection between parts and provide
+  sufficient information to automatically determine the mating of parts.
+
+- :ref:`parts` are 3D objects that are meant to be available for purchase or manufacturing.
+
+- :ref:`assemblies` are instructions how to put parts and other assemblies together to be used as a single object.
+
+- :ref:`providers` are implementations of a way to get parts and assemblies (to purchase them or to manufacture them).
+
+===============
+Common Metadata
+===============
+
+All :ref:`objects` in PartCAD may carry the following metadata:
+
+.. _requirements:
+
+Requirements
+------------
+
+Objects may contain a list of requirements in free form (any YAML syntax works).
+These requirements help describe the object in more detail.
+They are not used by PartCAD itself, but by AI or human actors to create,
+improve, or better understand the object.
+
+The requirements are from the user’s perspective and serve to guide the design.
+Once the design is complete, it may impose further requirements (for example,
+on manufacturing), but those are not part of this section.
+This section exclusively covers the requirements used to create the design.
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      requirements: |
+        This part has to ...
+        ...
+        It also has to ...
+        ...
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      requirements:
+        - <requirement 1>
+        - <requirement 2>
+        - <requirement 3>
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      requirements:
+        mechanical: |
+          The outer dimensions of the part have to be ...
+        electrical: |
+          The part has to be able to withstand ...
+        esthetic: |
+          The part has to look like ...
+
+Files
+-----
+
+For objects that are defined using a source file, the default file path is
+the name of the object plus the extension of that file type.
+
+An alternative file path (absolute or relative to the package path)
+can be defined explicitly using the `path` parameter:
+
+.. code-block:: yaml
+
+  parts:
+    part-name:
+      type: step
+      path: alternative-path.step # Instead of "part-name.step"
+
+When the source file is not present in the package source repository
+but needs to be pulled from a remote location, the following options can be used:
+
+.. code-block:: yaml
+
+  fileFrom: url
+  fileUrl: <url to pull the file from>
+  # fileCompressed: <(optional) whether the file needs to be decompressed before use>
+  # fileMd5Sum: <(optional) the MD5 checksum of the file>
+  # fileSha1Sum: <(optional) the SHA1 checksum of the file>
+  # fileSha2Sum: <(optional) the SHA2 checksum of the file>
+
+Parameters
+----------
+
+Objects may declare parameters. Once parameters are declared, each use of such objects may be accompanied
+by a set of parameter values. The parameter values are resolved and applied to the object to create a parametrized
+variant of the object. The parametrized variant remains stored (e.g. at runtime) as a separate object in the same
+package where the original object is declared. This allows for the same parametrized object to be used multiple times.
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      parameters:
+        <param name>:
+          type: <string|float|int|bool>
+          enum: <(optional) list of possible values>
+          default: <default value>
+
+.. _sketches:
 
 ========
 Sketches
@@ -189,6 +314,8 @@ CAD Scripts
 -----------
 
 See the "CAD Scripts" section in the "Parts" chapter below.
+
+.. _interfaces:
 
 ==========
 Interfaces
@@ -373,6 +500,8 @@ Interface examples
 
 See the `feature_interfaces` example for more information.
 
+.. _parts:
+
 =====
 Parts
 =====
@@ -456,6 +585,7 @@ Generate OpenSCAD, CadQuery or build123d scripts with Generative AI using the fo
   parts:
     <part name>:
       desc: <(optional) The detailed description to be used in the model generation prompt>
+      requirements: <(optional) The list of requirements to be used in the model generation prompt>
       type: <ai-openscad|ai-cadquery|ai-build123d>
       provider: <google|openai|ollama, the model provider to use>
       model: <(optional) the model to use>
@@ -465,7 +595,9 @@ Generate OpenSCAD, CadQuery or build123d scripts with Generative AI using the fo
       top_k: <(optional, openai|ollama) the top_k LLM parameter>
 
 Place the detailed description of the part in the ``desc`` field.
-Use ``INSERT_IMAGE_HERE(<relative-path-without-quotes>)`` to insert images into the prompt.
+Provide as much information as possible through the :ref:`requirements` field,
+using ``INCLUDE(<filename>)`` or ``DOWNLOAD(<url>)`` to add supported
+file formats to the prompt either from a file in the package folder or from a URL.
 
 The following models are recommended for use:
 
@@ -519,6 +651,8 @@ Define parts with CAD files using the following syntax:
 |                                                                                      |       # type: 3mf         |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
+.. _extrude:
+
 Extrude
 -------
 
@@ -543,6 +677,8 @@ Define parts by extruding a sketch using the following syntax:
 |       sketch: dxf_01      |                                                                                                                         |
 |       depth: 10           |                                                                                                                         |
 +---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+.. _sweep:
 
 Sweep
 -----
@@ -675,6 +811,8 @@ The MCFTT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type
 ``store``.
 
+.. _assemblies:
+
 ==========
 Assemblies
 ==========
@@ -773,6 +911,8 @@ assemblies.
 |         |       type: alias                          || make it easier to         |
 |         |       source: </path/to:existing-assembly> || reference it locally.     |
 +---------+--------------------------------------------+----------------------------+
+
+.. _providers:
 
 =========
 Providers
@@ -894,37 +1034,3 @@ Manufacturer
     for payments yet.
 
     - `request["cartId"]`: the id of the cart to be purchased
-
-==============
-Common Options
-==============
-
-The following options are shared by all or some shapes: sketches, parts and assemblies.
-
-Files
------
-
-For shape types that are defined using a source file, the default file path is
-the name of the shape plus the extension of that file type.
-
-An alternative file path (absolute or relative to the package path)
-can be defined explicitly using the `path` parameter:
-
-.. code-block:: yaml
-
-  parts:
-    part-name:
-      type: step
-      path: alternative-path.step
-
-When the source file is not present in the package source repository
-but needs to be pulled from a remote location, the following options can be used:
-
-.. code-block:: yaml
-
-  fileFrom: url
-  fileUrl: <url to pull the file from>
-  # fileCompressed: <(optional) whether the file needs to be decompressed before use>
-  # fileMd5Sum: <(optional) the MD5 checksum of the file>
-  # fileSha1Sum: <(optional) the SHA1 checksum of the file>
-  # fileSha2Sum: <(optional) the SHA2 checksum of the file>
