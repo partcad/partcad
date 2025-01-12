@@ -186,7 +186,6 @@ def process_result(result, verbose, quiet, no_ansi, package, format):
     # Abort if there was at least one error reported during the exeution time.
     # `result` is needed for the case when the command was not correct.
     if pc.logging.had_errors or result:
-        print("There were errors during the execution: %s, %s" % (pc.logging.had_errors, result))
         raise click.Abort()
 
 

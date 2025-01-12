@@ -16,13 +16,13 @@ import threading
 import time
 from typing import Any
 
+from .ai_feature_file import AiContentFile, AiContentProcessor
+from . import logging as pc_logging
+from .user_config import user_config
+
 # Lazy-load AI imports as they are not always needed
 # import ollama
 ollama = None
-
-from .ai_feature_file import AiContentProcessor
-from . import logging as pc_logging
-from .user_config import user_config
 
 lock = threading.Lock()
 
@@ -72,7 +72,7 @@ class AiOllama(AiContentProcessor):
         if not ollama_once():
             return None
 
-        def handle_content(content):
+        def handle_content(content: AiContentFile):
             return Path(content.filename).read_bytes()
 
         content_parts, content_inserts = self.process_content(prompt)

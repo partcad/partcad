@@ -309,6 +309,7 @@ REQUIREMENTS_END
             )
 
         if "properties" in self.config:
+            pc_logging.warning("The 'properties' field will be removed in the near future. Use 'requirements' instead.")
             properties = "\n".join(["  %s: %s" % (k, v) for k, v in self.config["properties"].items()])
             prompt += (
                 """

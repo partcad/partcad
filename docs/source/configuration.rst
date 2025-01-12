@@ -134,10 +134,15 @@ All :ref:`objects` in PartCAD may carry the following metadata:
 Requirements
 ------------
 
-Objects may contain a list of requirements provided in a free form (any YAML syntax works).
-The requirements are used to describe the object in a more detailed way.
-The requirements are not used by PartCAD itself, but are used by the AI or human actors to create the object,
-improve it incrementally or to understand the object better.
+Objects may contain a list of requirements in free form (any YAML syntax works).
+These requirements help describe the object in more detail.
+They are not used by PartCAD itself, but by AI or human actors to create,
+improve, or better understand the object.
+
+The requirements are from the user’s perspective and serve to guide the design.
+Once the design is complete, it may impose further requirements (for example,
+on manufacturing), but those are not part of this section.
+This section exclusively covers the requirements used to create the design.
 
 .. code-block:: yaml
 

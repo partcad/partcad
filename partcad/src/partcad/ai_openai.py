@@ -15,13 +15,13 @@ import re
 import threading
 from typing import Any
 
+from .ai_feature_file import AiContentFile, AiContentProcessor
+from . import logging as pc_logging
+from .user_config import user_config
+
 # Lazy-load AI imports as they are not always needed
 # import openai as openai_genai
 openai_genai = None
-
-from .ai_feature_file import AiContentProcessor
-from . import logging as pc_logging
-from .user_config import user_config
 
 lock = threading.Lock()
 OPENAI_API_KEY = None
@@ -86,7 +86,7 @@ class AiOpenAI(AiContentProcessor):
 
         pc_logging.debug("Prompt: %s", prompt)
 
-        def handle_content(content):
+        def handle_content(content: AiContentFile):
             pc_logging.debug("Content: %s", content)
             if content.is_image:
                 return {
@@ -94,7 +94,7 @@ class AiOpenAI(AiContentProcessor):
                     "image_url": {
                         "url": "data:%s;base64,%s"
                         % (
-                            mimetypes.guess_type(content.filename, False)[0],
+                            mimetypes.guess_type(content.filename, strict=False)[0],
                             base64.b64encode(Path(content.filename).read_bytes()).decode(),
                         ),
                         "detail": "high",

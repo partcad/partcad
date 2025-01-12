@@ -27,9 +27,9 @@ class AiContentFile:
         # Switch to lowercase to normalize the file extension in the URL
         lower_url = url.lower()
         if lower_url.startswith("http://") or lower_url.startswith("https://"):
-            response = requests.get(self.url)
+            response = requests.get(self.url, allow_redirects=True, timeout=15)
             if response.status_code == 200:
-                self.filename = tempfile.NamedTemporaryFile(suffix=self.suffix, delete=False)
+                self.filename = tempfile.NamedTemporaryFile(suffix=self.suffix, delete=True, delete_on_close=False)
                 self.filename.write(response.content)
                 self.filename.close()
             else:
@@ -73,7 +73,7 @@ class AiContentProcessor:
     def process_content(self, content: str):
         content_inserts = []
 
-        def include_content(match):
+        def include_content(match: re.Match):
             location = match.group(2)
             if (location.startswith('"') and location.endswith('"')) or (
                 location.startswith("'") and location.endswith("'")

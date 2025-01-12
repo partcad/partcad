@@ -12,6 +12,10 @@ import threading
 import time
 from typing import Any
 
+from .ai_feature_file import AiContentFile, AiContentProcessor
+from . import logging as pc_logging
+from .user_config import user_config
+
 # Lazy-load AI imports as they are not always needed
 # import PIL.Image
 pil_image = None
@@ -19,10 +23,6 @@ pil_image = None
 google_genai = None
 # import google.api_core.exceptions
 google_api_core_exceptions = None
-
-from .ai_feature_file import AiContentProcessor
-from . import logging as pc_logging
-from .user_config import user_config
 
 lock = threading.Lock()
 GOOGLE_API_KEY = None
@@ -93,7 +93,7 @@ class AiGoogle(AiContentProcessor):
         else:
             temperature = None
 
-        def handle_content(content):
+        def handle_content(content: AiContentFile):
             if content.is_image:
                 return pil_image.open(content.filename)
             if content.is_pdf:
@@ -104,6 +104,7 @@ class AiGoogle(AiContentProcessor):
                     time.sleep(5)
                     video_content = google_genai.get_file(video_content.name)
                 return video_content
+            return "FILE-TYPE-NOT-SUPPORTED"
 
         content_parts, content_inserts = self.process_content(prompt)
         content_inserts = list(map(handle_content, content_inserts))

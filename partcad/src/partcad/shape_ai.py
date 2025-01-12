@@ -40,10 +40,21 @@ The design is stored in the folder "%s" and is named "%s".
         )
 
         if self.desc is not None:
-            prompt += "The design is accompanied by the description:\n```%s```\n" % self.desc
+            prompt += (
+                """The design is accompanied by the description (until DESCRIPTION_END):
+%s
+DESCRIPTION_END
+"""
+                % self.desc
+            )
 
         if self.requirements is not None:
-            prompt += "The design has following requirements:\n```yaml\n%s\n```\n" % yaml.safe_dump(self.requirements)
+            prompt += """The design has following requirements (until REQUIREMENTS_END):
+%s
+REQUIREMENTS_END
+""" % yaml.safe_dump(
+                self.requirements
+            )
 
         prompt += """Create a text which describes the design displayed on the
 image so that a blind person (with background in mechanical engineering and
