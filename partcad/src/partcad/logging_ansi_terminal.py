@@ -31,7 +31,7 @@ NO_WRAP = "\033[?7l"
 
 
 def ansi_process_start(op: str, package: str, item: str = None):
-    logging.getLogger("partcad").critical(
+    logging.getLogger("partcad").debug(
         "process_start: %s: %s: %s" % (op, package, item),
         extra={
             "pc_event": "process_start",
@@ -43,7 +43,7 @@ def ansi_process_start(op: str, package: str, item: str = None):
 
 
 def ansi_process_end(op: str, package: str, item: str = None):
-    logging.getLogger("partcad").critical(
+    logging.getLogger("partcad").debug(
         "process_end: %s: %s: %s" % (op, package, item),
         extra={
             "pc_event": "process_end",
@@ -55,7 +55,7 @@ def ansi_process_end(op: str, package: str, item: str = None):
 
 
 def ansi_action_start(op: str, package: str, item: str = None):
-    logging.getLogger("partcad").critical(
+    logging.getLogger("partcad").debug(
         "action_start: %s: %s: %s" % (op, package, item),
         extra={
             "pc_event": "action_start",
@@ -67,7 +67,7 @@ def ansi_action_start(op: str, package: str, item: str = None):
 
 
 def ansi_action_end(op: str, package: str, item: str = None):
-    logging.getLogger("partcad").critical(
+    logging.getLogger("partcad").debug(
         "action_end: %s: %s: %s" % (op, package, item),
         extra={
             "pc_event": "action_end",
