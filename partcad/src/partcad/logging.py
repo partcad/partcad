@@ -10,6 +10,7 @@ import logging
 from logging import DEBUG, INFO, WARN, WARNING, ERROR, CRITICAL
 import threading
 import time
+import sentry_sdk
 
 # Track if any errors occurred during the execution for test purposes and for
 # the main program to know if it should exit with an error code.
@@ -44,8 +45,13 @@ def reset_errors():
 
 def _track_error(args):
     global had_errors
-    if args and len(args) > 1 and "conda run pythonw" in args[0]:
-        return
+    if args and len(args) > 1:
+        if "conda run pythonw" in args[0]:
+            return
+        if isinstance(args[0], Exception):
+            sentry_sdk.capture_exception(args[0])
+        elif isinstance(args[0], str):
+            sentry_sdk.capture_message(args[0])
     had_errors = True
 
 

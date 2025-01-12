@@ -2255,6 +2255,9 @@ scipy==1.15.0 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:ec915cd26d76f6fc7ae8522f74f5b2accf39546f341c771bb2297f3871934a52 \
     --hash=sha256:fde0f3104dfa1dfbc1f230f65506532d0558d43188789eaf68f97e106249a913 \
     --hash=sha256:fe00169cf875bed0b3c40e4da45b57037dc21d7c7bf0c85ed75f210c281488f1
+sentry-sdk==2.19.2 ; python_version >= "3.10" and python_version < "4.0" \
+    --hash=sha256:467df6e126ba242d39952375dd816fbee0f217d119bf454a8ce74cf1e7909e8d \
+    --hash=sha256:ebdc08228b4d131128e568d696c210d846e5b9d70aa0327dec6b1272d9d40b84
 setuptools==75.7.0 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:84fb203f278ebcf5cd08f97d3fb96d3fbed4b629d500b29ad60d11e00769b183 \
     --hash=sha256:886ff7b16cd342f1d1defc16fc98c9ce3fde69e087a4e1983d7ab634e5f41f4f
