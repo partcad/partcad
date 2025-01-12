@@ -9,6 +9,7 @@
 
 import asyncio
 import tempfile
+import yaml
 
 from .ai import Ai
 from . import logging as pc_logging
@@ -37,8 +38,13 @@ The design is stored in the folder "%s" and is named "%s".
             self.project_name,
             self.name,
         )
-        if not self.desc is None:
-            prompt += 'The design is accompanied by the following description: "%s". ' % self.desc
+
+        if self.desc is not None:
+            prompt += "The design is accompanied by the description:\n```%s```\n" % self.desc
+
+        if self.requirements is not None:
+            prompt += "The design has following requirements:\n```yaml\n%s\n```\n" % yaml.safe_dump(self.requirements)
+
         prompt += """Create a text which describes the design displayed on the
 image so that a blind person (with background in mechanical engineering and
 computer aided design) can picture it in their mind.

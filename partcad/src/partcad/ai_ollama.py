@@ -20,6 +20,7 @@ from typing import Any
 # import ollama
 ollama = None
 
+from .ai_feature_file import AiContentProcessor
 from . import logging as pc_logging
 from .user_config import user_config
 
@@ -56,7 +57,7 @@ def model_once(model: str):
                 models_pulled[model] = True
 
 
-class AiOllama:
+class AiOllama(AiContentProcessor):
     def generate_ollama(
         self,
         model: str,
@@ -71,18 +72,16 @@ class AiOllama:
         if not ollama_once():
             return None
 
-        image_content = []
+        def handle_content(content):
+            return Path(content.filename).read_bytes()
 
-        def insert_image(match):
-            filename = match.group(1)
-            image_index = len(image_content)
-            image_content.append(
-                Path(filename).read_bytes(),
-                # base64.b64encode(Path(filename).read_bytes()).decode(),
-            )
-            return f"The attached image number {image_index}.\n"
-
-        prompt = re.sub(r"INSERT_IMAGE_HERE\(([^)]*)\)", insert_image, prompt)
+        content_parts, content_inserts = self.process_content(prompt)
+        content_inserts = list(map(handle_content, content_inserts))
+        prompt = ""
+        for i in range(len(content_parts)):
+            prompt += content_parts[i]
+            if i < len(content_inserts):
+                prompt += f"This file is attached at the index of {i}.\n"
 
         if "tokens" in config:
             tokens = config["tokens"]
@@ -118,12 +117,12 @@ class AiOllama:
                         temperature=temperature,
                     )
                     pc_logging.debug("Prompt: %s" % prompt)
-                    pc_logging.debug("Images: %d" % len(image_content))
+                    pc_logging.debug("Files: %d" % len(content_inserts))
                     response = ollama.generate(
                         model=model,
                         context=[],  # do not accumulate context uncontrollably
                         prompt=prompt,
-                        images=image_content,
+                        images=content_inserts,
                         options=options,
                     )
                 except httpx.ConnectError as e:

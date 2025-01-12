@@ -62,7 +62,7 @@ def cli(ctx, recursive, used_by, package):
 
                 desc = assy.desc if assy.desc is not None else ""
                 desc = desc.replace("\n", "\n" + " " * (84 if recursive else 44))
-                line += f"desc"
+                line += f"{desc}"
                 output += line + "\n"
                 assy_kinds = assy_kinds + 1
 

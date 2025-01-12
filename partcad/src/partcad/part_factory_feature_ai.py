@@ -13,10 +13,10 @@ import copy
 import os
 import tempfile
 import threading
+import yaml
 
 from .ai import Ai
 from . import logging as pc_logging
-from . import sync_threads as pc_thread
 from .utils import total_size
 from .user_config import user_config
 
@@ -99,7 +99,7 @@ class PartFactoryFeatureAi(Ai):
         """This method must be executed at the very end of the part factory
         constructor to finalize the AI initialization. At the time of the call
         self.part and self.instantiate must be already defined."""
-        self.part.generate = lambda path: self._create_file(path)
+        self.part.do_regenerate = lambda path: self._create_file(path)
         self.part.change = lambda path, change=None: self._change_file(path, change)
 
         # If uncommented out, this makes the package initialization
@@ -211,6 +211,10 @@ class PartFactoryFeatureAi(Ai):
             f.write(script)
             f.close()
 
+            # I hereby declare the amnesty for all the errors.
+            # TODO(clairbee): find a more elegant way not to fail on the errors during the generation process
+            pc_logging.reset_errors()
+
     def _change_file(self, path, change=None):
         """This method is called to change the part."""
 
@@ -256,6 +260,7 @@ class PartFactoryFeatureAi(Ai):
         else:
             # Compare the images and select the best one
             new_script = self.select_best_image(script_candidates, change=change)
+            pc_logging.reset_errors()
 
         if new_script == script:
             pc_logging.info("The script was not changed")
@@ -265,6 +270,10 @@ class PartFactoryFeatureAi(Ai):
             f = open(path, "w")
             f.write(new_script)
             f.close()
+
+            # I hereby declare the amnesty for all the errors.
+            # TODO(clairbee): find a more elegant way not to fail on the errors during the generation process
+            pc_logging.reset_errors()
 
     def _csg_modeling(self):
         """This method generates CSG for the part."""
@@ -283,12 +292,21 @@ Then specify what CSG operations to perform on sets of primitives
 and on each of these primitives individually
 (including but not limited to adding fillets, chamfers, paddings and cutting holes).
 
-The part is described by (until DESCRIPTION END):
+The part's description (until DESCRIPTION_END):
 %s
-DESCRIPTION END
+DESCRIPTION_END
 """
             % self.ai_config["desc"]
         )
+
+        # TODO(clairbee): investigate how AIs respond to images inside code blocks
+        if self.ai_config.get("requirements", None) is not None:
+            prompt += """The part's requirements in the YAML format (until REQUIREMENTS_END):
+%s
+REQUIREMENTS_END
+""" % yaml.safe_dump(
+                self.ai_config["requirements"]
+            )
 
         if "properties" in self.config:
             properties = "\n".join(["  %s: %s" % (k, v) for k, v in self.config["properties"].items()])

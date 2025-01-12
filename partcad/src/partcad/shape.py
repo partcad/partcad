@@ -34,6 +34,7 @@ from ocp_serialize import register as register_ocp_helper
 class Shape(ShapeConfiguration):
     name: str
     desc: str
+    requirements: dict | list | str
     svg_path: str
     svg_url: str
     # shape: None | OCP.TopoDS.TopoDS_Solid
@@ -56,6 +57,7 @@ class Shape(ShapeConfiguration):
 
         self.desc = config.get("desc", None)
         self.desc = self.desc.strip() if self.desc is not None else None
+        self.requirements = config.get("requirements", None)
 
     @contextlib.asynccontextmanager
     async def locked(self):
@@ -123,7 +125,7 @@ class Shape(ShapeConfiguration):
             # p = pathlib.Path(self.path)
             # p.unlink(missing_ok=True)
             # p.touch()
-            self.generate(self.path)
+            self.do_regenerate(self.path)
         else:
             pc_logging.error("No generation function found")
 

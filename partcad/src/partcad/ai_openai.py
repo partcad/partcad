@@ -19,6 +19,7 @@ from typing import Any
 # import openai as openai_genai
 openai_genai = None
 
+from .ai_feature_file import AiContentProcessor
 from . import logging as pc_logging
 from .user_config import user_config
 
@@ -57,7 +58,7 @@ def openai_once():
     return True
 
 
-class AiOpenAI:
+class AiOpenAI(AiContentProcessor):
     def generate_openai(
         self,
         model: str,
@@ -85,38 +86,43 @@ class AiOpenAI:
 
         pc_logging.debug("Prompt: %s", prompt)
 
-        image_content = []
-
-        def insert_image(match):
-            filename = match.group(1)
-            image_content.append(
-                {
+        def handle_content(content):
+            pc_logging.debug("Content: %s", content)
+            if content.is_image:
+                return {
                     "type": "image_url",
                     "image_url": {
                         "url": "data:%s;base64,%s"
                         % (
-                            mimetypes.guess_type(filename, False)[0],
-                            base64.b64encode(Path(filename).read_bytes()).decode(),
+                            mimetypes.guess_type(content.filename, False)[0],
+                            base64.b64encode(Path(content.filename).read_bytes()).decode(),
                         ),
                         "detail": "high",
                     },
                 }
-            )
-            return "IMAGE_INSERTED_HERE"
+            if content.is_pdf:
+                try:
+                    import PyPDF2
 
-        prompt = re.sub(r"INSERT_IMAGE_HERE\(([^)]*)\)", insert_image, prompt)
-        text_content = list(
-            map(
-                lambda prompt_section: {"type": "text", "text": prompt_section},
-                prompt.split("IMAGE_INSERTED_HERE"),
-            )
-        )
+                    with open(content.filename, "rb") as file:
+                        reader = PyPDF2.PdfReader(file)
+                        text = ""
+                        for page in reader.pages:
+                            text += page.extract_text()
+                        return text
+                except ImportError:
+                    pc_logging.error("Install PyPDF2 if you want to use PDF files")
+                    return "FAILED-TO-INSERT-PDF-CONTENT"
 
+            return "FILE-TYPE-NOT-SUPPORTED"
+
+        content_parts, content_inserts = self.process_content(prompt)
+        content_inserts = list(map(handle_content, content_inserts))
         content = []
-        for i in range(len(text_content)):
-            content.append(text_content[i])
-            if i < len(image_content):
-                content.append(image_content[i])
+        for i in range(len(content_parts)):
+            content.append({"type": "text", "text": content_parts[i]})
+            if i < len(content_inserts):
+                content.append(content_inserts[i])
 
         params = {
             "messages": [
@@ -133,6 +139,8 @@ class AiOpenAI:
             params["max_tokens"] = tokens
             params["temperature"] = temperature
             params["top_p"] = top_p
+        pc_logging.debug("Params: %s", str(params))
+
         cc = openai_client.chat.completions.create(
             **params,
         )

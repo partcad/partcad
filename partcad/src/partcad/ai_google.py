@@ -8,7 +8,6 @@
 #
 
 import importlib
-import re
 import threading
 import time
 from typing import Any
@@ -21,6 +20,7 @@ google_genai = None
 # import google.api_core.exceptions
 google_api_core_exceptions = None
 
+from .ai_feature_file import AiContentProcessor
 from . import logging as pc_logging
 from .user_config import user_config
 
@@ -62,7 +62,7 @@ def google_once():
     return True
 
 
-class AiGoogle:
+class AiGoogle(AiContentProcessor):
     def generate_google(
         self,
         model: str,
@@ -93,21 +93,25 @@ class AiGoogle:
         else:
             temperature = None
 
-        image_content = []
+        def handle_content(content):
+            if content.is_image:
+                return pil_image.open(content.filename)
+            if content.is_pdf:
+                return google_genai.upload_file(content.filename)
+            if content.is_video:
+                video_content = google_genai.upload_file(content.filename)
+                while video_content.state.name == "PROCESSING":
+                    time.sleep(5)
+                    video_content = google_genai.get_file(video_content.name)
+                return video_content
 
-        def insert_image(match):
-            filename = match.group(1)
-            image_content.append(pil_image.open(filename))
-            return "IMAGE_INSERTED_HERE"
-
-        prompt = re.sub(r"INSERT_IMAGE_HERE\(([^)]*)\)", insert_image, prompt)
-        text_content = prompt.split("IMAGE_INSERTED_HERE")
-
+        content_parts, content_inserts = self.process_content(prompt)
+        content_inserts = list(map(handle_content, content_inserts))
         content = []
-        for i in range(len(text_content)):
-            content.append(text_content[i])
-            if i < len(image_content):
-                content.append(image_content[i])
+        for i in range(len(content_parts)):
+            content.append(content_parts[i])
+            if i < len(content_inserts):
+                content.append(content_inserts[i])
 
         client = google_genai.GenerativeModel(
             model,
