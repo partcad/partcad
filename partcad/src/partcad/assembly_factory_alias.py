@@ -29,8 +29,8 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
                 self.source_assembly_name = config["source"]
             else:
                 self.source_assembly_name = config["name"]
-                if not "project" in config:
-                    raise Exception("Alias needs either the source part name or the source project name")
+                if "project" not in config:
+                    raise Exception("Alias needs either the source assembly name or the source project name")
 
             if "project" in config:
                 self.source_project_name = config["project"]
@@ -58,8 +58,12 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             pc_logging.debug("Initializing an alias to %s" % self.source)
 
     def instantiate(self, assembly):
-        with pc_logging.Action("Alias", assembly.project_name, assembly.name):
+        with pc_logging.Action("Alias", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
             source = self.ctx._get_assembly(self.source)
+            if source is None:
+                pc_logging.error(f"The alias source {self.source} is not found")
+                return None
+
             children = source.children
             if children:
                 assembly.children = children
@@ -68,4 +72,6 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
 
             self.ctx.stats_assemblies_instantiated += 1
 
+            if source.path is not None:
+                assembly.path = source.path
             source.instantiate(assembly)

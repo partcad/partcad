@@ -28,8 +28,8 @@ class PartFactoryAlias(pf.PartFactory):
             if "source" in config:
                 self.source_part_name = config["source"]
             else:
-                self.source_assembly_name = config["name"]
-                if not "project" in config:
+                self.source_part_name = config["name"]
+                if "project" not in config:
                     raise Exception("Alias needs either the source part name or the source project name")
 
             if "project" in config:
@@ -58,15 +58,20 @@ class PartFactoryAlias(pf.PartFactory):
             pc_logging.debug("Initializing an alias to %s" % self.source)
 
     async def instantiate(self, part):
-        with pc_logging.Action("Alias", part.project_name, part.name):
+        with pc_logging.Action("Alias", part.project_name, f"{part.name}:{self.source_part_name}"):
 
             source = self.ctx._get_part(self.source)
+            if source is None:
+                pc_logging.error(f"The alias source {self.source} is not found")
+                return None
+
             shape = source.shape
-            if not shape is None:
+            if shape is not None:
+                part.shape = shape
                 return shape
 
             self.ctx.stats_parts_instantiated += 1
 
-            if not source.path is None:
+            if source.path is not None:
                 part.path = source.path
             return await source.instantiate(part)

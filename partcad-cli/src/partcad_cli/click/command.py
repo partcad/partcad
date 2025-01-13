@@ -153,7 +153,10 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
             exc.exit_code = 2
             raise exc from e
         except Exception as e:
+            import traceback
+
             pc.logging.error(e)
+            traceback.print_exc()
             raise click.Abort from e
 
 
