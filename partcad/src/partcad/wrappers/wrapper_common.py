@@ -16,7 +16,7 @@ import os
 import pickle
 import sys
 
-from cq_serialize import register as register_cq_helper
+from ocp_serialize import register as register_ocp_helper
 
 
 def handle_input():
@@ -40,14 +40,14 @@ def handle_input():
     # TODO(clairbee): is .encode() needed here?
     request_bytes = base64.b64decode(input_str)
 
-    register_cq_helper()
+    register_ocp_helper()
     request = pickle.loads(request_bytes)
     return path, request
 
 
 def handle_output(model):
     # Serialize the output
-    register_cq_helper()
+    register_ocp_helper()
     picklestring = pickle.dumps(model)
     response = base64.b64encode(picklestring)
     sys.stdout.write(response.decode())

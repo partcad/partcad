@@ -72,17 +72,16 @@ class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
                 auth = None
                 if not (self.auth_user is None or self.auth_pass is None):
                     auth = (self.auth_user, self.auth_pass)
-                with requests.get(
-                    tarball_url, stream=True, auth=auth
-                ) as rx, tarfile.open(fileobj=rx.raw, mode="r:gz") as tarobj:
+                with (
+                    requests.get(tarball_url, stream=True, auth=auth) as rx,
+                    tarfile.open(fileobj=rx.raw, mode="r:gz") as tarobj,
+                ):
                     args = inspect.getfullargspec(tarobj.extractall)
 
                     if "filter" in args.args:
                         if not self.import_rel_path is None:
                             filter = lambda member, _: (
-                                member
-                                if member.name.startswith(self.import_rel_path)
-                                else None
+                                member if member.name.startswith(self.import_rel_path) else None
                             )
                         else:
                             filter = lambda member, _: member

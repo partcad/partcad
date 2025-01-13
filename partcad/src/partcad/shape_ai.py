@@ -8,8 +8,8 @@
 #
 
 import asyncio
-from path import Path
 import tempfile
+import yaml
 
 from .ai import Ai
 from . import logging as pc_logging
@@ -38,11 +38,24 @@ The design is stored in the folder "%s" and is named "%s".
             self.project_name,
             self.name,
         )
-        if not self.desc is None:
+
+        if self.desc is not None:
             prompt += (
-                'The design is accompanied by the following description: "%s". '
+                """The design is accompanied by the description (until DESCRIPTION_END):
+%s
+DESCRIPTION_END
+"""
                 % self.desc
             )
+
+        if self.requirements is not None:
+            prompt += """The design has following requirements (until REQUIREMENTS_END):
+%s
+REQUIREMENTS_END
+""" % yaml.safe_dump(
+                self.requirements
+            )
+
         prompt += """Create a text which describes the design displayed on the
 image so that a blind person (with background in mechanical engineering and
 computer aided design) can picture it in their mind.
@@ -53,11 +66,8 @@ Produce text which is ready to be narrated as is.
 """
 
         config = {
-            "model": (
-                "gpt-4o"
-                if not user_config.openai_api_key is None
-                else "gemini-1.5-pro"
-            ),
+            "model": ("gpt-4o" if user_config.openai_api_key is not None else "gemini-1.5-pro"),
+            "provider": ("openai" if user_config.openai_api_key is not None else "google"),
         }
         summary = self.generate(
             "Desc",
@@ -65,7 +75,7 @@ Produce text which is ready to be narrated as is.
             self.name,
             prompt,
             config,
-            image_filenames=[image_filename],
+            # image_filenames=[image_filename],
         )
         return summary[0] if len(summary) > 0 else "Failed to summarize"
 

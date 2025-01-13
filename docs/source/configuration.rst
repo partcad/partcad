@@ -29,6 +29,7 @@ PartCAD aims to maintain three ways to manage the configuration files:
 
 The complete syntax of configuration files is described below.
 
+.. _packages:
 
 ========
 Packages
@@ -37,7 +38,7 @@ Packages
 The package is defined using the configuration file ``partcad.yaml`` placed
 in the package folder.
 Besides the package properties and, optionally, a list of imported dependencies,
-``partcad.yaml`` declares parts and assemblies contained in this package.
+``partcad.yaml`` declares a list of :ref:`objects` contained in this package.
 
 
 .. code-block:: yaml
@@ -50,7 +51,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
   pythonVersion: <(optional) python version for sandboxing if applicable>
   pythonRequirements: <(python scripts only) the list of dependencies to install>
 
-  import:
+  dependencies:
       <dependency-name>:
           desc: <(optional) textual description>
           type: <(optional) git|tar|local, can be guessed by path or url>
@@ -70,7 +71,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
 Dependencies
 ============
 
-Here are some examples of references to imported packages:
+Here are some examples of a dependency declaration in ``partcad.yaml``:
 
 .. role:: raw-html(raw)
     :format: html
@@ -78,25 +79,149 @@ Here are some examples of references to imported packages:
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | Method             | Example                                                                                               |
 +====================+=======================================================================================================+
-|| Local files       | .. code-block:: yaml                                                                                  |
+|| Local package     | .. code-block:: yaml                                                                                  |
 || (in the same      |                                                                                                       |
-|| source code       |   import:                                                                                             |
+|| source code       |   dependencies:                                                                                       |
 || repository)       |     other_directory:                                                                                  |
 |                    |       path: ../../other                                                                               |
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | GIT repository     | .. code-block:: yaml                                                                                  |
 | :raw-html:`<br />` |                                                                                                       |
-| (HTTPS, SSH)       |   import:                                                                                             |
+| (HTTPS, SSH)       |   dependencies:                                                                                       |
 |                    |     other_repo:                                                                                       |
-|                    |         url: https://github.com/openvmp/partcad                                                       |
+|                    |         url: https://github.com/partcad/partcad                                                       |
 |                    |         relPath: examples  # where to "cd"                                                            |
 +--------------------+-------------------------------------------------------------------------------------------------------+
 | Hosted tar ball    | .. code-block:: yaml                                                                                  |
 | :raw-html:`<br />` |                                                                                                       |
-| (HTTPS)            |   import:                                                                                             |
+| (HTTPS)            |   dependencies:                                                                                       |
 |                    |     other_archive:                                                                                    |
-|                    |       url: https://github.com/openvmp/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz |
+|                    |       url: https://github.com/partcad/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz |
 +--------------------+-------------------------------------------------------------------------------------------------------+
+
+Each dependency becomes a subpackage of the current package. All subfolders of the current package are considered
+subpackages (of the type `local`) if they contain a ``partcad.yaml`` file. Subfolders do not need to be explicitly
+declared as a dependency, but may be declared to provide a more detailed description.
+
+.. _objects:
+
+=======
+Objects
+=======
+
+PartCAD :ref:`packages` may contain the following objects:
+
+- :ref:`sketches` are 2D objects that can be used to create 3D objects (e.g. using :ref:`extrude` or :ref:`sweep`),
+  but can also be used to aid visualization of :ref:`interfaces` or to provide detailed instructions for AI actors.
+
+- :ref:`interfaces` are abstract objects that describe the endpoint of a connection between parts and provide
+  sufficient information to automatically determine the mating of parts.
+
+- :ref:`parts` are 3D objects that are meant to be available for purchase or manufacturing.
+
+- :ref:`assemblies` are instructions how to put parts and other assemblies together to be used as a single object.
+
+- :ref:`providers` are implementations of a way to get parts and assemblies (to purchase them or to manufacture them).
+
+===============
+Common Metadata
+===============
+
+All :ref:`objects` in PartCAD may carry the following metadata:
+
+.. _requirements:
+
+Requirements
+------------
+
+Objects may contain a list of requirements in free form (any YAML syntax works).
+These requirements help describe the object in more detail.
+They are not used by PartCAD itself, but by AI or human actors to create,
+improve, or better understand the object.
+
+The requirements are from the user’s perspective and serve to guide the design.
+Once the design is complete, it may impose further requirements (for example,
+on manufacturing), but those are not part of this section.
+This section exclusively covers the requirements used to create the design.
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      requirements: |
+        This part has to ...
+        ...
+        It also has to ...
+        ...
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      requirements:
+        - <requirement 1>
+        - <requirement 2>
+        - <requirement 3>
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      requirements:
+        mechanical: |
+          The outer dimensions of the part have to be ...
+        electrical: |
+          The part has to be able to withstand ...
+        esthetic: |
+          The part has to look like ...
+
+Files
+-----
+
+For objects that are defined using a source file, the default file path is
+the name of the object plus the extension of that file type.
+
+An alternative file path (absolute or relative to the package path)
+can be defined explicitly using the `path` parameter:
+
+.. code-block:: yaml
+
+  parts:
+    part-name:
+      type: step
+      path: alternative-path.step # Instead of "part-name.step"
+
+When the source file is not present in the package source repository
+but needs to be pulled from a remote location, the following options can be used:
+
+.. code-block:: yaml
+
+  fileFrom: url
+  fileUrl: <url to pull the file from>
+  # fileCompressed: <(optional) whether the file needs to be decompressed before use>
+  # fileMd5Sum: <(optional) the MD5 checksum of the file>
+  # fileSha1Sum: <(optional) the SHA1 checksum of the file>
+  # fileSha2Sum: <(optional) the SHA2 checksum of the file>
+
+Parameters
+----------
+
+Objects may declare parameters. Once parameters are declared, each use of such objects may be accompanied
+by a set of parameter values. The parameter values are resolved and applied to the object to create a parametrized
+variant of the object. The parametrized variant remains stored (e.g. at runtime) as a separate object in the same
+package where the original object is declared. This allows for the same parametrized object to be used multiple times.
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      parameters:
+        <param name>:
+          type: <string|float|int|bool>
+          enum: <(optional) list of possible values>
+          default: <default value>
+
+.. _sketches:
 
 ========
 Sketches
@@ -124,7 +249,7 @@ The basic sketches are defined using the following syntax:
     <sketch-name>:
       type: basic
       desc: <(optional) textual description>
-      # The below are mutualy exclusive options
+      # The below are mutually exclusive options
       circle: <(optional) radius>
       circle:  # alternative syntax
         radius: <radius>
@@ -140,8 +265,15 @@ The basic sketches are defined using the following syntax:
         side-y: <y edge size>
         x: <(optional) x offset>
         y: <(optional) y offset>
+      inner: <(optional) inner shape>
+        circle: <(optional) radius>
+           ...
+        square: <(optional) edge size>
+           ...
+        rectangle: <(optional)>
+           ...
 
-There must be only one field ``circle``, ``square`` or ``rectangle``.
+There must be only one field ``circle``, ``square`` or ``rectangle`` at the top level of the sketch or in the ``inner`` field.
 
 DXF
 ---
@@ -183,6 +315,8 @@ CAD Scripts
 
 See the "CAD Scripts" section in the "Parts" chapter below.
 
+.. _interfaces:
+
 ==========
 Interfaces
 ==========
@@ -200,12 +334,12 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
         <parent interface name>: <instance name>
         <other interface name>: # instance name is implied to be empty ("")
         <yet another interface>:
-          <instance name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          <instance name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
       ports:  # (optional) the list of ports in addition to the inherited ones
-        <port name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
-        <other port name>: # [[0,0,0], [0,0,1], 0] is implied
+        <port name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+        <other port name>: # [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle] is implied
         <another port name>:
-          location: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
       parameters:
         moveX: # (optional) offset along X
@@ -229,8 +363,8 @@ Abstract interfaces
 
 Abstract interfaces can't be implemented by parts directly.
 They also can't be used for mating with other interfaces.
-They are a convinence feature so that a property can be implemented once
-but inherited mutiple times by all child interfaces.
+They are a convenience feature so that a property can be implemented once
+but inherited multiple times by all child interfaces.
 
 Port visualization
 ------------------
@@ -314,7 +448,7 @@ There is a list of predefined parameters that are easy to use:
           default: <(optional) default value>
 
 However custom parameters can be defined to use an arbitrary direction vector
-and an arbitary offset or rotation.
+and an arbitrary offset or rotation.
 
 .. code-block:: yaml
 
@@ -366,6 +500,8 @@ Interface examples
 
 See the `feature_interfaces` example for more information.
 
+.. _parts:
+
 =====
 Parts
 =====
@@ -376,11 +512,11 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|stl|3mf>
+      type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|stl|3mf|extrude|sweep>
       desc: <(optional) textual description, also used by AI>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       # ... type-specific options ...
-      offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
       # The below syntax is similar to the one used for interfaces,
       # with the only exception being the word "implements" instead of "inherits".
@@ -388,15 +524,17 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
         <interface name>: <instance name>
         <other interface name>: # instance name is implied to be be empty ("")
         <yet another interface>:
-          <instance name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          <instance name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
       ports: # (optional) the list of ports in addition to the inherited ones
-        <port name>: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
-        <other port name>: # [[0,0,0], [0,0,1], 0] is implied
+        <port name>: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+        <other port name>: # [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle] is implied
         <another port name>:
-          location: <OCCT Location object> # e.g. [[0,0,0], [0,0,1], 0]
+          location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
 Depending on the type of the part, the configuration may have different options.
+
+See :ref:`location` for more information on the OCCT Location object.
 
 CAD Scripts
 -----------
@@ -412,7 +550,7 @@ Define parts with CodeCAD scripts using the following syntax:
       showObject: <(optional) the name of the object to show using "show_object(...)">
       patch:
         # ...regexp substitutions to apply...
-        "patern": "repl"
+        "pattern": "repl"
       pythonRequirements: <(python scripts only) the list of dependencies to install>
       parameters:
         <param name>:
@@ -423,14 +561,14 @@ Define parts with CodeCAD scripts using the following syntax:
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
 +======================================================================================+===========================+=========================================================================================================================+
-|                                                                                      | .. code-block:: yaml      | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_part_cadquery_primitive/cylinder.svg?raw=true  |
+|                                                                                      | .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_cadquery_primitive/cylinder.svg?raw=true  |
 || `CadQuery <https://github.com/CadQuery/cadquery>`_ or                               |                           |   :width: 128                                                                                                           |
 || `build123d <https://github.com/gumyr/build123d>`_ script                            |   parts:                  |                                                                                                                         |
 || in ``src/cylinder.py``                                                              |     src/cylinder:         |                                                                                                                         |
 |                                                                                      |       type: cadquery      |                                                                                                                         |
 |                                                                                      |       # type: build123d   |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
-|| `OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_ script                         | .. code-block:: yaml      | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_part_openscad/cube.svg?raw=true                |
+|| `OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_ script                         | .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_openscad/cube.svg?raw=true                |
 || in ``cube.scad``                                                                    |                           |   :width: 128                                                                                                           |
 |                                                                                      |   parts:                  |                                                                                                                         |
 |                                                                                      |     cube:                 |                                                                                                                         |
@@ -446,6 +584,8 @@ Generate OpenSCAD, CadQuery or build123d scripts with Generative AI using the fo
 
   parts:
     <part name>:
+      desc: <(optional) The detailed description to be used in the model generation prompt>
+      requirements: <(optional) The list of requirements to be used in the model generation prompt>
       type: <ai-openscad|ai-cadquery|ai-build123d>
       provider: <google|openai|ollama, the model provider to use>
       model: <(optional) the model to use>
@@ -453,8 +593,11 @@ Generate OpenSCAD, CadQuery or build123d scripts with Generative AI using the fo
       temperature: <(optional) the temperature LLM parameter>
       top_p: <(optional) the top_p LLM parameter>
       top_k: <(optional, openai|ollama) the top_k LLM parameter>
-      images: <(optional) contextual images as input for AI>
-        - <image path>
+
+Place the detailed description of the part in the ``desc`` field.
+Provide as much information as possible through the :ref:`requirements` field,
+using ``INCLUDE(<filename>)`` or ``DOWNLOAD(<url>)`` to add supported
+file formats to the prompt either from a file in the package folder or from a URL.
 
 The following models are recommended for use:
 
@@ -475,7 +618,7 @@ The following models are recommended for use:
 +---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                   | Result                                                                                                                  |
 +===========================+=========================================================================================================================+
-| .. code-block:: yaml      | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_part_ai_cadquery/cube.svg?raw=true             |
+| .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_ai_cadquery/cube.svg?raw=true             |
 |                           |   :width: 128                                                                                                           |
 |   parts:                  |                                                                                                                         |
 |     cube:                 |                                                                                                                         |
@@ -499,7 +642,7 @@ Define parts with CAD files using the following syntax:
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
 +======================================================================================+===========================+=========================================================================================================================+
-|| CAD file                                                                            | .. code-block:: yaml      | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_part_step/bolt.svg?raw=true                    |
+|| CAD file                                                                            | .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_step/bolt.svg?raw=true                    |
 || (`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_ in ``screw.step``,               |                           |   :width: 128                                                                                                           |
 || `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_ in ``screw.stl``,          |   parts:                  |                                                                                                                         |
 || or `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_ in ``screw.3mf``) |     screw:                |                                                                                                                         |
@@ -507,6 +650,61 @@ Define parts with CAD files using the following syntax:
 |                                                                                      |       # type: stl         |                                                                                                                         |
 |                                                                                      |       # type: 3mf         |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+.. _extrude:
+
+Extrude
+-------
+
+Define parts by extruding a sketch using the following syntax:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: extrude
+      sketch: <name of the sketch to extrude>
+      depth: <depth of the extrusion>
+
++---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| Example                   | Result                                                                                                                  |
++===========================+=========================================================================================================================+
+| .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_extrude/dxf.svg?raw=true                  |
+|                           |   :height: 256                                                                                                          |
+|   parts:                  |                                                                                                                         |
+|     dxf:                  |                                                                                                                         |
+|       type: extrude       |                                                                                                                         |
+|       sketch: dxf_01      |                                                                                                                         |
+|       depth: 10           |                                                                                                                         |
++---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+.. _sweep:
+
+Sweep
+-----
+
+Define parts by sweeping a sketch using the following syntax:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      type: sweep
+      sketch: <name of the sketch to sweep>
+      axis: [[0, 0, 10], [10, 0, 0]] # the sweep path defined as a list of vectors
+      ratio: <(optional, >0.5, <1.0) the placement of additional points along the vectors for better approximation>
+
++---------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
+| Example                                                                   | Result                                                                                                                  |
++===========================================================================+=========================================================================================================================+
+| .. code-block:: yaml                                                      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_sweep/pipe.svg?raw=true                   |
+|                                                                           |   :height: 256                                                                                                          |
+|   parts:                                                                  |                                                                                                                         |
+|     pipe:                                                                 |                                                                                                                         |
+|       type: sweep                                                         |                                                                                                                         |
+|       sketch: section                                                     |                                                                                                                         |
+|       axis: [[0, 0, 20], [0, 0, 20], [20, 0, 0], [20, 20, 0], [0, 20, 0]] |                                                                                                                         |
++---------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
 References
 ----------
@@ -542,7 +740,7 @@ Other Part Types
 
 Other methods to define parts are coming soon (e.g. `SDF <https://github.com/fogleman/sdf>`_).
 Please, express your interest in support for other formats by filing a corresponding issue on GitHub
-or sending an email to `openvmp@proton.me <mailto:openvmp@proton.me>`_.
+or sending an email to `support@partcad.org <mailto:support@partcad.org>`_.
 
 Parameters
 ----------
@@ -550,7 +748,7 @@ Parameters
 Each part may have a list of parameters that are passed into the scripts to
 modify the part.
 The parameters can be of types ``string``, ``float``, ``int`` and ``bool``.
-The parameter values can be restricted by specifying the list of possibe values
+The parameter values can be restricted by specifying the list of possible values
 in ``enum``.
 The initial parameter value is set using ``default``.
 
@@ -566,8 +764,8 @@ The initial parameter value is set using ``default``.
           default: <default value>
 
 There are several parameter names that are reserved for values used in
-visualisation, simulation calculations and, if applicable, manufacturing
-(also referred to as ``MCFTT prameters`` using their first letters):
+visualization, simulation calculations and, if applicable, manufacturing
+(also referred to as ``MCFTT parameters`` using their first letters):
 
 - ``material``
 
@@ -606,21 +804,23 @@ If the part has variable MCFTT parameters depending on the surface,
 then either this part must be broken down into multiple parts,
 or the values must be derived from CAD files/scripts (not implemented yet).
 In the latter case the part will not be eligible for manufacturing features,
-unless a specific manufacturing service provider recognises (vendor,SKU) values
+unless a specific manufacturing service provider recognizes (vendor,SKU) values
 and have received corresponding manufacturing instructions out-of-band.
 
 The MCFTT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type
 ``store``.
 
+.. _assemblies:
+
 ==========
 Assemblies
 ==========
 
-Assembly YAML
--------------
+Declare assemblies
+------------------
 
-Assemblies are declared in ``partcad.yaml`` using the following syntax:
+Assemblies are defined using the ``partcad.yaml`` file in the package folder. The syntax for defining assemblies is as follows:
 
 .. code-block:: yaml
 
@@ -633,14 +833,38 @@ Assemblies are declared in ``partcad.yaml`` using the following syntax:
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
           default: <default value>
-      offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">
+      offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
-Here is an example:
+The ``assy`` type is used to define assemblies in `Assembly YAML` format.
+The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
+The optional ``offset`` parameter specifies the location of the assembly using an OCCT Location object.
+See "Implementation Detail" for more information on the OCCT Location object.
+
+Here is an example of an assembly definition:
+
+.. code-block:: yaml
+
+  assemblies:
+    example_assembly:
+      type: assy
+      path: example.assy
+      parameters:
+        length:
+          type: float
+          default: 100.0
+      offset: [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
+
+In this example, an assembly named ``example_assembly`` is defined with a parameter ``length`` and an offset.
+
+Assembly YAML
+-------------
+
+Here is an example of an assembly defined using `Assembly YAML`:
 
 +---------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Configuration                                     | Result                                                                                                                  |
 +===================================================+=========================================================================================================================+
-| .. code-block:: yaml                              | .. image:: https://github.com/openvmp/partcad/blob/main/examples/produce_assembly_assy/logo.svg?raw=true                |
+| .. code-block:: yaml                              | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_assembly_assy/logo.svg?raw=true                |
 |                                                   |   :width: 400                                                                                                           |
 |   # partcad.yaml                                  |                                                                                                                         |
 |   assemblies:                                     |                                                                                                                         |
@@ -688,6 +912,8 @@ assemblies.
 |         |       source: </path/to:existing-assembly> || reference it locally.     |
 +---------+--------------------------------------------+----------------------------+
 
+.. _providers:
+
 =========
 Providers
 =========
@@ -707,7 +933,7 @@ Providers are declared in ``partcad.yaml`` using the following syntax:
           enum: <(optional) list of possible values>
           default: <default value>
 
-``enrich`` providers are just references to other providers with some prameters
+``enrich`` providers are just references to other providers with some parameters
 modified to specific values.
 
 ``store`` and ``manufacturer`` providers are implemented as Python scripts.
@@ -808,37 +1034,3 @@ Manufacturer
     for payments yet.
 
     - `request["cartId"]`: the id of the cart to be purchased
-
-==============
-Common Options
-==============
-
-The following options are shared by all or some shapes: sketches, parts and assemblies.
-
-Files
------
-
-For shape types that are defined using a source file, the default file path is
-the name of the shape plus the extension of that file type.
-
-An alternative file path (absolute or relative to the package path)
-can be defined explicitly using the `path` parameter:
-
-.. code-block:: yaml
-
-  parts:
-    part-name:
-      type: step
-      path: alternatative-path.step
-
-When the source file is not present in the package source repository
-but needs to be pulled from a remote location, the following options can be used:
-
-.. code-block:: yaml
-
-  fileFrom: url
-  fileUrl: <url to pull the file from>
-  # fileCompressed: <(optional) whether the file needs to be decompressed before use>
-  # fileMd5Sum: <(optional) the MD5 checksum of the file>
-  # fileSha1Sum: <(optional) the SHA1 checksum of the file>
-  # fileSha2Sum: <(optional) the SHA2 checksum of the file>

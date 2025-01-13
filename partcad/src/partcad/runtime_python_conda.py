@@ -20,7 +20,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "conda", version)
 
-        self.conda_path = shutil.which("conda")
+        self.initialized_conda = self.initialized
+        self.conda_path = shutil.which("mamba")
+        if self.conda_path is None:
+            self.conda_path = shutil.which("conda")
         if self.conda_path is None:
             self.conda_cli = importlib.import_module("conda.cli.python_api")
             self.conda_cli.run_command("config", "--quiet")
@@ -48,77 +51,67 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
     def once(self):
         with self.lock:
-            if not self.initialized:
-                with pc_logging.Action("Conda", "create", self.version):
-                    if self.conda_path is None:
-                        raise Exception(
-                            "ERROR: PartCAD is configured to use conda, but conda is missing"
-                        )
+            self.once_conda_locked()
+        super().once()
 
-                    try:
-                        os.makedirs(self.path)
+    async def once_async(self):
+        with self.lock:
+            async with self.get_async_lock():
+                self.once_conda_locked()
+        await super().once_async()
 
-                        # Install new conda environment with the preferred Python version
-                        p = subprocess.Popen(
-                            [
-                                self.conda_path,
-                                "create",
-                                "-y",
-                                "-q",
-                                "--json",
-                                "-p",
-                                self.path,
-                                "python=%s" % self.version,
-                            ],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                        )
-                        _, stderr = p.communicate()
-                        if not stderr is None and stderr != b"":
-                            pc_logging.error(
-                                "conda env install error: %s" % stderr
-                            )
+    def once_conda_locked(self):
+        if not self.initialized_conda:
+            with pc_logging.Action("Conda", "create", self.version):
+                if self.conda_path is None:
+                    raise Exception("ERROR: PartCAD is configured to use conda, but conda is missing")
 
-                        # Install pip into the newly created conda environment
-                        p = subprocess.Popen(
-                            [
-                                self.conda_path,
-                                "install",
-                                "-y",
-                                "-q",
-                                "--json",
-                                "-p",
-                                self.path,
-                                "pip",
-                            ],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                        )
-                        _, stderr = p.communicate()
-                        if not stderr is None and stderr != b"":
-                            pc_logging.error(
-                                "conda pip install error: %s" % stderr
-                            )
+                try:
+                    os.makedirs(self.path)
 
-                        self.initialized = True
-                    except Exception as e:
-                        shutil.rmtree(self.path)
-                        raise e
+                    # Install new conda environment with the preferred Python version
+                    p = subprocess.Popen(
+                        [
+                            self.conda_path,
+                            "create",
+                            "-y",
+                            "-q",
+                            "--json",
+                            "-p",
+                            self.path,
+                            "python=%s" % self.version,
+                        ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        shell=False,
+                        encoding="utf-8",
+                    )
+                    _, stderr = p.communicate()
+                    if not stderr is None and stderr.strip() != "":
+                        pc_logging.error("conda env install error: %s" % stderr)
 
-    async def run(self, cmd, stdin="", cwd=None):
-        self.once()
+                    # Install pip into the newly created conda environment
+                    p = subprocess.Popen(
+                        [
+                            self.conda_path,
+                            "install",
+                            "-y",
+                            "-q",
+                            "--json",
+                            "-p",
+                            self.path,
+                            "pip",
+                        ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        shell=False,
+                        encoding="utf-8",
+                    )
+                    _, stderr = p.communicate()
+                    if not stderr is None and stderr.strip() != "":
+                        pc_logging.error("conda pip install error: %s" % stderr)
 
-        return await super().run(
-            [
-                self.conda_path,
-                "run",
-                "--no-capture-output",
-                "-p",
-                self.path,
-                "python" if os.name != "nt" else "pythonw",
-                # "python%s" % self.version,  # This doesn't work on Windows
-            ]
-            + cmd,
-            stdin,
-            cwd=cwd,
-        )
+                    self.initialized_conda = True
+                except Exception as e:
+                    shutil.rmtree(self.path)
+                    raise e

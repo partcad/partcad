@@ -18,20 +18,16 @@ class NonePythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "none", version)
 
-        if os.name == "nt" and shutil.which("pythonw") is not None:
-            self.exec_name = "pythonw"
-        elif shutil.which("python3") is not None:
-            self.exec_name = "python3"
+        which = shutil.which("python")
+        if which is not None:
+            self.exec_path = which
         else:
-            self.exec_name = "python"
+            which3 = shutil.which("python3")
+            if which3 is not None:
+                self.exec_path = which3
+            else:
+                self.exec_path = which
 
         if not self.initialized:
             os.makedirs(self.path)
             self.initialized = True
-
-    async def run(self, cmd, stdin="", cwd=None):
-        return await super().run(
-            [self.exec_name] + cmd,
-            stdin,
-            cwd=cwd,
-        )

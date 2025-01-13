@@ -44,19 +44,19 @@ The command line tools are the easiest way to browse parts:
     pc list
 
     # List all sketches in all available packages
-    pc list-sketches -r
+    pc list sketches -r
 
     # List all interfaces in all available packages
-    pc list-interfaces -r
+    pc list interfaces -r
 
     # List all known matings of interfaces in all available packages
-    pc list-mates -r
+    pc list mates -r
 
     # List all parts in all available packages
-    pc list-parts -r
+    pc list parts -r
 
     # List all assemblies in all available packages
-    pc list-assemblies -r
+    pc list assemblies -r
 
     # Try initializing the model, print some basic info without displaying it
     pc info /pub/std/metric/cqwarehouse:fastener/hexhead-din931
@@ -76,12 +76,12 @@ There is currently no support for ``cq-server``.
 Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if there is
 any other tool we should support.
 
-=============
-Export models
-=============
+==================
+Render projections
+==================
 
-Individual parts, assemblies and scenes can be rendered and exported into the
-following formats:
+The result of 2D projection of individual parts, assemblies and scenes onto a plane
+(3D to 2D) can be rendered to an image in any of the following formats:
 
 - Vector images
 
@@ -91,7 +91,13 @@ following formats:
 
   - PNG
 
-- 3D models
+
+=============
+Export models
+=============
+
+Individual parts, assemblies and scenes can also can be exported into 3D
+model file formats, including:
 
   - `STEP <https://en.wikipedia.org/wiki/ISO_10303>`_
   - `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_
@@ -104,8 +110,8 @@ in the future.
 
   .. code-block:: shell
 
-    pc render -t stl <part path>
-    pc render -t step -a <assembly path>
+    pc export -t stl <part path>
+    pc export -t step -a <assembly path>
 
 ==============
 Consume models
@@ -122,8 +128,8 @@ STEP or 3MF files and, then, import them into the CAD Design GUI of your choice.
   .. code-block:: shell
 
     # Some "export to a file" examples:
-    pc render -t stl <part> [<package>]
-    pc render -t step -a <assembly> [<package>]
+    pc export [-P <package>] -t stl <part>
+    pc export [-P <package>] -t step -a <assembly>
 
 Python: CadQuery
 ----------------
@@ -210,17 +216,17 @@ shell
 -----
 
   .. code-block:: shell
- 
+
     # custom.sh
     for part in $PART_LIST; do
-      pc render -t png $part 
+      pc render -t png $part
     done
 
   .. code-block:: shell
- 
+
     # custom.sh
     for assembly in $ASSEMBLY_LIST; do
-      pc render -t png -a $assembly 
+      pc render -t png -a $assembly
     done
 
 ==============
@@ -346,5 +352,5 @@ Publish packages
 It's very simple to publish your package to the public PartCAD repository.
 First, publish your package as a repo on GitHub.
 Then create a pull request in
-`the public PartCAD repo <https://github.com/openvmp/partcad-index>`_
+`the public PartCAD repo <https://github.com/partcad/partcad-index>`_
 to add a reference to your package.

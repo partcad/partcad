@@ -10,6 +10,9 @@ sketches:
   sketch:
     type: cadquery
     desc: A sample sketch
+    parameters:
+      width: 3.0
+      length: 4.0
 
 render:
   readme:

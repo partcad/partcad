@@ -11,9 +11,12 @@
 # use the path prefix that we would expect in the real production use case.
 name: /pub/examples/partcad
 
-import:
+cover:
+  package: feature_interface
+
+dependencies:
   pub:
     onlyInRoot: True
     type: git
     url: https://github.com/openvmp/partcad-index.git
-  # NOTE: The subdirectories automatically become imports of the "local" type
+  # NOTE: The subdirectories automatically become dependencies of the "local" type

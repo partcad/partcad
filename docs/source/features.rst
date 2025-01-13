@@ -24,6 +24,44 @@ possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).
 
 
+=======================
+Installing Dependencies
+=======================
+
+Cloning over SSH is faster and more reliable because it uses an efficient
+protocol with lower overhead, supports compression, and maintains stable
+connections via key-based authentication. SSH avoids HTTPS rate limits,
+handles firewalls better, and eliminates credential prompts, making it
+ideal for large repositories or frequent interactions.
+
+If you have SSH keys configured then you can add the following
+to the ~/.partcad/config.yaml:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    dependencies:
+      overrides:
+        url:
+          "git@github.com:": "https://github.com/"
+
+===========================
+Git Configuration Overrides
+===========================
+
+By default, PartCAD uses the system's Git configuration when importing packages
+using git. If you want to override these configurations, you can add your
+overrides in ``~/.partcad/config.yaml`` as shown below:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    git:
+      config:
+        "user.name": "John Doe"
+        "user.email": "johndoe@example.com"
+        ...
+
 =============
 Generative AI
 =============
@@ -59,7 +97,7 @@ The following configuration is optional:
 
 PartCAD AI agents are designed to query AI multiple times,
 so that a range of options is considered and the best result is found.
-The following configuration options can be used to influence that bahavior:
+The following configuration options can be used to influence that behavior:
 
   .. code-block:: yaml
 
@@ -83,8 +121,8 @@ The generated part definitions are persisted as Python or CAD scripts.
     # Initialize the package
     pc init
     # Define the part but do not generate it yet
-    pc add-part ai-openscad --ai google --desc "Pixel phone case of a surprising shape" "generated-case.scad"
-    # Inspect the part. It triggers part generationg on demand.
+    pc add part ai-openscad --ai google --desc "Pixel phone case of a surprising shape" "generated-case.scad"
+    # Inspect the part. It triggers part generating on demand.
     pc inspect "generated-case"
 
 To use ChatGPT instead of Gemini, pass "openai" instead of "google" as the "--ai" parameter.
@@ -117,6 +155,40 @@ Or their more script-friendly variants:
     pc init
     pc -q --no-ansi inspect -V /pub/robotics/parts/gobilda:structure/u_channel_2
     pc -q --no-ansi inspect -V -a /pub/robotics/parts/gobilda:examples/wormgear
+
+=====================
+Environment Variables
+=====================
+
+PartCAD allows you to set CLI options and override user configurations specified in
+``~/.partcad/config.yaml`` using environment variables. This can be particularly
+useful for setting configurations dynamically or in environments where modifying
+configuration files is not feasible.
+
+Generally, all of PartCAD's environment variables are prefixed with ``PC``.
+
+For CLI options, the environment variable prefix depends on the command being
+used. You can use the `--help` option to determine the corresponding environment
+variable for each CLI option.
+
+    Here are some examples:
+
+      .. code-block:: bash
+
+        # Equivalent to: pc add part --desc "testing" scad test.scad
+        PC_ADD_PART_DESC="testing" pc add part scad test.scad
+
+Note that, these environment variables will be overridden if the CLI option is specified.
+
+For user configurations, the environment variables are of the format ``PC`` followed by the
+configuration option name(in uppercase). For example, to override the ``googleApiKey`` configuration,
+you would set the environment variable ``PC_GOOGLEAPIKEY``.
+
+Note that environment variable names are case-sensitive. Always use uppercase letters
+for the ``PC`` prefix and the rest of the variable name, as shown in the examples above.
+
+In this case, these environment variables will take precedence over the values specified in
+``~/.partcad/config.yaml``.
 
 ========
 Security

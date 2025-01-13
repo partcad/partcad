@@ -17,9 +17,7 @@ class ShapeConfiguration:
         if "name" in config:
             self.name = config["name"]
         else:
-            name = "part" + "".join(
-                random.choices(string.ascii_uppercase + string.digits, k=8)
-            )
+            name = "part" + "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
             self.name = name
             self.config["name"] = name
 

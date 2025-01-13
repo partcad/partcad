@@ -32,6 +32,18 @@ pc inspect -s rect_01
 <td valign=top>The longest way to create a basic circle in PartCAD</td>
 </tr></table>
 
+### circle_04
+<table><tr>
+<td valign=top><a href="circle_04.basic"><img src="././circle_04.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>Create a circle with an inner radius</td>
+</tr></table>
+
+### circle_05
+<table><tr>
+<td valign=top><a href="circle_05.basic"><img src="././circle_05.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>Create a circle with an inner radius</td>
+</tr></table>
+
 ### rect_01
 <table><tr>
 <td valign=top><a href="rect_01.basic"><img src="././rect_01.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>

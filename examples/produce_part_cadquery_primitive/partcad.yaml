@@ -10,8 +10,8 @@ docs:
 
 parts:
   cube:
-    type: cadquery
     desc: This is a cube from examples
+    type: cadquery
     parameters:
       width:
         default: 10.0
@@ -19,22 +19,36 @@ parts:
         default: 10.0
       height: 10.0
     aliases: ["box"]
-  brick:
+  cube_enrich:
+    desc: This is an example of a part defined by enriching another part
     type: enrich
     source: cube
     with:
       width: 20.0
       length: 10.0
       height: 7.5
-  # TODO(clairbee): add support for the below two
-  #brick2:
-  #  type: enrich
-  #  source: cube:width=20.0,height=20.0
-  #  with:
-  #    length: 10.0
-  #brick_alias:
-  #  type: alias
-  #   source: cube:width=20.0,height=20.0,length=7.5
+  cube_enrich_enrich:
+    desc: This is an example of enriching a part with params in the name
+    type: enrich
+    source: ../produce_part_cadquery_primitive:cube;width=20.0,height=20.0
+    with:
+      length: 5.0
+  cube_alias:
+    desc: This is an example of an alias to a part
+    type: alias
+    source: ../produce_part_cadquery_primitive:cube
+  cube_alias_params:
+    desc: This is an example of an alias to a part with params in the name
+    type: alias
+    source: :cube;width=20.0,height=20.0,length=7.5
+  cube_alias_alias:
+    type: alias
+    desc: This is an example of an alias to an alias
+    source: :cube_alias
+  cube_alias_enrich:
+    type: alias
+    desc: This is an example of an alias to an alias
+    source: :cube_enrich
   cylinder:
     type: cadquery
     path: cylinder.py

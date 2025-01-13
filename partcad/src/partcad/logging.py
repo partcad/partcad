@@ -31,15 +31,31 @@ warn = lambda *a, **kw: logging.getLogger("partcad").warn(*a, **kw)
 warning = lambda *a, **kw: logging.getLogger("partcad").warning(*a, **kw)
 
 
-def error(*args, **kwargs):
+def reset_errors():
+    """
+    Reset the error tracking.
+
+    This should be called before running a new test. This function modifies a global variable and should be called
+    with appropriate thread safety considerations.
+    """
     global had_errors
+    had_errors = False
+
+
+def _track_error(args):
+    global had_errors
+    if args and len(args) > 1 and "conda run pythonw" in args[0]:
+        return
     had_errors = True
+
+
+def error(*args, **kwargs):
+    _track_error(args)
     logging.getLogger("partcad").error(*args, **kwargs)
 
 
 def critical(*args, **kwargs):
-    global had_errors
-    had_errors = True
+    _track_error(args)
     logging.getLogger("partcad").critical(*args, **kwargs)
 
 
@@ -48,37 +64,35 @@ def critical(*args, **kwargs):
 def exception(
     *args,
 ):
-    global had_errors
-    had_errors = True
+    _track_error(args)
     logging.getLogger("partcad").exception(*args)
 
 
 # Create 'ops' that are used for dependency injection of the logic to control
 # the logging context (e.g. the current state of processes and actions).
-def default_process_start(
-    self_ops, op: str, package: str, item: str | None = None
-):
+def default_process_start(self_ops, op: str, package: str, item: str | None = None):
     if item is None:
-        info("Starting process: %s: %s" % (op, package))
+        debug("Starting process: %s: %s" % (op, package))
     else:
-        info("Starting process: %s: %s: %s" % (op, package, item))
+        debug("Starting process: %s: %s: %s" % (op, package, item))
 
 
 def default_process_end(self_ops, op: str, package: str, item: str = None):
     pass
 
 
-def default_action_start(
-    self_ops, op: str, package: str, item: str | None = None
-):
+def default_action_start(self_ops, op: str, package: str, item: str | None = None):
     if item is None:
-        info("Starting action: %s: %s" % (op, package))
+        debug("Starting action: %s: %s" % (op, package))
     else:
-        info("Starting action: %s: %s: %s" % (op, package, item))
+        debug("Starting action: %s: %s: %s" % (op, package, item))
 
 
 def default_action_end(self_ops, op: str, package: str, item: str = None):
-    pass
+    if item is None:
+        debug("Finished action: %s: %s" % (op, package))
+    else:
+        debug("Finished action: %s: %s: %s" % (op, package, item))
 
 
 # Dependency injection point for logging plugins
@@ -134,16 +148,11 @@ class Process(object):
             if self.item is None:
                 info("DONE: %s: %s: %.2fs" % (self.op, self.package, delta))
             else:
-                info(
-                    "DONE: %s: %s: %s: %.2fs"
-                    % (self.op, self.package, self.item, delta)
-                )
+                info("DONE: %s: %s: %s: %.2fs" % (self.op, self.package, self.item, delta))
 
 
 class Action(object):
-    def __init__(
-        self, op: str, package: str, item: str = None, extra: str = None
-    ):
+    def __init__(self, op: str, package: str, item: str = None, extra: str = None):
         self.op = op
         self.package = package
         if extra:

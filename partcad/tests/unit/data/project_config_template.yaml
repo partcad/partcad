@@ -1,3 +1,4 @@
+import:
 parts:
   {{package_name}}:
     type: cadquery

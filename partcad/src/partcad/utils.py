@@ -52,18 +52,14 @@ def resolve_resource_path(current_project_name, pattern: str):
 
 
 def normalize_resource_path(current_project_name, pattern: str):
-    project_pattern, item_pattern = resolve_resource_path(
-        current_project_name, pattern
-    )
+    project_pattern, item_pattern = resolve_resource_path(current_project_name, pattern)
     return f"{project_pattern}:{item_pattern}"
 
 
 def total_size(obj, verbose=False):
     """sum size of object & members."""
     if isinstance(obj, BLACKLIST):
-        raise TypeError(
-            "getsize() does not take argument of type: " + str(type(obj))
-        )
+        raise TypeError("getsize() does not take argument of type: " + str(type(obj)))
     seen_ids = set()
     size = 0
     objects = [obj]

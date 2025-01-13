@@ -11,7 +11,7 @@ import typing
 
 from . import assembly_factory as pf
 from . import logging as pc_logging
-from .utils import resolve_resource_path
+from .utils import resolve_resource_path, get_child_project_path
 
 
 class AssemblyFactoryAlias(pf.AssemblyFactory):
@@ -20,9 +20,7 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
     source: str
 
     def __init__(self, ctx, source_project, target_project, config):
-        with pc_logging.Action(
-            "InitAlias", source_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitAlias", source_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config)
             # Complement the config object here if necessary
             self._create(config)
@@ -31,31 +29,28 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
                 self.source_assembly_name = config["source"]
             else:
                 self.source_assembly_name = config["name"]
-                if not "project" in config:
-                    raise Exception(
-                        "Alias needs either the source part name or the source project name"
-                    )
+                if "project" not in config and "package" not in config:
+                    raise Exception("Alias needs either the source assembly name or the source project name")
 
-            if "project" in config:
-                self.source_project_name = config["project"]
-                if (
-                    self.source_project_name == "this"
-                    or self.source_project_name == ""
-                ):
+            if "project" in config or "package" in config:
+                if "project" in config:
+                    self.source_project_name = config["project"]
+                else:
+                    self.source_project_name = config["package"]
+                if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = self.project.name
+                elif not self.source_project_name.startswith("/"):
+                    # Resolve the project name relative to the target project
+                    self.source_project_name = get_child_project_path(target_project.name, self.source_project_name)
             else:
                 if ":" in self.source_assembly_name:
-                    self.source_project_name, self.source_assembly_name = (
-                        resolve_resource_path(
-                            self.project.name,
-                            self.source_assembly_name,
-                        )
+                    self.source_project_name, self.source_assembly_name = resolve_resource_path(
+                        self.project.name,
+                        self.source_assembly_name,
                     )
                 else:
                     self.source_project_name = self.project.name
-            self.source = (
-                self.source_project_name + ":" + self.source_assembly_name
-            )
+            self.source = self.source_project_name + ":" + self.source_assembly_name
             config["source_resolved"] = self.source
 
             if self.source_project_name == self.project.name:
@@ -69,8 +64,12 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             pc_logging.debug("Initializing an alias to %s" % self.source)
 
     def instantiate(self, assembly):
-        with pc_logging.Action("Alias", assembly.project_name, assembly.name):
+        with pc_logging.Action("Alias", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
             source = self.ctx._get_assembly(self.source)
+            if not source:
+                pc_logging.error(f"The alias source {self.source} is not found")
+                return
+
             children = source.children
             if children:
                 assembly.children = children
@@ -79,4 +78,6 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
 
             self.ctx.stats_assemblies_instantiated += 1
 
+            if source.path:
+                assembly.path = source.path
             source.instantiate(assembly)

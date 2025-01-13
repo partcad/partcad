@@ -1,4 +1,5 @@
-name: Deployment to PyPI
+# Deployment to PyPI
+name: Deployment # Keep the action badge icon short
 
 on:
   push:
@@ -17,19 +18,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-24.04]
         python-version: ["3.11"]
     runs-on: ${{ matrix.os }}
     env:
       BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: cache
         with:
           path: ~/.cache/pip
@@ -46,12 +47,13 @@ jobs:
           (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
           python -m venv .venv/install
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --upgrade pip build && deactivate)
+          sudo apt install --yes libcairo2-dev python3-dev
       - name: Test building and packaging
         run: |
           (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad && python -m build && cd .. && deactivate)
           (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad/requirements.txt && deactivate)
           (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad/dist partcad && deactivate)
-          cp README.md partcad-cli
+          cp .github/README.md partcad-cli
           (. .venv/build-cli/${{ env.BIN_DIR }}/activate && cd partcad-cli && python -m build && cd .. && deactivate)
       - name: Test installation
         run: |
@@ -61,44 +63,50 @@ jobs:
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli && deactivate)
       # Upload artifact from the selected OS/Python version combination only
       - name: Upload "partcad"
-        if: "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'"
-        uses: actions/upload-artifact@v3
+        if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.11' }}
+        uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions
           path: partcad/dist/
       - name: Upload "partcad-cli"
-        if: "matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'"
-        uses: actions/upload-artifact@v3
+        if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.11' }}
+        uses: actions/upload-artifact@v4
         with:
-          name: python-package-distributions
+          name: python-package-distributions-cli
           path: partcad-cli/dist/
 
   publish-to-pypi:
     name: Publish to PyPI
     needs:
       - build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: pypi
 
     steps:
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Download all the dists
-        uses: actions/download-artifact@v3
+      - name: Download lib dists
+        uses: actions/download-artifact@v4
         with:
           name: python-package-distributions
+          path: dist
+
+      - name: Download cli dists
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions-cli
           path: dist
 
       - name: Determine the release tag
         if: github.ref == 'refs/heads/main'
         run: |
-          git clone https://github.com/openvmp/partcad partcad-git;
+          git clone https://github.com/partcad/partcad partcad-git;
           cd partcad-git;
-          echo "MERGED_TAG=$(git describe --abbrev=0)" >> $GITHUB_ENV
+          echo "MERGED_TAG=$(git describe --abbrev=0)" >> "${GITHUB_ENV}"
 
       - name: Create GitHub Release
         if: github.ref == 'refs/heads/main'
@@ -112,10 +120,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url:
-            "${{ github.ref == 'refs/heads/main' &&
-            'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
+            "${{ github.ref == 'refs/heads/main' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/'
             }}"
           user: __token__
-          password:
-            "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY ||
-            secrets.TEST_PYPI_KEY }}"
+          password: "${{ github.ref == 'refs/heads/main' &&  secrets.PYPI_KEY || secrets.TEST_PYPI_KEY }}"

@@ -1,0 +1,87 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+default_install_hook_types: [pre-commit, prepare-commit-msg]
+# TODO: [TODO-16] @alexanderilyin: Add hook to run pytest via xdist
+# TODO: [TODO-17] @alexanderilyin: Add hook to run behave via behavex
+# TODO: [TODO-18] @alexanderilyin: Add hook to check author email. We should only accept commits from partcad.org email addresses.
+repos:
+  - repo: https://github.com/partcad/pre-commit
+    rev: v1.8.2
+    hooks:
+      - id: prepare-commit-msg
+        args: ["--open-source", "--commit-msg-filename"]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: "^examples/|_ai_.+\\.(py|scad)"
+        exclude_types: [svg]
+      - id: end-of-file-fixer
+        exclude: "^examples/|_ai_.+\\.(py|scad)"
+        exclude_types: [svg]
+      - id: check-yaml
+        exclude: "^mkdocs.yml|partcad/tests/unit/data/project_config_(template|include).yaml$"
+        args: ["--unsafe"] # TODO: Remove once there is better solution for '!!python/name:...' in mkdocs.yml
+      - id: check-added-large-files
+      # https://github.com/docker/for-mac/issues/5029
+      # - id: check-executables-have-shebangs
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: detect-private-key
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.30.0
+    hooks:
+      - id: check-dependabot
+      - id: check-github-actions
+      - id: check-github-workflows
+        args: ["--verbose"]
+  - repo: https://github.com/python-poetry/poetry
+    rev: 1.8.0
+    hooks:
+      - id: poetry-check
+      - id: poetry-lock
+      - id: poetry-export
+        args:
+          [
+            "--format=requirements.txt",
+            "--output=.devcontainer/requirements.txt",
+            "--with=dev",
+            "--with=test",
+            "--with=partcad",
+            "--with=cli",
+            "--with=docs",
+          ]
+      - id: poetry-install
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: ShellCheck
+        entry: shellcheck
+        language: system
+        types: [shell]
+        args: ["-e", "SC1091"] # Optional: exclude specific checks
+        # args: ["--severity=warning"]  # Optional: show only errors and warnings
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.1-beta
+    hooks:
+      - id: hadolint
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+
+  # GitGuardian Shield Configuration:
+  #   - Pre-commit hooks: https://github.com/GitGuardian/ggshield/blob/main/.pre-commit-hooks.yaml
+  #   - Example config: https://github.com/GitGuardian/ggshield/blob/main/pre-commit-config.local-example.yml
+  #   - Integration guide: https://docs.gitguardian.com/ggshield-docs/integrations/git-hooks/pre-commit
+  # TODO: Find a better way to distribute the ggshield API Keys
+  # - repo: https://github.com/gitguardian/ggshield
+  #   rev: v1.34.0
+  #   hooks:
+  #     - id: ggshield
+  #       language_version: python3
+  #       stages: [pre-commit]
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.5
+    hooks:
+      - id: actionlint

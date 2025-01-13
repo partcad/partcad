@@ -46,7 +46,7 @@ class Part(ShapeWithAi):
         self.count = 0
 
     async def get_shape(self):
-        async with self.lock:
+        async with self.locked():
             if self.shape is None:
                 self.shape = await pc_thread.run_async(self.instantiate, self)
             return self.shape
@@ -65,10 +65,7 @@ class Part(ShapeWithAi):
         if (
             self.vendor is None
             and self.sku is None
-            and (
-                not "parameters" in self.config
-                or not property in self.config["parameters"]
-            )
+            and (not "parameters" in self.config or not property in self.config["parameters"])
         ):
             shape = await self.get_shape()
             # TODO(clairbee): derive the property from the model

@@ -13,23 +13,26 @@ parts:
     type: ai-cadquery
     provider: google
     desc: A cube
-    properties:
-      length: 10
+    requirements:
+      properties:
+        length: 10
   prism:
     type: ai-cadquery
     provider: ollama
     model: llama3.1:70b
     desc: A hexagonal prism
-    properties:
-      length: 10
+    requirements:
+      properties:
+        length: 10
   tetrahedron:
     type: ai-cadquery
     provider: openai
     tokens: 4000
     top_p: 0.9
     desc: A tetrahedron
-    properties:
-      length: 10
+    requirements:
+      properties:
+        length: 10
 
 render:
   readme:

@@ -1,4 +1,4 @@
 * text=lf
 *.step binary
-*.png binary
+mkdocs/**/*.png filter=lfs diff=lfs merge=lfs -text
 *.stl binary

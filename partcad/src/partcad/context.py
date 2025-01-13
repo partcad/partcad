@@ -42,6 +42,7 @@ class Context(project_config.Configuration):
     stats_providers: int
     stats_provider_queries: int
     stats_memory: int
+    stats_git_ops: int
 
     # name is the package path (not a filesystem path) of the root package
     # in case it's configured to be something other than '/' (default)
@@ -69,7 +70,7 @@ class Context(project_config.Configuration):
             self.lock.release()
 
     def __init__(self, root_path=None, search_root=True):
-        """Initializes the context and imports the root project."""
+        """Initializes the context and loads the root project."""
         root_file = ""
         if root_path is None:
             # Find the top folder containing "partcad.yaml"
@@ -95,8 +96,7 @@ class Context(project_config.Configuration):
             root_path,
         ).replace(os.path.sep, "/")
         if self.current_project_path == self.name + "/." or (
-            self.name.endswith("/")
-            and self.current_project_path == self.name + "."
+            self.name.endswith("/") and self.current_project_path == self.name + "."
         ):
             self.current_project_path = self.name
 
@@ -120,6 +120,7 @@ class Context(project_config.Configuration):
         self.stats_providers = 0
         self.stats_provider_queries = 0
         self.stats_memory = 0
+        self.stats_git_ops = 0
 
         self.mates = {}
         # self.projects contains all projects known to this context
@@ -147,46 +148,28 @@ class Context(project_config.Configuration):
         return self.current_project_path
 
     def import_project(self, parent, project_import_config):
-        if (
-            not "name" in project_import_config
-            or not "type" in project_import_config
-        ):
-            pc_logging.error(
-                "Invalid project configuration found: %s"
-                % project_import_config
-            )
+        if not "name" in project_import_config or not "type" in project_import_config:
+            pc_logging.error("Invalid project configuration found: %s" % project_import_config)
             return None
 
         name = project_import_config["name"]
         with self.PackageLock(self, name):
             with pc_logging.Action("Import", name):
                 if name in self._projects_being_loaded:
-                    pc_logging.error(
-                        "Recursive project loading detected (%s), aborting."
-                        % name
-                    )
+                    pc_logging.error("Recursive project loading detected (%s), aborting." % name)
                     return None
                 self._projects_being_loaded[name] = True
 
                 # Depending on the project type, use different factories
-                if (
-                    not "type" in project_import_config
-                    or project_import_config["type"] == "local"
-                ):
+                if not "type" in project_import_config or project_import_config["type"] == "local":
                     with pc_logging.Action("Local", name):
-                        rfl.ProjectFactoryLocal(
-                            self, parent, project_import_config
-                        )
+                        rfl.ProjectFactoryLocal(self, parent, project_import_config)
                 elif project_import_config["type"] == "git":
                     with pc_logging.Action("Git", name):
-                        rfg.ProjectFactoryGit(
-                            self, parent, project_import_config
-                        )
+                        rfg.ProjectFactoryGit(self, parent, project_import_config)
                 elif project_import_config["type"] == "tar":
                     with pc_logging.Action("Tar", name):
-                        rft.ProjectFactoryTar(
-                            self, parent, project_import_config
-                        )
+                        rft.ProjectFactoryTar(self, parent, project_import_config)
                 else:
                     pc_logging.error("Invalid project type found: %s." % name)
                     del self._projects_being_loaded[name]
@@ -194,10 +177,7 @@ class Context(project_config.Configuration):
 
                 # Check whether the factory was able to successfully add the project
                 if not name in self.projects:
-                    pc_logging.error(
-                        "Failed to create the project: %s"
-                        % project_import_config
-                    )
+                    pc_logging.error("Failed to create the project: %s" % project_import_config)
                     del self._projects_being_loaded[name]
                     return None
 
@@ -207,10 +187,7 @@ class Context(project_config.Configuration):
                     del self._projects_being_loaded[name]
                     return None
                 if imported_project.broken:
-                    pc_logging.error(
-                        "Failed to parse the package's 'partcad.yaml': %s"
-                        % name
-                    )
+                    pc_logging.error("Failed to parse the package's 'partcad.yaml': %s" % name)
 
                 self.stats_packages += 1
                 self.stats_packages_instantiated += 1
@@ -241,10 +218,7 @@ class Context(project_config.Configuration):
         with self.lock:
             # Check if it's an explicit reference outside of the root project
             if not project_path.startswith(self.name):
-                pc_logging.debug(
-                    "Project path is outside of the root project: %s"
-                    % project_path
-                )
+                pc_logging.debug("Project path is outside of the root project: %s" % project_path)
                 # In case of an explicit reference outside of the root project,
                 # assume that the root package has an 'onlyInRoot' dependency
                 # present to facilitate such a reference in a standalone
@@ -258,6 +232,8 @@ class Context(project_config.Configuration):
                 len_to_skip = 1
             project_path = project_path[len_to_skip:]
 
+            if self.name not in self.projects:
+                return None
             project = self.projects[self.name]
 
             if project_path == "":
@@ -286,14 +262,10 @@ class Context(project_config.Configuration):
 
         # see if the wanted project is already initialized
         if next_project_path in self.projects:
-            return self._get_project_recursive(
-                self.projects[next_project_path], import_list
-            )
+            return self._get_project_recursive(self.projects[next_project_path], import_list)
 
         # Check if there is a matching subfolder
-        subfolders = [
-            f.name for f in os.scandir(project.config_dir) if f.is_dir()
-        ]
+        subfolders = [f.name for f in os.scandir(project.config_dir) if f.is_dir()]
         if next_import in list(subfolders):
             if os.path.exists(
                 os.path.join(
@@ -302,9 +274,7 @@ class Context(project_config.Configuration):
                     consts.DEFAULT_PACKAGE_CONFIG,
                 )
             ):
-                pc_logging.debug(
-                    "Importing a subfolder (get): %s..." % next_project_path
-                )
+                pc_logging.debug("Importing a subfolder (get): %s..." % next_project_path)
                 prj_conf = {
                     "name": next_project_path,
                     "type": "local",
@@ -312,45 +282,35 @@ class Context(project_config.Configuration):
                 }
                 next_project = self.import_project(project, prj_conf)
                 if not next_project is None:
-                    result = self._get_project_recursive(
-                        next_project, import_list
-                    )
+                    result = self._get_project_recursive(next_project, import_list)
                     return result
         else:
             # Otherwise, iterate all subfolders and check if any of them are packages
-            if (
-                "import" in project.config_obj
-                and not project.config_obj["import"] is None
-            ):
-                imports = project.config_obj["import"]
+            if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
+                dependencies = project.config_obj["dependencies"]
                 # TODO(clairbee): revisit if this code path is needed when the
                 #                 user explicitly asked for a particular package
                 # if not project.config_obj.get("isRoot", False):
                 #     filtered = filter(
-                #         lambda x: "onlyInRoot" not in imports[x]
-                #         or not imports[x]["onlyInRoot"],
-                #         imports,
+                #         lambda x: "onlyInRoot" not in dependencies[x]
+                #         or not dependencies[x]["onlyInRoot"],
+                #         dependencies,
                 #     )
-                #     imports = list(filtered)
-                for prj_name in imports:
-                    pc_logging.debug(
-                        "Checking the import: %s vs %s..."
-                        % (prj_name, next_import)
-                    )
+                #     dependencies = list(filtered)
+                for prj_name in dependencies:
+                    pc_logging.debug(f"Checking the dependency: {prj_name} vs {next_import}...")
                     if prj_name != next_import:
                         continue
-                    prj_conf = project.config_obj["import"][prj_name]
+                    prj_conf = project.config_obj["dependencies"][prj_name]
                     if prj_conf.get("onlyInRoot", False):
                         next_project_path = "/" + prj_name
-                    pc_logging.debug("Importing: %s..." % next_project_path)
+                    pc_logging.debug(f"Loading the dependency: {next_project_path}...")
                     if "name" in prj_conf:
                         prj_conf["orig_name"] = prj_conf["name"]
                     prj_conf["name"] = next_project_path
                     next_project = self.import_project(project, prj_conf)
                     if not next_project is None:
-                        result = self._get_project_recursive(
-                            next_project, import_list
-                        )
+                        result = self._get_project_recursive(next_project, import_list)
                         return result
                     break
 
@@ -365,32 +325,22 @@ class Context(project_config.Configuration):
         iterate_tasks = []
         import_tasks = []
 
-        iterate_tasks.append(
-            asyncio.create_task(self._import_all_recursive(project))
-        )
+        iterate_tasks.append(asyncio.create_task(self._import_all_recursive(project)))
 
         while iterate_tasks or import_tasks:
             if iterate_tasks:
-                iterate_done, iterate_tasks_set = await asyncio.tasks.wait(
-                    iterate_tasks
-                )
+                iterate_done, iterate_tasks_set = await asyncio.tasks.wait(iterate_tasks)
                 iterate_tasks = list(iterate_tasks_set)
                 for iterate_task in iterate_done:
                     new_import_tasks = iterate_task.result()
                     import_tasks.extend(new_import_tasks)
 
             if import_tasks:
-                import_done, import_tasks_set = await asyncio.tasks.wait(
-                    import_tasks
-                )
+                import_done, import_tasks_set = await asyncio.tasks.wait(import_tasks)
                 import_tasks = list(import_tasks_set)
                 for import_task in import_done:
                     next_project = import_task.result()
-                    iterate_tasks.append(
-                        asyncio.create_task(
-                            self._import_all_recursive(next_project)
-                        )
-                    )
+                    iterate_tasks.append(asyncio.create_task(self._import_all_recursive(next_project)))
 
     async def _import_all_recursive(self, project):
         tasks = []
@@ -399,34 +349,28 @@ class Context(project_config.Configuration):
             pc_logging.warn("Ignoring the broken package: %s" % project.name)
             return []
 
-        # First, iterate all explicitly mentioned "import"s.
+        # First, iterate all explicitly mentioned "dependencies"s.
         # Do it before iterating subdirectories, as it may kick off a long
         # background task.
-        if (
-            "import" in project.config_obj
-            and not project.config_obj["import"] is None
-        ):
-            imports = project.config_obj["import"]
+        if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
+            dependencies = project.config_obj["dependencies"]
             if not project.config_obj.get("isRoot", False):
                 filtered = filter(
-                    lambda x: "onlyInRoot" not in imports[x]
-                    or not imports[x]["onlyInRoot"],
-                    imports,
+                    lambda x: "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"],
+                    dependencies,
                 )
-                imports = list(filtered)
+                dependencies = list(filtered)
 
-            for prj_name in imports:
-                prj_conf = project.config_obj["import"][prj_name]
+            for prj_name in dependencies:
+                prj_conf = project.config_obj["dependencies"][prj_name]
 
                 if prj_conf.get("onlyInRoot", False):
                     next_project_path = "/" + prj_name
                 else:
-                    next_project_path = get_child_project_path(
-                        project.name, prj_name
-                    )
+                    next_project_path = get_child_project_path(project.name, prj_name)
                 if next_project_path == self.name:
-                    # Avoid circular imports of the root package
-                    # TODO(clairbee): fix circular imports in general
+                    # Avoid circular dependencies of the root package
+                    # TODO(clairbee): fix circular dependencies in general
                     continue
                 pc_logging.debug("Importing: %s..." % next_project_path)
 
@@ -434,16 +378,10 @@ class Context(project_config.Configuration):
                     prj_conf["orig_name"] = prj_conf["name"]
                 prj_conf["name"] = next_project_path
 
-                tasks.append(
-                    asyncio.create_task(
-                        sync_threads.run(self.import_project, project, prj_conf)
-                    )
-                )
+                tasks.append(asyncio.create_task(sync_threads.run(self.import_project, project, prj_conf)))
 
         # Second, iterate over all subfolder and check for packages
-        subfolders = [
-            f.name for f in os.scandir(project.config_dir) if f.is_dir()
-        ]
+        subfolders = [f.name for f in os.scandir(project.config_dir) if f.is_dir()]
         for subdir in list(subfolders):
             if os.path.exists(
                 os.path.join(
@@ -461,25 +399,32 @@ class Context(project_config.Configuration):
                     pc_logging.debug("Skipping already imported: %s" % subdir)
                     continue
 
-                pc_logging.debug(
-                    "Importing a subfolder (import all): %s..."
-                    % next_project_path
-                )
+                pc_logging.debug("Importing a subfolder (import all): %s..." % next_project_path)
                 prj_conf = {
                     "name": next_project_path,
                     "type": "local",
                     "path": subdir,
                 }
 
-                tasks.append(
-                    asyncio.create_task(
-                        sync_threads.run(self.import_project, project, prj_conf)
-                    )
-                )
+                tasks.append(asyncio.create_task(sync_threads.run(self.import_project, project, prj_conf)))
 
         return tasks
 
     def get_all_packages(self, parent_name=None):
+        # See if we need to preload any "onlyInRoot" packages
+        # TODO(clairbee): parallelize preloading too?
+        if "dependencies" in self.config_obj and self.config_obj["dependencies"] is not None:
+            dependencies = self.config_obj["dependencies"]
+            for prj_name in dependencies:
+                if "onlyInRoot" in dependencies[prj_name]:
+                    if parent_name is None:
+                        if self.name == "/":
+                            # preload
+                            _ = self.get_project("/" + prj_name)
+                    elif parent_name.startswith(("/" + prj_name)):
+                        # preload
+                        _ = self.get_project(parent_name)
+
         # TODO(clairbee): leverage root_project.get_child_project_names()
         self.import_all(parent_name)
         return self.get_packages(parent_name)
@@ -487,23 +432,18 @@ class Context(project_config.Configuration):
     def get_packages(self, parent_name=None):
         projects = self.projects.values()
         if parent_name is not None:
-            projects = filter(
-                lambda x: x.name.startswith(parent_name), projects
-            )
+            projects = filter(lambda x: x.name.startswith(parent_name), projects)
         return map(
             lambda pkg: {"name": pkg.name, "desc": pkg.desc},
             filter(
                 # FIXME(clairbee): parameterize interfaces before displaying them
                 # lambda x: len(x.interfaces) + len(x.sketches) + len(x.parts) + len(x.assemblies)
-                lambda x: len(x.sketches) + len(x.parts) + len(x.assemblies)
-                > 0,
+                lambda x: len(x.sketches) + len(x.parts) + len(x.assemblies) > 0,
                 projects,
             ),
         )
 
-    def add_mate(
-        self, source_interface, target_interface, mate_target_config: dict
-    ):
+    def add_mate(self, source_interface, target_interface, mate_target_config: dict):
         self._add_mate(
             source_interface,
             target_interface,
@@ -531,15 +471,10 @@ class Context(project_config.Configuration):
         if not source_interface_name in self.mates:
             self.mates[source_interface_name] = {}
         if target_interface_name in self.mates[source_interface_name]:
-            pc_logging.error(
-                "Mate already exists: %s -> %s"
-                % (source_interface_name, target_interface_name)
-            )
+            pc_logging.error("Mate already exists: %s -> %s" % (source_interface_name, target_interface_name))
             return
 
-        mate = Mating(
-            source_interface, target_interface, mate_target_config, reverse
-        )
+        mate = Mating(source_interface, target_interface, mate_target_config, reverse)
         self.mates[source_interface_name][target_interface_name] = mate
 
     def get_mate(self, source_interface_name, target_interface_name):
@@ -559,9 +494,7 @@ class Context(project_config.Configuration):
             [
                 compatible_interface
                 for interface in source_interfaces
-                for compatible_interface in self.get_interface(
-                    interface
-                ).compatible_with
+                for compatible_interface in self.get_interface(interface).compatible_with
             ]
         )
 
@@ -570,22 +503,16 @@ class Context(project_config.Configuration):
         # called 'real', beacuase it allows to perform a lookup of
         # the actual (real) source interface(s) which brought in the given
         # compatible interface.
-        real_source_interfaces = {
-            interface: set([interface]) for interface in source_interfaces
-        }
+        real_source_interfaces = {interface: set([interface]) for interface in source_interfaces}
         for interface in source_interfaces:
-            for compatible_interface in self.get_interface(
-                interface
-            ).compatible_with:
+            for compatible_interface in self.get_interface(interface).compatible_with:
                 if not compatible_interface in real_source_interfaces:
                     real_source_interfaces[compatible_interface] = set()
                 real_source_interfaces[compatible_interface].add(interface)
 
         # Now, extend the source_interfaces to include all of the interfaces at
         # least one of the source interfaces is compatible with
-        source_interfaces = source_interfaces.union(
-            compatible_source_interfaces
-        )
+        source_interfaces = source_interfaces.union(compatible_source_interfaces)
         pc_logging.debug("Source interfaces: %s" % source_interfaces)
 
         # Now do the same for the target interfaces
@@ -594,73 +521,49 @@ class Context(project_config.Configuration):
             [
                 compatible_interface
                 for interface in target_interfaces
-                for compatible_interface in self.get_interface(
-                    interface
-                ).compatible_with
+                for compatible_interface in self.get_interface(interface).compatible_with
             ]
         )
-        real_target_interfaces = {
-            interface: set([interface]) for interface in target_interfaces
-        }
+        real_target_interfaces = {interface: set([interface]) for interface in target_interfaces}
         for interface in target_interfaces:
-            for compatible_interface in self.get_interface(
-                interface
-            ).compatible_with:
+            for compatible_interface in self.get_interface(interface).compatible_with:
                 if not compatible_interface in real_target_interfaces:
                     real_target_interfaces[compatible_interface] = set()
                 real_target_interfaces[compatible_interface].add(interface)
-        target_interfaces = target_interfaces.union(
-            compatible_target_interfaces
-        )
+        target_interfaces = target_interfaces.union(compatible_target_interfaces)
         pc_logging.debug("Target interfaces: %s" % target_interfaces)
 
         source_interfaces_mates = set(
             [
                 peer_interface
                 for source_interface in source_interfaces
-                for peer_interface in self.mates.get(
-                    source_interface, {}
-                ).keys()
+                for peer_interface in self.mates.get(source_interface, {}).keys()
             ]
         )
         target_interfaces_mates = set(
             [
                 peer_interface
                 for target_interface in target_interfaces
-                for peer_interface in self.mates.get(
-                    target_interface, {}
-                ).keys()
+                for peer_interface in self.mates.get(target_interface, {}).keys()
             ]
         )
-        source_candidate_interfaces = source_interfaces.intersection(
-            target_interfaces_mates
-        )
+        source_candidate_interfaces = source_interfaces.intersection(target_interfaces_mates)
         real_source_candidate_interfaces = set()
         for source_interface in source_candidate_interfaces:
-            real_source_candidate_interfaces = (
-                real_source_candidate_interfaces.union(
-                    real_source_interfaces[source_interface]
-                )
+            real_source_candidate_interfaces = real_source_candidate_interfaces.union(
+                real_source_interfaces[source_interface]
             )
         source_candidate_interfaces = real_source_candidate_interfaces
-        pc_logging.debug(
-            "Source candidate interfaces: %s" % source_candidate_interfaces
-        )
+        pc_logging.debug("Source candidate interfaces: %s" % source_candidate_interfaces)
 
-        target_candidate_interfaces = target_interfaces.intersection(
-            source_interfaces_mates
-        )
+        target_candidate_interfaces = target_interfaces.intersection(source_interfaces_mates)
         real_target_candidate_interfaces = set()
         for target_interface in target_candidate_interfaces:
-            real_target_candidate_interfaces = (
-                real_target_candidate_interfaces.union(
-                    real_target_interfaces[target_interface]
-                )
+            real_target_candidate_interfaces = real_target_candidate_interfaces.union(
+                real_target_interfaces[target_interface]
             )
         target_candidate_interfaces = real_target_candidate_interfaces
-        pc_logging.debug(
-            "Target candidate interfaces: %s" % target_candidate_interfaces
-        )
+        pc_logging.debug("Target candidate interfaces: %s" % target_candidate_interfaces)
 
         return source_candidate_interfaces, target_candidate_interfaces
 
@@ -687,9 +590,7 @@ class Context(project_config.Configuration):
         return asyncio.run(self._get_sketch(sketch_spec, params).get_cadquery())
 
     def get_sketch_build123d(self, sketch_spec, params=None):
-        return asyncio.run(
-            self._get_sketch(sketch_spec, params).get_build123d()
-        )
+        return asyncio.run(self._get_sketch(sketch_spec, params).get_build123d())
 
     def _get_interface(self, interface_spec):
         project_name, interface_name = resolve_resource_path(
@@ -701,9 +602,7 @@ class Context(project_config.Configuration):
             pc_logging.error("Package %s not found" % project_name)
             pc_logging.error("Packages found: %s" % str(self.projects))
             return None
-        pc_logging.debug(
-            "Retrieving %s from %s" % (interface_name, project_name)
-        )
+        pc_logging.debug("Retrieving %s from %s" % (interface_name, project_name))
         return prj.get_interface(interface_name)
 
     def get_interface(self, interface_spec):
@@ -731,20 +630,13 @@ class Context(project_config.Configuration):
 
             part_suppliers = prj.get_suppliers(part_spec)
             if len(part_suppliers) == 0:
-                pc_logging.error(
-                    "No suppliers found for %s in %s"
-                    % (part_name, project_name)
-                )
+                pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
                 return {}
 
             pc_logging.debug("Part spec: %s" % str(part_spec))
             for provider_name, provider_extra_config in part_suppliers.items():
-                provider = self.get_provider(
-                    provider_name, provider_extra_config
-                )
-                if cart.qos is not None and not provider.is_qos_available(
-                    cart.qos
-                ):
+                provider = self.get_provider(provider_name, provider_extra_config)
+                if cart.qos is not None and not provider.is_qos_available(cart.qos):
                     continue
                 if not await provider.is_part_available(part_spec):
                     continue
@@ -754,9 +646,7 @@ class Context(project_config.Configuration):
                 suppliers[f"{project_name}:{part_name}"].append(provider.name)
 
             if f"{project_name}:{part_name}" not in suppliers:
-                pc_logging.error(
-                    f"No supplier found for {project_name}:{part_name}"
-                )
+                pc_logging.error(f"No supplier found for {project_name}:{part_name}")
 
         # TODO(clairbee): calculate the recommended suppliers and
         #                 reorder the results accordingly
@@ -767,9 +657,7 @@ class Context(project_config.Configuration):
         """From a list of suppliers, select the preferred one."""
         return suppliers[0]
 
-    def select_preferred_suppliers(
-        self, suppliers_per_part: dict[str, list[str]]
-    ) -> dict[str, str]:
+    def select_preferred_suppliers(self, suppliers_per_part: dict[str, list[str]]) -> dict[str, str]:
         """Given a list of suppliers per part, select the preferred supplier for each."""
         preferred_suppliers = {}
         for name, suppliers in suppliers_per_part.items():
@@ -778,9 +666,7 @@ class Context(project_config.Configuration):
 
         return preferred_suppliers
 
-    async def select_supplier(
-        self, provider, cart: ProviderCart
-    ) -> dict[str, str]:
+    async def select_supplier(self, provider, cart: ProviderCart) -> dict[str, str]:
         """Given a specific provider, confirm it can provide all the parts."""
         if cart.qos is not None and not provider.is_qos_available(cart.qos):
             pc_logging.error(f"QoS {cart.qos} is not available from {provider}")
@@ -790,9 +676,7 @@ class Context(project_config.Configuration):
 
         async def _set_supplier(name, cart_item):
             if not await provider.is_part_available(cart_item):
-                pc_logging.error(
-                    "Part %s is not available from %s" % (name, provider.name)
-                )
+                pc_logging.error("Part %s is not available from %s" % (name, provider.name))
                 suppliers[str(cart_item)] = ""
             else:
                 pc_logging.debug("Cart item: %s" % str(cart_item))
@@ -804,9 +688,7 @@ class Context(project_config.Configuration):
 
         return suppliers
 
-    async def prepare_supplier_carts(
-        self, preferred_suppliers: dict[str, str]
-    ) -> dict[str, ProviderCart]:
+    async def prepare_supplier_carts(self, preferred_suppliers: dict[str, str]) -> dict[str, ProviderCart]:
         """Given the list of preferred suppliers, prepare the supplier carts."""
         supplier_carts: dict[str, ProviderCart] = {}
 
@@ -819,9 +701,7 @@ class Context(project_config.Configuration):
         for part_spec, provider_name in preferred_suppliers.items():
             if not provider_name in supplier_carts:
                 supplier_carts[provider_name] = ProviderCart()
-            cart_item = await supplier_carts[provider_name].add_part_spec(
-                self, part_spec
-            )
+            cart_item = await supplier_carts[provider_name].add_part_spec(self, part_spec)
 
             # If it's not 'None' which means no provider found
             if provider_name:
@@ -899,33 +779,32 @@ class Context(project_config.Configuration):
         if prj is None:
             pc_logging.error("Package %s not found" % project_name)
             return None
-        pc_logging.debug(
-            "Retrieving %s from %s" % (assembly_name, project_name)
-        )
+        pc_logging.debug("Retrieving %s from %s" % (assembly_name, project_name))
         return prj.get_assembly(assembly_name, params)
 
     def get_assembly(self, assembly_spec, params=None):
         return self._get_assembly(assembly_spec, params)
 
     def get_assembly_shape(self, assembly_spec, params=None):
-        return asyncio.run(
-            self._get_assembly(assembly_spec, params).get_wrapped()
-        )
+        return asyncio.run(self._get_assembly(assembly_spec, params).get_wrapped())
 
     def get_assembly_cadquery(self, assembly_spec, params=None):
-        return asyncio.run(
-            self._get_assembly(assembly_spec, params).get_cadquery()
-        )
+        return asyncio.run(self._get_assembly(assembly_spec, params).get_cadquery())
 
     def get_assembly_build123d(self, assembly_spec, params=None):
-        return asyncio.run(
-            self._get_assembly(assembly_spec, params).get_build123d()
-        )
+        return asyncio.run(self._get_assembly(assembly_spec, params).get_build123d())
+
+    async def render_async(self, project_path=None, format=None, output_dir=None):
+        if project_path is None:
+            project_path = self.get_current_project_path()
+        pc_logging.debug("Rendering all objects in %s..." % project_path)
+        project = self.get_project(project_path)
+        await project.render_async(format=format, output_dir=output_dir)
 
     def render(self, project_path=None, format=None, output_dir=None):
         if project_path is None:
             project_path = self.get_current_project_path()
-        pc_logging.info("Rendering all objects in %s..." % project_path)
+        pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
         project.render(format=format, output_dir=output_dir)
 
@@ -940,9 +819,7 @@ class Context(project_config.Configuration):
                 python_runtime = user_config.python_runtime
             runtime_name = python_runtime + "-" + version
             if not runtime_name in self.runtimes_python:
-                self.runtimes_python[runtime_name] = runtime_python_all.create(
-                    self, version, python_runtime
-                )
+                self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)
             return self.runtimes_python[runtime_name]
 
     def ensure_dirs(self, path):

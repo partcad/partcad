@@ -31,9 +31,7 @@ def test_provider_quote_store_csv():
     assert list(preferred_suppliers.keys())[0] == FULL_PART_NAME
     assert preferred_suppliers[FULL_PART_NAME] == FULL_PROVIDER_NAME
 
-    supplier_carts = asyncio.run(
-        ctx.prepare_supplier_carts(preferred_suppliers)
-    )
+    supplier_carts = asyncio.run(ctx.prepare_supplier_carts(preferred_suppliers))
     quotes = asyncio.run(ctx.supplier_carts_to_quotes(supplier_carts))
     pc.logging.error("Quotes: %s" % quotes)
     assert len(quotes.keys()) == 1

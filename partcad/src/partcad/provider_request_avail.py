@@ -17,9 +17,7 @@ class ProviderRequestAvail(ProviderRequest):
     count_per_sku: int
     count: int
 
-    def __init__(
-        self, name: str, vendor: str, sku: str, count_per_sku: int, count: int
-    ):
+    def __init__(self, name: str, vendor: str, sku: str, count_per_sku: int, count: int):
         self.name = name
         self.vendor = vendor
         self.sku = sku

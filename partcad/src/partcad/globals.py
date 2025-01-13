@@ -102,9 +102,7 @@ def create_package(dst_path=consts.DEFAULT_PACKAGE_CONFIG, private=False):
         template_name = "init-private.yaml"
     else:
         template_name = "init-public.yaml"
-    src_path = os.path.join(
-        os.path.dirname(__file__), "template", template_name
-    )
+    src_path = os.path.join(os.path.dirname(__file__), "template", template_name)
 
     if os.path.exists(dst_path):
         pc_logging.error("File already exists: %s" % dst_path)

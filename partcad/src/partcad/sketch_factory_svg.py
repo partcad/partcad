@@ -82,9 +82,7 @@ class SketchFactorySvg(SketchFactoryFile):
                     face_builder = BRepBuilderAPI_MakeFace(wire, True)
                     face_builder.Build()
                     if not face_builder.IsDone():
-                        raise ValueError(
-                            f"Cannot build face(s): {face_builder.Error()}"
-                        )
+                        raise ValueError(f"Cannot build face(s): {face_builder.Error()}")
 
                     face = face_builder.Face()
 
@@ -115,9 +113,7 @@ class SketchFactorySvg(SketchFactoryFile):
                     else:
                         shape = None
             except Exception as e:
-                pc_logging.exception(
-                    "Failed to import the SVG file: %s: %s" % (self.path, e)
-                )
+                pc_logging.exception("Failed to import the SVG file: %s: %s" % (self.path, e))
                 shape = None
 
             self.ctx.stats_sketches_instantiated += 1

@@ -8,43 +8,40 @@
 #
 
 # This script is executed within a python runtime environment
-# (no need for a sandbox) to speed up parallel rendering
+# to speed up parallel rendering, and not to leverage any other benefits of sandboxing
 
 import os
 import sys
 
-import cadquery as cq
-
-# import build123d as b3d
-
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from utils_ocp import tessellate
+
 
 def process(path, request):
-    try:
-        cq_obj = cq.Solid.makeBox(1, 1, 1)
-        cq_obj.wrapped = request["wrapped"]
 
-        vertices, triangles = cq_obj.tessellate(
-            request["tolerance"], request["angularTolerance"]
-        )
+    try:
+        obj = request["wrapped"]
+
+        vertices, triangles = tessellate(obj, request["tolerance"], request["angularTolerance"])
 
         # b3d_obj = b3d.Shape(request["wrapped"])
         # vertices, triangles = b3d.Mesher._mesh_shape(
         #     b3d_obj, request["tolerance"], request["angularTolerance"]
         # )
 
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8", buffering=256 * 1024) as f:
             f.write("# OBJ file\n")
             for v in vertices:
-                f.write("v %.4f %.4f %.4f\n" % (v.x, v.y, v.z))
-                # f.write("v %.4f %.4f %.4f\n" % (v[0], v[1], v[2]))
+                f.write(f"v {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}\n")
             for p in triangles:
                 f.write("f")
                 for i in p:
                     f.write(" %d" % (i + 1))
                 f.write("\n")
+            f.flush()
 
         return {
             "success": True,

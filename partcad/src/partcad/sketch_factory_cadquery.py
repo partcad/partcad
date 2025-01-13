@@ -27,25 +27,19 @@ from . import wrapper
 from . import logging as pc_logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from cq_serialize import register as register_cq_helper
+from ocp_serialize import register as register_ocp_helper
 
 
 class SketchFactoryCadquery(SketchFactoryPython):
-    def __init__(
-        self, ctx, source_project, target_project, config, can_create=False
-    ):
+    def __init__(self, ctx, source_project, target_project, config, can_create=False):
         python_version = source_project.python_version
         if python_version is None:
             # Stay one step ahead of the minimum required Python version
             python_version = "3.10"
         if python_version == "3.12" or python_version == "3.11":
-            pc_logging.debug(
-                "Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery"
-            )
+            pc_logging.debug("Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery")
             python_version = "3.10"
-        with pc_logging.Action(
-            "InitCadQuery", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitCadQuery", target_project.name, config["name"]):
             super().__init__(
                 ctx,
                 source_project,
@@ -61,14 +55,8 @@ class SketchFactoryCadquery(SketchFactoryPython):
         await super().instantiate(sketch)
 
         with pc_logging.Action("CadQuery", sketch.project_name, sketch.name):
-            if (
-                not os.path.exists(sketch.path)
-                or os.path.getsize(sketch.path) == 0
-            ):
-                pc_logging.error(
-                    "CadQuery script is empty or does not exist: %s"
-                    % sketch.path
-                )
+            if not os.path.exists(sketch.path) or os.path.getsize(sketch.path) == 0:
+                pc_logging.error("CadQuery script is empty or does not exist: %s" % sketch.path)
                 return None
 
             # Finish initialization of PythonRuntime
@@ -90,20 +78,47 @@ class SketchFactoryCadquery(SketchFactoryPython):
             request["patch"] = patch
 
             # Serialize the request
-            register_cq_helper()
+            register_ocp_helper()
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
-            await self.runtime.ensure("ocp-tessellate")
-            await self.runtime.ensure("cadquery")
-            await self.runtime.ensure("numpy==1.24.1")
-            await self.runtime.ensure("numpy-quaternion==2023.0.4")
-            await self.runtime.ensure("nptyping==1.24.1")
-            await self.runtime.ensure("typing_extensions>=4.6.0,<5")
+            await self.runtime.ensure_async(
+                "ocp-tessellate==3.0.8",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "nlopt==2.7.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery-ocp==7.7.2",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery==2.4.0",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "numpy==1.26.4",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "numpy-quaternion==2023.0.4",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "nptyping==2.0.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                # "typing_extensions>=4.6.0,<5", # doesn't work on Windows
+                "typing_extensions==4.12.2",
+                session=self.session,
+            )
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
-            response_serialized, errors = await self.runtime.run(
+            response_serialized, errors = await self.runtime.run_async(
                 [
                     wrapper_path,
                     os.path.abspath(sketch.path),
@@ -119,12 +134,10 @@ class SketchFactoryCadquery(SketchFactoryPython):
             try:
                 # pc_logging.error("Response: %s" % response_serialized)
                 response = base64.b64decode(response_serialized)
-                register_cq_helper()
+                register_ocp_helper()
                 result = pickle.loads(response)
             except Exception as e:
-                sketch.error(
-                    "Exception while deserializing %s: %s" % (sketch.name, e)
-                )
+                sketch.error("Exception while deserializing %s: %s" % (sketch.name, e))
                 return None
 
             if not result["success"]:
@@ -159,9 +172,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
                             continue
 
                         # TODO(clairbee): add support for the below types
-                        if isinstance(shape, TopLoc_Location) or isinstance(
-                            shape, gp_Ax1
-                        ):
+                        if isinstance(shape, TopLoc_Location) or isinstance(shape, gp_Ax1):
                             continue
 
                         if (
@@ -175,13 +186,9 @@ class SketchFactoryCadquery(SketchFactoryPython):
                             # TODO(clairbee) Add all metadata types here
                             components_list.append(shape)
                         else:
-                            pc_logging.error(
-                                "Unsupported shape type: %s" % type(shape)
-                            )
+                            pc_logging.error("Unsupported shape type: %s" % type(shape))
                     except Exception as e:
-                        pc_logging.error(
-                            "Error adding shape to compound: %s" % e
-                        )
+                        pc_logging.error("Error adding shape to compound: %s" % e)
 
             process(result["shapes"], sketch.components)
 

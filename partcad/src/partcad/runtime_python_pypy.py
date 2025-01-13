@@ -17,11 +17,14 @@ class PyPyPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "pypy", version)
 
+        self.exec_name = "pypy" if os.name != "nt" else "pypy.exe"
         if not self.initialized:
-            if shutil.which("pypy") is None:
+            which = shutil.which("pypy")
+            if which is None:
                 raise Exception(
                     "ERROR: PartCAD is configured to use missing pypy to execute Python scripts (CadQuery, build123d etc)"
                 )
+            self.exec_path = which
 
             os.makedirs(self.path)
             try:
@@ -39,11 +42,3 @@ class PyPyPythonRuntime(runtime_python.PythonRuntime):
             except Exception as e:
                 shutil.rmtree(self.path)
                 raise e
-
-    async def run(self, cmd, stdin="", cwd=None):
-        return await super().run(
-            ["conda", "run", "--no-capture-output", "-p", self.path, "pypy"]
-            + cmd,
-            stdin,
-            cwd=cwd,
-        )

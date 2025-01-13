@@ -177,10 +177,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
                     if action_key in self.actions:
                         del self.actions[record.op + "-" + target]
                     else:
-                        error(
-                            "action_key not found: %s: among %s"
-                            % (action_key, str(self.actions.keys()))
-                        )
+                        error("action_key not found: %s: among %s" % (action_key, str(self.actions.keys())))
 
                     self.actions_running -= 1
                 ignore_message = True
@@ -220,9 +217,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
             )
             self.footer_size = 1
 
-            sorted_actions = sorted(
-                self.actions.values(), key=lambda a: a["start"]
-            )
+            sorted_actions = sorted(self.actions.values(), key=lambda a: a["start"])
             sorted_actions = sorted_actions[: self.MAX_LINES]
             for action in sorted_actions:
                 output += "%s\t[%s]%s %s [%ds]\n" % (

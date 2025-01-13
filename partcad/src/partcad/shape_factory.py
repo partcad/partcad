@@ -24,9 +24,7 @@ class ShapeFactory(factory.Factory):
         self.config = config
 
         if "fileFrom" in config:
-            self.fileFactory = factory.instantiate(
-                "file", config["fileFrom"], ctx, project, project, config
-            )
+            self.fileFactory = factory.instantiate("file", config["fileFrom"], ctx, project, project, config)
         else:
             self.fileFactory = None
 

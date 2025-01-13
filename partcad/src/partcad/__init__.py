@@ -49,9 +49,8 @@ __all__ = [
     "assembly_factory",
     "assembly_factory_python",
     "scene",
-    "main_cli",
     "plugins",
     "exception",
 ]
 
-__version__: str = "0.7.16"
+__version__: str = "0.7.56"

@@ -51,10 +51,8 @@ class ProviderConfiguration:
                         "type": "array",
                         "default": param_value,
                     }
-                # All params are float unless another type is explicitly speciifed
-                elif (
-                    isinstance(param_value, dict) and not "type" in param_value
-                ):
+                # All params are float unless another type is explicitly specified
+                elif isinstance(param_value, dict) and not "type" in param_value:
                     param_value["type"] = "float"
 
         return config

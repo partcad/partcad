@@ -13,7 +13,7 @@ import pickle
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from cq_serialize import register as register_cq_helper
+from ocp_serialize import register as register_ocp_helper
 
 from .provider_factory_file import ProviderFactoryFile
 from .runtime_python import PythonRuntime
@@ -34,13 +34,14 @@ class ProviderFactoryPython(ProviderFactoryFile):
         config,
         can_create=False,
         python_version=None,
+        extension=".py",
     ):
         super().__init__(
             ctx,
             source_project,
             target_project,
             config,
-            extension=".py",
+            extension=extension,
             can_create=can_create,
         )
         self.cwd = config.get("cwd", None)
@@ -52,12 +53,11 @@ class ProviderFactoryPython(ProviderFactoryFile):
             # Stay one step ahead of the minimum required Python version
             python_version = "3.10"
         if python_version == "3.12" or python_version == "3.11":
-            pc_logging.debug(
-                "Downgrading Python version to 3.10 to minimize compatibility issues"
-            )
+            pc_logging.debug("Downgrading Python version to 3.10 to minimize compatibility issues")
             python_version = "3.10"
 
         self.runtime = self.ctx.get_python_runtime(python_version)
+        self.session = self.runtime.get_session(source_project.name)
 
     def info(self, provider):
         info: dict[str, object] = provider.shape_info()
@@ -76,8 +76,8 @@ class ProviderFactoryPython(ProviderFactoryFile):
         """
 
         # Install dependencies of this package
-        await self.runtime.prepare_for_package(self.project)
-        await self.runtime.prepare_for_shape(self.config)
+        await self.runtime.prepare_for_package(self.project, session=self.session)
+        await self.runtime.prepare_for_shape(self.config, session=self.session)
 
         return await super().prepare_script(provider)
 
@@ -102,9 +102,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
         ):
             prepared = await self.prepare_script(provider)
             if not prepared:
-                pc_logging.error(
-                    "Failed to prepare %s of %s" % (script_name, provider.name)
-                )
+                pc_logging.error("Failed to prepare %s of %s" % (script_name, provider.name))
                 return None
 
             # Get the path to the wrapper script
@@ -129,25 +127,57 @@ class ProviderFactoryPython(ProviderFactoryFile):
             # request["patch"] = patch
 
             # Serialize the request
-            register_cq_helper()
+            register_ocp_helper()
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
-            await self.runtime.ensure("ocp-tessellate")
-            await self.runtime.ensure("numpy==1.24.1")
-            await self.runtime.ensure("numpy-quaternion==2023.0.4")
-            await self.runtime.ensure("nptyping==1.24.1")
-            await self.runtime.ensure("cadquery")
+            # TODO-199: Use a requirements.txt or pyproject.toml for version specifications
+            # TODO-200: Create a version resolution mechanism that can handle dependency conflicts
+            # TODO-201: Implement a version update strategy for security patches
+            await self.runtime.ensure_async(
+                "ocp-tessellate==3.0.8",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "nlopt==2.7.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery-ocp==7.7.2",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery==2.4.0",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "numpy==1.26.4",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "numpy-quaternion==2023.0.4",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "nptyping==2.0.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                # "typing_extensions>=4.6.0,<5", # doesn't work on Windows
+                "typing_extensions==4.12.2",
+                session=self.session,
+            )
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
-            response_serialized, errors = await self.runtime.run(
+            response_serialized, errors = await self.runtime.run_async(
                 [
                     wrapper_path,
                     os.path.abspath(self.path),
                     os.path.abspath(cwd),
                 ],
                 request_serialized,
+                session=self.session,
             )
             if len(errors) > 0:
                 error_lines = errors.split("\n")
@@ -156,12 +186,10 @@ class ProviderFactoryPython(ProviderFactoryFile):
 
             try:
                 response = base64.b64decode(response_serialized)
-                register_cq_helper()
+                register_ocp_helper()
                 result = pickle.loads(response)
             except Exception as e:
-                provider.error(
-                    "Exception while deserializing %s: %s" % (provider.name, e)
-                )
+                provider.error("Exception while deserializing %s: %s" % (provider.name, e))
                 return None
 
             if "exception" in result:

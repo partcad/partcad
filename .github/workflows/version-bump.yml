@@ -6,24 +6,24 @@ permissions:
   contents: write
 jobs:
   update_version_and_tag:
-    runs-on: ubuntu-latest
-    if:
-      "!startsWith(github.event.head_commit.message, '[SKIP]') &&
-      !startsWith(github.event.head_commit.message, 'Version updated')"
+    runs-on: ubuntu-24.04
+    if: |
+      !startsWith(github.event.head_commit.message, '[SKIP]') &&
+      !startsWith(github.event.head_commit.message, 'Version updated')
     environment:
       name: CD
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT }}
       - name: Install Python 3
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - name: Setup env variables
         run: |
-          echo "SKIPBUMP=FALSE" >> $GITHUB_ENV
+          echo "SKIPBUMP=FALSE" >> "${GITHUB_ENV}"
 
       - name: Install dependencies
         run: |
@@ -32,8 +32,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config --global user.name 'PartCAD GitHub Action'
-          git config --global user.email 'openvmp@proton.me'
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
 
       # If a commit starts with [MAJOR] a new major verion upgrade will be
       # triggered. Use with caution as Major upgrades denote backwards
@@ -42,16 +42,16 @@ jobs:
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          bump-my-version bump major
-          echo "SKIPBUMP=TRUE" >> $GITHUB_ENV
+          bump-my-version bump --config-file .devcontainer/.bumpversion.toml --config-file .devcontainer/.bumpversion.toml major
+          echo "SKIPBUMP=TRUE" >> "${GITHUB_ENV}"
         if: startsWith(github.event.head_commit.message, '[MAJOR]')
 
       - name: Bump Minor Version
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          bump-my-version bump minor
-          echo "SKIPBUMP=TRUE" >> $GITHUB_ENV
+          bump-my-version bump --config-file .devcontainer/.bumpversion.toml minor
+          echo "SKIPBUMP=TRUE" >> "${GITHUB_ENV}"
         if: startsWith(github.event.head_commit.message, '[FEATURE]')
 
       # Default action
@@ -59,7 +59,7 @@ jobs:
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          bump-my-version bump patch
+          bump-my-version bump --config-file .devcontainer/.bumpversion.toml patch
         if: env.SKIPBUMP == 'FALSE'
 
       - name: Commit version change to repo

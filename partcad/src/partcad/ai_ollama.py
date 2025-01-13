@@ -10,18 +10,19 @@
 import base64
 import importlib
 import httpx
-from path import Path
+from pathlib import Path
 import re
 import threading
 import time
 from typing import Any
 
+from .ai_feature_file import AiContentFile, AiContentProcessor
+from . import logging as pc_logging
+from .user_config import user_config
+
 # Lazy-load AI imports as they are not always needed
 # import ollama
 ollama = None
-
-from . import logging as pc_logging
-from .user_config import user_config
 
 lock = threading.Lock()
 
@@ -56,7 +57,7 @@ def model_once(model: str):
                 models_pulled[model] = True
 
 
-class AiOllama:
+class AiOllama(AiContentProcessor):
     def generate_ollama(
         self,
         model: str,
@@ -66,25 +67,21 @@ class AiOllama:
     ):
         model_once(model)
 
-        pc_logging.info(
-            "Generating with Ollama: asking for %d alternatives", options_num
-        )
+        pc_logging.info("Generating with Ollama: asking for %d alternatives", options_num)
 
         if not ollama_once():
             return None
 
-        image_content = []
+        def handle_content(content: AiContentFile):
+            return Path(content.filename).read_bytes()
 
-        def insert_image(match):
-            filename = match.group(1)
-            image_index = len(image_content)
-            image_content.append(
-                Path(filename).read_bytes(),
-                # base64.b64encode(Path(filename).read_bytes()).decode(),
-            )
-            return f"The attached image number {image_index}.\n"
-
-        prompt = re.sub(r"INSERT_IMAGE_HERE\(([^)]*)\)", insert_image, prompt)
+        content_parts, content_inserts = self.process_content(prompt)
+        content_inserts = list(map(handle_content, content_inserts))
+        prompt = ""
+        for i in range(len(content_parts)):
+            prompt += content_parts[i]
+            if i < len(content_inserts):
+                prompt += f"This file is attached at the index of {i}.\n"
 
         if "tokens" in config:
             tokens = config["tokens"]
@@ -120,29 +117,23 @@ class AiOllama:
                         temperature=temperature,
                     )
                     pc_logging.debug("Prompt: %s" % prompt)
-                    pc_logging.debug("Images: %d" % len(image_content))
+                    pc_logging.debug("Files: %d" % len(content_inserts))
                     response = ollama.generate(
                         model=model,
                         context=[],  # do not accumulate context uncontrollably
                         prompt=prompt,
-                        images=image_content,
+                        images=content_inserts,
                         options=options,
                     )
                 except httpx.ConnectError as e:
                     pc_logging.exception(e)
-                    pc_logging.error(
-                        "Failed to connect to Ollama. Is it running?"
-                    )
+                    pc_logging.error("Failed to connect to Ollama. Is it running?")
                     retry = True
                     time.sleep(15)
                 except ollama._types.ResponseError as e:
                     pc_logging.exception(e)
-                    pc_logging.error(
-                        "Failed to generate with Ollama: %s" % str(e)
-                    )
-                    pc_logging.warning(
-                        f"Consider running 'ollama run {model}' first..."
-                    )
+                    pc_logging.error("Failed to generate with Ollama: %s" % str(e))
+                    pc_logging.warning(f"Consider running 'ollama run {model}' first...")
                     if "not found" in str(e):
                         retry = True
                         time.sleep(15)

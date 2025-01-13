@@ -23,11 +23,11 @@ Alternatively, manually create ``partcad.yaml`` with the following content:
   .. code-block:: yaml
 
     # partcad.yaml
-    import:
+    dependencies:
       # Public PartCAD repository (reference it explicitly if required)
       pub:
         type: git
-        url: https://github.com/openvmp/partcad-index.git
+        url: https://github.com/partcad/partcad-index.git
 
 Now launch ``pc list`` to see the list of packages currently available in
 the public PartCAD repository.
@@ -66,7 +66,7 @@ Now let's add a declaration of this part to ``partcad.yaml``.
 
   .. code-block:: shell
 
-    pc add-part scad test.scad
+    pc add part scad test.scad
 
 
 Inspect the part
@@ -85,7 +85,16 @@ Now the part can be exported:
 
   .. code-block:: shell
 
-    pc render -t stl :test
+    pc export -t stl :test
+
+Reset partcad
+---------------------
+
+PartCAD maintains an internal state to keep track of dependencies of a project. This state can be reset using the command below.
+
+  .. code-block:: shell
+
+    pc reset
 
 =================
 VS Code Extension

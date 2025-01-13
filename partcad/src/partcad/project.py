@@ -9,6 +9,7 @@
 import asyncio
 import copy
 import os
+import re
 
 # from pprint import pformat
 import ruamel.yaml
@@ -32,6 +33,7 @@ from .sketch_factory_cadquery import SketchFactoryCadquery
 from . import part
 from . import part_config
 from .part_factory_extrude import PartFactoryExtrude
+from .part_factory_sweep import PartFactorySweep
 from . import part_factory_scad as pfscad
 from . import part_factory_step as pfs
 from . import part_factory_stl as pfstl
@@ -51,13 +53,16 @@ from .render import render_cfg_merge
 from .utils import resolve_resource_path, normalize_resource_path
 
 
+# TODO FIXME NOCOMMIT: switch from RLock back to Lock
+
+
 class Project(project_config.Configuration):
 
     class InterfaceLock(object):
         def __init__(self, prj, interface_name: str):
             prj.interface_locks_lock.acquire()
             if not interface_name in prj.interface_locks:
-                prj.interface_locks[interface_name] = threading.Lock()
+                prj.interface_locks[interface_name] = threading.RLock()
             self.lock = prj.interface_locks[interface_name]
             prj.interface_locks_lock.release()
 
@@ -71,7 +76,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, sketch_name: str):
             prj.sketch_locks_lock.acquire()
             if not sketch_name in prj.sketch_locks:
-                prj.sketch_locks[sketch_name] = threading.Lock()
+                prj.sketch_locks[sketch_name] = threading.RLock()
             self.lock = prj.sketch_locks[sketch_name]
             prj.sketch_locks_lock.release()
 
@@ -85,7 +90,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, part_name: str):
             prj.part_locks_lock.acquire()
             if not part_name in prj.part_locks:
-                prj.part_locks[part_name] = threading.Lock()
+                prj.part_locks[part_name] = threading.RLock()
             self.lock = prj.part_locks[part_name]
             prj.part_locks_lock.release()
 
@@ -99,7 +104,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, assembly_name: str):
             prj.assembly_locks_lock.acquire()
             if not assembly_name in prj.assembly_locks:
-                prj.assembly_locks[assembly_name] = threading.Lock()
+                prj.assembly_locks[assembly_name] = threading.RLock()
             self.lock = prj.assembly_locks[assembly_name]
             prj.assembly_locks_lock.release()
 
@@ -113,7 +118,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, provider_name: str):
             prj.provider_locks_lock.acquire()
             if not provider_name in prj.provider_locks:
-                prj.provider_locks[provider_name] = threading.Lock()
+                prj.provider_locks[provider_name] = threading.RLock()
             self.lock = prj.provider_locks[provider_name]
             prj.provider_locks_lock.release()
 
@@ -139,10 +144,7 @@ class Project(project_config.Configuration):
         self.path = dir_name
 
         # self.interface_configs contains the configs of all the interfaces in this project
-        if (
-            "interfaces" in self.config_obj
-            and not self.config_obj["interfaces"] is None
-        ):
+        if "interfaces" in self.config_obj and not self.config_obj["interfaces"] is None:
             self.interface_configs = self.config_obj["interfaces"]
             # pc_logging.debug(
             #     "Interfaces: %s" % str(self.interface_configs.keys())
@@ -155,10 +157,7 @@ class Project(project_config.Configuration):
         self.interface_locks_lock = threading.Lock()
 
         # self.sketch_configs contains the configs of all the sketches in this project
-        if (
-            "sketches" in self.config_obj
-            and not self.config_obj["sketches"] is None
-        ):
+        if "sketches" in self.config_obj and not self.config_obj["sketches"] is None:
             self.sketch_configs = self.config_obj["sketches"]
         else:
             self.sketch_configs = {}
@@ -178,10 +177,7 @@ class Project(project_config.Configuration):
         self.part_locks_lock = threading.Lock()
 
         # self.assembly_configs contains the configs of all the assemblies in this project
-        if (
-            "assemblies" in self.config_obj
-            and not self.config_obj["assemblies"] is None
-        ):
+        if "assemblies" in self.config_obj and not self.config_obj["assemblies"] is None:
             self.assembly_configs = self.config_obj["assemblies"]
         else:
             self.assembly_configs = {}
@@ -191,10 +187,7 @@ class Project(project_config.Configuration):
         self.assembly_locks_lock = threading.Lock()
 
         # self.provider_configs contains the configs of all the providers in this project
-        if (
-            "providers" in self.config_obj
-            and not self.config_obj["providers"] is None
-        ):
+        if "providers" in self.config_obj and not self.config_obj["providers"] is None:
             self.provider_configs = self.config_obj["providers"]
         else:
             self.provider_configs = {}
@@ -231,14 +224,14 @@ class Project(project_config.Configuration):
     #             self.path + "/" + self.config_obj["cover"]["package"]
     #         ).get_cover()
 
-    def get_child_project_names(self):
+    def get_child_project_names(self, absolute: bool = True):
         if self.broken:
             pc_logging.info("Ignoring the broken package: %s" % self.name)
             return
 
         children = list()
-        subfolders = [f.name for f in os.scandir(self.config_dir) if f.is_dir()]
-        for subdir in list(subfolders):
+        sub_folders = [f.name for f in os.scandir(self.config_dir) if f.is_dir()]
+        for subdir in list(sub_folders):
             if os.path.exists(
                 os.path.join(
                     self.config_dir,
@@ -246,28 +239,27 @@ class Project(project_config.Configuration):
                     consts.DEFAULT_PACKAGE_CONFIG,
                 )
             ):
-                children.append(self.name + "/" + subdir)
+                children.append(self.name + "/" + subdir if absolute else subdir)
 
-        if (
-            "import" in self.config_obj
-            and not self.config_obj["import"] is None
-        ):
-            imports = self.config_obj["import"]
+        if "dependencies" in self.config_obj and not self.config_obj["dependencies"] is None:
+            dependencies = self.config_obj["dependencies"]
             if not self.config_obj.get("isRoot", False):
                 filtered = filter(
-                    lambda x: "onlyInRoot" not in imports[x]
-                    or not imports[x]["onlyInRoot"],
-                    imports,
+                    lambda x: "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"],
+                    dependencies,
                 )
-                imports = list(filtered)
-            children.extend(
-                list(
-                    map(
-                        lambda project_name: self.name + "/" + project_name,
-                        imports,
+                dependencies = list(filtered)
+            if absolute:
+                children.extend(
+                    list(
+                        map(
+                            lambda project_name: self.name + "/" + project_name,
+                            dependencies,
+                        )
                     )
                 )
-            )
+            else:
+                children.extend(list(dependencies))
         return children
 
     def init_mates(self):
@@ -275,25 +267,18 @@ class Project(project_config.Configuration):
         for source_interface_name, mate_config in mates.items():
             if not ":" in source_interface_name:
                 source_interface_name = self.name + ":" + source_interface_name
-            source_package_name, short_source_interface_name = (
-                resolve_resource_path(self.name, source_interface_name)
-            )
+            source_package_name, short_source_interface_name = resolve_resource_path(self.name, source_interface_name)
 
-            # Short-circut the case when the source package is the current one
+            # Short-circuit the case when the source package is the current one
             # to avoid recursive package loading
             if source_package_name == self.name:
                 source_package = self
             else:
                 source_package = self.ctx.get_project(source_package_name)
 
-            source_interface = source_package.get_interface(
-                short_source_interface_name
-            )
+            source_interface = source_package.get_interface(short_source_interface_name)
             if source_interface is None:
-                raise Exception(
-                    "Failed to find the source interface to mate: %s"
-                    % source_interface_name
-                )
+                raise Exception("Failed to find the source interface to mate: %s" % source_interface_name)
             source_interface.add_mates(self, mate_config)
 
     def get_interface_config(self, interface_name):
@@ -315,18 +300,13 @@ class Project(project_config.Configuration):
             source_project = self
 
         interface_name: str = config["name"]
-        self.interfaces[interface_name] = interface.Interface(
-            interface_name, source_project, config
-        )
+        self.interfaces[interface_name] = interface.Interface(interface_name, source_project, config)
 
     def get_interface(self, interface_name) -> interface.Interface:
         self.lock.acquire()
 
         # See if it's already available
-        if (
-            interface_name in self.interfaces
-            and not self.interfaces[interface_name] is None
-        ):
+        if interface_name in self.interfaces and not self.interfaces[interface_name] is None:
             p = self.interfaces[interface_name]
             self.lock.release()
             return p
@@ -361,9 +341,7 @@ class Project(project_config.Configuration):
 
         for sketch_name in self.sketch_configs:
             config = self.get_sketch_config(sketch_name)
-            config = sketch_config.SketchConfiguration.normalize(
-                sketch_name, config
-            )
+            config = sketch_config.SketchConfiguration.normalize(sketch_name, config)
             self.init_sketch_by_config(config)
 
     def init_sketch_by_config(self, config, source_project=None):
@@ -373,10 +351,7 @@ class Project(project_config.Configuration):
         sketch_name: str = config["name"]
 
         if not "type" in config:
-            raise Exception(
-                "ERROR: Sketch type is not specified: %s: %s"
-                % (sketch_name, config)
-            )
+            raise Exception("ERROR: Sketch type is not specified: %s: %s" % (sketch_name, config))
         elif config["type"] == "build123d":
             SketchFactoryBuild123d(self.ctx, source_project, self, config)
         elif config["type"] == "cadquery":
@@ -392,10 +367,7 @@ class Project(project_config.Configuration):
         elif config["type"] == "enrich":
             SketchFactoryEnrich(self.ctx, source_project, self, config)
         else:
-            pc_logging.error(
-                "Invalid sketch type encountered: %s: %s"
-                % (sketch_name, config)
-            )
+            pc_logging.error("Invalid sketch type encountered: %s: %s" % (sketch_name, config))
             return None
 
         # Initialize aliases if they are declared implicitly
@@ -409,14 +381,8 @@ class Project(project_config.Configuration):
                     "name": alias,
                     "source": ":" + sketch_name,
                 }
-                alias_sketch_config = (
-                    sketch_config.SketchConfiguration.normalize(
-                        alias, alias_sketch_config
-                    )
-                )
-                pfa.SketchFactoryAlias(
-                    self.ctx, source_project, self, alias_sketch_config
-                )
+                alias_sketch_config = sketch_config.SketchConfiguration.normalize(alias, alias_sketch_config)
+                pfa.SketchFactoryAlias(self.ctx, source_project, self, alias_sketch_config)
 
     def get_sketch(self, sketch_name, func_params=None) -> sketch.Sketch:
         if func_params is None or not func_params:
@@ -446,17 +412,12 @@ class Project(project_config.Configuration):
         else:
             # Determine the name we want this parameterized sketch to have
             result_name = base_sketch_name + ";"
-            result_name += ",".join(
-                map(lambda n: n + "=" + str(params[n]), sorted(params))
-            )
+            result_name += ",".join(map(lambda n: n + "=" + str(params[n]), sorted(params)))
 
         self.lock.acquire()
 
         # See if it's already available
-        if (
-            result_name in self.sketches
-            and not self.sketches[result_name] is None
-        ):
+        if result_name in self.sketches and not self.sketches[result_name] is None:
             p = self.sketches[result_name]
             self.lock.release()
             return p
@@ -469,25 +430,15 @@ class Project(project_config.Configuration):
                 # This is just a regular sketch name, no params (sketch_name == result_name)
                 if not sketch_name in self.sketch_configs:
                     # We don't know anything about such a sketch
-                    pc_logging.error(
-                        "Sketch '%s' not found in '%s'", sketch_name, self.name
-                    )
+                    pc_logging.error("Sketch '%s' not found in '%s'", sketch_name, self.name)
                     return None
                 # This is not yet created (invalidated?)
                 config = self.get_sketch_config(sketch_name)
-                config = sketch_config.SketchConfiguration.normalize(
-                    sketch_name, config
-                )
+                config = sketch_config.SketchConfiguration.normalize(sketch_name, config)
                 self.init_sketch_by_config(config)
 
-                if (
-                    not sketch_name in self.sketches
-                    or self.sketches[sketch_name] is None
-                ):
-                    pc_logging.error(
-                        "Failed to instantiate a non-parametrized sketch %s"
-                        % sketch_name
-                    )
+                if not sketch_name in self.sketches or self.sketches[sketch_name] is None:
+                    pc_logging.error("Failed to instantiate a non-parametrized sketch %s" % sketch_name)
                 return self.sketches[sketch_name]
 
             # This sketch has params (sketch_name != result_name)
@@ -511,9 +462,7 @@ class Project(project_config.Configuration):
                 return None
 
             config = copy.deepcopy(config)
-            if (
-                not "parameters" in config or config["parameters"] is None
-            ) and (config["type"] != "enrich"):
+            if (not "parameters" in config or config["parameters"] is None) and (config["type"] != "enrich"):
                 pc_logging.error(
                     "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
                     base_sketch_name,
@@ -523,9 +472,7 @@ class Project(project_config.Configuration):
                 return None
 
             # Expand the config object so that the parameter values can be set
-            config = sketch_config.SketchConfiguration.normalize(
-                result_name, config
-            )
+            config = sketch_config.SketchConfiguration.normalize(result_name, config)
             config["orig_name"] = base_sketch_name
 
             # Fill in the parameter values
@@ -534,31 +481,19 @@ class Project(project_config.Configuration):
                 # Filling "parameters"
                 for param_name, param_value in params.items():
                     if config["parameters"][param_name]["type"] == "string":
-                        config["parameters"][param_name]["default"] = str(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = str(param_value)
                     elif config["parameters"][param_name]["type"] == "int":
-                        config["parameters"][param_name]["default"] = int(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = int(param_value)
                     elif config["parameters"][param_name]["type"] == "float":
-                        config["parameters"][param_name]["default"] = float(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = float(param_value)
                     elif config["parameters"][param_name]["type"] == "bool":
                         if isinstance(param_value, str):
                             if param_value.lower() == "true":
-                                config["parameters"][param_name][
-                                    "default"
-                                ] = True
+                                config["parameters"][param_name]["default"] = True
                             else:
-                                config["parameters"][param_name][
-                                    "default"
-                                ] = False
+                                config["parameters"][param_name]["default"] = False
                         else:
-                            config["parameters"][param_name]["default"] = bool(
-                                param_value
-                            )
+                            config["parameters"][param_name]["default"] = bool(param_value)
                     elif config["parameters"][param_name]["type"] == "array":
                         config["parameters"][param_name]["default"] = param_value
             else:
@@ -569,9 +504,7 @@ class Project(project_config.Configuration):
                     config["with"][param_name] = param_value
 
             # Now initialize the sketch
-            pc_logging.debug(
-                "Initializing a parametrized sketch: %s" % result_name
-            )
+            pc_logging.debug("Initializing a parametrized sketch: %s" % result_name)
             # pc_logging.debug(
             #     "Initializing a parametrized sketch using the following config: %s"
             #     % pformat(config)
@@ -610,10 +543,7 @@ class Project(project_config.Configuration):
         part_name: str = config["name"]
 
         if not "type" in config:
-            raise Exception(
-                "ERROR: Part type is not specified: %s: %s"
-                % (part_name, config)
-            )
+            raise Exception("ERROR: Part type is not specified: %s: %s" % (part_name, config))
         elif config["type"] == "ai-cadquery":
             PartFactoryAiCadquery(self.ctx, source_project, self, config)
         elif config["type"] == "ai-build123d":
@@ -634,14 +564,14 @@ class Project(project_config.Configuration):
             pfscad.PartFactoryScad(self.ctx, source_project, self, config)
         elif config["type"] == "extrude":
             PartFactoryExtrude(self.ctx, source_project, self, config)
+        elif config["type"] == "sweep":
+            PartFactorySweep(self.ctx, source_project, self, config)
         elif config["type"] == "alias":
             pfa.PartFactoryAlias(self.ctx, source_project, self, config)
         elif config["type"] == "enrich":
             pfe.PartFactoryEnrich(self.ctx, source_project, self, config)
         else:
-            pc_logging.error(
-                "Invalid part type encountered: %s: %s" % (part_name, config)
-            )
+            pc_logging.error("Invalid part type encountered: %s: %s" % (part_name, config))
             return None
 
         # Initialize aliases if they are declared implicitly
@@ -655,12 +585,8 @@ class Project(project_config.Configuration):
                     "name": alias,
                     "source": ":" + part_name,
                 }
-                alias_part_config = part_config.PartConfiguration.normalize(
-                    alias, alias_part_config
-                )
-                pfa.PartFactoryAlias(
-                    self.ctx, source_project, self, alias_part_config
-                )
+                alias_part_config = part_config.PartConfiguration.normalize(alias, alias_part_config)
+                pfa.PartFactoryAlias(self.ctx, source_project, self, alias_part_config)
 
     def get_part(self, part_name, func_params=None, quiet=False) -> part.Part:
         if func_params is None or not func_params:
@@ -690,9 +616,7 @@ class Project(project_config.Configuration):
         else:
             # Determine the name we want this parameterized part to have
             result_name = base_part_name + ";"
-            result_name += ",".join(
-                map(lambda n: n + "=" + str(params[n]), sorted(params))
-            )
+            result_name += ",".join(map(lambda n: n + "=" + str(params[n]), sorted(params)))
 
         self.lock.acquire()
 
@@ -711,22 +635,15 @@ class Project(project_config.Configuration):
                 if not part_name in self.part_configs:
                     # We don't know anything about such a part
                     if not quiet:
-                        pc_logging.error(
-                            "Part '%s' not found in '%s'", part_name, self.name
-                        )
+                        pc_logging.error("Part '%s' not found in '%s'", part_name, self.name)
                     return None
                 # This is not yet created (invalidated?)
                 config = self.get_part_config(part_name)
-                config = part_config.PartConfiguration.normalize(
-                    part_name, config
-                )
+                config = part_config.PartConfiguration.normalize(part_name, config)
                 self.init_part_by_config(config)
 
                 if not part_name in self.parts or self.parts[part_name] is None:
-                    pc_logging.error(
-                        "Failed to instantiate a non-parametrized part %s"
-                        % part_name
-                    )
+                    pc_logging.error("Failed to instantiate a non-parametrized part %s" % part_name)
                 return self.parts[part_name]
 
             # This part has params (part_name != result_name)
@@ -750,9 +667,7 @@ class Project(project_config.Configuration):
                 return None
 
             config = copy.deepcopy(config)
-            if (
-                not "parameters" in config or config["parameters"] is None
-            ) and (config["type"] != "enrich"):
+            if (not "parameters" in config or config["parameters"] is None) and (config["type"] != "enrich"):
                 pc_logging.error(
                     "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
                     base_part_name,
@@ -762,9 +677,7 @@ class Project(project_config.Configuration):
                 return None
 
             # Expand the config object so that the parameter values can be set
-            config = part_config.PartConfiguration.normalize(
-                result_name, config
-            )
+            config = part_config.PartConfiguration.normalize(result_name, config)
             config["orig_name"] = base_part_name
 
             # Fill in the parameter values
@@ -773,31 +686,19 @@ class Project(project_config.Configuration):
                 # Filling "parameters"
                 for param_name, param_value in params.items():
                     if config["parameters"][param_name]["type"] == "string":
-                        config["parameters"][param_name]["default"] = str(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = str(param_value)
                     elif config["parameters"][param_name]["type"] == "int":
-                        config["parameters"][param_name]["default"] = int(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = int(param_value)
                     elif config["parameters"][param_name]["type"] == "float":
-                        config["parameters"][param_name]["default"] = float(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = float(param_value)
                     elif config["parameters"][param_name]["type"] == "bool":
                         if isinstance(param_value, str):
                             if param_value.lower() == "true":
-                                config["parameters"][param_name][
-                                    "default"
-                                ] = True
+                                config["parameters"][param_name]["default"] = True
                             else:
-                                config["parameters"][param_name][
-                                    "default"
-                                ] = False
+                                config["parameters"][param_name]["default"] = False
                         else:
-                            config["parameters"][param_name]["default"] = bool(
-                                param_value
-                            )
+                            config["parameters"][param_name]["default"] = bool(param_value)
                     elif config["parameters"][param_name]["type"] == "array":
                         config["parameters"][param_name]["default"] = param_value
             else:
@@ -808,9 +709,7 @@ class Project(project_config.Configuration):
                     config["with"][param_name] = param_value
 
             # Now initialize the part
-            pc_logging.debug(
-                "Initializing a parametrized part: %s" % result_name
-            )
+            pc_logging.debug("Initializing a parametrized part: %s" % result_name)
             # pc_logging.debug(
             #     "Initializing a parametrized part using the following config: %s"
             #     % pformat(config)
@@ -839,16 +738,10 @@ class Project(project_config.Configuration):
 
         for assembly_name in self.assembly_configs:
             config = self.get_assembly_config(assembly_name)
-            config = assembly_config.AssemblyConfiguration.normalize(
-                assembly_name, config
-            )
-            factory.instantiate(
-                "assembly", config["type"], self.ctx, self, self, config
-            )
+            config = assembly_config.AssemblyConfiguration.normalize(assembly_name, config)
+            factory.instantiate("assembly", config["type"], self.ctx, self, self, config)
 
-    def get_assembly(
-        self, assembly_name, func_params=None
-    ) -> assembly.Assembly:
+    def get_assembly(self, assembly_name, func_params=None) -> assembly.Assembly:
         if func_params is None or not func_params:
             has_func_params = False
         else:
@@ -876,17 +769,12 @@ class Project(project_config.Configuration):
         else:
             # Determine the name we want this parameterized assembly to have
             result_name = base_assembly_name + ";"
-            result_name += ",".join(
-                map(lambda n: n + "=" + str(params[n]), sorted(params))
-            )
+            result_name += ",".join(map(lambda n: n + "=" + str(params[n]), sorted(params)))
 
         self.lock.acquire()
 
         # See if it's already available
-        if (
-            result_name in self.assemblies
-            and not self.assemblies[result_name] is None
-        ):
+        if result_name in self.assemblies and not self.assemblies[result_name] is None:
             p = self.assemblies[result_name]
             self.lock.release()
             return p
@@ -907,21 +795,11 @@ class Project(project_config.Configuration):
                     return None
                 # This is not yet created (invalidated?)
                 config = self.get_assembly_config(assembly_name)
-                config = assembly_config.AssemblyConfiguration.normalize(
-                    assembly_name, config
-                )
-                factory.instantiate(
-                    "assembly", config["type"], self.ctx, self, self, config
-                )
+                config = assembly_config.AssemblyConfiguration.normalize(assembly_name, config)
+                factory.instantiate("assembly", config["type"], self.ctx, self, self, config)
 
-                if (
-                    not assembly_name in self.assemblies
-                    or self.assemblies[assembly_name] is None
-                ):
-                    pc_logging.error(
-                        "Failed to instantiate a non-parametrized assembly %s"
-                        % assembly_name
-                    )
+                if not assembly_name in self.assemblies or self.assemblies[assembly_name] is None:
+                    pc_logging.error("Failed to instantiate a non-parametrized assembly %s" % assembly_name)
                 return self.assemblies[assembly_name]
 
             # This assembly has params (part_name != result_name)
@@ -945,9 +823,7 @@ class Project(project_config.Configuration):
                 return None
 
             config = copy.deepcopy(config)
-            if (
-                not "parameters" in config or config["parameters"] is None
-            ) and (config["type"] != "enrich"):
+            if (not "parameters" in config or config["parameters"] is None) and (config["type"] != "enrich"):
                 pc_logging.error(
                     "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
                     base_assembly_name,
@@ -957,9 +833,7 @@ class Project(project_config.Configuration):
                 return None
 
             # Expand the config object so that the parameter values can be set
-            config = assembly_config.AssemblyConfiguration.normalize(
-                result_name, config
-            )
+            config = assembly_config.AssemblyConfiguration.normalize(result_name, config)
             config["orig_name"] = base_assembly_name
 
             # Fill in the parameter values
@@ -968,31 +842,19 @@ class Project(project_config.Configuration):
                 # Filling "parameters"
                 for param_name, param_value in params.items():
                     if config["parameters"][param_name]["type"] == "string":
-                        config["parameters"][param_name]["default"] = str(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = str(param_value)
                     elif config["parameters"][param_name]["type"] == "int":
-                        config["parameters"][param_name]["default"] = int(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = int(param_value)
                     elif config["parameters"][param_name]["type"] == "float":
-                        config["parameters"][param_name]["default"] = float(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = float(param_value)
                     elif config["parameters"][param_name]["type"] == "bool":
                         if isinstance(param_value, str):
                             if param_value.lower() == "true":
-                                config["parameters"][param_name][
-                                    "default"
-                                ] = True
+                                config["parameters"][param_name]["default"] = True
                             else:
-                                config["parameters"][param_name][
-                                    "default"
-                                ] = False
+                                config["parameters"][param_name]["default"] = False
                         else:
-                            config["parameters"][param_name]["default"] = bool(
-                                param_value
-                            )
+                            config["parameters"][param_name]["default"] = bool(param_value)
                     elif config["parameters"][param_name]["type"] == "array":
                         config["parameters"][param_name]["default"] = param_value
             else:
@@ -1003,16 +865,12 @@ class Project(project_config.Configuration):
                     config["with"][param_name] = param_value
 
             # Now initialize the assembly
-            pc_logging.debug(
-                "Initializing a parametrized assembly: %s" % result_name
-            )
+            pc_logging.debug("Initializing a parametrized assembly: %s" % result_name)
             # pc_logging.debug(
             #     "Initializing a parametrized assembly using the following config: %s"
             #     % pformat(config)
             # )
-            factory.instantiate(
-                "assembly", config["type"], self.ctx, self, self, config
-            )
+            factory.instantiate("assembly", config["type"], self.ctx, self, self, config)
 
             # See if it worked
             if not result_name in self.assemblies:
@@ -1036,28 +894,20 @@ class Project(project_config.Configuration):
 
         for provider_name in self.provider_configs:
             config = self.get_provider_config(provider_name)
-            config = provider_config.ProviderConfiguration.normalize(
-                provider_name, config
-            )
-            factory.instantiate(
-                "provider", config["type"], self.ctx, self, self, config
-            )
+            config = provider_config.ProviderConfiguration.normalize(provider_name, config)
+            factory.instantiate("provider", config["type"], self.ctx, self, self, config)
 
     # TODO(clairbee): either call init_*_by_config or call
-    #                  factory->instantite everywhere.
-    #                  Recall what waas the thinking about it when the factory
+    #                  factory->instantiate everywhere.
+    #                  Recall what was the thinking about it when the factory
     #                  class was introduced.
 
     def init_provider_by_config(self, config, source_project=None):
         if source_project is None:
             source_project = self
-        factory.instantiate(
-            "provider", config["type"], self.ctx, source_project, self, config
-        )
+        factory.instantiate("provider", config["type"], self.ctx, source_project, self, config)
 
-    def get_provider(
-        self, provider_name, func_params=None
-    ) -> provider.Provider:
+    def get_provider(self, provider_name, func_params=None) -> provider.Provider:
         if func_params is None or not func_params:
             has_func_params = False
         else:
@@ -1085,17 +935,12 @@ class Project(project_config.Configuration):
         else:
             # Determine the name we want this parameterized provider to have
             result_name = base_provider_name + ";"
-            result_name += ",".join(
-                map(lambda n: n + "=" + str(params[n]), sorted(params))
-            )
+            result_name += ",".join(map(lambda n: n + "=" + str(params[n]), sorted(params)))
 
         self.lock.acquire()
 
         # See if it's already available
-        if (
-            result_name in self.providers
-            and not self.providers[result_name] is None
-        ):
+        if result_name in self.providers and not self.providers[result_name] is None:
             p = self.providers[result_name]
             self.lock.release()
             return p
@@ -1116,21 +961,11 @@ class Project(project_config.Configuration):
                     return None
                 # This is not yet created (invalidated?)
                 config = self.get_provider_config(provider_name)
-                config = provider_config.ProviderConfiguration.normalize(
-                    provider_name, config
-                )
-                factory.instantiate(
-                    "provider", config["type"], self.ctx, self, self, config
-                )
+                config = provider_config.ProviderConfiguration.normalize(provider_name, config)
+                factory.instantiate("provider", config["type"], self.ctx, self, self, config)
 
-                if (
-                    not provider_name in self.providers
-                    or self.providers[provider_name] is None
-                ):
-                    pc_logging.error(
-                        "Failed to instantiate a non-parametrized provider %s"
-                        % provider_name
-                    )
+                if not provider_name in self.providers or self.providers[provider_name] is None:
+                    pc_logging.error("Failed to instantiate a non-parametrized provider %s" % provider_name)
                 return self.providers[provider_name]
 
             # This provider has params (part_name != result_name)
@@ -1154,9 +989,7 @@ class Project(project_config.Configuration):
                 return None
 
             config = copy.deepcopy(config)
-            if (
-                not "parameters" in config or config["parameters"] is None
-            ) and (config["type"] != "enrich"):
+            if (not "parameters" in config or config["parameters"] is None) and (config["type"] != "enrich"):
                 pc_logging.error(
                     "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
                     base_provider_name,
@@ -1166,9 +999,7 @@ class Project(project_config.Configuration):
                 return None
 
             # Expand the config object so that the parameter values can be set
-            config = provider_config.ProviderConfiguration.normalize(
-                result_name, config
-            )
+            config = provider_config.ProviderConfiguration.normalize(result_name, config)
             config["orig_name"] = base_provider_name
 
             # Fill in the parameter values
@@ -1177,31 +1008,19 @@ class Project(project_config.Configuration):
                 # Filling "parameters"
                 for param_name, param_value in params.items():
                     if config["parameters"][param_name]["type"] == "string":
-                        config["parameters"][param_name]["default"] = str(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = str(param_value)
                     elif config["parameters"][param_name]["type"] == "int":
-                        config["parameters"][param_name]["default"] = int(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = int(param_value)
                     elif config["parameters"][param_name]["type"] == "float":
-                        config["parameters"][param_name]["default"] = float(
-                            param_value
-                        )
+                        config["parameters"][param_name]["default"] = float(param_value)
                     elif config["parameters"][param_name]["type"] == "bool":
                         if isinstance(param_value, str):
                             if param_value.lower() == "true":
-                                config["parameters"][param_name][
-                                    "default"
-                                ] = True
+                                config["parameters"][param_name]["default"] = True
                             else:
-                                config["parameters"][param_name][
-                                    "default"
-                                ] = False
+                                config["parameters"][param_name]["default"] = False
                         else:
-                            config["parameters"][param_name]["default"] = bool(
-                                param_value
-                            )
+                            config["parameters"][param_name]["default"] = bool(param_value)
                     elif config["parameters"][param_name]["type"] == "array":
                         config["parameters"][param_name]["default"] = param_value
             else:
@@ -1212,16 +1031,12 @@ class Project(project_config.Configuration):
                     config["with"][param_name] = param_value
 
             # Now initialize the provider
-            pc_logging.debug(
-                "Initializing a parametrized provider: %s" % result_name
-            )
+            pc_logging.debug("Initializing a parametrized provider: %s" % result_name)
             # pc_logging.debug(
             #     "Initializing a parametrized provider using the following config: %s"
             #     % pformat(config)
             # )
-            factory.instantiate(
-                "provider", config["type"], self.ctx, self, self, config
-            )
+            factory.instantiate("provider", config["type"], self.ctx, self, self, config)
 
             # See if it worked
             if not result_name in self.providers:
@@ -1235,7 +1050,7 @@ class Project(project_config.Configuration):
             return self.providers[result_name]
 
     def get_suppliers(self, part_spec):
-        # TODO(clirbee): return the eligible subset of suppliers
+        # TODO(clairbee): return the eligible subset of suppliers
         # part_name = part_spec["name"]
         return self.suppliers
 
@@ -1272,15 +1087,15 @@ class Project(project_config.Configuration):
             config = yaml.load(fp)
             fp.close()
 
-        for elem in config:
-            if elem == "import":
-                imports = config["import"]
-                imports[alias] = {
-                    location_param: location,
-                    "type": location_type,
-                }
-                break  # no need to iterate further
-        with open(self.config_path) as fp:
+        if "import" in config and "dependencies" not in config:
+            config["dependencies"] = config["import"]
+        if config["dependencies"] is None:
+            config["dependencies"] = {}
+        config["dependencies"][alias] = {
+            location_param: location,
+            "type": location_type,
+        }
+        with open(self.config_path, "w") as fp:
             yaml.dump(config, fp)
             fp.close()
 
@@ -1300,7 +1115,7 @@ class Project(project_config.Configuration):
             path = path[1:]
 
         name = path
-        if name.endswith(".%s" % extension):
+        if name.lower().endswith((".%s" % extension).lower()):
             name = name[: -len(extension) - 1]
 
         return True, path, name
@@ -1318,9 +1133,17 @@ class Project(project_config.Configuration):
         else:
             ext = kind
 
-        valid, path, name = self._validate_path(path, ext)
-        if not valid:
-            return False
+        if ext:
+            # This is a file type.
+            # Remove the extension from the name.
+            valid, path, name = self._validate_path(path, ext)
+            if not valid:
+                return False
+        else:
+            # This is not a file type.
+            # The user provided value is not a path. It's just the name itself.
+            name = path
+            path = None
 
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
@@ -1350,6 +1173,21 @@ class Project(project_config.Configuration):
             fp.close()
 
         return True
+
+    def add_sketch(self, kind: str, path: str, config={}) -> bool:
+        pc_logging.info("Adding the sketch %s of type %s" % (path, kind))
+        ext_by_kind = {
+            "cadquery": "py",
+            "build123d": "py",
+            "basic": None,
+        }
+        return self._add_component(
+            kind,
+            path,
+            "sketches",
+            ext_by_kind,
+            config,
+        )
 
     def add_part(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the part %s of type %s" % (path, kind))
@@ -1400,12 +1238,8 @@ class Project(project_config.Configuration):
             yaml.dump(package_config, fp)
             fp.close()
 
-    def update_part_config(
-        self, part_name, part_config_update: dict[str, typing.Any]
-    ):
-        pc_logging.debug(
-            "Updating part config: %s: %s" % (part_name, part_config_update)
-        )
+    def update_part_config(self, part_name, part_config_update: dict[str, typing.Any]):
+        pc_logging.debug("Updating part config: %s: %s" % (part_name, part_config_update))
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
         with open(self.config_path) as fp:
@@ -1427,15 +1261,20 @@ class Project(project_config.Configuration):
                     yaml.dump(config, fp)
                     fp.close()
 
-    def test(self):
+    async def test_async(self):
+        tasks = []
         for interface in self.interfaces.values():
-            interface.test()
+            tasks.append(asyncio.create_task(interface.test_async()))
         for sketch in self.sketches.values():
-            sketch.test()
+            tasks.append(asyncio.create_task(sketch.test_async()))
         for part in self.parts.values():
-            part.test()
+            tasks.append(asyncio.create_task(part.test_async()))
         for assembly in self.assemblies.values():
-            assembly.test()
+            tasks.append(asyncio.create_task(assembly.test_async()))
+        return await asyncio.gather(*tasks)
+
+    def test(self):
+        asyncio.run(self.test_async())
 
     async def render_async(
         self,
@@ -1451,10 +1290,7 @@ class Project(project_config.Configuration):
             # TODO(clairbee): pass the preference downstream without making a
             # persistent change.
             if not output_dir is None:
-                if (
-                    not "render" in self.config_obj
-                    or self.config_obj["render"] is None
-                ):
+                if not "render" in self.config_obj or self.config_obj["render"] is None:
                     self.config_obj["render"] = {}
                 self.config_obj["render"]["output_dir"] = output_dir
 
@@ -1465,31 +1301,19 @@ class Project(project_config.Configuration):
             # Enumerating all parts and assemblies
             if sketches is None:
                 sketches = []
-                if (
-                    "sketches" in self.config_obj
-                    and not self.config_obj["sketches"] is None
-                ):
+                if "sketches" in self.config_obj and not self.config_obj["sketches"] is None:
                     sketches = self.config_obj["sketches"].keys()
             if interfaces is None:
                 interfaces = []
-                if (
-                    "interfaces" in self.config_obj
-                    and not self.config_obj["interfaces"] is None
-                ):
+                if "interfaces" in self.config_obj and not self.config_obj["interfaces"] is None:
                     interfaces = self.config_obj["interfaces"].keys()
             if parts is None:
                 parts = []
-                if (
-                    "parts" in self.config_obj
-                    and not self.config_obj["parts"] is None
-                ):
+                if "parts" in self.config_obj and not self.config_obj["parts"] is None:
                     parts = self.config_obj["parts"].keys()
             if assemblies is None:
                 assemblies = []
-                if (
-                    "assemblies" in self.config_obj
-                    and not self.config_obj["assemblies"] is None
-                ):
+                if "assemblies" in self.config_obj and not self.config_obj["assemblies"] is None:
                     assemblies = self.config_obj["assemblies"].keys()
 
             # Enumerate
@@ -1512,13 +1336,8 @@ class Project(project_config.Configuration):
             tasks = []
             for shape in shapes:
                 shape_render = copy.copy(render)
-                if (
-                    "render" in shape.config
-                    and not shape.config["render"] is None
-                ):
-                    shape_render = render_cfg_merge(
-                        shape_render, shape.config["render"]
-                    )
+                if "render" in shape.config and not shape.config["render"] is None:
+                    shape_render = render_cfg_merge(shape_render, shape.config["render"])
 
                 # Determine which formats need to be rendered.
                 # The format needs to be rendered either if it's mentioned in the config
@@ -1528,8 +1347,7 @@ class Project(project_config.Configuration):
                     "svg" in shape_render
                     and shape_render["svg"] is not None
                     and not isinstance(shape_render["svg"], str)
-                    and shape.kind
-                    in shape_render.get("svg", {}).get("exclude", [])
+                    and shape.kind in shape_render.get("svg", {}).get("exclude", [])
                 ):
                     render_svg = False
                 elif format is None and "svg" in shape_render:
@@ -1543,8 +1361,7 @@ class Project(project_config.Configuration):
                     "png" in shape_render
                     and shape_render["png"] is not None
                     and not isinstance(shape_render["png"], str)
-                    and shape.kind
-                    in shape_render.get("png", {}).get("exclude", [])
+                    and shape.kind in shape_render.get("png", {}).get("exclude", [])
                 ):
                     render_png = False
                 elif format is None and "png" in shape_render:
@@ -1558,8 +1375,7 @@ class Project(project_config.Configuration):
                     "step" in shape_render
                     and shape_render["step"] is not None
                     and not isinstance(shape_render["step"], str)
-                    and shape.kind
-                    in shape_render.get("step", {}).get("exclude", [])
+                    and shape.kind in shape_render.get("step", {}).get("exclude", [])
                 ):
                     render_step = False
                 elif format is None and "step" in shape_render:
@@ -1573,8 +1389,7 @@ class Project(project_config.Configuration):
                     "stl" in shape_render
                     and shape_render["stl"] is not None
                     and not isinstance(shape_render["stl"], str)
-                    and shape.kind
-                    in shape_render.get("stl", {}).get("exclude", [])
+                    and shape.kind in shape_render.get("stl", {}).get("exclude", [])
                 ):
                     render_stl = False
                 elif format is None and "stl" in shape_render:
@@ -1588,8 +1403,7 @@ class Project(project_config.Configuration):
                     "3mf" in shape_render
                     and shape_render["3mf"] is not None
                     and not isinstance(shape_render["3mf"], str)
-                    and shape.kind
-                    in shape_render.get("3mf", {}).get("exclude", [])
+                    and shape.kind in shape_render.get("3mf", {}).get("exclude", [])
                 ):
                     render_3mf = False
                 elif format is None and "3mf" in shape_render:
@@ -1603,8 +1417,7 @@ class Project(project_config.Configuration):
                     "threejs" in shape_render
                     and shape_render["threejs"] is not None
                     and not isinstance(shape_render["threejs"], str)
-                    and shape.kind
-                    in shape_render.get("threejs", {}).get("exclude", [])
+                    and shape.kind in shape_render.get("threejs", {}).get("exclude", [])
                 ):
                     render_threejs = False
                 elif format is None and "threejs" in shape_render:
@@ -1618,8 +1431,7 @@ class Project(project_config.Configuration):
                     "obj" in shape_render
                     and shape_render["obj"] is not None
                     and not isinstance(shape_render["obj"], str)
-                    and shape.kind
-                    in shape_render.get("obj", {}).get("exclude", [])
+                    and shape.kind in shape_render.get("obj", {}).get("exclude", [])
                 ):
                     render_obj = False
                 elif format is None and "obj" in shape_render:
@@ -1633,8 +1445,7 @@ class Project(project_config.Configuration):
                     "gltf" in shape_render
                     and shape_render["gltf"] is not None
                     and not isinstance(shape_render["gltf"], str)
-                    and shape.kind
-                    in shape_render.get("gltf", {}).get("exclude", [])
+                    and shape.kind in shape_render.get("gltf", {}).get("exclude", [])
                 ):
                     render_gltf = False
                 elif format is None and "gltf" in shape_render:
@@ -1675,11 +1486,7 @@ class Project(project_config.Configuration):
         format=None,
         output_dir=None,
     ):
-        asyncio.run(
-            self.render_async(
-                sketches, interfaces, parts, assemblies, format, output_dir
-            )
-        )
+        asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
 
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:
@@ -1726,57 +1533,49 @@ class Project(project_config.Configuration):
             lines += [usage]
             lines += [""]
 
-        if (
-            self.config_obj.get("import", None) is not None
-            and not "packages" in exclude
-        ):
-            imports = self.config_obj["import"]
-            display_imports = []
-            for alias in imports:
-                if imports[alias].get("onlyInRoot", False):
+        if self.config_obj.get("dependencies", None) is not None and not "packages" in exclude:
+            dependencies = copy.copy(self.config_obj["dependencies"])
+            child_packages = self.get_child_project_names(absolute=False)
+            display_dependencies = []
+            for alias in child_packages:
+                if alias in dependencies and dependencies[alias].get("onlyInRoot", False) and self.name != "/":
                     continue
-                display_imports.append(alias)
+                display_dependencies.append(alias)
 
-            if display_imports:
+            if display_dependencies:
                 lines += ["## Sub-Packages"]
                 lines += [""]
-                for alias in display_imports:
-                    import_config = imports[alias]
+                for alias in display_dependencies:
+                    import_config = dependencies.get(alias, {})
                     columns = []
 
-                    if (
-                        "type" not in import_config
-                        or import_config["type"] == "local"
-                    ):
+                    if "type" not in import_config or import_config["type"] == "local":
                         lines += [
-                            "### [%s](./%s)"
+                            "### [%s](%s)"
                             % (
-                                import_config["name"],
+                                alias,
                                 os.path.join(
                                     return_path,
-                                    import_config["path"],
+                                    import_config.get("path", alias),
                                     "README.md",
                                 ),
                             )
                         ]
                     elif import_config["type"] == "git":
-                        lines += [
-                            "### [%s](%s)"
-                            % (import_config["name"], import_config["url"])
-                        ]
+                        lines += ["### [%s](%s)" % (import_config["name"], import_config["url"])]
                     else:
-                        lines += ["### %s" % import_config["name"]]
+                        lines += ["### %s" % import_config.get("name", alias)]
 
                     if "desc" in import_config:
                         columns += [import_config["desc"]]
                     elif not columns:
-                        columns += ["***Not documented yet.***"]
+                        # TODO(clairbee): is there an easy and reiable way to pull the descriptions from sub-packages?
+                        # columns += ["***Not documented yet.***"]
+                        pass
 
                     if len(columns) > 1:
                         lines += ["<table><tr>"]
-                        lines += map(
-                            lambda c: "<td valign=top>" + c + "</td>", columns
-                        )
+                        lines += map(lambda c: "<td valign=top>" + c + "</td>", columns)
                         lines += ["</tr></table>"]
                     else:
                         lines += columns
@@ -1785,11 +1584,7 @@ class Project(project_config.Configuration):
         def add_section(name, display_name, shape, render_cfg):
             config = shape.config
 
-            if (
-                "type" in config
-                and config["type"] == "alias"
-                and "aliases" in exclude
-            ):
+            if "type" in config and config["type"] == "alias" and "aliases" in exclude:
                 return []
 
             path = None
@@ -1805,18 +1600,13 @@ class Project(project_config.Configuration):
                         or config["type"] == "ai-build123d"
                     ):
                         path += ".py"
-                    elif (
-                        config["type"] == "openscad"
-                        or config["type"] == "ai-openscad"
-                    ):
+                    elif config["type"] == "openscad" or config["type"] == "ai-openscad":
                         path += ".scad"
                     else:
                         path += "." + config["type"]
 
             columns = []
-            if "svg" in render_cfg or (
-                "type" in config and config["type"] == "svg"
-            ):
+            if "svg" in render_cfg or ("type" in config and config["type"] == "svg"):
                 svg_cfg = render_cfg["svg"] if "svg" in render_cfg else {}
                 if isinstance(svg_cfg, str):
                     svg_cfg = {"prefix": svg_cfg}
@@ -1860,13 +1650,8 @@ class Project(project_config.Configuration):
                 image_path = None
                 test_image_path = None
 
-            if image_path is None or not os.path.exists(
-                os.path.join(output_dir, test_image_path)
-            ):
-                pc_logging.warn(
-                    "Skipping rendering of %s: no image found at %s"
-                    % (name, test_image_path)
-                )
+            if image_path is None or not os.path.exists(os.path.join(output_dir, test_image_path)):
+                pc_logging.warn("Skipping rendering of %s: no image found at %s" % (name, test_image_path))
                 return []
 
             if "desc" in config:
@@ -1889,6 +1674,14 @@ class Project(project_config.Configuration):
                 parameters += "</ul>\n"
                 columns += [parameters]
 
+            if not "images" in config and "desc" in config and "INSERT_IMAGE_HERE" in config["desc"]:
+                config["images"] = list(
+                    re.findall(
+                        r"INSERT_IMAGE_HERE\(([^)]*)\)",
+                        config["desc"],
+                        re.MULTILINE,
+                    ),
+                )
             if "images" in config:
                 images = "Input images:\n"
                 for image in config["images"]:
@@ -1931,9 +1724,7 @@ class Project(project_config.Configuration):
             for name in shape_names:
                 shape = self.assemblies[name]
                 if shape.config["type"] == "alias":
-                    source_path = normalize_resource_path(
-                        self.name, shape.config["source_resolved"]
-                    )
+                    source_path = normalize_resource_path(self.name, shape.config["source_resolved"])
                     shape = self.ctx.get_assembly(source_path)
                     display_name = name + " (alias to " + shape.name + ")"
                 else:
@@ -1947,9 +1738,7 @@ class Project(project_config.Configuration):
             for name in shape_names:
                 shape = self.parts[name]
                 if shape.config["type"] == "alias":
-                    source_path = normalize_resource_path(
-                        self.name, shape.config["source_resolved"]
-                    )
+                    source_path = normalize_resource_path(self.name, shape.config["source_resolved"])
                     shape = self.ctx.get_part(source_path)
                     display_name = name + " (alias to " + shape.name + ")"
                 else:

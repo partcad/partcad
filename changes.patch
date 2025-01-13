@@ -1,0 +1,11 @@
+--- ./__main__.py	2024-12-30 04:32:27.981121777 +0000
++++ /usr/local/python/3.10.16/lib/python3.10/site-packages/youtube_video_upload/__main__.py	2024-12-30 04:32:38.101567662 +0000
+@@ -8,7 +8,7 @@
+
+ try:
+     yaml_file = open(sys.argv[-1], 'r+')
+-    options = yaml.load(yaml_file.read())
++    options = yaml.load(yaml_file.read(), Loader=yaml.FullLoader)
+     new_options = upload_from_options(options)
+     yaml_file.close()
+ except KeyboardInterrupt:

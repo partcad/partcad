@@ -37,9 +37,7 @@ class ProviderFactory(factory.Factory):
         provider = Provider(config)
         provider.name = f"{self.target_project.name}:{self.name}"
         provider.config = self.config
-        provider.project_name = (
-            self.target_project.name
-        )  # TODO(clairbee): pass it via the constructor
+        provider.project_name = self.target_project.name  # TODO(clairbee): pass it via the constructor
         # TODO(clairbee): Make the next line work for provider_factory_file only
         provider.info = lambda: self.info(provider)
         return provider

@@ -1,0 +1,89 @@
+{
+  "name": "PartCAD Dev Container",
+  "build": {
+    "cacheFrom": "ghcr.io/partcad/devcontainer-partcad:latest",
+    "dockerfile": "./Dockerfile"
+  },
+  "remoteEnv": {
+    // TODO: @alexanderilyin do not patch PATH here but make `mamba` discoverable.
+    "PATH": "${containerEnv:PATH}:/home/vscode/miniforge3/bin"
+  },
+  "postCreateCommand": {
+    "setup-utils": "sudo apt-get update && sudo apt-get install -y file xxd",
+    "~/.cache": "sudo chown -R $(whoami):$(whoami) /home/$(whoami)/.cache"
+  },
+  "postStartCommand": {
+    "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
+  },
+  "mounts": [
+    // TODO: For some reason this leads to tests hanging in the CI.
+    // "source=partcad-partcad,target=/home/vscode/.partcad,type=volume",
+    "source=partcad-cache,target=/home/vscode/.cache,type=volume",
+    "source=partcad-config,target=/home/vscode/.config,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "dotfiles.repository": "deepspacecartel/dotfiles"
+      },
+      // <!-- prettier-ignore-start -->
+      "extensions": [
+        // PartCAD TODO-19: Move extension to PartCAD organization
+        "OpenVMP.partcad",
+        // Git Tools
+        "eamodio.gitlens",
+        // CAD Viewer
+        "bernhard-42.ocp-cad-viewer",
+        // Python Environment
+        "donjayamanne.python-environment-manager",
+        "njpwerner.autodocstring", // Python docstring generator
+        "kevinrose.vsc-python-indent", // Better Python indentation
+        "ms-python.black-formatter",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        // Code Formatting
+        "esbenp.prettier-vscode",
+        "streetsidesoftware.code-spell-checker", // Because typos are worse than black holes
+        // GitHub Integration
+        "GitHub.copilot",
+        "GitHub.vscode-github-actions",
+        "GitHub.vscode-pull-request-github",
+        // File Headers
+        "psioniq.psi-header",
+        // Docker Support
+        "ms-azuretools.vscode-docker",
+        // YAML Support
+        // "redhat.vscode-yaml", # TODO-20:command 'jumpToSchema' already exists
+        // SVG Support
+        "jock.svg",
+        // Jinja Support
+        "samuelcolvin.jinjahtml",
+        // Markdown Support
+        "yzhang.markdown-all-in-one",
+        "bierner.github-markdown-preview",
+        "bierner.markdown-checkbox",
+        "bierner.markdown-footnotes",
+        "bierner.markdown-mermaid",
+        "bierner.markdown-preview-github-styles",
+        "bierner.markdown-yaml-preamble",
+        "chintans98.markdown-jira",
+        // Task Management
+        "Gruntfuggly.todo-tree",
+        "wayou.vscode-todo-highlight", // Additional TODO highlighting
+        // Atlassian Integration
+        "Atlassian.atlascode",
+        // Documentation Support
+        "swyddfa.esbonio",
+        "lextudio.restructuredtext",
+        "trond-snekvik.simple-rst",
+        // Code Analysis
+        "alexkrechik.cucumberautocomplete",
+        "bbenoist.vagrant",
+        "codecov.codecov",
+        "hediet.debug-visualizer",
+        "ryanluker.vscode-coverage-gutters"
+      ]
+      // <!-- prettier-ignore-end -->
+    }
+  }
+}

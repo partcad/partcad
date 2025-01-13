@@ -1,0 +1,52 @@
+name: Upload Test Results & Coverage Reports
+
+description: Upload test results and coverage reports to GitHub and Codecov
+
+inputs:
+  name:
+    description: Name of the artifact to upload to GitHub.
+    required: true
+    default: test-results
+  path:
+    description: Path to the test results to upload to GitHub.
+    required: true
+  status:
+    description: The status of the job.
+    required: true
+  retention-days:
+    description: Number of days to retain the artifact on GitHub.
+    required: false
+    default: "7"
+  codecov-files:
+    description: Path to the test results file to upload to Codecov.
+    required: true
+  coverage-report:
+    description: Path to the coverage reports to upload to Codecov.
+    required: true
+  token:
+    description: Codecov token.
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Upload test results to GitHub
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Upload coverage reports to Codecov
+      if: ${{ inputs.status }} != 'cancelled'
+      uses: codecov/codecov-action@v5
+      with:
+        files: ${{ inputs.coverage-report }}
+        token: ${{ inputs.token }}
+
+    - name: Upload test results to Codecov
+      if: ${{ inputs.status }} != 'cancelled'
+      uses: codecov/test-results-action@v1
+      with:
+        files: ${{ inputs.codecov-files }}
+        token: ${{ inputs.token }}

@@ -1,0 +1,447 @@
+# https://github.com/devcontainers/ci/blob/main/docs/github-action.md
+name: "Dev Container CI"
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *" # Run daily at midnight
+  merge_group:
+  pull_request:
+  push:
+    branches:
+      - main
+      - devel
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CONTAINER_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-devcontainer
+  TOTAL_TIMEOUT: 900
+  INSTALL_TIMEOUT: 300
+
+jobs:
+  dev-container-build:
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    name: "Build: Dev Container"
+    # TODO:https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller/about-actions-runner-controller#creating-your-own-runner-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: write
+    steps:
+      - name: Set Environment Variables
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # Replace / with - if ref is present; fallback to SHA
+          if [ -n "${HEAD_REF}" ]; then
+            echo "DEBUG: Generating TAG from HEAD_REF: ${HEAD_REF}"
+            TAG="${HEAD_REF//\//-}"
+          else
+            echo "DEBUG: Using SHA as fallback: ${{ github.sha }}"
+            TAG="${{ github.sha }}"
+          fi
+
+          # Convert to lowercase
+          TAG=$(echo "${TAG}" | tr '[:upper:]' '[:lower:]')
+          echo "DEBUG: Final IMAGE_TAG: $TAG"
+
+          # Validate tag format (lowercase, numbers, dashes only)
+          if ! echo "$TAG" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
+            echo "::error::Invalid tag format: $TAG"
+            exit 1
+          fi
+          if [ ${#tag} -gt 128 ]; then
+            echo "::error::Tag length exceeds Docker's 128 character limit: ${#tag} characters"
+            exit 1
+          fi
+
+          # Export tag to be used in subsequent jobs
+          echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Dev Container
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          imageTag: ${{ env.IMAGE_TAG }}
+          cacheFrom: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          push: always
+
+  poetry-install:
+    name: "Run: poetry install"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: dev-container-build
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: "Run: poetry install"
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          push: never
+          runCmd: |
+            start_time=$SECONDS
+            for i in {1..3}; do
+              if [ $((SECONDS - start_time)) -gt ${{ env.TOTAL_TIMEOUT }} ]; then
+                echo "Total timeout of ${{ env.TOTAL_TIMEOUT }}s exceeded"
+                exit 1
+              fi
+              echo "Attempt $i/3: Installing dependencies (timeout: ${{ env.INSTALL_TIMEOUT }})..."
+              if timeout ${{ env.INSTALL_TIMEOUT }} poetry --no-ansi --no-interaction install; then
+                echo "Installation successful on attempt $i"
+                exit 0
+              fi
+              echo "Attempt $i failed. Waiting $((i * 10)) seconds before retry..."
+              sleep $((i * 10))  # Exponential backoff
+            done
+            echo "All installation attempts failed after 3 tries"
+            exit 1
+
+  pytest:
+    name: "Run: pytest"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: poetry-install
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Run PyTest
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          push: never
+          runCmd: |
+            # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
+            mkdir -pv pytest-results
+            poetry --no-ansi --no-interaction show --tree
+            poetry --no-ansi --no-interaction run pytest --verbose --color=no | ts -i %.S | ts -s
+
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: pytest-results
+          path: pytest-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: pytest-results/junit.xml
+          coverage-report: pytest-results/coverage.xml
+
+      - name: Generate Allure Report
+        if: always()
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          push: never
+          runCmd: |
+            if [ ! -d "allure-results" ]; then
+              echo "##[warning]allure-results directory not found. Skipping report generation."
+              exit 0
+            fi
+            if ! allure generate --config .devcontainer/allure.yml allure-results -o allure-report; then
+              echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
+            fi
+
+      - name: Publish Allure Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-allure-report
+          path: allure-report/
+          retention-days: 7
+
+  pre-commit:
+    name: "Run: pre-commit"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: dev-container-build
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache pre-commit dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .pre-commit
+          key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pre-commit-
+      - name: Run pre-commit hooks
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          push: never
+          # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
+          # TODO: Run ggshield and/or other secrets scanning tools as separate job
+          env: |
+            SKIP=poetry-export,poetry-lock,ggshield
+          runCmd:
+            pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
+            --all-files
+
+  behave:
+    name: "Run: behave"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: poetry-install
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Start SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+
+      - name: Run Behave
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          push: never
+          env: |
+            # TODO-25: Workaround for "Host key verification failed."
+            GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+          runCmd: |
+            # TODO-26: PC-186: Allow to configure git clone protocol in settings
+            git config --global url."git@github.com:".insteadOf "https://github.com/"
+            mkdir -pv behave-results
+            poetry --no-ansi --no-interaction run coverage run $(poetry run which behave)
+            poetry --no-ansi --no-interaction run coverage xml --data-file=./.coverage -o behave-results/coverage.xml
+
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: behave-results
+          path: behave-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: behave-results/junit.xml
+          coverage-report: behave-results/coverage.xml
+
+      - name: Generate Allure Report
+        if: always()
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          push: never
+          runCmd: |
+            if [ ! -d "allure-results" ]; then
+              echo "##[warning]allure-results directory not found. Skipping report generation."
+              exit 0
+            fi
+            if ! allure generate --config .devcontainer/allure.yml allure-results -o allure-report; then
+              echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
+            fi
+
+      - name: Publish Allure Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: behave-allure-report
+          path: allure-report/
+          retention-days: 7
+
+  nox:
+    strategy:
+      fail-fast: false
+      matrix:
+        # NOTE: OS below is the one which runs the container, not the one inside the container
+        # TODO: @alexanderilyin: Add more OSes via https://github.com/partcad/devcontainers-templates
+        os: [ubuntu-24.04]
+        python-version:
+          # TODO: Enable 3.10 when pytest job is deprecated
+          # - "3.10"
+          - "3.11"
+          - "3.12"
+    name: "Run: nox"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    needs: poetry-install
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      # TODO: @alexanderilyin Add caching for: "Creating virtual environment (virtualenv) using python3.11 in .nox/pytest-3-11"
+
+      - name: Run Nox
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          push: never
+          runCmd: |
+            poetry --no-ansi --no-interaction run nox --python ${{ matrix.python-version }}
+
+      # - name: Generate Allure Report
+      #   if: always()
+      #   uses: devcontainers/ci@v0.3
+      #   with:
+      #     cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+      #     push: never
+      #     runCmd: |
+      #       if [ ! -d "allure-results" ]; then
+      #         echo "##[warning]allure-results directory not found. Skipping report generation."
+      #         exit 0
+      #       fi
+      #       if ! allure generate --config .devcontainer/allure.ymlallure-results -o allure-report; then
+      #         echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
+      #       fi
+
+      # - name: Publish Allure Report
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: pytest-allure-report
+      #     path: allure-report/
+      #     retention-days: 7
+
+  integration-tests:
+    name: "Run: pc"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: poetry-install
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Run Acceptance Tests
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          push: never
+          runCmd: |
+            mkdir -pv test-results
+            poetry --no-ansi --no-interaction show --tree
+            # TODO: Use similar 'coverage run' in behave steps when calling pc
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r /)"
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r)"
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r)"
+            poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml
+
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: pc-test-results
+          path: pc-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: pc-test-results/junit.xml
+          coverage-report: pc-test-results/coverage.xml

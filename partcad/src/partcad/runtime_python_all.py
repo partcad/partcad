@@ -23,6 +23,4 @@ def create(ctx, version, python_runtime=None):
     elif python_runtime == "conda":
         return runtime_python_conda.CondaPythonRuntime(ctx, version)
     else:
-        raise Exception(
-            "ERROR: invalid python runtime type (sandbox type) %s" % python_runtime
-        )
+        raise Exception("ERROR: invalid python runtime type (sandbox type) %s" % python_runtime)

@@ -34,9 +34,7 @@ class PartFactory(ShapeFactory):
 
     def _create_part(self, config: object) -> Part:
         part = Part(config)
-        part.project_name = (
-            self.target_project.name
-        )  # TODO(clairbee): pass it via the constructor
+        part.project_name = self.target_project.name  # TODO(clairbee): pass it via the constructor
         # TODO(clairbee): Make the next line work for part_factory_file only
         part.instantiate = lambda part_self: self.instantiate(part_self)
         part.info = lambda: self.info(part)

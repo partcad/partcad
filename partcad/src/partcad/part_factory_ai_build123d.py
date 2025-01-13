@@ -22,9 +22,7 @@ class PartFactoryAiBuild123d(PartFactoryBuild123d, PartFactoryFeatureAi):
         if "mode" in config and config["mode"] == "algebra":
             mode = "algebra"
 
-        with pc_logging.Action(
-            "InitAiB3d", target_project.name, config["name"]
-        ):
+        with pc_logging.Action("InitAiB3d", target_project.name, config["name"]):
             PartFactoryFeatureAi.__init__(
                 self,
                 config,

@@ -1,0 +1,160 @@
+name: Gource Visualization
+
+on:
+  workflow_dispatch:
+    inputs:
+      seconds_per_day:
+        description: "Speed in seconds per day (default: 10)"
+        required: true
+        type: number
+        default: 1
+      auto_skip_seconds:
+        description: "Auto skip to next entry if nothing happens for a number of seconds (default: 3)"
+        required: true
+        type: number
+        default: 0.5
+      resolution:
+        description: "Video resolution (default: 1280x720)"
+        required: false
+        type: string
+        default: "1280x720"
+      file_idle_time:
+        description: "File idle time in seconds (default: 0)"
+        required: false
+        type: number
+        default: 0
+      start_days_ago:
+        description: "Start at a number of days ago (default: 7)"
+        required: false
+        type: number
+        default: 7
+      stop_days_ago:
+        description: "Stop at a number of days ago (default: 0)"
+        required: false
+        type: number
+        default: 0
+      fps:
+        description: "Frames per second (default: 60)"
+        required: false
+        type: number
+        default: 60
+
+  pull_request:
+    paths:
+      # TODO: Add this to automathor: 'git diff --name-status origin/devel..HEAD's
+      - ".github/workflows/gource-visualization.yml"
+  schedule:
+    # Runs every Monday at 00:00 UTC on "Default Branch"
+    - cron: "0 0 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CONTAINER_REGISTRY: ghcr.io
+  # TODO: Build image in partcad/devcontainers-templates.git
+  IMAGE_NAME: ${{ github.repository }}-devcontainer-gource
+  GOURCE_TIMEOUT_MINUTES: ${{ vars.GOURCE_TIMEOUT_MINUTES || 15 }}
+
+jobs:
+  gource-ffmpeg:
+    name: "Run: gource"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Run: gource"
+        uses: devcontainers/ci@v0.3
+        # TODO: all jobs in all workflows should have 'timeout-minutes' set
+        timeout-minutes: ${{ fromJSON(env.GOURCE_TIMEOUT_MINUTES) }}
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          push: never
+          runCmd: |
+            set -euo pipefail
+
+            # TODO: Move to Dockerfile
+            # 1. Set up dependencies (Gource and FFmpeg)
+            sudo apt-get update
+            sudo apt-get install --yes gource ffmpeg
+            sudo apt-get clean
+            sudo rm -rf /var/lib/apt/lists/*
+
+            # 2. Generate Gource visualization
+            echo "Starting Gource visualization..."
+            gource \
+              --viewport "${{ inputs.resolution || '1280x720' }}" \
+              --start-date "$(date --date="${{ inputs.start_days_ago || 7 }} days ago" +"%Y-%m-%d %H:%M:%S %z")" \
+              --stop-date "$(date --date="${{ inputs.stop_days_ago || 0 }} days ago" +"%Y-%m-%d %H:%M:%S %z")" \
+              --title "PartCAD (${{ github.event.repository.name }}) - Last 7 Days" \
+              --output-ppm-stream gource_output.ppm \
+              --seconds-per-day ${{ inputs.seconds_per_day || 1 }} \
+              --auto-skip-seconds ${{ inputs.auto_skip_seconds || 0.5 }} \
+              --file-idle-time "${{ inputs.file_idle_time || 0 }}" \
+              --key \
+              --highlight-users
+
+            # Verify the output was generated
+            if [ ! -s gource_output.ppm ]; then
+              echo "Error: Gource failed to generate visualization"
+              exit 1
+            fi
+
+            # 3. Convert Gource output to MP4 using FFmpeg
+            ffmpeg \
+              -y \
+              -r ${{ inputs.fps || 60 }} \
+              -f image2pipe \
+              -vcodec ppm \
+              -i gource_output.ppm \
+              -vcodec libx264 \
+              -preset ultrafast \
+              -pix_fmt yuv420p \
+              -crf 18 \
+              -threads 0 \
+              -bf 0 \
+              gource_output.mp4
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gource-visualization
+          path: gource_output.mp4
+          retention-days: 7
+
+      # TODO: Do all of this in single container step
+      - name: "Run: youtube-upload"
+        uses: devcontainers/ci@v0.3
+        timeout-minutes: ${{ fromJSON(env.GOURCE_TIMEOUT_MINUTES) }}
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          push: never
+          runCmd: |
+            set -euo pipefail
+
+            # TODO: Move to Dockerfile
+            pip install youtube-video-upload==0.2.0
+
+            patch /usr/local/python/3.10.16/lib/python3.10/site-packages/youtube_video_upload/__main__.py < changes.patch
+
+            mkdir -p /tmp/secrets
+            SECRETS_DIR="/tmp/secrets"
+            mkdir -p "${SECRETS_DIR}"
+            CREDENTIALS_FILE="${SECRETS_DIR}/credentials.json"
+
+            # Ensure cleanup happens even if the script fails
+            trap 'rm -fv "${CREDENTIALS_FILE}" || true' EXIT
+
+            echo "${{ secrets.YOUTUBE_CREDENTIALS_BASE64 }}" | base64 --decode > /tmp/secrets/credentials.json
+            chmod 600 /tmp/secrets/credentials.json
+
+            python -m youtube_video_upload example.yaml

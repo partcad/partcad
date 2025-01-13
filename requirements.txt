@@ -1,9 +1,0 @@
-black
-flake8
-isort
-pytest
-pytest-cov
-#tox==4.9.0
-sphinx
-sphinx_rtd_theme
-readthedocs-sphinx-search

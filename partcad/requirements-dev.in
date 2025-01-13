@@ -1,0 +1,7 @@
+allure-pytest
+click
+coloredlogs
+pytest-cov
+pytest-durations
+pytest-html
+rich-click

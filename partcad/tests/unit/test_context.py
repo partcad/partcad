@@ -49,8 +49,8 @@ def test_ctx_stats2():
     assert new_memory > old_memory
 
     old_memory = ctx.stats_memory
-    cq_obj = asyncio.run(cube.get_cadquery())
-    assert cq_obj is not None
+    obj = asyncio.run(cube.get_wrapped())
+    assert obj is not None
     ctx.stats_recalc()
     assert ctx.stats_parts_instantiated == 1
     new_memory = ctx.stats_memory

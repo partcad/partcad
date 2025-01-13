@@ -15,10 +15,8 @@ import os
 import re
 import sys
 
-from cadquery import cqgi
-import build123d
-
 sys.path.append(os.path.dirname(__file__))
+import custom_cqgi
 import wrapper_common
 import py_stubs.ocp_vscode  # Make 'sys.modules["py_stubs.ocp_vscode"]' available
 from ocp_tessellate.ocp_utils import (
@@ -44,15 +42,13 @@ def process(path, request):
     if "build_parameters" in request:
         build_parameters = request["build_parameters"]
 
-    script = open(path, "r").read()
+    with open(path, "r", encoding="utf-8") as f:
+        script = f.read()
     for old, new in patch.items():
         script = re.sub(old, new, script, flags=re.MULTILINE)
 
     if "import partcad" in script:
-        script = (
-            "import logging\nlogging.basicConfig(level=60)\n"  # Disable PartCAD logging
-            + script
-        )
+        script = "import logging\nlogging.basicConfig(level=60)\n" + script  # Disable PartCAD logging
 
     # Ignore ocp_vscode as it is of no use in the sandboxed environment
     # and it produces a lot of sporadic output to stdout and stderr
@@ -70,7 +66,7 @@ def process(path, request):
         )
 
     # Execute the script
-    script_object = cqgi.parse(script)
+    script_object = custom_cqgi.parse(script)
     build_result = script_object.build(build_parameters=build_parameters)
 
     if not build_result.success:

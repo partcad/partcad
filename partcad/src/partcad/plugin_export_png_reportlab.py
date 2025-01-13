@@ -33,7 +33,7 @@ class PluginExportPngReportlab:
         # Render the raster image
         drawing = svglib.svg2rlg(svg_path)
         if drawing is None:
-            pc_logging.error('Failed to convert to RLG. Aborting.')
+            pc_logging.error("Failed to convert to RLG. Aborting.")
             return
 
         scale_width = float(width) / float(drawing.width)
