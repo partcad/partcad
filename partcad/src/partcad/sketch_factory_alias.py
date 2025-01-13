@@ -71,12 +71,12 @@ class SketchFactoryAlias(SketchFactory):
                 return None
 
             shape = source.shape
-            if shape is not None:
+            if shape:
                 sketch.shape = shape
                 return shape
 
             self.ctx.stats_sketches_instantiated += 1
 
-            if source.path is not None:
+            if source.path:
                 sketch.path = source.path
             return await source.instantiate(sketch)

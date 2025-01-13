@@ -66,7 +66,7 @@ class PartFactoryEnrich(pf.PartFactory):
             self._create(config)
 
     async def instantiate(self, part):
-        with pc_logging.Action("Enrich", part.project_name, part.name):
+        with pc_logging.Action("Enrich", part.project_name, f"{part.name}:{self.source_part_name}"):
 
             # Get the config of the part the 'enrich' points to
             if self.source_project_name == self.source_project.name:
@@ -144,12 +144,12 @@ class PartFactoryEnrich(pf.PartFactory):
             part.config["orig_name"] = part.name
             part.config["name"] = name
             shape = source.shape
-            if shape is not None:
+            if shape:
                 part.shape = shape
                 return shape
 
             self.ctx.stats_parts_instantiated += 1
 
-            if source.path is not None:
+            if source.path:
                 part.path = source.path
             return await source.instantiate(part)

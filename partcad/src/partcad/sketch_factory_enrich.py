@@ -66,7 +66,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
             self._create(config)
 
     async def instantiate(self, sketch):
-        with pc_logging.Action("Enrich", sketch.project_name, sketch.name):
+        with pc_logging.Action("Enrich", sketch.project_name, f"{sketch.name}:{self.source_sketch_name}"):
 
             # Get the config of the sketch the 'enrich' points to
             if self.source_project_name == self.source_project.name:
@@ -144,12 +144,12 @@ class SketchFactoryEnrich(pf.SketchFactory):
             sketch.config["orig_name"] = sketch.name
             sketch.config["name"] = name
             shape = source.shape
-            if shape is not None:
+            if shape:
                 sketch.shape = shape
                 return shape
 
             self.ctx.stats_sketches_instantiated += 1
 
-            if source.path is not None:
+            if source.path:
                 sketch.path = source.path
             return await source.instantiate(sketch)

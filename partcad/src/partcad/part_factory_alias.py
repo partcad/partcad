@@ -72,12 +72,12 @@ class PartFactoryAlias(pf.PartFactory):
                 return None
 
             shape = source.shape
-            if shape is not None:
+            if shape:
                 part.shape = shape
                 return shape
 
             self.ctx.stats_parts_instantiated += 1
 
-            if source.path is not None:
+            if source.path:
                 part.path = source.path
             return await source.instantiate(part)

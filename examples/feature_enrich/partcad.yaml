@@ -35,6 +35,12 @@ sketches:
     type: enrich
     source: dxf_01
     package: ../produce_sketch_dxf
+  dxf_enrich:
+    type: enrich
+    source: :dxf
+  dxf_alias:
+    type: alias
+    source: :dxf
   dxf_01:
     type: enrich
     package: ../produce_sketch_dxf
@@ -44,6 +50,12 @@ sketches:
   svg_01:
     type: alias
     package: ../produce_sketch_svg
+  sketch:
+    type: enrich
+    package: ../produce_sketch_cadquery
+    with:
+      width: 4.0
+      length: 5.0
 
 assemblies:
   desk-no-enrich:
