@@ -1,10 +1,11 @@
-@cli @add-assembly
+@cli @pc-info @add-assembly
 Feature: `pc info` command
 
   Background: Initialize sandbox
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
 
+  @pc-info @add-assembly
   Scenario: Add assembly from `logo.assy` file
     When I run command:
       """
@@ -90,6 +91,39 @@ Feature: `pc info` command
       partcad info -a primitive
       """
     Then the command should exit with a status code of "0"
+
+  @success @pc-info
+  Scenario: Show 'Url' & 'Path' as package info for remote imports(git/tar)
+    Given a file named "partcad.yaml" with content:
+      """
+      import:
+        rob:
+          type: git
+          relPath: robotics/parts
+          url: https://github.com/partcad/partcad-index.git
+      """
+    When I run "pc info /rob/dfrobot:motion/rubber_wheel_136_24"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "github.com"
+    And STDOUT should contain "Url: 'https://github.com/"
+    And STDOUT should contain "Path: '/rob/dfrobot'"
+
+  @success @pc-info
+  Scenario: Show 'Path' as package info for local imports
+    When I run command:
+      """
+      echo "translate (v= [0,0,0])  cube (size = 10);" > test.scad
+      """
+    Then the command should exit with a status code of "0"
+    Given a file named "partcad.yaml" with content:
+      """
+        parts:
+          test:
+            type: scad
+      """
+    When I run "pc info test"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Path: '/'"
 # And STDOUT should contain "cube" in the parts list
 # And STDOUT should contain "cylinder" in the parts list
 # And STDOUT should contain valid location coordinates
