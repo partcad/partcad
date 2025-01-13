@@ -11,7 +11,7 @@ import typing
 
 from .sketch_factory import SketchFactory
 from . import logging as pc_logging
-from .utils import resolve_resource_path
+from .utils import resolve_resource_path, get_child_project_path
 
 
 class SketchFactoryAlias(SketchFactory):
@@ -39,6 +39,9 @@ class SketchFactoryAlias(SketchFactory):
                     self.source_project_name = config["package"]
                 if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = source_project.name
+                elif not self.source_project_name.startswith("/"):
+                    # Resolve the project name relative to the target project
+                    self.source_project_name = get_child_project_path(target_project.name, self.source_project_name)
             else:
                 if ":" in self.source_sketch_name:
                     self.source_project_name, self.source_sketch_name = resolve_resource_path(

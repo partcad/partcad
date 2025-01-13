@@ -13,7 +13,7 @@ import typing
 from . import part_config
 from . import part_factory as pf
 from . import logging as pc_logging
-from .utils import resolve_resource_path
+from .utils import resolve_resource_path, get_child_project_path
 
 
 class PartFactoryEnrich(pf.PartFactory):
@@ -37,6 +37,9 @@ class PartFactoryEnrich(pf.PartFactory):
                     source_project_name = config["package"]
                 if source_project_name == "this" or source_project_name == "":
                     source_project_name = source_project.name
+                elif not source_project_name.startswith("/"):
+                    # Resolve the project name relative to the target project
+                    source_project_name = get_child_project_path(target_project.name, source_project_name)
             else:
                 if ":" in source_part_name:
                     source_project_name, source_part_name = resolve_resource_path(

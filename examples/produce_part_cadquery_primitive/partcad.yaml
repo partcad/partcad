@@ -30,13 +30,13 @@ parts:
   cube_enrich_enrich:
     desc: This is an example of enriching a part with params in the name
     type: enrich
-    source: :cube;width=20.0,height=20.0
+    source: ../produce_part_cadquery_primitive:cube;width=20.0,height=20.0
     with:
       length: 5.0
   cube_alias:
     desc: This is an example of an alias to a part
     type: alias
-    source: :cube
+    source: ../produce_part_cadquery_primitive:cube
   cube_alias_params:
     desc: This is an example of an alias to a part with params in the name
     type: alias

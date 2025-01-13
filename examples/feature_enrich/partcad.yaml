@@ -29,6 +29,7 @@ parts:
     type: alias
     package: /pub/std/imperial/dimensional-lumber
 
+sketches:
   # Enrich sketches
   dxf:
     type: enrich
