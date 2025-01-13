@@ -9,6 +9,7 @@
 
 import asyncio
 import copy
+from typing import Dict
 
 from . import logging as pc_logging
 from .utils import resolve_resource_path
@@ -47,10 +48,6 @@ class ProviderCartItem:
     # TODO(clairbee): add texture
     # TODO(clairbee): add tolerance
 
-    vendor: str = None
-    sku: str = None
-    count_per_sku: int = None
-
     format: str = None
     binary: bytes = None
 
@@ -59,14 +56,18 @@ class ProviderCartItem:
         self.count = 0
         self.format = "none"
 
+    def _set_store_data(self, part):
+        store_data = part.get_store_data()
+        self.vendor = store_data.vendor
+        self.sku = store_data.sku
+        self.count_per_sku = store_data.count_per_sku
+
     async def set_spec(self, ctx, spec: str):
         self.name, self.count = resolve_cart_item(spec)
 
         part = ctx.get_part(self.name)
         assert part is not None
-        self.vendor = part.vendor
-        self.sku = part.sku
-        self.count_per_sku = part.count_per_sku
+        self._set_store_data(part)
 
         self.material = await part.get_mcftt("material")
         self.color = await part.get_mcftt("color")
@@ -86,10 +87,7 @@ class ProviderCartItem:
         if self.vendor and self.sku:
             result["vendor"] = self.vendor
             result["sku"] = self.sku
-            if self.count_per_sku:
-                result["count_per_sku"] = self.count_per_sku
-            else:
-                result["count_per_sku"] = 1
+            result["count_per_sku"] = self.count_per_sku
         return result
 
     def add_binary(self, format: str, binary: bytes):

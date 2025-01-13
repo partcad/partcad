@@ -12,6 +12,25 @@ by ``vendor`` and ``SKU``.
 ``manufacturer`` can be used to quote and order parts by using their 3D model
 (for example, by 3D printing them).
 
+.. yaml:
+
+  # partcad.yaml
+
+  parts:
+    existing_part:
+      ...
+      vendor: homedepot
+      sku: ...
+    new_part:
+      ...
+      manufacturing:
+        method: additive
+      parameters:
+        color: black
+        material: /pub/std/manufacturing/material/plastic:pla
+
+See :ref:`providers` for more information about the providers and how PartCAD selects them.
+
 In the future, PartCAD will support ``assembler``, which is supposed to produce
 an assembly given assembly instructions and using parts ordered from
 ``store``-s and ``manufacturer``-s.

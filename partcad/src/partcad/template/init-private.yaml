@@ -2,6 +2,7 @@
 # name: <package name>
 # desc: <package description>
 # url: <package's or maintainer's url>
+# manufacturable: <are objects in this package manufacturable? true or false>
 
 dependencies:
   # Add dependencies here

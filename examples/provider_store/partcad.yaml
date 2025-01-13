@@ -1,4 +1,5 @@
 desc: Example of a shop provider implemented using a CSV file.
+manufacturable: true # Objects in this package are manufacturable
 
 docs:
   intro: |
@@ -37,6 +38,11 @@ docs:
     ...
     ```
 
+    Confirm it works for aliases just fine:
+    ```shell
+    $ pc supply quote nut#2
+    ...`
+
     Use the quote in a script:
     ```shell
     $ pc -q supply quote --provider myGarage --json /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1 | jq '.[] | .result | .price' -
@@ -74,5 +80,14 @@ providers:
         type: string
         default: USD
 
+suppliers:
+  myGarage:
+
+parts:
+  nut:
+    type: alias
+    source: /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm
+
 render:
+  svg:
   readme:

@@ -23,6 +23,9 @@ class ShapeFactory(factory.Factory):
         self.project = project
         self.config = config
 
+        if "manufacturable" not in config:
+            config["manufacturable"] = project.is_manufacturable
+
         if "fileFrom" in config:
             self.fileFactory = factory.instantiate("file", config["fileFrom"], ctx, project, project, config)
         else:

@@ -1,4 +1,5 @@
 desc: Example of a manufacturer provider which is a pseudo 3D printer.
+manufacturable: true # Objects in this package are manufacturable
 
 docs:
   usage: |
@@ -79,6 +80,8 @@ parts:
       material:
         type: string
         default: /pub/std/manufacturing/material/plastic:pla
+    manufacturing:
+      method: additive
 
 render:
   readme:

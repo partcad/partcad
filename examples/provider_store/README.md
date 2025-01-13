@@ -2,7 +2,7 @@
 
 Example of a shop provider implemented using a CSV file.
 
-This examples demostrates how to implement a provider of the type 'store'.
+This examples demonstrates how to implement a provider of the type 'store'.
 While this example uses a file, the providers are expected to uses online
 services for accessing up-to-date part availability data.
 However the use of a static file is acceptable too: the most of customers
@@ -39,6 +39,11 @@ INFO:  			/pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1
 ...
 ```
 
+Confirm it works for aliases just fine:
+```shell
+$ pc supply quote nut#2
+...`
+
 Use the quote in a script:
 ```shell
 $ pc -q supply quote --provider myGarage --json /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1 | jq '.[] | .result | .price' -
@@ -50,6 +55,14 @@ Make an order (assuming the cart id is '123456') before the quote expires:
 $ pc supply order 123456
 ```
 
+
+## Parts
+
+### nut (alias to hardware/nut_m4_0_7mm)
+<table><tr>
+<td valign=top><a href="nut.step"><img src="././nut.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>2811 Series Zinc-Plated Steel Hex Nut (M4 x 0.7mm, 7mm Hex) - 25 Pack</td>
+</tr></table>
 
 <br/><br/>
 

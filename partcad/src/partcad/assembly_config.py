@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from .assembly_config_manufacturing import AssemblyConfigManufacturing
 from .shape_config import ShapeConfiguration
 
 
@@ -21,3 +22,8 @@ class AssemblyConfiguration(ShapeConfiguration):
             config = {"type": "alias", "source": config}
 
         return ShapeConfiguration.normalize(name, config)
+
+    @staticmethod
+    def get_manufacturing_data(assembly):
+        final_config = assembly.get_final_config()
+        return AssemblyConfigManufacturing(final_config)

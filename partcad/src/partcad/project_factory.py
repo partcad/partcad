@@ -11,7 +11,7 @@ from . import project as p
 
 
 class ImportConfiguration:
-    def __init__(self, config_obj={}):
+    def __init__(self, config_obj={}, parent=None):
         self.config_obj = config_obj
         self.name = config_obj.get("name")
         if not "type" in config_obj:
@@ -27,11 +27,21 @@ class ImportConfiguration:
         self.import_config_type = config_obj.get("type")
         self.import_config_is_root = config_obj.get("isRoot", False)
         self.include_paths = self.config_obj.get("includePaths", [])
+        self.inherited_config = config_obj.get(
+            "inheritedConfig",
+            (
+                {
+                    "manufacturable": parent.is_manufacturable,
+                }
+                if parent
+                else {}
+            ),
+        )
 
 
 class ProjectFactory(ImportConfiguration):
     def __init__(self, ctx, parent, import_config_obj):
-        super().__init__(import_config_obj)
+        super().__init__(import_config_obj, parent)
         self.ctx = ctx
         self.parent = parent
 
@@ -46,7 +56,9 @@ class ProjectFactory(ImportConfiguration):
 
     def _create(self, config):
         # TODO(clairbee): Finalize the config object if necessary
-        self.project = p.Project(self.ctx, self.name, self.path, include_paths=self.include_paths)
+        self.project = p.Project(
+            self.ctx, self.name, self.path, include_paths=self.include_paths, inherited_config=self.inherited_config
+        )
         # Make the project config inherit some properties of the import config
         self.project.config_obj["type"] = self.import_config_type
         self.project.config_obj["isRoot"] = self.import_config_is_root

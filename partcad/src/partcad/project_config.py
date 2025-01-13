@@ -24,7 +24,13 @@ DEFAULT_CONFIG_FILENAME = "partcad.yaml"
 class Configuration:
     name: str
 
-    def __init__(self, name, config_path=DEFAULT_CONFIG_FILENAME, include_paths=[]):
+    def __init__(
+        self,
+        name,
+        config_path=DEFAULT_CONFIG_FILENAME,
+        include_paths=[],
+        inherited_config={},
+    ):
         self.name = name
         self.config_obj = {}
         self.config_dir = config_path
@@ -75,8 +81,15 @@ class Configuration:
         if self.config_path.endswith(".json"):
             self.config_obj = json.load(config)
 
+        # Recover from a broken or missing configuration
+        # TODO(clairbee): add better error and exception handling (consider if it is needed)
         if self.config_obj is None:
             self.config_obj = {}
+
+        # Merge the inherited configuration
+        for key in inherited_config:
+            if key not in self.config_obj:
+                self.config_obj[key] = inherited_config[key]
 
         if name == consts.ROOT and "name" in self.config_obj:
             name = self.config_obj["name"]
@@ -120,3 +133,12 @@ class Configuration:
                 sys.version_info.major,
                 sys.version_info.minor,
             )
+
+        # option: "manufacturable"
+        # description: whether the objects in this package are designed for manufacturing by default
+        # values: boolean
+        # default: True
+        if "manufacturable" in self.config_obj:
+            self.is_manufacturable = bool(self.config_obj["manufacturable"])
+        else:
+            self.is_manufacturable = True
