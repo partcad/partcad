@@ -17,7 +17,8 @@ parts:
         default: 10.0
       length:
         default: 10.0
-      height: 10.0
+      height:
+        default: 10.0
     aliases: ["box"]
   cube_enrich:
     desc: This is an example of a part defined by enriching another part

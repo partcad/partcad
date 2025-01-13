@@ -53,6 +53,7 @@
     "devel",
     "eamodio",
     "ensurepip",
+    "gcode",
     "ggshield",
     "gource",
     "Gruntfuggly",
@@ -64,6 +65,7 @@
     "miniforge",
     "mkdocs",
     "mypy",
+    "nema",
     "njpwerner",
     "nlopt",
     "NOCOMMIT",
@@ -92,12 +94,12 @@
     "worktrees",
     "xdist"
   ],
-  "codeium.enableConfig": {
-    "*": true,
-    "feature": true,
-    "log": true,
-    "markdown": true
-  },
+  // "codeium.enableConfig": {
+  //   "*": true,
+  //   "feature": true,
+  //   "log": true,
+  //   "markdown": true
+  // },
   "diffEditor.hideUnchangedRegions.enabled": true,
   "editor.accessibilitySupport": "off",
   "editor.autoIndent": "full",
@@ -231,11 +233,15 @@
   "terminal.integrated.fontFamily": "'Hack Nerd Font Mono'",
   "terminal.integrated.scrollback": 100000,
   "testing.automaticallyOpenPeekView": "never",
-  // "yaml.format.bracketSpacing": false,
-  "testing.automaticallyOpenTestResults": "neverOpen", // prevent YAML formatter from breaking Jinja2 templates
+  "testing.automaticallyOpenTestResults": "neverOpen",
   "testing.followRunningTest": false,
   // "testing.openTesting": "neverOpen",
   "workbench.colorTheme": "GitHub Dark",
-  "yaml.format.bracketSpacing": false // prevent YAML formatter from breaking Jinja2 templates
-  // "yaml.format.bracketSpacing": false,
+  "yaml.format.bracketSpacing": false, // prevent YAML formatter from breaking Jinja2 templates
+  "githubPullRequests.ignoredPullRequestBranches": [
+    "devel"
+  ],
+  "yaml.schemas": {
+    "docs/mkdocs/docs/schema/partcad.json": "*/partcad.yaml"
+  }
 }
