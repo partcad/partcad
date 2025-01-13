@@ -52,7 +52,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
             if ";" in source_sketch_name:
                 self.source_sketch_name = source_sketch_name.split(";")[0]
                 suffix = source_sketch_name.split(";")[1]
-                self.extra_with = list(map(lambda p: p.split("="), suffix.split(",")))
+                self.extra_with = [p.split("=") for p in suffix.split(",")]
             else:
                 self.source_sketch_name = source_sketch_name
                 self.extra_with = []
@@ -131,6 +131,11 @@ class SketchFactoryEnrich(pf.SketchFactory):
             self.source_project.init_sketch_by_config(augmented_config)
 
             source = self.source_project.get_sketch(sketch.name)
+            name = sketch.config["name"]
+            sketch.config = source.config
+            sketch.config["source"] = self.source_project_name + ":" + self.source_sketch_name
+            sketch.config["orig_name"] = sketch.name
+            sketch.config["name"] = name
             shape = source.shape
             if shape is not None:
                 sketch.shape = shape

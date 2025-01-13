@@ -52,7 +52,7 @@ class PartFactoryEnrich(pf.PartFactory):
             if ";" in source_part_name:
                 self.source_part_name = source_part_name.split(";")[0]
                 suffix = source_part_name.split(";")[1]
-                self.extra_with = list(map(lambda p: p.split("="), suffix.split(",")))
+                self.extra_with = [p.split("=") for p in suffix.split(",")]
             else:
                 self.source_part_name = source_part_name
                 self.extra_with = []
@@ -131,6 +131,11 @@ class PartFactoryEnrich(pf.PartFactory):
             self.source_project.init_part_by_config(augmented_config, self.source_project)
 
             source = self.source_project.get_part(part.name)
+            name = part.config["name"]
+            part.config = source.config
+            part.config["source"] = self.source_project_name + ":" + self.source_part_name
+            part.config["orig_name"] = part.name
+            part.config["name"] = name
             shape = source.shape
             if shape is not None:
                 part.shape = shape

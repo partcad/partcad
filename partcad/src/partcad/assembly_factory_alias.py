@@ -62,7 +62,7 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             source = self.ctx._get_assembly(self.source)
             if source is None:
                 pc_logging.error(f"The alias source {self.source} is not found")
-                return None
+                return
 
             children = source.children
             if children:
