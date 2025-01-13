@@ -27,11 +27,14 @@ class PartFactoryEnrich(pf.PartFactory):
                 source_part_name = config["source"]
             else:
                 source_part_name = config["name"]
-                if "project" not in config:
+                if "project" not in config and "package" not in config:
                     raise Exception("Enrich needs either the source part name or the source project name")
 
-            if "project" in config:
-                source_project_name = config["project"]
+            if "project" in config or "package" in config:
+                if "project" in config:
+                    source_project_name = config["project"]
+                else:
+                    source_project_name = config["package"]
                 if source_project_name == "this" or source_project_name == "":
                     source_project_name = source_project.name
             else:

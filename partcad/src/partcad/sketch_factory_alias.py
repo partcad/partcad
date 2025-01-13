@@ -29,11 +29,14 @@ class SketchFactoryAlias(SketchFactory):
                 self.source_sketch_name = config["source"]
             else:
                 self.source_sketch_name = config["name"]
-                if "project" not in config:
+                if "project" not in config and "package" not in config:
                     raise Exception("Alias needs either the source sketch name or the source project name")
 
-            if "project" in config:
-                self.source_project_name = config["project"]
+            if "project" in config or "package" in config:
+                if "project" in config:
+                    self.source_project_name = config["project"]
+                else:
+                    self.source_project_name = config["package"]
                 if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = source_project.name
             else:
