@@ -66,7 +66,7 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
     def instantiate(self, assembly):
         with pc_logging.Action("Alias", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
             source = self.ctx._get_assembly(self.source)
-            if source:
+            if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return
 

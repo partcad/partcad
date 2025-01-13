@@ -66,7 +66,7 @@ class SketchFactoryAlias(SketchFactory):
         with pc_logging.Action("Alias", sketch.project_name, f"{sketch.name}:{self.source_sketch_name}"):
 
             source = self.ctx._get_sketch(self.source)
-            if source is None:
+            if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return None
 

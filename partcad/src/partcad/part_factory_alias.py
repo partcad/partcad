@@ -67,7 +67,7 @@ class PartFactoryAlias(pf.PartFactory):
         with pc_logging.Action("Alias", part.project_name, f"{part.name}:{self.source_part_name}"):
 
             source = self.ctx._get_part(self.source)
-            if source is None:
+            if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return None
 
