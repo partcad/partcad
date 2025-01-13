@@ -3,6 +3,8 @@
 # desc: <package description>
 # url: <package's or maintainer's url>
 
+private: True
+
 dependencies:
   # Add dependencies here
   # <package-name>:

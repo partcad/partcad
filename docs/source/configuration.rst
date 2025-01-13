@@ -45,6 +45,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
 
   name: <(optional) for advanced users, the assumed package path for standalone development>
   desc: <(optional) description>
+  private: <(optional) boolean flag to mark the package as private>
   url: <(optional) package or maintainer's url>
   poc: <(optional) point of contact, maintainer's email>
   partcad: <(optional) required PartCAD version spec string>

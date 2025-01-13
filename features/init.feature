@@ -29,6 +29,7 @@ Feature: `pc init` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: True
       dependencies:
       sketches:
       parts:
