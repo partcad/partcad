@@ -126,7 +126,9 @@ class PartFactoryEnrich(pf.PartFactory):
                             "Attempting to parametrize a part with an unknown parameter: %s:%s: %s"
                             % (self.source_project_name, self.source_part_name, param)
                         )
-                    augmented_config["parameters"][param]["default"] = part.config["with"][param]
+                    augmented_config["parameters"][param]["default"] = eval(
+                        type(augmented_config["parameters"][param]["default"]).__name__
+                    )(part.config["with"][param])
 
             self.source_project.init_part_by_config(augmented_config, self.source_project)
 

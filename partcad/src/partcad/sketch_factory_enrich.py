@@ -126,7 +126,9 @@ class SketchFactoryEnrich(pf.SketchFactory):
                             "Attempting to parametrize a sketch with an unknown parameter: %s:%s: %s"
                             % (self.source_project_name, self.source_sketch_name, param)
                         )
-                    augmented_config["parameters"][param]["default"] = sketch.config["with"][param]
+                    augmented_config["parameters"][param]["default"] = eval(
+                        type(augmented_config["parameters"][param]["default"]).__name__
+                    )(sketch.config["with"][param])
 
             self.source_project.init_sketch_by_config(augmented_config)
 
