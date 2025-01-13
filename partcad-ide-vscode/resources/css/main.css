@@ -1,0 +1,8 @@
+.inspector table, .inspector table tr, .inspector table td {
+  border: 1px solid darkgray;
+  border-collapse: collapse;
+}
+
+.inspector table tr:nth-child(even) {
+  background-color: darkblue;
+}

@@ -160,6 +160,21 @@ Configuration file is located at `.devcontainer/.pre-commit-config.yaml` where y
 
     Remember: These hooks are required to pass in CI before PR merge.
 
+!!! warning
+
+    You also able to remove local git hooks completely but your PR won't be able to
+    merge until hooks checks pass in CI:
+
+    ```bash
+    pre-commit uninstall --config .devcontainer/.pre-commit-config.yaml
+    ```
+
+    Option w/o using 3rd-parties tools:
+
+    ```bash
+    rm .git/hooks/*
+    ```
+
 ## Open Pull Request
 
 There are multiple options how PR could be opened, please refer to the following to choose option which works best for

@@ -285,6 +285,13 @@ python -m pip install -U -e /workspaces/partcad/partcad -e /workspaces/partcad/p
 
 ### Encountered X files that should have been pointers, but weren't:
 
+```text
+Encountered 3 files that should have been pointers, but weren't:
+        partcad-ide-vscode/docs/image1.png
+        partcad-ide-vscode/docs/image2.png
+        partcad-ide-vscode/resources/logo_128x128.png
+```
+
 This could be fixed with the following command:
 
 ```bash
