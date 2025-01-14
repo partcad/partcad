@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
 
-def process(path, request):
+def process(path):
     try:
         shape = TopoDS_Shape()
         builder = BRep_Builder()
