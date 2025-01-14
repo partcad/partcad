@@ -16,5 +16,6 @@ render:
   # step: ./ # TODO(clairbee): fix CadQuery's noisiness
   3mf: ./
   threejs: ./
+  brep: ./
   obj: ./
   markdown: README.md

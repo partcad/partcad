@@ -1386,6 +1386,20 @@ class Project(project_config.Configuration):
                     render_step = False
 
                 if (
+                    "brep" in shape_render
+                    and shape_render["brep"] is not None
+                    and not isinstance(shape_render["brep"], str)
+                    and shape.kind in shape_render.get("brep", {}).get("exclude", [])
+                ):
+                    render_brep = False
+                elif format is None and "brep" in shape_render:
+                    render_brep = True
+                elif not format is None and format == "brep":
+                    render_brep = True
+                else:
+                    render_brep = False
+
+                if (
                     "stl" in shape_render
                     and shape_render["stl"] is not None
                     and not isinstance(shape_render["stl"], str)
@@ -1461,6 +1475,8 @@ class Project(project_config.Configuration):
                     tasks.append(shape.render_png_async(self.ctx, self))
                 if render_step:
                     tasks.append(shape.render_step_async(self.ctx, self))
+                if render_brep:
+                    tasks.append(shape.render_brep_async(self.ctx, self))
                 if render_stl:
                     tasks.append(shape.render_stl_async(self.ctx, self))
                 if render_3mf:
