@@ -40,5 +40,5 @@ class PartConfigManufacturing:
             return "none"
         return "unknown"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"PartConfigManufacturing(method={self._method_string()})"

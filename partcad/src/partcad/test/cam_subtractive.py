@@ -17,7 +17,7 @@ from OCP.ShapeAnalysis import ShapeAnalysis_FreeBoundsProperties
 
 
 class CamSubtractiveTest(Test):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("cam-subtractive")
 
     async def test(self, ctx, shape):

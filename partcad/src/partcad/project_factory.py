@@ -27,16 +27,9 @@ class ImportConfiguration:
         self.import_config_type = config_obj.get("type")
         self.import_config_is_root = config_obj.get("isRoot", False)
         self.include_paths = self.config_obj.get("includePaths", [])
-        self.inherited_config = config_obj.get(
-            "inheritedConfig",
-            (
-                {
-                    "manufacturable": parent.is_manufacturable,
-                }
-                if parent
-                else {}
-            ),
-        )
+        self.inherited_config = config_obj.get("inheritedConfig", {})
+        if parent and not self.inherited_config:
+            self.inherited_config = {"manufacturable": parent.is_manufacturable}
 
 
 class ProjectFactory(ImportConfiguration):

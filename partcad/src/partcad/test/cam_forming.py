@@ -17,7 +17,7 @@ from OCP.ShapeAnalysis import ShapeAnalysis_FreeBoundsProperties
 
 
 class CamFormingTest(Test):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("cam-forming")
 
     async def test(self, ctx, shape):
@@ -40,4 +40,4 @@ class CamFormingTest(Test):
             pc_logging.error("The shape is not solid")
             return
 
-        pc_logging.debug("Passed test: %s: %s:%s" % (self.name, shape.project_name, shape.name))
+        pc_logging.debug(f"Passed test: {self.name}: {shape.project_name}:{shape.name}")

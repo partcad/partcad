@@ -16,7 +16,7 @@ from partcad.shape_config_store import ShapeConfigStore
 class ShapeConfiguration:
     is_manufacturable: bool = False
 
-    def __init__(self, config):
+    def __init__(self, config: dict) -> None:
         self.config = config
 
         if "name" in config:

@@ -12,7 +12,7 @@ from .. import logging as pc_logging
 
 
 class CadTest(Test):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("cad")
 
     async def test(self, ctx, shape):
@@ -21,4 +21,4 @@ class CadTest(Test):
             pc_logging.error("Failed to get the shape of %s:%s" % (shape.package, shape.name))
             return
 
-        pc_logging.debug("Passed test: %s: %s:%s" % (self.name, shape.project_name, shape.name))
+        pc_logging.debug(f"Passed test: {self.name}: {shape.project_name}:{shape.name}")

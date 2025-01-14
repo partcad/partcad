@@ -16,7 +16,7 @@ from ..assembly_config import AssemblyConfiguration
 
 
 class CamTest(Test):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("cam")
 
     async def test(self, ctx, shape):
@@ -84,8 +84,10 @@ class CamTest(Test):
             for part_name in bom:
                 part = ctx.get_part(part_name)
                 if part is None:
-                    pc_logging.error("Part %s:%s is missing" % (assembly.project_name, part_name))
+                    pc_logging.error(
+                        f"Missing part '{part_name}' required for assembly '{assembly.project_name}:{assembly.name}'"
+                    )
                     continue
                 await self.test(ctx, part)
 
-        pc_logging.debug("Passed test: %s: %s:%s" % (self.name, assembly.project_name, assembly.name))
+        pc_logging.debug(f"Passed test: {assembly.project_name}:{assembly.name}")

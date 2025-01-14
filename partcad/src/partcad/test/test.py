@@ -13,7 +13,7 @@ from .. import logging as pc_logging
 
 
 class Test(ABC):
-    def __init__(self, name):
+    def __init__(self, name) -> None:
         self.name = name
 
     @abstractmethod

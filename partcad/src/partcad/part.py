@@ -51,10 +51,10 @@ class Part(ShapeWithAi):
 
         store_data = self.get_store_data()
 
-        if (not store_data.vendor or not store_data.sku) and (
+        if not (store_data.vendor and store_data.sku) and (
             "parameters" not in self.config or property not in self.config["parameters"]
         ):
-            shape = await self.get_shape()
+            # shape = await self.get_shape()
             # TODO(clairbee): derive the property from the model
 
             if property == "finish":
@@ -93,8 +93,8 @@ class Part(ShapeWithAi):
         if not self.desc is None:
             name = self.desc
         store_data = self.get_store_data()
-        vendor = store_data.vendor if store_data.vendor else ""
-        sku = store_data.sku if store_data.sku else ""
+        vendor = store_data.vendor or ""
+        sku = store_data.sku or ""
         if self.url is None:
             label = name
         else:
