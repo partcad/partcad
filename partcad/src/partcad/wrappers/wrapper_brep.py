@@ -10,6 +10,7 @@ from OCP.TopoDS import TopoDS_Shape
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
+from ..exception import BREPProcessingError
 
 
 def process(path):
@@ -19,12 +20,12 @@ def process(path):
         brep_tools = BRepTools()
 
         if not brep_tools.Read_s(shape, path, builder):
-            raise Exception("BREP file could not be loaded")
+            raise BREPProcessingError(f"Failed to load BREP file: {path}")
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {
             "success": False,
-            "exception": str(e.with_traceback(None)),
+            "exception": str(e),
             "shape": None,
         }
 

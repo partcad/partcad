@@ -10,3 +10,11 @@
 
 class NeedsUpdateException(Exception):
     pass
+
+class PartFactoryBrepError(Exception):
+    """Custom exception for PartFactoryBrep errors."""
+    pass
+
+class BREPProcessingError(Exception):
+    """Custom exception for BREP processing errors."""
+    pass
