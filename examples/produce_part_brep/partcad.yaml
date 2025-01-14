@@ -1,0 +1,23 @@
+desc: PartCAD example project to demonstrate parts defined using BREP files.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect box
+    ```
+
+parts:
+  box:
+    type: brep
+    aliases:
+      - hexhead
+    desc: M8x30-screw
+  screw: box
+  fastener:
+    type: alias
+    source: box
+
+render:
+  readme:
+  svg:
+    prefix: ./
