@@ -90,6 +90,7 @@ class Ai(AiGoogle, AiOpenAI, AiOllama):
                 pc_logging.error(error)
                 return []
 
+            self.model = model
             result = []
             if provider == "google":
                 try:

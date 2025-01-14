@@ -45,7 +45,7 @@ from pathlib import Path
 )
 @click.argument("path", type=str)  # help="Path to the file"
 @click.pass_obj
-def cli(ctx, desc, kind, provider, path):
+def cli(ctx, desc, kind, provider, path: str):
     prj = ctx.get_project(pc.ROOT)
     with pc.logging.Process("AddPart", prj.name):
         config = {}
@@ -53,5 +53,13 @@ def cli(ctx, desc, kind, provider, path):
             config["desc"] = desc
         if provider:
             config["provider"] = provider
+            kind_ext = {
+                "ai-cadquery": "py",
+                "ai-openscad": "scad",
+            }
+            if path.lower().endswith((".%s" % kind_ext[kind]).lower()):
+                path = path.rsplit('.', 1)[0] + '.gen.' + kind_ext[kind]
+            else:
+                path += '.gen'
         if prj.add_part(kind, path, config):
             Path(path).touch()
