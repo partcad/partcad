@@ -11,7 +11,7 @@ from . import project as p
 
 
 class ImportConfiguration:
-    def __init__(self, config_obj={}, parent=None):
+    def __init__(self, config_obj: dict = {}, parent: p.Project | None = None):
         self.config_obj = config_obj
         self.name = config_obj.get("name")
         if not "type" in config_obj:
@@ -57,7 +57,11 @@ class ProjectFactory(ImportConfiguration):
     def _create(self, config):
         # TODO(clairbee): Finalize the config object if necessary
         self.project = p.Project(
-            self.ctx, self.name, self.path, include_paths=self.include_paths, inherited_config=self.inherited_config
+            self.ctx,
+            self.name,
+            self.path,
+            include_paths=self.include_paths,
+            inherited_config=self.inherited_config,
         )
         # Make the project config inherit some properties of the import config
         self.project.config_obj["type"] = self.import_config_type

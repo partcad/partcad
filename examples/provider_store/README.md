@@ -2,7 +2,7 @@
 
 Example of a shop provider implemented using a CSV file.
 
-This examples demonstrates how to implement a provider of the type 'store'.
+This example demonstrates how to implement a provider of the type 'store'.
 While this example uses a file, the providers are expected to uses online
 services for accessing up-to-date part availability data.
 However the use of a static file is acceptable too: the most of customers

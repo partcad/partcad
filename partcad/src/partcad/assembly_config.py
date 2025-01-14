@@ -24,6 +24,6 @@ class AssemblyConfiguration(ShapeConfiguration):
         return ShapeConfiguration.normalize(name, config)
 
     @staticmethod
-    def get_manufacturing_data(assembly):
+    def get_manufacturing_data(assembly) -> AssemblyConfigManufacturing:
         final_config = assembly.get_final_config()
         return AssemblyConfigManufacturing(final_config)

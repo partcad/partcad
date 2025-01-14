@@ -12,22 +12,22 @@ by ``vendor`` and ``SKU``.
 ``manufacturer`` can be used to quote and order parts by using their 3D model
 (for example, by 3D printing them).
 
-.. yaml:
+.. code-block:: yaml
 
   # partcad.yaml
 
   parts:
     existing_part:
-      ...
-      vendor: homedepot
+      vendor: homedepot # for example
       sku: ...
-    new_part:
       ...
+    new_part:
       manufacturing:
         method: additive
       parameters:
         color: black
         material: /pub/std/manufacturing/material/plastic:pla
+      ...
 
 See :ref:`providers` for more information about the providers and how PartCAD selects them.
 

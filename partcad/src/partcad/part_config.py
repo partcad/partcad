@@ -56,6 +56,6 @@ class PartConfiguration(ShapeConfiguration):
         return ShapeConfiguration.normalize(name, config)
 
     @staticmethod
-    def get_manufacturing_data(part):
+    def get_manufacturing_data(part) -> PartConfigManufacturing:
         final_config = part.get_final_config()
         return PartConfigManufacturing(final_config)

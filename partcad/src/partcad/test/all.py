@@ -11,6 +11,8 @@ from .test import Test
 from .cad import CadTest
 from .cam import CamTest
 from .cam_additive_solid import CamAdditiveSolidTest
+from .cam_subtractive import CamSubtractiveTest
+from .cam_forming import CamFormingTest
 
 _global_tests = []
 
@@ -22,6 +24,8 @@ def tests() -> list[Test]:
                 CadTest(),
                 CamTest(),
                 CamAdditiveSolidTest(),
+                CamSubtractiveTest(),
+                CamFormingTest(),
             ]
         )
     return _global_tests

@@ -45,10 +45,10 @@ class ShapeConfiguration:
 
         return config
 
-    def get_final_config(self):
+    def get_final_config(self) -> dict:
         """Return the final configuration (once all "alias" and "enrich" directives are resolved)."""
         return self.config
 
-    def get_store_data(self):
+    def get_store_data(self) -> ShapeConfigStore:
         final_config = self.get_final_config()
         return ShapeConfigStore(final_config)

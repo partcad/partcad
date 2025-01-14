@@ -9,7 +9,6 @@
 
 import asyncio
 import copy
-from typing import Dict
 
 from . import logging as pc_logging
 from .utils import resolve_resource_path

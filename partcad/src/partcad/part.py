@@ -52,7 +52,7 @@ class Part(ShapeWithAi):
         store_data = self.get_store_data()
 
         if (not store_data.vendor or not store_data.sku) and (
-            not "parameters" in self.config or not property in self.config["parameters"]
+            "parameters" not in self.config or property not in self.config["parameters"]
         ):
             shape = await self.get_shape()
             # TODO(clairbee): derive the property from the model
@@ -64,7 +64,7 @@ class Part(ShapeWithAi):
                 # By default, the parameter is not set
                 value = None
 
-            if value is not None:
+            if value:
                 if "parameters" not in self.config:
                     self.config["parameters"] = {}
                 self.config["parameters"][property] = {
@@ -98,9 +98,8 @@ class Part(ShapeWithAi):
         if self.url is None:
             label = name
         else:
-            label = "[" + name + "](" + self.url + ")"
-            if sku != "":
-                sku = "[" + sku + "](" + self.url + ")"
+            label = f"[{name}]({self.url})"
+            sku = f"[{sku}]({self.url})" if sku else ""
         count = str(math.ceil(self.count / store_data.count_per_sku))
         img_url = self._get_svg_url()
 

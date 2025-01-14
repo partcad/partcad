@@ -15,12 +15,6 @@ import asyncio
 from partcad.test.all import tests as all_tests
 
 
-async def logged_test(
-    action,
-):
-    pass
-
-
 async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assembly, scene, object):
     """
     TODO-118: @alexanderilyin: Add scene support

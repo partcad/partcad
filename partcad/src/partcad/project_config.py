@@ -26,10 +26,10 @@ class Configuration:
 
     def __init__(
         self,
-        name,
-        config_path=DEFAULT_CONFIG_FILENAME,
-        include_paths=[],
-        inherited_config={},
+        name: str,
+        config_path: str = DEFAULT_CONFIG_FILENAME,
+        include_paths: list[str] = [],
+        inherited_config: dict = {},
     ):
         self.name = name
         self.config_obj = {}
