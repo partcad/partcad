@@ -34,7 +34,7 @@ jobs:
         os: [windows-latest, macos-13] # macos-latest has an issue with nlopt
         python-version:
           - "3.10"
-          # - "3.11"
+          - "3.11"
           - "3.12"
         exclude:
           # PC-191: AttributeError: 'NoneType' object has no attribute 'TShape'
