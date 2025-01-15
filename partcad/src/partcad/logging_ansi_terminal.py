@@ -7,7 +7,6 @@
 # Licensed under Apache License, Version 2.0.
 
 import atexit
-import bisect
 import logging
 from logging.handlers import QueueHandler, QueueListener
 import queue
@@ -28,7 +27,7 @@ class TimeSortedActions:
         if key in self.actions:
             self.sorted_action_names.remove(key)  # Remove old key if it exists
         self.actions[key] = value
-        bisect.insort(self.sorted_action_names, key, key=lambda k: self.actions[k]["start"])
+        self.sorted_action_names.append(key)
 
     def __delitem__(self, key: str) -> None:
         del self.actions[key]

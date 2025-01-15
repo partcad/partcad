@@ -100,29 +100,6 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             "--json",
                             "-p",
                             self.path,
-                            "vtk",
-                            "-c",
-                            "conda-forge",
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        shell=False,
-                        encoding="utf-8",
-                    )
-                    _, stderr = p.communicate()
-                    if not stderr is None and stderr.strip() != "":
-                        pc_logging.error("conda vtk install error: %s" % stderr)
-
-                    # Install pip into the newly created conda environment
-                    p = subprocess.Popen(
-                        [
-                            self.conda_path,
-                            "install",
-                            "-y",
-                            "-q",
-                            "--json",
-                            "-p",
-                            self.path,
                             "pip",
                         ],
                         stdout=subprocess.PIPE,
