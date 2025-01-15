@@ -55,7 +55,7 @@ __all__ = [
     "exception",
 ]
 
-__version__: str = "0.7.61"
+__version__: str = "0.7.62"
 
 if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
     sentry_sdk.init(
