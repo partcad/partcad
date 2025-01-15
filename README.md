@@ -54,6 +54,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] [OpenSCAD]
   - Using legacy CAD files
     - [x] `STEP`
+    - [x] `BREP`
     - [x] `STL`
     - [x] `3MF`
   - Generating with LLM/GenAI
@@ -75,6 +76,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `PNG`
   - Export 3D models to CAD files
     - [x] `STEP`
+    - [x] `BREP`
     - [x] `STL`
     - [x] `3MF`
     - [x] `ThreeJS`
@@ -136,5 +138,6 @@ Give us a star for our hard work!
 [build123d]: https://github.com/gumyr/build123d
 [OpenSCAD]: https://openscad.org/
 [STEP]: https://en.wikipedia.org/wiki/ISO_10303
+[BREP]: https://en.wikipedia.org/wiki/Boundary_representation
 [OpenCASCADE]: https://www.opencascade.com/
 [Quick Start]: https://partcad.github.io/partcad/development/quick-start/

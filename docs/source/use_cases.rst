@@ -100,6 +100,7 @@ Individual parts, assemblies and scenes can also can be exported into 3D
 model file formats, including:
 
   - `STEP <https://en.wikipedia.org/wiki/ISO_10303>`_
+  - `BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_
   - `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_
   - `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_
   - `ThreeJS <https://en.wikipedia.org/wiki/Three.js>`_
@@ -112,6 +113,7 @@ in the future.
 
     pc export -t stl <part path>
     pc export -t step -a <assembly path>
+
 
 ==============
 Consume models
@@ -237,7 +239,7 @@ Part: Files
 -----------
 
 One way to define parts in PartCAD is by providing a file in any of the currently
-supported formats: STEP, STL, 3MF. There is no intention to limit the list of
+supported formats: STEP, BREP, STL, 3MF. There is no intention to limit the list of
 file formats supported. Contribute support of your favorite file format
 (ideally, implicitly, by adding the corresponding support to build123d).
 
@@ -248,9 +250,11 @@ file formats supported. Contribute support of your favorite file format
         part1:
             type: step # part1.step is used
         part2:
-            type: stl # part2.stl is used
+            type: brep # part2.brep is used
         part3:
-            type: 3mf # part3.3mf is used
+            type: stl # part3.stl is used
+        part4:
+            type: 3mf # part4.3mf is used
 
 Part: CAD scripts
 -----------------
