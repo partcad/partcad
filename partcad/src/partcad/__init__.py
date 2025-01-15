@@ -57,6 +57,7 @@ __all__ = [
 
 __version__: str = "0.7.62"
 
+# TODO(clairbee): move the below to `logging_sentry.py`
 if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
     sentry_sdk.init(
         dsn=user_config.get_string("sentry.dsn"),
@@ -64,11 +65,12 @@ if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
         debug=user_config.get_bool("sentry.debug"),
         shutdown_timeout=user_config.get_int("sentry.shutdown_timeout"),
         enable_tracing=True,
-        attach_stacktrace=True,
+        attach_stacktrace=False, # TODO(clairbee): enable when sanitizing is implemented, make it configurable for CI/CD
         traces_sample_rate=user_config.get_float("sentry.traces_sample_rate"),
         integrations=[
             LoggingIntegration(
                 level=logging.ERROR,
             )
-        ]
+        ],
+        before_send=lambda event, hint: event if event.level == "critical" else None,
     )
