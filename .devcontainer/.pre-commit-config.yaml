@@ -41,8 +41,8 @@ repos:
       - id: poetry-check
       - id: poetry-lock
       - id: poetry-export
-        args:
-          [
+        args: [
+            # TODO: This should be updating corresponding ./{partcad,docs,partcad-cli}/requirements.txt
             "--format=requirements.txt",
             "--output=.devcontainer/requirements.txt",
             "--with=dev",
