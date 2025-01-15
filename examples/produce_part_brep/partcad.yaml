@@ -9,11 +9,8 @@ docs:
 parts:
   box:
     type: brep
-    desc: 30x20x10-box
-  screw: box
-  fastener:
-    type: alias
-    source: box
+    desc: A box defined in BREP
+    
   
 
 render:
