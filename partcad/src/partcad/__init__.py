@@ -72,5 +72,5 @@ if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
                 level=logging.ERROR,
             )
         ],
-        before_send=lambda event, hint: event if event.level == "critical" else None,
+        before_send=lambda event, hint: event if event.level != "critical" else None,
     )
