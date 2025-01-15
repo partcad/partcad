@@ -1,4 +1,6 @@
 from build123d import Location
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 from .globals import (
     init,
@@ -54,3 +56,19 @@ __all__ = [
 ]
 
 __version__: str = "0.7.60"
+
+if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
+    sentry_sdk.init(
+        dsn=user_config.get_string("sentry.dsn"),
+        release=__version__,
+        debug=user_config.get_bool("sentry.debug"),
+        shutdown_timeout=user_config.get_int("sentry.shutdown_timeout"),
+        enable_tracing=True,
+        attach_stacktrace=True,
+        traces_sample_rate=user_config.get_float("sentry.traces_sample_rate"),
+        integrations=[
+            LoggingIntegration(
+                level=logging.ERROR,
+            )
+        ]
+    )
