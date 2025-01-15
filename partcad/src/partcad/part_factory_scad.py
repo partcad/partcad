@@ -14,7 +14,6 @@ import subprocess
 import tempfile
 import base64
 import pickle
-
 import build123d as b3d
 
 from .part_factory_file import PartFactoryFile
@@ -43,11 +42,7 @@ class PartFactoryScad(PartFactoryFile):
                 extension=".scad",
                 can_create=can_create,
             )
-
-            # Complement the config object here if necessary
-            self._create(config)
-
-            self.project_dir = source_project.config_dir
+            # FIXME: related to wrapper
             self.part_factory = PartFactoryPython(
                 ctx,
                 source_project,
@@ -56,6 +51,13 @@ class PartFactoryScad(PartFactoryFile):
                 can_create=can_create,
                 python_version=python_version,
             )
+            # simple preparing scad file with module calls
+            # self.pre_process_scad(
+            #     build_parameters=self.config["parameters"],
+            # )
+            # Complement the config object here if necessary
+            self._create(config)
+            self.project_dir = source_project.config_dir
 
     async def instantiate(self, part):
         await super().instantiate(part)
@@ -64,6 +66,8 @@ class PartFactoryScad(PartFactoryFile):
             if not os.path.exists(part.path) or os.path.getsize(part.path) == 0:
                 pc_logging.error("OpenSCAD script is empty or does not exist: %s" % part.path)
                 return None
+            # FIXME: NOT WORKING/ issue with OCP import on wrappers/wrapper_common.py
+
             # Finish initialization of PythonRuntime
             # which was too expensive to do in the constructor
             await self.part_factory.prepare_python()
@@ -153,3 +157,65 @@ class PartFactoryScad(PartFactoryFile):
             self.ctx.stats_parts_instantiated += 1
 
             return shape
+
+    def pre_process_scad(
+        self,
+        build_parameters: dict,
+    ):
+        """
+        Preprocess an SCAD file:
+          - Copy it to a temp file
+          - Resolve 'use' and 'include' directives by copying their files to /tmp
+          - Append a method call if it doesn't already exist
+        """
+
+        if "method" not in build_parameters:
+            return
+        method = build_parameters["method"]["default"]
+        build_parameters.pop("method")
+        # Add each remaining key-value pair in build_parameters to args
+        args = {}
+        for k, v in build_parameters.items():
+            args[k] = v["default"]
+
+        tmp_fd, tmp_file_path = tempfile.mkstemp(suffix=".scad", dir="/tmp")
+        os.close(tmp_fd)  # We only need the path; close the file descriptor.
+
+        shutil.copy(self.path, tmp_file_path)
+        args_str = ""
+        if args.items() != {}:
+            args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+
+        new_line = f"{method}({args_str});"
+
+        with open(tmp_file_path, "r") as f:
+            lines = f.readlines()
+
+        base_dir = os.path.dirname(self.path)
+        for line in lines:
+            line_stripped = line.strip()
+            if line_stripped.startswith("use <") or line_stripped.startswith("include <"):
+                # Extract the file name from the directive
+                file_name = line_stripped.split("<")[1].split(">")[0]
+                file_path = os.path.join(base_dir, file_name)
+
+                if os.path.exists(file_path):
+                    shutil.copy(file_path, "/tmp")
+                    print(f"Copied {file_name} to /tmp")
+                else:
+                    print(f"File {file_name} not found in {base_dir}")
+
+        original_content_str = "".join(lines)
+
+        if new_line in original_content_str:
+            print("The method call already exists in the file. No changes made.")
+            return
+
+        updated_content = f"{original_content_str}\n{new_line}"
+
+        with open(tmp_file_path, "w") as f:
+            f.write(updated_content)
+
+        # Update self.path to point to the modified temp file
+        self.path = tmp_file_path
+        print(f"File updated successfully at: {self.path}")
