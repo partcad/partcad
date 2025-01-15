@@ -63,6 +63,8 @@ class PartFactoryAlias(pf.PartFactory):
 
             pc_logging.debug("Initializing an alias to %s" % self.source)
 
+            self.part.get_final_config = self.get_final_config
+
     async def instantiate(self, part):
         with pc_logging.Action("Alias", part.project_name, f"{part.name}:{self.source_part_name}"):
 
@@ -81,3 +83,9 @@ class PartFactoryAlias(pf.PartFactory):
             if source.path:
                 part.path = source.path
             return await source.instantiate(part)
+
+    def get_final_config(self):
+        source = self.ctx._get_part(self.source)
+        if not source:
+            raise Exception(f"The alias source {self.source} is not found")
+        return source.get_final_config()

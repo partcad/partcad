@@ -8,6 +8,7 @@
 #
 
 from .shape_config import ShapeConfiguration
+from .part_config_manufacturing import PartConfigManufacturing
 
 
 class PartConfiguration(ShapeConfiguration):
@@ -53,3 +54,8 @@ class PartConfiguration(ShapeConfiguration):
                     param_value["type"] = "float"
 
         return ShapeConfiguration.normalize(name, config)
+
+    @staticmethod
+    def get_manufacturing_data(part) -> PartConfigManufacturing:
+        final_config = part.get_final_config()
+        return PartConfigManufacturing(final_config)
