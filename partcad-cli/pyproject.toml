@@ -1,6 +1,6 @@
 [project]
 name = "partcad-cli"
-version = "0.7.58"
+version = "0.7.59"
 description = "Command-line interface to PartCAD"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "cad", "design", "openscad", "step", "stl"]
