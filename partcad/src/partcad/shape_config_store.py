@@ -18,5 +18,5 @@ class ShapeConfigStore:
         self.sku = final_config.get("sku", None)
         self.count_per_sku = final_config.get("count_per_sku", 1)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"ShapeConfigStore(vendor={self.vendor}, sku={self.sku}, count_per_sku={self.count_per_sku})"

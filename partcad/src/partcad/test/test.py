@@ -14,7 +14,7 @@ from .. import logging as pc_logging
 
 
 class Test(ABC):
-    def __init__(self, name) -> None:
+    def __init__(self, name: str) -> None:
         self.name = name
 
     @abstractmethod
@@ -22,12 +22,11 @@ class Test(ABC):
         raise NotImplementedError("This method should be overridden")
 
     async def test_log_wrapper(self, tests_to_run: list["Test"], ctx, shape, test_ctx: dict = {}) -> bool:
-        # shape_name = shape.config["name"] if "name" in shape.config else shape.name
         test_ctx = copy.copy(test_ctx)
         test_ctx["log_wrapper"] = True
         action_name = (
             shape.project_name
-            if not "action_prefix" in test_ctx
+            if "action_prefix" not in test_ctx
             else f"{test_ctx['action_prefix']}:{shape.project_name}"
         )
         with pc_logging.Action("Test", action_name, shape.name, self.name):
@@ -54,4 +53,4 @@ class Test(ABC):
     def passed(self, shape, *args) -> None:
         """This methods works like logging.error() but prepends the message with the test name and the shape name."""
         message = self._log_message_prepare(*args)
-        pc_logging.info(f"Test passed: {shape.project_name}:{shape.name}: {self.name}{message}")
+        pc_logging.debug(f"Test passed: {shape.project_name}:{shape.name}: {self.name}{message}")

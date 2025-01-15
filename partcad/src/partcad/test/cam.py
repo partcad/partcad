@@ -28,13 +28,13 @@ class CamTest(Test):
             self.debug(shape, "Not applicable")
             return True
 
-        if not shape.is_manufacturable and not "force_manufacturing" in test_ctx:
+        if not shape.is_manufacturable and "force_manufacturing" not in test_ctx:
             self.debug(shape, "Not supposed to be manufacturable")
             return True
 
-        if isinstance(shape, Part):
+        if is_part:
             return await self.test_part(tests_to_run, ctx, shape, test_ctx)
-        elif isinstance(shape, Assembly):
+        else:
             return await self.test_assembly(tests_to_run, ctx, shape, test_ctx)
 
     async def test_part(self, tests_to_run: list[Test], ctx, part: Part, test_ctx: dict = {}) -> bool:

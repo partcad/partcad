@@ -128,8 +128,20 @@ class Project(project_config.Configuration):
         def __exit__(self, *_args):
             self.lock.release()
 
-    def __init__(self, ctx, name, path, include_paths=[], inherited_config={}):
-        super().__init__(name, path, include_paths=include_paths, inherited_config=inherited_config)
+    def __init__(
+        self,
+        ctx,
+        name: str,
+        path: str,
+        include_paths: list[str] = [],
+        inherited_config: dict = {},
+    ):
+        super().__init__(
+            name,
+            path,
+            include_paths=include_paths,
+            inherited_config=inherited_config,
+        )
         self.ctx = ctx
 
         # Protect the critical sections from access in different threads

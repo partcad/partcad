@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 
 import atexit
+import bisect
 import logging
 from logging.handlers import QueueHandler, QueueListener
 import queue
@@ -16,6 +17,32 @@ from typing import Any
 import threading
 
 from .logging import ops, error
+
+
+class TimeSortedActions:
+    def __init__(self):
+        self.actions = {}  # Use a regular dictionary to store data
+        self.sorted_action_names = []
+
+    def __setitem__(self, key, value):
+        if key in self.actions:
+            self.sorted_action_names.remove(key)  # Remove old key if it exists
+        self.actions[key] = value
+        bisect.insort(self.sorted_action_names, key, key=lambda k: self.actions[k]["start"])
+
+    def __delitem__(self, key):
+        del self.actions[key]
+        self.sorted_action_names.remove(key)
+
+    def __getitem__(self, key):
+        return self.actions[key]
+
+    def keys(self):
+        return self.sorted_action_names
+
+    def __contains__(self, key):
+        return key in self.actions
+
 
 COLOR_DEBUG = "\033[94m"
 COLOR_INFO = "\033[92m\033[1m"
@@ -80,6 +107,7 @@ def ansi_action_end(op: str, package: str, item: str = None):
 
 class AnsiTerminalProgressHandler(logging.Handler):
     MAX_LINES = 8
+    HEAD_LINES = 3
 
     def __init__(self, stream=sys.stdout) -> None:
         super().__init__()
@@ -96,7 +124,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
         self.process_start = None
         self.footer_size = 0
 
-        self.actions = {}
+        self.actions = TimeSortedActions()
         self.actions_running = 0
         self.actions_total = 0
 
@@ -225,9 +253,18 @@ class AnsiTerminalProgressHandler(logging.Handler):
             )
             self.footer_size = 1
 
-            sorted_actions = sorted(self.actions.values(), key=lambda a: a["start"])
-            sorted_actions = sorted_actions[: self.MAX_LINES]
-            for action in sorted_actions:
+            sorted_actions = self.actions.keys()
+            if len(sorted_actions) > self.MAX_LINES:
+                sorted_actions = (
+                    sorted_actions[: self.HEAD_LINES] + sorted_actions[-(self.MAX_LINES - self.HEAD_LINES - 1) :]
+                )
+                # output += str(len(sorted_actions)) + " actions\n"
+                skip_line = True
+            else:
+                sorted_actions = sorted_actions[: self.MAX_LINES]
+                skip_line = False
+            for i, action_string in enumerate(sorted_actions, 0):
+                action = self.actions[action_string]
                 output += "%s\t[%s]%s %s [%ds]\n" % (
                     COLOR_ACTION,
                     action["op"],
@@ -235,6 +272,9 @@ class AnsiTerminalProgressHandler(logging.Handler):
                     action["target"],
                     now - action["start"],
                 )
+                if skip_line and i == self.HEAD_LINES - 1:
+                    output += "\t...\n"
+                    self.footer_size += 1
                 self.footer_size += 1
             output += WRAP
         else:

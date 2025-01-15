@@ -70,6 +70,7 @@ sketches:
 
 parts:
   cylinder:
+    desc: An example of a manufacturable part
     type: extrude
     sketch: circle
     depth: 10
@@ -82,6 +83,12 @@ parts:
         default: /pub/std/manufacturing/material/plastic:pla
     manufacturing:
       method: additive
+
+assemblies:
+  assembly:
+    type: assy
+    manufacturing:
+      method: basic
 
 render:
   readme:

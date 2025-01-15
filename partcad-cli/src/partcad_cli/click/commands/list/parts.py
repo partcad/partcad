@@ -1,5 +1,4 @@
 import rich_click as click
-import partcad as pc
 from partcad import logging
 from partcad.logging import Process
 
@@ -36,7 +35,7 @@ def cli(ctx, used_by, recursive, package):
         part_kinds = 0
 
         if used_by is not None:
-            pc.logging.info("Instantiating %s..." % used_by)
+            logging.info("Instantiating %s..." % used_by)
             ctx.get_assembly(used_by)
         else:
             ctx.get_all_packages()
@@ -79,4 +78,4 @@ def cli(ctx, used_by, recursive, package):
                 output += "Total: %d parts of %d kinds\n" % (part_count, part_kinds)
         else:
             output += "\t<none>\n"
-        pc.logging.info(output)
+        logging.info(output)

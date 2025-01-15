@@ -13,21 +13,20 @@ METHOD_ADDITIVE: int = 100
 METHOD_SUBTRACTIVE: int = 200
 METHOD_FORMING: int = 300
 
+_METHOD_MAP = {
+    "additive": METHOD_ADDITIVE,
+    "subtractive": METHOD_SUBTRACTIVE,
+    "forming": METHOD_FORMING,
+}
+
 
 class PartConfigManufacturing:
     method: int | None
 
-    def __init__(self, final_config):
+    def __init__(self, final_config: dict) -> None:
         manufacturing_config = final_config.get("manufacturing", {})
         method_string = manufacturing_config.get("method", None)
-        if method_string == "additive":
-            self.method = METHOD_ADDITIVE
-        elif method_string == "subtractive":
-            self.method = METHOD_SUBTRACTIVE
-        elif method_string == "forming":
-            self.method = METHOD_FORMING
-        else:
-            self.method = METHOD_NONE
+        self.method = _METHOD_MAP.get(method_string, METHOD_NONE)
 
     def _method_string(self):
         if self.method == METHOD_ADDITIVE:
