@@ -31,10 +31,7 @@ from . import logging
 from . import utils
 from . import exception
 
-# import test
-
 __all__ = [
-    # "test",
     "config",
     "context",
     "shape",

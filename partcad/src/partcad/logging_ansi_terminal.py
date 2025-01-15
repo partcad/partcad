@@ -20,27 +20,27 @@ from .logging import ops, error
 
 
 class TimeSortedActions:
-    def __init__(self):
-        self.actions = {}  # Use a regular dictionary to store data
-        self.sorted_action_names = []
+    def __init__(self) -> None:
+        self.actions: dict = {}  # Use a regular dictionary to store data
+        self.sorted_action_names: list[str] = []
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value) -> None:
         if key in self.actions:
             self.sorted_action_names.remove(key)  # Remove old key if it exists
         self.actions[key] = value
         bisect.insort(self.sorted_action_names, key, key=lambda k: self.actions[k]["start"])
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: str) -> None:
         del self.actions[key]
         self.sorted_action_names.remove(key)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> dict:
         return self.actions[key]
 
-    def keys(self):
+    def keys(self) -> list[str]:
         return self.sorted_action_names
 
-    def __contains__(self, key):
+    def __contains__(self, key: str) -> bool:
         return key in self.actions
 
 
@@ -205,13 +205,9 @@ class AnsiTerminalProgressHandler(logging.Handler):
                     if action_key in self.actions:
                         del self.actions[record.op + "-" + target]
                     else:
-                        """
-                        When this happens, it means there are nested actions using the same name.
-                        It is usually happening when 'alias' or 'enrich' actions are used.
-                        It caused by the improper use of object names in actions.
-                        The proper way is to always use the target name as the same source can be used in multiple
-                        aliases and enriches.
-                        """
+                        """Missing action key typically indicates nested actions with identical names.
+                        This occurs with 'alias' or 'enrich' actions. Always use unique target names
+                        as the same source may be used in multiple aliases and enriches."""
 
                         error("action_key not found: %s: among %s" % (action_key, str(self.actions.keys())))
 

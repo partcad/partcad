@@ -7,6 +7,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import logging as pc_logging
+
 METHOD_NONE: None = None
 # Note: The assigned numbers are used in APIs and must never change unless the old method is deprecated.
 METHOD_ADDITIVE: int = 100
@@ -27,6 +29,10 @@ class PartConfigManufacturing:
         manufacturing_config = final_config.get("manufacturing", {})
         method_string = manufacturing_config.get("method", None)
         self.method = _METHOD_MAP.get(method_string, METHOD_NONE)
+        if self.method == METHOD_NONE and method_string is not None:
+            pc_logging.error(
+                f"Unknown manufacturing method '{method_string}'. " f"Supported methods: {list(_METHOD_MAP.keys())}."
+            )
 
     def _method_string(self):
         if self.method == METHOD_ADDITIVE:
