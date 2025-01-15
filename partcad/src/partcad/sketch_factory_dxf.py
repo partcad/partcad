@@ -30,10 +30,10 @@ class SketchFactoryDxf(SketchFactoryPython):
             python_version = source_project.python_version
             if python_version is None:
                 # Stay one step ahead of the minimum required Python version
-                python_version = "3.10"
-            if python_version == "3.12" or python_version == "3.11":
-                pc_logging.debug("Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery")
-                python_version = "3.10"
+                python_version = "3.11"
+            if python_version == "3.12" or python_version == "3.10":
+                pc_logging.debug("Switching Python version to 3.11 to avoid compatibility issues with CadQuery")
+                python_version = "3.11"
             super().__init__(
                 ctx,
                 source_project,
@@ -79,7 +79,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                 request_serialized = base64.b64encode(picklestring).decode()
 
                 await self.runtime.ensure_async("cadquery-ocp==7.7.2")
-                await self.runtime.ensure_async("cadquery==2.4.0")
+                await self.runtime.ensure_async("cadquery==2.5.2")
                 response_serialized, errors = await self.runtime.run_async(
                     [
                         wrapper_path,

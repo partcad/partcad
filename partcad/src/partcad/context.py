@@ -232,6 +232,8 @@ class Context(project_config.Configuration):
                 len_to_skip = 1
             project_path = project_path[len_to_skip:]
 
+            if self.name not in self.projects:
+                return None
             project = self.projects[self.name]
 
             if project_path == "":

@@ -81,7 +81,7 @@ class PartFactoryStep(PartFactoryFile):
                         # We don't care about customer preferences much here
                         # as this is expected to be hermetic.
                         # Stick to the version where CadQuery is known to work.
-                        self.runtime = self.ctx.get_python_runtime("3.10")
+                        self.runtime = self.ctx.get_python_runtime("3.11")
 
             if do_subprocess:
                 wrapper_path = wrapper.get("step.py")

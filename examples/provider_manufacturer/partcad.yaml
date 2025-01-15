@@ -1,4 +1,5 @@
 desc: Example of a manufacturer provider which is a pseudo 3D printer.
+manufacturable: true # Objects in this package are manufacturable
 
 docs:
   usage: |
@@ -69,6 +70,7 @@ sketches:
 
 parts:
   cylinder:
+    desc: An example of a manufacturable part
     type: extrude
     sketch: circle
     depth: 10
@@ -79,6 +81,14 @@ parts:
       material:
         type: string
         default: /pub/std/manufacturing/material/plastic:pla
+    manufacturing:
+      method: additive
+
+assemblies:
+  assembly:
+    type: assy
+    manufacturing:
+      method: basic
 
 render:
   readme:

@@ -12,28 +12,41 @@ import partcad.utils as pc_utils
 from partcad import logging as logging
 import asyncio
 
+from partcad.test.all import tests as all_tests
 
-async def cli_test_async(ctx, packages, sketch, interface, assembly, scene, object):
+
+async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assembly, scene, object):
     """
     TODO-118: @alexanderilyin: Add scene support
     """
     tasks = []
+
+    tests_to_run = all_tests()
+    if filter_prefix:
+        tests_to_run = list(filter(lambda t: t.name.startswith(filter_prefix), tests_to_run))
+        logging.debug(f"Running tests with prefix {filter_prefix}")
+
     for package in packages:
-        if object is not None:
+        if object:
             if ":" not in object:
                 object = ":" + object
             package, object = pc_utils.resolve_resource_path(ctx.get_current_project_path(), object)
 
         prj = ctx.get_project(package)
-        if object is None:
+        if not object:
             # Test all parts and assemblies in this project
-            tasks.append(prj.test_async())
+            tasks.append(prj.test_log_wrapper_async(ctx, tests=tests_to_run))
+        elif interface:
+            # Test the requested interface
+            shape = prj.get_interface(object)
+            if shape is None:
+                logging.error(f"{object} is not found")
+            else:
+                tasks.append(shape.test_async())
         else:
             # Test the requested part or assembly
             if sketch:
                 shape = prj.get_sketch(object)
-            elif interface:
-                shape = prj.get_interface(object)
             elif assembly:
                 shape = prj.get_assembly(object)
             else:
@@ -42,7 +55,7 @@ async def cli_test_async(ctx, packages, sketch, interface, assembly, scene, obje
             if shape is None:
                 logging.error(f"{object} is not found")
             else:
-                tasks.append(shape.test_async())
+                tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape) for t in tests_to_run])
 
     await asyncio.gather(*tasks)
 
@@ -62,6 +75,14 @@ async def cli_test_async(ctx, packages, sketch, interface, assembly, scene, obje
     is_flag=True,
     show_envvar=True,
     help="Recursively test all imported packages",
+)
+@click.option(
+    "--filter",
+    "-f",
+    help="Only run tests that start with the given prefix",
+    type=str,
+    show_envvar=True,
+    default=None,
 )
 @click.option(
     "--sketch",
@@ -93,9 +114,13 @@ async def cli_test_async(ctx, packages, sketch, interface, assembly, scene, obje
 )
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_obj
-def cli(ctx, package, recursive, sketch, interface, assembly, scene, object):
-    with logging.Process("Test", "this"):
-        package = package if package is not None else ""
+def cli(ctx, package, recursive, filter, sketch, interface, assembly, scene, object):
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        logging.error(f"Package {package} is not found")
+        return
+    package = package_obj.name
+    with logging.Process("Test", package):
         if recursive:
             start_package = ctx.get_project_abs_path(package)
             all_packages = ctx.get_all_packages(start_package)
@@ -105,4 +130,15 @@ def cli(ctx, package, recursive, sketch, interface, assembly, scene, object):
         else:
             packages = [package]
 
-        asyncio.run(cli_test_async(ctx, packages, sketch, interface, assembly, scene, object))
+        asyncio.run(
+            cli_test_async(
+                ctx,
+                packages,
+                filter_prefix=filter,
+                sketch=sketch,
+                interface=interface,
+                assembly=assembly,
+                scene=scene,
+                object=object,
+            )
+        )
