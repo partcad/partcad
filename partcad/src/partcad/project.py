@@ -17,6 +17,7 @@ import threading
 import typing
 
 
+
 from . import consts
 from . import factory
 from . import logging as pc_logging
@@ -24,6 +25,7 @@ from . import project_config
 from . import interface
 from . import sketch
 from . import sketch_config
+from .exception import EmptyShapesError
 from .exception import EmptyShapesError
 from .sketch_factory_alias import SketchFactoryAlias
 from .sketch_factory_enrich import SketchFactoryEnrich
