@@ -11,10 +11,26 @@
 class NeedsUpdateException(Exception):
     pass
 
-class PartFactoryBrepError(Exception):
-    """Custom exception for PartFactoryBrep errors."""
+class PartFactoryError(Exception):
+    """Base exception for all part factory-related errors."""
     pass
 
-class BREPProcessingError(Exception):
-    """Custom exception for BREP processing errors."""
+
+class PartFactoryInitializationError(PartFactoryError):
+    """Exception for errors during part factory initialization."""
+    pass
+
+
+class PartProcessingError(PartFactoryError):
+    """Exception for errors during part processing."""
+    pass
+
+
+class FileReadError(PartProcessingError):
+    """Exception for errors reading files."""
+    pass
+
+
+class ValidationError(PartFactoryError):
+    """Exception for validation errors in part factory configuration."""
     pass

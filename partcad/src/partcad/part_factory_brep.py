@@ -9,7 +9,7 @@ from OCP.BRepTools import BRepTools
 from OCP.TopoDS import TopoDS_Shape
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
-from .exception import PartFactoryBrepError
+from .exception import FileReadError
 
 
 class PartFactoryBrep(PartFactoryFile):
@@ -85,7 +85,7 @@ class PartFactoryBrep(PartFactoryFile):
             brep_tools = BRepTools()
 
             if not brep_tools.Read_s(shape, self.path, builder):
-                raise PartFactoryBrepError(f"Failed to load BREP file: {self.path}")
+                raise FileReadError(f"Failed to load BREP file: {self.path}")
 
             return shape
         except Exception as e:
