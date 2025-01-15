@@ -73,14 +73,14 @@ Feature: `pc` command
 
   @wip @pc-format @pc-format-level @pc-version
   Scenario: Use log level as output prefix
-    When I run "partcad --format=level version"
+    When I run "partcad --level version"
     Then the command should exit with a status code of "0"
     And STDERR should match the regex "^INFO PartCAD Python Module version: \d+\.\d+\.\d+$"
     And STDERR should match the regex "^INFO PartCAD CLI version: \d+\.\d+\.\d+$"
 
   @wip @pc-format @pc-format-time @pc-version
   Scenario: Use time with milliseconds as output prefix
-    When I run "partcad --format=time version"
+    When I run "partcad --time version"
     Then the command should exit with a status code of "0"
     And STDERR should match the regex "^\d{2}:\d{2}:\d{2}\.\d{3} INFO PartCAD Python Module version: \d+\.\d+\.\d+$"
     And STDERR should match the regex "^\d{2}:\d{2}:\d{2}\.\d{3} INFO PartCAD CLI version: \d+\.\d+\.\d+$"
@@ -88,7 +88,7 @@ Feature: `pc` command
 
   @wip @pc-format @pc-format-path @pc-version
   Scenario: Use source file path and line number as output prefix
-    When I run "partcad --format=path version"
+    When I run "partcad --path version"
     Then the command should exit with a status code of "0"
     And STDERR should match the regex "^/.+\.py:\d+ PartCAD Python Module version: \d+\.\d+\.\d+$"
     And STDERR should match the regex "^/.+\.py:\d+ PartCAD CLI version: \d+\.\d+\.\d+$"
