@@ -9,8 +9,10 @@ from OCP.BRepTools import BRepTools
 from OCP.TopoDS import TopoDS_Shape
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
+from . import wrapper
 from .exception import FileReadError
 
+sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 
 class PartFactoryBrep(PartFactoryFile):
     # Constants
@@ -27,7 +29,6 @@ class PartFactoryBrep(PartFactoryFile):
         """
         Initialize the BREP part factory.
         """
-        pc_logging.info(f"Initializing BREP factory with context: {ctx.__dict__}")
         with pc_logging.Action("InitBREP", target_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config, extension=".brep")
             self._create(config)
@@ -42,6 +43,7 @@ class PartFactoryBrep(PartFactoryFile):
         with pc_logging.Action("BREP", part.project_name, part.name):
             file_size = os.path.getsize(self.path)
             do_subprocess = self._should_use_subprocess(file_size)
+            do_subprocess = True
 
             # Load shape via subprocess or direct method
             if do_subprocess:
