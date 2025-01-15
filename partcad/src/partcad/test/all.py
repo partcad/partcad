@@ -14,7 +14,7 @@ from .cam_additive_solid import CamAdditiveSolidTest
 from .cam_subtractive import CamSubtractiveTest
 from .cam_forming import CamFormingTest
 
-_global_tests = []
+_global_tests: list[Test] = []
 
 
 def tests() -> list[Test]:

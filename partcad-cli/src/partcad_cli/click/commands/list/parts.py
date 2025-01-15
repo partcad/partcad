@@ -1,6 +1,6 @@
 import rich_click as click
 import partcad as pc
-import time
+from partcad import logging
 from partcad.logging import Process
 
 
@@ -25,7 +25,11 @@ from partcad.logging import Process
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
 def cli(ctx, used_by, recursive, package):
-    package = ctx.get_project(package).name
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        logging.error(f"Package {package} is not found")
+        return
+    package = package_obj.name
 
     with Process("ListParts", package):
         part_count = 0

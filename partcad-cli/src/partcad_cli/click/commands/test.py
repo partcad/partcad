@@ -55,7 +55,7 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
             if shape is None:
                 logging.error(f"{object} is not found")
             else:
-                tasks.extend([t.test_log_wrapper(ctx, shape) for t in tests_to_run])
+                tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape) for t in tests_to_run])
 
     await asyncio.gather(*tasks)
 
@@ -115,7 +115,11 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_obj
 def cli(ctx, package, recursive, filter, sketch, interface, assembly, scene, object):
-    package = ctx.get_project(package).name
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        logging.error(f"Package {package} is not found")
+        return
+    package = package_obj.name
     with logging.Process("Test", package):
         if recursive:
             start_package = ctx.get_project_abs_path(package)

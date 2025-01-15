@@ -20,15 +20,15 @@ class CamSubtractiveTest(Test):
     def __init__(self) -> None:
         super().__init__("cam-subtractive")
 
-    async def test(self, ctx, shape):
+    async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         if not isinstance(shape, Part):
-            # Not applicable
-            return
+            self.debug(shape, "Not applicable")
+            return True
 
         manufacturing_data = PartConfiguration.get_manufacturing_data(shape)
         if manufacturing_data.method != METHOD_SUBTRACTIVE:
-            # Not applicable
-            return
+            self.debug(shape, "Not applicable")
+            return True
 
         # TODO(clairbee): Utilize the data provided in the config
 
@@ -37,7 +37,8 @@ class CamSubtractiveTest(Test):
         fbp = ShapeAnalysis_FreeBoundsProperties(wrapped)
         fbp.Perform()
         if fbp.NbFreeBounds() != 0:
-            pc_logging.error("The shape is not solid")
-            return
+            self.failed(shape, "The shape is not solid")
+            return False
 
-        pc_logging.debug("Passed test: %s: %s:%s" % (self.name, shape.project_name, shape.name))
+        self.passed(shape)
+        return True

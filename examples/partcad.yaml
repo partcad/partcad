@@ -11,7 +11,7 @@
 # use the path prefix that we would expect in the real production use case.
 name: /pub/examples/partcad
 partcad: ">=0.7.56"
-manufacturable: False
+manufacturable: false
 
 cover:
   package: feature_interface

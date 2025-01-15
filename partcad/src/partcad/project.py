@@ -1261,35 +1261,37 @@ class Project(project_config.Configuration):
                     yaml.dump(config, fp)
                     fp.close()
 
-    async def test_async(self, ctx, tests=[]):
+    async def test_async(self, ctx, tests=[]) -> bool:
         tasks = []
         for interface in self.interfaces.values():
             tasks.append(asyncio.create_task(interface.test_async()))
         for sketch in self.sketches.values():
-            tasks.extend(map(lambda t: asyncio.create_task(t.test(ctx, sketch)), tests))
+            tasks.extend(map(lambda t: asyncio.create_task(t.test(tests, ctx, sketch)), tests))
         for part in self.parts.values():
-            tasks.extend(map(lambda t: asyncio.create_task(t.test(ctx, part)), tests))
+            tasks.extend(map(lambda t: asyncio.create_task(t.test(tests, ctx, part)), tests))
         for assembly in self.assemblies.values():
-            tasks.extend(map(lambda t: asyncio.create_task(t.test(ctx, assembly)), tests))
-        return await asyncio.gather(*tasks)
+            tasks.extend(map(lambda t: asyncio.create_task(t.test(tests, ctx, assembly)), tests))
+        results = await asyncio.gather(*tasks)
+        return False not in results
 
-    def test(self, ctx, tests=[]):
-        asyncio.run(self.test_async(ctx, tests))
+    def test(self, ctx, tests=[]) -> bool:
+        return asyncio.run(self.test_async(ctx, tests))
 
-    async def test_log_wrapper_async(self, ctx, tests=[]):
+    async def test_log_wrapper_async(self, ctx, tests=[]) -> bool:
         tasks = []
         for interface in self.interfaces.values():
             tasks.append(asyncio.create_task(interface.test_async()))
         for sketch in self.sketches.values():
-            tasks.extend(map(lambda t: asyncio.create_task(t.test_log_wrapper(ctx, sketch)), tests))
+            tasks.extend(map(lambda t: asyncio.create_task(t.test_log_wrapper(tests, ctx, sketch)), tests))
         for part in self.parts.values():
-            tasks.extend(map(lambda t: asyncio.create_task(t.test_log_wrapper(ctx, part)), tests))
+            tasks.extend(map(lambda t: asyncio.create_task(t.test_log_wrapper(tests, ctx, part)), tests))
         for assembly in self.assemblies.values():
-            tasks.extend(map(lambda t: asyncio.create_task(t.test_log_wrapper(ctx, assembly)), tests))
-        return await asyncio.gather(*tasks)
+            tasks.extend(map(lambda t: asyncio.create_task(t.test_log_wrapper(tests, ctx, assembly)), tests))
+        results = await asyncio.gather(*tasks)
+        return False not in results
 
-    def test_log_wrapper(self, ctx, tests=[]):
-        asyncio.run(self.test_log_wrapper_async(ctx, tests))
+    def test_log_wrapper(self, ctx, tests=[]) -> bool:
+        return asyncio.run(self.test_log_wrapper_async(ctx, tests))
 
     async def render_async(
         self,

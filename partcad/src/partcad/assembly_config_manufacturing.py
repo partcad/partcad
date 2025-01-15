@@ -15,7 +15,8 @@ class AssemblyConfigManufacturing:
     method: int | None
 
     def __init__(self, final_config):
-        method_string = final_config.get("method", None)
+        manufacturing_config = final_config.get("manufacturing", {})
+        method_string = manufacturing_config.get("method", None)
         if method_string == "basic":
             self.method = METHOD_ASSEMBLE_PARTCAD_BASIC
         else:

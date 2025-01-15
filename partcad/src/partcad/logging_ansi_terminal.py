@@ -177,6 +177,14 @@ class AnsiTerminalProgressHandler(logging.Handler):
                     if action_key in self.actions:
                         del self.actions[record.op + "-" + target]
                     else:
+                        """
+                        When this happens, it means there are nested actions using the same name.
+                        It is usually happening when 'alias' or 'enrich' actions are used.
+                        It caused by the improper use of object names in actions.
+                        The proper way is to always use the target name as the same source can be used in multiple
+                        aliases and enriches.
+                        """
+
                         error("action_key not found: %s: among %s" % (action_key, str(self.actions.keys())))
 
                     self.actions_running -= 1
