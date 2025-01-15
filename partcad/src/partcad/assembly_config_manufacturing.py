@@ -12,7 +12,7 @@ from . import logging as pc_logging
 METHOD_NONE = None
 METHOD_ASSEMBLE_PARTCAD_BASIC = 1
 
-_METHOD_MAP = {
+_METHOD_MAP: dict[str, int] = {
     "basic": METHOD_ASSEMBLE_PARTCAD_BASIC,
 }
 
@@ -26,10 +26,10 @@ class AssemblyConfigManufacturing:
         self.method = _METHOD_MAP.get(method_string, METHOD_NONE)
         if self.method is METHOD_NONE and method_string is not None:
             pc_logging.error(
-                f"Unknown manufacturing method '{method_string}'. " f"Supported methods: {list(_METHOD_MAP.keys())}."
+                f"Unknown manufacturing method '{method_string}'. Supported methods: {list(_METHOD_MAP.keys())}."
             )
 
-    def _method_string(self):
+    def _method_string(self) -> str:
         if self.method == METHOD_ASSEMBLE_PARTCAD_BASIC:
             return "basic"
         if self.method == METHOD_NONE:

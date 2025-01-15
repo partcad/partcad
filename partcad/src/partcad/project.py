@@ -1275,9 +1275,6 @@ class Project(project_config.Configuration):
 
     async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False) -> list[asyncio.Task]:
         tasks = []
-        for interface in self.interfaces.values():
-            tasks.append(asyncio.create_task(interface.test_async()))
-
         test_method = "test_log_wrapper" if use_wrapper else "test"
         for interface in self.interfaces.values():
             tasks.append(asyncio.create_task(interface.test_async()))
@@ -1291,13 +1288,13 @@ class Project(project_config.Configuration):
         return False not in results
 
     async def test_async(self, ctx, tests=[]) -> bool:
-        return await self._run_test_async(ctx, tests, False)
+        return await self._run_test_async(ctx, tests, use_wrapper=False)
 
     def test(self, ctx, tests=[]) -> bool:
         return asyncio.run(self.test_async(ctx, tests))
 
     async def test_log_wrapper_async(self, ctx, tests=[]) -> bool:
-        return await self._run_test_async(ctx, tests, True)
+        return await self._run_test_async(ctx, tests, use_wrapper=True)
 
     def test_log_wrapper(self, ctx, tests=[]) -> bool:
         return asyncio.run(self.test_log_wrapper_async(ctx, tests))

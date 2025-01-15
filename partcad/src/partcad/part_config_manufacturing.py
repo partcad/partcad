@@ -15,7 +15,7 @@ METHOD_ADDITIVE: int = 100
 METHOD_SUBTRACTIVE: int = 200
 METHOD_FORMING: int = 300
 
-_METHOD_MAP = {
+_METHOD_MAP: dict[str, int] = {
     "additive": METHOD_ADDITIVE,
     "subtractive": METHOD_SUBTRACTIVE,
     "forming": METHOD_FORMING,
@@ -31,10 +31,10 @@ class PartConfigManufacturing:
         self.method = _METHOD_MAP.get(method_string, METHOD_NONE)
         if self.method == METHOD_NONE and method_string is not None:
             pc_logging.error(
-                f"Unknown manufacturing method '{method_string}'. " f"Supported methods: {list(_METHOD_MAP.keys())}."
+                f"Unknown manufacturing method '{method_string}'. Supported methods: {list(_METHOD_MAP.keys())}."
             )
 
-    def _method_string(self):
+    def _method_string(self) -> str:
         if self.method == METHOD_ADDITIVE:
             return "additive"
         if self.method == METHOD_SUBTRACTIVE:
