@@ -10,7 +10,7 @@ from OCP.TopoDS import TopoDS_Shape
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 from . import wrapper
-from .exception import FileReadError
+from .exception import FileReadError, PartFactoryError
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 
@@ -43,7 +43,6 @@ class PartFactoryBrep(PartFactoryFile):
         with pc_logging.Action("BREP", part.project_name, part.name):
             file_size = os.path.getsize(self.path)
             do_subprocess = self._should_use_subprocess(file_size)
-            do_subprocess = True
 
             # Load shape via subprocess or direct method
             if do_subprocess:
@@ -128,7 +127,7 @@ class PartFactoryBrep(PartFactoryFile):
             response = pickle.loads(base64.b64decode(response_serialized))
             if not response.get("success", False):
                 pc_logging.error(response["exception"])
-                raise PartFactoryBrepError(response["exception"])
+                raise PartFactoryError(response["exception"])
 
             return response["shape"]
         except Exception as e:
