@@ -11,6 +11,7 @@ requests
 aiofiles
 aiohttp
 vyper-config==1.2.1
+sentry-sdk==2.19.2
 
 # Google AI
 google.generativeai
