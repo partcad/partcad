@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from async_lru import alru_cache
 import typing
 
 from .provider_request_caps import ProviderRequestCaps
@@ -30,6 +31,8 @@ class Provider:
         self.config = config
 
         self.url = config.get("url", None)
+
+        self.get_caps = alru_cache(maxsize=1, typed=True)(self.get_caps)
 
     def error(self, msg: str):
         mute = self.config.get("mute", False)

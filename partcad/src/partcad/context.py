@@ -615,43 +615,57 @@ class Context(project_config.Configuration):
         """Find suppliers for each of the parts in the cart"""
         suppliers = {}
         for name, part_spec in cart.parts.items():
-            if not ":" in name:
-                name = ":" + name
-            project_name, part_name = resolve_resource_path(
-                self.current_project_path,
-                name,
-            )
-            prj = self.get_project(project_name)
-            if prj is None:
-                pc_logging.error("Package %s not found" % project_name)
-                pc_logging.error("Packages found: %s" % str(self.projects))
-                return {}
-            pc_logging.debug("Retrieving suppliers from %s" % project_name)
+            suppliers_per_part = await self.find_part_suppliers(part_spec, cart)
 
-            part_suppliers = prj.get_suppliers(part_spec)
-            if len(part_suppliers) == 0:
-                pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
-                return {}
+            if not suppliers_per_part:
+                pc_logging.error(f"No supplier found for {name}")
 
-            pc_logging.debug("Part spec: %s" % str(part_spec))
-            for provider_name, provider_extra_config in part_suppliers.items():
-                provider = self.get_provider(provider_name, provider_extra_config)
-                if cart.qos is not None and not provider.is_qos_available(cart.qos):
-                    continue
-                if not await provider.is_part_available(part_spec):
-                    continue
+            suppliers[name] = suppliers_per_part
 
-                if f"{project_name}:{part_name}" not in suppliers:
-                    suppliers[f"{project_name}:{part_name}"] = []
-                suppliers[f"{project_name}:{part_name}"].append(provider.name)
-
-            if f"{project_name}:{part_name}" not in suppliers:
-                pc_logging.error(f"No supplier found for {project_name}:{part_name}")
-
-        # TODO(clairbee): calculate the recommended suppliers and
-        #                 reorder the results accordingly
-
+        # TODO(clairbee): calculate the recommended suppliers and reorder the results accordingly
         return suppliers
+
+    async def find_part_suppliers(self, part_item: ProviderCartItem, cart: ProviderCart = None) -> dict[str, list[str]]:
+        """Find suppliers for a specific part. Optionally, use a cart for requirements and preferences.
+
+        Args:
+            part_spec (ProviderCartItem): The part to find suppliers for.
+            cart (ProviderCart, optional): Use this cart for requirements and preferences. Defaults to None.
+
+        Returns:
+            list[str]: list of provider names that can supply the part.
+        """
+        providers = []
+
+        project_name, part_name = resolve_resource_path(
+            self.current_project_path,
+            part_item.name,
+        )
+        prj = self.get_project(project_name)
+        if prj is None:
+            pc_logging.error("Package %s not found" % project_name)
+            pc_logging.error("Packages found: %s" % str(self.projects))
+            return {}
+        pc_logging.debug("Retrieving suppliers from %s" % project_name)
+
+        part_suppliers = prj.get_suppliers()
+        if len(part_suppliers) == 0:
+            pc_logging.error("No suppliers found for %s in %s" % (part_name, project_name))
+            return {}
+        else:
+            pc_logging.debug("Part suppliers: %s" % str(part_suppliers))
+
+        pc_logging.debug("Part: %s" % str(part_item))
+        for provider_name, provider_extra_config in part_suppliers.items():
+            provider = self.get_provider(provider_name, provider_extra_config)
+            if not await provider.is_part_available(part_item):
+                continue
+            if cart and cart.qos is not None and not provider.is_qos_available(cart.qos):
+                continue
+
+            providers.append(provider_name)
+
+        return providers
 
     def select_preferred_supplier(self, suppliers: list[str]):
         """From a list of suppliers, select the preferred one."""
@@ -733,6 +747,7 @@ class Context(project_config.Configuration):
         return quotes
 
     def get_provider(self, part_spec, params=None):
+        pc_logging.debug("Getting provider for %s" % part_spec)
         project_name, part_name = resolve_resource_path(
             self.current_project_path,
             part_spec,

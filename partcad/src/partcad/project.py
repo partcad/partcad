@@ -1061,10 +1061,11 @@ class Project(project_config.Configuration):
 
             return self.providers[result_name]
 
-    def get_suppliers(self, part_spec):
-        # TODO(clairbee): return the eligible subset of suppliers
-        # part_name = part_spec["name"]
-        return self.suppliers
+    def get_suppliers(self):
+        return {
+            supplier_name if ":" in supplier_name else f"{self.name}:{supplier_name}": supplier
+            for supplier_name, supplier in self.suppliers.items()
+        }
 
     def init_suppliers(self):
         cfg = self.config_obj.get("suppliers", {})

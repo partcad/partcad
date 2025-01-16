@@ -51,6 +51,9 @@ def cli(ctx, api, qos, provider, specs):
 
         if provider:
             provider = ctx.get_provider(provider)
+            if not provider:
+                pc.logging.error(f"Provider {provider} not found.")
+                return
             preferred_suppliers = asyncio.run(ctx.select_supplier(provider, cart))
             pc.logging.debug("Selected suppliers: %s" % str(preferred_suppliers))
         else:
