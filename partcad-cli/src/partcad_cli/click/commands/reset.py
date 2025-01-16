@@ -14,7 +14,7 @@ def cli(ctx: Context) -> None:
         for import_type in cached_import_types:
             cache_dir = os.path.join(user_config.internal_state_dir, import_type)
             if os.path.exists(cache_dir):
-                with Action(f"Repos", import_type):
+                with Action("Repos", import_type):
                     shutil.rmtree(cache_dir)
                     info(f"Removed cached {import_type} dependencies: '{cache_dir}'")
 
