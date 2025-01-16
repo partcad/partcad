@@ -146,7 +146,7 @@
   "githubPullRequests.experimental.chat": true,
   "githubPullRequests.pullBranch": "never",
   "markdown.extension.toc.omittedFromToc": {
-    ".github/README.md": [
+    "README.md": [
       "# PartCAD"
     ]
   },

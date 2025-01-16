@@ -22,7 +22,7 @@ Stay informed and share feedback by joining [our Discord server](https://discord
 
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
-[![PartCAD Visual Studio Code extension](../docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
+[![PartCAD Visual Studio Code extension](docs/source/images/vscode1.png)](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad)
 
 ## Features
 
