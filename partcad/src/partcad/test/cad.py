@@ -18,8 +18,6 @@ class CadTest(Test):
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
         wrapped = await shape.get_wrapped()
         if wrapped is None:
-            self.failed(shape, "Failed to get the shape")
-            return False
+            return self.failed(shape, "Failed to get the shape")
 
-        self.passed(shape)
-        return True
+        return self.passed(shape)

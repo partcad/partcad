@@ -123,6 +123,7 @@ google-generativeai = "^0.8.3"
 pillow = "^11.0.0"
 openai = "^1.55.1"
 ollama = "^0.4.1"
+async-lru = "^2.0.4"
 
 [tool.poetry.group.cli.dependencies]
 setuptools = "^75.5.0"
