@@ -4,7 +4,14 @@ import partcad as pc
 import coloredlogs
 import logging
 import sentry_sdk
-from sentry_sdk.tracing import Transaction
+import rich_click as click
+import yaml
+import partcad as pc
+import coloredlogs
+import logging
+import sentry_sdk
+
+from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
