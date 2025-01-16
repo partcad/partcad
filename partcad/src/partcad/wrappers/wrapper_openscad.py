@@ -18,13 +18,10 @@ def process(path, request):
     if "build_parameters" in request:
         build_parameters = request["build_parameters"]
     if not build_parameters:
-        return {"success": False, "exception": "No build parameters provided"}
+        return {"success": "success", "newPath": path}
     method = build_parameters.get("method", "")
     # delete the method from the build parameters
     build_parameters.pop("method", None)
-
-    if build_parameters is None:
-        build_parameters = {}
 
     tmp_fd, tmp_file_path = tempfile.mkstemp(suffix=".scad", dir="/tmp")
     os.close(tmp_fd)  # We only need the path; close the file descriptor.
@@ -56,15 +53,13 @@ def process(path, request):
 
             if os.path.exists(file_path):
                 shutil.copy(file_path, "/tmp")
-                print(f"Copied {file_name} to /tmp")
             else:
-                print(f"File {file_name} not found in {base_dir}")
+                return {"exception": f"File {file_name} not found in {base_dir}"}
 
     original_content_str = "".join(lines)
 
     if new_line in original_content_str:
-        print("The method call already exists in the file. No changes made.")
-        return
+        return {"success": "success", "newPath": tmp_file_path}
 
     updated_content = f"{original_content_str}\n{new_line}"
 
@@ -72,15 +67,14 @@ def process(path, request):
         f.write(updated_content)
 
     return {
-        "success": True,
-        # "exception": "",
+        "success": "success",
         "newPath": tmp_file_path,
     }
 
 
 path, request = wrapper_common.handle_input()
 
-# Call CadQuery
+# Call OpenScad
 model = process(path, request)
 
 wrapper_common.handle_output(model)
