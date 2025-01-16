@@ -45,6 +45,11 @@ class UserConfig(vyper.Vyper):
 
         self.set_default("sentry.shutdown_timeout", 5)
         self.set_default("sentry.traces_sample_rate", 1.0)
+        self.set_default("sentry.dsn", "https://sentry.partcad.org")
+        self.set_default("sentry.environment", "production")
+        self.set_default("sentry.debug", False)
+        self.set_default("sentry.enable_tracing", True)
+        self.set_default("sentry.attach_stacktrace", False)
 
         self.set_env_prefix("pc")
         self.automatic_env()
@@ -118,5 +123,6 @@ class UserConfig(vyper.Vyper):
         self.max_script_correction = None
         if self.is_set("maxScriptCorrection"):
             self.max_script_correction = self.get_int("maxScriptCorrection")
+
 
 user_config = UserConfig()

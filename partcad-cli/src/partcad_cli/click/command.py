@@ -3,6 +3,8 @@ import yaml
 import partcad as pc
 import coloredlogs
 import logging
+import sentry_sdk
+from sentry_sdk.tracing import Transaction
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
@@ -64,6 +66,7 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     show_envvar=True,
 )
 @click.pass_context
+@sentry_sdk.trace
 def cli(ctx, verbose, quiet, no_ansi, package, format):
     """
     \b
@@ -75,6 +78,9 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
     ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝╚═════╝
 
     """
+
+    sentry_sdk.start_transaction(op="process", name="PartCAD")
+
     # TODO-86: @clairbee add a config option to change logging mechanism and level
     if no_ansi:
         logging.getLogger("partcad").propagate = True
@@ -182,6 +188,16 @@ cli.context_settings = {
 
 @cli.result_callback()
 def process_result(result, verbose, quiet, no_ansi, package, format):
+    transaction = sentry_sdk.Hub.current.scope.transaction  # type: Transaction
+    if transaction:
+        transaction.finish()
+
+    # flush() prevents the following message:
+    # Sentry is attempting to send 3 pending events
+    # Waiting up to 1 seconds
+    # Press Ctrl-C to quit
+    sentry_sdk.flush()
+
     # TODO-89: @alexanderilyin: What is this for?
     if not no_ansi:
         pc.logging_ansi_terminal_fini()

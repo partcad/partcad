@@ -8,6 +8,7 @@
 
 
 import rich_click as click
+import sentry_sdk
 
 import os
 import threading
@@ -58,7 +59,9 @@ def get_runtime():
         logging.info("Runtime environments size: %.2fMB" % runtime_total)
 
 
+# @sentry_sdk.trace # AttributeError: 'function' object has no attribute 'make_context'
 @click.command(help="Display the state of internal data used by PartCAD")
+@sentry_sdk.trace  # TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'
 def cli() -> None:
     with logging.Process("Status", "this"):
 
