@@ -11,22 +11,17 @@ import asyncio
 import os
 import shutil
 import subprocess
-import tempfile
-import base64
-import pickle
 import build123d as b3d
+import hashlib
+import tempfile
+import fcntl  # For file locking
 
 from .part_factory_file import PartFactoryFile
-from .runtime_python import PythonRuntime
 
-from . import wrapper
-from ocp_serialize import register as register_ocp_helper
 from . import logging as pc_logging
 
 
 class PartFactoryScad(PartFactoryFile):
-    runtime: PythonRuntime
-    cwd: str
 
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
 
@@ -39,18 +34,7 @@ class PartFactoryScad(PartFactoryFile):
                 extension=".scad",
                 can_create=can_create,
             )
-            # FIXME: related to wrapper
-            python_version = source_project.python_version
-            if python_version is None:
-                # Stay one step ahead of the minimum required Python version
-                python_version = "3.10"
-            if python_version == "3.12" or python_version == "3.11":
-                pc_logging.debug("Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery")
-            python_version = "3.10"
-            self.runtime = self.ctx.get_python_runtime(python_version)
-            self.session = self.runtime.get_session(source_project.name)
-            self.cwd = config.get("cwd", None)
-
+            self.pre_process_scad()
             self._create(config)
             self.project_dir = source_project.config_dir
 
@@ -61,59 +45,7 @@ class PartFactoryScad(PartFactoryFile):
             if not os.path.exists(part.path) or os.path.getsize(part.path) == 0:
                 pc_logging.error("OpenSCAD script is empty or does not exist: %s" % part.path)
                 return None
-            # FIXME: NOT WORKING/ issue with OCP import on wrappers/wrapper_common.py
-            # Finish initialization of PythonRuntime
-            # which was too expensive to do in the constructor
-            await self.prepare_python()
-            # Get the path to the wrapper script
-            # which needs to be executed
-            wrapper_path = wrapper.get("openscad.py")
 
-            # Build the request
-            request = {"build_parameters": {}}
-            if "parameters" in self.config:
-                for param_name, param in self.config["parameters"].items():
-                    request["build_parameters"][param_name] = param["default"]
-            # Serialize the request
-            register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
-            cwd = self.project.config_dir
-            if self.cwd is not None:
-                cwd = os.path.join(self.project.config_dir, self.cwd)
-
-            response_serialized, errors = await self.runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(part.path),
-                    os.path.abspath(cwd),
-                ],
-                request_serialized,
-                session=self.session,
-            )
-            if len(errors) > 0:
-                error_lines = errors.split("\n")
-                for error_line in error_lines:
-                    part.error("%s: %s" % (part.name, error_line))
-
-            try:
-                pc_logging.info("Response: %s" % response_serialized)
-                response = base64.b64decode(response_serialized)
-                register_ocp_helper()
-                result = pickle.loads(response)
-            except Exception as e:
-                part.error("Exception while deserializing %s: %s" % (part.name, e))
-                return None
-
-            if not result["success"]:
-                part.error("%s: %s" % (part.name, result["exception"]))
-                return None
-
-            if result["newPath"] is None:
-                return None
-            # TODO: we might need to delete /tmp folder after the script is done
-            self.path = result["newPath"]
-            self.part.path = self.path
             scad_path = shutil.which("openscad")
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
@@ -158,13 +90,107 @@ class PartFactoryScad(PartFactoryFile):
 
             return shape
 
-    async def prepare_python(self):
+    def pre_process_scad(self):
         """
-        This method is called by child classes
-        to prepare the Python environment
-        before instantiating the part.
+        Preprocess a SCAD file by:
+        - appending module call to the end of SCAD file.
+        - updates self.path to the new file path
         """
-        # Install dependencies of this package
-        # DO NOT COMMIT
-        await self.runtime.prepare_for_package(self.project, session=self.session)
-        await self.runtime.prepare_for_shape(self.config, session=self.session)
+        args: dict = {}
+        method: str = None
+        args_str: str = ""
+
+        if "parameters" in self.config:
+            for param_name, param in self.config["parameters"].items():
+                if param_name == "method":
+                    method = param["default"]
+                else:
+                    args[param_name] = param["default"]
+        if method is None:
+            return
+
+        if args:
+            args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+
+        new_line = f"{method}({args_str});"
+
+        base_dir = os.path.dirname(self.path)
+        if not base_dir:
+            base_dir = "."
+
+        lock_path = "/tmp/partcad.lock"
+        with open(lock_path, "w") as lock_file:
+            fcntl.lockf(lock_file, fcntl.LOCK_EX)
+
+            try:
+                if ".partcad/git" in base_dir.replace("\\", "/"):
+                    # Create a stable name for the SCAD file
+                    hashed = hashlib.sha1(base_dir.encode("utf-8")).hexdigest()
+                    original_filename = os.path.basename(self.path)
+                    new_filename = f"partcad_{hashed}_{original_filename}"
+                    new_scad_path = os.path.join(base_dir, new_filename)
+
+                    print(f"Detected '.partcad/git' in path. Copying to {new_scad_path} ...")
+                    shutil.copy(self.path, new_scad_path)
+
+                    # Read the content
+                    with open(new_scad_path, "r") as f:
+                        lines = f.readlines()
+                    non_commented_lines = []
+                    for line in lines:
+                        stripped = line.strip()
+                        # If the line starts with `//`, skip it, its commented
+                        if stripped.startswith("//"):
+                            continue
+                        non_commented_lines.append(line)
+
+                    non_commented_content_str = "".join(non_commented_lines)
+
+                    # Check if the method call already exists
+                    if new_line not in non_commented_content_str:
+                        content = "".join(lines)
+                        updated_content = f"{content}\n{new_line}"
+                        with open(new_scad_path, "w") as f:
+                            f.write(updated_content)
+
+                    self.path = new_scad_path
+
+                else:
+                    hashed = hashlib.sha1(base_dir.encode("utf-8")).hexdigest()
+                    tmp_package_dir = f"/tmp/partcad-openscad-{hashed}"
+
+                    # Copy entire base_dir to tmp_package_dir if not already present
+                    if not os.path.exists(tmp_package_dir):
+                        shutil.copytree(base_dir, tmp_package_dir)
+
+                    # Name of the SCAD file in the tmp directory
+                    scad_filename = os.path.basename(self.path)
+                    new_scad_path = os.path.join(tmp_package_dir, scad_filename)
+
+                    # Overwrite the file from original source
+                    shutil.copy(self.path, new_scad_path)
+
+                    # Read its content
+                    with open(new_scad_path, "r") as f:
+                        lines = f.readlines()
+                        # 1) Build a string of *non-commented* lines only
+                    non_commented_lines = []
+                    for line in lines:
+                        stripped = line.strip()
+                        if stripped.startswith("//"):
+                            continue
+                        non_commented_lines.append(line)
+
+                    non_commented_content_str = "".join(non_commented_lines)
+                    if new_line not in non_commented_content_str:
+                        content = "".join(lines)
+                        updated_content = f"{content}\n{new_line}"
+                        with open(new_scad_path, "w") as f:
+                            f.write(updated_content)
+
+                    # Update self.path to the new file location
+                    self.path = new_scad_path
+
+            finally:
+                # Release the lock
+                fcntl.lockf(lock_file, fcntl.LOCK_UN)
