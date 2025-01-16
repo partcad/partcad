@@ -21,7 +21,7 @@ from . import project_factory_local as rfl
 from . import project_factory_git as rfg
 from . import project_factory_tar as rft
 from . import sync_threads
-from .user_config import user_config
+from .user_config import UserConfig
 from .utils import *
 from .provider_request_quote import ProviderRequestQuote
 from .provider_data_cart import *
@@ -71,7 +71,7 @@ class Context(project_config.Configuration):
         def __exit__(self, *_args):
             self.lock.release()
 
-    def __init__(self, root_path=None, search_root=True):
+    def __init__(self, root_path=None, search_root=True, user_config=UserConfig()):
         """Initializes the context and loads the root project."""
         root_file = ""
         if root_path is None:
@@ -133,6 +133,7 @@ class Context(project_config.Configuration):
         self.project_locks = {}
         self.project_locks_lock = threading.Lock()
         self._projects_being_loaded = {}
+        self.user_config = user_config
 
         with pc_logging.Process("InitCtx", self.config_dir):
             self.import_project(
@@ -825,7 +826,7 @@ class Context(project_config.Configuration):
                     sys.version_info.minor,
                 )
             if python_runtime is None:
-                python_runtime = user_config.python_runtime
+                python_runtime = self.user_config.python_runtime
             runtime_name = python_runtime + "-" + version
             if not runtime_name in self.runtimes_python:
                 self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)

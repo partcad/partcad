@@ -14,7 +14,6 @@ from typing import Any
 
 from .ai_feature_file import AiContentFile, AiContentProcessor
 from . import logging as pc_logging
-from .user_config import user_config
 
 # Lazy-load AI imports as they are not always needed
 # import PIL.Image
@@ -33,7 +32,7 @@ model_tokens = {
 }
 
 
-def google_once():
+def google_once(latest_key: str):
     global GOOGLE_API_KEY
     global pil_image
     global google_genai
@@ -49,7 +48,6 @@ def google_once():
         if google_api_core_exceptions is None:
             google_api_core_exceptions = importlib.import_module("google.api_core.exceptions")
 
-        latest_key = user_config.google_api_key
         if latest_key != GOOGLE_API_KEY:
             GOOGLE_API_KEY = latest_key
             if not GOOGLE_API_KEY is None:
@@ -70,7 +68,7 @@ class AiGoogle(AiContentProcessor):
         config: dict[str, Any] = {},
         options_num: int = 1,
     ):
-        if not google_once():
+        if not google_once(self.ctx.user_config.google_api_key):
             return None
 
         if "tokens" in config:

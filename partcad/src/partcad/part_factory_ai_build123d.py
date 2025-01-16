@@ -23,6 +23,14 @@ class PartFactoryAiBuild123d(PartFactoryBuild123d, PartFactoryFeatureAi):
             mode = "algebra"
 
         with pc_logging.Action("InitAiB3d", target_project.name, config["name"]):
+            PartFactoryBuild123d.__init__(
+                self,
+                ctx,
+                source_project,
+                target_project,
+                config,
+                can_create=True,
+            )
             PartFactoryFeatureAi.__init__(
                 self,
                 config,
@@ -33,14 +41,6 @@ class PartFactoryAiBuild123d(PartFactoryBuild123d, PartFactoryFeatureAi):
 Do not export anything.
 Use show_object() to display the part.
 """,
-            )
-            PartFactoryBuild123d.__init__(
-                self,
-                ctx,
-                source_project,
-                target_project,
-                config,
-                can_create=True,
             )
 
             self.on_init_ai()

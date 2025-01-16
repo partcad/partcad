@@ -6,6 +6,7 @@ import logging
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
+from partcad.user_config import UserConfig
 
 help_config = click.RichHelpConfiguration(
     text_markup="rich",
@@ -122,10 +123,6 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
         "install",
         "update",
     ]
-    if ctx.invoked_subcommand in commands_with_forced_update:
-        from partcad.user_config import user_config
-
-        user_config.force_update = True
 
     # TODO-88: @alexanderilyin: try to get this list dynamically
     commands_with_context = [
@@ -146,7 +143,9 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
         from partcad.globals import init
 
         try:
-            ctx.obj = init(package)
+            user_config = UserConfig()
+            user_config.force_update = ctx.invoked_subcommand in commands_with_forced_update
+            ctx.obj = init(package, user_config=user_config)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
             exc = click.BadParameter("Invalid configuration file", ctx=ctx, param=package, param_hint=None)
             exc.exit_code = 2

@@ -8,14 +8,12 @@
 
 import os
 
-from .user_config import user_config
-
 
 class Runtime:
     @staticmethod
-    def get_internal_state_dir():
+    def get_internal_state_dir(internal_state_dir):
         return os.path.join(
-            user_config.internal_state_dir,
+            internal_state_dir,
             "runtime",
         )
 
@@ -23,7 +21,7 @@ class Runtime:
         self.ctx = ctx
         self.name = name
         self.path = os.path.join(
-            Runtime.get_internal_state_dir(),
+            Runtime.get_internal_state_dir(self.ctx.user_config.internal_state_dir),
             "pc-" + name,  # Leave "pc-" for UX (e.g. in VS Code)
         )
         self.initialized = os.path.exists(self.path)
