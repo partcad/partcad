@@ -1386,7 +1386,7 @@ class Project(project_config.Configuration):
 
             if None in shapes:
                 raise EmptyShapesError
-            
+
             for shape in shapes:
                 shape_render = copy.copy(render)
                 if "render" in shape.config and shape.config["render"] is not None:
@@ -1395,8 +1395,11 @@ class Project(project_config.Configuration):
                 # Dynamically check and add tasks for each render format
                 for format_name, render_func_name in render_formats.items():
                     if _should_render_format(format_name, shape_render, format, shape.kind):
-                        render_func = getattr(shape, render_func_name)  # Get the render function dynamically
-                        tasks.append(render_func(self.ctx, self))
+                        if hasattr(shape, render_func_name):
+                            render_func = getattr(shape, render_func_name)
+                            tasks.append(render_func(self.ctx, self))
+                        else:
+                            pc_logging.warn(f"Shape {shape.kind} does not support {format_name} rendering")
 
             await asyncio.gather(*tasks)
 
