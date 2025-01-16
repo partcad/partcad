@@ -45,6 +45,7 @@ from . import part_factory_cadquery as pfc
 from . import part_factory_build123d as pfb
 from . import part_factory_alias as pfa
 from . import part_factory_enrich as pfe
+from . import part_factory_brep as pfbr
 from . import assembly
 from . import assembly_config
 from . import provider
@@ -568,6 +569,8 @@ class Project(project_config.Configuration):
             pfb.PartFactoryBuild123d(self.ctx, source_project, self, config)
         elif config["type"] == "step":
             pfs.PartFactoryStep(self.ctx, source_project, self, config)
+        elif config["type"] == "brep":
+            pfbr.PartFactoryBrep(self.ctx, source_project, self, config)
         elif config["type"] == "stl":
             pfstl.PartFactoryStl(self.ctx, source_project, self, config)
         elif config["type"] == "3mf":

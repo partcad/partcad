@@ -1,0 +1,19 @@
+desc: PartCAD example project to demonstrate parts defined using BREP files.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect box
+    ```
+
+parts:
+  box:
+    type: brep
+    desc: A box defined in BREP
+    
+  
+
+render:
+  readme:
+  svg:
+    prefix: ./

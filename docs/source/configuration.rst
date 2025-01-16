@@ -513,7 +513,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|stl|3mf|extrude|sweep>
+      type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|brep|stl|3mf|extrude|sweep>
       desc: <(optional) textual description, also used by AI>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       # ... type-specific options ...
@@ -637,7 +637,7 @@ Define parts with CAD files using the following syntax:
 
   parts:
     <part name>:
-      type: <step|stl|3mf>
+      type: <step|brep|stl|3mf>
       binary: <(stl only) use the binary format>
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+

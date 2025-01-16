@@ -34,6 +34,7 @@ from pathlib import Path
             "build123d",
             "scad",
             "step",
+            "brep",
             "stl",
             "3mf",
             "ai-cadquery",

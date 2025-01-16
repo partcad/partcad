@@ -49,6 +49,26 @@ def test_part_get_step_2():
     wrapped = asyncio.run(bolt.get_wrapped())
     assert wrapped is not None
 
+def test_part_get_brep_1():
+    """Load a BREP part from a project by the part name"""
+    ctx = pc.Context("examples/produce_part_brep")
+    repo1 = ctx.get_project(".")
+    assert repo1 is not None
+    box = repo1.get_part("box")
+    assert box is not None
+    wrapped = asyncio.run(box.get_wrapped())
+    assert wrapped is not None
+
+
+def test_part_get_brep_2():
+    """Load a BREP part from the context by the project and part names"""
+    ctx = pc.Context("examples/produce_part_brep")
+    box = ctx.get_part(":box")
+    assert box is not None
+
+    wrapped = asyncio.run(box.get_wrapped())
+    assert wrapped is not None
+
 
 def test_part_get_stl():
     """Load a STL part"""
