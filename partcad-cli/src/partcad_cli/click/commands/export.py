@@ -23,6 +23,7 @@ import partcad.utils as pc_utils
     type=click.Choice(
         [
             "step",
+            "brep",
             "stl",
             "3mf",
             "threejs",

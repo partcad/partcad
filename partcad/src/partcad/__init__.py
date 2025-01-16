@@ -41,6 +41,7 @@ __all__ = [
     "part",
     "part_factory",
     "part_factory_step",
+    "part_factory_brep",
     "part_factory_cadquery",
     "project",
     "project_factory",

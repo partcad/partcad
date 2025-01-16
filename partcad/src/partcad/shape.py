@@ -445,6 +445,38 @@ class Shape(ShapeConfiguration):
     ):
         asyncio.run(self.render_step_async(ctx, project, filepath))
 
+    async def render_brep_async(
+        self,
+        ctx,
+        project=None,
+        filepath=None,
+    ):
+        with pc_logging.Action("RenderBREP", self.project_name, self.name):
+            brep_opts, filepath = self.render_getopts("brep", ".brep", project, filepath)
+
+            obj = await self.get_wrapped()
+
+            def do_render_brep():
+                nonlocal project, filepath, obj
+                from OCP.BRepTools import BRepTools
+
+                if not project is None:
+                    project.ctx.ensure_dirs_for_file(filepath)
+
+                brep_writer = BRepTools()
+                with open(filepath, "wb") as brep_file:
+                    brep_writer.Write_s(obj, brep_file)
+
+            await pc_thread.run(do_render_brep)
+
+    def render_brep(
+        self,
+        ctx,
+        project=None,
+        filepath=None,
+    ):
+        asyncio.run(self.render_brep_async(ctx, project, filepath))
+
     async def render_stl_async(
         self,
         ctx,
