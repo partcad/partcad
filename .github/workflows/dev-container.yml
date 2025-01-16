@@ -76,15 +76,8 @@ jobs:
 
       - name: Install OS-specific dependencies (Windows)
         if: runner.os == 'Windows'
-        run: |
-          # Prepare the registry
-          reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f
-
-          # Install OpenSCAD
-          curl -o openscad.zip https://files.openscad.org/OpenSCAD-2021.01-x86-64.zip
-          Expand-Archive -Force openscad.zip
-          # shellcheck disable=SC1001,SC2086
-          Add-Content $env:GITHUB_PATH $env:GITHUB_WORKSPACE\openscad\openscad-2021.01
+        run: .github/scripts/openscad.ps1
+        timeout-minutes: 1
       # END OS-SPECIFIC
       #
       - name: Install dependencies
@@ -100,7 +93,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -U pytest
           # Install all core and a subset of CLI dependencies, that are required for tests
-          # TODO: @alexanderilyin: Add extra dependencies to top level Poetry config
           pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
           pip install -r partcad/requirements-dev.in
           mamba deactivate
