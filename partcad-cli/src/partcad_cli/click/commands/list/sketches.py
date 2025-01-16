@@ -22,7 +22,11 @@ from partcad import logging
 @click.argument("package", type=str, required=False, default=".")  # help="Package to retrieve the object from"
 @click.pass_obj
 def cli(ctx, recursive, used_by, package):
-    package = ctx.get_project(package).name
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        logging.error(f"Package {package} is not found")
+        return
+    package = package_obj.name
 
     with Process("ListSketches", package):
         sketch_count = 0

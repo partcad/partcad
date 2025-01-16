@@ -95,16 +95,14 @@ class PythonRuntime(runtime.Runtime):
             if not self.initialized:
                 # Preinstall the most common packages to avoid race conditions
                 # TODO(clairbee): Lock the entire runtime instead
-                self.ensure_onced("ocp-tessellate==3.0.8")
-                self.ensure_onced("nlopt==2.7.1")
-                self.ensure_onced("cadquery-ocp==7.7.2")
-                self.ensure_onced("cadquery==2.4.0")
-                self.ensure_onced("numpy==1.26.4")
-                self.ensure_onced("numpy-quaternion==2023.0.4")
-                self.ensure_onced("nptyping==2.0.1")
-                # self.ensure_onced("typing_extensions>=4.6.0,<5") # doesn't work on Windows
+                self.ensure_onced("ocp-tessellate==3.0.9")
+                self.ensure_onced("nlopt==2.9.0")
+                self.ensure_onced("cadquery==2.5.2")
+                self.ensure_onced("numpy==2.2.1")
                 self.ensure_onced("typing_extensions==4.12.2")
-                self.ensure_onced("build123d==0.7.0")
+                self.ensure_onced("cadquery-ocp==7.7.2")
+                self.ensure_onced("ocpsvg==0.3.4")
+                self.ensure_onced("build123d==0.8.0")
                 self.initialized = True
 
     async def once_async(self):
@@ -113,16 +111,14 @@ class PythonRuntime(runtime.Runtime):
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     # TODO(clairbee): Lock the entire runtime instead
-                    await self.ensure_async_onced_locked("ocp-tessellate==3.0.8")
-                    await self.ensure_async_onced_locked("nlopt==2.7.1")
-                    await self.ensure_async_onced_locked("cadquery-ocp==7.7.2")
-                    await self.ensure_async_onced_locked("cadquery==2.4.0")
-                    await self.ensure_async_onced_locked("numpy==1.26.4")
-                    await self.ensure_async_onced_locked("numpy-quaternion==2023.0.4")
-                    await self.ensure_async_onced_locked("nptyping==2.0.1")
-                    # await self.ensure_async_onced_locked("typing_extensions>=4.6.0,<5") # doesn't work on Windows
+                    await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
+                    await self.ensure_async_onced_locked("nlopt==2.9.0")
+                    await self.ensure_async_onced_locked("cadquery==2.5.2")
+                    await self.ensure_async_onced_locked("numpy==2.2.1")
                     await self.ensure_async_onced_locked("typing_extensions==4.12.2")
-                    await self.ensure_async_onced_locked("build123d==0.7.0")
+                    await self.ensure_async_onced_locked("cadquery-ocp==7.7.2")
+                    await self.ensure_async_onced_locked("ocpsvg==0.3.4")
+                    await self.ensure_async_onced_locked("build123d==0.8.0")
                     self.initialized = True
 
     def run(self, cmd, stdin="", cwd=None, session=None):

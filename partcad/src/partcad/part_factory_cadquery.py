@@ -30,10 +30,10 @@ class PartFactoryCadquery(PartFactoryPython):
         python_version = source_project.python_version
         if python_version is None:
             # Stay one step ahead of the minimum required Python version
-            python_version = "3.10"
-        if python_version == "3.12" or python_version == "3.11":
-            pc_logging.debug("Downgrading Python version to 3.10 to avoid compatibility issues with CadQuery")
-            python_version = "3.10"
+            python_version = "3.11"
+        if python_version == "3.12" or python_version == "3.10":
+            pc_logging.debug("Switching Python version to 3.11 to avoid compatibility issues with CadQuery")
+            python_version = "3.11"
         with pc_logging.Action("InitCadQuery", target_project.name, config["name"]):
             super().__init__(
                 ctx,
@@ -82,36 +82,27 @@ class PartFactoryCadquery(PartFactoryPython):
             request_serialized = base64.b64encode(picklestring).decode()
 
             await self.runtime.ensure_async(
-                "ocp-tessellate==3.0.8",
+                "ocp-tessellate==3.0.9",
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "nlopt==2.7.1",
+                "nlopt==2.9.0",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "cadquery==2.5.2",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "numpy==2.2.1",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "typing_extensions==4.12.2",
                 session=self.session,
             )
             await self.runtime.ensure_async(
                 "cadquery-ocp==7.7.2",
-                session=self.session,
-            )
-            await self.runtime.ensure_async(
-                "cadquery==2.4.0",
-                session=self.session,
-            )
-            await self.runtime.ensure_async(
-                "numpy==1.26.4",
-                session=self.session,
-            )
-            await self.runtime.ensure_async(
-                "numpy-quaternion==2023.0.4",
-                session=self.session,
-            )
-            await self.runtime.ensure_async(
-                "nptyping==2.0.1",
-                session=self.session,
-            )
-            await self.runtime.ensure_async(
-                # "typing_extensions>=4.6.0,<5", # doesn't work on Windows
-                "typing_extensions==4.12.2",
                 session=self.session,
             )
             cwd = self.project.config_dir

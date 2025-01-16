@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "0.7.56"
+current_version = "0.7.64"
 commit = "true"
 commit_args = "--no-verify"
 tag = "true"
@@ -40,3 +40,8 @@ replace = "Installing the current project: partcad-dev ({new_version})"
 filename = "pyproject.toml"
 search = "version = \"{current_version}\""
 replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "examples/partcad.yaml"
+search = "partcad: \">={current_version}\""
+replace = "partcad: \">={new_version}\""

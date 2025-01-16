@@ -1,4 +1,6 @@
 from build123d import Location
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 from .globals import (
     init,
@@ -54,4 +56,46 @@ __all__ = [
     "exception",
 ]
 
-__version__: str = "0.7.56"
+__version__: str = "0.7.64"
+
+# TODO(clairbee): move the below to `logging_sentry.py`
+if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
+    critical_to_ignore = [
+        "action_start: ",
+        "action_end: ",
+    ]
+    debug_to_ignore = [
+        "Starting action",
+        "Finished action",
+    ]
+
+    def before_send(event, hint):
+        # Reduce noise in logs (drop events from "with logging.Process():")
+        if event.get("level") == "critical":
+            # from logging_ansi_terminal.py
+            message = event.get("logentry", {}).get("message")
+            if message and message.startswith(critical_to_ignore):
+                return None
+        elif event.get("level") == "debug":
+            # from logging.py
+            message = event.get("logentry", {}).get("message")
+            if message and message.startswith(debug_to_ignore):
+                return None
+
+        return event
+
+    sentry_sdk.init(
+        dsn=user_config.get_string("sentry.dsn"),
+        release=__version__,
+        debug=user_config.get_bool("sentry.debug"),
+        shutdown_timeout=user_config.get_int("sentry.shutdown_timeout"),
+        enable_tracing=True,
+        attach_stacktrace=False,
+        traces_sample_rate=user_config.get_float("sentry.traces_sample_rate"),
+        integrations=[
+            LoggingIntegration(
+                level=logging.ERROR,
+            )
+        ],
+        before_send=before_send,
+    )

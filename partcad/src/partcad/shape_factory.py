@@ -23,6 +23,9 @@ class ShapeFactory(factory.Factory):
         self.project = project
         self.config = config
 
+        if "manufacturable" not in config:
+            config["manufacturable"] = project.is_manufacturable
+
         if "fileFrom" in config:
             self.fileFactory = factory.instantiate("file", config["fileFrom"], ctx, project, project, config)
         else:
@@ -32,4 +35,8 @@ class ShapeFactory(factory.Factory):
 
     def info(self, shape):
         """This is the default implementation of the get_info method for factories."""
-        return shape.shape_info()
+        info: dict = shape.shape_info()
+        if 'url' in self.project.config_obj and self.project.config_obj["url"] is not None:
+            info["Url"] = self.project.config_obj["url"]
+        info["Path"] = self.project.name
+        return info

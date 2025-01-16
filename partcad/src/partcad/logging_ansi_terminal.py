@@ -17,6 +17,32 @@ import threading
 
 from .logging import ops, error
 
+
+class TimeSortedActions:
+    def __init__(self) -> None:
+        self.actions: dict = {}  # Use a regular dictionary to store data
+        self.sorted_action_names: list[str] = []
+
+    def __setitem__(self, key: str, value) -> None:
+        if key in self.actions:
+            self.sorted_action_names.remove(key)  # Remove old key if it exists
+        self.actions[key] = value
+        self.sorted_action_names.append(key)
+
+    def __delitem__(self, key: str) -> None:
+        del self.actions[key]
+        self.sorted_action_names.remove(key)
+
+    def __getitem__(self, key: str) -> dict:
+        return self.actions[key]
+
+    def keys(self) -> list[str]:
+        return self.sorted_action_names
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.actions
+
+
 COLOR_DEBUG = "\033[94m"
 COLOR_INFO = "\033[92m\033[1m"
 COLOR_WARN = "\033[93m"
@@ -80,6 +106,7 @@ def ansi_action_end(op: str, package: str, item: str = None):
 
 class AnsiTerminalProgressHandler(logging.Handler):
     MAX_LINES = 8
+    HEAD_LINES = 3
 
     def __init__(self, stream=sys.stdout) -> None:
         super().__init__()
@@ -96,7 +123,7 @@ class AnsiTerminalProgressHandler(logging.Handler):
         self.process_start = None
         self.footer_size = 0
 
-        self.actions = {}
+        self.actions = TimeSortedActions()
         self.actions_running = 0
         self.actions_total = 0
 
@@ -177,6 +204,10 @@ class AnsiTerminalProgressHandler(logging.Handler):
                     if action_key in self.actions:
                         del self.actions[record.op + "-" + target]
                     else:
+                        """Missing action key typically indicates nested actions with identical names.
+                        This occurs with 'alias' or 'enrich' actions. Always use unique target names
+                        as the same source may be used in multiple aliases and enriches."""
+
                         error("action_key not found: %s: among %s" % (action_key, str(self.actions.keys())))
 
                     self.actions_running -= 1
@@ -217,9 +248,18 @@ class AnsiTerminalProgressHandler(logging.Handler):
             )
             self.footer_size = 1
 
-            sorted_actions = sorted(self.actions.values(), key=lambda a: a["start"])
-            sorted_actions = sorted_actions[: self.MAX_LINES]
-            for action in sorted_actions:
+            sorted_actions = self.actions.keys()
+            if len(sorted_actions) > self.MAX_LINES:
+                sorted_actions = (
+                    sorted_actions[: self.HEAD_LINES] + sorted_actions[-(self.MAX_LINES - self.HEAD_LINES - 1) :]
+                )
+                # output += str(len(sorted_actions)) + " actions\n"
+                skip_line = True
+            else:
+                sorted_actions = sorted_actions[: self.MAX_LINES]
+                skip_line = False
+            for i, action_string in enumerate(sorted_actions, 0):
+                action = self.actions[action_string]
                 output += "%s\t[%s]%s %s [%ds]\n" % (
                     COLOR_ACTION,
                     action["op"],
@@ -227,6 +267,9 @@ class AnsiTerminalProgressHandler(logging.Handler):
                     action["target"],
                     now - action["start"],
                 )
+                if skip_line and i == self.HEAD_LINES - 1:
+                    output += "\t...\n"
+                    self.footer_size += 1
                 self.footer_size += 1
             output += WRAP
         else:

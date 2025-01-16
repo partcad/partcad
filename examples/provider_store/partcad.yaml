@@ -1,8 +1,9 @@
 desc: Example of a shop provider implemented using a CSV file.
+manufacturable: true # Objects in this package are manufacturable
 
 docs:
   intro: |
-    This examples demonstrates how to implement a provider of the type 'store'.
+    This example demonstrates how to implement a provider of the type 'store'.
     While this example uses a file, the providers are expected to uses online
     services for accessing up-to-date part availability data.
     However the use of a static file is acceptable too: the most of customers
@@ -36,6 +37,11 @@ docs:
     INFO:  			/pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1
     ...
     ```
+
+    Confirm it works for aliases just fine:
+    ```shell
+    $ pc supply quote nut#2
+    ...`
 
     Use the quote in a script:
     ```shell
@@ -74,5 +80,14 @@ providers:
         type: string
         default: USD
 
+suppliers:
+  myGarage:
+
+parts:
+  nut:
+    type: alias
+    source: /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm
+
 render:
+  svg:
   readme:

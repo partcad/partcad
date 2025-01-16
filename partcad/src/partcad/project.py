@@ -128,8 +128,20 @@ class Project(project_config.Configuration):
         def __exit__(self, *_args):
             self.lock.release()
 
-    def __init__(self, ctx, name, path, include_paths=[]):
-        super().__init__(name, path, include_paths)
+    def __init__(
+        self,
+        ctx,
+        name: str,
+        path: str,
+        include_paths: list[str] = [],
+        inherited_config: dict = {},
+    ):
+        super().__init__(
+            name,
+            path,
+            include_paths=include_paths,
+            inherited_config=inherited_config,
+        )
         self.ctx = ctx
 
         # Protect the critical sections from access in different threads
@@ -1261,20 +1273,31 @@ class Project(project_config.Configuration):
                     yaml.dump(config, fp)
                     fp.close()
 
-    async def test_async(self):
+    async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False) -> list[asyncio.Task]:
         tasks = []
+        test_method = "test_log_wrapper" if use_wrapper else "test"
         for interface in self.interfaces.values():
             tasks.append(asyncio.create_task(interface.test_async()))
         for sketch in self.sketches.values():
-            tasks.append(asyncio.create_task(sketch.test_async()))
+            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, sketch)) for t in tests)
         for part in self.parts.values():
-            tasks.append(asyncio.create_task(part.test_async()))
+            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, part)) for t in tests)
         for assembly in self.assemblies.values():
-            tasks.append(asyncio.create_task(assembly.test_async()))
-        return await asyncio.gather(*tasks)
+            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, assembly)) for t in tests)
+        results = await asyncio.gather(*tasks)
+        return False not in results
 
-    def test(self):
-        asyncio.run(self.test_async())
+    async def test_async(self, ctx, tests=[]) -> bool:
+        return await self._run_test_async(ctx, tests, use_wrapper=False)
+
+    def test(self, ctx, tests=[]) -> bool:
+        return asyncio.run(self.test_async(ctx, tests))
+
+    async def test_log_wrapper_async(self, ctx, tests=[]) -> bool:
+        return await self._run_test_async(ctx, tests, use_wrapper=True)
+
+    def test_log_wrapper(self, ctx, tests=[]) -> bool:
+        return asyncio.run(self.test_log_wrapper_async(ctx, tests))
 
     async def render_async(
         self,
@@ -1630,11 +1653,11 @@ class Project(project_config.Configuration):
                 image_path = os.path.join(
                     return_path,
                     svg_cfg.get("prefix", "."),
-                    shape.name + ".svg",
+                    name + ".svg",
                 )
                 test_image_path = os.path.join(
                     svg_cfg.get("prefix", "."),
-                    shape.name + ".svg",
+                    name + ".svg",
                 )
                 img_text = (
                     '<img src="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">'
@@ -1649,11 +1672,11 @@ class Project(project_config.Configuration):
                 image_path = os.path.join(
                     return_path,
                     png_cfg.get("prefix", "."),
-                    shape.name + ".png",
+                    name + ".png",
                 )
                 test_image_path = os.path.join(
                     png_cfg.get("prefix", "."),
-                    shape.name + ".png",
+                    name + ".png",
                 )
                 img_text = (
                     '<img src="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">'

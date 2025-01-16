@@ -10,16 +10,23 @@
 import random
 import string
 
+from partcad.shape_config_store import ShapeConfigStore
+
 
 class ShapeConfiguration:
-    def __init__(self, config):
+    is_manufacturable: bool = False
+
+    def __init__(self, config: dict) -> None:
         self.config = config
+
         if "name" in config:
             self.name = config["name"]
         else:
             name = "part" + "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
             self.name = name
             self.config["name"] = name
+
+        self.is_manufacturable = bool(config.get("manufacturable", True))
 
     @staticmethod
     def normalize(name, config):
@@ -37,3 +44,11 @@ class ShapeConfiguration:
         config["orig_name"] = name
 
         return config
+
+    def get_final_config(self) -> dict:
+        """Return the final configuration (once all "alias" and "enrich" directives are resolved)."""
+        return self.config
+
+    def get_store_data(self) -> ShapeConfigStore:
+        final_config = self.get_final_config()
+        return ShapeConfigStore(final_config)
