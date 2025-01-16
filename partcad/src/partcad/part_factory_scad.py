@@ -97,7 +97,7 @@ class PartFactoryScad(PartFactoryFile):
                     part.error("%s: %s" % (part.name, error_line))
 
             try:
-                # pc_logging.info("Response: %s" % response_serialized)
+                pc_logging.info("Response: %s" % response_serialized)
                 response = base64.b64decode(response_serialized)
                 register_ocp_helper()
                 result = pickle.loads(response)
@@ -157,3 +157,14 @@ class PartFactoryScad(PartFactoryFile):
             self.ctx.stats_parts_instantiated += 1
 
             return shape
+
+    async def prepare_python(self):
+        """
+        This method is called by child classes
+        to prepare the Python environment
+        before instantiating the part.
+        """
+        # Install dependencies of this package
+        # DO NOT COMMIT
+        await self.runtime.prepare_for_package(self.project, session=self.session)
+        await self.runtime.prepare_for_shape(self.config, session=self.session)
