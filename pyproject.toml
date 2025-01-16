@@ -58,7 +58,7 @@ authors = [
   "PartCAD <support@partcad.org>",
 ]
 license = "Apache 2.0"
-readme = ".github/README.md"
+readme = "README.md"
 packages = [
   { include = "partcad", from = "partcad/src" },
   { include = "partcad_cli", from = "partcad-cli/src" }
