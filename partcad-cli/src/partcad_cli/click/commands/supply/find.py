@@ -41,6 +41,9 @@ def cli(ctx: Any, api: bool, qos: str, provider: str, specs: List[str]) -> None:
         suppliers = {}
         if provider:
             provider = ctx.get_provider(provider)
+            if not provider:
+                pc.logging.error(f"Provider {provider} not found.")
+                return
             if not provider.is_qos_available(qos):
                 pc.logging.error(f"Provider {provider.name} cannot provide qos: {qos}.")
             asyncio.run(provider.load(cart))

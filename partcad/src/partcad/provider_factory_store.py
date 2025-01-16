@@ -52,7 +52,7 @@ class ProviderFactoryStore(ProviderFactoryPython):
         return availability["available"] if availability and "available" in availability else False
 
     async def load(self, cart_item: ProviderCartItem):
-        """No-op. No CAD binary to be loded."""
+        """No-op. No CAD binary to be loaded."""
         pass
 
     async def query_quote(self, request: ProviderRequestQuote):

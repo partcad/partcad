@@ -12,6 +12,7 @@ aiofiles
 aiohttp
 vyper-config==1.2.1
 sentry-sdk==2.19.2
+async-lru==2.0.4
 
 # Google AI
 google.generativeai

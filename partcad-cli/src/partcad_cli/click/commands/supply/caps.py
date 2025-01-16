@@ -25,6 +25,9 @@ def cli(ctx, providers):
     with logging.Process("SupplyCaps", "this"):
         for provider_spec in providers:
             provider = ctx.get_provider(provider_spec)
+            if not provider:
+                pc.logging.error(f"Provider {provider} not found.")
+                return
             req = ProviderRequestCaps()
             caps = asyncio.run(provider.query_caps(req))
             pc.logging.info(f"{provider_spec}: {json.dumps(caps, indent=4)}")

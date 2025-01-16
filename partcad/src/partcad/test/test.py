@@ -14,6 +14,10 @@ from .. import logging as pc_logging
 
 
 class Test(ABC):
+    # TODO(clairbee): add the concept of "skipped" test (introduce the enum type TestResult or find existing python types)
+    TEST_FAILED = False
+    TEST_PASSED = True
+
     def __init__(self, name: str) -> None:
         self.name = name
 
@@ -45,12 +49,14 @@ class Test(ABC):
         message = self._log_message_prepare(*args)
         pc_logging.debug(f"Test: {shape.project_name}:{shape.name}: {self.name}{message}")
 
-    def failed(self, shape, *args) -> None:
+    def failed(self, shape, *args) -> bool:
         """This methods works like logging.error() but prepends the message with the test name and the shape name."""
         message = self._log_message_prepare(*args)
         pc_logging.error(f"Test failed: {shape.project_name}:{shape.name}: {self.name}{message}")
+        return self.TEST_FAILED
 
-    def passed(self, shape, *args) -> None:
+    def passed(self, shape, *args) -> bool:
         """This methods works like logging.error() but prepends the message with the test name and the shape name."""
         message = self._log_message_prepare(*args)
         pc_logging.debug(f"Test passed: {shape.project_name}:{shape.name}: {self.name}{message}")
+        return self.TEST_PASSED

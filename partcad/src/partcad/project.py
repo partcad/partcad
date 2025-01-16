@@ -47,6 +47,7 @@ from . import part_factory_cadquery as pfc
 from . import part_factory_build123d as pfb
 from . import part_factory_alias as pfa
 from . import part_factory_enrich as pfe
+from . import part_factory_brep as pfbr
 from . import assembly
 from . import assembly_config
 from . import provider
@@ -570,6 +571,8 @@ class Project(project_config.Configuration):
             pfb.PartFactoryBuild123d(self.ctx, source_project, self, config)
         elif config["type"] == "step":
             pfs.PartFactoryStep(self.ctx, source_project, self, config)
+        elif config["type"] == "brep":
+            pfbr.PartFactoryBrep(self.ctx, source_project, self, config)
         elif config["type"] == "stl":
             pfstl.PartFactoryStl(self.ctx, source_project, self, config)
         elif config["type"] == "3mf":
@@ -1063,10 +1066,11 @@ class Project(project_config.Configuration):
 
             return self.providers[result_name]
 
-    def get_suppliers(self, part_spec):
-        # TODO(clairbee): return the eligible subset of suppliers
-        # part_name = part_spec["name"]
-        return self.suppliers
+    def get_suppliers(self):
+        return {
+            supplier_name if ":" in supplier_name else f"{self.name}:{supplier_name}": supplier
+            for supplier_name, supplier in self.suppliers.items()
+        }
 
     def init_suppliers(self):
         cfg = self.config_obj.get("suppliers", {})

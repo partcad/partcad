@@ -15,6 +15,7 @@ from ..part import Part
 from ..part_config import PartConfiguration
 from ..assembly import Assembly
 from ..assembly_config import AssemblyConfiguration
+from ..provider_data_cart import ProviderCartItem
 
 
 class CamTest(Test):
@@ -26,11 +27,11 @@ class CamTest(Test):
         is_assembly = isinstance(shape, Assembly)
         if not is_part and not is_assembly:
             self.debug(shape, "Not applicable")
-            return True
+            return self.TEST_PASSED
 
         if not shape.is_manufacturable and "force_manufacturing" not in test_ctx:
             self.debug(shape, "Not supposed to be manufacturable")
-            return True
+            return self.TEST_PASSED
 
         if is_part:
             return await self.test_part(tests_to_run, ctx, shape, test_ctx)
@@ -58,11 +59,25 @@ class CamTest(Test):
             can_be_manufactured = True
 
         if not can_be_purchased and not can_be_manufactured:
-            self.failed(part, "Cannot be purchased or manufactured")
-            return False
+            return self.failed(part, "Cannot be purchased or manufactured")
 
-        self.passed(part)
-        return True
+        part_spec = f"{part.project_name}:{part.name}"
+        part_item = ProviderCartItem()
+        await part_item.set_spec(ctx, part_spec)
+        suppliers = await ctx.find_part_suppliers(part_item)
+        if not suppliers:
+            return self.failed(part, "No suppliers found")
+
+        supplier_found = False
+        for provider_name in suppliers:
+            provider = ctx.get_provider(provider_name)
+            if await provider.is_part_available(part_item):
+                supplier_found = True
+                break
+        if not supplier_found:
+            return self.failed(part, "No suppliers provide the part")
+
+        return self.passed(part)
 
     async def test_assembly(self, tests_to_run: list[Test], ctx, assembly: Assembly, test_ctx: dict = {}) -> bool:
         self.debug(assembly, "Testing for manufacturability")
@@ -96,6 +111,7 @@ class CamTest(Test):
                 # Check if the part exists
                 part = ctx.get_part(part_name)
                 if part is None:
+                    # Do not stop here: test other parts right away
                     self.failed(assembly, f"Missing part '{part_name}' is referenced")
                     failed = True
                     continue
@@ -106,12 +122,12 @@ class CamTest(Test):
                 else:
                     tasks = [t.test(tests_to_run, ctx, part, test_ctx) for t in tests_to_run]
                 results = await asyncio.gather(*tasks)
-                if False in results:
+                if self.TEST_FAILED in results:
+                    # Do not stop here: test other parts right away
                     self.failed(assembly, f"Non-manufacturable part '{part_name}' is referenced")
                     failed = True
 
         if failed:
-            return False
+            return self.TEST_FAILED
 
-        self.passed(assembly)
-        return True
+        return self.passed(assembly)

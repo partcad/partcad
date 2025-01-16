@@ -125,6 +125,7 @@ class ProviderCart:
             ctx.current_project_path,
             name,
         )
+        name = project_name + ":" + object_name
         prj = ctx.get_project(project_name)
 
         part = prj.get_part(object_name, quiet=True)

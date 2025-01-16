@@ -24,6 +24,6 @@ class Runtime:
         self.name = name
         self.path = os.path.join(
             Runtime.get_internal_state_dir(),
-            "partcad-" + name,  # Leave "partcad" for UX (e.g. in VS Code)
+            "pc-" + name,  # Leave "pc-" for UX (e.g. in VS Code)
         )
         self.initialized = os.path.exists(self.path)
