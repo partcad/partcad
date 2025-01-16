@@ -19,6 +19,14 @@ class PartFactoryAiCadquery(PartFactoryCadquery, PartFactoryFeatureAi):
         self.lang = self.LANG_PYTHON
 
         with pc_logging.Action("InitAiCq", target_project.name, config["name"]):
+            PartFactoryCadquery.__init__(
+                self,
+                ctx,
+                source_project,
+                target_project,
+                config,
+                can_create=True,
+            )
             PartFactoryFeatureAi.__init__(
                 self,
                 config,
@@ -32,13 +40,4 @@ Do not export anything.
 Use "show_object()" to display the part.
 """,
             )
-            PartFactoryCadquery.__init__(
-                self,
-                ctx,
-                source_project,
-                target_project,
-                config,
-                can_create=True,
-            )
-
             self.on_init_ai()

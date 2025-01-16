@@ -384,7 +384,7 @@ jobs:
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
-            poetry --no-ansi --no-interaction run pytest --verbose --color=no | ts -i %.S | ts -s
+            poetry --no-ansi --no-interaction run pytest -n auto --verbose --color=no | ts -i %.S | ts -s
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
@@ -453,7 +453,7 @@ jobs:
           # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
           # TODO: Run ggshield and/or other secrets scanning tools as separate job
           env: |
-            SKIP=poetry-export,poetry-lock,ggshield
+            SKIP=poetry-export,poetry-lock,ggshield,pytest
           runCmd:
             pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
             --all-files

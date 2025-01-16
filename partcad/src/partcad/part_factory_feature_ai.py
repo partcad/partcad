@@ -18,7 +18,6 @@ import yaml
 from .ai import Ai
 from . import logging as pc_logging
 from .utils import total_size
-from .user_config import user_config
 
 DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING = 3
 DEFAULT_ALTERNATIVES_MODEL_GENERATION = 3
@@ -51,30 +50,30 @@ class PartFactoryFeatureAi(Ai):
         else:
             self.num_geometric_modeling = DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING
         if (
-            user_config.max_geometric_modeling is not None
-            and self.num_geometric_modeling > user_config.max_geometric_modeling
+            self.ctx.user_config.max_geometric_modeling is not None
+            and self.num_geometric_modeling > self.ctx.user_config.max_geometric_modeling
         ):
-            self.num_geometric_modeling = user_config.max_geometric_modeling
+            self.num_geometric_modeling = self.ctx.user_config.max_geometric_modeling
 
         if "numModelGeneration" in self.ai_config:
             self.num_model_generation = self.ai_config[("numModelGeneration")]
         else:
             self.num_model_generation = DEFAULT_ALTERNATIVES_MODEL_GENERATION
         if (
-            user_config.max_model_generation is not None
-            and self.num_model_generation > user_config.max_model_generation
+            self.ctx.user_config.max_model_generation is not None
+            and self.num_model_generation > self.ctx.user_config.max_model_generation
         ):
-            self.num_model_generation = user_config.max_model_generation
+            self.num_model_generation = self.ctx.user_config.max_model_generation
 
         if "numScriptCorrection" in self.ai_config:
             self.num_script_correction = self.ai_config[("numScriptCorrection")]
         else:
             self.num_script_correction = DEFAULT_INCREMENTAL_SCRIPT_CORRECTION
         if (
-            user_config.max_script_correction is not None
-            and self.num_script_correction > user_config.max_script_correction
+            self.ctx.user_config.max_script_correction is not None
+            and self.num_script_correction > self.ctx.user_config.max_script_correction
         ):
-            self.num_script_correction = user_config.max_script_correction
+            self.num_script_correction = self.ctx.user_config.max_script_correction
 
         # Normalize the input configuration
         pc_logging.debug("AI configuration: %s" % self.ai_config)

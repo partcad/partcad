@@ -5,6 +5,8 @@ import partcad as pc
 from git.exc import GitCommandError
 from unittest.mock import MagicMock, mock_open, patch
 
+from partcad.user_config import UserConfig
+
 repo_url = "https://github.com/partcad/partcad"
 test_config_import_git = {
     "name": "/part_step",
@@ -84,55 +86,51 @@ fake_git_errors = [
 
 test_git_retry_config = {"max": 5, "patience": 0.1}
 
-@pytest.fixture
-def git_config() -> callable:
-    def _git_config(key: str, /, *args, **kwargs) -> dict | str:
-        temp = defaultdict(dict, {
-            "git.clone.retry.max": test_git_retry_config["max"],
-            "git.clone.retry.patience": test_git_retry_config["patience"],
-        })
-        return temp[key]
-    return _git_config
-
 @pytest.mark.parametrize("git_error", fake_git_errors)
-def test_project_import_git_clone_retry_failure(git_error: GitCommandError, git_config):
+def test_project_import_git_clone_retry_failure(git_error: GitCommandError):
     def side_effect(*args, **kwargs):
         side_effect.counter += 1
         raise git_error
     side_effect.counter = 0
 
     with patch("git.Repo.clone_from", side_effect=side_effect) as mock_clone_from, \
-         patch.object(pc.user_config, "get", side_effect=git_config), \
          tempfile.TemporaryDirectory() as temp_dir, \
-         patch.object(pc.user_config, "internal_state_dir", temp_dir), \
          pytest.raises(RuntimeError):
 
-        ctx = pc.Context()
+        user_config = UserConfig()
+        user_config.internal_state_dir = temp_dir
+        user_config.set('git.clone.retry.max', test_git_retry_config["max"])
+        user_config.set('git.clone.retry.patience', test_git_retry_config["patience"])
+
+        ctx = pc.Context(user_config=user_config)
         factory = pc.ProjectFactoryGit(ctx, None, test_config_import_git)
-        factory._clone_or_update_repo(repo_url)
+        assert factory is not None
 
     # The number of calls must be initial attempt plus 'max' retries
     assert mock_clone_from.call_count == test_git_retry_config["max"] + 1
 
 
-def test_project_import_git_clone_retry_then_success(git_config):
+def test_project_import_git_clone_retry_then_success():
     fail_count = 3
     def side_effect(*args, **kwargs):
         side_effect.counter += 1
-        if side_effect.counter < fail_count:
+        if side_effect.counter <= fail_count:
             raise fake_git_errors[0]
         return MagicMock()
     side_effect.counter = 0
 
     with patch("git.Repo.clone_from", side_effect=side_effect) as mock_clone_from, \
-         patch.object(pc.user_config, "get", side_effect=git_config), \
          tempfile.TemporaryDirectory() as temp_dir, \
-         patch.object(pc.user_config, "internal_state_dir", temp_dir), \
          patch("builtins.open", mock_open(read_data="")):
 
-        ctx = pc.Context()
+        user_config = UserConfig()
+        user_config.internal_state_dir = temp_dir
+        user_config.set('git.clone.retry.max', test_git_retry_config["max"])
+        user_config.set('git.clone.retry.patience', test_git_retry_config["patience"])
+
+        ctx = pc.Context(user_config=user_config)
         factory = pc.ProjectFactoryGit(ctx, None, test_config_import_git)
-        factory._clone_or_update_repo(repo_url)
+        assert factory is not None
 
     # The call_count must be fail_count plus one(the last successful call)
     assert mock_clone_from.call_count == fail_count + 1

@@ -15,7 +15,6 @@ from .ai_openai import AiOpenAI
 from .ai_ollama import AiOllama
 
 from . import logging as pc_logging
-from .user_config import user_config
 
 
 supported_models = [
@@ -55,7 +54,7 @@ class Ai(AiGoogle, AiOpenAI, AiOllama):
                 model = config["model"]
             else:
                 if provider is None:
-                    if not user_config.openai_api_key is None:
+                    if not self.ctx.user_config.openai_api_key is None:
                         provider = "openai"
                     else:
                         provider = "google"

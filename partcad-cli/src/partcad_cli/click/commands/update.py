@@ -1,6 +1,5 @@
 import rich_click as click
 from partcad.context import Context
-from partcad.user_config import user_config
 from partcad import logging as logging
 
 
@@ -11,7 +10,7 @@ def cli(ctx: Context):
     # if not click.confirm("This will force update all packages. Continue?", default=False):
     #     click.echo("Update cancelled")
     #     return
-    user_config.force_update = True
+    ctx.user_config.force_update = True
     try:
         packages = ctx.get_all_packages()
         packages_list = list(packages)

@@ -18,6 +18,14 @@ class PartFactoryAiScad(PartFactoryScad, PartFactoryFeatureAi):
         config["path"] = config["name"] + ".scad"
 
         with pc_logging.Action("InitAiScad", target_project.name, config["name"]):
+            PartFactoryScad.__init__(
+                self,
+                ctx,
+                source_project,
+                target_project,
+                config,
+                can_create=True,
+            )            
             PartFactoryFeatureAi.__init__(
                 self,
                 config,
@@ -29,14 +37,6 @@ Define all necessary functions and constants.
 Do not generate comments.
 Do not export anything.
 """,
-            )
-            PartFactoryScad.__init__(
-                self,
-                ctx,
-                source_project,
-                target_project,
-                config,
-                can_create=True,
             )
 
             self.on_init_ai()

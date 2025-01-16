@@ -21,6 +21,7 @@ from .provider_factory_store import ProviderFactoryStore
 from .part import Part
 from . import consts
 from . import factory
+from .user_config import UserConfig
 from . import logging as pc_logging
 
 global _partcad_context
@@ -35,7 +36,7 @@ factory.register("provider", "enrich", ProviderFactoryEnrich)
 factory.register("provider", "store", ProviderFactoryStore)
 
 
-def init(config_path=None, search_root=True) -> Context:
+def init(config_path=None, search_root=True, user_config=UserConfig()) -> Context:
     """Initialize the default context explicitly using the desired path."""
     global _partcad_context
     global _partcad_context_path
@@ -44,13 +45,13 @@ def init(config_path=None, search_root=True) -> Context:
     with _partcad_context_lock:
         if _partcad_context is None:
             _partcad_context_path = config_path
-            _partcad_context = Context(config_path, search_root=search_root)
+            _partcad_context = Context(config_path, search_root=search_root, user_config=user_config)
             return _partcad_context
 
     if _partcad_context_path == config_path:
         return _partcad_context
 
-    return Context(config_path, search_root=search_root)
+    return Context(config_path, search_root=search_root, user_config=user_config)
 
 
 def fini():

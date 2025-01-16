@@ -18,7 +18,6 @@ from typing import Any
 
 from .ai_feature_file import AiContentFile, AiContentProcessor
 from . import logging as pc_logging
-from .user_config import user_config
 
 # Lazy-load AI imports as they are not always needed
 # import ollama
@@ -33,22 +32,22 @@ ollama_num_thread = None
 models_pulled = {}
 
 
-def ollama_once():
+def ollama_once(num_thread):
     global ollama, ollama_num_thread
 
     with lock:
         if ollama is None:
             ollama = importlib.import_module("ollama")
 
-            ollama_num_thread = user_config.ollama_num_thread
+            ollama_num_thread = num_thread
 
     return True
 
 
-def model_once(model: str):
+def model_once(model: str, num_thread):
     global models_pulled
 
-    ollama_once()
+    ollama_once(num_thread)
 
     with lock:
         if not model in models_pulled:
@@ -65,7 +64,7 @@ class AiOllama(AiContentProcessor):
         config: dict[str, Any] = {},
         options_num: int = 1,
     ):
-        model_once(model)
+        model_once(model, self.ctx.user_config.ollama_num_thread)
 
         pc_logging.info("Generating with Ollama: asking for %d alternatives", options_num)
 

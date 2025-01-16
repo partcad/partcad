@@ -8,11 +8,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import pytest
 import tempfile
 
 import partcad as pc
 
 
+@pytest.mark.slow
 def test_render_svg_part_1():
     """Render a primitive shape to SVG"""
     ctx = pc.init("examples")
@@ -25,6 +27,7 @@ def test_render_svg_part_1():
         assert False, "Valid render request caused an exception: %s" % e
 
 
+@pytest.mark.slow
 def test_render_svg_assy_1():
     """Render a primitive shape to SVG"""
     ctx = pc.init("examples")
@@ -37,6 +40,7 @@ def test_render_svg_assy_1():
         assert False, "Valid render request caused an exception: %s" % e
 
 
+@pytest.mark.slow
 def test_render_svg_assy_2():
     """Render a primitive shape to SVG"""
     ctx = pc.init("examples")
@@ -49,6 +53,7 @@ def test_render_svg_assy_2():
         assert False, "Valid render request caused an exception: %s" % e
 
 
+@pytest.mark.slow
 def test_render_project():
     """Render an entire project"""
     ctx = pc.init("examples")

@@ -1,7 +1,6 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 default_install_hook_types: [pre-commit, prepare-commit-msg]
-# TODO: [TODO-16] @alexanderilyin: Add hook to run pytest via xdist
 # TODO: [TODO-17] @alexanderilyin: Add hook to run behave via behavex
 # TODO: [TODO-18] @alexanderilyin: Add hook to check author email. We should only accept commits from partcad.org email addresses.
 repos:
@@ -61,6 +60,12 @@ repos:
         types: [shell]
         args: ["-e", "SC1091"] # Optional: exclude specific checks
         # args: ["--severity=warning"]  # Optional: show only errors and warnings
+      - id: pytest
+        name: pytest
+        entry: poetry run pytest partcad/tests -n auto -m "not slow" --timeout 300
+        language: system
+        types: [python]
+        description: Run pytest tests in parallel using xdist
   - repo: https://github.com/hadolint/hadolint
     rev: v2.13.1-beta
     hooks:
