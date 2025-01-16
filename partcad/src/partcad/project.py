@@ -16,6 +16,7 @@ import ruamel.yaml
 import threading
 import typing
 
+
 from . import consts
 from . import factory
 from . import logging as pc_logging
@@ -23,6 +24,7 @@ from . import project_config
 from . import interface
 from . import sketch
 from . import sketch_config
+from .exception import EmptyShapesError
 from .sketch_factory_alias import SketchFactoryAlias
 from .sketch_factory_enrich import SketchFactoryEnrich
 from .sketch_factory_basic import SketchFactoryBasic
@@ -1361,159 +1363,47 @@ class Project(project_config.Configuration):
 
             # Render
             tasks = []
+
+            def _should_render_format(format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str) -> bool:
+                """Helper function to determine if a format should be rendered"""
+                if (
+                    format_name in shape_render
+                    and shape_render[format_name] is not None
+                    and not isinstance(shape_render[format_name], str)
+                    and shape_kind in shape_render.get(format_name, {}).get("exclude", [])
+                ):
+                    return False
+                return (current_format is None and format_name in shape_render) or (current_format is not None and current_format == format_name)
+
+            # Map of format names to their corresponding async render functions
+            render_formats = {
+                "svg": "render_svg_async",
+                "png": "render_png_async",
+                "step": "render_step_async",
+                "stl": "render_stl_async",
+                "3mf": "render_3mf_async",
+                "threejs": "render_threejs_async",
+                "obj": "render_obj_async",
+                "gltf": "render_gltf_async",
+                "brep": "render_brep_async",
+            }
+
+            if None in shapes:
+                raise EmptyShapesError
+
             for shape in shapes:
                 shape_render = copy.copy(render)
-                if "render" in shape.config and not shape.config["render"] is None:
+                if "render" in shape.config and shape.config["render"] is not None:
                     shape_render = render_cfg_merge(shape_render, shape.config["render"])
 
-                # Determine which formats need to be rendered.
-                # The format needs to be rendered either if it's mentioned in the config
-                # or if it's explicitly requested in the params (e.g. comes from the
-                # command line).
-                if (
-                    "svg" in shape_render
-                    and shape_render["svg"] is not None
-                    and not isinstance(shape_render["svg"], str)
-                    and shape.kind in shape_render.get("svg", {}).get("exclude", [])
-                ):
-                    render_svg = False
-                elif format is None and "svg" in shape_render:
-                    render_svg = True
-                elif not format is None and format == "svg":
-                    render_svg = True
-                else:
-                    render_svg = False
-
-                if (
-                    "png" in shape_render
-                    and shape_render["png"] is not None
-                    and not isinstance(shape_render["png"], str)
-                    and shape.kind in shape_render.get("png", {}).get("exclude", [])
-                ):
-                    render_png = False
-                elif format is None and "png" in shape_render:
-                    render_png = True
-                elif not format is None and format == "png":
-                    render_png = True
-                else:
-                    render_png = False
-
-                if (
-                    "step" in shape_render
-                    and shape_render["step"] is not None
-                    and not isinstance(shape_render["step"], str)
-                    and shape.kind in shape_render.get("step", {}).get("exclude", [])
-                ):
-                    render_step = False
-                elif format is None and "step" in shape_render:
-                    render_step = True
-                elif not format is None and format == "step":
-                    render_step = True
-                else:
-                    render_step = False
-
-                if (
-                    "brep" in shape_render
-                    and shape_render["brep"] is not None
-                    and not isinstance(shape_render["brep"], str)
-                    and shape.kind in shape_render.get("brep", {}).get("exclude", [])
-                ):
-                    render_brep = False
-                elif format is None and "brep" in shape_render:
-                    render_brep = True
-                elif not format is None and format == "brep":
-                    render_brep = True
-                else:
-                    render_brep = False
-
-                if (
-                    "stl" in shape_render
-                    and shape_render["stl"] is not None
-                    and not isinstance(shape_render["stl"], str)
-                    and shape.kind in shape_render.get("stl", {}).get("exclude", [])
-                ):
-                    render_stl = False
-                elif format is None and "stl" in shape_render:
-                    render_stl = True
-                elif not format is None and format == "stl":
-                    render_stl = True
-                else:
-                    render_stl = False
-
-                if (
-                    "3mf" in shape_render
-                    and shape_render["3mf"] is not None
-                    and not isinstance(shape_render["3mf"], str)
-                    and shape.kind in shape_render.get("3mf", {}).get("exclude", [])
-                ):
-                    render_3mf = False
-                elif format is None and "3mf" in shape_render:
-                    render_3mf = True
-                elif not format is None and format == "3mf":
-                    render_3mf = True
-                else:
-                    render_3mf = False
-
-                if (
-                    "threejs" in shape_render
-                    and shape_render["threejs"] is not None
-                    and not isinstance(shape_render["threejs"], str)
-                    and shape.kind in shape_render.get("threejs", {}).get("exclude", [])
-                ):
-                    render_threejs = False
-                elif format is None and "threejs" in shape_render:
-                    render_threejs = True
-                elif not format is None and format == "threejs":
-                    render_threejs = True
-                else:
-                    render_threejs = False
-
-                if (
-                    "obj" in shape_render
-                    and shape_render["obj"] is not None
-                    and not isinstance(shape_render["obj"], str)
-                    and shape.kind in shape_render.get("obj", {}).get("exclude", [])
-                ):
-                    render_obj = False
-                elif format is None and "obj" in shape_render:
-                    render_obj = True
-                elif not format is None and format == "obj":
-                    render_obj = True
-                else:
-                    render_obj = False
-
-                if (
-                    "gltf" in shape_render
-                    and shape_render["gltf"] is not None
-                    and not isinstance(shape_render["gltf"], str)
-                    and shape.kind in shape_render.get("gltf", {}).get("exclude", [])
-                ):
-                    render_gltf = False
-                elif format is None and "gltf" in shape_render:
-                    render_gltf = True
-                elif not format is None and format == "gltf":
-                    render_gltf = True
-                else:
-                    render_gltf = False
-
-                if render_svg:
-                    tasks.append(shape.render_svg_async(self.ctx, self))
-                if render_png:
-                    tasks.append(shape.render_png_async(self.ctx, self))
-                if render_step:
-                    tasks.append(shape.render_step_async(self.ctx, self))
-                if render_brep:
-                    tasks.append(shape.render_brep_async(self.ctx, self))
-                if render_stl:
-                    tasks.append(shape.render_stl_async(self.ctx, self))
-                if render_3mf:
-                    tasks.append(shape.render_3mf_async(self.ctx, self))
-                if render_threejs:
-                    tasks.append(shape.render_threejs_async(self.ctx, self))
-                if render_obj:
-                    tasks.append(shape.render_obj_async(self.ctx, self))
-                if render_gltf:
-                    tasks.append(shape.render_gltf_async(self.ctx, self))
+                # Dynamically check and add tasks for each render format
+                for format_name, render_func_name in render_formats.items():
+                    if _should_render_format(format_name, shape_render, format, shape.kind):
+                        if hasattr(shape, render_func_name):
+                            render_func = getattr(shape, render_func_name)
+                            tasks.append(render_func(self.ctx, self))
+                        else:
+                            pc_logging.warn(f"Shape {shape.kind} does not support {format_name} rendering")
 
             await asyncio.gather(*tasks)
 
