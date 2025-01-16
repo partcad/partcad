@@ -105,8 +105,8 @@ if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
             LoggingIntegration(
                 level=logging.logging.getLevelName(
                     user_config.get_string("sentry.integrations.LoggingIntegration.level").upper()
-                )
-            )
+                ),
+            ),
         ],
         before_send=before_send,
     )
