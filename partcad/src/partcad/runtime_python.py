@@ -19,10 +19,10 @@ from . import logging as pc_logging
 from . import sync_threads
 
 
-class VenvLock(object):
+class VenvLock:
     def __init__(self, runtime, venv: str):
         runtime.venv_locks_lock.acquire()
-        if not venv in runtime.venv_locks:
+        if venv not in runtime.venv_locks:
             runtime.venv_locks[venv] = threading.Lock()
         self.lock = runtime.venv_locks[venv]
         runtime.venv_locks_lock.release()
@@ -34,7 +34,7 @@ class VenvLock(object):
         self.lock.release()
 
 
-class AsyncVenvLock(object):
+class AsyncVenvLock:
     def __init__(self, runtime, venv: str):
         self.runtime = runtime
         self.venv = venv
@@ -59,7 +59,7 @@ class PythonRuntime(runtime.Runtime):
 
         if version is None:
             version = "%d.%d" % (sys.version_info.major, sys.version_info.minor)
-        super().__init__(ctx, "python-" + sandbox + "-" + version)
+        super().__init__(ctx, "py-" + sandbox + "-" + version)
         self.version = version
 
         # Runtimes are meant to be executed from dedicated threads, outside of
@@ -250,7 +250,7 @@ class PythonRuntime(runtime.Runtime):
         if path is None:
             path = self.path
 
-        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()
+        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()[:16]
         guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
         if session:
             # Add the dependency to the session dependencies
@@ -277,7 +277,7 @@ class PythonRuntime(runtime.Runtime):
 
         # TODO(clairbee): expire the guard file after a certain time
 
-        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()
+        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()[:16]
         guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
         if session:
             # Add the dependency to the session dependencies
@@ -305,7 +305,7 @@ class PythonRuntime(runtime.Runtime):
 
         # TODO(clairbee): expire the guard file after a certain time
 
-        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()
+        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()[:16]
         guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
         if session:
             # Add the dependency to the session dependencies
@@ -399,7 +399,7 @@ class PythonRuntime(runtime.Runtime):
 
     def get_session(self, name: str):
         """Create a context to describe the venv environment in case it is needed"""
-        name_hash = hashlib.sha256(name.encode()).hexdigest()
+        name_hash = hashlib.sha256(name.encode()).hexdigest()[:16]
         venv_path = os.path.join(self.path, "v-env-" + name_hash)
         return {
             "name": name,

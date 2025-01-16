@@ -12,7 +12,6 @@ import hashlib
 import re
 import os
 import time
-import pathlib
 import threading
 
 from . import project_factory as pf
@@ -30,7 +29,6 @@ git_error_patterns = [
     r"fatal: unable to access 'https?://github.com/[a-zA-Z0-9./_-]+': Could not resolve host: .+",
     r"fatal: Could not resolve host: .+",
     r"fatal: Could not read from remote repository.",
-
     # Partial data transfer issue
     r"error: \d+ bytes of body are still expected",
     # Timeout issue
@@ -45,7 +43,6 @@ git_error_patterns = [
     r"fatal: unable to access 'https?://github.com/[a-zA-Z0-9./_-]+': Received HTTP code \d+ from proxy after CONNECT",
     # Unexpected EOF
     r"fetch-pack: unexpected disconnect while reading sideband packet",
-
     # Invalid index-pack output
     r"fatal: early EOF",
     r"fatal: fetch-pack: invalid index-pack output",
@@ -80,16 +77,17 @@ class GitImportConfiguration:
 
     def _git_config_options(self) -> list[str]:
         params = []
-        git_config = user_config.get('git.config')
+        git_config = user_config.get("git.config")
         if git_config is None:
             return params
         for key, value in git_config.items():
             if key.find("url") != -1 and key.find("insteadOf") != -1:
                 continue
 
-             # Use shlex.quote to properly escape shell arguments
+            # Use shlex.quote to properly escape shell arguments
             params.append(f"-c {quote(key)}={quote(str(value))}")
         return params
+
 
 class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
     def __init__(self, ctx, parent, config):
@@ -122,7 +120,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
             cache_dir = os.path.join(user_config.internal_state_dir, "git")
 
         # Generate a unique identifier for the repository based on its URL.
-        repo_hash = hashlib.sha256(repo_url.encode()).hexdigest()
+        repo_hash = hashlib.sha256(repo_url.encode()).hexdigest()[:16]
         if self.import_revision is not None:
             # Append the revision to the hash instead of using it as an input
             # to the hash function. This way we can navigate in the cache
@@ -140,8 +138,8 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
         with cache_lock:
             attempt = 0
-            max_retries = user_config.get_int('git.clone.retry.max')
-            patience = user_config.get_float('git.clone.retry.patience')
+            max_retries = user_config.get_int("git.clone.retry.max")
+            patience = user_config.get_float("git.clone.retry.patience")
             while attempt <= max_retries:
                 # Check if the repository is already cached.
                 if os.path.exists(cache_path):
@@ -220,7 +218,9 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     # Clone the repository if it's not cached yet.
                     try:
                         pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
-                        repo = Repo.clone_from(repo_url, cache_path, multi_options=self.git_config_options, allow_unsafe_options=True)
+                        repo = Repo.clone_from(
+                            repo_url, cache_path, multi_options=self.git_config_options, allow_unsafe_options=True
+                        )
                         self.ctx.stats_git_ops += 1
                         if not self.import_revision is None:
                             repo.git.checkout(self.import_revision, force=True)
