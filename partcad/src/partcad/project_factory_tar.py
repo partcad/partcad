@@ -60,7 +60,7 @@ class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
             cache_dir = os.path.join(user_config.internal_state_dir, "tar")
 
         # Generate a unique identifier for the file based on its URL.
-        url_hash = hashlib.sha256(tarball_url.encode()).hexdigest()
+        url_hash = hashlib.sha256(tarball_url.encode()).hexdigest()[:16]
         cache_path = os.path.join(cache_dir, url_hash)
 
         # Check if the tarball is already cached.
