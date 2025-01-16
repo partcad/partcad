@@ -1,8 +1,4 @@
 {
-  "yaml.customTags": [
-    "tag:yaml.org,2002:python/name:material.extensions.emoji.to_svg",
-    "tag:yaml.org,2002:python/name:material.extensions.emoji.twemoji"
-  ],
   // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
   "OcpCadViewer.advanced.autostart": false,
   "[feature]": {
@@ -238,6 +234,10 @@
   "testing.followRunningTest": false,
   // "testing.openTesting": "neverOpen",
   "workbench.colorTheme": "GitHub Dark",
+  "yaml.customTags": [
+    "tag:yaml.org,2002:python/name:material.extensions.emoji.to_svg",
+    "tag:yaml.org,2002:python/name:material.extensions.emoji.twemoji"
+  ],
   "yaml.format.bracketSpacing": false // prevent YAML formatter from breaking Jinja2 templates
   // "yaml.format.bracketSpacing": false,
 }
