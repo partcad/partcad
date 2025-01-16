@@ -747,7 +747,7 @@ class Context(project_config.Configuration):
         return quotes
 
     def get_provider(self, part_spec, params=None):
-        pc_logging.debug("Getting provider for %s" % part_spec)
+        pc_logging.debug(f"Getting provider for {part_spec}")
         project_name, part_name = resolve_resource_path(
             self.current_project_path,
             part_spec,

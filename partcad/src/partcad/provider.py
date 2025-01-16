@@ -29,7 +29,7 @@ class Provider:
         super().__init__()
         self.name = name
         self.config = config
-
+        self.errors = []
         self.url = config.get("url", None)
 
         self.get_caps = alru_cache(maxsize=1, typed=True)(self.get_caps)
