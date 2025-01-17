@@ -10,6 +10,8 @@ import asyncio
 import os
 import threading
 
+from sentry_sdk.tracing import Transaction
+
 from . import consts
 from . import logging as pc_logging
 from .mating import Mating
@@ -55,6 +57,8 @@ class Context(project_config.Configuration):
     # It is expected to match 'self.name' of the current package's object
     current_project_path: str
 
+    transaction: Transaction
+
     class PackageLock(object):
         def __init__(self, ctx, package_name: str):
             ctx.project_locks_lock.acquire()
@@ -69,8 +73,9 @@ class Context(project_config.Configuration):
         def __exit__(self, *_args):
             self.lock.release()
 
-    def __init__(self, root_path=None, search_root=True):
+    def __init__(self, root_path=None, search_root=True, transaction=None):
         """Initializes the context and loads the root project."""
+        self.transaction = transaction
         root_file = ""
         if root_path is None:
             # Find the top folder containing "partcad.yaml"

@@ -40,6 +40,8 @@ from . import logging
 from . import utils
 from . import exception
 
+from .user_config import UserConfig
+
 __all__ = [
     "config",
     "context",
@@ -67,18 +69,20 @@ __version__: str = "0.7.70"
 
 # TODO(clairbee): move the below to `logging_sentry.py`
 if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
-    critical_to_ignore = [
+    critical_to_ignore = (
         "action_start: ",
         "action_end: ",
-    ]
-    debug_to_ignore = [
+        "process_start: ",
+        "process_end: ",
+    )
+    debug_to_ignore = (
         "Starting action",
         "Finished action",
-    ]
+    )
 
     def before_send(event, hint):
         # Reduce noise in logs (drop events from "with logging.Process():")
-        if event.get("level") == "critical":
+        if event.get("level") in ["critical", "fatal"]:
             # from logging_ansi_terminal.py
             message = event.get("logentry", {}).get("message")
             if message and message.startswith(critical_to_ignore):
@@ -101,6 +105,8 @@ if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
         enable_tracing=user_config.get_bool("sentry.enable_tracing"),
         attach_stacktrace=user_config.get_bool("sentry.attach_stacktrace"),
         traces_sample_rate=user_config.get_float("sentry.traces_sample_rate"),
+        default_integrations=False,
+        profiles_sample_rate=1.0,
         integrations=[
             LoggingIntegration(
                 level=logging.logging.getLevelName(
@@ -116,6 +122,7 @@ if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
     # # "null - Replaced because of SDK configuration"
     # sentry_sdk.set_user({"ip_address": "{{auto}}"})
 
+    # TODO: Move to config.yaml
     sentry_sdk.set_tag("utm.source", "PartCAD")
     sentry_sdk.set_tag("utm.medium", "Sentry")
     sentry_sdk.set_tag("utm.campaign", "Open Source")
@@ -131,14 +138,14 @@ if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
     username_md5 = hashlib.md5(username.encode()).hexdigest()
     sentry_sdk.set_tag("username.md5", username_md5)
 
-    cache_dir = os.path.expanduser("~/.cache/partcad")
+    cache_dir = UserConfig.get_cache_dir()
     os.makedirs(cache_dir, exist_ok=True)
     cache_file = os.path.join(cache_dir, "id")
 
     # Check if the ID is already cached
     if os.path.exists(cache_file):
-      with open(cache_file) as f:
-          unique_uid = f.read().strip()
+        with open(cache_file) as f:
+            unique_uid = f.read().strip()
     else:
         # Generate a new unique ID and cache it
         unique_uid = str(uuid.uuid4())
@@ -164,5 +171,3 @@ if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
 
     sentry_sdk.set_measurement("memory.rss", memory_rss, "byte")
     sentry_sdk.set_measurement("cpu.user", cpu_user, "second")
-
-    sentry_sdk.profiler.start_profiler()

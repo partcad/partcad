@@ -9,13 +9,13 @@ import yaml
 import partcad as pc
 import coloredlogs
 import logging
-import sentry_sdk
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
 
+transaction = None
 help_config = click.RichHelpConfiguration(
     text_markup="rich",
     show_arguments=True,
@@ -73,7 +73,6 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     show_envvar=True,
 )
 @click.pass_context
-@sentry_sdk.trace
 def cli(ctx, verbose, quiet, no_ansi, package, format):
     """
     \b
@@ -85,8 +84,17 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
     ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝╚═════╝
 
     """
+    global transaction
 
-    sentry_sdk.start_transaction(op="process", name="PartCAD")
+    # Manually call start_profiler and stop_profiler
+    # to profile the code in between
+    sentry_sdk.profiler.start_profiler()
+
+    # with sentry_sdk.start_span(op="status", name="Display the state of internal data used by PartCAD"):
+    transaction = sentry_sdk.start_transaction(op="pc", name="pc")
+
+    # sentry_sdk.start_transaction(op="cli", name="PartCAD CLI")
+    # with sentry_sdk.start_span(op="pc", name="Setting up CLI context"):
 
     # TODO-86: @clairbee add a config option to change logging mechanism and level
     if no_ansi:
@@ -144,23 +152,24 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
     commands_with_context = [
         "add",
         "ai",
+        "export",
         "info",
         "inspect",
         "install",
         "list",
         "render",
-        "export",
+        "reset",
+        "status",
         "supply",  # Actually context is needed for "quote" but for now it it is what it is
         "test",
         "update",
-        "reset",
     ]
 
     if ctx.invoked_subcommand in commands_with_context:
         from partcad.globals import init
 
         try:
-            ctx.obj = init(package)
+            ctx.obj = init(package, transaction=transaction)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
             exc = click.BadParameter("Invalid configuration file", ctx=ctx, param=package, param_hint=None)
             exc.exit_code = 2
@@ -195,21 +204,23 @@ cli.context_settings = {
 
 @cli.result_callback()
 def process_result(result, verbose, quiet, no_ansi, package, format):
-    transaction = sentry_sdk.Hub.current.scope.transaction  # type: Transaction
-    if transaction:
-        transaction.finish()
+    # transaction = sentry_sdk.Hub.current.scope.transaction  # type: Transaction
+    # if transaction:
+    #     transaction.finish()
 
-    # flush() prevents the following message:
-    # Sentry is attempting to send 3 pending events
-    # Waiting up to 1 seconds
-    # Press Ctrl-C to quit
+    transaction.finish()
+
+    pc.logging.debug("Stopping Sentry SDK profiler")
+    sentry_sdk.profiler.stop_profiler()
+
+    pc.logging.debug("Flushing Sentry SDK events")
     sentry_sdk.flush()
 
     # TODO-89: @alexanderilyin: What is this for?
     if not no_ansi:
         pc.logging_ansi_terminal_fini()
 
-    # Abort if there was at least one error reported during the exeution time.
+    # Abort if there was at least one error reported during the execution time.
     # `result` is needed for the case when the command was not correct.
     if pc.logging.had_errors or result:
         raise click.Abort()

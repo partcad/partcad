@@ -118,12 +118,14 @@ process_lock = threading.Lock()
 
 # Classes to be used with "with()" to alter the logging context.
 class Process(object):
-    def __init__(self, op: str, package: str, item: str = None):
+    def __init__(self, op: str, package: str, item: str = None, transaction=None):
         self.op = op
         self.package = package
         self.item = item
         self.succeeded = False
         self.start = 0.0
+        self.transaction = transaction
+        self.span = None
 
     async def __aenter__(self):
         self.__enter__()
@@ -133,6 +135,8 @@ class Process(object):
 
         if process_lock.acquire():
             self.start = time.time()
+            if self.transaction:
+                self.span = self.transaction.start_child(op=self.op, description=self.package)
             ops.process_start(self.op, self.package, self.item)
             self.succeeded = True
         else:
@@ -148,6 +152,8 @@ class Process(object):
 
         if self.succeeded:
             process_lock.release()
+            if self.span:
+                self.span.finish()
             ops.process_end(self.op, self.package, self.item)
 
             delta = time.time() - self.start
@@ -158,9 +164,12 @@ class Process(object):
 
 
 class Action(object):
-    def __init__(self, op: str, package: str, item: str = None, extra: str = None):
+    def __init__(self, op: str, package: str, item: str = None, extra: str = None, transaction=None):
         self.op = op
         self.package = package
+        self.transaction = transaction
+        self.span = None
+
         if extra:
             self.item = item + " : " + extra
         else:
@@ -170,6 +179,8 @@ class Action(object):
         self.__enter__()
 
     def __enter__(self):
+        if self.transaction:
+            self.span = self.transaction.start_child(op=self.op, description=self.package)
         ops.action_start(self.op, self.package, self.item)
 
     async def __aexit__(self, *args):
@@ -177,3 +188,5 @@ class Action(object):
 
     def __exit__(self, *_args):
         ops.action_end(self.op, self.package, self.item)
+        if self.span:
+            self.span.finish()

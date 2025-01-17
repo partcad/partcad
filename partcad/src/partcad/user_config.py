@@ -20,6 +20,10 @@ class UserConfig(vyper.Vyper):
     def get_config_dir():
         return os.path.join(Path.home(), ".partcad")
 
+    @staticmethod
+    def get_cache_dir():
+        return os.path.join(Path.home(), ".cache", "partcad")
+
     def __init__(self):
         super().__init__()
         self.set_config_type("yaml")

@@ -12,14 +12,23 @@ import sentry_sdk
 
 import os
 import threading
+import socket
+import hashlib
+import uuid
+import psutil
+import time
 
 from partcad import __version__ as version
+import humanfriendly
 import partcad.logging as logging
 import partcad.user_config as user_config
+from partcad.context import Context
 
+transaction = None
 path = user_config.internal_state_dir
 
 
+@sentry_sdk.trace
 def get_size(start_path="."):
     total_size = 0
     for dirpath, dirnames, filenames in os.walk(start_path):
@@ -33,37 +42,40 @@ def get_size(start_path="."):
 
 
 def get_total():
-    with logging.Action("Status", "total"):
-        total = (get_size(path)) / 1048576.0
-        logging.info("Total internal data storage size: %.2fMB" % total)
+    with logging.Action("Status", "total", transaction=transaction):
+        total = float(get_size(path))
+        logging.info("Total internal data storage size: %s" % humanfriendly.format_size(total))
 
 
 def get_git():
-    with logging.Action("Status", "git"):
+    with logging.Action("Status", "git", transaction=transaction):
         git_path = os.path.join(path, "git")
-        git_total = (get_size(git_path)) / 1048576.0
-        logging.info("Git cache size: %.2fMB" % git_total)
+        git_total = get_size(git_path)
+        logging.info("Git cache size: %s" % humanfriendly.format_size(git_total))
 
 
 def get_tar():
-    with logging.Action("Status", "tar"):
+    with logging.Action("Status", "tar", transaction=transaction):
         tar_path = os.path.join(path, "tar")
-        tar_total = (get_size(tar_path)) / 1048576.0
-        logging.info("Tar cache size: %.2fMB" % tar_total)
+        tar_total = get_size(tar_path)
+        logging.info("Tar cache size: %s" % humanfriendly.format_size(tar_total))
 
 
 def get_runtime():
-    with logging.Action("Status", "runtime"):
+    with logging.Action("Status", "runtime", transaction=transaction):
         runtime_path = os.path.join(path, "runtime")
-        runtime_total = (get_size(runtime_path)) / 1048576.0
-        logging.info("Runtime environments size: %.2fMB" % runtime_total)
+        runtime_total = get_size(runtime_path)
+        logging.info("Runtime environments size: %s" % humanfriendly.format_size(runtime_total))
 
 
-# @sentry_sdk.trace # AttributeError: 'function' object has no attribute 'make_context'
 @click.command(help="Display the state of internal data used by PartCAD")
-@sentry_sdk.trace  # TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'
-def cli() -> None:
-    with logging.Process("Status", "this"):
+@click.pass_obj
+def cli(ctx: Context) -> None:
+    global transaction
+    transaction = ctx.transaction
+    span = transaction.start_child(op="status", description="Display the state of internal data used by PartCAD")
+    # span = sentry_sdk.start_span(name="status")
+    with logging.Process("Status", "this", transaction=ctx.transaction):
 
         logging.info(f"PartCAD version: {version}")
 
@@ -87,3 +99,4 @@ def cli() -> None:
         thread_git.join()
         thread_tar.join()
         thread_runtime.join()
+    span.finish()
