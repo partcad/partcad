@@ -453,10 +453,10 @@ jobs:
           # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
           # TODO: Run ggshield and/or other secrets scanning tools as separate job
           env: |
-            SKIP=poetry-export,poetry-lock,ggshield,pytest
-          runCmd:
-            pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
-            --all-files
+            SKIP=pytest,poetry-export,poetry-lock
+          runCmd: |
+            echo "SKIP: '$SKIP'"
+            pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always --all-files
 
   behave:
     name: "Run: behave"
