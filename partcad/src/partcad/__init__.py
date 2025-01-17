@@ -137,10 +137,8 @@ if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
 
     # Check if the ID is already cached
     if os.path.exists(cache_file):
-if os.path.exists(cache_file):
-    with open(cache_file) as f:
-        unique_uid = f.read().strip()
-            unique_uid = f.read().strip()
+      with open(cache_file) as f:
+          unique_uid = f.read().strip()
     else:
         # Generate a new unique ID and cache it
         unique_uid = str(uuid.uuid4())
