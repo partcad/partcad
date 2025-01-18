@@ -2141,6 +2141,16 @@ docs = ["myst-parser", "pydata-sphinx-theme", "sphinx-autodoc-typehints", "sphin
 test = ["ipykernel", "pre-commit", "pytest (<8)", "pytest-cov", "pytest-timeout"]
 
 [[package]]
+name = "lib3mf"
+version = "2.3.2"
+description = "lib3mf is an implementation of the 3D Manufacturing Format file standard"
+optional = false
+python-versions = "*"
+files = [
+    {file = "lib3mf-2.3.2-py3-none-any.whl", hash = "sha256:42a3be872caffe0a9bc53451cd632b87773ce27710e3a4f374877e95a8c11db1"},
+]
+
+[[package]]
 name = "lxml"
 version = "5.3.0"
 description = "Powerful and Pythonic XML processing library combining libxml2/libxslt with the ElementTree API."
@@ -5591,4 +5601,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.13"
-content-hash = "274b7a74df1c2941156506bbfa071aa23e7784e6c66ee6e72468b8578be2e166"
+content-hash = "f07c5f009d12a5f6b68414f0aff844931b2947e83e116e6d07c0867495b65057"

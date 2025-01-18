@@ -1,0 +1,22 @@
+desc: PartCAD example project to demonstrate parts defined using STL files.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect cube
+    ```
+
+parts:
+  bolt:
+    type: step
+    desc: 
+  bolt_stl:
+    type: stl
+    desc: 
+  bolt_3mf:
+    type: 3mf
+
+render:
+  readme:
+  svg:
+    prefix: ./

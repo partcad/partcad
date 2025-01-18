@@ -1,7 +1,8 @@
 import rich_click as click
 from pathlib import Path
 import partcad.logging as logging
-from partcad.converters.cad_converter import CADConverter
+# from partcad.converters.cad_converter import CADConverter
+from partcad.converter import CADConverter
 
 
 @click.command(help="Convert CAD files from one format to another")
@@ -104,4 +105,3 @@ def cli(ctx, create_dirs, output_dir, input, output, input_filename, output_file
         except Exception as e:
             logging.error(f"Conversion failed: {e}")
             raise click.ClickException(str(e))
-          

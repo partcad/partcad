@@ -1,0 +1,21 @@
+desc: PartCAD example project to demonstrate parts defined using 3MF files
+
+docs:
+  usage: |
+    ```shell
+    pc inspect cube
+    ```
+
+parts:
+  cube:
+    type: 3mf
+    desc: A cube defined in 3MF
+  cube_stl:
+    type: stl
+  cube_step:
+    type: step
+
+render:
+  readme:
+  svg:
+    prefix: ./

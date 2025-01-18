@@ -1,0 +1,36 @@
+desc: PartCAD example project to demonstrate parts defined using STL files.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect cube
+    ```
+
+parts:
+  cube:
+    type: stl
+    desc: A cube defined in STL
+  cube_step:
+    type: step
+  cube_3mf:
+    type: 3mf
+  cube_brep:
+    type: brep
+  
+  gear:
+    type: stl
+  gear_step:
+    type: step
+  gear_3mf:
+    type: 3mf
+  gear_brep:
+    type: brep
+
+
+  r2d2:
+    type: stl
+
+render:
+  readme:
+  svg:
+    prefix: ./
