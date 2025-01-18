@@ -4,15 +4,20 @@ from OCP.STEPControl import STEPControl_Reader, STEPControl_Writer, STEPControl_
 from OCP.StlAPI import StlAPI_Reader, StlAPI_Writer
 from OCP.BRepTools import BRepTools
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
+from OCP.BRep import BRep_Tool
+from OCP.TopExp import TopExp_Explorer
+from OCP.TopAbs import TopAbs_FACE
+from OCP.TopoDS import TopoDS
+from OCP.TopLoc import TopLoc_Location
 from lib3mf import Wrapper, Position, Triangle
 from . import logging
 
 
 class CADConverter:
     """
-    Handles CAD file conversion between supported formats (STEP, STL, 3MF, BREP).
+    Handles CAD file conversion between supported formats (STEP, STL, 3MF, BREP, SCAD).
     """
-    CONVERTERS = {"step", "stl", "3mf", "brep"}
+    CONVERTERS = {"step", "stl", "3mf", "brep", "scad"}
 
     @staticmethod
     def is_supported_format(fmt: str) -> bool:
@@ -43,6 +48,8 @@ class CADConverter:
             return CADConverter._read_stl(file_path)
         elif file_format == "brep":
             return CADConverter._read_brep(file_path)
+        elif file_format == "scad":
+            return CADConverter._read_scad(file_path)
         else:
             raise ValueError(f"Unsupported input format: {file_format}")
 
@@ -63,6 +70,8 @@ class CADConverter:
                 CADConverter._convert_stl_to_3mf(temp_stl, file_path)
             finally:
                 os.remove(temp_stl)
+        elif file_format == "scad":
+            CADConverter._write_scad(shape, file_path)
         else:
             raise ValueError(f"Unsupported output format: {file_format}")
 
@@ -119,6 +128,96 @@ class CADConverter:
         """Write a shape to a BREP file."""
         with open(brep_file, "wb") as file:
             BRepTools.Write_s(shape, file)
+
+    @staticmethod
+    def _read_scad(scad_file: str) -> TopoDS_Shape:
+        """Read a SCAD file with basic primitives and return a TopoDS_Shape."""
+        shape = TopoDS_Shape()
+
+        with open(scad_file, "r") as file:
+            for line in file:
+                line = line.strip()
+                if line.startswith("cube"):
+                    # Example: cube([x, y, z]);
+                    dimensions = line.split("[")[1].split("]")[0].split(",")
+                    x, y, z = map(float, dimensions)
+                    shape = BRepPrimAPI_MakeBox(x, y, z).Shape()
+                elif line.startswith("sphere"):
+                    # Example: sphere(r);
+                    radius = float(line.split("(")[1].split(")")[0])
+                    shape = BRepPrimAPI_MakeSphere(radius).Shape()
+                elif line.startswith("cylinder"):
+                    # Example: cylinder(h, r1, r2);
+                    args = line.split("(")[1].split(")")[0].split(",")
+                    h, r1 = map(float, args[:2])
+                    shape = BRepPrimAPI_MakeCylinder(r1, h).Shape()
+                else:
+                    raise ValueError(f"Unsupported SCAD primitive: {line}")
+
+        return shape
+
+    @staticmethod
+    def _write_scad(shape: TopoDS_Shape, scad_file: str):
+        """Convert a TopoDS_Shape to a native SCAD file."""
+        points = []
+        faces = []
+        vertex_map = {}
+
+        # Perform triangulation if not already done
+        BRepMesh_IncrementalMesh(shape, 0.1, True, 0.5, True)
+
+        # Explore faces and extract triangulation
+        explorer = TopExp_Explorer(shape, TopAbs_FACE)
+        while explorer.More():
+            face = TopoDS.Face_s(explorer.Current())  # Explicit conversion to TopoDS_Face
+            location = TopLoc_Location()
+            triangulation = BRep_Tool.Triangulation_s(face, location)
+
+            if not triangulation:
+                explorer.Next()
+                continue
+
+            # Get the number of nodes and triangles
+            num_nodes = triangulation.NbNodes()
+            num_triangles = triangulation.NbTriangles()
+
+            # Map nodes
+            for i in range(1, num_nodes + 1):
+                node = triangulation.Node(i)
+                coord = (node.X(), node.Y(), node.Z())
+                if coord not in vertex_map:
+                    vertex_map[coord] = len(points)
+                    points.append(coord)
+
+            # Map triangles
+            for i in range(1, num_triangles + 1):
+                triangle = triangulation.Triangle(i)
+                node_indices = triangle.Get()  # Get all three nodes of the triangle
+                faces.append([
+                    vertex_map[(triangulation.Node(node_indices[0]).X(),
+                                triangulation.Node(node_indices[0]).Y(),
+                                triangulation.Node(node_indices[0]).Z())],
+                    vertex_map[(triangulation.Node(node_indices[1]).X(),
+                                triangulation.Node(node_indices[1]).Y(),
+                                triangulation.Node(node_indices[1]).Z())],
+                    vertex_map[(triangulation.Node(node_indices[2]).X(),
+                                triangulation.Node(node_indices[2]).Y(),
+                                triangulation.Node(node_indices[2]).Z())]
+                ])
+
+            explorer.Next()
+
+        # Generate SCAD code for polyhedron
+        scad_code = [
+            "polyhedron(",
+            f"  points = [{', '.join([f'[{x}, {y}, {z}]' for x, y, z in points])}],",
+            f"  faces = [{', '.join([f'[{a}, {b}, {c}]' for a, b, c in faces])}]",
+            ");"
+        ]
+
+        # Write SCAD file
+        with open(scad_file, "w") as file:
+            file.write("\n".join(scad_code))
 
     @staticmethod
     def _write_temp_stl(shape: TopoDS_Shape) -> str:

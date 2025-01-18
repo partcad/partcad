@@ -28,7 +28,7 @@ from partcad.converter import CADConverter
             "brep",
             "stl",
             "3mf",
-            "obj",
+            "scad"
         ],
         case_sensitive=False,
     ),
@@ -43,7 +43,7 @@ from partcad.converter import CADConverter
             "brep",
             "stl",
             "3mf",
-            "obj",
+            "scad"
         ],
         case_sensitive=False,
     ),
