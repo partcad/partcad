@@ -34,7 +34,7 @@ class PartFactoryScad(PartFactoryFile):
             self._create(config)
 
             for dep in self.config.get("dependencies", []):
-                self.part.cache_dependencies.append(dep)
+                self.part.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
 
             self.project_dir = source_project.config_dir
 

@@ -24,7 +24,10 @@ class Cache:
 
     def get_cache_path(self, hash: CacheHash) -> Path:
         """Get the file path for a cached object."""
-        return self.cache_dir / hash.get()
+        hash_str = hash.get()
+        if not hash_str:
+            return None
+        return self.cache_dir / hash_str
 
     def _needs_write_data(self, data_len: int) -> bool:
         """Check if object needs to be written to cache."""
@@ -50,6 +53,9 @@ class Cache:
             return {}
 
         cache_path = self.get_cache_path(hash)
+        if not cache_path:
+            # Hash is not produced
+            return {}
 
         saved = {}
 
@@ -77,6 +83,9 @@ class Cache:
             return {}
 
         cache_path = self.get_cache_path(hash)
+        if not cache_path:
+            # Hash is not produced
+            return {}
 
         async def task_item(key: str) -> tuple[str, bytes]:
             try:

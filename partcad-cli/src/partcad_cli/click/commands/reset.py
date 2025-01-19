@@ -27,8 +27,8 @@ from partcad.user_config import user_config
 def cli(repo_only: bool, runtime_only: bool, cache_only: bool) -> None:
     with Process("Reset", "global"):
         if repo_only or not (cache_only or runtime_only):
+            cached_import_types = ["git", "tar"]
             for import_type in cached_import_types:
-                cached_import_types = ["git", "tar"]
                 cache_dir = os.path.join(user_config.internal_state_dir, import_type)
                 if os.path.exists(cache_dir):
                     with Action("Repos", import_type):

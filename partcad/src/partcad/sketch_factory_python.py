@@ -7,6 +7,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import os
+
 from .sketch_factory_file import SketchFactoryFile
 from .runtime_python import PythonRuntime
 
@@ -45,7 +47,7 @@ class SketchFactoryPython(SketchFactoryFile):
 
     def post_create(self) -> None:
         for dep in self.config.get("dependencies", []):
-            self.sketch.cache_dependencies.append(dep)
+            self.sketch.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
         super().post_create()
 
     async def prepare_python(self):

@@ -30,7 +30,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             self._create(config)
             self.assembly.cache_dependencies_broken = True
             for dep in self.config.get("dependencies", []):
-                self.assembly.cache_dependencies.append(dep)
+                self.assembly.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
 
     def instantiate(self, assembly):
         # # This method is best executed on a thread but the current Python version
