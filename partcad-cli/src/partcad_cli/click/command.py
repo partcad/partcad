@@ -130,7 +130,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
     # TODO-88: @alexanderilyin: try to get this list dynamically
     commands_with_context = [
         "add",
-        "adhoc",
+        # "adhoc",
         "ai",
         "info",
         "inspect",

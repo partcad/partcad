@@ -1,107 +1,71 @@
 import rich_click as click
 from pathlib import Path
+from partcad.converter import convert_cad_file
 import partcad.logging as logging
-# from partcad.converters.cad_converter import CADConverter
-from partcad.converter import CADConverter
 
 
-@click.command(help="Convert CAD files from one format to another")
+@click.command(help="Convert CAD files between formats")
 @click.option(
-    "--create-dirs",
-    "-p",
-    help="Create the necessary directory structure if it is missing",
-    is_flag=True,
+    "--input", "input_type",
+    type=click.Choice(["step", "brep", "stl", "3mf", "scad"]),
+    help="Input file type. Inferred from filename if not provided.",
+    required=False,
 )
 @click.option(
-    "--output-dir",
-    "-O",
-    help="Output directory for the converted file",
-    type=click.Path(file_okay=False, dir_okay=True),
-)
-@click.option(
-    "--input",
-    "-I",
-    help="Input file type (e.g., stl, step)",
+    "--output", "output_type",
     type=click.Choice(
-        [
+      [
             "step",
             "brep",
             "stl",
             "3mf",
-            "scad"
-        ],
-        case_sensitive=False,
-    ),
+            "threejs",
+            "obj",
+            "gltf",
+        ]),
+    help="Output file type. Inferred from filename if not provided.",
+    required=False,
 )
-@click.option(
-    "--output",
-    "-t",
-    help="Output file type (e.g., stl, step, brep)",
-    type=click.Choice(
-        [
-            "step",
-            "brep",
-            "stl",
-            "3mf",
-            "scad"
-        ],
-        case_sensitive=False,
-    ),
-)
-@click.argument("input_filename", type=click.Path())
+@click.argument("input_filename", type=click.Path(exists=True))
 @click.argument("output_filename", type=click.Path(), required=False)
-@click.pass_context
-def cli(ctx, create_dirs, output_dir, input, output, input_filename, output_filename):
-    input_file = Path(input_filename)
+def cli(input_type, output_type, input_filename, output_filename):
+    """
+    Convert CAD files from one format to another.
+    """
+    def infer_type_from_filename(filename):
+        extension = Path(filename).suffix.lower()
+        return {
+        ".step": "step",
+        ".stl": "stl",
+        ".3mf": "3mf",
+        ".scad": "scad",
+        ".brep": "brep",
+        ".json": "threejs",
+        ".obj": "obj",
+        ".gltf": "gltf",
+        ".md": "markdown",
+        ".txt": "txt",
+        }.get(extension, None)
 
-    with logging.Process("Convert CAD File", "convert"):
-        # Append the extension if missing and --input is provided
-        if input and not input_file.suffix:
-            input_file = input_file.with_suffix(f".{input}")
+    # Infer types if not explicitly provided
+    input_type = input_type or infer_type_from_filename(input_filename)
+    if not input_type:
+        logging.error("Cannot infer input type. Please specify --input explicitly.")
+        raise click.Abort()
 
-        # Validate input file existence
-        if not input_file.exists():
-            raise click.UsageError(f"Input file '{input_file}' does not exist.")
+    output_type = output_type or infer_type_from_filename(output_filename)
+    if not output_type:
+        logging.error("Cannot infer output type. Please specify --output explicitly.")
+        raise click.Abort()
 
-        # Determine output type and filename
-        if output_filename:
-            output_file = Path(output_filename)
-            output_type = output or output_file.suffix.lstrip(".").lower()
+    if not output_filename:
+        output_filename = Path(input_filename).stem + f".{output_type}"
 
-            # Validate file extension and output type match
-            expected_extension = f".{output}"
-            if output and not str(output_file).endswith(expected_extension):
-                raise click.UsageError(
-                    f"Conflict: The specified output type '{output}' does not match the file extension '{output_file.suffix}' "
-                    f"in the output filename '{output_file.name}'."
-                )
-        elif output:
-            # Generate output filename based on input filename and output type
-            output_dir_path = Path(output_dir or ".")
-            output_file = output_dir_path / f"{input_file.stem}.{output}"
-            output_type = output
-        else:
-            raise click.UsageError("You must specify either --output or <output_filename>.")
-
-        # Ensure the output directory exists if --create-dirs is enabled
-        if create_dirs:
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-        elif not output_file.parent.exists():
-            raise click.UsageError(
-                f"Output directory '{output_file.parent}' does not exist. Use --create-dirs to create it."
-            )
-
-        # Validate input and output formats
-        input_type = input or input_file.suffix.lstrip(".").lower()
-        if not CADConverter.is_supported_format(input_type) or not CADConverter.is_supported_format(output_type):
-            raise click.UsageError(
-                f"Conversion from {input_type} to {output_type} is not supported."
-            )
-
-        # Perform the conversion
-        try:
-            CADConverter.convert(str(input_file), str(output_file), input_type, output_type)
-            logging.info(f"Successfully converted {input_file} to {output_file}.")
-        except Exception as e:
-            logging.error(f"Conversion failed: {e}")
-            raise click.ClickException(str(e))
+    # Perform conversion
+    try:
+        logging.info(f"Converting {input_filename} ({input_type}) to {output_filename} ({output_type})...")
+        convert_cad_file(input_filename, input_type, output_filename, output_type)
+        logging.info(f"Conversion complete: {output_filename}")
+    except Exception as e:
+        logging.error(f"Error during conversion: {e}")
+        raise click.Abort()
