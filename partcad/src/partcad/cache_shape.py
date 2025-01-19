@@ -76,7 +76,7 @@ class ShapeCache(Cache):
 
         hash_str = hash.get()
         if hash_str is None:
-            # Not enough datat to hash
+            # Not enough data to hash
             return {}, {}
 
         results = {}

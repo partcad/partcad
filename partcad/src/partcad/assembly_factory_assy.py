@@ -178,7 +178,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         # Check if this node is for an assembly
         if "links" in node and not node["links"] is None:
             item = Assembly(
-                assembly.project_name, {"name": name, "child": True}
+                assembly.project_name, {"name": f"{self.name}:{name}", "child": True}
             )  # TODO(clairbee): revisit why node["links"]) was used there
             item.instantiate = lambda x: True
             await self.handle_node_list(item, node["links"])

@@ -97,6 +97,6 @@ class PartFactoryAlias(pf.PartFactory):
             raise Exception(f"The alias source {self.source} is not found")
         return source.get_final_config()
 
-    def get_cacheable(self):
+    def get_cacheable(self) -> bool:
         # This object is a wrapper around another one which must be cached.
         return False

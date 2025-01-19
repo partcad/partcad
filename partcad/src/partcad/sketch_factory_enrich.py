@@ -164,6 +164,6 @@ class SketchFactoryEnrich(pf.SketchFactory):
 
             return await source.instantiate(sketch)
 
-    def get_cacheable(self):
+    def get_cacheable(self) -> bool:
         # This object is a wrapper around another one which must be cached.
         return False

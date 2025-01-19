@@ -77,15 +77,15 @@ class Shape(ShapeConfiguration):
                     cad_config[key] = self.config[key]
             self.hash.add_dict(cad_config)
 
-    def get_cache_dependencies_broken(self):
+    def get_cache_dependencies_broken(self) -> bool:
         if user_config.cache_dependencies_ignore:
             return False
         return self.cache_dependencies_broken
 
-    def get_cacheable(self):
+    def get_cacheable(self) -> bool:
         return self.cacheable and not self.get_cache_dependencies_broken()
 
-    def get_async_lock(self):
+    def get_async_lock(self) -> asyncio.Lock:
         if not hasattr(self.tls, "async_shape_locks"):
             self.tls.async_shape_locks = {}
         self_id = id(self)

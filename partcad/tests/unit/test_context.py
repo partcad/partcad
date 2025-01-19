@@ -49,6 +49,7 @@ def test_ctx_stats2():
     assert new_memory > old_memory
 
     old_memory = ctx.stats_memory
+    cube.cacheable = False
     obj = asyncio.run(cube.get_wrapped(ctx))
     assert obj is not None
     ctx.stats_recalc()
