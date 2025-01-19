@@ -101,5 +101,3 @@ class PartFactoryAlias(pf.PartFactory):
         # This object is a wrapper around another one.
         # The other one is the one which must be cached.
         return False
-
-        return False
