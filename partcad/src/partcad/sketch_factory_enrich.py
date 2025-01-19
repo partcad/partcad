@@ -143,13 +143,21 @@ class SketchFactoryEnrich(pf.SketchFactory):
             sketch.config["source"] = self.source_project_name + ":" + self.source_sketch_name
             sketch.config["orig_name"] = sketch.name
             sketch.config["name"] = name
-            shape = source.shape
-            if shape:
-                sketch.shape = shape
-                return shape
+
+            # Clone the source object properties
+            if source.path:
+                sketch.path = source.path
+            if "with" in source.config:
+                self.hash.add_dict(sketch.config["with"])
+            sketch.cachable = source.cachable
+            sketch.cache_dependencies = source.cache_dependencies
+            sketch.cache_dependencies_broken = source.cache_dependencies_broken
+
+            _wrapped = source._wrapped
+            if _wrapped:
+                sketch._wrapped = _wrapped
+                return _wrapped
 
             self.ctx.stats_sketches_instantiated += 1
 
-            if source.path:
-                sketch.path = source.path
             return await source.instantiate(sketch)

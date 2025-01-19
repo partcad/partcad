@@ -18,7 +18,7 @@ def test_part_enrich_get_1():
     ctx = pc.Context("examples/produce_part_cadquery_primitive")
     cube_enrich = ctx._get_part(":cube_enrich")
     assert cube_enrich is not None
-    assert asyncio.run(cube_enrich.get_wrapped()) is not None
+    assert asyncio.run(cube_enrich.get_wrapped(ctx)) is not None
 
     # Check whether the original part is stil ok or not
     cube_config = ctx.get_project(".").get_part_config("cube")
@@ -31,7 +31,7 @@ def test_part_enrich_get_2():
     ctx = pc.Context("examples/produce_part_cadquery_primitive")
     cube_enrich = ctx._get_part(":cube_enrich")
     assert cube_enrich is not None
-    assert asyncio.run(cube_enrich.get_wrapped()) is not None
+    assert asyncio.run(cube_enrich.get_wrapped(ctx)) is not None
 
     # Check whether the parameter change is in effect
     assert cube_enrich.config["parameters"]["width"]["default"] == 20.0
@@ -42,7 +42,7 @@ def test_part_enrich_get_3():
     ctx = pc.Context("examples/produce_part_cadquery_primitive")
     cube_alias_enrich = ctx._get_part(":cube_alias_enrich")
     assert cube_alias_enrich is not None
-    assert asyncio.run(cube_alias_enrich.get_wrapped()) is not None
+    assert asyncio.run(cube_alias_enrich.get_wrapped(ctx)) is not None
 
     # Check whether the parameter change is in effect
     assert cube_alias_enrich.config["parameters"]["width"]["default"] == 10.0
@@ -53,7 +53,7 @@ def test_part_enrich_get_4():
     ctx = pc.Context("examples/produce_part_cadquery_primitive")
     cube_enrich_enrich = ctx._get_part(":cube_enrich_enrich")
     assert cube_enrich_enrich is not None
-    assert asyncio.run(cube_enrich_enrich.get_wrapped()) is not None
+    assert asyncio.run(cube_enrich_enrich.get_wrapped(ctx)) is not None
 
     # Check whether the parameter change is in effect
     assert cube_enrich_enrich.config["parameters"]["width"]["default"] == 20.0

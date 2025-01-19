@@ -54,15 +54,18 @@ class PartFactoryExtrude(PartFactory):
             self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
 
             self._create(config)
+            self.part.hash.add_string(str(self.depth))
+            # TODO(clairbee): add dependency tracking for Extrude (PC-313)
+            self.part.cache_dependencies_broken = True
 
     async def instantiate(self, part):
         with pc_logging.Action("Extrude", part.project_name, part.name):
             shape = None
             try:
-                self.sketch = self.project.ctx.get_sketch(self.source_sketch_spec)
+                self.sketch = self.ctx.get_sketch(self.source_sketch_spec)
 
                 maker = BRepPrimAPI_MakePrism(
-                    await self.sketch.get_shape(),
+                    await self.sketch.get_wrapped(self.ctx),
                     gp_Vec(0.0, 0.0, self.depth),
                 )
                 maker.Build()

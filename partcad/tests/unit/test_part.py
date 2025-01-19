@@ -36,7 +36,7 @@ def test_part_get_step_1():
     assert repo1 is not None
     bolt = repo1.get_part("bolt")
     assert bolt is not None
-    wrapped = asyncio.run(bolt.get_wrapped())
+    wrapped = asyncio.run(bolt.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -46,8 +46,9 @@ def test_part_get_step_2():
     bolt = ctx.get_part(":bolt")
     assert bolt is not None
 
-    wrapped = asyncio.run(bolt.get_wrapped())
+    wrapped = asyncio.run(bolt.get_wrapped(ctx))
     assert wrapped is not None
+
 
 def test_part_get_brep_1():
     """Load a BREP part from a project by the part name"""
@@ -56,7 +57,7 @@ def test_part_get_brep_1():
     assert repo1 is not None
     box = repo1.get_part("box")
     assert box is not None
-    wrapped = asyncio.run(box.get_wrapped())
+    wrapped = asyncio.run(box.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -66,7 +67,7 @@ def test_part_get_brep_2():
     box = ctx.get_part(":box")
     assert box is not None
 
-    wrapped = asyncio.run(box.get_wrapped())
+    wrapped = asyncio.run(box.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -76,7 +77,7 @@ def test_part_get_stl():
     part = ctx.get_part(":cube")
     assert part is not None
 
-    wrapped = asyncio.run(part.get_wrapped())
+    wrapped = asyncio.run(part.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -86,7 +87,7 @@ def test_part_get_3mf():
     part = ctx.get_part(":cube")
     assert part is not None
 
-    wrapped = asyncio.run(part.get_wrapped())
+    wrapped = asyncio.run(part.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -98,7 +99,7 @@ def test_part_get_scad():
         part = ctx.get_part(":cube")
         assert part is not None
 
-        wrapped = asyncio.run(part.get_wrapped())
+        wrapped = asyncio.run(part.get_wrapped(ctx))
         assert wrapped is not None
     else:
         pytest.skip("No OpenSCAD installed")
@@ -110,7 +111,7 @@ def test_part_get_3():
     _ = pc.ProjectFactoryLocal(ctx, None, test_config_local)
     cylinder = ctx.get_part("/primitive_local:cylinder")
     assert cylinder is not None
-    wrapped = asyncio.run(cylinder.get_wrapped())
+    wrapped = asyncio.run(cylinder.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -125,7 +126,7 @@ def test_part_get_4():
     cube = factory.project.get_part("cube")
     assert cube is not None
 
-    wrapped = asyncio.run(cube.get_wrapped())
+    wrapped = asyncio.run(cube.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -136,7 +137,7 @@ def test_part_lazy_loading():
     cylinder = ctx.get_part("/primitive_local:cylinder")
     assert cylinder.shape is None
 
-    wrapped = asyncio.run(cylinder.get_wrapped())
+    wrapped = asyncio.run(cylinder.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -149,7 +150,7 @@ def test_part_aliases():
     assert box is not None
     assert box.shape is None
 
-    wrapped = asyncio.run(box.get_wrapped())
+    wrapped = asyncio.run(box.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -161,7 +162,7 @@ def test_part_example_cadquery_primitive():
     cylinder = ctx.get_part("/produce_part_cadquery_primitive:cylinder")
     assert cylinder is not None
 
-    wrapped = asyncio.run(cylinder.get_wrapped())
+    wrapped = asyncio.run(cylinder.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -173,7 +174,7 @@ def test_part_example_cadquery_logo():
     head_half = ctx.get_part("/produce_part_cadquery_logo:head_half")
     assert head_half is not None
 
-    wrapped = asyncio.run(head_half.get_wrapped())
+    wrapped = asyncio.run(head_half.get_wrapped(ctx))
     assert wrapped is not None
 
 

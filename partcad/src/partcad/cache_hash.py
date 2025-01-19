@@ -1,0 +1,119 @@
+#
+# OpenVMP, 2025
+#
+# Author: Roman Kuzmenko
+# Created: 2025-01-17
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import hashlib
+
+from . import logging as pc_logging
+from .user_config import user_config
+
+
+class CacheHash:
+    dependencies = []  # This is meant to be replaced with a list of dependencies
+
+    def __init__(self, name: str, algo="sha1", hasher=None):
+        self.name = name
+        self.is_empty = True
+        self.is_used = False
+        if not user_config.cache:
+            # Caching is disabled, no initialization needed
+            self.hasher = None
+            return
+
+        if hasher != None:
+            self.hasher = hasher.copy()
+        elif algo == "sha1":
+            self.hasher = hashlib.sha1()
+        elif algo == "sha256":
+            self.hasher = hashlib.sha256()
+        else:
+            raise ValueError(f"Unknown hash algorithm: {algo}")
+
+        self.add_string(name)
+
+    def touch(self):
+        if self.is_used:
+            pc_logging.warning(f"Hash update after being used: {self.name}")
+        self.is_empty = False
+
+    # TODO(clairbee): do not "add_" anything to the hash immediately.
+    # Instead, add the data to a list and then add it to the hash when needed.
+
+    def add_dict(self, data: dict):
+        if not self.hasher:
+            # Caching is disabled
+            return
+        if data is None or len(data.keys()) == 0:
+            # Do not consider it not being empty
+            return
+
+        def recurse(val):
+            if isinstance(val, dict):
+                for k in sorted(val.keys()):
+                    self.hasher.update(str(k).encode())
+                    recurse(val[k])
+            elif isinstance(val, (list, tuple, set)):
+                for item in sorted(val) if not isinstance(val, list) else val:
+                    recurse(item)
+            else:
+                self.hasher.update(str(val).encode())
+
+        recurse(data)
+        self.touch()
+
+    def add_string(self, string: str):
+        if not self.hasher:
+            # Caching is disabled
+            return
+        if string is None:
+            # Do not consider it not being empty
+            return
+
+        self.hasher.update(string.encode())
+        self.touch()
+
+    def add_bytes(self, bytes: bytes):
+        if not self.hasher:
+            # Caching is disabled
+            return
+        if bytes is None or len(bytes) == 0:
+            # Do not consider it not being empty
+            return
+
+        self.hasher.update(bytes)
+        self.touch()
+
+    def add_filename(self, filename: str):
+        if not self.hasher:
+            # Caching is disabled
+            return
+        if filename is None:
+            # Do not consider it not being empty
+            return
+
+        try:
+            with open(filename, "rb") as f:
+                self.hasher.update(f.read())
+            self.touch()
+        except FileNotFoundError:
+            # This is not a bug. The file may not exist.
+            pass
+
+    def set_dependencies(self, dependencies: list[str]):
+        self.dependencies = dependencies
+
+    def get(self) -> str | None:
+        self.used = True
+        if self.is_empty:
+            return None
+
+        # TODO(clairbee): make I/O asynchronous and parallel, but maintain the order of hashing
+        for filename in self.dependencies:
+            self.add_filename(filename)
+
+        return self.hasher.hexdigest()

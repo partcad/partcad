@@ -20,29 +20,26 @@ class Part(ShapeWithAi):
     url: typing.Optional[str] = None
     count: int = None
 
-    def __init__(self, config: object = {}, shape=None):
-        super().__init__(config)
+    def __init__(self, project_name: str, config: object = {}, shape=None):
+        super().__init__(project_name, config)
 
-        self.kind = "parts"
-        self.shape = shape
+        self.kind = "part"
+        self._wrapped = shape
 
         self.url = None
         if "url" in config:
             self.url = config["url"]
         self.count = 0
 
-    async def get_shape(self):
-        async with self.locked():
-            if self.shape is None:
-                self.shape = await pc_thread.run_async(self.instantiate, self)
-            return self.shape
+    async def get_shape(self, ctx):
+        return await pc_thread.run_async(self.instantiate, self)
 
     def ref_inc(self):
         # TODO(clairbee): add a thread lock here
         self.count += 1
 
     def clone(self):
-        cloned = Part(self.name, self.config, self.shape)
+        cloned = Part(self.project_name, self.config, self._wrapped)
         cloned.count = self.count
         return cloned
 
@@ -54,7 +51,7 @@ class Part(ShapeWithAi):
         if not (store_data.vendor and store_data.sku) and (
             "parameters" not in self.config or property not in self.config["parameters"]
         ):
-            # shape = await self.get_shape()
+            # shape = await self.get_wrapped()
             # TODO(clairbee): derive the property from the model
 
             if property == "finish":

@@ -62,21 +62,26 @@ class SketchFactoryAlias(SketchFactory):
 
             pc_logging.debug("Initializing an alias to %s" % self.source)
 
-    async def instantiate(self, sketch):
-        with pc_logging.Action("Alias", sketch.project_name, f"{sketch.name}:{self.source_sketch_name}"):
+    async def instantiate(self, obj):
+        with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_sketch_name}"):
 
             source = self.ctx._get_sketch(self.source)
             if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return None
 
-            shape = source.shape
-            if shape:
-                sketch.shape = shape
-                return shape
+            # Clone the source object properties
+            if source.path:
+                obj.path = source.path
+            obj.cachable = source.cachable
+            obj.cache_dependencies = source.cache_dependencies
+            obj.cache_dependencies_broken = source.cache_dependencies_broken
+
+            _wrapped = source._wrapped
+            if _wrapped:
+                obj.wrapped = _wrapped
+                return _wrapped
 
             self.ctx.stats_sketches_instantiated += 1
 
-            if source.path:
-                sketch.path = source.path
-            return await source.instantiate(sketch)
+            return await source.instantiate(obj)

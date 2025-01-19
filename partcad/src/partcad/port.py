@@ -26,9 +26,11 @@ class WithPorts(Interface):
         self.interfaces = None
 
     def get_interfaces(self):
-        if self.interfaces is None:
-            self.instantiate_interfaces()
-        return self.interfaces
+        # TODO(clairbee): make interface a Shape and switch to existing sync mechanisms
+        with self.lock:
+            if self.interfaces is None:
+                self.instantiate_interfaces()
+            return self.interfaces
 
     def get_interface(self, interface_name: str):
         return self.get_interfaces()[interface_name]

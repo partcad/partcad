@@ -33,6 +33,9 @@ class PartFactoryScad(PartFactoryFile):
             # Complement the config object here if necessary
             self._create(config)
 
+            # TODO(clairbee): add dependency tracking for OpenSCAD scripts
+            self.part.cache_dependencies_broken = True
+
             self.project_dir = source_project.config_dir
 
     async def instantiate(self, part):

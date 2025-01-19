@@ -16,7 +16,7 @@ class CadTest(Test):
         super().__init__("cad")
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
-        wrapped = await shape.get_wrapped()
+        wrapped = await shape.get_wrapped(ctx)
         if wrapped is None:
             return self.failed(shape, "Failed to get the shape")
 

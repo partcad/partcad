@@ -42,45 +42,6 @@ based on the location and preferences of the requestor, while leaving the
 possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).
 
-
-=======================
-Installing Dependencies
-=======================
-
-Cloning over SSH is faster and more reliable because it uses an efficient
-protocol with lower overhead, supports compression, and maintains stable
-connections via key-based authentication. SSH avoids HTTPS rate limits,
-handles firewalls better, and eliminates credential prompts, making it
-ideal for large repositories or frequent interactions.
-
-If you have SSH keys configured then you can add the following
-to the ~/.partcad/config.yaml:
-
-  .. code-block:: yaml
-
-    # ~/.partcad/config.yaml
-    dependencies:
-      overrides:
-        url:
-          "git@github.com:": "https://github.com/"
-
-===========================
-Git Configuration Overrides
-===========================
-
-By default, PartCAD uses the system's Git configuration when importing packages
-using git. If you want to override these configurations, you can add your
-overrides in ``~/.partcad/config.yaml`` as shown below:
-
-  .. code-block:: yaml
-
-    # ~/.partcad/config.yaml
-    git:
-      config:
-        "user.name": "John Doe"
-        "user.email": "johndoe@example.com"
-        ...
-
 =============
 Generative AI
 =============
@@ -175,9 +136,45 @@ Or their more script-friendly variants:
     pc -q --no-ansi inspect -V /pub/robotics/parts/gobilda:structure/u_channel_2
     pc -q --no-ansi inspect -V -a /pub/robotics/parts/gobilda:examples/wormgear
 
-=====================
-Environment Variables
-=====================
+.. _caching:
+
+=======
+Caching
+=======
+
+PartCAD is capable of caching intermediate and final results of all model compilations.
+This can be particularly useful when working with large models or when scripting languages
+(like OpenSCAD, CadQuery or build123d) are used.
+
+At the moment code-CAD caching is experimental and can be enabled by using the following configuration:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    cacheDependenciesIgnore: True:
+
+========
+Security
+========
+
+As code-CAD is gaining popularity in the community, the topic of supply chain
+security and the risk of running arbitrary third-party code is not sufficiently
+addressed. PartCAD aims to close that gap for open-source software in a way
+that exceeds anything commercial software has to offer at the moment.
+
+PartCAD is capable of rendering scripted parts
+(``CadQuery`` and ``build123d`` use Python) in sandboxed environments.
+
+At the moment it is only useful from a dependency management perspective
+(it allows third-party packages to bring their Python dependencies without
+polluting your own Python environment),
+in the future, PartCAD aims to achieve security isolation of the sandboxed
+environments. That will fundamentally change the security implications of using
+scripted models shared online.
+
+==================
+Automation Support
+==================
 
 PartCAD allows you to set CLI options and override user configurations specified in
 ``~/.partcad/config.yaml`` using environment variables. This can be particularly
@@ -209,21 +206,36 @@ for the ``PC`` prefix and the rest of the variable name, as shown in the example
 In this case, these environment variables will take precedence over the values specified in
 ``~/.partcad/config.yaml``.
 
-========
-Security
-========
+==========================
+Flexible Git Configuration
+==========================
 
-As code-CAD is gaining popularity in the community, the topic of supply chain
-security and the risk of running arbitrary third-party code is not sufficiently
-addressed. PartCAD aims to close that gap for open-source software in a way
-that exceeds anything commercial software has to offer at the moment.
+By default, PartCAD uses the system's Git configuration when importing packages
+using git. If you want to override these configurations, you can add your
+overrides in ``~/.partcad/config.yaml`` as shown below:
 
-PartCAD is capable of rendering scripted parts
-(``CadQuery`` and ``build123d`` use Python) in sandboxed environments.
+  .. code-block:: yaml
 
-At the moment it is only useful from a dependency management perspective
-(it allows third-party packages to bring their Python dependencies without
-polluting your own Python environment),
-in the future, PartCAD aims to achieve security isolation of the sandboxed
-environments. That will fundamentally change the security implications of using
-scripted models shared online.
+    # ~/.partcad/config.yaml
+    git:
+      config:
+        "user.name": "John Doe"
+        "user.email": "johndoe@example.com"
+        ...
+
+Cloning over SSH is faster and more reliable because it uses an efficient
+protocol with lower overhead, supports compression, and maintains stable
+connections via key-based authentication. SSH avoids HTTPS rate limits,
+handles firewalls better, and eliminates credential prompts, making it
+ideal for large repositories or frequent interactions.
+
+If you have SSH keys configured then you can add the following
+to the ~/.partcad/config.yaml:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    dependencies:
+      overrides:
+        url:
+          "git@github.com:": "https://github.com/"

@@ -18,7 +18,7 @@ def test_part_alias_get_1():
     bolt = ctx._get_part(":screw")
     assert bolt is not None
 
-    wrapped = asyncio.run(bolt.get_wrapped())
+    wrapped = asyncio.run(bolt.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -28,7 +28,7 @@ def test_part_alias_get_2():
     bolt = ctx._get_part(":fastener")
     assert bolt is not None
 
-    wrapped = asyncio.run(bolt.get_wrapped())
+    wrapped = asyncio.run(bolt.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -38,7 +38,7 @@ def test_part_alias_get_3():
     bolt = ctx._get_part(":hexhead")
     assert bolt is not None
 
-    wrapped = asyncio.run(bolt.get_wrapped())
+    wrapped = asyncio.run(bolt.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -48,7 +48,7 @@ def test_part_alias_get_3():
 #     ctx = pc.Context("examples/produce_part_cadquery_primitive")
 #     brick = ctx.get_part(":brick2")
 #     assert brick is not None
-#     assert brick.get_wrapped() is not None
+#     assert brick.get_wrapped(ctx) is not None
 
 #     # Check whether the parameter change is in effect
 #     assert brick.config["parameters"]["width"]["default"] == 20.0

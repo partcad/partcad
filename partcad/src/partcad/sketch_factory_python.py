@@ -43,6 +43,11 @@ class SketchFactoryPython(SketchFactoryFile):
         self.runtime = self.ctx.get_python_runtime(python_version)
         self.session = self.runtime.get_session(source_project.name)
 
+    def post_create(self):
+        # TODO(clairbee): add dependency tracking for python scripts
+        self.sketch.cache_dependencies_broken = True
+        return super().post_create()
+
     async def prepare_python(self):
         """
         This method is called by child classes
@@ -55,7 +60,7 @@ class SketchFactoryPython(SketchFactoryFile):
         await self.runtime.prepare_for_shape(self.config, session=self.session)
 
     def info(self, sketch):
-        info: dict[str, object] = sketch.shape_info()
+        info: dict[str, object] = sketch.shape_info(self.ctx)
         info.update(
             {
                 "runtime_version": self.runtime.version,

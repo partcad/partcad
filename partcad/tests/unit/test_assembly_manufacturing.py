@@ -19,7 +19,7 @@ def test_assembly_manufacturing_positive_1():
     ctx = pc.Context("examples/provider_manufacturer")
     assembly = ctx._get_assembly(":assembly")
     assert assembly is not None
-    assert asyncio.run(assembly.get_wrapped()) is not None
+    assert asyncio.run(assembly.get_wrapped(ctx)) is not None
 
     test = pc.test.cam.CamTest()
     assert asyncio.run(test.test([test], ctx, assembly)) == True
@@ -30,7 +30,7 @@ def test_assembly_manufacturing_negative_1():
     ctx = pc.Context("examples/produce_assembly_assy")
     assembly = ctx._get_assembly(":logo")
     assert assembly is not None
-    assert asyncio.run(assembly.get_wrapped()) is not None
+    assert asyncio.run(assembly.get_wrapped(ctx)) is not None
 
     test = pc.test.cam.CamTest()
     assert asyncio.run(test.test([test], ctx, assembly)) == True

@@ -166,12 +166,12 @@ class ProviderCart:
 
     def add_item(self, item: ProviderCartItem, count=1):
         """Copy the cart item into this cart in a way that the original cart is not affected"""
-        new_item = copy.copy(item)
+        new_item = copy.deepcopy(item)
         self._add_item(new_item, count)
         return new_item
 
     def _add_item(self, item: ProviderCartItem, count=1):
-        """Add item without 'copy.copy()'"""
+        """Add item without 'copy.deepcopy()'"""
         assert item.count > 0
         item.count *= count
         if item.name in self.parts:

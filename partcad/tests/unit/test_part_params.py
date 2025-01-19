@@ -18,7 +18,7 @@ def test_part_params_get_1():
     ctx = pc.Context("examples/produce_part_cadquery_primitive")
     brick = ctx._get_part(":cube", {"width": 17.0})
     assert brick is not None
-    assert asyncio.run(brick.get_wrapped()) is not None
+    assert asyncio.run(brick.get_wrapped(ctx)) is not None
     assert brick.config["parameters"]["width"]["default"] == 17.0
 
 
@@ -27,5 +27,5 @@ def test_part_params_get_2():
     ctx = pc.Context("examples/produce_part_cadquery_primitive")
     brick = ctx._get_part(":cube", {"width": "17.0"})
     assert brick is not None
-    assert asyncio.run(brick.get_wrapped()) is not None
+    assert asyncio.run(brick.get_wrapped(ctx)) is not None
     assert brick.config["parameters"]["width"]["default"] == 17.0

@@ -28,6 +28,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             super().__init__(ctx, source_project, target_project, config, extension=".assy")
             # Complement the config object here if necessary
             self._create(config)
+            self.assembly.cache_dependencies_broken = True
 
     def instantiate(self, assembly):
         # # This method is best executed on a thread but the current Python version
@@ -176,7 +177,9 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
         # Check if this node is for an assembly
         if "links" in node and not node["links"] is None:
-            item = Assembly({"name": name})  # TODO(clairbee): revisit why node["links"]) was used there
+            item = Assembly(
+                assembly.project_name, {"name": name, "child": True}
+            )  # TODO(clairbee): revisit why node["links"]) was used there
             item.instantiate = lambda x: True
             await self.handle_node_list(item, node["links"])
         else:

@@ -180,6 +180,16 @@ class SketchFactoryBasic(SketchFactory):
                     self.inner_rects.extend([Rect(r) for r in inner["rectangles"]])
 
             self._create(config)
+            basic_config = {}
+            if "circle" in config:
+                basic_config["circle"] = config["circle"]
+            if "square" in config:
+                basic_config["square"] = config["square"]
+            if "rectangle" in config:
+                basic_config["rectangle"] = config["rectangle"]
+            if "inner" in config:
+                basic_config["inner"] = config["inner"]
+            self.sketch.hash.add_dict(basic_config)
 
     async def instantiate(self, sketch):
         with pc_logging.Action("Basic", sketch.project_name, sketch.name):

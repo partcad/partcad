@@ -65,24 +65,29 @@ class PartFactoryAlias(pf.PartFactory):
 
             self.part.get_final_config = self.get_final_config
 
-    async def instantiate(self, part):
-        with pc_logging.Action("Alias", part.project_name, f"{part.name}:{self.source_part_name}"):
+    async def instantiate(self, obj):
+        with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_part_name}"):
 
             source = self.ctx._get_part(self.source)
             if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return None
 
-            shape = source.shape
-            if shape:
-                part.shape = shape
-                return shape
+            # Clone the source object properties
+            if source.path:
+                obj.path = source.path
+            obj.cachable = source.cachable
+            obj.cache_dependencies = source.cache_dependencies
+            obj.cache_dependencies_broken = source.cache_dependencies_broken
+
+            _wrapped = source._wrapped
+            if _wrapped:
+                obj._wrapped = _wrapped
+                return _wrapped
 
             self.ctx.stats_parts_instantiated += 1
 
-            if source.path:
-                part.path = source.path
-            return await source.instantiate(part)
+            return await source.instantiate(obj)
 
     def get_final_config(self):
         source = self.ctx._get_part(self.source)

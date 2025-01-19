@@ -30,8 +30,13 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Windows
   - [x] Linux
   - [x] macOS
+- Workflow acceleration by caching rendered models (including for code-CADs)
+  - [x] In memory
+  - [x] On disk
+  - [ ] Local Server _(in progress)_
+  - [ ] Cloud _(in progress)_
 - Collaboration on designs
-  - [x] Versioning of CAD designs using `Git` _(like it's 2024 for real)_
+  - [x] Versioning of CAD designs using `Git` _(like it's 2025 for real)_
     - [x] Mechanics
     - [ ] Electronics _(in progress)_
     - [ ] Software _(in progress)_

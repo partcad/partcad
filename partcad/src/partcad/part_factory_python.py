@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from . import logging as pc_logging
 from .part_factory_file import PartFactoryFile
 from .runtime_python import PythonRuntime
 
@@ -41,6 +42,11 @@ class PartFactoryPython(PartFactoryFile):
         self.runtime = self.ctx.get_python_runtime(python_version)
         self.session = self.runtime.get_session(source_project.name)
 
+    def post_create(self):
+        # TODO(clairbee): add dependency tracking for python scripts
+        self.part.cache_dependencies_broken = True
+        return super().post_create()
+
     async def prepare_python(self):
         """
         This method is called by child classes
@@ -54,7 +60,7 @@ class PartFactoryPython(PartFactoryFile):
         await self.runtime.prepare_for_shape(self.config, session=self.session)
 
     def info(self, part):
-        info: dict[str, object] = part.shape_info()
+        info: dict[str, object] = part.shape_info(self.ctx)
         info.update(
             {
                 "runtime_version": self.runtime.version,

@@ -56,16 +56,13 @@ from .render import render_cfg_merge
 from .utils import resolve_resource_path, normalize_resource_path
 
 
-# TODO FIXME NOCOMMIT: switch from RLock back to Lock
-
-
 class Project(project_config.Configuration):
 
     class InterfaceLock(object):
         def __init__(self, prj, interface_name: str):
             prj.interface_locks_lock.acquire()
             if not interface_name in prj.interface_locks:
-                prj.interface_locks[interface_name] = threading.RLock()
+                prj.interface_locks[interface_name] = threading.Lock()
             self.lock = prj.interface_locks[interface_name]
             prj.interface_locks_lock.release()
 
@@ -79,7 +76,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, sketch_name: str):
             prj.sketch_locks_lock.acquire()
             if not sketch_name in prj.sketch_locks:
-                prj.sketch_locks[sketch_name] = threading.RLock()
+                prj.sketch_locks[sketch_name] = threading.Lock()
             self.lock = prj.sketch_locks[sketch_name]
             prj.sketch_locks_lock.release()
 
@@ -93,7 +90,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, part_name: str):
             prj.part_locks_lock.acquire()
             if not part_name in prj.part_locks:
-                prj.part_locks[part_name] = threading.RLock()
+                prj.part_locks[part_name] = threading.Lock()
             self.lock = prj.part_locks[part_name]
             prj.part_locks_lock.release()
 
@@ -107,7 +104,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, assembly_name: str):
             prj.assembly_locks_lock.acquire()
             if not assembly_name in prj.assembly_locks:
-                prj.assembly_locks[assembly_name] = threading.RLock()
+                prj.assembly_locks[assembly_name] = threading.Lock()
             self.lock = prj.assembly_locks[assembly_name]
             prj.assembly_locks_lock.release()
 
@@ -121,7 +118,7 @@ class Project(project_config.Configuration):
         def __init__(self, prj, provider_name: str):
             prj.provider_locks_lock.acquire()
             if not provider_name in prj.provider_locks:
-                prj.provider_locks[provider_name] = threading.RLock()
+                prj.provider_locks[provider_name] = threading.Lock()
             self.lock = prj.provider_locks[provider_name]
             prj.provider_locks_lock.release()
 
@@ -265,14 +262,7 @@ class Project(project_config.Configuration):
                 )
                 dependencies = list(filtered)
             if absolute:
-                children.extend(
-                    list(
-                        map(
-                            lambda project_name: self.name + "/" + project_name,
-                            dependencies,
-                        )
-                    )
-                )
+                children.extend([self.name + "/" + project_name for project_name in dependencies])
             else:
                 children.extend(list(dependencies))
         return children
@@ -1281,15 +1271,19 @@ class Project(project_config.Configuration):
 
     async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False) -> list[asyncio.Task]:
         tasks = []
-        test_method = "test_log_wrapper" if use_wrapper else "test"
-        for interface in self.interfaces.values():
-            tasks.append(asyncio.create_task(interface.test_async()))
-        for sketch in self.sketches.values():
-            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, sketch)) for t in tests)
-        for part in self.parts.values():
-            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, part)) for t in tests)
-        for assembly in self.assemblies.values():
-            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, assembly)) for t in tests)
+        test_method = "test_log_wrapper" if use_wrapper else "test_cached"
+        for name in self.interface_configs.keys():
+            obj = self.get_interface(name)
+            tasks.append(asyncio.create_task(obj.test_async()))
+        for name in self.sketch_configs.keys():
+            obj = self.get_sketch(name)
+            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, obj)) for t in tests)
+        for name in self.part_configs.keys():
+            obj = self.get_part(name)
+            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, obj)) for t in tests)
+        for name in self.assembly_configs.keys():
+            obj = self.get_assembly(name)
+            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, obj)) for t in tests)
         results = await asyncio.gather(*tasks)
         return False not in results
 
@@ -1364,16 +1358,27 @@ class Project(project_config.Configuration):
             # Render
             tasks = []
 
-            def _should_render_format(format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str) -> bool:
+            def _should_render_format(
+                format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str
+            ) -> bool:
                 """Helper function to determine if a format should be rendered"""
+                plural_shape_kind = {
+                    "part": "parts",
+                    "assembly": "assemblies",
+                    "sketch": "sketches",
+                    "interface": "interfaces",
+                    "providers": "providers",
+                }
                 if (
                     format_name in shape_render
                     and shape_render[format_name] is not None
                     and not isinstance(shape_render[format_name], str)
-                    and shape_kind in shape_render.get(format_name, {}).get("exclude", [])
+                    and plural_shape_kind.get(shape_kind, None) in shape_render.get(format_name, {}).get("exclude", [])
                 ):
                     return False
-                return (current_format is None and format_name in shape_render) or (current_format is not None and current_format == format_name)
+                return (current_format is None and format_name in shape_render) or (
+                    current_format is not None and current_format == format_name
+                )
 
             # Map of format names to their corresponding async render functions
             render_formats = {

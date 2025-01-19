@@ -24,15 +24,16 @@ class AssemblyFactory(ShapeFactory):
         self.orig_name = config["orig_name"]
 
     def _create(self, config):
-        self.assembly = Assembly(config)
-        self.assembly.project_name = self.project.name  # TODO(clairbee): pass it via the constructor
-        # TODO(clairbee): Make the next line work for assembly_factory_file only
-        if self.path:
-            self.assembly.path = self.path
-        self.project.assemblies[self.name] = self.assembly
-
+        self.assembly = Assembly(self.project.name, config)
         self.assembly.instantiate = lambda assembly_self: self.instantiate(assembly_self)
         self.assembly.info = lambda: self.info(self.assembly)
         self.assembly.with_ports = self.with_ports
+        self.project.assemblies[self.name] = self.assembly
+
+        self.post_create()
 
         self.ctx.stats_assemblies += 1
+
+    def post_create(self):
+        # This is a base class catch-all method
+        pass

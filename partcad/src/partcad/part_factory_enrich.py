@@ -143,13 +143,21 @@ class PartFactoryEnrich(pf.PartFactory):
             part.config["source"] = self.source_project_name + ":" + self.source_part_name
             part.config["orig_name"] = part.name
             part.config["name"] = name
-            shape = source.shape
-            if shape:
-                part.shape = shape
-                return shape
+
+            # Clone the source object properties
+            if source.path:
+                part.path = source.path
+            if "with" in source.config:
+                self.hash.add_dict(part.config["with"])
+            part.cachable = source.cachable
+            part.cache_dependencies = source.cache_dependencies
+            part.cache_dependencies_broken = source.cache_dependencies_broken
+
+            _wrapped = source._wrapped
+            if _wrapped:
+                part._wrapped = _wrapped
+                return _wrapped
 
             self.ctx.stats_parts_instantiated += 1
 
-            if source.path:
-                part.path = source.path
             return await source.instantiate(part)

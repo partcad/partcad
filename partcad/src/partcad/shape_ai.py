@@ -19,8 +19,8 @@ from .user_config import user_config
 
 class ShapeWithAi(Shape, Ai):
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, project_name: str, config):
+        super().__init__(project_name, config)
 
     # @override
     async def get_summary_async(self, project=None):

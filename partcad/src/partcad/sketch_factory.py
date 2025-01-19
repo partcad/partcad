@@ -33,8 +33,7 @@ class SketchFactory(ShapeFactory):
         self.orig_name = config["orig_name"]
 
     def _create_sketch(self, config: object) -> Sketch:
-        sketch = Sketch(config)
-        sketch.project_name = self.target_project.name  # TODO(clairbee): pass it via the constructor
+        sketch = Sketch(self.target_project.name, config)
         # TODO(clairbee): Make the next line work for sketch_factory_file only
         sketch.instantiate = lambda sketch_self: self.instantiate(sketch_self)
         sketch.info = lambda: self.info(sketch)
@@ -43,8 +42,12 @@ class SketchFactory(ShapeFactory):
 
     def _create(self, config: object):
         self.sketch = self._create_sketch(config)
-        if self.path:
-            self.sketch.path = self.path
-
         self.target_project.sketches[self.name] = self.sketch
+
+        self.post_create()
+
         self.ctx.stats_sketches += 1
+
+    def post_create(self):
+        # This is a base class catch-all method
+        pass

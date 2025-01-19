@@ -63,21 +63,26 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
 
             pc_logging.debug("Initializing an alias to %s" % self.source)
 
-    def instantiate(self, assembly):
-        with pc_logging.Action("Alias", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
+    def instantiate(self, obj):
+        with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_assembly_name}"):
             source = self.ctx._get_assembly(self.source)
             if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return
 
+            # Clone the source object properties
+            if source.path:
+                obj.path = source.path
+            obj.cachable = source.cachable
+            obj.cache_dependencies = source.cache_dependencies
+            obj.cache_dependencies_broken = source.cache_dependencies_broken
+
             children = source.children
             if children:
-                assembly.children = children
-                assembly.shape = source.shape
+                obj.children = children
+                obj._wrapped = source._wrapped
                 return
 
             self.ctx.stats_assemblies_instantiated += 1
 
-            if source.path:
-                assembly.path = source.path
-            source.instantiate(assembly)
+            source.instantiate(obj)

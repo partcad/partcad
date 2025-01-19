@@ -224,6 +224,25 @@ package where the original object is declared. This allows for the same parametr
 
 .. _sketches:
 
+Other
+-----
+
+There are other optional fields that are common to all objects:
+
+- ``desc``: <text>
+
+  Description of the object.
+
+- ``offset``: <OCCT Location object>
+
+  Defines the offset to apply to the CAD model when this object is used.
+
+- ``cache``: <bool> (default: `True`)
+
+  The value `false` indicates the intent to exclude this object from any cacheing behavior.
+  It may be due to size or time considerations, or due to known issues with dependency tracking.
+  It does not override any global caching settings.
+
 ========
 Sketches
 ========

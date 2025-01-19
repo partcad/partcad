@@ -38,7 +38,7 @@ def test_file_url_part_1():
     assert bolt is not None
     assert os.path.exists(bolt.path) is False
 
-    wrapped = asyncio.run(bolt.get_wrapped())
+    wrapped = asyncio.run(bolt.get_wrapped(ctx))
     assert wrapped is not None
 
     assert os.path.exists(bolt.path) is True
