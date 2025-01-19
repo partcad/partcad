@@ -69,6 +69,7 @@ class Shape(ShapeConfiguration):
 
         # Filesystem cache
         self.hash = CacheHash(f"{self.project_name}:{self.name}")
+        self.hash.set_dependencies(self.cache_dependencies)
 
         if self.cacheable:
             cad_config = {}
@@ -260,6 +261,8 @@ class Shape(ShapeConfiguration):
         if self.with_ports is not None:
             info["Ports"] = self.with_ports.info()
 
+        info["Hash"] = self.hash.get()
+        info["Dependencies"] = self.cache_dependencies
         return info
 
     def error(self, msg: str):

@@ -30,7 +30,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Windows
   - [x] Linux
   - [x] macOS
-- Workflow acceleration by caching rendered models (including for code-CADs)
+- Workflow acceleration by caching rendered models (including OpenSCAD, CadQuery and build123d)
   - [x] In memory
   - [x] On disk
   - [ ] Local Server _(in progress)_

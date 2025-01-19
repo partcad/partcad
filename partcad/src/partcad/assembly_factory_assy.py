@@ -29,6 +29,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             # Complement the config object here if necessary
             self._create(config)
             self.assembly.cache_dependencies_broken = True
+            for dep in self.config.get("dependencies", []):
+                self.assembly.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
 
     def instantiate(self, assembly):
         # # This method is best executed on a thread but the current Python version
@@ -180,6 +182,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             item = Assembly(
                 assembly.project_name, {"name": f"{self.name}:{name}", "child": True}
             )  # TODO(clairbee): revisit why node["links"]) was used there
+            item.cacheable = False  # Keep it uncacheable before parts info is in the hashing context
             item.instantiate = lambda x: True
             await self.handle_node_list(item, node["links"])
         else:

@@ -240,7 +240,7 @@ There are other optional fields that are common to all objects:
 - ``cache``: <bool> (default: `True`)
 
   The value `false` indicates the intent to exclude this object from any cacheing behavior.
-  It may be due to size or time considerations, or due to known issues with dependency tracking.
+  It may be due to storage size or time considerations, or due to known issues with dependency tracking.
   It does not override any global caching settings.
 
 ========
@@ -572,6 +572,9 @@ Define parts with CodeCAD scripts using the following syntax:
         # ...regexp substitutions to apply...
         "pattern": "repl"
       pythonRequirements: <(python scripts only) the list of dependencies to install>
+      dependencies: # (optional) the list of filenames the caching logic checks for changes
+        - <file1.py>
+        - <file2.dat>
       parameters:
         <param name>:
           type: <string|float|int|bool>
@@ -853,6 +856,9 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
           default: <default value>
+      dependencies: # (optional) the list of filenames the caching logic checks for changes
+        - <macros.j2>
+        - <other.assy>
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
 The ``assy`` type is used to define assemblies in `Assembly YAML` format.
