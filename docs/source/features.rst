@@ -151,7 +151,7 @@ At the moment code-CAD caching is experimental and can be enabled by using the f
   .. code-block:: yaml
 
     # ~/.partcad/config.yaml
-    cacheDependenciesIgnore: True:
+    cacheDependenciesIgnore: True
 
 ========
 Security

@@ -95,8 +95,9 @@ class PartFactoryFeatureAi(Ai):
         if not "top_p" in self.ai_config:
             self.ai_config["top_p"] = 0.1
 
-    def post_create(self):
+    def post_create(self) -> None:
         self.part.hash.add_dict(self.ai_config)
+        super().post_create()
 
     def on_init_ai(self):
         """This method must be executed at the very end of the part factory

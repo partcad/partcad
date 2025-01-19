@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import copy
 import typing
 
 from .sketch_factory import SketchFactory
@@ -73,8 +74,8 @@ class SketchFactoryAlias(SketchFactory):
             # Clone the source object properties
             if source.path:
                 obj.path = source.path
-            obj.cachable = source.cachable
-            obj.cache_dependencies = source.cache_dependencies
+            obj.cacheable = source.cacheable
+            obj.cache_dependencies = copy.copy(source.cache_dependencies)
             obj.cache_dependencies_broken = source.cache_dependencies_broken
 
             _wrapped = source._wrapped

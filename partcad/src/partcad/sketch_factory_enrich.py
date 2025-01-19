@@ -149,8 +149,8 @@ class SketchFactoryEnrich(pf.SketchFactory):
                 sketch.path = source.path
             if "with" in source.config:
                 self.hash.add_dict(sketch.config["with"])
-            sketch.cachable = source.cachable
-            sketch.cache_dependencies = source.cache_dependencies
+            sketch.cacheable = source.cacheable
+            sketch.cache_dependencies = copy.copy(source.cache_dependencies)
             sketch.cache_dependencies_broken = source.cache_dependencies_broken
 
             _wrapped = source._wrapped

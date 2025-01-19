@@ -135,7 +135,7 @@ def test_part_lazy_loading():
     ctx = pc.Context()  # Empty config
     _ = pc.ProjectFactoryLocal(ctx, None, test_config_local)
     cylinder = ctx.get_part("/primitive_local:cylinder")
-    assert cylinder.shape is None
+    assert cylinder._wrapped is None
 
     wrapped = asyncio.run(cylinder.get_wrapped(ctx))
     assert wrapped is not None
@@ -148,7 +148,7 @@ def test_part_aliases():
     # "box" is an alias for "cube"
     box = ctx.get_part("/primitive_local:box")
     assert box is not None
-    assert box.shape is None
+    assert box._wrapped is None
 
     wrapped = asyncio.run(box.get_wrapped(ctx))
     assert wrapped is not None

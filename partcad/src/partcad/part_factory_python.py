@@ -42,10 +42,10 @@ class PartFactoryPython(PartFactoryFile):
         self.runtime = self.ctx.get_python_runtime(python_version)
         self.session = self.runtime.get_session(source_project.name)
 
-    def post_create(self):
+    def post_create(self) -> None:
         # TODO(clairbee): add dependency tracking for python scripts
         self.part.cache_dependencies_broken = True
-        return super().post_create()
+        super().post_create()
 
     async def prepare_python(self):
         """

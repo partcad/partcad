@@ -7,7 +7,6 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
-import copy
 import typing
 
 import build123d as b3d
@@ -31,10 +30,7 @@ class Assembly(ShapeWithAi):
     def __init__(self, project_name: str, config={}):
         super().__init__(project_name, config)
 
-        if "location" in config:
-            self.location = config["location"]
-        else:
-            self.location = None
+        self.location = config.get("location")
         self.kind = "assembly"
 
         # self.children contains all child parts and assemblies before they turn into 'self.shape'
@@ -70,7 +66,7 @@ class Assembly(ShapeWithAi):
 
     async def get_shape(self, ctx):
         await self.do_instantiate()
-        if not "child" in self.config:
+        if "child" not in self.config:
             # This is the top level assembly
             with pc_logging.Action("Assembly", self.project_name, self.name):
                 return await self._get_shape_real(ctx)

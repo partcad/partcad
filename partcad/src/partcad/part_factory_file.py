@@ -48,13 +48,13 @@ class PartFactoryFile(PartFactory):
             if exists and not os.path.isfile(self.path):
                 raise Exception("ERROR: The part path (%s) must be a file" % self.path)
 
-    def post_create(self):
+    def post_create(self) -> None:
         if self.path:
             self.part.path = self.path
             self.part.cache_dependencies.append(self.path)
         else:
             pc_logging.warning(f"Part path is not set: {self.part.name}")
-        return super().post_create()
+        super().post_create()
 
     async def instantiate(self, part):
         if not self.fileFactory is None and not os.path.exists(part.path):

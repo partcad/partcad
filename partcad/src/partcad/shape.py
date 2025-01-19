@@ -60,7 +60,7 @@ class Shape(ShapeConfiguration):
         self.requirements = config.get("requirements", None)
 
         # Cache behavior
-        self.cachable = config.get("cache", True)
+        self.cacheable = config.get("cache", True)
         self.cache_dependencies = []
         self.cache_dependencies_broken = False
 
@@ -70,7 +70,7 @@ class Shape(ShapeConfiguration):
         # Filesystem cache
         self.hash = CacheHash(f"{self.project_name}:{self.name}")
 
-        if self.cachable:
+        if self.cacheable:
             cad_config = {}
             for key in ["parameters", "offset", "scale"]:
                 if key in self.config:
@@ -83,7 +83,7 @@ class Shape(ShapeConfiguration):
         return self.cache_dependencies_broken
 
     def get_cacheable(self):
-        return self.cachable and not self.get_cache_dependencies_broken()
+        return self.cacheable and not self.get_cache_dependencies_broken()
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_shape_locks"):
@@ -112,7 +112,7 @@ class Shape(ShapeConfiguration):
     async def get_wrapped(self, ctx):
         with self.lock:
             async with self.get_async_lock():
-                if self._wrapped != None:
+                if self._wrapped is not None:
                     return self._wrapped
 
                 is_cacheable = self.get_cacheable() and ctx
@@ -407,7 +407,7 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderSVG", self.project_name, self.name):
             _, filepath = self.render_getopts("svg", ".svg", project, filepath)
 
@@ -425,7 +425,7 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_svg_async(ctx, project, filepath))
 
     async def render_png_async(
@@ -435,7 +435,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         width=None,
         height=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderPNG", self.project_name, self.name):
             if not plugins.export_png.is_supported():
                 pc_logging.error("Export to PNG is not supported")
@@ -457,7 +457,7 @@ class Shape(ShapeConfiguration):
             # Render the vector image
             svg_path = await self._get_svg_path(ctx=ctx, project=project)
 
-            def do_render_png():
+            def do_render_png() -> None:
                 nonlocal project, svg_path, width, height, filepath
                 plugins.export_png.export(project, svg_path, width, height, filepath)
 
@@ -470,7 +470,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         width=None,
         height=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_png_async(ctx, project, filepath, width, height))
 
     async def render_step_async(
@@ -478,13 +478,13 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderSTEP", self.project_name, self.name):
             step_opts, filepath = self.render_getopts("step", ".step", project, filepath)
 
             obj = await self.get_wrapped(ctx)
 
-            def do_render_step():
+            def do_render_step() -> None:
                 nonlocal project, filepath, obj
                 from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
                 from OCP.Interface import Interface_Static
@@ -510,7 +510,7 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_step_async(ctx, project, filepath))
 
     async def render_brep_async(
@@ -524,7 +524,7 @@ class Shape(ShapeConfiguration):
 
             obj = await self.get_wrapped(ctx)
 
-            def do_render_brep():
+            def do_render_brep() -> None:
                 nonlocal project, filepath, obj
                 from OCP.BRepTools import BRepTools
 
@@ -542,7 +542,7 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_brep_async(ctx, project, filepath))
 
     async def render_stl_async(
@@ -553,7 +553,7 @@ class Shape(ShapeConfiguration):
         tolerance=None,
         angularTolerance=None,
         ascii=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderSTL", self.project_name, self.name):
             stl_opts, filepath = self.render_getopts("stl", ".stl", project, filepath)
 
@@ -577,7 +577,7 @@ class Shape(ShapeConfiguration):
 
             obj = await self.get_wrapped(ctx)
 
-            def do_render_stl():
+            def do_render_stl() -> None:
                 nonlocal obj, project, filepath, tolerance, angularTolerance, ascii
                 from OCP.BRepMesh import BRepMesh_IncrementalMesh
                 from OCP.StlAPI import StlAPI_Writer
@@ -606,7 +606,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_stl_async(ctx, project, filepath, tolerance, angularTolerance))
 
     async def render_3mf_async(
@@ -616,7 +616,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         with pc_logging.Action("Render3MF", self.project_name, self.name):
             threemf_opts, filepath = self.render_getopts("3mf", ".3mf", project, filepath)
 
@@ -677,7 +677,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_3mf_async(ctx, project, filepath, tolerance, angularTolerance))
 
     async def render_threejs_async(
@@ -687,7 +687,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderThreeJS", self.project_name, self.name):
             threejs_opts, filepath = self.render_getopts("threejs", ".json", project, filepath)
 
@@ -743,7 +743,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_threejs_async(ctx, project, filepath, tolerance, angularTolerance))
 
     async def render_obj_async(
@@ -753,7 +753,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderOBJ", self.project_name, self.name):
             obj_opts, filepath = self.render_getopts("obj", ".obj", project, filepath)
 
@@ -809,7 +809,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_obj_async(ctx, project, filepath, tolerance, angularTolerance))
 
     async def render_gltf_async(
@@ -820,7 +820,7 @@ class Shape(ShapeConfiguration):
         binary=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderGLTF", self.project_name, self.name):
             gltf_opts, filepath = self.render_getopts("gltf", ".json", project, filepath)
 
@@ -844,7 +844,7 @@ class Shape(ShapeConfiguration):
 
             b3d_obj = await self.get_build123d(ctx)
 
-            def do_render_gltf():
+            def do_render_gltf() -> None:
                 nonlocal b3d_obj, project, filepath, tolerance, angularTolerance
                 import build123d as b3d
 
@@ -865,10 +865,10 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_gltf_async(ctx, project, filepath, tolerance, angularTolerance))
 
-    async def render_txt_async(self, ctx, project=None, filepath=None):
+    async def render_txt_async(self, ctx, project=None, filepath=None) -> None:
         with pc_logging.Action("RenderTXT", self.project_name, self.name):
             if filepath is None:
                 filepath = self.path + "/bom.txt"
@@ -880,10 +880,10 @@ class Shape(ShapeConfiguration):
             await self._render_txt_real(file)
             file.close()
 
-    def render_txt(self, ctx, project=None, filepath=None):
+    def render_txt(self, ctx, project=None, filepath=None) -> None:
         asyncio.run(self.render_txt_async(ctx, project, filepath))
 
-    async def render_markdown_async(self, ctx, project=None, filepath=None):
+    async def render_markdown_async(self, ctx, project=None, filepath=None) -> None:
         with pc_logging.Action("RenderMD", self.project_name, self.name):
             if filepath is None:
                 filepath = self.path + "/README.md"
@@ -906,7 +906,7 @@ It already takes into account the number of items per SKU.
             )
             bom_file.close()
 
-    def render_markdown(self, ctx, project=None, filepath=None):
+    def render_markdown(self, ctx, project=None, filepath=None) -> None:
         asyncio.run(self.render_markdown_async(ctx, project, filepath))
 
     async def get_summary_async(self, project=None):
@@ -915,4 +915,4 @@ It already takes into account the number of items per SKU.
         return None
 
     def get_summary(self, project=None):
-        asyncio.run(self.get_summary_async(project))
+        return asyncio.run(self.get_summary_async(project))

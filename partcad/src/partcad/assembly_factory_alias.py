@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import copy
 import typing
 
 from . import assembly_factory as pf
@@ -73,8 +74,8 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             # Clone the source object properties
             if source.path:
                 obj.path = source.path
-            obj.cachable = source.cachable
-            obj.cache_dependencies = source.cache_dependencies
+            obj.cacheable = source.cacheable
+            obj.cache_dependencies = copy.copy(source.cache_dependencies)
             obj.cache_dependencies_broken = source.cache_dependencies_broken
 
             children = source.children

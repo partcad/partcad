@@ -47,6 +47,6 @@ class PartFactory(ShapeFactory):
 
         self.ctx.stats_parts += 1
 
-    def post_create(self):
+    def post_create(self) -> None:
         # This is a base class catch-all method
         pass

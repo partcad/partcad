@@ -7,9 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .interface_inherit import InterfaceInherits
 from .interface import Interface
-from . import logging as pc_logging
 
 
 class WithPorts(Interface):
@@ -22,11 +20,9 @@ class WithPorts(Interface):
         config: dict = {},
     ):
         super().__init__(name, project, config, config_section="implements")
-
         self.interfaces = None
 
     def get_interfaces(self):
-        # TODO(clairbee): make interface a Shape and switch to existing sync mechanisms
         with self.lock:
             if self.interfaces is None:
                 self.instantiate_interfaces()

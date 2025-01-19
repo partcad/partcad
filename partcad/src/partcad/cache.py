@@ -16,7 +16,7 @@ import aiofiles
 
 
 class Cache:
-    def __init__(self, data_type: str):
+    def __init__(self, data_type: str) -> None:
         """Initialize cache for specific data type."""
         self.data_type = data_type
         self.cache_dir = Path(user_config.internal_state_dir) / "cache" / data_type
@@ -38,6 +38,11 @@ class Cache:
 
         return True
 
+    def _should_cache_key(self, key: str, value: bytes) -> bool:
+        if not key.startswith(("shape", "sketch", "part", "assembly", "cmps")):
+            return True
+        return self._needs_write_data(len(value))
+
     async def write_data_async(self, hash: CacheHash, items: dict[str, bytes]) -> dict[str, bool]:
         """Write object to cache and return its hash."""
         if not user_config.cache:
@@ -53,15 +58,11 @@ class Cache:
                 await f.write(value)
             saved[key] = True
 
-        tasks = []
-        for key, value in items.items():
-            if key.startswith(("shape", "sketch", "part", "assembly", "cmps")):
-                data_len = len(value)
-                if not self._needs_write_data(data_len):
-                    continue
-
-            tasks.append(asyncio.create_task(task_item(key, value)))
-
+        tasks = [
+            asyncio.create_task(task_item(key, value))
+            for key, value in items.items()
+            if self._should_cache_key(key, value)
+        ]
         if tasks:
             tasks.append(asyncio.create_task(task_item("name", hash.name.encode())))
             await asyncio.gather(*tasks)
@@ -77,7 +78,7 @@ class Cache:
 
         cache_path = self.get_cache_path(hash)
 
-        async def task_item(key: str) -> list:
+        async def task_item(key: str) -> tuple[str, bytes]:
             try:
                 async with aiofiles.open(f"{cache_path}.{key}", "rb") as f:
                     return [key, await f.read()]
@@ -86,8 +87,7 @@ class Cache:
 
         tasks = [asyncio.create_task(task_item(key)) for key in keys]
 
-        results = {result[0]: result[1] for result in await asyncio.gather(*tasks)}
-        return results
+        return dict(await asyncio.gather(*tasks))
 
     def exists(self, obj_hash: str) -> bool:
         """Check if object exists in cache."""
