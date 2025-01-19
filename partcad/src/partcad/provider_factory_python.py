@@ -60,7 +60,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
         self.session = self.runtime.get_session(source_project.name)
 
     def info(self, provider):
-        info: dict[str, object] = provider.shape_info()
+        info: dict[str, object] = provider.shape_info(self.ctx)
         info.update(
             {
                 "runtime_version": self.runtime.version,

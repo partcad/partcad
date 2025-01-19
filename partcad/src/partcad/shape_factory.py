@@ -35,8 +35,8 @@ class ShapeFactory(factory.Factory):
 
     def info(self, shape):
         """This is the default implementation of the get_info method for factories."""
-        info: dict = shape.shape_info()
-        if 'url' in self.project.config_obj and self.project.config_obj["url"] is not None:
+        info: dict = shape.shape_info(self.ctx)
+        if "url" in self.project.config_obj and self.project.config_obj["url"] is not None:
             info["Url"] = self.project.config_obj["url"]
         info["Path"] = self.project.name
         return info

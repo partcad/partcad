@@ -20,7 +20,7 @@ def test_sketch_get_dxf():
     assert repo1 is not None
     sketch = repo1.get_sketch("dxf_01")
     assert sketch is not None
-    wrapped = asyncio.run(sketch.get_wrapped())
+    wrapped = asyncio.run(sketch.get_wrapped(ctx))
     assert wrapped is not None
 
 
@@ -31,5 +31,5 @@ def test_sketch_get_svg():
     assert repo1 is not None
     sketch = repo1.get_sketch("svg_01")
     assert sketch is not None
-    wrapped = asyncio.run(sketch.get_wrapped())
+    wrapped = asyncio.run(sketch.get_wrapped(ctx))
     assert wrapped is not None

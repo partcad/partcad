@@ -18,7 +18,7 @@ def test_assembly_alias_get_1():
     ctx = pc.Context("examples/produce_assembly_assy")
     alias = ctx._get_assembly(":partcad_logo")
     assert alias is not None
-    assert asyncio.run(alias.get_wrapped()) is not None
+    assert asyncio.run(alias.get_wrapped(ctx)) is not None
 
 
 def test_assembly_alias_get_2():
@@ -26,4 +26,4 @@ def test_assembly_alias_get_2():
     ctx = pc.Context("examples/produce_assembly_assy")
     alias = ctx._get_assembly(":partcad_logo_short")
     assert alias is not None
-    assert asyncio.run(alias.get_wrapped()) is not None
+    assert asyncio.run(alias.get_wrapped(ctx)) is not None

@@ -35,6 +35,23 @@ class UserConfig(vyper.Vyper):
             except Exception as e:
                 pc_logging.error("ERROR: Failed to parse %s" % config_path)
 
+        # If the filesystem cache is enabled, then (by default):
+        # - objects of 1 byte bytes are cached both in memory and on the filesystem (to cache test results)
+        # - objects from 2 bytes to 100 bytes are cached in memory only (avoid filesystem polution and overhead),
+        # - objects from 100 bytes to 1MB are cached both in the filesystem and in memory (where most cache hits are expected),
+        # - objects from 1MB bytes to 10MB are cached in the filesystem only (optimize RAM usage).
+        # - objects from 10MB to 100MB are cached in memory only (avoid quick filesystem quota depletion).
+        # - object above 100MB are not cached and recomputed on each access (avoid RAM depletion).
+        # If the filesystem cache is disabled then (by default):
+        # - objects from 1 to 100MB are cached in memory only.
+        # - object above 100MB are not cached and recomputed on each access.
+        self.set_default("cacheFiles", True)
+        self.set_default("cacheFilesMaxEntrySize", 10 * 1024 * 1024)
+        self.set_default("cacheFilesMinEntrySize", 100)
+        self.set_default("cacheMemoryMaxEntrySize", 100 * 1024 * 1024)
+        self.set_default("cacheMemoryDoubleCacheMaxEntrySize", 1 * 1024 * 1024)
+        self.set_default("cacheDependenciesIgnore", False)
+
         if shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
             self.set_default("pythonSandbox", "conda")
         else:
@@ -56,6 +73,42 @@ class UserConfig(vyper.Vyper):
         self.threads_max = None
         if self.is_set("threadsMax"):
             self.threads_max = self.get_int("threadsMax")
+
+        # option: cacheFiles
+        # description: enable caching of intermediate results to the filesystem
+        # values: [True | False]
+        # default: True
+        self.cache = self.get_bool("cacheFiles")
+
+        # option: cacheFilesMaxEntrySize
+        # description: the maximum size of a single file cache entry in bytes
+        # values: >0
+        # default: 10*1024*1024 (10MB)
+        self.cache_max_entry_size = self.get_int("cacheFilesMaxEntrySize")
+
+        # option: cacheFilesMinEntrySize
+        # description: the minimum size of a single file cache entry (except test results) in bytes
+        # values: >=0
+        # default: 100
+        self.cache_min_entry_size = self.get_int("cacheFilesMinEntrySize")
+
+        # option: cacheMemoryMaxEntrySize
+        # description: the maximum size of a single memory cache entry in bytes
+        # values: >=0, 0 means no limit
+        # default: 100*1024*1024 (100MB)
+        self.cache_memory_max_entry_size = self.get_int("cacheMemoryMaxEntrySize")
+
+        # option: cacheMemoryDoubleCacheMaxEntrySize
+        # description: the maximum size of a single memory cache entry in bytes
+        # values: >=0, 0 means no limit
+        # default: 1*1024*1024 (1MB)
+        self.cache_memory_double_cache_max_entry_size = self.get_int("cacheMemoryDoubleCacheMaxEntrySize")
+
+        # option: cacheDependenciesIgnore
+        # description: ignore broken dependencies and cache at your own risk
+        # values: [True | False]
+        # default: False
+        self.cache_dependencies_ignore = self.get_bool("cacheDependenciesIgnore")
 
         # option: pythonSandbox
         # description: sandboxing environment for invoking python scripts
@@ -118,5 +171,6 @@ class UserConfig(vyper.Vyper):
         self.max_script_correction = None
         if self.is_set("maxScriptCorrection"):
             self.max_script_correction = self.get_int("maxScriptCorrection")
+
 
 user_config = UserConfig()

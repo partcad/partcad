@@ -33,18 +33,20 @@ class PartFactory(ShapeFactory):
         self.orig_name = config["orig_name"]
 
     def _create_part(self, config: object) -> Part:
-        part = Part(config)
-        part.project_name = self.target_project.name  # TODO(clairbee): pass it via the constructor
-        # TODO(clairbee): Make the next line work for part_factory_file only
+        part = Part(self.target_project.name, config)
         part.instantiate = lambda part_self: self.instantiate(part_self)
         part.info = lambda: self.info(part)
         part.with_ports = self.with_ports
         return part
 
-    def _create(self, config: object):
+    def _create(self, config: object) -> None:
         self.part = self._create_part(config)
-        if self.path:
-            self.part.path = self.path
-
         self.target_project.parts[self.name] = self.part
+
+        self.post_create()
+
         self.ctx.stats_parts += 1
+
+    def post_create(self) -> None:
+        # This is a base class catch-all method
+        pass

@@ -101,7 +101,7 @@ class CamTest(Test):
                 failed = True
 
             # When testing parts in a manufacturable assembly, ignore their manufacturability preference
-            test_ctx = copy.copy(test_ctx)
+            test_ctx = copy.deepcopy(test_ctx)
             test_ctx["force_manufacturing"] = True
             test_ctx["action_prefix"] = f"{assembly.project_name}:{assembly.name}"
 

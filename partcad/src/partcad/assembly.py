@@ -7,7 +7,6 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
-import copy
 import typing
 
 import build123d as b3d
@@ -28,15 +27,11 @@ class AssemblyChild:
 class Assembly(ShapeWithAi):
     path: typing.Optional[str] = None
 
-    def __init__(self, config={}):
-        super().__init__(config)
+    def __init__(self, project_name: str, config: dict = {}):
+        super().__init__(project_name, config)
 
-        if "location" in config:
-            self.location = config["location"]
-        else:
-            self.location = None
-        self.shape = None
-        self.kind = "assemblies"
+        self.location = config.get("location")
+        self.kind = "assembly"
 
         # self.children contains all child parts and assemblies before they turn into 'self.shape'
         self.children = []
@@ -45,12 +40,11 @@ class Assembly(ShapeWithAi):
         self.count = 0
 
     async def do_instantiate(self):
-        async with self.locked():
+        if len(self.children) == 0:
+            self._wrapped = None  # Invalidate if any
+            await pc_thread.run(self.instantiate, self)
             if len(self.children) == 0:
-                self.shape = None  # Invalidate if any
-                await pc_thread.run(self.instantiate, self)
-                if len(self.children) == 0:
-                    pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
+                pc_logging.warning(f"The assembly {self.project_name}:{self.name} is empty")
 
     # add is a non-thread-safe method for end users to create custom Assemblies
     def add(
@@ -64,67 +58,63 @@ class Assembly(ShapeWithAi):
         # Keep part reference counter for bill-of-materials purposes
         child_item.ref_inc()
 
-        self.shape = None  # Invalidate if any
+        self._wrapped = None  # Invalidate if any
 
     def ref_inc(self):
         for child in self.children:
             child.item.ref_inc()
 
-    async def get_shape(self):
+    async def get_shape(self, ctx):
         await self.do_instantiate()
-        async with self.locked():
-            if hasattr(self, "project_name"):
-                # This is the top level assembly
-                with pc_logging.Action("Assembly", self.project_name, self.name):
-                    return await self._get_shape_real()
-            else:
-                return await self._get_shape_real()
+        if "child" not in self.config:
+            # This is the top level assembly
+            with pc_logging.Action("Assembly", self.project_name, self.name):
+                return await self._get_shape_real(ctx)
+        else:
+            return await self._get_shape_real(ctx)
 
-    async def _get_shape_real(self):
-        if self.shape is None:
-            child_shapes = []
-            tasks = []
+    async def _get_shape_real(self, ctx):
+        child_shapes = []
 
-            async def per_child(child):
-                item = copy.copy(await child.item.get_build123d())
-                if not child.name is None:
-                    item.label = child.name
-                if not child.location is None:
-                    item.locate(child.location)
-                return item
+        async def per_child(child):
+            # TODO(clairbee): use topods objects here
+            item = await child.item.get_build123d(ctx)
+            if child.name is not None:
+                item.label = child.name
+            if child.location is not None:
+                item.locate(child.location)
+            return item
 
-            if len(self.children) == 0:
-                pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
-            for child in self.children:
-                tasks.append(per_child(child))
+        if len(self.children) == 0:
+            pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
 
-            # TODO(clairbee): revisit whether non-determinism here is acceptable
-            for f in asyncio.as_completed(tasks):
-                item = await f
-                child_shapes.append(item)
+        tasks = [asyncio.create_task(per_child(child)) for child in self.children]
 
-            compound = b3d.Compound(children=child_shapes)
-            if not self.name is None:
-                compound.label = self.name
-            if not self.location is None:
-                compound.locate(self.location)
-            self.shape = compound.wrapped
-        if self.shape is None:
-            pc_logging.warning("The shape is None")
-        return self.shape
+        # TODO(clairbee): revisit whether non-determinism here is acceptable
+        for f in asyncio.as_completed(tasks):
+            item = await f
+            child_shapes.append(item)
+
+        compound = b3d.Compound(children=child_shapes)
+        if not self.name is None:
+            compound.label = self.name
+        if not self.location is None:
+            compound.locate(self.location)
+        return compound.wrapped
         # return copy.copy(
-        #     self.shape
+        #     shape
         # )  # TODO(clairbee): fix this for the case when the parts are made with cadquery
 
     async def get_bom(self):
-        await self.do_instantiate()
-        async with self.locked():
-            if hasattr(self, "project_name"):
-                # This is the top level assembly
-                with pc_logging.Action("BoM", self.project_name, self.name):
+        with self.lock:
+            async with self.get_async_lock():
+                await self.do_instantiate()
+                if hasattr(self, "project_name"):
+                    # This is the top level assembly
+                    with pc_logging.Action("BoM", self.project_name, self.name):
+                        return await self._get_bom_real()
+                else:
                     return await self._get_bom_real()
-            else:
-                return await self._get_bom_real()
 
     async def _get_bom_real(self):
         bom = {}
@@ -149,11 +139,15 @@ class Assembly(ShapeWithAi):
         return bom
 
     async def _render_txt_real(self, file):
-        await self.do_instantiate()
+        with self.lock:
+            async with self.get_async_lock():
+                await self.do_instantiate()
         for child in self.children:
             child._render_txt_real(file)
 
     async def _render_markdown_real(self, file):
-        await self.do_instantiate()
+        with self.lock:
+            async with self.get_async_lock():
+                await self.do_instantiate()
         for child in self.children:
             child._render_markdown_real(file)

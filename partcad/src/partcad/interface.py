@@ -11,6 +11,8 @@ import asyncio
 import math
 import re
 
+import threading
+
 from .geom import Location
 from .interface_inherit import InterfaceInherits
 from .sketch import Sketch
@@ -55,6 +57,7 @@ class InterfacePort:
 
         if sketch is not None:
             self.sketch = sketch
+            self.source_project_name = self.sketch.project_name
         elif "sketch" in config:
             if "project" in config:
                 self.source_project_name = config["project"]
@@ -275,12 +278,15 @@ class Interface:
                 self.params[param_name] = InterfaceParameter(param_config)
 
         self.project.ctx.stats_interfaces += 1
+        self.lock = threading.RLock()
 
     def get_ports(self):
-        if self.ports is None:
-            self.instantiate_ports()  # Fill in own ports
-            self.instantiate()  # Get ports from parents
-        return self.ports
+        # TODO(clairbee): make interface a Shape and switch to existing sync mechanisms
+        with self.lock:
+            if self.ports is None:
+                self.instantiate_ports()  # Fill in own ports
+                self.instantiate()  # Get ports from parents
+            return self.ports
 
     def instantiate_ports(self):
         self.ports = {}
@@ -475,12 +481,12 @@ class Interface:
             info["leadPort"] = self.lead_port
         return info
 
-    async def get_components(self):
+    async def get_components(self, ctx):
         components = []
         for port in self.get_ports().values():
             components.append(port.location)
             if port.sketch is not None:
-                sketch_components = list(await port.sketch.get_components())
+                sketch_components = list(await port.sketch.get_components(ctx))
 
                 def move_component(component, move_components):
                     nonlocal port
@@ -503,10 +509,10 @@ class Interface:
                 components.append(sketch_components)
         return components
 
-    async def show_async(self):
+    async def show_async(self, ctx=None):
         components = []
         try:
-            components = await self.get_components()
+            components = await self.get_components(ctx)
         except Exception as e:
             pc_logging.error(e)
 
@@ -532,5 +538,5 @@ class Interface:
                     pc_logging.warning(e)
                     pc_logging.warning('No VS Code or "OCP CAD Viewer" extension detected.')
 
-    def show(self):
-        asyncio.run(self.show_async())
+    def show(self, ctx=None):
+        asyncio.run(self.show_async(ctx))

@@ -65,6 +65,8 @@ class PartFactoryEnrich(pf.PartFactory):
 
             self._create(config)
 
+            self.part.get_cacheable = self.get_cacheable
+
     async def instantiate(self, part):
         with pc_logging.Action("Enrich", part.project_name, f"{part.name}:{self.source_part_name}"):
 
@@ -139,17 +141,30 @@ class PartFactoryEnrich(pf.PartFactory):
 
             source = self.source_project.get_part(part.name)
             name = part.config["name"]
-            part.config = source.config
+            part.config = copy.copy(source.config)
             part.config["source"] = self.source_project_name + ":" + self.source_part_name
             part.config["orig_name"] = part.name
             part.config["name"] = name
-            shape = source.shape
-            if shape:
-                part.shape = shape
-                return shape
+
+            # Clone the source object properties
+            if source.path:
+                part.path = source.path
+            if "with" in source.config:
+                part.hash.add_dict(source.config["with"])
+            part.cacheable = source.cacheable
+            part.cache_dependencies = copy.copy(source.cache_dependencies)
+            part.cache_dependencies_broken = source.cache_dependencies_broken
+
+            _wrapped = source._wrapped
+            if _wrapped:
+                part._wrapped = _wrapped
+                return _wrapped
 
             self.ctx.stats_parts_instantiated += 1
 
-            if source.path:
-                part.path = source.path
             return await source.instantiate(part)
+
+    def get_cacheable(self) -> bool:
+        # This object is a wrapper around another one.
+        # The other one is the one which must be cached.
+        return False

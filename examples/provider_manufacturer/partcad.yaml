@@ -93,5 +93,6 @@ assemblies:
 render:
   readme:
     exclude:
+      - assemblies
       - sketches
       - parts

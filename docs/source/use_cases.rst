@@ -6,6 +6,20 @@ and frameworks to operate with those parts and assemblies.
 Depending on particular goals, different ways of interacting with PartCAD tools
 and data may be desired. Below is a list of some common use cases.
 
+.. _cad_faster:
+.. _openscad_accelerator:
+.. _openscad_cache:
+
+=========================
+Develop CAD models faster
+=========================
+
+PartCAD VSCode Extension is a powerful tool to develop code-CAD (OpenSCAD, CadQuery and build123d)
+models faster. It provides a rich set of features to help you develop models:
+
+- :ref:`caching` of intermediate and final results of all model compilations
+- Render-on-save (including for OpenSCAD)
+
 =======================
 Browse available models
 =======================

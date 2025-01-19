@@ -16,16 +16,13 @@ from . import sync_threads as pc_thread
 class Sketch(ShapeWithAi):
     path: typing.Optional[str] = None
 
-    def __init__(self, config: object = {}):
-        super().__init__(config)
+    def __init__(self, project_name: str, config: dict = {}) -> None:
+        super().__init__(project_name, config)
 
-        self.kind = "sketches"
+        self.kind = "sketch"
 
-    async def get_shape(self):
-        async with self.locked():
-            if self.shape is None:
-                self.shape = await pc_thread.run_async(self.instantiate, self)
-            return self.shape
+    async def get_shape(self, ctx):
+        return await pc_thread.run_async(self.instantiate, self)
 
     def ref_inc(self):
         # Not applicable to sketches

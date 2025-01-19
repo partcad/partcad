@@ -54,6 +54,16 @@ class PartFactorySweep(PartFactory):
             self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
 
             self._create(config)
+            sweep_config = {}
+            if "axis" in config:
+                sweep_config["axis"] = self.axis
+            if "axisCoords" in config:
+                sweep_config["axisCoords"] = self.axis
+            if "ratio" in config:
+                sweep_config["ratio"] = self.ratio
+            self.part.hash.add_dict(sweep_config)
+            # TODO(clairbee): add dependency tracking for Sweep (PC-313)
+            self.part.cache_dependencies_broken = True
 
     async def instantiate(self, part):
         with pc_logging.Action("Sweep", part.project_name, part.name):
@@ -147,7 +157,7 @@ class PartFactorySweep(PartFactory):
                 # TODO(clairbee): Drop the Bezier curve and use the `axis_wire` constructed above, but
                 #                 replace the cut corners with elliptic arcs that connect the edges smoothly
 
-                faces = await self.sketch.get_shape()
+                faces = await self.sketch.get_wrapped(self.ctx)
 
                 from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipe
                 from OCP.TopExp import TopExp_Explorer

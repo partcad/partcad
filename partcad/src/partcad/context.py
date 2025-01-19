@@ -10,6 +10,8 @@ import asyncio
 import os
 import threading
 
+from .cache import Cache
+from .cache_shape import ShapeCache
 from . import consts
 from . import logging as pc_logging
 from .mating import Mating
@@ -100,6 +102,9 @@ class Context(project_config.Configuration):
         ):
             self.current_project_path = self.name
 
+        self.cache_shapes = ShapeCache()
+        self.cache_tests = Cache("tests")
+
         # Protect the critical sections from access in different threads
         self.lock = threading.RLock()
 
@@ -154,6 +159,9 @@ class Context(project_config.Configuration):
 
         name = project_import_config["name"]
         with self.PackageLock(self, name):
+            if name in self.projects:
+                return self.projects[name]
+
             with pc_logging.Action("Import", name):
                 if name in self._projects_being_loaded:
                     pc_logging.error("Recursive project loading detected (%s), aborting." % name)
@@ -411,20 +419,6 @@ class Context(project_config.Configuration):
         return tasks
 
     def get_all_packages(self, parent_name=None):
-        # See if we need to preload any "onlyInRoot" packages
-        # TODO(clairbee): parallelize preloading too?
-        if "dependencies" in self.config_obj and self.config_obj["dependencies"] is not None:
-            dependencies = self.config_obj["dependencies"]
-            for prj_name in dependencies:
-                if "onlyInRoot" in dependencies[prj_name]:
-                    if parent_name is None:
-                        if self.name == "/":
-                            # preload
-                            _ = self.get_project("/" + prj_name)
-                    elif parent_name.startswith(("/" + prj_name)):
-                        # preload
-                        _ = self.get_project(parent_name)
-
         # TODO(clairbee): leverage root_project.get_child_project_names()
         self.import_all(parent_name)
         return self.get_packages(parent_name)
@@ -584,13 +578,13 @@ class Context(project_config.Configuration):
         return self._get_sketch(sketch_spec, params)
 
     def get_sketch_shape(self, sketch_spec, params=None):
-        return asyncio.run(self._get_sketch(sketch_spec, params).get_wrapped())
+        return asyncio.run(self._get_sketch(sketch_spec, params).get_wrapped(self))
 
     def get_sketch_cadquery(self, sketch_spec, params=None):
-        return asyncio.run(self._get_sketch(sketch_spec, params).get_cadquery())
+        return asyncio.run(self._get_sketch(sketch_spec, params).get_cadquery(self))
 
     def get_sketch_build123d(self, sketch_spec, params=None):
-        return asyncio.run(self._get_sketch(sketch_spec, params).get_build123d())
+        return asyncio.run(self._get_sketch(sketch_spec, params).get_build123d(self))
 
     def _get_interface(self, interface_spec):
         project_name, interface_name = resolve_resource_path(
@@ -609,7 +603,7 @@ class Context(project_config.Configuration):
         return self._get_interface(interface_spec)
 
     def get_interface_shape(self, interface_spec):
-        return asyncio.run(self._get_interface(interface_spec).get_wrapped())
+        return asyncio.run(self._get_interface(interface_spec).get_wrapped(self))
 
     async def find_suppliers(self, cart: ProviderCart) -> dict[str, list[str]]:
         """Find suppliers for each of the parts in the cart"""
@@ -777,13 +771,13 @@ class Context(project_config.Configuration):
         return self._get_part(part_spec, params)
 
     def get_part_shape(self, part_spec, params=None):
-        return asyncio.run(self._get_part(part_spec, params).get_wrapped())
+        return asyncio.run(self._get_part(part_spec, params).get_wrapped(self))
 
     def get_part_cadquery(self, part_spec, params=None):
-        return asyncio.run(self._get_part(part_spec, params).get_cadquery())
+        return asyncio.run(self._get_part(part_spec, params).get_cadquery(self))
 
     def get_part_build123d(self, part_spec, params=None):
-        return asyncio.run(self._get_part(part_spec, params).get_build123d())
+        return asyncio.run(self._get_part(part_spec, params).get_build123d(self))
 
     def _get_assembly(self, assembly_spec, params=None):
         project_name, assembly_name = resolve_resource_path(
@@ -801,13 +795,13 @@ class Context(project_config.Configuration):
         return self._get_assembly(assembly_spec, params)
 
     def get_assembly_shape(self, assembly_spec, params=None):
-        return asyncio.run(self._get_assembly(assembly_spec, params).get_wrapped())
+        return asyncio.run(self._get_assembly(assembly_spec, params).get_wrapped(self))
 
     def get_assembly_cadquery(self, assembly_spec, params=None):
-        return asyncio.run(self._get_assembly(assembly_spec, params).get_cadquery())
+        return asyncio.run(self._get_assembly(assembly_spec, params).get_cadquery(self))
 
     def get_assembly_build123d(self, assembly_spec, params=None):
-        return asyncio.run(self._get_assembly(assembly_spec, params).get_build123d())
+        return asyncio.run(self._get_assembly(assembly_spec, params).get_build123d(self))
 
     async def render_async(self, project_path=None, format=None, output_dir=None):
         if project_path is None:

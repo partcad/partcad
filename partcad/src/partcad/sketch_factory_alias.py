@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import copy
 import typing
 
 from .sketch_factory import SketchFactory
@@ -24,6 +25,8 @@ class SketchFactoryAlias(SketchFactory):
             super().__init__(ctx, source_project, target_project, config)
             # Complement the config object here if necessary
             self._create(config)
+
+            self.sketch.get_cacheable = self.get_cacheable
 
             if "source" in config:
                 self.source_sketch_name = config["source"]
@@ -62,21 +65,31 @@ class SketchFactoryAlias(SketchFactory):
 
             pc_logging.debug("Initializing an alias to %s" % self.source)
 
-    async def instantiate(self, sketch):
-        with pc_logging.Action("Alias", sketch.project_name, f"{sketch.name}:{self.source_sketch_name}"):
+    async def instantiate(self, obj):
+        with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_sketch_name}"):
 
             source = self.ctx._get_sketch(self.source)
             if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return None
 
-            shape = source.shape
-            if shape:
-                sketch.shape = shape
-                return shape
+            # Clone the source object properties
+            if source.path:
+                obj.path = source.path
+            obj.cacheable = source.cacheable
+            obj.cache_dependencies = copy.copy(source.cache_dependencies)
+            obj.cache_dependencies_broken = source.cache_dependencies_broken
+
+            _wrapped = source._wrapped
+            if _wrapped:
+                obj.wrapped = _wrapped
+                return _wrapped
 
             self.ctx.stats_sketches_instantiated += 1
 
-            if source.path:
-                sketch.path = source.path
-            return await source.instantiate(sketch)
+            return await source.instantiate(obj)
+
+    def get_cacheable(self) -> bool:
+        # This object is a wrapper around another one.
+        # The other one is the one which must be cached.
+        return False

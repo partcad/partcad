@@ -67,8 +67,10 @@ class AiContentFile:
         return f"AiContentFile({self.url}, {type})"
 
 
+MARKER = "CONTENT_INSERTED_HERE"
+
+
 class AiContentProcessor:
-    MARKER = "CONTENT_INSERTED_HERE"
 
     def process_content(self, content: str):
         content_inserts = []
@@ -81,12 +83,12 @@ class AiContentProcessor:
                 location = location[1:-1]
             try:
                 content_inserts.append(AiContentFile(location))
-                return "CONTENT_INSERTED_HERE"
+                return MARKER
             except Exception as e:
                 pc_logging.error(f"Failed to include content from {location}: {e}")
                 return "PARTCAD-FAILED-TO-INSERT-CONTENT-HERE"
 
         content = re.sub(r"(INSERT_IMAGE_HERE|INCLUDE|DOWNLOAD)\(([^)]*)\)", include_content, content)
-        content_parts = content.split("CONTENT_INSERTED_HERE")
+        content_parts = content.split(MARKER)
 
         return content_parts, content_inserts

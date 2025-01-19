@@ -31,6 +31,14 @@ class AssemblyFactoryFile(AssemblyFactory):
         if not os.path.exists(self.path):
             raise Exception("ERROR: The assembly path must exist")
 
+    def post_create(self) -> None:
+        if self.path:
+            self.assembly.path = self.path
+            self.assembly.cache_dependencies.append(self.path)
+        else:
+            pc_logging.warning(f"Assembly path is not set: {self.assembly.name}")
+        super().post_create()
+
     async def instantiate(self, assembly):
         if not self.fileFactory is None and not os.path.exists(assembly.path):
             with pc_logging.Action("File", self.target_project.name, assembly.name):

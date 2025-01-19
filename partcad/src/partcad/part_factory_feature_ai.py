@@ -95,6 +95,10 @@ class PartFactoryFeatureAi(Ai):
         if not "top_p" in self.ai_config:
             self.ai_config["top_p"] = 0.1
 
+    def post_create(self) -> None:
+        self.part.hash.add_dict(self.ai_config)
+        super().post_create()
+
     def on_init_ai(self):
         """This method must be executed at the very end of the part factory
         constructor to finalize the AI initialization. At the time of the call
@@ -337,7 +341,7 @@ Use milimeters for dimensions and degrees for angles.
 """
 
         config = self.ai_config
-        config = copy.copy(config)
+        config = copy.deepcopy(config)
         # if config["temperature"] < 0.8:
         #     config["temperature"] += 0.4
         # if config["top_p"] < 0.4:
@@ -388,7 +392,7 @@ IMPORTANT: Output the %s itself and do not add any text or comments before or af
         )
 
         config = self.ai_config
-        config = copy.copy(config)
+        config = copy.deepcopy(config)
         # if config["temperature"] < 0.8:
         #     config["temperature"] += 0.4
         # if config["top_p"] < 0.4:
@@ -409,7 +413,7 @@ IMPORTANT: Output the %s itself and do not add any text or comments before or af
     def _change_script(self, csg_instructions, script, rendered_image, change=None):
         """This method changes the script given the original request and the produced script."""
 
-        config = copy.copy(self.ai_config)
+        config = copy.deepcopy(self.ai_config)
 
         prompt = """You are an AI assistant in an engineering department.
 You are asked to create a %s matching the given description%s.
@@ -657,13 +661,13 @@ Very important not to produce exactly the same script: at least something has to
         def render(part):
             nonlocal exception_text
             try:
-                coro = part.get_shape()
+                coro = part.get_wrapped(self.ctx)
                 with pc_logging.Action("Instantiate", part.project_name, part.name):
                     shape = asyncio.run(coro)
-                if not shape is None:
+                if shape is not None:
                     try:
                         # Best effort to provide an interactive experience
-                        part.show()
+                        part.show(self.ctx)
                     except Exception as e:
                         pass
                     part.render_png(self.ctx, None, output_path)
@@ -757,7 +761,7 @@ Just the number.
 
         # Ask AI to compare the images
         pc_logging.info("Attempting to select the best script by comparing images")
-        config = copy.copy(self.ai_config)
+        config = copy.deepcopy(self.ai_config)
         if config["temperature"] > 0.1:
             config["temperature"] = 0.05
         if config["top_p"] > 0.1:

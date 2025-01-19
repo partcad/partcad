@@ -105,4 +105,4 @@ def cli(ctx, context, verbal, package, interface, assembly, sketch, scene, param
                 if not context.parent.params.get("q"):
                     print("%s" % summary)
             else:
-                obj.show()
+                obj.show(ctx)

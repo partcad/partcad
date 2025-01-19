@@ -6,9 +6,6 @@
 #
 # Licensed under Apache License, Version 2.0.
 
-import contextlib
-import build123d as b3d
-
 import asyncio
 import base64
 import copy
@@ -19,9 +16,11 @@ import sys
 import tempfile
 import threading
 
+from .cache_hash import CacheHash
 from .render import *
 from .plugins import *
 from .shape_config import ShapeConfiguration
+from .user_config import user_config
 from .utils import total_size
 from . import logging as pc_logging
 from . import sync_threads as pc_thread
@@ -41,11 +40,12 @@ class Shape(ShapeConfiguration):
 
     errors: list[str]
 
-    def __init__(self, config):
+    def __init__(self, project_name: str, config: dict) -> None:
         super().__init__(config)
+        self.project_name = project_name
         self.errors = []
-        self._lock = threading.Lock()
-        self.shape = None
+        self.lock = threading.RLock()
+        self.tls = threading.local()
         self.components = []
         self.compound = None
         self.with_ports = None
@@ -59,66 +59,140 @@ class Shape(ShapeConfiguration):
         self.desc = self.desc.strip() if self.desc is not None else None
         self.requirements = config.get("requirements", None)
 
-    @contextlib.asynccontextmanager
-    async def locked(self):
-        """Multi-threading lock for coroutines"""
-        await pc_thread.run_detached(self._lock.acquire)
-        try:
-            yield
-        finally:
-            self._lock.release()
+        # Cache behavior
+        self.cacheable = config.get("cache", True)
+        self.cache_dependencies = []
+        self.cache_dependencies_broken = False
 
-    async def get_components(self):
+        # Memory cache
+        self._wrapped = None
+
+        # Filesystem cache
+        self.hash = CacheHash(f"{self.project_name}:{self.name}")
+
+        if self.cacheable:
+            cad_config = {}
+            for key in ["parameters", "offset", "scale"]:
+                if key in self.config:
+                    cad_config[key] = self.config[key]
+            self.hash.add_dict(cad_config)
+
+    def get_cache_dependencies_broken(self) -> bool:
+        if user_config.cache_dependencies_ignore:
+            return False
+        return self.cache_dependencies_broken
+
+    def get_cacheable(self) -> bool:
+        return self.cacheable and not self.get_cache_dependencies_broken()
+
+    def get_async_lock(self) -> asyncio.Lock:
+        if not hasattr(self.tls, "async_shape_locks"):
+            self.tls.async_shape_locks = {}
+        self_id = id(self)
+        if self_id not in self.tls.async_shape_locks:
+            self.tls.async_shape_locks[self_id] = asyncio.Lock()
+        return self.tls.async_shape_locks[self_id]
+
+    async def get_components(self, ctx):
         if len(self.components) == 0:
             # Maybe it's empty, maybe it's not generated yet
-            wrapped = await self.get_wrapped()
+            wrapped = await self.get_wrapped(ctx)
 
             # If it's a compound, we can get the components
             if len(self.components) == 0:
                 self.components = [wrapped]
 
             if self.with_ports is not None:
-                ports_list = list(await self.with_ports.get_components())
+                ports_list = list(await self.with_ports.get_components(ctx))
                 if len(ports_list) != 0:
                     self.components.append(ports_list)
 
         return self.components
 
-    async def get_wrapped(self):
-        shape = await self.get_shape()
+    async def get_wrapped(self, ctx):
+        with self.lock:
+            async with self.get_async_lock():
+                if self._wrapped is not None:
+                    return self._wrapped
 
-        # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
-        #                 apply to both 'wrapped' and 'components'
-        if "offset" in self.config:
-            b3d_solid = b3d.Solid.make_box(1, 1, 1)
-            b3d_solid.wrapped = shape
-            b3d_solid.relocate(b3d.Location(*self.config["offset"]))
-            shape = b3d_solid.wrapped
-        if "scale" in self.config:
-            b3d_solid = b3d.Solid.make_box(1, 1, 1)
-            b3d_solid.wrapped = shape
-            b3d_solid = b3d_solid.scale(self.config["scale"])
-            shape = b3d_solid.wrapped
-        return shape
+                is_cacheable = self.get_cacheable() and ctx
+                if is_cacheable:
+                    cache_hash = self.hash
+                    if cache_hash:
+                        keys_to_read = [self.kind, "cmps"]
+                        cached, to_cache_in_memory = await ctx.cache_shapes.read_async(cache_hash, keys_to_read)
+                        if to_cache_in_memory.get(self.kind, False):
+                            self._wrapped = cached[self.kind]
+                        if to_cache_in_memory.get("cmps", False):
+                            self.components = cached["cmps"]
+                        if cached.get(self.kind, None):
+                            return cached[self.kind]
+                    else:
+                        if user_config.cache:
+                            pc_logging.warning(f"No cache hash for shape: {self.name}")
+                else:
+                    cache_hash = None
 
-    async def get_cadquery(self):
+                shape = await self.get_shape(ctx)
+
+                # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
+                #                 apply to both 'wrapped' and 'components'
+                if "offset" in self.config:
+                    import build123d as b3d
+
+                    b3d_solid = b3d.Solid.make_box(1, 1, 1)
+                    b3d_solid.wrapped = shape
+                    b3d_solid.relocate(b3d.Location(*self.config["offset"]))
+                    shape = b3d_solid.wrapped
+                if "scale" in self.config:
+                    import build123d as b3d
+
+                    b3d_solid = b3d.Solid.make_box(1, 1, 1)
+                    b3d_solid.wrapped = shape
+                    b3d_solid = b3d_solid.scale(self.config["scale"])
+                    shape = b3d_solid.wrapped
+
+                if cache_hash:
+                    if is_cacheable:
+                        to_cache = {self.kind: shape}
+                        if self.components and len(self.components) > 0:
+                            to_cache["cmps"] = self.components
+                        to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
+                        do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
+                    else:
+                        do_cache_in_memory = True
+                    if do_cache_in_memory:
+                        self._wrapped = shape
+                else:
+                    # Let the file cache tell us if we need to cache this in memory
+                    self._wrapped = shape
+                return shape
+
+    async def get_cadquery(self, ctx=None):
         import cadquery as cq
 
+        if not ctx:
+            pc_logging.debug("No context provided to get_cadquery(). Consider using get_part_cadquery() instead.")
+
         cq_solid = cq.Solid.makeBox(1, 1, 1)
-        cq_solid.wrapped = await self.get_wrapped()
+        cq_solid.wrapped = await self.get_wrapped(ctx)
         return cq_solid
 
-    async def get_build123d(self) -> b3d.Solid:
+    async def get_build123d(self, ctx=None):
+        import build123d as b3d
+
+        if not ctx:
+            pc_logging.debug("No context provided to get_build123d(). Consider using get_part_build123d() instead.")
+
         b3d_solid = b3d.Solid.make_box(1, 1, 1)
-        b3d_solid.wrapped = await self.get_wrapped()
+        b3d_solid.wrapped = await self.get_wrapped(ctx)
         return b3d_solid
 
     def regenerate(self):
         """Regenerates the shape generated by AI. Config remains the same."""
         if hasattr(self, "generate"):
             # Invalidate the shape
-            # async with self.locked():
-            self.shape = None
+            self._wrapped = None
 
             # # Truncate the source code file
             # # This will trigger the regeneration of the file on instantiation
@@ -135,57 +209,51 @@ class Shape(ShapeConfiguration):
         else:
             pc_logging.error("No change function found")
 
-    async def show_async(self, show_object=None):
+    async def show_async(self, ctx=None):
+        # Remove this workaround when the VSCode extension is updated to pass 'ctx'
+        if ctx is None:
+            from .globals import _partcad_context
+
+            ctx = _partcad_context
+
         with pc_logging.Action("Show", self.project_name, self.name):
-            if show_object is None:
-                components = []
-                # TODO(clairbee): consider removing this exception handler permanently
-                # Comment out the below exception handler for easier troubleshooting in CLI
-                try:
-                    components = await self.get_components()
-                except Exception as e:
-                    pc_logging.exception(e)
+            components = []
+            # TODO(clairbee): consider removing this exception handler permanently
+            # Comment out the below exception handler for easier troubleshooting in CLI
+            try:
+                components = await self.get_components(ctx)
+            except Exception as e:
+                pc_logging.exception(e)
 
-                if len(components) != 0:
-                    import importlib
+            if len(components) != 0:
+                import importlib
 
-                    ocp_vscode = importlib.import_module("ocp_vscode")
-                    if ocp_vscode is None:
-                        pc_logging.warning('Failed to load "ocp_vscode". Giving up on connection to VS Code.')
-                    else:
-                        try:
-                            # ocp_vscode.config.status()
-                            pc_logging.info('Visualizing in "OCP CAD Viewer"...')
-                            # pc_logging.debug(self.shape)
-                            ocp_vscode.show(
-                                *components,
-                                progress=None,
-                                # TODO(clairbee): make showing (and the connection
-                                # to ocp_vscode) a part of the context, and memorize
-                                # which part was displayed last. Keep the camera
-                                # if the part has not changed.
-                                # reset_camera=ocp_vscode.Camera.KEEP,
-                            )
-                        except Exception as e:
-                            pc_logging.warning(e)
-                            pc_logging.warning('No VS Code or "OCP CAD Viewer" extension detected.')
+                ocp_vscode = importlib.import_module("ocp_vscode")
+                if ocp_vscode is None:
+                    pc_logging.warning('Failed to load "ocp_vscode". Giving up on connection to VS Code.')
+                else:
+                    try:
+                        # ocp_vscode.config.status()
+                        pc_logging.info('Visualizing in "OCP CAD Viewer"...')
+                        # pc_logging.debug(self.shape)
+                        ocp_vscode.show(
+                            *components,
+                            progress=None,
+                            # TODO(clairbee): make showing (and the connection
+                            # to ocp_vscode) a part of the context, and memorize
+                            # which part was displayed last. Keep the camera
+                            # if the part has not changed.
+                            # reset_camera=ocp_vscode.Camera.KEEP,
+                        )
+                    except Exception as e:
+                        pc_logging.warning(e)
+                        pc_logging.warning('No VS Code or "OCP CAD Viewer" extension detected.')
 
-            if show_object is not None:
-                try:
-                    shape = await self.get_shape()
-                except Exception as e:
-                    pc_logging.error(e)
-                if shape is not None:
-                    show_object(
-                        shape,
-                        options={},
-                    )
+    def show(self, ctx=None):
+        asyncio.run(self.show_async(ctx))
 
-    def show(self, show_object=None):
-        asyncio.run(self.show_async(show_object))
-
-    def shape_info(self):
-        asyncio.run(self.get_wrapped())
+    def shape_info(self, ctx):
+        asyncio.run(self.get_wrapped(ctx))
         info = {}
         info["Memory"] = "%.02f KB" % ((total_size(self) + 1023.0) / 1024.0)
 
@@ -213,7 +281,7 @@ class Shape(ShapeConfiguration):
         if filepath is None:
             filepath = tempfile.mktemp(".svg")
 
-        obj = await self.get_wrapped()
+        obj = await self.get_wrapped(ctx)
         if obj is None:
             # pc_logging.error("The shape failed to instantiate")
             self.svg_path = None
@@ -339,7 +407,7 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderSVG", self.project_name, self.name):
             _, filepath = self.render_getopts("svg", ".svg", project, filepath)
 
@@ -357,7 +425,7 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_svg_async(ctx, project, filepath))
 
     async def render_png_async(
@@ -367,7 +435,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         width=None,
         height=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderPNG", self.project_name, self.name):
             if not plugins.export_png.is_supported():
                 pc_logging.error("Export to PNG is not supported")
@@ -389,7 +457,7 @@ class Shape(ShapeConfiguration):
             # Render the vector image
             svg_path = await self._get_svg_path(ctx=ctx, project=project)
 
-            def do_render_png():
+            def do_render_png() -> None:
                 nonlocal project, svg_path, width, height, filepath
                 plugins.export_png.export(project, svg_path, width, height, filepath)
 
@@ -402,7 +470,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         width=None,
         height=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_png_async(ctx, project, filepath, width, height))
 
     async def render_step_async(
@@ -410,13 +478,13 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderSTEP", self.project_name, self.name):
             step_opts, filepath = self.render_getopts("step", ".step", project, filepath)
 
-            obj = await self.get_wrapped()
+            obj = await self.get_wrapped(ctx)
 
-            def do_render_step():
+            def do_render_step() -> None:
                 nonlocal project, filepath, obj
                 from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
                 from OCP.Interface import Interface_Static
@@ -442,7 +510,7 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_step_async(ctx, project, filepath))
 
     async def render_brep_async(
@@ -454,9 +522,9 @@ class Shape(ShapeConfiguration):
         with pc_logging.Action("RenderBREP", self.project_name, self.name):
             brep_opts, filepath = self.render_getopts("brep", ".brep", project, filepath)
 
-            obj = await self.get_wrapped()
+            obj = await self.get_wrapped(ctx)
 
-            def do_render_brep():
+            def do_render_brep() -> None:
                 nonlocal project, filepath, obj
                 from OCP.BRepTools import BRepTools
 
@@ -474,7 +542,7 @@ class Shape(ShapeConfiguration):
         ctx,
         project=None,
         filepath=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_brep_async(ctx, project, filepath))
 
     async def render_stl_async(
@@ -485,7 +553,7 @@ class Shape(ShapeConfiguration):
         tolerance=None,
         angularTolerance=None,
         ascii=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderSTL", self.project_name, self.name):
             stl_opts, filepath = self.render_getopts("stl", ".stl", project, filepath)
 
@@ -507,9 +575,9 @@ class Shape(ShapeConfiguration):
                 else:
                     ascii = False
 
-            obj = await self.get_wrapped()
+            obj = await self.get_wrapped(ctx)
 
-            def do_render_stl():
+            def do_render_stl() -> None:
                 nonlocal obj, project, filepath, tolerance, angularTolerance, ascii
                 from OCP.BRepMesh import BRepMesh_IncrementalMesh
                 from OCP.StlAPI import StlAPI_Writer
@@ -538,7 +606,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_stl_async(ctx, project, filepath, tolerance, angularTolerance))
 
     async def render_3mf_async(
@@ -548,7 +616,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         with pc_logging.Action("Render3MF", self.project_name, self.name):
             threemf_opts, filepath = self.render_getopts("3mf", ".3mf", project, filepath)
 
@@ -564,7 +632,7 @@ class Shape(ShapeConfiguration):
                 else:
                     angularTolerance = 0.1
 
-            obj = await self.get_wrapped()
+            obj = await self.get_wrapped(ctx)
 
             if not project is None:
                 project.ctx.ensure_dirs_for_file(filepath)
@@ -609,7 +677,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_3mf_async(ctx, project, filepath, tolerance, angularTolerance))
 
     async def render_threejs_async(
@@ -619,7 +687,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderThreeJS", self.project_name, self.name):
             threejs_opts, filepath = self.render_getopts("threejs", ".json", project, filepath)
 
@@ -635,7 +703,7 @@ class Shape(ShapeConfiguration):
                 else:
                     angularTolerance = 0.1
 
-            obj = await self.get_wrapped()
+            obj = await self.get_wrapped(ctx)
             wrapper_path = wrapper.get("render_threejs.py")
             request = {
                 "wrapped": obj,
@@ -675,7 +743,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_threejs_async(ctx, project, filepath, tolerance, angularTolerance))
 
     async def render_obj_async(
@@ -685,7 +753,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderOBJ", self.project_name, self.name):
             obj_opts, filepath = self.render_getopts("obj", ".obj", project, filepath)
 
@@ -701,7 +769,7 @@ class Shape(ShapeConfiguration):
                 else:
                     angularTolerance = 0.1
 
-            obj = await self.get_wrapped()
+            obj = await self.get_wrapped(ctx)
             wrapper_path = wrapper.get("render_obj.py")
             request = {
                 "wrapped": obj,
@@ -741,7 +809,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_obj_async(ctx, project, filepath, tolerance, angularTolerance))
 
     async def render_gltf_async(
@@ -752,7 +820,7 @@ class Shape(ShapeConfiguration):
         binary=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         with pc_logging.Action("RenderGLTF", self.project_name, self.name):
             gltf_opts, filepath = self.render_getopts("gltf", ".json", project, filepath)
 
@@ -774,10 +842,12 @@ class Shape(ShapeConfiguration):
                 else:
                     binary = False
 
-            b3d_obj = await self.get_build123d()
+            b3d_obj = await self.get_build123d(ctx)
 
-            def do_render_gltf():
+            def do_render_gltf() -> None:
                 nonlocal b3d_obj, project, filepath, tolerance, angularTolerance
+                import build123d as b3d
+
                 b3d.export_gltf(
                     b3d_obj,
                     filepath,
@@ -795,10 +865,10 @@ class Shape(ShapeConfiguration):
         filepath=None,
         tolerance=None,
         angularTolerance=None,
-    ):
+    ) -> None:
         asyncio.run(self.render_gltf_async(ctx, project, filepath, tolerance, angularTolerance))
 
-    async def render_txt_async(self, ctx, project=None, filepath=None):
+    async def render_txt_async(self, ctx, project=None, filepath=None) -> None:
         with pc_logging.Action("RenderTXT", self.project_name, self.name):
             if filepath is None:
                 filepath = self.path + "/bom.txt"
@@ -810,10 +880,10 @@ class Shape(ShapeConfiguration):
             await self._render_txt_real(file)
             file.close()
 
-    def render_txt(self, ctx, project=None, filepath=None):
+    def render_txt(self, ctx, project=None, filepath=None) -> None:
         asyncio.run(self.render_txt_async(ctx, project, filepath))
 
-    async def render_markdown_async(self, ctx, project=None, filepath=None):
+    async def render_markdown_async(self, ctx, project=None, filepath=None) -> None:
         with pc_logging.Action("RenderMD", self.project_name, self.name):
             if filepath is None:
                 filepath = self.path + "/README.md"
@@ -836,7 +906,7 @@ It already takes into account the number of items per SKU.
             )
             bom_file.close()
 
-    def render_markdown(self, ctx, project=None, filepath=None):
+    def render_markdown(self, ctx, project=None, filepath=None) -> None:
         asyncio.run(self.render_markdown_async(ctx, project, filepath))
 
     async def get_summary_async(self, project=None):
@@ -845,4 +915,4 @@ It already takes into account the number of items per SKU.
         return None
 
     def get_summary(self, project=None):
-        asyncio.run(self.get_summary_async(project))
+        return asyncio.run(self.get_summary_async(project))

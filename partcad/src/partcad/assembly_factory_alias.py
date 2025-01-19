@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import copy
 import typing
 
 from . import assembly_factory as pf
@@ -24,6 +25,8 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             super().__init__(ctx, source_project, target_project, config)
             # Complement the config object here if necessary
             self._create(config)
+
+            self.assembly.get_cacheable = self.get_cacheable
 
             if "source" in config:
                 self.source_assembly_name = config["source"]
@@ -63,21 +66,31 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
 
             pc_logging.debug("Initializing an alias to %s" % self.source)
 
-    def instantiate(self, assembly):
-        with pc_logging.Action("Alias", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
+    def instantiate(self, obj):
+        with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_assembly_name}"):
             source = self.ctx._get_assembly(self.source)
             if not source:
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return
 
+            # Clone the source object properties
+            if source.path:
+                obj.path = source.path
+            obj.cacheable = source.cacheable
+            obj.cache_dependencies = copy.copy(source.cache_dependencies)
+            obj.cache_dependencies_broken = source.cache_dependencies_broken
+
             children = source.children
             if children:
-                assembly.children = children
-                assembly.shape = source.shape
+                obj.children = children
+                obj._wrapped = source._wrapped
                 return
 
             self.ctx.stats_assemblies_instantiated += 1
 
-            if source.path:
-                assembly.path = source.path
-            source.instantiate(assembly)
+            source.instantiate(obj)
+
+    def get_cacheable(self) -> bool:
+        # This object is a wrapper around another one.
+        # The other one is the one which must be cached.
+        return False

@@ -33,7 +33,7 @@ class CamFormingTest(Test):
         # TODO(clairbee): Utilize the data provided in the config
 
         # TODO(clairbee): Improve and extend the below
-        wrapped = await shape.get_wrapped()
+        wrapped = await shape.get_wrapped(ctx)
         fbp = ShapeAnalysis_FreeBoundsProperties(wrapped)
         fbp.Perform()
         if fbp.NbFreeBounds() != 0:
