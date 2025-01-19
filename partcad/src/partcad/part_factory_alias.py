@@ -98,5 +98,8 @@ class PartFactoryAlias(pf.PartFactory):
         return source.get_final_config()
 
     def get_cacheable(self) -> bool:
-        # This object is a wrapper around another one which must be cached.
+        # This object is a wrapper around another one.
+        # The other one is the one which must be cached.
+        return False
+
         return False

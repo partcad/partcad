@@ -91,5 +91,6 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             source.instantiate(obj)
 
     def get_cacheable(self) -> bool:
-        # This object is a wrapper around another one which must be cached.
+        # This object is a wrapper around another one.
+        # The other one is the one which must be cached.
         return False

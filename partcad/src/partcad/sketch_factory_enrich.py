@@ -150,7 +150,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
             if source.path:
                 sketch.path = source.path
             if "with" in source.config:
-                self.hash.add_dict(sketch.config["with"])
+                sketch.hash.add_dict(source.config["with"])
             sketch.cacheable = source.cacheable
             sketch.cache_dependencies = copy.copy(source.cache_dependencies)
             sketch.cache_dependencies_broken = source.cache_dependencies_broken
@@ -165,5 +165,6 @@ class SketchFactoryEnrich(pf.SketchFactory):
             return await source.instantiate(sketch)
 
     def get_cacheable(self) -> bool:
-        # This object is a wrapper around another one which must be cached.
+        # This object is a wrapper around another one.
+        # The other one is the one which must be cached.
         return False
