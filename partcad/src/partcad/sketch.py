@@ -16,7 +16,7 @@ from . import sync_threads as pc_thread
 class Sketch(ShapeWithAi):
     path: typing.Optional[str] = None
 
-    def __init__(self, project_name: str, config: object = {}) -> None:
+    def __init__(self, project_name: str, config: dict = {}) -> None:
         super().__init__(project_name, config)
 
         self.kind = "sketch"

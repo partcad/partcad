@@ -53,7 +53,7 @@ class Cache:
 
         saved = {}
 
-        async def task_item(key, value) -> None:
+        async def task_item(key: str, value: bytes) -> None:
             async with aiofiles.open(f"{cache_path}.{key}", "wb") as f:
                 await f.write(value)
             saved[key] = True
@@ -88,7 +88,3 @@ class Cache:
         tasks = [asyncio.create_task(task_item(key)) for key in keys]
 
         return dict(await asyncio.gather(*tasks))
-
-    def exists(self, obj_hash: str) -> bool:
-        """Check if object exists in cache."""
-        return self.get_cache_path(obj_hash).exists()

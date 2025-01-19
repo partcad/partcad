@@ -23,7 +23,7 @@ class AssemblyFactory(ShapeFactory):
         self.name = config["name"]
         self.orig_name = config["orig_name"]
 
-    def _create(self, config):
+    def _create(self, config) -> None:
         self.assembly = Assembly(self.project.name, config)
         self.assembly.instantiate = lambda assembly_self: self.instantiate(assembly_self)
         self.assembly.info = lambda: self.info(self.assembly)

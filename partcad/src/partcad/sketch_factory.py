@@ -34,13 +34,12 @@ class SketchFactory(ShapeFactory):
 
     def _create_sketch(self, config: object) -> Sketch:
         sketch = Sketch(self.target_project.name, config)
-        # TODO(clairbee): Make the next line work for sketch_factory_file only
         sketch.instantiate = lambda sketch_self: self.instantiate(sketch_self)
         sketch.info = lambda: self.info(sketch)
         sketch.with_ports = self.with_ports
         return sketch
 
-    def _create(self, config: object):
+    def _create(self, config: object) -> None:
         self.sketch = self._create_sketch(config)
         self.target_project.sketches[self.name] = self.sketch
 

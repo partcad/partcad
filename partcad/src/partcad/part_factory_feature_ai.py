@@ -664,7 +664,7 @@ Very important not to produce exactly the same script: at least something has to
                 coro = part.get_wrapped(self.ctx)
                 with pc_logging.Action("Instantiate", part.project_name, part.name):
                     shape = asyncio.run(coro)
-                if not shape is None:
+                if shape is not None:
                     try:
                         # Best effort to provide an interactive experience
                         part.show(self.ctx)

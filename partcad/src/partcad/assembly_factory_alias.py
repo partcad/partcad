@@ -26,6 +26,8 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             # Complement the config object here if necessary
             self._create(config)
 
+            self.assembly.get_cacheable = self.get_cacheable
+
             if "source" in config:
                 self.source_assembly_name = config["source"]
             else:
@@ -87,3 +89,7 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             self.ctx.stats_assemblies_instantiated += 1
 
             source.instantiate(obj)
+
+    def get_cacheable(self):
+        # This object is a wrapper around another one which must be cached.
+        return False

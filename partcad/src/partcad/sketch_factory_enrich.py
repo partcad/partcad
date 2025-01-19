@@ -65,6 +65,8 @@ class SketchFactoryEnrich(pf.SketchFactory):
 
             self._create(config)
 
+            self.sketch.get_cacheable = self.get_cacheable
+
     async def instantiate(self, sketch):
         with pc_logging.Action("Enrich", sketch.project_name, f"{sketch.name}:{self.source_sketch_name}"):
 
@@ -139,7 +141,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
 
             source = self.source_project.get_sketch(sketch.name)
             name = sketch.config["name"]
-            sketch.config = source.config
+            sketch.config = copy.copy(source.config)
             sketch.config["source"] = self.source_project_name + ":" + self.source_sketch_name
             sketch.config["orig_name"] = sketch.name
             sketch.config["name"] = name
@@ -161,3 +163,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
             self.ctx.stats_sketches_instantiated += 1
 
             return await source.instantiate(sketch)
+
+    def get_cacheable(self):
+        # This object is a wrapper around another one which must be cached.
+        return False

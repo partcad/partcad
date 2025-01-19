@@ -39,7 +39,7 @@ class PartFactory(ShapeFactory):
         part.with_ports = self.with_ports
         return part
 
-    def _create(self, config: object):
+    def _create(self, config: object) -> None:
         self.part = self._create_part(config)
         self.target_project.parts[self.name] = self.part
 

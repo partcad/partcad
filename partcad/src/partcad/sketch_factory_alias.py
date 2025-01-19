@@ -26,6 +26,8 @@ class SketchFactoryAlias(SketchFactory):
             # Complement the config object here if necessary
             self._create(config)
 
+            self.sketch.get_cacheable = self.get_cacheable
+
             if "source" in config:
                 self.source_sketch_name = config["source"]
             else:
@@ -86,3 +88,7 @@ class SketchFactoryAlias(SketchFactory):
             self.ctx.stats_sketches_instantiated += 1
 
             return await source.instantiate(obj)
+
+    def get_cacheable(self):
+        # This object is a wrapper around another one which must be cached.
+        return False

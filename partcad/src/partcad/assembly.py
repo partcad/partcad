@@ -27,7 +27,7 @@ class AssemblyChild:
 class Assembly(ShapeWithAi):
     path: typing.Optional[str] = None
 
-    def __init__(self, project_name: str, config={}):
+    def __init__(self, project_name: str, config: dict = {}):
         super().__init__(project_name, config)
 
         self.location = config.get("location")
@@ -44,7 +44,7 @@ class Assembly(ShapeWithAi):
             self._wrapped = None  # Invalidate if any
             await pc_thread.run(self.instantiate, self)
             if len(self.children) == 0:
-                pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
+                pc_logging.warning(f"The assembly {self.project_name}:{self.name} is empty")
 
     # add is a non-thread-safe method for end users to create custom Assemblies
     def add(
@@ -79,9 +79,9 @@ class Assembly(ShapeWithAi):
         async def per_child(child):
             # TODO(clairbee): use topods objects here
             item = await child.item.get_build123d(ctx)
-            if not child.name is None:
+            if child.name is not None:
                 item.label = child.name
-            if not child.location is None:
+            if child.location is not None:
                 item.locate(child.location)
             return item
 

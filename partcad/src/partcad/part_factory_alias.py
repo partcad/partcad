@@ -26,6 +26,9 @@ class PartFactoryAlias(pf.PartFactory):
             # Complement the config object here if necessary
             self._create(config)
 
+            self.part.get_final_config = self.get_final_config
+            self.part.get_cacheable = self.get_cacheable
+
             if "source" in config:
                 self.source_part_name = config["source"]
             else:
@@ -64,8 +67,6 @@ class PartFactoryAlias(pf.PartFactory):
 
             pc_logging.debug("Initializing an alias to %s" % self.source)
 
-            self.part.get_final_config = self.get_final_config
-
     async def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_part_name}"):
 
@@ -95,3 +96,7 @@ class PartFactoryAlias(pf.PartFactory):
         if not source:
             raise Exception(f"The alias source {self.source} is not found")
         return source.get_final_config()
+
+    def get_cacheable(self):
+        # This object is a wrapper around another one which must be cached.
+        return False

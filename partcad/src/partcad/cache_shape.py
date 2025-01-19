@@ -20,7 +20,7 @@ SERIALIZATION_BREP = 2
 
 
 class ShapeCache(Cache):
-    def __init__(self, serialization: int = SERIALIZATION_PICKLE):
+    def __init__(self, serialization: int = SERIALIZATION_PICKLE) -> None:
         super().__init__("shapes")
         self.serialization = serialization
 
@@ -67,7 +67,7 @@ class ShapeCache(Cache):
             else:
                 results[key] = True
 
-            return results
+        return results
 
     async def read_async(self, hash: CacheHash, keys: list[str]) -> tuple[dict[str, object], dict[str, bool]]:
         if not user_config.cache:
@@ -102,7 +102,7 @@ class ShapeCache(Cache):
             if serialization == SERIALIZATION_PICKLE:
                 try:
                     obj = pickle.loads(data)
-                except pickle.UnpicklingErro as e:
+                except pickle.UnpicklingError:
                     results[key] = None
                     in_memory[key] = False
                     continue
