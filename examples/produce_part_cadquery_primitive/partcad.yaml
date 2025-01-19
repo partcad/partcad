@@ -18,6 +18,8 @@ parts:
       length:
         default: 10.0
       height: 10.0
+    dependencies:
+      - cylinder.py # For testing purposes only
     aliases: ["box"]
   cube_enrich:
     desc: This is an example of a part defined by enriching another part

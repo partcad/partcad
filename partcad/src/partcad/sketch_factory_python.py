@@ -44,8 +44,8 @@ class SketchFactoryPython(SketchFactoryFile):
         self.session = self.runtime.get_session(source_project.name)
 
     def post_create(self) -> None:
-        # TODO(clairbee): add dependency tracking for python scripts
-        self.sketch.cache_dependencies_broken = True
+        for dep in self.config.get("dependencies", []):
+            self.sketch.cache_dependencies.append(dep)
         super().post_create()
 
     async def prepare_python(self):

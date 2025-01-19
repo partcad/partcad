@@ -8,15 +8,15 @@
 #
 
 import hashlib
+import os
+import struct
 
 from . import logging as pc_logging
 from .user_config import user_config
 
 
 class CacheHash:
-    dependencies = []  # This is meant to be replaced with a list of dependencies
-
-    def __init__(self, name: str, algo="sha1", hasher=None):
+    def __init__(self, name: str, algo="md5", hasher=None):
         self.name = name
         self.is_empty = True
         self.is_used = False
@@ -27,6 +27,8 @@ class CacheHash:
 
         if hasher != None:
             self.hasher = hasher.copy()
+        elif algo == "md5":
+            self.hasher = hashlib.md5()
         elif algo == "sha1":
             self.hasher = hashlib.sha1()
         elif algo == "sha256":
@@ -34,7 +36,7 @@ class CacheHash:
         else:
             raise ValueError(f"Unknown hash algorithm: {algo}")
 
-        self.add_string(name)
+        self.dependencies = []
 
     def touch(self):
         if self.is_used:
@@ -97,23 +99,23 @@ class CacheHash:
             return
 
         try:
-            with open(filename, "rb") as f:
-                self.hasher.update(f.read())
-            self.touch()
+            self.hasher.update(struct.pack("f", os.path.getmtime(filename)))
         except FileNotFoundError:
-            # This is not a bug. The file may not exist.
-            pass
+            # TODO(clairbee): trigger preload if content hashing is back
+            # This happens for all files that are not yet downloaded
+            return
+        self.touch()
 
-    def set_dependencies(self, dependencies: list[str]):
+    def set_dependencies(self, dependencies: list[str]) -> None:
         self.dependencies = dependencies
 
     def get(self) -> str | None:
-        self.used = True
-        if self.is_empty:
-            return None
-
         # TODO(clairbee): make I/O asynchronous and parallel, but maintain the order of hashing
         for filename in self.dependencies:
             self.add_filename(filename)
+
+        self.used = True
+        if self.is_empty:
+            return None
 
         return self.hasher.hexdigest()

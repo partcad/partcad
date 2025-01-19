@@ -7,6 +7,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import os
+
 from . import logging as pc_logging
 from .part_factory_file import PartFactoryFile
 from .runtime_python import PythonRuntime
@@ -43,8 +45,8 @@ class PartFactoryPython(PartFactoryFile):
         self.session = self.runtime.get_session(source_project.name)
 
     def post_create(self) -> None:
-        # TODO(clairbee): add dependency tracking for python scripts
-        self.part.cache_dependencies_broken = True
+        for dep in self.config.get("dependencies", []):
+            self.part.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
         super().post_create()
 
     async def prepare_python(self):
