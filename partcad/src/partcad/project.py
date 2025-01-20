@@ -1442,7 +1442,6 @@ class Project(project_config.Configuration):
             raise ValueError("Target format must be specified for conversion.")
 
         with pc_logging.Action("AsyncConvert", self.name):
-            # Collect all shapes for conversion
             shapes = []
             if sketches:
                 shapes.extend(self.get_sketch(name) for name in sketches)
@@ -1455,27 +1454,18 @@ class Project(project_config.Configuration):
 
             pc_logging.info(f"Converting {len(shapes)} object(s) to '{target_format}'.")
 
-            # Create async tasks for rendering
+            # Prepare async tasks for rendering
             tasks = [
                 getattr(shape, f"render_{target_format}_async")(self.ctx, self, output_dir)
                 for shape in shapes
                 if hasattr(shape, f"render_{target_format}_async")
             ]
-
-            unsupported_shapes = [shape.name for shape in shapes if not hasattr(shape, f"render_{target_format}_async")]
-            if unsupported_shapes:
-                pc_logging.warning(f"The following shapes do not support rendering to '{target_format}': {unsupported_shapes}")
-
-            # Run rendering tasks
             await asyncio.gather(*tasks)
 
-            # Update configuration if in_place is True
             if in_place:
                 for shape in shapes:
                     self.update_part_config(shape.name, {"type": target_format})
-                    pc_logging.info(f"Updated configuration for '{shape.name}' to type '{target_format}'.")
 
-            pc_logging.info("Conversion completed successfully.")
 
     def convert(
         self,
@@ -1488,9 +1478,7 @@ class Project(project_config.Configuration):
         in_place: bool = False,
     ) -> None:
         """Synchronous wrapper for async_convert."""
-        pc_logging.info(f"Starting synchronous conversion to '{target_format}'.")
         asyncio.run(self.async_convert(sketches, interfaces, parts, assemblies, target_format, output_dir, in_place))
-        pc_logging.info("Synchronous conversion process completed.")
 
 
     def render_readme_async(self, render_cfg, output_dir):
