@@ -9,10 +9,10 @@ import partcad.logging as logging
     "--input", "input_type",
     type=click.Choice(
       [
-         "step", 
-         "brep", 
-         "stl", 
-         "3mf", 
+         "step",
+         "brep",
+         "stl",
+         "3mf",
          "scad",
          "cadquery",
          "build123d"
