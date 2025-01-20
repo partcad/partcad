@@ -46,10 +46,11 @@ class ProjectFactory(ImportConfiguration):
             self.config_path = parent.config_path
             self.config_dir = parent.config_dir
 
-        # TODO(clairbee): Initialize the config object if necessary
+        # Continue initializing the config object here if necessary
 
     def _create(self, config):
-        # TODO(clairbee): Finalize the config object if necessary
+        # Finalize the config object here if necessary
+
         self.project = p.Project(
             self.ctx,
             self.name,
@@ -60,7 +61,7 @@ class ProjectFactory(ImportConfiguration):
         # Make the project config inherit some properties of the import config
         self.project.config_obj["type"] = self.import_config_type
         self.project.config_obj["isRoot"] = self.import_config_is_root
-        self.project.config_obj["url"] = self.import_config_url
+        self.project.config_obj["importUrl"] = self.import_config_url
 
     def _save(self):
         self.ctx.projects[self.name] = self.project

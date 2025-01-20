@@ -141,7 +141,7 @@ class Context(project_config.Configuration):
                     "name": self.name,
                     "type": "local",
                     "path": self.config_path,
-                    "maybeEmpty": True,
+                    "canBeEmpty": True,
                     "isRoot": True,
                 },
             )
@@ -153,7 +153,7 @@ class Context(project_config.Configuration):
         return self.current_project_path
 
     def import_project(self, parent, project_import_config):
-        if not "name" in project_import_config or not "type" in project_import_config:
+        if "name" not in project_import_config or "type" not in project_import_config:
             pc_logging.error("Invalid project configuration found: %s" % project_import_config)
             return None
 
@@ -169,9 +169,10 @@ class Context(project_config.Configuration):
                 self._projects_being_loaded[name] = True
 
                 # Depending on the project type, use different factories
-                if not "type" in project_import_config or project_import_config["type"] == "local":
+                if "type" not in project_import_config or project_import_config["type"] == "local":
                     with pc_logging.Action("Local", name):
                         rfl.ProjectFactoryLocal(self, parent, project_import_config)
+                        pc_logging.debug("Local project loaded: %s" % name)
                 elif project_import_config["type"] == "git":
                     with pc_logging.Action("Git", name):
                         rfg.ProjectFactoryGit(self, parent, project_import_config)
@@ -184,7 +185,7 @@ class Context(project_config.Configuration):
                     return None
 
                 # Check whether the factory was able to successfully add the project
-                if not name in self.projects:
+                if name not in self.projects:
                     pc_logging.error("Failed to create the project: %s" % project_import_config)
                     del self._projects_being_loaded[name]
                     return None
@@ -423,18 +424,20 @@ class Context(project_config.Configuration):
         self.import_all(parent_name)
         return self.get_packages(parent_name)
 
-    def get_packages(self, parent_name=None):
+    def get_packages(self, parent_name: str = None) -> list[dict[str, str]]:
         projects = self.projects.values()
         if parent_name is not None:
             projects = filter(lambda x: x.name.startswith(parent_name), projects)
-        return map(
-            lambda pkg: {"name": pkg.name, "desc": pkg.desc},
-            filter(
-                # FIXME(clairbee): parameterize interfaces before displaying them
-                # lambda x: len(x.interfaces) + len(x.sketches) + len(x.parts) + len(x.assemblies)
-                lambda x: len(x.sketches) + len(x.parts) + len(x.assemblies) > 0,
-                projects,
-            ),
+        return list(
+            map(
+                lambda pkg: {"name": pkg.name, "desc": pkg.desc},
+                filter(
+                    # FIXME(clairbee): parameterize interfaces before displaying them
+                    # lambda x: len(x.interfaces) + len(x.sketches) + len(x.parts) + len(x.assemblies)
+                    lambda x: len(x.sketches) + len(x.parts) + len(x.assemblies) > 0,
+                    projects,
+                ),
+            )
         )
 
     def add_mate(self, source_interface, target_interface, mate_target_config: dict):

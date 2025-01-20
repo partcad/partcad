@@ -146,6 +146,7 @@ class ProviderCart:
                     tasks.append(asyncio.create_task(self.add_item_from_spec(ctx, part_spec, count)))
                 await asyncio.gather(*tasks)
             else:
+                # TODO(clairbee): turn it into an error() and recover nicely
                 raise Exception(f"Part or assembly '{object_name}' not found in project '{project_name}'")
 
     async def add_item_from_spec(self, ctx, part_spec: str, count=1):

@@ -65,9 +65,10 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 fp.close()
 
                 # Resolve Jinja templates
-                template = Environment(loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep)).from_string(
-                    config
-                )
+                template = Environment(
+                    loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep),
+                    autoescape=True,
+                ).from_string(config)
                 config = template.render(params)
 
                 # Parse the resulting config
@@ -81,7 +82,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 pc_logging.error("ERROR: Assembly file not found: %s" % self.path)
 
             result = await self.handle_node(assembly, assy)
-            if not result is None:
+            if result is not None:
                 assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
                 # Keep part reference counter for bill-of-materials purposes
                 result[0].ref_inc()
@@ -99,7 +100,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 task = tasks.pop(0)
                 f = await asyncio.tasks.wait([task])
                 result = f[0].pop().result()
-                if not result is None:
+                if result is not None:
                     assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
                     # Keep part reference counter for bill-of-materials purposes
                     result[0].ref_inc()

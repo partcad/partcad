@@ -1,6 +1,6 @@
 import rich_click as click
-from partcad import logging
-from partcad.logging import Process
+from partcad import logging as pc_logging
+from partcad.context import Context
 
 
 @click.command(help="List available parts")
@@ -23,20 +23,27 @@ from partcad.logging import Process
 )
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-def cli(ctx, used_by, recursive, package):
+def cli(ctx: Context, used_by: str | None, recursive: bool, package: str):
     package_obj = ctx.get_project(package)
     if not package_obj:
-        logging.error(f"Package {package} is not found")
+        pc_logging.error(f"Package {package} is not found")
         return
     package = package_obj.name
 
-    with Process("ListParts", package):
+    with pc_logging.Process("ListParts", package):
         part_count = 0
         part_kinds = 0
 
         if used_by is not None:
-            logging.info("Instantiating %s..." % used_by)
-            ctx.get_assembly(used_by)
+            pc_logging.info("Instantiating %s..." % used_by)
+            try:
+                target = ctx.get_assembly(used_by)
+                if not target:
+                    pc_logging.error(f"Assembly {used_by} is not found")
+                    return
+            except:
+                pc_logging.error(f"Failed to instantiate the assembly {used_by}")
+                return
         else:
             ctx.get_all_packages()
 
@@ -78,4 +85,4 @@ def cli(ctx, used_by, recursive, package):
                 output += "Total: %d parts of %d kinds\n" % (part_count, part_kinds)
         else:
             output += "\t<none>\n"
-        logging.info(output)
+        pc_logging.info(output)

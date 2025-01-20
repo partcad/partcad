@@ -8,7 +8,6 @@
 #
 
 from .test import Test
-from .. import logging as pc_logging
 
 
 class CadTest(Test):

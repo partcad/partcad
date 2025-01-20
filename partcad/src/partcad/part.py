@@ -18,7 +18,7 @@ from . import logging as pc_logging
 class Part(ShapeWithAi):
     path: typing.Optional[str] = None
     url: typing.Optional[str] = None
-    count: int = None
+    count: int
 
     def __init__(self, project_name: str, config: dict = {}, shape=None):
         super().__init__(project_name, config)

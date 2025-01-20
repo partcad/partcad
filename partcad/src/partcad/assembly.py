@@ -36,7 +36,6 @@ class Assembly(ShapeWithAi):
         # self.children contains all child parts and assemblies before they turn into 'self.shape'
         self.children = []
 
-        # TODO(clairbee): add reference counter to assemblies
         self.count = 0
 
     async def do_instantiate(self):
@@ -63,6 +62,7 @@ class Assembly(ShapeWithAi):
     def ref_inc(self):
         for child in self.children:
             child.item.ref_inc()
+        self.count += 1
 
     async def get_shape(self, ctx):
         await self.do_instantiate()
