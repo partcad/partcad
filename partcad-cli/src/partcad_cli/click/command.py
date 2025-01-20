@@ -271,6 +271,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     commands_with_context = [
         "add",
         "ai",
+        "convert",
         "info",
         "inspect",
         "install",
