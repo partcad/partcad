@@ -88,14 +88,37 @@ def _resolve_package_object(ctx, package, object):
 
 def _convert_object(project, object, target_format, output_dir, in_place):
     """Perform the conversion of the specified object."""
-    parts = [object]  # Assume the object is a part by default
+    # Determine the object type from the project configuration
+    if object in project.parts:
+        parts = [object]
+        sketches = []
+        assemblies = []
+    elif object in project.assemblies:
+        parts = []
+        sketches = []
+        assemblies = [object]
+    elif object in project.sketches:
+        parts = []
+        sketches = [object]
+        assemblies = []
+    else:
+        raise click.UsageError(f"Object '{object}' not found in parts, assemblies, or sketches.")
+
+    # Log the conversion process
     logging.info(f"Converting object '{object}' to format '{target_format}'")
 
+    # Perform the conversion
     project.convert(
-        sketches=[], interfaces=[], parts=parts, assemblies=[],
-        target_format=target_format, output_dir=output_dir, in_place=in_place
+        sketches=sketches,
+        interfaces=[],
+        parts=parts,
+        assemblies=assemblies,
+        target_format=target_format,
+        output_dir=output_dir,
+        in_place=in_place,
     )
 
+    # Update configuration if in-place is enabled
     if in_place:
         logging.info(f"Updating configuration for object '{object}' to type '{target_format}'")
         project.update_part_config(object, {"type": target_format})
