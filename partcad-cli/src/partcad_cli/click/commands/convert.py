@@ -62,7 +62,7 @@ def cli(
     # Set options for creating directories
     ctx.option_create_dirs = create_dirs
 
-    # Determine package(s) to process
+    # Get the list of packages to process
     package = package or ""
     packages = _get_packages(ctx, package, recursive)
 
@@ -82,7 +82,7 @@ def cli(
 def _get_packages(ctx: object, package: str, recursive: bool) -> List[str]:
     """Retrieve a list of packages to process."""
     if recursive:
-        start_package: str = pc_utils.get_child_project_path(ctx.get_current_project_path(), package)
+        start_package = pc_utils.get_child_project_path(ctx.get_current_project_path(), package)
         all_packages = ctx.get_all_packages(start_package)
         return [pkg["name"] for pkg in all_packages]
     return [package]
@@ -97,6 +97,18 @@ def _resolve_package_object(ctx: object, package: str, object: str) -> Tuple[str
     return package, object
 
 
+def _get_object_type(project: Project, object: str) -> Tuple[List[str], List[str], List[str]]:
+    """Determine the type of the object (parts, assemblies, sketches)."""
+    if object in project.parts:
+        return [object], [], []
+    elif object in project.assemblies:
+        return [], [object], []
+    elif object in project.sketches:
+        return [], [], [object]
+    else:
+        raise click.UsageError(f"Object '{object}' not found in parts, assemblies, or sketches.")
+
+
 def _convert_object(
     project: Project,
     object: str,
@@ -105,23 +117,8 @@ def _convert_object(
     in_place: bool,
 ) -> None:
     """Perform the conversion of the specified object."""
-    # Determine the object type from the project configuration
-    if object in project.parts:
-        parts = [object]
-        sketches: List[str] = []
-        assemblies: List[str] = []
-    elif object in project.assemblies:
-        parts = []
-        sketches = []
-        assemblies = [object]
-    elif object in project.sketches:
-        parts = []
-        sketches = [object]
-        assemblies = []
-    else:
-        raise click.UsageError(f"Object '{object}' not found in parts, assemblies, or sketches.")
+    parts, assemblies, sketches = _get_object_type(project, object)
 
-    # Log the conversion process
     logging.info(f"Converting object '{object}' to format '{target_format}'")
 
     # Perform the conversion
