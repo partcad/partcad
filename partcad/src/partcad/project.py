@@ -1426,6 +1426,55 @@ class Project(project_config.Configuration):
     ):
         asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
 
+
+    async def async_convert(self, sketches=None, interfaces=None, parts=None, assemblies=None, target_format=None, output_dir=None, in_place=False):
+        """Asynchronously convert specified objects to a target format."""
+        if not target_format:
+            raise ValueError("Target format must be specified for conversion.")
+
+        with pc_logging.Action("AsyncConvert", self.name):
+            shapes = []
+
+            if sketches:
+                shapes.extend(self.get_sketch(name) for name in sketches)
+            if interfaces:
+                shapes.extend(self.get_interface(name) for name in interfaces)
+            if parts:
+                shapes.extend(self.get_part(name) for name in parts)
+            if assemblies:
+                shapes.extend(self.get_assembly(name) for name in assemblies)
+
+            # Notify user about the object being processed
+            pc_logging.info(f"Converting {len(shapes)} object(s) to {target_format}.")
+
+            # Prepare async tasks for rendering
+            tasks = []
+            for shape in shapes:
+                method_name = f"render_{target_format}_async"
+                if hasattr(shape, method_name):
+                    render_method = getattr(shape, method_name)
+                    tasks.append(render_method(self.ctx, self, output_dir))
+                else:
+                    pc_logging.warning(f"Shape {shape.name} does not support rendering to {target_format}.")
+
+            # Execute all tasks
+            await asyncio.gather(*tasks)
+
+            # Update configuration if in_place is True
+            if in_place:
+                for shape in shapes:
+                    self.update_part_config(shape.name, {"type": target_format})
+                    pc_logging.info(f"Updated configuration for {shape.name} to type {target_format}.")
+
+        pc_logging.info("Conversion completed successfully.")
+
+    def convert(self, sketches=None, interfaces=None, parts=None, assemblies=None, target_format=None, output_dir=None, in_place=False):
+        """Synchronous wrapper for async_convert."""
+        pc_logging.info(f"Starting conversion to {target_format}.")
+        asyncio.run(self.async_convert(sketches, interfaces, parts, assemblies, target_format, output_dir, in_place))
+        pc_logging.info("Conversion process finished.")
+
+
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:
             output_dir = self.config_dir
