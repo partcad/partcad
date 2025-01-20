@@ -2,6 +2,8 @@ import rich_click as click
 import partcad.logging as logging
 import partcad.utils as pc_utils
 from partcad import Project
+from typing import List, Optional, Tuple
+
 
 @click.command(help="Convert parts, assemblies, or scenes to another format and update their type")
 @click.option(
@@ -44,7 +46,16 @@ from partcad import Project
 )
 @click.argument("object", type=str, required=True)
 @click.pass_obj
-def cli(ctx, create_dirs, output_dir, target_format, package, recursive, in_place, object):
+def cli(
+    ctx: object,
+    create_dirs: bool,
+    output_dir: Optional[str],
+    target_format: str,
+    package: Optional[str],
+    recursive: bool,
+    in_place: bool,
+    object: str,
+) -> None:
     """CLI command to convert parts, assemblies, or scenes."""
     logging.info(f"Starting 'pc convert' with object={object}, target_format={target_format}, in_place={in_place}")
 
@@ -68,16 +79,16 @@ def cli(ctx, create_dirs, output_dir, target_format, package, recursive, in_plac
     logging.info("Finished 'pc convert' command.")
 
 
-def _get_packages(ctx, package, recursive):
+def _get_packages(ctx: object, package: str, recursive: bool) -> List[str]:
     """Retrieve a list of packages to process."""
     if recursive:
-        start_package = pc_utils.get_child_project_path(ctx.get_current_project_path(), package)
+        start_package: str = pc_utils.get_child_project_path(ctx.get_current_project_path(), package)
         all_packages = ctx.get_all_packages(start_package)
         return [pkg["name"] for pkg in all_packages]
     return [package]
 
 
-def _resolve_package_object(ctx, package, object):
+def _resolve_package_object(ctx: object, package: str, object: str) -> Tuple[str, str]:
     """Resolve the package and object if provided in 'package:object' format."""
     if ":" not in object:
         object = f":{object}"
@@ -86,13 +97,19 @@ def _resolve_package_object(ctx, package, object):
     return package, object
 
 
-def _convert_object(project, object, target_format, output_dir, in_place):
+def _convert_object(
+    project: Project,
+    object: str,
+    target_format: str,
+    output_dir: Optional[str],
+    in_place: bool,
+) -> None:
     """Perform the conversion of the specified object."""
     # Determine the object type from the project configuration
     if object in project.parts:
         parts = [object]
-        sketches = []
-        assemblies = []
+        sketches: List[str] = []
+        assemblies: List[str] = []
     elif object in project.assemblies:
         parts = []
         sketches = []
