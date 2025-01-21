@@ -9,7 +9,7 @@ PartCAD is more than just a traditional CAD tool for drawing. In fact, it’s **
 “CAD” in PartCAD stand for “computer-aided design” in a more generic sense, where “design” stands for the process of
 getting from an idea to **a clear and deterministic specification of a manufacturable physical product** using a
 computer (including the use of AI models). While PartCAD started as **the first package manager for hardware**, it is
-now the next generation CAD that can turn a single visionary individual into a one person corporation, or make one
+now the **next-generation CAD** that can turn a single visionary individual into a one person corporation, or make one
 future Product Manager as productive (**and much faster!**) as 10 corporate engineering departments of the past.
 
 .. image:: https://github.com/partcad/partcad/blob/main/docs/source/images/vscode1.png?raw=true             |

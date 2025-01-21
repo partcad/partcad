@@ -19,7 +19,7 @@ PartCAD is more than just a traditional CAD tool for drawing. In fact, it’s **
 “CAD” in PartCAD stand for “computer-aided design” in a more generic sense, where “design” stands for the process of
 getting from an idea to **a clear and deterministic specification of a manufacturable physical product** using a
 computer (including the use of AI models). While PartCAD started as **the first package manager for hardware**, it is
-now the next generation CAD that can turn a single visionary individual into a one person corporation, or make one
+now **the next-generation CAD** that can turn a single visionary individual into a one person corporation, or make one
 future Product Manager as productive (**and much faster!**) as 10 corporate engineering departments of the past.
 
 PartCAD is constantly evolving, with new features and integrations being added all the time.
@@ -30,28 +30,42 @@ development process.**
 
 [PartCAD] includes tools to package product information:
 
-- High level requirements (texts and drawings)
-- Detailed design (mechanical outline, PCB schematics, software architecture)
+- Optional (but highly recommended) high-level requirements (texts and drawings)
+- Optional detailed design (mechanical outline, PCB schematics, software architecture)
 - Implementation (mechanical CAD files, PCB layout, software artifacts)
-- Bill of materials (mechanical, electrical, software)
-- Design validation results
-- Parts sourcing data
-- Manufacturing process requirements (including required equipment if any)
-- Manufacturing instructions (sufficiently documented to be reproduced by anyone without inquiring any additional
-  information)
-- Product validation instructions
-- Experimental product validation results
-- Maintenance instructions
-- Or any other product related data
+- Optionally, the following data can be provided to augment or complement the output of PartCAD:
+
+  - Additional manufacturing process requirements and instructions
+  - Additional product validation instructions
+  - Maintenance instructions
+
+- Or any other product related metadata
 
 Such packages are modular and reusable, allowing one to build not only on top of the CAD files of previous products, but
 to build on top of their manufacturing processes as well.
 
+## PartCAD outputs
+
+As a result of maintaining the product information using PartCAD, the following outputs can be generated and, if
+necessary, collected and managed using PartCAD tools:
+
+- A product documentation (markdown, html or PDF)
+- Design validation results
+- Product bill of materials (mechanical, electrical, software)
+- Sourcing information for all components
+- Manufacturing process specification (including required equipment if any)
+- Manufacturing instructions (sufficiently documented to be reproduced by anyone without inquiring any additional
+  information)
+- Product validation instructions
+- Product validation results (given access to an experimental product and the required tools)
+- Input data for software components to visualize the product on your website, with a 3D viewer, a configurator,
+  manufacturing/assembly instructions and more
+
 ## Product development and testing
 
-Once packaged, the product information can be versioned and used for iterative improvements either by human or AI
-actors. To achieve that, PartCAD integrates with third-party tools. Below are just some examples of what third-party
-integrations can be used for:
+Once product information is packaged, it can be versioned and used for iterative improvements or to produce PartCAD
+outputs either by human or AI actors. To achieve that, PartCAD integrates with third-party tools. Below are just some
+examples of what third-party integrations can be used for:
 
 - AI tools can be used to update the mechanical design and implementation based on the current state of the requirements
 - A legacy CAD tool can be used manually to update the implementation
@@ -65,7 +79,7 @@ integrations can be used for:
 - Manufacturing instructions are verified for correctness (e.g. the provided manufacturing steps can actually be
   successfully and safely performed, and fit within the capabilities of the selected manufacturing tools)
 
-Some of the iterative improvements or tests can be achieved using PartCAD built-in features. However the use of
+Some of the iterative improvements or tests can be achieved using PartCAD built-in features. However, the use of
 third-party tools is recommended for unlocking cutting edge innovations and features.
 
 ## Operations using PartCAD
@@ -74,7 +88,8 @@ PartCAD also works on the following supplementary products to enable (if needed)
 third-party tools:
 
 - A CRM for part manufacturing and assembly shops for businesses of any size (from skilled individuals working in their
-  garage to biggest factories) to immediately start taking orders for manufacturable products maintained using PartCAD
+  garage to the biggest factories) to immediately start taking orders for manufacturable products maintained using
+  PartCAD
 - An inventory tool to manage the list of parts and final products in stock, as well as to track and manage all
   in-progress or completed orders, to immediately bring supply chains up and to scale them up while keeping all data
   private on-prem and not incurring any costs (for cloud services and alike)
