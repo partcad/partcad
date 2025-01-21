@@ -15,7 +15,7 @@ future Product Manager as productive (**and much faster!**) as 10 corporate engi
 .. image:: https://github.com/partcad/partcad/blob/main/docs/source/images/vscode1.png?raw=true             |
 
 PartCAD is constantly evolving, with new features and integrations being added all the time.
-`Contact us <https://calendly.com/partcad-support/30min>`_ **to schedule discuss how PartCAD can revolutionize your
+`Contact us <https://calendly.com/partcad-support/30min>`_ **to discuss how PartCAD can revolutionize your
 product development process.**
 
 
