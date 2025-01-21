@@ -17,11 +17,6 @@ themselves, the supplementary documentation and supplier information
 (and integration).
 To address that need PartCAD was published as a standalone framework to be used
 by any project.
-While it does not yet have all the features of a full PLM system,
-it is on the way to becoming one.
-
-It is currently addressing mechanical engineering workflows, but it will
-address electrical and electronics engineering workflows as well in the future.
 
 ========
 Overview
@@ -29,15 +24,15 @@ Overview
 
 PartCAD can be perceived as consisting of four parts:
 
-- PartCAD standards and conventions on how to maintain part and assembly data
+- PartCAD standards and conventions on how to maintain product information
 
-- The public repository of data created and maintained by the community based
+- The public repository of products created and maintained by the community based
   on the PartCAD standards and conventions
 
 - Tools that operate with public and private repositories for as
   long as they are maintained following the PartCAD standards and conventions
 
-- Libraries and frameworks to programmatically interact with PartCAD data in
-  public and private repositories
+- Libraries and frameworks to programmatically interact with product information in
+  public and private PartCAD repositories
 
 Detailed documentation on all of the above can be found in the 'Design' section.

@@ -8,13 +8,102 @@
 [![Documentation Status](https://readthedocs.org/projects/partcad/badge/?version=latest)](https://partcad.readthedocs.io/en/latest/?badge=latest)
 <a href="https://discord.gg/9AEu3vF7rv"><img alt="Discord" src="https://img.shields.io/discord/1091497262733074534?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
 
-[PartCAD] is **the first package manager for CAD models** and a framework for managing assemblies.
-
-It aims to complement Git with everything necessary for hardware development to substitute commercial Product Lifecycle
-Management (PLM) tools. It's a free versioning and change management solution for all your CAD needs, built around your
-CAD artifacts instead of being built into your CAD tool.
-
 Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](https://youtube.com/@PartCAD)💥💥.
+
+## What is PartCAD?
+
+[PartCAD] is the standard for documenting manufacturable physical products. It comes with a set of tools to maintain
+product information and to facilitate efficient and effective workflows at all product lifecycle phases.
+
+PartCAD is more than just a traditional CAD tool for drawing. In fact, it’s **not for drawing at all**. The letters
+“CAD” in PartCAD stand for “computer-aided design” in a more generic sense, where “design” stands for the process of
+getting from an idea to **a clear and deterministic specification of a manufacturable physical product** using a
+computer (including the use of AI models). While PartCAD started as **the first package manager for hardware**, it is
+now **the next-generation CAD** that can turn a single visionary individual into a one person corporation, or make one
+future Product Manager as productive (**and much faster!**) as 10 corporate engineering departments of the past.
+
+PartCAD is constantly evolving, with new features and integrations being added all the time.
+**[Contact us](https://calendly.com/partcad-support/30min) to discuss how PartCAD can revolutionize your product
+development process.**
+
+## PartCAD packages
+
+[PartCAD] includes tools to package product information:
+
+- Optional (but highly recommended) high-level requirements (texts and drawings)
+- Optional detailed design (mechanical outline, PCB schematics, software architecture)
+- Implementation (mechanical CAD files, PCB layout, software artifacts)
+- Optionally, the following data can be provided to augment or complement the output of PartCAD:
+
+  - Additional manufacturing process requirements and instructions
+  - Additional product validation instructions
+  - Maintenance instructions
+
+- Or any other product related metadata
+
+Such packages are modular and reusable, allowing one to build not only on top of the CAD files of previous products, but
+to build on top of their manufacturing processes as well.
+
+## PartCAD outputs
+
+As a result of maintaining the product information using PartCAD, the following outputs can be generated and, if
+necessary, collected and managed using PartCAD tools:
+
+- A product documentation (markdown, html or PDF)
+- Design validation results
+- Product bill of materials (mechanical, electrical, software)
+- Sourcing information for all components
+- Manufacturing process specification (including required equipment if any)
+- Manufacturing instructions (sufficiently documented to be reproduced by anyone without inquiring any additional
+  information)
+- Product validation instructions
+- Product validation results (given access to an experimental product and the required tools)
+- Input data for software components to visualize the product on your website, with a 3D viewer, a configurator,
+  manufacturing/assembly instructions and more
+
+## Product development and testing
+
+Once product information is packaged, it can be versioned and used for iterative improvements or to produce PartCAD
+outputs either by human or AI actors. To achieve that, PartCAD integrates with third-party tools. Below are just some
+examples of what third-party integrations can be used for:
+
+- AI tools can be used to update the mechanical design and implementation based on the current state of the requirements
+- A legacy CAD tool can be used manually to update the implementation
+- AI tools can be used to validate the design and implementation to identify product requirement or best practices (e.g.
+  to reduce manufacturing complexity) violations
+- A web interface of an online store or an API of an additive manufacturer can be used to source and manufacture parts
+- Simulation tools (potentially in conjunction with AI tools) can be used to validate that the product design matches
+  the product requirements
+- AI tools can be used to review the product implementation for correctness, safety or compliance
+- Manufacturing processes are verified for completeness (e.g. tools requirements are specified for all operations)
+- Manufacturing instructions are verified for correctness (e.g. the provided manufacturing steps can actually be
+  successfully and safely performed, and fit within the capabilities of the selected manufacturing tools)
+
+Some of the iterative improvements or tests can be achieved using PartCAD built-in features. However, the use of
+third-party tools is recommended for unlocking cutting edge innovations and features.
+
+## Operations using PartCAD
+
+PartCAD also works on the following supplementary products to enable (if needed) operations without any use of
+third-party tools:
+
+- A CRM for part manufacturing and assembly shops for businesses of any size (from skilled individuals working in their
+  garage to the biggest factories) to immediately start taking orders for manufacturable products maintained using
+  PartCAD
+- An inventory tool to manage the list of parts and final products in stock, as well as to track and manage all
+  in-progress or completed orders, to immediately bring supply chains up and to scale them up while keeping all data
+  private on-prem and not incurring any costs (for cloud services and alike)
+
+## Supply Chains based on PartCAD
+
+By letting the user easily switch between third-party engineering tools or manufacturers without having to migrate
+product data, PartCAD creates a competitive environment for service providers to drive the costs down.
+
+Whenever you select third-party tools (if any) to use in your workflows, you ultimately decide (and make it transparent
+or auditable) how secure your supply chain is and how exposed your product information is. If you opt for on-prem tools
+only, all your product information remains on-prem too. It makes PartCAD an ultimate solution for achieving data
+sovereignty for those willing to keep their product data private. In the age of cloud data harvesting (especially for AI
+training), it makes PartCAD a better alternative to any cloud-based PDM, PLM or BOM solution.
 
 ## Join us!
 
