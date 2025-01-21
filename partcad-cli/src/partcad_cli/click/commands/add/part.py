@@ -1,6 +1,7 @@
 import rich_click as click  # import click
 import partcad as pc
 from pathlib import Path
+from partcad.sentry import tracer as pc_tracer
 
 
 @click.command(help="Add a part")
@@ -45,7 +46,8 @@ from pathlib import Path
 )
 @click.argument("path", type=str)  # help="Path to the file"
 @click.pass_obj
-def cli(ctx, desc, kind, provider, path: str):
+@pc_tracer.start_as_current_span("Command [pc add part]")
+def cli(ctx, desc, kind, provider, path):
     prj = ctx.get_project(pc.ROOT)
     with pc.logging.Process("AddPart", prj.name):
         config = {}

@@ -2,10 +2,12 @@ import rich_click as click
 from partcad.context import Context
 from partcad.user_config import user_config
 from partcad import logging as logging
+from partcad.sentry import tracer as pc_tracer
 
 
 @click.command(help="Force update all imported packages to their latest versions. ")
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc update]")
 def cli(ctx: Context):
     # TODO-119: @alexanderilyin: Add prompt to confirm force update
     # if not click.confirm("This will force update all packages. Continue?", default=False):

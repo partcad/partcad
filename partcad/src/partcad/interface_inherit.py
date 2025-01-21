@@ -7,11 +7,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from .sentry import instrument
 from .geom import Location
 from . import logging as pc_logging
 from .utils import resolve_resource_path
 
 
+@instrument()
 class InterfaceInherits:
     """One of the other interface types inherited by this interface.
     May include multiple instances of each inherited interface.

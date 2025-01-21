@@ -10,8 +10,10 @@ from . import logging as pc_logging
 
 # import svglib.svglib as svglib
 # import reportlab.graphics.renderPM as renderPM
+from .sentry import instrument
 
 
+@instrument(exclude=["is_supported"])
 class PluginExportPngReportlab:
     def is_supported(self):
         return True

@@ -14,8 +14,10 @@ import json
 
 from . import runtime_python
 from . import logging as pc_logging
+from .sentry import instrument, tracer as pc_tracer
 
 
+@instrument()
 class CondaPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "conda", version)
@@ -68,10 +70,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
                 try:
                     os.makedirs(self.path)
-
-                    # Install new conda environment with the preferred Python version
-                    p = subprocess.Popen(
-                        [
+                    with pc_tracer.start_as_current_span(
+                        "CondaPythonRuntime.once_conda_locked.*{subprocess.Popen}"
+                    ) as span:
+                        args = [
                             self.conda_path,
                             "create",
                             "-y",
@@ -80,19 +82,24 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             "-p",
                             self.path,
                             "python=%s" % self.version,
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        shell=False,
-                        encoding="utf-8",
-                    )
-                    _, stderr = p.communicate()
+                        ]
+                        span.set_attribute("cmd", " ".join(args))
+                        # Install new conda environment with the preferred Python version
+                        p = subprocess.Popen(
+                            args,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            shell=False,
+                            encoding="utf-8",
+                        )
+                        _, stderr = p.communicate()
                     if not stderr is None and stderr.strip() != "":
                         pc_logging.error("conda env install error: %s" % stderr)
 
-                    # Install pip into the newly created conda environment
-                    p = subprocess.Popen(
-                        [
+                    with pc_tracer.start_as_current_span(
+                        "CondaPythonRuntime.once_conda_locked.*{subprocess.Popen}"
+                    ) as span:
+                        args = [
                             self.conda_path,
                             "install",
                             "-y",
@@ -101,13 +108,18 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             "-p",
                             self.path,
                             "pip",
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        shell=False,
-                        encoding="utf-8",
-                    )
-                    _, stderr = p.communicate()
+                        ]
+                        span.set_attribute("cmd", " ".join(args))
+
+                        # Install pip into the newly created conda environment
+                        p = subprocess.Popen(
+                            args,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            shell=False,
+                            encoding="utf-8",
+                        )
+                        _, stderr = p.communicate()
                     if not stderr is None and stderr.strip() != "":
                         pc_logging.error("conda pip install error: %s" % stderr)
 

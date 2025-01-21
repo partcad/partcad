@@ -10,6 +10,7 @@
 import rich_click as click
 import partcad.utils as pc_utils
 import partcad.logging as logging
+from partcad.sentry import tracer as pc_tracer
 
 
 # TODO-105: @alexanderilyin: Replace --scene, --interface, --assembly, --sketch with a single option --type
@@ -85,6 +86,7 @@ import partcad.logging as logging
 )
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc render]")
 def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
     with logging.Process("Render", "this"):
         ctx.option_create_dirs = create_dirs

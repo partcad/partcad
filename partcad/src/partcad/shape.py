@@ -29,7 +29,10 @@ from . import wrapper
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
+from .sentry import instrument, tracer as pc_tracer
 
+
+@instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
     name: str
     desc: str
@@ -311,8 +314,9 @@ class Shape(ShapeConfiguration):
             "viewport_origin": viewport_origin,
         }
         register_ocp_helper()
-        picklestring = pickle.dumps(request)
-        request_serialized = base64.b64encode(picklestring).decode()
+        with pc_tracer.start_as_current_span("*Shape.render_svg_somewhere.{pickle.dumps}"):
+            picklestring = pickle.dumps(request)
+            request_serialized = base64.b64encode(picklestring).decode()
 
         # We don't care about customer preferences much here
         # as this is expected to be hermetic.
@@ -487,6 +491,7 @@ class Shape(ShapeConfiguration):
 
             obj = await self.get_wrapped(ctx)
 
+            @pc_tracer.start_as_current_span("Shape.render_step_async.do_render_step")
             def do_render_step() -> None:
                 nonlocal project, filepath, obj
                 from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
@@ -499,12 +504,12 @@ class Shape(ShapeConfiguration):
                 if "write_pcurves" in step_opts and not step_opts["write_pcurves"]:
                     pcurves = 0
                 precision_mode = step_opts.get("precision_mode", 0)
-
-                writer = STEPControl_Writer()
-                Interface_Static.SetIVal_s("write.surfacecurve.mode", pcurves)
-                Interface_Static.SetIVal_s("write.precision.mode", precision_mode)
-                writer.Transfer(obj, STEPControl_AsIs)
-                writer.Write(filepath)
+                with pc_tracer.start_as_current_span("*Shape.render_step_async.{STEPControl_Writer}"):
+                    writer = STEPControl_Writer()
+                    Interface_Static.SetIVal_s("write.surfacecurve.mode", pcurves)
+                    Interface_Static.SetIVal_s("write.precision.mode", precision_mode)
+                    writer.Transfer(obj, STEPControl_AsIs)
+                    writer.Write(filepath)
 
             await pc_thread.run(do_render_step)
 
@@ -527,6 +532,7 @@ class Shape(ShapeConfiguration):
 
             obj = await self.get_wrapped(ctx)
 
+            @pc_tracer.start_as_current_span("Shape.render_brep_async.do_render_brep")
             def do_render_brep() -> None:
                 nonlocal project, filepath, obj
                 from OCP.BRepTools import BRepTools
@@ -580,6 +586,7 @@ class Shape(ShapeConfiguration):
 
             obj = await self.get_wrapped(ctx)
 
+            @pc_tracer.start_as_current_span("Shape.render_stl_async.do_render_stl")
             def do_render_stl() -> None:
                 nonlocal obj, project, filepath, tolerance, angularTolerance, ascii
                 from OCP.BRepMesh import BRepMesh_IncrementalMesh
@@ -587,18 +594,18 @@ class Shape(ShapeConfiguration):
 
                 if not project is None:
                     project.ctx.ensure_dirs_for_file(filepath)
+                with pc_tracer.start_as_current_span("*Shape.render_stl_async.{OCP.BRepMesh.BRepMesh_IncrementalMesh}"):
+                    BRepMesh_IncrementalMesh(
+                        obj,
+                        theLinDeflection=tolerance,
+                        isRelative=True,
+                        theAngDeflection=angularTolerance,
+                        isInParallel=True,
+                    )
 
-                BRepMesh_IncrementalMesh(
-                    obj,
-                    theLinDeflection=tolerance,
-                    isRelative=True,
-                    theAngDeflection=angularTolerance,
-                    isInParallel=True,
-                )
-
-                writer = StlAPI_Writer()
-                writer.ASCIIMode = ascii
-                writer.Write(obj, filepath)
+                    writer = StlAPI_Writer()
+                    writer.ASCIIMode = ascii
+                    writer.Write(obj, filepath)
 
             await pc_thread.run(do_render_stl)
 
@@ -647,8 +654,9 @@ class Shape(ShapeConfiguration):
                 "angularTolerance": angularTolerance,
             }
             register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            with pc_tracer.start_as_current_span("*Shape.render_3mf_async.{pickle.dumps}"):
+                picklestring = pickle.dumps(request)
+                request_serialized = base64.b64encode(picklestring).decode()
 
             # We don't care about customer preferences much here
             # as this is expected to be hermetic.
@@ -714,8 +722,9 @@ class Shape(ShapeConfiguration):
                 "angularTolerance": angularTolerance,
             }
             register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            with pc_tracer.start_as_current_span("*Shape.render_threejs_async.{pickle.dumps}"):
+                picklestring = pickle.dumps(request)
+                request_serialized = base64.b64encode(picklestring).decode()
 
             # We don't care about customer preferences much here
             # as this is expected to be hermetic.
@@ -780,8 +789,9 @@ class Shape(ShapeConfiguration):
                 "angularTolerance": angularTolerance,
             }
             register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            with pc_tracer.start_as_current_span("*Shape.render_obj_async.{pickle.dumps}"):
+                picklestring = pickle.dumps(request)
+                request_serialized = base64.b64encode(picklestring).decode()
 
             # We don't care about customer preferences much here
             # as this is expected to be hermetic.
@@ -847,6 +857,7 @@ class Shape(ShapeConfiguration):
 
             b3d_obj = await self.get_build123d(ctx)
 
+            @pc_tracer.start_as_current_span("Shape.render_gltf_async.do_render_gltf")
             def do_render_gltf() -> None:
                 nonlocal b3d_obj, project, filepath, tolerance, angularTolerance
                 import build123d as b3d

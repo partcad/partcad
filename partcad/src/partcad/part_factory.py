@@ -11,8 +11,10 @@ import typing
 
 from .part import Part
 from .shape_factory import ShapeFactory
+from .sentry import instrument
 
 
+@instrument()
 class PartFactory(ShapeFactory):
     # TODO(clairbee): Make the next line work for part_factory_file only
     path: typing.Optional[str] = None

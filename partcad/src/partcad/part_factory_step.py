@@ -24,6 +24,7 @@ import time
 from . import logging as pc_logging
 from . import wrapper
 from .part_factory_file import PartFactoryFile
+from .sentry import instrument, tracer as pc_tracer
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
@@ -32,6 +33,7 @@ from ocp_serialize import register as register_ocp_helper
 #                 in Python 3.13+ (is GIL still a problem?)
 
 
+@instrument()
 class PartFactoryStep(PartFactoryFile):
     # How many STEP files should be loaded directly simultaneously (without
     # launching a subprocess), no matter the file size.
@@ -88,8 +90,9 @@ class PartFactoryStep(PartFactoryFile):
 
                 request = {"build_parameters": {}}
                 register_ocp_helper()
-                picklestring = pickle.dumps(request)
-                request_serialized = base64.b64encode(picklestring).decode()
+                with pc_tracer.start_as_current_span("*PartFactoryStep.instantiate.{pickle.dumps}"):
+                    picklestring = pickle.dumps(request)
+                    request_serialized = base64.b64encode(picklestring).decode()
 
                 response_serialized, errors = await self.runtime.run_async(
                     [
@@ -136,22 +139,25 @@ class PartFactoryStep(PartFactoryFile):
                 time.sleep(0.0001)
                 time.sleep(0.0001)
                 # TODO(clairbee): remove sleep calls when GIL is fixed in CQ
+                with pc_tracer.start_as_current_span(
+                    "*PartFactoryStep.instantiate.{OCP.STEPControl.STEPControl_Reader}"
+                ):
+                    reader = STEPControl_Reader()
 
-                reader = STEPControl_Reader()
+                    readStatus = reader.ReadFile(self.path)
+                    if readStatus != OCP.IFSelect.IFSelect_RetDone:
+                        raise ValueError("STEP File could not be loaded")
+                    for i in range(reader.NbRootsForTransfer()):
+                        reader.TransferRoot(i + 1)
 
-                readStatus = reader.ReadFile(self.path)
-                if readStatus != OCP.IFSelect.IFSelect_RetDone:
-                    raise ValueError("STEP File could not be loaded")
-                for i in range(reader.NbRootsForTransfer()):
-                    reader.TransferRoot(i + 1)
-
-                builder = TopoDS_Builder()
-                compound = TopoDS_Compound()
-                builder.MakeCompound(compound)
-                for i in range(reader.NbShapes()):
-                    occ_shape = reader.Shape(i + 1)
-                    builder.Add(compound, occ_shape)
-                shape = compound
+                with pc_tracer.start_as_current_span("*PartFactoryStep.instantiate.{OCP.TopoDS.TopoDS_Builder}"):
+                    builder = TopoDS_Builder()
+                    compound = TopoDS_Compound()
+                    builder.MakeCompound(compound)
+                    for i in range(reader.NbShapes()):
+                        occ_shape = reader.Shape(i + 1)
+                        builder.Add(compound, occ_shape)
+                    shape = compound
 
             with PartFactoryStep.lock:
                 if do_subprocess:

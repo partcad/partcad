@@ -25,6 +25,7 @@ from OCP.ShapeFix import (
 
 from .sketch_factory import SketchFactory
 from . import logging as pc_logging
+from .sentry import instrument
 
 
 class Circle:
@@ -140,6 +141,7 @@ class Rect:
 
 # TODO(clairbee): distinguish between inner and outer wires?
 #                 see Face::_make_from_wires in build123d/topology.py
+@instrument()
 class SketchFactoryBasic(SketchFactory):
     outer_circle: Circle = None
     outer_square: Square = None

@@ -60,6 +60,7 @@ class UserConfig(vyper.Vyper):
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
 
+        self.set_default("sentry.debug", False)
         self.set_default("sentry.shutdown_timeout", 5)
         self.set_default("sentry.traces_sample_rate", 1.0)
 

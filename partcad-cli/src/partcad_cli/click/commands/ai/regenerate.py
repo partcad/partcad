@@ -1,6 +1,7 @@
 import partcad.logging as logging
 import partcad.utils as pc_utils
 import rich_click as click
+from partcad.sentry import tracer as pc_tracer
 
 
 @click.command(help="Regenerate a sketch, part or assembly")
@@ -45,6 +46,7 @@ import rich_click as click
     "object", type=str, required=False
 )  # help="Path to the part (default), assembly or scene to regenerate"
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc ai regenerate]")
 def cli(ctx, sketch, interface, assembly, scene, package, object):
     if sketch or interface or assembly or scene:
         object_type = "sketch" if sketch else "interface" if interface else "assembly" if assembly else "scene"

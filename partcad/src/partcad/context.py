@@ -25,9 +25,11 @@ from .user_config import user_config
 from .utils import *
 from .provider_request_quote import ProviderRequestQuote
 from .provider_data_cart import *
+from .sentry import instrument
 
 
 # Context
+@instrument()
 class Context(project_config.Configuration):
     """Stores and caches all imported objects."""
 

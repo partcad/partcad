@@ -1,6 +1,6 @@
 import rich_click as click
 import partcad.logging as logging
-
+from partcad.sentry import tracer as pc_tracer
 
 # TODO-98: @clairbee: fix type checking here
 # TODO: @alexanderilyin: https://stackoverflow.com/a/37491504/25671117
@@ -62,6 +62,7 @@ import partcad.logging as logging
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_context
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc inspect]")
 def cli(ctx, context, verbal, package, interface, assembly, sketch, scene, params, object):
     with logging.Process("inspect", "this"):
         param_dict = {}

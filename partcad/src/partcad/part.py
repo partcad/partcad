@@ -13,8 +13,10 @@ import typing
 from .shape_ai import ShapeWithAi
 from . import sync_threads as pc_thread
 from . import logging as pc_logging
+from .sentry import instrument
 
 
+@instrument(exclude=["ref_inc"])
 class Part(ShapeWithAi):
     path: typing.Optional[str] = None
     url: typing.Optional[str] = None

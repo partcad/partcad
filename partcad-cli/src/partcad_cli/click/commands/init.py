@@ -12,6 +12,7 @@ from packaging.specifiers import SpecifierSet, InvalidSpecifier
 
 import partcad.logging as logging
 from partcad.globals import create_package
+from partcad.sentry import tracer as pc_tracer
 from partcad.consts import ROOT
 from partcad import __version__ as pc_version
 
@@ -119,6 +120,7 @@ class DynamicPromptOption(click.Option):
     show_envvar=True,
 )
 @click.pass_context
+@pc_tracer.start_as_current_span("Command [pc init]")
 def cli(ctx: click.rich_context.RichContext, **kwargs):
     if not ctx.parent.params.get("package") is None:
         if os.path.isdir(ctx.parent.params.get("package")):

@@ -10,11 +10,13 @@
 import copy
 import typing
 
+from .sentry import instrument
 from . import assembly_factory as pf
 from . import logging as pc_logging
 from .utils import resolve_resource_path, get_child_project_path
 
 
+@instrument()
 class AssemblyFactoryAlias(pf.AssemblyFactory):
     source_assembly_name: str
     source_project_name: typing.Optional[str]

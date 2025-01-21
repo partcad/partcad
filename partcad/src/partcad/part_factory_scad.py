@@ -17,8 +17,10 @@ import build123d as b3d
 
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
+from .sentry import instrument, tracer as pc_tracer
 
 
+@instrument()
 class PartFactoryScad(PartFactoryFile):
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         with pc_logging.Action("InitOpenSCAD", target_project.name, config["name"]):
@@ -50,22 +52,27 @@ class PartFactoryScad(PartFactoryFile):
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 
-            stl_path = tempfile.mktemp(".stl")
-            p = await asyncio.create_subprocess_exec(
-                *[
+            with pc_tracer.start_as_current_span(
+                "PartFactoryScad.instantiate.*{asyncio.create_subprocess_exec}"
+            ) as span:
+                stl_path = tempfile.mktemp(".stl")
+                args = [
                     scad_path,
                     "--export-format",
                     "binstl",
                     "-o",
                     stl_path,
                     part.path,
-                ],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=False,
-            )
-            _, errors = await p.communicate()
+                ]
+                span.set_attribute("cmd", " ".join(args))
+                p = await asyncio.create_subprocess_exec(
+                    *args,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                )
+                _, errors = await p.communicate()
             if len(errors) > 0:
                 error_lines = errors.decode().split("\n")
                 for error_line in error_lines:
@@ -74,16 +81,16 @@ class PartFactoryScad(PartFactoryFile):
             if not os.path.exists(stl_path) or os.path.getsize(stl_path) == 0:
                 part.error("OpenSCAD failed to generate the STL file. Please, check the script.")
                 return None
-
-            try:
-                shape = b3d.Mesher().read(stl_path)[0].wrapped
-            except:
+            with pc_tracer.start_as_current_span("*PartFactoryScad.instantiate.{build123d.import_stl}"):
                 try:
-                    # First, make sure it's not the known problem in Mesher
-                    shape = b3d.import_stl(stl_path).wrapped
-                except Exception as e:
-                    part.error("%s: %s" % (part.name, e))
-                    return None
+                    shape = b3d.Mesher().read(stl_path)[0].wrapped
+                except:
+                    try:
+                        # First, make sure it's not the known problem in Mesher
+                        shape = b3d.import_stl(stl_path).wrapped
+                    except Exception as e:
+                        part.error("%s: %s" % (part.name, e))
+                        return None
             os.unlink(stl_path)
 
             self.ctx.stats_parts_instantiated += 1

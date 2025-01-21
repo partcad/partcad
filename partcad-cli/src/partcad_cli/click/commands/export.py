@@ -1,6 +1,7 @@
 import rich_click as click
 import partcad.logging as logging
 import partcad.utils as pc_utils
+from partcad.sentry import tracer as pc_tracer
 
 
 @click.command(help="Export 3D view of parts, assemblies, or scenes in the package")
@@ -70,6 +71,7 @@ import partcad.utils as pc_utils
 )
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc export]")
 def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
     with logging.Process("Export", "this"):
         ctx.option_create_dirs = create_dirs

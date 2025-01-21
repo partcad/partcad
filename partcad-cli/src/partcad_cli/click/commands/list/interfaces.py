@@ -1,7 +1,7 @@
 import rich_click as click
 from partcad import logging
 from partcad.logging import Process
-
+from partcad.sentry import tracer as pc_tracer
 
 @click.command(help="List available interfaces")
 @click.option(
@@ -21,6 +21,7 @@ from partcad.logging import Process
 )
 @click.argument("package", type=str, required=False, default=".")  # help="Package to retrieve the object from"
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc list interfaces]")
 def cli(ctx, recursive, used_by, package):
     package_obj = ctx.get_project(package)
     if not package_obj:

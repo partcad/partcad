@@ -12,6 +12,7 @@ import copy
 
 from . import logging as pc_logging
 from .utils import resolve_resource_path
+from .sentry import instrument
 
 
 def resolve_cart_item(item_spec: str):
@@ -99,6 +100,7 @@ class ProviderCartItem:
         return result
 
 
+@instrument(exclude=["__repr__"])
 class ProviderCart:
     """Describes a cart of parts"""
 

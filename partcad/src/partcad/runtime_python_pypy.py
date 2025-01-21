@@ -11,8 +11,10 @@ import shutil
 import subprocess
 
 from . import runtime_python
+from .sentry import instrument
 
 
+@instrument()
 class PyPyPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "pypy", version)

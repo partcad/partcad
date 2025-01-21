@@ -7,6 +7,7 @@ from partcad_cli.click.commands.list.mates import cli as list_mates
 from partcad_cli.click.commands.list.packages import cli as list_packages
 from partcad_cli.click.commands.list.parts import cli as list_parts
 from partcad_cli.click.commands.list.sketches import cli as list_sketches
+from partcad.sentry import tracer as pc_tracer
 
 
 @click.option(
@@ -27,6 +28,7 @@ from partcad_cli.click.commands.list.sketches import cli as list_sketches
 @click.argument("package", type=str, required=False, default=".")
 @click.command(help="List all available parts, assemblies and scenes")
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc list all]")
 def cli(ctx, used_by, recursive, package) -> None:
     """List all available parts, assemblies and scenes recursively."""
     runner = CliRunner()

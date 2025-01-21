@@ -15,6 +15,7 @@ import tarfile
 
 from . import project_factory as pf
 from .user_config import user_config
+from .sentry import instrument
 
 
 class TarImportConfiguration:
@@ -29,6 +30,7 @@ class TarImportConfiguration:
             self.auth_pass = None
 
 
+@instrument()
 class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
     def __init__(self, ctx, parent, config):
         pf.ProjectFactory.__init__(self, ctx, parent, config)

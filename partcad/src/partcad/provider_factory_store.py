@@ -17,8 +17,10 @@ from .provider_data_cart import *
 from . import logging as pc_logging
 
 # from . import sync_threads as pc_thread
+from .sentry import instrument
 
 
+@instrument()
 class ProviderFactoryStore(ProviderFactoryPython):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitStore", target_project.name, config["name"]):

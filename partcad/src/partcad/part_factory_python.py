@@ -12,8 +12,10 @@ import os
 from . import logging as pc_logging
 from .part_factory_file import PartFactoryFile
 from .runtime_python import PythonRuntime
+from .sentry import instrument
 
 
+@instrument()
 class PartFactoryPython(PartFactoryFile):
     runtime: PythonRuntime
     cwd: str

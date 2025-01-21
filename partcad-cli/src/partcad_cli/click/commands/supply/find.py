@@ -1,5 +1,6 @@
 import rich_click as click
 from partcad import logging
+from partcad.sentry import tracer as pc_tracer
 
 import asyncio
 from partcad.provider_data_cart import ProviderCart
@@ -33,6 +34,7 @@ from typing import Any, List
     nargs=-1,
 )  # help="Part (default) or assembly to quote, with options"
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc supply find]")
 def cli(ctx: Any, api: bool, qos: str, provider: str, specs: List[str]) -> None:
     with logging.Process("SupplyFind", "this"):
         cart = ProviderCart()

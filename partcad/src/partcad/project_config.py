@@ -17,10 +17,12 @@ import math
 from . import consts
 from . import logging as pc_logging
 from . import exception as pc_exception
+from .sentry import instrument
 
 DEFAULT_CONFIG_FILENAME = "partcad.yaml"
 
 
+@instrument()
 class Configuration:
     name: str
 

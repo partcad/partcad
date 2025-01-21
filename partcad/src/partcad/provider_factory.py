@@ -9,8 +9,10 @@
 
 from . import factory
 from .provider import Provider
+from .sentry import instrument
 
 
+@instrument()
 class ProviderFactory(factory.Factory):
     provider: Provider
     name: str

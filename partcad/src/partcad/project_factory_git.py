@@ -18,6 +18,7 @@ from . import project_factory as pf
 from . import logging as pc_logging
 from .user_config import user_config
 from shlex import quote
+from .sentry import instrument, tracer as pc_tracer
 
 global_cache_lock = threading.Lock()
 cache_locks = {}
@@ -89,6 +90,7 @@ class GitImportConfiguration:
         return params
 
 
+@instrument()
 class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
     def __init__(self, ctx, parent, config):
         pf.ProjectFactory.__init__(self, ctx, parent, config)
@@ -162,7 +164,10 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 branch_name = remote_head.reference.name
                                 short_branch_name = branch_name[branch_name.find("/") + 1 :]
                                 pc_logging.debug("Refreshing the GIT branch: %s" % short_branch_name)
-                                origin.pull(short_branch_name)
+                                with pc_tracer.start_as_current_span(
+                                    "*ProjectFactoryGit._clone_or_update_repo.{Repo.pull}"
+                                ):
+                                    origin.pull(short_branch_name)
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
                         else:
@@ -180,9 +185,12 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 before = repo.active_branch.commit
                                 origin = repo.remote("origin")
                                 # Need to check for updates
-                                origin.fetch()
-                                repo.git.checkout(self.import_revision, force=True)
-                                origin.pull(force=True, rebase=True)
+                                with pc_tracer.start_as_current_span(
+                                    "*ProjectFactoryGit._clone_or_update_repo.{Repo.pull}-{Repo.fetch}"
+                                ):
+                                    origin.fetch()
+                                    repo.git.checkout(self.import_revision, force=True)
+                                    origin.pull(force=True, rebase=True)
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
                             else:
@@ -220,9 +228,12 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     # Clone the repository if it's not cached yet.
                     try:
                         pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
-                        repo = Repo.clone_from(
-                            repo_url, cache_path, multi_options=self.git_config_options, allow_unsafe_options=True
-                        )
+                        with pc_tracer.start_as_current_span(
+                            "*ProjectFactoryGit._clone_or_update_repo.{Repo.clone_from}"
+                        ):
+                            repo = Repo.clone_from(
+                                repo_url, cache_path, multi_options=self.git_config_options, allow_unsafe_options=True
+                            )
                         self.ctx.stats_git_ops += 1
                         if not self.import_revision is None:
                             repo.git.checkout(self.import_revision, force=True)

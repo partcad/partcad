@@ -11,10 +11,12 @@ import aiofiles
 import aiohttp
 import os
 
+from .sentry import instrument
 from .file_factory import FileFactory
 from .logging import debug
 
 
+@instrument()
 class FileFactoryUrl(FileFactory):
     url: str = None
 

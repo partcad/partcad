@@ -14,8 +14,10 @@ from . import provider_config
 from . import provider_factory as pf
 from . import logging as pc_logging
 from .utils import resolve_resource_path
+from .sentry import instrument
 
 
+@instrument()
 class ProviderFactoryEnrich(pf.ProviderFactory):
     source_provider_name: str
     source_project_name: typing.Optional[str]

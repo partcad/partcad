@@ -1,12 +1,13 @@
 import rich_click as click
-
 import asyncio
 import copy
-from partcad.provider_data_cart import *
-from partcad.provider_request_quote import *
-import partcad as pc
 import json
 import sys
+
+from partcad.provider_data_cart import *
+from partcad.provider_request_quote import *
+from partcad.sentry import tracer as pc_tracer
+import partcad as pc
 
 
 @click.command(help="Get a quote from suppliers")
@@ -39,6 +40,7 @@ import sys
     nargs=-1,
 )  # help="Part (default) or assembly to quote, with options",
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc supply quote]")
 def cli(ctx, api, qos, provider, specs):
     """
     TODO-117: Implementing Network Error Handling

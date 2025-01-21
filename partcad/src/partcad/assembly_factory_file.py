@@ -10,10 +10,12 @@
 
 import os
 
+from .sentry import instrument
 from .assembly_factory import AssemblyFactory
 from . import logging as pc_logging
 
 
+@instrument()
 class AssemblyFactoryFile(AssemblyFactory):
     def __init__(self, ctx, source_project, target_project, config, extension=""):
         super().__init__(ctx, source_project, target_project, config)

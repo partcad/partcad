@@ -21,12 +21,14 @@ from .ai import Ai
 from . import logging as pc_logging
 from .utils import total_size
 from .user_config import user_config
+from .sentry import instrument
 
 DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING = 3
 DEFAULT_ALTERNATIVES_MODEL_GENERATION = 3
 DEFAULT_INCREMENTAL_SCRIPT_CORRECTION = 2
 
 
+@instrument()
 class PartFactoryFeatureAi(Ai):
     """Used by all part factories that generate parts with GenAI."""
 

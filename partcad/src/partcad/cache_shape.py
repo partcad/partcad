@@ -14,11 +14,13 @@ from .cache_hash import CacheHash
 from .shape import Shape
 from .user_config import user_config
 from .utils import total_size
+from .sentry import instrument
 
 SERIALIZATION_PICKLE = 1
 SERIALIZATION_BREP = 2
 
 
+@instrument()
 class ShapeCache(Cache):
     def __init__(self, serialization: int = SERIALIZATION_PICKLE) -> None:
         super().__init__("shapes")

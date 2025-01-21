@@ -1,6 +1,7 @@
 import rich_click as click
 from pprint import pformat
 import partcad.logging as logging
+from partcad.sentry import tracer as pc_tracer
 
 
 # TODO-94: @alexanderilyin: Replace -i, -a, -s, -S with --type; https://stackoverflow.com/a/37491504/25671117
@@ -57,6 +58,7 @@ import partcad.logging as logging
 )
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to show"
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc info]")
 def cli(ctx, package, interface, assembly, sketch, scene, object, params):  # , path
     param_dict = {}
     if params is not None:

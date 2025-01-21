@@ -13,8 +13,10 @@ import typing
 from .sketch_factory import SketchFactory
 from . import logging as pc_logging
 from .utils import resolve_resource_path, get_child_project_path
+from .sentry import instrument
 
 
+@instrument()
 class SketchFactoryAlias(SketchFactory):
     source_sketch_name: str
     source_project_name: typing.Optional[str]

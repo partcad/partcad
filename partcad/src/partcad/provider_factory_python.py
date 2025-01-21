@@ -20,8 +20,10 @@ from .runtime_python import PythonRuntime
 
 from . import wrapper
 from . import logging as pc_logging
+from .sentry import instrument
 
 
+@instrument()
 class ProviderFactoryPython(ProviderFactoryFile):
     runtime: PythonRuntime
     cwd: str

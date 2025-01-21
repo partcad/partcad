@@ -12,6 +12,7 @@ import threading
 import time
 from typing import Any
 
+from .sentry import instrument
 from .ai_feature_file import AiContentFile, AiContentProcessor
 from . import logging as pc_logging
 from .user_config import user_config
@@ -62,6 +63,7 @@ def google_once():
     return True
 
 
+@instrument()
 class AiGoogle(AiContentProcessor):
     def generate_google(
         self,

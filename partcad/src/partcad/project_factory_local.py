@@ -9,6 +9,7 @@
 
 import os
 from . import project_factory as pf
+from .sentry import instrument
 
 
 class LocalImportConfiguration:
@@ -19,6 +20,7 @@ class LocalImportConfiguration:
             self.maybe_empty = self.config_obj.get("maybeEmpty")
 
 
+@instrument()
 class ProjectFactoryLocal(pf.ProjectFactory, LocalImportConfiguration):
     def __init__(self, ctx, parent, config):
         pf.ProjectFactory.__init__(self, ctx, parent, config)

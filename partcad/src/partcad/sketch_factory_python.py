@@ -11,10 +11,12 @@ import os
 
 from .sketch_factory_file import SketchFactoryFile
 from .runtime_python import PythonRuntime
+from .sentry import instrument
 
 
 # TODO(clairbee): create ShapeFactoryPython to be reused
 #                 by corresponding Sketch, Part and Assembly factories
+@instrument()
 class SketchFactoryPython(SketchFactoryFile):
     runtime: PythonRuntime
     cwd: str

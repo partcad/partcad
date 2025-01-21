@@ -5,6 +5,7 @@ import json
 import partcad as pc
 
 from partcad.provider_request_caps import ProviderRequestCaps
+from partcad.sentry import tracer as pc_tracer
 
 
 @click.command(help="Get capabilities of the provider")
@@ -17,6 +18,7 @@ from partcad.provider_request_caps import ProviderRequestCaps
     show_envvar=True,
 )
 @click.pass_obj
+@pc_tracer.start_as_current_span("Command [pc supply caps]")
 def cli(ctx, providers):
     # TODO-109: Create tests for: Multiple provider scenarios
     # TODO-110: Create tests for: Error handling cases

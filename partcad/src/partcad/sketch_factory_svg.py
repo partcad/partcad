@@ -22,8 +22,10 @@ from OCP.TopoDS import TopoDS
 
 from . import logging as pc_logging
 from .sketch_factory_file import SketchFactoryFile
+from .sentry import instrument
 
 
+@instrument()
 class SketchFactorySvg(SketchFactoryFile):
     flip_y = True
     ignore_visibility = False

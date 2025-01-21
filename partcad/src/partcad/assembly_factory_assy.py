@@ -16,12 +16,14 @@ import yaml
 from OCP.gp import gp_Trsf
 import build123d as b3d
 
+from .sentry import instrument
 from .assembly import Assembly, AssemblyChild
 from .assembly_factory_file import AssemblyFactoryFile
 from . import logging as pc_logging
 from .utils import normalize_resource_path
 
 
+@instrument()
 class AssemblyFactoryAssy(AssemblyFactoryFile):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitASSY", source_project.name, config["name"]):

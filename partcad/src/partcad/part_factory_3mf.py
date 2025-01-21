@@ -9,10 +9,12 @@
 
 import build123d as b3d
 
+from .sentry import instrument
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 
 
+@instrument()
 class PartFactory3mf(PartFactoryFile):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("Init3MF", target_project.name, config["name"]):

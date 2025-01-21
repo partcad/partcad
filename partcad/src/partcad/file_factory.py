@@ -9,7 +9,10 @@
 
 import typing
 
+from .sentry import instrument
 
+
+@instrument()
 class FileFactory:
     path: typing.Optional[str] = None
 

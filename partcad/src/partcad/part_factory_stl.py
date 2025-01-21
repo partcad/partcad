@@ -11,8 +11,10 @@ import build123d as b3d
 
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
+from .sentry import instrument, tracer as pc_tracer
 
 
+@instrument()
 class PartFactoryStl(PartFactoryFile):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitSTL", target_project.name, config["name"]):
@@ -29,7 +31,10 @@ class PartFactoryStl(PartFactoryFile):
     async def instantiate(self, part):
         await super().instantiate(part)
 
-        with pc_logging.Action("STL", part.project_name, part.name):
+        with (
+            pc_logging.Action("STL", part.project_name, part.name),
+            pc_tracer.start_as_current_span("*PartFactoryStl.instantiate.{build123d.import_stl}"),
+        ):
             try:
                 shape = b3d.Mesher().read(self.path)[0].wrapped
             except:

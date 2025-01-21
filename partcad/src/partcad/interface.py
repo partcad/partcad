@@ -18,6 +18,7 @@ from .interface_inherit import InterfaceInherits
 from .sketch import Sketch
 from . import logging as pc_logging
 from .utils import resolve_resource_path
+from .sentry import instrument
 
 from OCP.gp import (
     gp_Trsf,
@@ -28,6 +29,7 @@ from OCP.gp import (
 )
 
 
+@instrument()
 class InterfacePort:
     """One of the ports provided by the interface,
     either explicitly (inside "ports:")
@@ -212,6 +214,7 @@ class InterfaceParameter:
 
 # TODO(clairbee): introduce "Entity" as a shared parent to Shape and Interface
 #                 to share "show()"
+@instrument()
 class Interface:
     """Stored as a singleton in the package and defines the interface.
     Explicitly contains all inherited ports and instances of sub-interfaces.

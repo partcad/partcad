@@ -24,7 +24,10 @@ from . import logging as pc_logging
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
+from .sentry import instrument, tracer as pc_tracer
 
+
+@instrument()
 class PartFactoryCadquery(PartFactoryPython):
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         python_version = source_project.python_version
@@ -78,8 +81,9 @@ class PartFactoryCadquery(PartFactoryPython):
 
             # Serialize the request
             register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            with pc_tracer.start_as_current_span("*PartFactoryCadquery.instantiate.{pickle.dumps}"):
+                picklestring = pickle.dumps(request)
+                request_serialized = base64.b64encode(picklestring).decode()
 
             await self.runtime.ensure_async(
                 "ocp-tessellate==3.0.9",
@@ -145,9 +149,10 @@ class PartFactoryCadquery(PartFactoryPython):
             if len(result["shapes"]) == 1:
                 return result["shapes"][0]
 
-            builder = TopoDS_Builder()
-            compound = TopoDS_Compound()
-            builder.MakeCompound(compound)
-            for shape in result["shapes"]:
-                builder.Add(compound, shape)
+            with pc_tracer.start_as_current_span("*PartFactoryCadquery.instantiate.{OCP.TopoDS.TopoDS_Builder}"):
+                builder = TopoDS_Builder()
+                compound = TopoDS_Compound()
+                builder.MakeCompound(compound)
+                for shape in result["shapes"]:
+                    builder.Add(compound, shape)
             return compound
