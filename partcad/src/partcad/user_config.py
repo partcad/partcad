@@ -64,12 +64,12 @@ class UserConfig(vyper.Vyper):
         self.set_default("sentry.traces_sample_rate", 1.0)
 
         self.set_env_prefix("pc")
-        self.automatic_env()
 
         # option: threadsMax
         # description: the maximum number of processing threads to use (not a strict limit)
         # values: >2
         # default: min(7, <cpu threads count - 1>)
+        self.bind_env("threadsMax", "PC_THREADS_MAX")
         self.threads_max = None
         if self.is_set("threadsMax"):
             self.threads_max = self.get_int("threadsMax")
@@ -78,66 +78,77 @@ class UserConfig(vyper.Vyper):
         # description: enable caching of intermediate results to the filesystem
         # values: [True | False]
         # default: True
+        self.bind_env("cacheFiles", "PC_CACHE_FILES")
         self.cache = self.get_bool("cacheFiles")
 
         # option: cacheFilesMaxEntrySize
         # description: the maximum size of a single file cache entry in bytes
         # values: >0
         # default: 10*1024*1024 (10MB)
+        self.bind_env("cacheFilesMaxEntrySize", "PC_CACHE_FILES_MAX_ENTRY_SIZE")
         self.cache_max_entry_size = self.get_int("cacheFilesMaxEntrySize")
 
         # option: cacheFilesMinEntrySize
         # description: the minimum size of a single file cache entry (except test results) in bytes
         # values: >=0
         # default: 100
+        self.bind_env("cacheFilesMinEntrySize", "PC_CACHE_FILES_MIN_ENTRY_SIZE")
         self.cache_min_entry_size = self.get_int("cacheFilesMinEntrySize")
 
         # option: cacheMemoryMaxEntrySize
         # description: the maximum size of a single memory cache entry in bytes
         # values: >=0, 0 means no limit
         # default: 100*1024*1024 (100MB)
+        self.bind_env("cacheMemoryMaxEntrySize", "PC_CACHE_MEMORY_MAX_ENTRY_SIZE")
         self.cache_memory_max_entry_size = self.get_int("cacheMemoryMaxEntrySize")
 
         # option: cacheMemoryDoubleCacheMaxEntrySize
         # description: the maximum size of a single memory cache entry in bytes
         # values: >=0, 0 means no limit
         # default: 1*1024*1024 (1MB)
+        self.bind_env("cacheMemoryDoubleCacheMaxEntrySize", "PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE")
         self.cache_memory_double_cache_max_entry_size = self.get_int("cacheMemoryDoubleCacheMaxEntrySize")
 
         # option: cacheDependenciesIgnore
         # description: ignore broken dependencies and cache at your own risk
         # values: [True | False]
         # default: False
+        self.bind_env("cacheDependenciesIgnore", "PC_CACHE_DEPENDENCIES_IGNORE")
         self.cache_dependencies_ignore = self.get_bool("cacheDependenciesIgnore")
 
         # option: pythonSandbox
         # description: sandboxing environment for invoking python scripts
         # values: [none | pypy | conda]
         # default: conda
-        self.python_runtime = self.get("pythonSandbox")
+        self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
+        self.python_runtime = self.get_string("pythonSandbox")
 
         # option: internalStateDir
         # description: folder to store all temporary files
         # values: <path>
         # default: '.partcad' folder in the home directory
-        self.internal_state_dir = self.get("internalStateDir")
+        self.bind_env("internalStateDir", "PC_INTERNAL_STATE_DIR")
+        self.internal_state_dir = self.get_string("internalStateDir")
 
         # option: forceUpdate
         # description: update all repositories even if they are fresh
         # values: [True | False]
         # default: False
+        self.bind_env("forceUpdate", "PC_FORCE_UPDATE")
         self.force_update = self.get_bool("forceUpdate")
 
         # option: googleApiKey
         # description: GOOGLE API key for AI services
         # values: <string>
         # default: None
+        self.bind_env("googleApiKey", "PC_GOOGLE_API_KEY")
         self.google_api_key = self.get("googleApiKey")
 
         # option: openaiApiKey
         # description: OpenAI API key for AI services
         # values: <string>
         # default: None
+        self.bind_env("openaiApiKey", "PC_OPENAI_API_KEY")
         self.openai_api_key = self.get("openaiApiKey")
 
         # option: ollamaNumThread
@@ -145,6 +156,7 @@ class UserConfig(vyper.Vyper):
         # values: <integer>
         # default: None
         self.ollama_num_thread = None
+        self.bind_env("ollamaNumThread", "PC_OLLAMA_NUM_THREAD")
         if self.is_set("ollamaNumThread"):
             self.ollama_num_thread = self.get_int("ollamaNumThread")
 
@@ -153,6 +165,7 @@ class UserConfig(vyper.Vyper):
         # values: <integer>
         # default: None
         self.max_geometric_modeling = None
+        self.bind_env("maxGeometricModeling", "PC_MAX_GEOMETRIC_MODELING")
         if self.is_set("maxGeometricModeling"):
             self.max_geometric_modeling = self.get_int("maxGeometricModeling")
 
@@ -161,6 +174,7 @@ class UserConfig(vyper.Vyper):
         # values: <integer>
         # default: None
         self.max_model_generation = None
+        self.bind_env("maxModelGeneration", "PC_MAX_MODEL_GENERATION")
         if self.is_set("maxModelGeneration"):
             self.max_model_generation = self.get_int("maxModelGeneration")
 
@@ -169,6 +183,7 @@ class UserConfig(vyper.Vyper):
         # values: <integer>
         # default: None
         self.max_script_correction = None
+        self.bind_env("maxScriptCorrection", "PC_MAX_SCRIPT_CORRECTION")
         if self.is_set("maxScriptCorrection"):
             self.max_script_correction = self.get_int("maxScriptCorrection")
 

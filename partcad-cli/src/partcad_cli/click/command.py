@@ -63,8 +63,120 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     default=None,
     show_envvar=True,
 )
+@click.option(
+    "--threads-max",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Maximum number of processing threads to use (not a strict limit)",
+)
+@click.option(
+    "--cache",
+    is_flag=True,
+    default=None,
+    show_envvar=True,
+    help="Enable caching of intermediate results to the filesystem",
+)
+@click.option(
+    "--cache-max-entry-size",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Maximum size of a single file cache entry in bytes (defaults to 10485760 or 10MB)",
+)
+@click.option(
+    "--cache-min-entry-size",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Minimum size of a single file cache entry (except test results) in bytes (defaults to 104857600 or 100MB)",
+)
+@click.option(
+    "--cache-memory-max-entry-size",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Maximum size of a single memory cache entry in bytes (defaults to 104857600 or 100MB)",
+)
+@click.option(
+    "--cache-memory-double-cache-max-entry-size",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Maximum size of a single memory cache entry in bytes(defaults to 1048576 or 1MB)",
+)
+@click.option(
+    "--cache-dependencies-ignore",
+    is_flag=True,
+    default=None,
+    show_envvar=True,
+    help="Ignore broken dependencies and cache at your own risk",
+)
+@click.option(
+    "--python-runtime",
+    default=None,
+    show_envvar=True,
+    type=click.Choice(["none", "pypy", "conda"]),
+    help="Sandboxing environment for invoking python scripts(defaults to conda)",
+)
+@click.option(
+    "--internal-state-dir",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help="Directory to store all temporary files(defaults to '.partcad' folder in home directory)",
+)
+@click.option(
+    "--force-update",
+    is_flag=True,
+    show_envvar=True,
+    default=None,
+    help="Update all repositories even if they are fresh",
+)
+@click.option(
+    "--google-api-key",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help="GOOGLE API key for AI services",
+)
+@click.option(
+    "--openai-api-key",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help="OPENAI API key for AI services",
+)
+@click.option(
+    "--ollama-num-thread",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Number of CPU threads Ollama should utilize",
+)
+@click.option(
+    "--max-geometric-modeling",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Maximum number of attempts for geometric modeling",
+)
+@click.option(
+    "--max-model-generation",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Maximum number of attempts for CAD script generation",
+)
+@click.option(
+    "--max-script-correction",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Maximum number of attempts to incrementally fix the ai generated script if it's not working",
+)
 @click.pass_context
-def cli(ctx, verbose, quiet, no_ansi, package, format):
+def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     """
     \b
     ██████╗  █████╗ ██████╗ ████████╗ ██████╗ █████╗ ██████╗
@@ -122,9 +234,34 @@ def cli(ctx, verbose, quiet, no_ansi, package, format):
         "install",
         "update",
     ]
-    if ctx.invoked_subcommand in commands_with_forced_update:
-        from partcad.user_config import user_config
+    from partcad.user_config import user_config
 
+    user_config_options = [
+        ("PC_THREADS_MAX", "threads_max"),
+        ("PC_CACHE_FILES", "cache"),
+        ("PC_CACHE_FILES_MAX_ENTRY_SIZE", "cache_max_entry_size"),
+        ("PC_CACHE_FILES_MIN_ENTRY_SIZE", "cache_min_entry_size"),
+        ("PC_CACHE_MEMORY_MAX_ENTRY_SIZE", "cache_memory_max_entry_size"),
+        ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
+        ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
+        ("PC_PYTHON_SANDBOX", "python_runtime"),
+        ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
+        ("PC_FORCE_UPDATE", "force_update"),
+        ("PC_GOOGLE_API_KEY", "google_api_key"),
+        ("PC_OPENAI_API_KEY", "openai_api_key"),
+        ("PC_OLLAMA_NUM_THREAD", "ollama_num_thread"),
+        ("PC_MAX_GEOMETRIC_MODELING", "max_geometric_modeling"),
+        ("PC_MAX_MODEL_GENERATION", "max_model_generation"),
+        ("PC_MAX_SCRIPT_CORRECTION", "max_script_correction"),
+    ]
+
+
+    for env_var, attrib in user_config_options:
+        value = kwargs.get(attrib, None)
+        if value is not None and user_config._get_env(env_var) is None:
+            setattr(user_config, attrib, value)
+
+    if ctx.invoked_subcommand in commands_with_forced_update:
         user_config.force_update = True
 
     # TODO-88: @alexanderilyin: try to get this list dynamically
@@ -180,7 +317,7 @@ cli.context_settings = {
 
 
 @cli.result_callback()
-def process_result(result, verbose, quiet, no_ansi, package, format):
+def process_result(result, verbose, quiet, no_ansi, package, format, **kwargs):
     # TODO-89: @alexanderilyin: What is this for?
     if not no_ansi:
         pc.logging_ansi_terminal_fini()
