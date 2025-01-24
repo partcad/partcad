@@ -1,11 +1,8 @@
 import rich_click as click
-import partcad as pc
 from partcad.actions.part_actions import convert_part_action, resolve_enrich_action
 from partcad.context import Context
-from partcad.part import Part
 import partcad.logging as pc_logging
 import partcad.utils as pc_utils
-import os
 
 @click.command(help="Convert parts to another format or resolve enrich parts to their original types.")
 @click.argument("part_name", type=str, required=True)

@@ -1,8 +1,6 @@
 import shutil
 import copy
 from pathlib import Path
-import partcad as pc
-from partcad.context import Context
 import partcad.logging as pc_logging
 from partcad.project import Project
 from partcad.utils import resolve_resource_path
@@ -81,26 +79,6 @@ def convert_part_action(project, part_name, target_format):
     project.update_part_config(part_name, {"path": converted_path, "type": target_format})
     pc_logging.info(f"Part {part_name} converted to {target_format} successfully.")
 
-
-EXTENSION_MAPPING = {
-    "threejs": "json",
-    "cadquery": "py",
-    "build123d": "py",
-    "scad": "scad",
-    "step": "step",
-    "brep": "brep",
-    "stl": "stl",
-    "3mf": "3mf",
-    "obj": "obj",
-    "gltf": "gltf",
-}
-
-import shutil
-import copy
-from pathlib import Path
-import partcad.logging as pc_logging
-from partcad.project import Project
-from partcad.utils import resolve_resource_path
 
 EXTENSION_MAPPING = {
     "threejs": "json",
