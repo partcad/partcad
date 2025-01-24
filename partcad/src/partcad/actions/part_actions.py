@@ -4,6 +4,7 @@ from pathlib import Path
 import partcad as pc
 from partcad.context import Context
 import partcad.logging as pc_logging
+from partcad.project import Project
 from partcad.utils import resolve_resource_path
 
 def add_part_action(project, kind, path, config=None):
@@ -81,74 +82,83 @@ def convert_part_action(project, part_name, target_format):
     pc_logging.info(f"Part {part_name} converted to {target_format} successfully.")
 
 
-import os
-from pathlib import Path
+EXTENSION_MAPPING = {
+    "threejs": "json",
+    "cadquery": "py",
+    "build123d": "py",
+    "scad": "scad",
+    "step": "step",
+    "brep": "brep",
+    "stl": "stl",
+    "3mf": "3mf",
+    "obj": "obj",
+    "gltf": "gltf",
+}
+
 import shutil
+import copy
+from pathlib import Path
 import partcad.logging as pc_logging
+from partcad.project import Project
 from partcad.utils import resolve_resource_path
 
-def resolve_enrich_action(ctx, part_name):
-    pc_logging.info(f"Resolving enrich part: {part_name}")
+EXTENSION_MAPPING = {
+    "threejs": "json",
+    "cadquery": "py",
+    "build123d": "py",
+    "scad": "scad",
+    "step": "step",
+    "brep": "brep",
+    "stl": "stl",
+    "3mf": "3mf",
+    "obj": "obj",
+    "gltf": "gltf",
+}
 
-    # Resolve project and part
-    project_name, item_name = resolve_resource_path(ctx.get_current_project_path(), part_name)
-    project = ctx.get_project(project_name)
-    if not project:
-        raise RuntimeError(f"Failed to find a project for '{project_name}'.")
+def resolve_enrich_action(project: Project, part_name: str):
+    """
+    Resolve an enrich part to its original type and update its definition.
 
-    pc_logging.info(f"Using project: {project.name} at {project.path}")
+    :param project: Project object
+    :param part_name: Name of the enrich part to resolve.
+    """
+    _, item_name = resolve_resource_path(project.name, part_name)
 
     part_config = project.get_part_config(item_name)
-    if not part_config:
-        raise ValueError(f"Part '{item_name}' not found in project '{project_name}'.")
+    if not part_config or part_config["type"] != "enrich":
+        raise ValueError(f"Invalid or missing enrich part '{item_name}' in project '{project.name}'.")
 
-    pc_logging.debug(f"Enrich part configuration: {part_config}")
-
-    if part_config["type"] != "enrich":
-        raise ValueError(f"Part '{item_name}' is not of type 'enrich'.")
-
-    # Fetch source part configuration
     source_name = part_config["source"]
-    source_part = ctx.get_part(source_name)
-    source_config = source_part.config
-    pc_logging.debug(f"Source part configuration: {source_config}")
+    source_project_name, source_item_name = resolve_resource_path(project.name, source_name)
 
-    # Deep copy of source configuration
+    # Retrieve source project and part
+    source_project = project.ctx.get_project(source_project_name)
+    if not source_project:
+        raise ValueError(f"Source project '{source_project_name}' not found for part '{source_item_name}'.")
+    source_part = source_project.get_part(source_item_name)
+    if not source_part or not source_part.path:
+        raise ValueError(f"Source part '{source_item_name}' has no valid path in project '{source_project_name}'.")
+
+    # Prepare resolved configuration
+    source_config = source_part.config
     resolved_config = copy.deepcopy(source_config)
 
-    # Apply enrich-specific modifications
-    if "with" in part_config:
-        for key, value in part_config["with"].items():
-            resolved_config.setdefault("parameters", {}).setdefault(key, {})
-            resolved_config["parameters"][key].update({
-                "type": type(value).__name__,
-                "default": value,
-            })
+    # Apply modifications from the enrich configuration
+    for key, value in part_config.get("with", {}).items():
+        resolved_config.setdefault("parameters", {}).setdefault(key, {})
+        resolved_config["parameters"][key].update({
+            "type": type(value).__name__,
+            "default": value,
+        })
+    resolved_config.setdefault("ports", {}).update(part_config.get("ports", {}))
 
-    # Add port locations if specified
-    if "ports" in part_config:
-        resolved_config.setdefault("ports", {}).update(part_config["ports"])
+    # Copy the source file and update path
+    file_extension = EXTENSION_MAPPING.get(resolved_config["type"], resolved_config["type"])
+    target_path = Path(project.path) / f"{item_name}.{file_extension}"
+    shutil.copy(Path(source_part.path), target_path)
+    pc_logging.info(f"Copied source part from {source_part.path} to {target_path}")
 
-    # Determine target path
-    target_path = Path(project.path) / f"{item_name}.{resolved_config['type']}"
-    try:
-        source_path = Path(source_part.path)
-        shutil.copy(source_path, target_path)
-        pc_logging.info(f"Files moved: {source_path} -> {target_path}")
-    except Exception as e:
-        raise RuntimeError(f"Failed to move files for '{item_name}': {e}")
-
-    # Update the part configuration
+    # Update project configuration
     resolved_config["path"] = str(target_path)
-    try:
-        project.update_part_config(item_name, resolved_config)
-        updated_config = project.get_part_config(item_name)
-        pc_logging.info(f"Updated part configuration for '{item_name}': {updated_config}")
-    except Exception as e:
-        pc_logging.error(f"Failed to update part configuration for '{item_name}': {e}")
-        # Manually add and save config
-        project.parts[item_name] = resolved_config
-        project.save_config()
-        pc_logging.info(f"Manually added and saved part configuration for '{item_name}'.")
-
-    pc_logging.info(f"Enrich part '{item_name}' resolved successfully.")
+    project.update_part_config(item_name, resolved_config)
+    pc_logging.info(f"Resolved part '{item_name}' updated in project configuration.")
