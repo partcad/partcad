@@ -9,6 +9,7 @@
 import os
 import shutil
 import threading
+import ruamel.yaml as ruamel
 
 from .context import Context
 from .assembly import Assembly
@@ -97,16 +98,26 @@ def render(format=None, output_dir=None):
     return init().render(format, output_dir)
 
 
-def create_package(dst_path=consts.DEFAULT_PACKAGE_CONFIG, private=False):
+def create_package(dst_path=consts.DEFAULT_PACKAGE_CONFIG, config_options={"private": False}):
+    yaml = ruamel.YAML()
+    private = config_options["private"]
     if private:
         template_name = "init-private.yaml"
     else:
         template_name = "init-public.yaml"
     src_path = os.path.join(os.path.dirname(__file__), "template", template_name)
 
+    with open(src_path) as f:
+        config = yaml.load(f)
+    for key, value in config_options.items():
+        key = ''.join(x.capitalize() if i != 0 else x for i, x in enumerate(key.split('_')))
+        if value and value != "empty":
+            config.insert(0, key, value)
+
     if os.path.exists(dst_path):
         pc_logging.error("File already exists: %s" % dst_path)
         return False
-    shutil.copyfile(src_path, dst_path)
+    with open(dst_path, "w") as f:
+        yaml.dump(config, f)
 
     return True
