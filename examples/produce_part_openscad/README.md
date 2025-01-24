@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_openscad
+# //pub/examples/partcad/produce_part_openscad
 
 PartCAD example project to demonstrate parts defined using SCAD files.
 

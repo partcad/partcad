@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_3mf
+# //pub/examples/partcad/produce_part_3mf
 
 PartCAD example project to demonstrate parts defined using 3MF files
 

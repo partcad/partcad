@@ -11,7 +11,7 @@
 CURRENT = "."
 
 # The top level package: the top-most found by Context while traversing '..'.
-ROOT = "/"
+ROOT = "//"
 
 # Which file to look for if the directory name is passed instead of the config
 # filename.

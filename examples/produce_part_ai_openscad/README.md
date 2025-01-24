@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_ai_openscad
+# //pub/examples/partcad/produce_part_ai_openscad
 
 PartCAD parts defined using AI-generated OpenSCAD scripts.
 

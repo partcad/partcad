@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 NOW = datetime.now(timezone.utc)
-CYLINDER = "/pub/examples/partcad/provider_manufacturer:cylinder"
+CYLINDER = "//pub/examples/partcad/provider_manufacturer:cylinder"
 
 if not "request" in globals():
     request = {
@@ -13,7 +13,7 @@ if __name__ == "caps":
     # This is a capabilities request
     output = {
         "materials": {
-            "/pub/std/manufacturing/material/plastic:pla": {
+            "//pub/std/manufacturing/material/plastic:pla": {
                 "colors": [{"name": "red"}],
                 "finishes": [{"name": "none"}],
             },

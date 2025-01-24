@@ -1476,7 +1476,7 @@ class Project(project_config.Configuration):
             child_packages = self.get_child_project_names(absolute=False)
             display_dependencies = []
             for alias in child_packages:
-                if alias in dependencies and dependencies[alias].get("onlyInRoot", False) and self.name != "/":
+                if alias in dependencies and dependencies[alias].get("onlyInRoot", False) and self.name != "//":
                     continue
                 display_dependencies.append(alias)
 

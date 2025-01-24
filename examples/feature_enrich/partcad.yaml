@@ -4,7 +4,7 @@ parts:
   leg:
     desc: Vertical 4x4
     type: enrich
-    source: /pub/std/imperial/dimensional-lumber:lumber
+    source: //pub/std/imperial/dimensional-lumber:lumber
     with:
       height: 4
       width: 4
@@ -12,22 +12,22 @@ parts:
   side-support:
     desc: Horizontal support 2x6
     type: enrich
-    source: /pub/std/imperial/dimensional-lumber:lumber
+    source: //pub/std/imperial/dimensional-lumber:lumber
     with:
       height: 2
       width: 6
     offset: [[0, 0, 0], [0, 1, 0], -90]
   table-top:
     type: enrich
-    source: /pub/std/imperial/dimensional-lumber:plywood
+    source: //pub/std/imperial/dimensional-lumber:plywood
 
   # References to parts with the same names in other packages
   lumber:
     type: enrich
-    package: /pub/std/imperial/dimensional-lumber
+    package: //pub/std/imperial/dimensional-lumber
   plywood:
     type: alias
-    package: /pub/std/imperial/dimensional-lumber
+    package: //pub/std/imperial/dimensional-lumber
 
 sketches:
   # Enrich sketches

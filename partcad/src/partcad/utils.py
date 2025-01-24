@@ -27,7 +27,7 @@ def get_child_project_path(parent_path, child_name):
         result = parent_path + "/" + child_name
 
     result = re.sub(r"/[^/]*/\.\.", "", result)
-    if result != "/":
+    if result != "//":
         result = re.sub(r"/$", "", result)
     return result
 
@@ -39,8 +39,12 @@ def resolve_resource_path(current_project_name, pattern: str):
     if project_pattern == "":
         project_pattern = current_project_name
 
+    # For backward compatibility '/' -> '//'
+    if re.match(r"^/[^/]", project_pattern):
+        pc_logging.warning(f"{project_pattern}: using '/' as the root package path is deprecated. Use '//' instead.")
+        project_pattern = '/' + project_pattern
     project_pattern = project_pattern.replace("...", "*")
-    if not project_pattern.startswith("/"):
+    if not project_pattern.startswith("//"):
         if current_project_name.endswith("/"):
             project_pattern = current_project_name + project_pattern
         else:

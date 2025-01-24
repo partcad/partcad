@@ -1,4 +1,4 @@
-# /pub/examples/partcad/feature_monorepo
+# //pub/examples/partcad/feature_monorepo
 
 Demonstrates how to create a monorepo with multiple packages in it
 

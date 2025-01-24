@@ -1,4 +1,4 @@
-# /pub/examples/partcad/feature_interface
+# //pub/examples/partcad/feature_interface
 
 This example demonstrates how the same parametrized assembly
 can be defined in three slightly different ways

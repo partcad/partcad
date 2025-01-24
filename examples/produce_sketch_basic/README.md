@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_sketch_basic
+# //pub/examples/partcad/produce_sketch_basic
 
 This example demonstrates various syntax options how to define sketches using basic geometry shapes.
 

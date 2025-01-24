@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_sweep
+# //pub/examples/partcad/produce_part_sweep
 
 This example demonstrates how to define 3D parts by sweeping 2D sketches.
 

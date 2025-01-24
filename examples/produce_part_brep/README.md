@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_brep
+# //pub/examples/partcad/produce_part_brep
 
 PartCAD example project to demonstrate parts defined using BREP files.
 

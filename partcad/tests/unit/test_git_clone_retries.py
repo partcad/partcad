@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 repo_url = "https://github.com/partcad/partcad"
 test_config_import_git = {
-    "name": "/part_step",
+    "name": "//part_step",
     "type": "git",
     "url": repo_url,
     "relPath": "examples/produce_part_step",

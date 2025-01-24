@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_step
+# //pub/examples/partcad/produce_part_step
 
 PartCAD example project to demonstrate parts defined using STEP files.
 

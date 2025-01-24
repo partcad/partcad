@@ -47,7 +47,7 @@ class Context(project_config.Configuration):
     stats_git_ops: int
 
     # name is the package path (not a filesystem path) of the root package
-    # in case it's configured to be something other than '/' (default)
+    # in case it's configured to be something other than '//' (default)
     name: str
 
     # root_path is the absolute filesystem path to the root package (for monorepo's)
@@ -208,7 +208,7 @@ class Context(project_config.Configuration):
         Get the full package path (not a filesystem path) of a package
         given the relative path from the current package
         """
-        if rel_project_path.startswith("/"):
+        if rel_project_path.startswith("//"):
             return rel_project_path
 
         project_path = self.current_project_path
@@ -232,12 +232,12 @@ class Context(project_config.Configuration):
                 # present to facilitate such a reference in a standalone
                 # development environment.
 
-            # Strip the first '/' (absolute path always starts with a '/'``)
-            if self.name != "/" and project_path.startswith(self.name):
-                # The root package is not '/, need to skip the root package name
+            # Strip the first '//' (absolute path always starts with a '//'``)
+            if self.name != "//" and project_path.startswith(self.name):
+                # The root package is not '//', need to skip the root package name
                 len_to_skip = len(self.name) + 1
             else:
-                len_to_skip = 1
+                len_to_skip = 2
             project_path = project_path[len_to_skip:]
 
             if self.name not in self.projects:
@@ -311,7 +311,7 @@ class Context(project_config.Configuration):
                         continue
                     prj_conf = project.config_obj["dependencies"][prj_name]
                     if prj_conf.get("onlyInRoot", False):
-                        next_project_path = "/" + prj_name
+                        next_project_path = "//" + prj_name
                     pc_logging.debug(f"Loading the dependency: {next_project_path}...")
                     if "name" in prj_conf:
                         prj_conf["orig_name"] = prj_conf["name"]
@@ -373,7 +373,7 @@ class Context(project_config.Configuration):
                 prj_conf = project.config_obj["dependencies"][prj_name]
 
                 if prj_conf.get("onlyInRoot", False):
-                    next_project_path = "/" + prj_name
+                    next_project_path = "//" + prj_name
                 else:
                     next_project_path = get_child_project_path(project.name, prj_name)
                 if next_project_path == self.name:

@@ -46,7 +46,7 @@ Feature: `pc render` command
         inspect \
           -p length=30 \
           -p size=M4-0.7 \
-          /pub/std/metric/cqwarehouse:fastener/hexhead-din931
+          //pub/std/metric/cqwarehouse:fastener/hexhead-din931
       """
     # TODO: Failure to pip install from GH repo
     Then the command should exit with a status code of "0"
@@ -54,7 +54,7 @@ Feature: `pc render` command
       """
       pc \
         inspect \
-          /pub/std/metric/cqwarehouse:fastener/hexhead-din931;length=30,size=M4-0.7
+          //pub/std/metric/cqwarehouse:fastener/hexhead-din931;length=30,size=M4-0.7
       """
     Then the command should exit with a status code of "0"
      And STDOUT should contain 'DONE: InitCtx:'
@@ -70,8 +70,8 @@ Feature: `pc render` command
     When I run command:
       """
       pc supply quote \
-        --provider /pub/svc/commerce/gobilda:gobilda \
-        /pub/robotics/multimodal/openvmp/robots/don1:assembly-wormgear#10
+        --provider //pub/svc/commerce/gobilda:gobilda \
+        //pub/robotics/multimodal/openvmp/robots/don1:assembly-wormgear#10
       """
     # TODO: We don't have enough XXX stock on hand for the quantity you selected
     # @alexanderilyin: Well... now I start thinking that during tests we don't really need to go to the live provider
@@ -80,7 +80,7 @@ Feature: `pc render` command
     Then the command should exit with a status code of "1"
      And STDOUT should contain 'DONE: SupplyQuote: this:'
      And STDOUT should contain 'The following quotes are received:'
-     And STDOUT should contain '/pub/svc/commerce/gobilda:gobilda: No quote received'
+     And STDOUT should contain '//pub/svc/commerce/gobilda:gobilda: No quote received'
 
   # TODO: This depends on ~/.partcad/config.yaml:googleApiKey
   # @alexanderilyin: I'm still not sure if it's okay to use live 3rd parties services during PR checks but from other
@@ -125,9 +125,9 @@ Feature: `pc render` command
   Scenario: Features: Summarization
     When I run "pc init"
     Then the command should exit with a status code of "0"
-    When I run "pc inspect -V /pub/robotics/parts/gobilda:structure/u_channel_2"
+    When I run "pc inspect -V //pub/robotics/parts/gobilda:structure/u_channel_2"
     Then the command should exit with a status code of "0"
-    When I run "pc inspect -V -a /pub/robotics/parts/gobilda:examples/wormgear"
+    When I run "pc inspect -V -a //pub/robotics/parts/gobilda:examples/wormgear"
     Then the command should exit with a status code of "0"
 
   # TODO: This depends on ~/.partcad/config.yaml:googleApiKey
@@ -135,9 +135,9 @@ Feature: `pc render` command
   Scenario: Features: Summarization (Script Friendly)
     When I run "pc init"
     Then the command should exit with a status code of "0"
-    When I run "pc -q --no-ansi inspect -V /pub/robotics/parts/gobilda:structure/u_channel_2"
+    When I run "pc -q --no-ansi inspect -V //pub/robotics/parts/gobilda:structure/u_channel_2"
     Then the command should exit with a status code of "0"
-    When I run "pc -q --no-ansi inspect -V -a /pub/robotics/parts/gobilda:examples/wormgear"
+    When I run "pc -q --no-ansi inspect -V -a //pub/robotics/parts/gobilda:examples/wormgear"
     Then the command should exit with a status code of "0"
 
   @docs-installation
@@ -152,7 +152,7 @@ Feature: `pc render` command
   Scenario: Troubleshooting: Command Line
     When I run "pc init"
     Then the command should exit with a status code of "0"
-    When I run "pc inspect /pub/std/metric/cqwarehouse:fastener/hexhead-iso4014"
+    When I run "pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-iso4014"
     Then the command should exit with a status code of "0"
 
   @docs-use-cases
@@ -173,9 +173,9 @@ Feature: `pc render` command
     When I run "pc list assemblies -r"
     Then the command should exit with a status code of "0"
     # TODO Failure to pip install from GH repo
-    # When I run "pc info /pub/std/metric/cqwarehouse:fastener/hexhead-din931"
+    # When I run "pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
     # Then the command should exit with a status code of "0"
-    # When I run "pc inspect /pub/std/metric/cqwarehouse:fastener/hexhead-din931"
+    # When I run "pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
     # Then the command should exit with a status code of "0"
     # When I run command:
     #   """
@@ -183,18 +183,18 @@ Feature: `pc render` command
     #     inspect \
     #       -p length=30 \
     #       -p size=M4-0.7 \
-    #       /pub/std/metric/cqwarehouse:fastener/hexhead-din931
+    #       //pub/std/metric/cqwarehouse:fastener/hexhead-din931
     #   """
     # Then the command should exit with a status code of "0"
-    When I run "pc export -t stl /pub/robotics/parts/gobilda:structure/u_channel_2"
+    When I run "pc export -t stl //pub/robotics/parts/gobilda:structure/u_channel_2"
     Then the command should exit with a status code of "0"
-    When I run "pc export -t step -a /pub/robotics/parts/gobilda:examples/wormgear"
+    When I run "pc export -t step -a //pub/robotics/parts/gobilda:examples/wormgear"
     Then the command should exit with a status code of "0"
-    When I run "pc export -P /pub/robotics/parts/gobilda -t stl structure/u_channel_2"
+    When I run "pc export -P //pub/robotics/parts/gobilda -t stl structure/u_channel_2"
     Then the command should exit with a status code of "0"
-    When I run "pc export -P /pub/robotics/parts/gobilda -t step -a examples/wormgear"
+    When I run "pc export -P //pub/robotics/parts/gobilda -t step -a examples/wormgear"
     Then the command should exit with a status code of "0"
-    When I run "pc render -t png /pub/robotics/parts/gobilda:structure/u_channel_2"
+    When I run "pc render -t png //pub/robotics/parts/gobilda:structure/u_channel_2"
     Then the command should exit with a status code of "0"
-    When I run "pc render -t png -a /pub/robotics/parts/gobilda:examples/wormgear"
+    When I run "pc render -t png -a //pub/robotics/parts/gobilda:examples/wormgear"
     Then the command should exit with a status code of "0"

@@ -1,4 +1,4 @@
-# /pub/examples/partcad/provider_manufacturer
+# //pub/examples/partcad/provider_manufacturer
 
 Example of a manufacturer provider which is a pseudo 3D printer.
 
@@ -8,8 +8,8 @@ Get a quote:
 $ pc supply quote cylinder#1
 ...
 INFO:  The following quotes are received:
-INFO:  		/pub/examples/partcad/provider_manufacturer:my3dPrinter: 12345: $100.00
-INFO:  			/pub/examples/partcad/provider_manufacturer:cylinder#1
+INFO:  		//pub/examples/partcad/provider_manufacturer:my3dPrinter: 12345: $100.00
+INFO:  			//pub/examples/partcad/provider_manufacturer:cylinder#1
 ...
 ```
 

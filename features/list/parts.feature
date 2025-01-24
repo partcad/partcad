@@ -13,7 +13,7 @@ Feature: `pc list parts` command
           type: git
           url: https://github.com/partcad/partcad-electronics-sbcs-raspberrypi
       """
-    # TODO-59: @alexanderilyin: Add case for whole /pub:
+    # TODO-59: @alexanderilyin: Add case for whole //pub:
     # And a file named "partcad.yaml" does not exist
     # When I run "partcad --no-ansi init"
     # Then the command should exit with a status code of "0"

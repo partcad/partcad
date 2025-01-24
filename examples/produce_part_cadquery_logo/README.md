@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_cadquery_logo
+# //pub/examples/partcad/produce_part_cadquery_logo
 
 PartCAD example project which implements its logo.
 

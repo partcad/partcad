@@ -14,9 +14,9 @@ All data in PartCAD is bundled into 'packages'.
 
 Packages are organized in a hierarchical structure where some packages may
 define "dependencies" that become "child" packages.
-The top-level package is called "/". If a package called "/package" has a
+The top-level package is called "//". If a package called "//package" has a
 dependency called "sub-package" then such a sub-package will be called
-"/package/sub-package".
+"//package/sub-package".
 
 Each package is described using the configuration file ``partcad.yaml`` placed
 in the package folder.
@@ -119,7 +119,7 @@ Paths
 PartCAD uses package paths to identify packages and parts declared in them.
 
 The current package has the path ``""`` or ``"."``.
-The root package has the path ``"/"``.
+The root package has the path ``"//"``.
 For any package ``"<package-path>"``, each sub-directory containing
 ``partcad.yaml`` and each ``import``-ed dependency becomes
 ``"<package-path>/<sub-package>"``.
@@ -128,10 +128,10 @@ Absolute vs relative
 --------------------
 
 The absolute package path is the path from the root package to the package.
-If the path starts with ``"/"`` then it is an absolute path.
+If the path starts with ``"//"`` then it is an absolute path.
 
 The relative package path is the path from the current package to the package.
-If the path does not start with ``"/"`` then it is a relative path.
+If the path does not start with ``"//"`` then it is a relative path.
 Sometimes it might help to disambiguate the relative path by prepending ``"./"``.
 
 Multiple packages
@@ -181,10 +181,10 @@ of the object with the given parameters:
     pc inspect \
         -p length=30 \
         -p size=M4-0.7 \
-        /pub/std/metric/cqwarehouse:fastener/hexhead-din931
+        //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
     # Use this:
-    pc inspect /pub/std/metric/cqwarehouse:fastener/hexhead-din931;length=30,size=M4-0.7
+    pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-din931;length=30,size=M4-0.7
 
 Objects in a cart
 -----------------
@@ -197,8 +197,8 @@ ordering from a store, the object ID may optionally contain the quantity:
 
     # Quote for parts needed to assemble 10 gearboxes
     pc supply quote \
-      --provider /pub/svc/commerce/gobilda:gobilda \
-      /pub/robotics/multimodal/openvmp/robots/don1:assembly-wormgear#10
+      --provider //pub/svc/commerce/gobilda:gobilda \
+      //pub/robotics/multimodal/openvmp/robots/don1:assembly-wormgear#10
 
 =====================
 The public repository
