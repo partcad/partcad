@@ -1441,7 +1441,7 @@ class Project(project_config.Configuration):
         if not target_format:
             raise ValueError("Target format must be specified for conversion.")
 
-        with pc_logging.Action("AsyncConvert", self.name):
+        with pc_logging.Action("Convert", self.name):
             shapes = []
             if sketches:
                 shapes.extend(self.get_sketch(name) for name in sketches)
