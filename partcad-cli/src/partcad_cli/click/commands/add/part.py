@@ -37,6 +37,7 @@ from pathlib import Path
             "brep",
             "stl",
             "3mf",
+            "obj",
             "ai-cadquery",
             "ai-openscad",
         ]

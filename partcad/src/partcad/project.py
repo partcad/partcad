@@ -46,6 +46,7 @@ from .part_factory_ai_openscad import PartFactoryAiScad
 from . import part_factory_cadquery as pfc
 from . import part_factory_build123d as pfb
 from . import part_factory_alias as pfa
+from . import part_factory_obj as pfo
 from . import part_factory_enrich as pfe
 from . import part_factory_brep as pfbr
 from . import assembly
@@ -565,6 +566,8 @@ class Project(project_config.Configuration):
             pfbr.PartFactoryBrep(self.ctx, source_project, self, config)
         elif config["type"] == "stl":
             pfstl.PartFactoryStl(self.ctx, source_project, self, config)
+        elif config["type"] == "obj":
+            pfo.PartFactoryObj(self.ctx, source_project, self, config)
         elif config["type"] == "3mf":
             pf3.PartFactory3mf(self.ctx, source_project, self, config)
         elif config["type"] == "scad":

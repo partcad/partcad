@@ -1,0 +1,17 @@
+desc: PartCAD example project to demonstrate parts defined using OBJ files.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect cube
+    ```
+
+parts:
+  cube:
+    type: obj
+    desc: A cube defined in OBJ
+
+render:
+  readme:
+  svg:
+    prefix: ./
