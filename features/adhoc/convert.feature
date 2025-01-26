@@ -30,12 +30,12 @@ Feature: `pc adhoc convert` command
     And STDOUT should contain "Conversion complete: test.step"
 
   Scenario: Missing input file
-    When I run "partcad adhoc convert nonexistent.stl test.step --input stl --output step"
+    When I run "partcad adhoc convert nonexistent.stl test.step"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Error: [Errno 2] No such file or directory: 'nonexistent.stl'"
 
   Scenario: Unsupported output type
-    When I run "partcad adhoc convert test.stl test.unknown --input stl --output unknown"
+    When I run "partcad adhoc convert test.stl --input stl --output unknown"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Error during conversion: Unsupported export format: unknown"
 
@@ -67,3 +67,26 @@ Feature: `pc adhoc convert` command
     When I run "partcad adhoc convert invalid.stl test.step --input stl --output step"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Error during conversion: Failed to load the input part."
+
+  Scenario: Handle empty input file
+    Given a file named "empty.stl" with content:
+      """
+      """
+    When I run "partcad adhoc convert empty.stl empty.step --input stl --output step"
+    Then the command should exit with a status code of "1"
+    And STDERR should contain "Error during conversion: Failed to load the input part."
+
+  Scenario: Ambiguous input file extension
+    When I run "partcad adhoc convert test.unknown test.step"
+    Then the command should exit with a status code of "1"
+    And STDERR should contain "Cannot infer input type. Please specify --input explicitly."
+
+  Scenario: Overwrite existing output file
+    Given a file named "test.step" with content:
+      """
+      Existing STEP content
+      """
+    When I run "partcad adhoc convert test.stl test.step --input stl --output step"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Converting test.stl (stl) to test.step (step)..."
+    And STDOUT should contain "Conversion complete: test.step"

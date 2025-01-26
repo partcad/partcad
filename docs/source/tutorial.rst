@@ -87,6 +87,25 @@ Now the part can be exported:
 
     pc export -t stl :test
 
+Convert a CAD File
+------------------
+
+The pc adhoc convert command allows you to quickly convert a CAD file from one format to another without requiring a full project setup or configuration.
+
+To convert a CAD file, run the following command:
+
+  .. code-block:: shell
+
+    pc adhoc convert input.stl output.step
+
+You can also specify the input and output file types explicitly:
+
+  .. code-block:: shell
+
+    pc adhoc convert --input stl --output step input
+
+If the file types are not provided, they will be inferred from the file extensions. This command is ideal for quick, on-the-fly file format conversions.
+
 Reset partcad
 ---------------------
 
