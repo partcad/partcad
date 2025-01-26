@@ -87,6 +87,63 @@ Now the part can be exported:
 
     pc export -t stl :test
 
+
+Convert a part, assembly, or sketch
+-----------------------------------
+
+The `pc convert` command allows you to convert parts, assemblies, or sketches to a different format, and optionally update their type in the `partcad.yaml` configuration.
+
+For example, to convert a part defined in STL format to STEP format:
+
+.. code-block:: shell
+
+    # Convert the part "cube" to STEP format
+    pc convert -t step :cube
+
+To update the part's type in `partcad.yaml` after conversion, use the ``--in-place`` flag:
+
+.. code-block:: shell
+
+    # Convert the part "cube" to STEP format and update its type in the configuration
+    pc convert -t step --in-place :cube
+
+You can also specify an output directory for the converted files:
+
+.. code-block:: shell
+
+    # Convert the part "cube" to STEP format and save it in the specified directory
+    pc convert -t step -O ./output :cube
+
+To convert objects from a specific package, use the `--package` flag:
+
+.. code-block:: shell
+
+    # Convert the part "cube" in the "produce_part_stl" package to STEP format
+    pc convert -t step --package /produce_part_stl :cube
+
+For recursive processing of all packages, use the ``--recursive`` flag:
+
+.. code-block:: shell
+
+    # Convert all parts in the "produce_part_cadquery" package and its dependencies to STEP format
+    pc convert --recursive -t step --package /produce_part_cadquery
+
+Supported formats for conversion include:
+
+- STEP
+- BREP
+- STL
+- 3MF
+- Three.js (JSON)
+- OBJ
+- glTF (JSON)
+
+.. note::
+
+    - The object must exist in the `partcad.yaml` file and be defined as a part, assembly, or sketch.
+    - The `--in-place` option ensures that the type of the object is updated in `partcad.yaml` after conversion.
+    - If the target format is not supported by the object, a warning will be displayed, and the conversion will be skipped.
+
 Reset partcad
 ---------------------
 
