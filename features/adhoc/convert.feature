@@ -90,3 +90,47 @@ Feature: `pc adhoc convert` command
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting test.stl (stl) to test.step (step)..."
     And STDOUT should contain "Conversion complete: test.step"
+    And the file "test.step" should exist
+
+  Scenario: Binary STL file with incorrect header
+    Given a file named "binary_invalid.stl" with binary content:
+      """
+      INVALIDHEADER
+      """
+    When I run "partcad adhoc convert binary_invalid.stl binary.step --input stl --output step"
+    Then the command should exit with a status code of "1"
+    And STDERR should contain "Error during conversion: Failed to load the input part."
+
+  Scenario: ASCII STL with invalid vertex coordinates
+    Given a file named "invalid_vertices.stl" with content:
+      """
+      solid InvalidVertices
+        facet normal 0 0 0
+          outer loop
+            vertex 0 0 0
+            vertex INVALID INVALID INVALID
+            vertex 0 1 0
+          endloop
+        endfacet
+      endsolid
+      """
+    When I run "partcad adhoc convert invalid_vertices.stl invalid_vertices.step --input stl --output step"
+    Then the command should exit with a status code of "1"
+    And STDERR should contain "Error during conversion: Failed to load the input part."
+
+  Scenario: STL with negative face count
+    Given a file named "negative_faces.stl" with content:
+      """
+      solid NegativeFaces
+        facet normal 0 0 0
+          outer loop
+            vertex 0 0 0
+            vertex 1 0 0
+            vertex 0 1 0
+          endloop
+        endfacet
+      /* Invalid syntax mimicking a negative face count */
+      """
+    When I run "partcad adhoc convert negative_faces.stl negative_faces.step --input stl --output step"
+    Then the command should exit with a status code of "1"
+    And STDERR should contain "Error during conversion: Failed to load the input part."
