@@ -62,11 +62,7 @@ repos:
         # args: ["--severity=warning"]  # Optional: show only errors and warnings
       - id: pytest
         name: "Poetry: pytest"
-        entry: |
-          bash -c '
-            export CORES=$(lscpu -b -p=Core,Socket | grep -v "^#" | sort -u | wc -l)
-            poetry run pytest partcad/tests -n $(( CORES < 5 ? CORES : 4 )) -m "not slow" --timeout 300
-          '
+        entry: .devcontainer/pytest_hook.sh
         language: system
         types: [python]
         description: Run pytest tests in parallel using xdist
