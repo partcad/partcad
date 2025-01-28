@@ -19,3 +19,16 @@ RUN \
   sudo apt-get update \
   && sudo apt-get install --yes moreutils \
   && sudo rm -rf /var/lib/apt/lists/*
+
+# Install PowerShell
+# https://github.com/hadolint/hadolint/wiki/DL4006
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# hadolint ignore=DL3004,DL4001
+RUN \
+  sudo apt-get update \
+  && sudo apt-get install -y wget apt-transport-https software-properties-common \
+  && wget -q "https://packages.microsoft.com/keys/microsoft.asc" -O- | sudo apt-key add -   \
+  && sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-debian-stretch-prod stretch main" > /etc/apt/sources.list.d/microsoft.list' \
+  && sudo apt-get update \
+  && sudo apt-get install -y powershell \
+  && sudo rm -rf /var/lib/apt/lists/*
