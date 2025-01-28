@@ -51,6 +51,12 @@ jobs:
           # shellcheck disable=SC1090
           . ~/.bash_profile
 
+          # Install OS-specific dependencies
+          if [ "${{ matrix.os }}" == "ubuntu-24.04" ]; then
+            sudo apt-get update
+            sudo apt-get install libcairo2-dev pkg-config python3-dev
+          fi
+
           mamba create -n env-build python=${{ matrix.python-version }} -y
           mamba activate env-build
           python -m ensurepip --upgrade
