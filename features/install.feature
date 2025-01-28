@@ -37,7 +37,7 @@ Feature: `pc install` command
     Then STDERR should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
 
-  @wip @success @pc-init @pc-install @pc-ansi
+  @success @pc-init @pc-install @pc-ansi
   Scenario: Install packages with ssh
     Given a file named "partcad.yaml" with content:
       """

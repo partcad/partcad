@@ -56,7 +56,7 @@ __all__ = [
     "exception",
 ]
 
-__version__: str = "0.7.74"
+__version__: str = "0.7.76"
 
 # TODO(clairbee): move the below to `logging_sentry.py`
 if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):

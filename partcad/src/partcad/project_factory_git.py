@@ -69,7 +69,7 @@ class GitImportConfiguration:
 
     def _apply_import_overrides(self):
         # applying url overrides
-        url_override = user_config.get("import.overrides.url")
+        url_override = user_config.get("dependencies.overrides.url")
         if url_override:
             for key, value in url_override.items():
                 if value in self.import_config_url:
@@ -212,7 +212,9 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             )
                             time.sleep(patience)
                         else:
-                            pc_logging.error("Failed to update repo after %s retries" % attempt)
+                            pc_logging.error(
+                                "Failed to update repo %s after %d retries", self.import_config_url, attempt
+                            )
                             # Fall back to using the previous copy
                 else:
                     # Clone the repository if it's not cached yet.
@@ -242,7 +244,9 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             )
                             time.sleep(patience)
                         else:
-                            pc_logging.error("Failed to clone repo after %d retries", attempt)
+                            pc_logging.error(
+                                "Failed to clone repo %s after %d retries", self.import_config_url, attempt
+                            )
                             raise RuntimeError(f"Failed to clone repo: {e}") from e
                 attempt += 1
         if not self.import_rel_path is None:
