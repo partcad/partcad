@@ -51,5 +51,13 @@ def cli(ctx, desc, kind, provider, path):
             config["desc"] = desc
         if provider:
             config["provider"] = provider
+            kind_ext = {
+                "ai-cadquery": "py",
+                "ai-openscad": "scad",
+            }
+            if path.lower().endswith((".%s" % kind_ext[kind]).lower()):
+                path = path.rsplit('.', 1)[0] + '.gen.' + kind_ext[kind]
+            else:
+                path += '.gen'
         if prj.add_sketch(kind, path, config):
             Path(path).touch()
