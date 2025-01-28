@@ -612,7 +612,7 @@ jobs:
       #     retention-days: 7
 
   integration-tests:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: "Run: pc"
     runs-on: ubuntu-24.04
     timeout-minutes: 60
