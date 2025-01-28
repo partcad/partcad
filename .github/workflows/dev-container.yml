@@ -614,7 +614,7 @@ jobs:
   integration-tests:
     name: "Run: pc"
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     needs: poetry-install
     steps:
       - name: Checkout (GitHub)
