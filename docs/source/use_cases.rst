@@ -73,16 +73,16 @@ The command line tools are the easiest way to browse parts:
     pc list assemblies -r
 
     # Try initializing the model, print some basic info without displaying it
-    pc info /pub/std/metric/cqwarehouse:fastener/hexhead-din931
+    pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
     # Display the model in OCP CAD Viewer
-    pc inspect /pub/std/metric/cqwarehouse:fastener/hexhead-din931
+    pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
     # Display the parametrized model
     pc inspect \
         -p length=30 \
         -p size=M4-0.7 \
-        /pub/std/metric/cqwarehouse:fastener/hexhead-din931
+        //pub/std/metric/cqwarehouse:fastener/hexhead-din931
 
 The last command displays the chosen part in
 ``OCP CAD Viewer`` view in Visual Studio Code.
@@ -159,7 +159,7 @@ script:
     import cadquery as cq
     import partcad as pc
     part = pc.get_part_cadquery(
-        "/pub/std/metric/cqwarehouse:fastener/hexhead-din931",
+        "//pub/std/metric/cqwarehouse:fastener/hexhead-din931",
     )
     ...
     show_object(part)
@@ -170,7 +170,7 @@ script:
     import cadquery as cq
     import partcad as pc
     assembly = pc.get_assembly_cadquery(
-        "/pub/furniture/workspace/basic:imperial-desk-1",
+        "//pub/furniture/workspace/basic:imperial-desk-1",
     )
     ...
     show_object(assembly)
@@ -187,7 +187,7 @@ Here are some examples of how to fetch PartCAD models from within a
     import build123d as b3d
     import partcad as pc
     part = pc.get_part_build123d(
-        "/pub/std/metric/cqwarehouse:hexhead-din931",
+        "//pub/std/metric/cqwarehouse:hexhead-din931",
     )
     ...
     show_object(part)
@@ -198,7 +198,7 @@ Here are some examples of how to fetch PartCAD models from within a
     import build123d as b3d
     import partcad as pc
     assembly = pc.get_assembly_build123d(
-        "/pub/furniture/workspace/basic:imperial-desk-1",
+        "//pub/furniture/workspace/basic:imperial-desk-1",
     )
     ...
     show_object(assembly)
@@ -213,7 +213,7 @@ Python
     import partcad as pc
 
     part = pc.get_part(
-        "/pub/std/metric/cqwarehouse:fastener/hexhead-din931",
+        "//pub/std/metric/cqwarehouse:fastener/hexhead-din931",
     )
     part.show()
 
@@ -223,7 +223,7 @@ Python
     import partcad as pc
 
     assembly = pc.get_assembly(
-        "/pub/furniture/workspace/basic:imperial-desk-1",
+        "//pub/furniture/workspace/basic:imperial-desk-1",
     )
     assembly.show()
 

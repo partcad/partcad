@@ -13,14 +13,14 @@ import os
 import partcad as pc
 
 test_config_import_git = {
-    "name": "/part_step",
+    "name": "//part_step",
     "type": "git",
     "url": "https://github.com/partcad/partcad",
     "revision": "devel",
     "relPath": "examples/produce_part_step",
 }
 test_config_import_tar = {
-    "name": "/part_step",
+    "name": "//part_step",
     "type": "tar",
     "url": "https://github.com/partcad/partcad/archive/7544a5a1e3d8909c9ecee9e87b30998c05d090ca.tar.gz",
     "relPath": "partcad-7544a5a1e3d8909c9ecee9e87b30998c05d090ca/examples/part_step",
@@ -29,7 +29,7 @@ test_config_import_tar = {
 
 def test_project_this_1():
     ctx = pc.Context("partcad/tests")
-    prj = ctx.get_project("/")
+    prj = ctx.get_project("//")
     assert prj is not None
 
 

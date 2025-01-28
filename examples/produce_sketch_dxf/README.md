@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_sketch_dxf
+# //pub/examples/partcad/produce_sketch_dxf
 
 This example demonstrates how to define a sketch using a DXF file.
 

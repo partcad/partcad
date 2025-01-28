@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_sketch_cadquery
+# //pub/examples/partcad/produce_sketch_cadquery
 
 This example demonstrates how to define a sketch using a CadQuery script.
 

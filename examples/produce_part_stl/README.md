@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_stl
+# //pub/examples/partcad/produce_part_stl
 
 PartCAD example project to demonstrate parts defined using STL files.
 

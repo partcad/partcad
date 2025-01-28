@@ -152,21 +152,21 @@ Feature: `pc info` command
 
   # @pc-info
   # Scenario: Show part details
-  #   When I run "partcad info /pub/std/metric/cqwarehouse:fastener/hexhead-din931"
+  #   When I run "partcad info //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
   #   Then the command should exit with a status code of "0"
   #   And STDOUT should contain "'name': 'fastener/hexhead-din931',"
   #   And STDOUT should contain "'orig_name': 'fastener/hexhead-din931',"
 
   # @pc-info
   # Scenario: Show simplified part information
-  #   When I run "partcad info -s /pub/std/metric/m:m3"
+  #   When I run "partcad info -s //pub/std/metric/m:m3"
   #   Then the command should exit with a status code of "0"
   #   And STDOUT should contain only essential fields
   #   And STDOUT should not contain detailed specifications
 
   # @pc-info
   # Scenario: Show interactive part information
-  #   When I run "partcad info -i /pub/std/metric/m:m3-screw"
+  #   When I run "partcad info -i //pub/std/metric/m:m3-screw"
   #   Then the command should exit with a status code of "0"
   #   And an interactive viewer should be launched
   #   And the viewer should display the part model

@@ -15,13 +15,13 @@ import shutil
 import partcad as pc
 
 test_config_local = {
-    "name": "/primitive_local",
+    "name": "//primitive_local",
     "type": "local",
     "path": "examples/produce_part_cadquery_primitive",
 }
 
 test_config_git = {
-    "name": "/primitive_git",
+    "name": "//primitive_git",
     "type": "git",
     "url": "https://github.com/partcad/partcad",
     "revision": "devel",
@@ -109,7 +109,7 @@ def test_part_get_3():
     """Instantiate a project by a local import config and load a part"""
     ctx = pc.Context()  # Empty config
     _ = pc.ProjectFactoryLocal(ctx, None, test_config_local)
-    cylinder = ctx.get_part("/primitive_local:cylinder")
+    cylinder = ctx.get_part("//primitive_local:cylinder")
     assert cylinder is not None
     wrapped = asyncio.run(cylinder.get_wrapped(ctx))
     assert wrapped is not None
@@ -134,7 +134,7 @@ def test_part_lazy_loading():
     """Test for lazy loading of geometry data"""
     ctx = pc.Context()  # Empty config
     _ = pc.ProjectFactoryLocal(ctx, None, test_config_local)
-    cylinder = ctx.get_part("/primitive_local:cylinder")
+    cylinder = ctx.get_part("//primitive_local:cylinder")
     assert cylinder._wrapped is None
 
     wrapped = asyncio.run(cylinder.get_wrapped(ctx))
@@ -146,7 +146,7 @@ def test_part_aliases():
     ctx = pc.Context()  # Empty config
     _ = pc.ProjectFactoryLocal(ctx, None, test_config_local)
     # "box" is an alias for "cube"
-    box = ctx.get_part("/primitive_local:box")
+    box = ctx.get_part("//primitive_local:box")
     assert box is not None
     assert box._wrapped is None
 
@@ -157,9 +157,9 @@ def test_part_aliases():
 def test_part_example_cadquery_primitive():
     """Instantiate all parts from the example: part_cadquery_primitive"""
     ctx = pc.init("examples")
-    cube = ctx.get_part("/produce_part_cadquery_primitive:cube")
+    cube = ctx.get_part("//produce_part_cadquery_primitive:cube")
     assert cube is not None
-    cylinder = ctx.get_part("/produce_part_cadquery_primitive:cylinder")
+    cylinder = ctx.get_part("//produce_part_cadquery_primitive:cylinder")
     assert cylinder is not None
 
     wrapped = asyncio.run(cylinder.get_wrapped(ctx))
@@ -169,9 +169,9 @@ def test_part_example_cadquery_primitive():
 def test_part_example_cadquery_logo():
     """Instantiate all parts from the example: part_cadquery_logo"""
     ctx = pc.init("examples")
-    bone = ctx.get_part("/produce_part_cadquery_logo:bone")
+    bone = ctx.get_part("//produce_part_cadquery_logo:bone")
     assert bone is not None
-    head_half = ctx.get_part("/produce_part_cadquery_logo:head_half")
+    head_half = ctx.get_part("//produce_part_cadquery_logo:head_half")
     assert head_half is not None
 
     wrapped = asyncio.run(head_half.get_wrapped(ctx))
@@ -181,8 +181,8 @@ def test_part_example_cadquery_logo():
 def test_part_example_build123d_primitive():
     """Instantiate all parts from the example: part_build123d_primitive"""
     ctx = pc.init("examples")
-    cube = ctx.get_part("/produce_part_build123d_primitive:cube")
+    cube = ctx.get_part("//produce_part_build123d_primitive:cube")
     assert cube is not None
 
-    wrapped = ctx.get_part_shape("/produce_part_build123d_primitive:cube")
+    wrapped = ctx.get_part_shape("//produce_part_build123d_primitive:cube")
     assert wrapped is not None

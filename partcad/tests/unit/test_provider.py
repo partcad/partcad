@@ -15,8 +15,8 @@ from partcad.provider_data_cart import ProviderCart
 
 
 def test_provider_quote_store_csv():
-    FULL_PART_NAME = "/pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#25"
-    FULL_PROVIDER_NAME = "/pub/examples/partcad/provider_store:myGarage"
+    FULL_PART_NAME = "//pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#25"
+    FULL_PROVIDER_NAME = "//pub/examples/partcad/provider_store:myGarage"
 
     ctx = pc.init("examples/provider_store")
 
@@ -40,9 +40,9 @@ def test_provider_quote_store_csv():
 
 def test_provider_quote_store_csv_2():
     """Use an alias to refer to the same part."""
-    PART_NAME = "/pub/examples/partcad/provider_store:nut"
-    FULL_PART_NAME = "/pub/examples/partcad/provider_store:nut#1"
-    FULL_PROVIDER_NAME = "/pub/examples/partcad/provider_store:myGarage"
+    PART_NAME = "//pub/examples/partcad/provider_store:nut"
+    FULL_PART_NAME = "//pub/examples/partcad/provider_store:nut#1"
+    FULL_PROVIDER_NAME = "//pub/examples/partcad/provider_store:myGarage"
 
     ctx = pc.init("examples/provider_store")
 

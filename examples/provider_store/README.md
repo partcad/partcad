@@ -1,4 +1,4 @@
-# /pub/examples/partcad/provider_store
+# //pub/examples/partcad/provider_store
 
 Example of a shop provider implemented using a CSV file.
 
@@ -13,29 +13,29 @@ dependency update strategy).
 ## Usage
 Find a provider to order 25 nuts from:
 ```shell
-$ pc supply find --provider myGarage /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#25
+$ pc supply find --provider myGarage //pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#25
 ...
 INFO:  The requested parts are available through the following suppliers:
-INFO:  /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#25:
-		/pub/examples/partcad/provider_store:myGarage
+INFO:  //pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#25:
+		//pub/examples/partcad/provider_store:myGarage
 ...
 ```
 
 Ask for too much (26 parts while the store has only 25 in stock) and find nothing:
 ```shell
-$ pc supply find --provider myGarage /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#26
+$ pc supply find --provider myGarage //pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#26
 ...
-ERROR: Provider /pub/examples/partcad/provider_store:myGarage cannot provide /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm.
+ERROR: Provider //pub/examples/partcad/provider_store:myGarage cannot provide //pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm.
 ...
 ```
 
 Get a quote for a minimum order to get 1 part:
 ```shell
-$ pc supply quote --provider myGarage /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1
+$ pc supply quote --provider myGarage //pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1
 ...
 INFO:  The following quotes are received:
-INFO:  		/pub/examples/partcad/provider_store:myGarage: 123456: $0.01
-INFO:  			/pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1
+INFO:  		//pub/examples/partcad/provider_store:myGarage: 123456: $0.01
+INFO:  			//pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1
 ...
 ```
 
@@ -46,7 +46,7 @@ $ pc supply quote nut#2
 
 Use the quote in a script:
 ```shell
-$ pc -q supply quote --provider myGarage --json /pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1 | jq '.[] | .result | .price' -
+$ pc -q supply quote --provider myGarage --json //pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm#1 | jq '.[] | .result | .price' -
 0.01
 ```
 

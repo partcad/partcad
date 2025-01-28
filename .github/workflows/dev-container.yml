@@ -196,7 +196,7 @@ jobs:
           mamba activate test
           # BEGIN PUBLIC REPO
           cd examples
-          pc --no-ansi test -r --package /pub/examples
+          pc --no-ansi test -r --package //pub/examples
           # END PUBLIC REPO
           mamba deactivate
 
@@ -238,7 +238,7 @@ jobs:
   #      run: |
   #        pip install -U ./partcad ./partcad-cli
   #        cd examples
-  #        pc --no-ansi test -r --package /pub
+  #        pc --no-ansi test -r --package //pub
 
   dev-container-build:
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}

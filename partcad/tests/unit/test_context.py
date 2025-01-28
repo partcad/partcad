@@ -24,11 +24,11 @@ def test_ctx_stats1():
     ctx.stats_recalc()
     assert ctx.stats_packages > 0
     assert ctx.stats_parts == 0
-    ctx.get_project("/produce_part_cadquery_primitive")
+    ctx.get_project("//produce_part_cadquery_primitive")
     assert ctx.stats_parts > 0
     assert ctx.stats_parts_instantiated == 0
     assert ctx.stats_assemblies == 0
-    ctx.get_project("/produce_assembly_assy")
+    ctx.get_project("//produce_assembly_assy")
     assert ctx.stats_assemblies > 0
     assert ctx.stats_assemblies_instantiated == 0
     assert ctx.stats_memory > 0
@@ -41,7 +41,7 @@ def test_ctx_stats2():
     assert ctx.stats_parts_instantiated == 0
     old_memory = ctx.stats_memory
 
-    cube = ctx._get_part("/produce_part_cadquery_primitive:cube")
+    cube = ctx._get_part("//produce_part_cadquery_primitive:cube")
     assert cube is not None
     assert ctx.stats_parts_instantiated == 0
     ctx.stats_recalc()

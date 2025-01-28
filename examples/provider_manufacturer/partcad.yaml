@@ -8,8 +8,8 @@ docs:
     $ pc supply quote cylinder#1
     ...
     INFO:  The following quotes are received:
-    INFO:  		/pub/examples/partcad/provider_manufacturer:my3dPrinter: 12345: $100.00
-    INFO:  			/pub/examples/partcad/provider_manufacturer:cylinder#1
+    INFO:  		//pub/examples/partcad/provider_manufacturer:my3dPrinter: 12345: $100.00
+    INFO:  			//pub/examples/partcad/provider_manufacturer:cylinder#1
     ...
     ```
 
@@ -80,7 +80,7 @@ parts:
         default: red
       material:
         type: string
-        default: /pub/std/manufacturing/material/plastic:pla
+        default: //pub/std/manufacturing/material/plastic:pla
     manufacturing:
       method: additive
 

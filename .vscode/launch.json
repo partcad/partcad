@@ -136,7 +136,7 @@
         "${workspaceFolder}/examples",
         "render",
         "--package",
-        "/produce_assembly_assy",
+        "//produce_assembly_assy",
         "-t",
         "readme",
         "-O",

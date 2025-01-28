@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_assembly_assy
+# //pub/examples/partcad/produce_assembly_assy
 
 Assembly YAML examples
 

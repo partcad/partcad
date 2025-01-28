@@ -95,7 +95,7 @@ def cli(ctx, context, verbal, package, interface, assembly, sketch, scene, param
         else:
             if verbal:
                 if package is None:
-                    package_obj = ctx.get_project("/")
+                    package_obj = ctx.get_project("//")
                 else:
                     package_obj = ctx.get_project(package)
 

@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_sketch_build123d
+# //pub/examples/partcad/produce_sketch_build123d
 
 This example demonstrates how to define a sketch using a build123d script.
 

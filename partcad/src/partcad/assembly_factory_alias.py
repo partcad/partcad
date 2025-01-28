@@ -42,7 +42,7 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
                     self.source_project_name = config["package"]
                 if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = self.project.name
-                elif not self.source_project_name.startswith("/"):
+                elif not self.source_project_name.startswith("//"):
                     # Resolve the project name relative to the target project
                     self.source_project_name = get_child_project_path(target_project.name, self.source_project_name)
             else:

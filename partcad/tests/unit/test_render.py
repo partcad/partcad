@@ -16,7 +16,7 @@ import partcad as pc
 def test_render_svg_part_1():
     """Render a primitive shape to SVG"""
     ctx = pc.init("examples")
-    prj = ctx.get_project("/produce_part_cadquery_primitive")
+    prj = ctx.get_project("//produce_part_cadquery_primitive")
     cube = prj.get_part("cube")
     assert cube is not None
     try:
@@ -28,7 +28,7 @@ def test_render_svg_part_1():
 def test_render_svg_assy_1():
     """Render a primitive shape to SVG"""
     ctx = pc.init("examples")
-    prj = ctx.get_project("/produce_assembly_assy")
+    prj = ctx.get_project("//produce_assembly_assy")
     assy = prj.get_assembly("logo")
     assert assy is not None
     try:
@@ -40,7 +40,7 @@ def test_render_svg_assy_1():
 def test_render_svg_assy_2():
     """Render a primitive shape to SVG"""
     ctx = pc.init("examples")
-    prj = ctx.get_project("/produce_assembly_assy")
+    prj = ctx.get_project("//produce_assembly_assy")
     assy = prj.get_assembly("logo_embedded")
     assert assy is not None
     try:
@@ -52,7 +52,7 @@ def test_render_svg_assy_2():
 def test_render_project():
     """Render an entire project"""
     ctx = pc.init("examples")
-    prj = ctx.get_project("/feature_export")
+    prj = ctx.get_project("//feature_export")
     assert prj is not None
     output_dir = tempfile.mkdtemp()
     prj.render(output_dir=output_dir)

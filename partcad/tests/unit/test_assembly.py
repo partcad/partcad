@@ -17,9 +17,9 @@ import partcad as pc
 
 def test_assembly_primitive():
     ctx = pc.init("examples")
-    part1 = ctx.get_part("/produce_part_cadquery_primitive:cube")
+    part1 = ctx.get_part("//produce_part_cadquery_primitive:cube")
     assert part1 is not None
-    part2 = ctx.get_part("/produce_part_cadquery_primitive:cylinder")
+    part2 = ctx.get_part("//produce_part_cadquery_primitive:cylinder")
     assert part2 is not None
 
     model = pc.Assembly({"name": "example1"})
@@ -31,7 +31,7 @@ def test_assembly_primitive():
 
 def test_assembly_example_assy_primitive():
     ctx = pc.init("examples")
-    primitive = ctx._get_assembly("/produce_assembly_assy:primitive")
+    primitive = ctx._get_assembly("//produce_assembly_assy:primitive")
     assert primitive is not None
     assert asyncio.run(primitive.get_wrapped(ctx)) is not None
     assert asyncio.run(primitive.get_build123d(ctx)) is not None
@@ -39,7 +39,7 @@ def test_assembly_example_assy_primitive():
 
 def test_assembly_example_assy_logo():
     ctx = pc.init("examples")
-    logo = ctx._get_assembly("/produce_assembly_assy:logo")
+    logo = ctx._get_assembly("//produce_assembly_assy:logo")
     assert logo is not None
     assert asyncio.run(logo.get_wrapped(ctx)) is not None
     assert asyncio.run(logo.get_build123d(ctx)) is not None
@@ -47,7 +47,7 @@ def test_assembly_example_assy_logo():
 
 def test_assembly_example_assy_logo_embedded():
     ctx = pc.init("examples")
-    logo = ctx._get_assembly("/produce_assembly_assy:logo_embedded")
+    logo = ctx._get_assembly("//produce_assembly_assy:logo_embedded")
     assert logo is not None
     assert asyncio.run(logo.get_wrapped(ctx)) is not None
     assert asyncio.run(logo.get_build123d(ctx)) is not None
@@ -55,7 +55,7 @@ def test_assembly_example_assy_logo_embedded():
 
 def test_assembly_example_assy_logo_bom():
     ctx = pc.init("examples")
-    logo = ctx._get_assembly("/produce_assembly_assy:logo_embedded")
+    logo = ctx._get_assembly("//produce_assembly_assy:logo_embedded")
     assert logo is not None
     bom = asyncio.run(logo.get_bom())
     assert bom is not None

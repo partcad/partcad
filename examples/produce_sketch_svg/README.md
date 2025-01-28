@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_sketch_svg
+# //pub/examples/partcad/produce_sketch_svg
 
 This example demonstrates how to define a sketch using an SVG file.
 

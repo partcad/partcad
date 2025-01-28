@@ -26,7 +26,7 @@ by ``vendor`` and ``SKU``.
         method: additive
       parameters:
         color: black
-        material: /pub/std/manufacturing/material/plastic:pla
+        material: //pub/std/manufacturing/material/plastic:pla
       ...
 
 See :ref:`providers` for more information about the providers and how PartCAD selects them.
@@ -125,16 +125,16 @@ Summarize the part or assembly using following commands:
   .. code-block:: bash
 
     pc init
-    pc inspect -V /pub/robotics/parts/gobilda:structure/u_channel_2
-    pc inspect -V -a /pub/robotics/parts/gobilda:examples/wormgear
+    pc inspect -V //pub/robotics/parts/gobilda:structure/u_channel_2
+    pc inspect -V -a //pub/robotics/parts/gobilda:examples/wormgear
 
 Or their more script-friendly variants:
 
   .. code-block:: bash
 
     pc init
-    pc -q --no-ansi inspect -V /pub/robotics/parts/gobilda:structure/u_channel_2
-    pc -q --no-ansi inspect -V -a /pub/robotics/parts/gobilda:examples/wormgear
+    pc -q --no-ansi inspect -V //pub/robotics/parts/gobilda:structure/u_channel_2
+    pc -q --no-ansi inspect -V -a //pub/robotics/parts/gobilda:examples/wormgear
 
 .. _caching:
 

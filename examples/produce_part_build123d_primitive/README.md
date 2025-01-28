@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_build123d_primitive
+# //pub/examples/partcad/produce_part_build123d_primitive
 
 PartCAD example project which demonstrates parts defined using build123d.
 

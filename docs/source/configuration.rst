@@ -793,7 +793,7 @@ visualization, simulation calculations and, if applicable, manufacturing
 - ``material``
 
   Must point at an object of type ``material``.
-  Some of them are defined in ``/pub/std/manufacturing/material``.
+  Some of them are defined in ``//pub/std/manufacturing/material``.
   When a request is made to a manufacturing API,
   a close enough material is selected from the materials provided by the
   manufacturer. The responsibility to select the right material is on the
@@ -1034,7 +1034,7 @@ Manufacturer
       .. code-block:: json
 
         {
-            "/pub/std/manufacturing/material/plastic:pla": {
+            "//pub/std/manufacturing/material/plastic:pla": {
                 "colors": [{"name": "red"}],
                 "finishes": [{"name": "none"}]
             }

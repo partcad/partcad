@@ -51,4 +51,4 @@ Any part or assembly can be displayed in ``OCP CAD Viewer`` by running
     pc init
 
     # Display the part in 'OCP CAD Viewer'
-    pc inspect /pub/std/metric/cqwarehouse:fastener/hexhead-iso4014
+    pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-iso4014

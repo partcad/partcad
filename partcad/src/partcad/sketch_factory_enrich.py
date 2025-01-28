@@ -37,7 +37,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
                     source_project_name = config["package"]
                 if source_project_name == "this" or source_project_name == "":
                     source_project_name = source_project.name
-                elif not source_project_name.startswith("/"):
+                elif not source_project_name.startswith("//"):
                     # Resolve the project name relative to the target project
                     source_project_name = get_child_project_path(target_project.name, source_project_name)
             else:

@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_cadquery_primitive
+# //pub/examples/partcad/produce_part_cadquery_primitive
 
 PartCAD example project which demonstrates parts defined using CadQuery.
 

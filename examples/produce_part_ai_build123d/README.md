@@ -1,4 +1,4 @@
-# /pub/examples/partcad/produce_part_ai_build123d
+# //pub/examples/partcad/produce_part_ai_build123d
 
 PartCAD parts defined using AI-generated build123d scripts.
 

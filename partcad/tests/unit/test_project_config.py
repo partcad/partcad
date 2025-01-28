@@ -35,14 +35,14 @@ def test_project_config_template():
     ctx.import_project(
         this,
         {
-            "name": "/that",
+            "name": "//that",
             "type": "local",
             "path": "unit/data/project_config_template.yaml",
         },
     )
     # In this test case, the template is used to name the part the same name as
     # the package is called.
-    part = ctx._get_part("/that:/that")
+    part = ctx._get_part("//that://that")
     assert not part is None
 
 
@@ -52,7 +52,7 @@ def test_project_config_template_override():
     ctx.import_project(
         this,
         {
-            "name": "/that",
+            "name": "//that",
             "type": "local",
             "path": "unit/data/project_config_include.yaml",
             "includePaths": ["subdir"],
@@ -60,5 +60,5 @@ def test_project_config_template_override():
     )
     # In this test case, the template is used to name the part the same name as
     # the package is called.
-    part = ctx._get_part("/that:defined")
+    part = ctx._get_part("//that:defined")
     assert not part is None

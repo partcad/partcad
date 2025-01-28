@@ -141,7 +141,7 @@ Browse the imported packages in the Explorer view. Click on the parts and
 assemblies to see them in the ``OCP CAD Viewer`` view that will appear on the
 right.
 
-For example, navigate to ``/pub/std/metric/cqwarehouse`` and click on some part
+For example, navigate to ``//pub/std/metric/cqwarehouse`` and click on some part
 (e.g. ``fastener/hexhead-din931``).
 The PartCAD Inspector view displays the part parameters.
 The parameter values can be changed and the part gets redrawn on ``Update``.
