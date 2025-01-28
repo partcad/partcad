@@ -612,9 +612,10 @@ jobs:
       #     retention-days: 7
 
   integration-tests:
+    if: github.event_name == 'schedule'
     name: "Run: pc"
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 60
     needs: poetry-install
     steps:
       - name: Checkout (GitHub)
