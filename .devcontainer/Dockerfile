@@ -1,12 +1,11 @@
-# TODO: @alexanderilyin: Move JIRA CLI installation to Dev Container Templates
-# hadolint ignore=DL3007
-FROM ghcr.io/ankitpokhrel/jira-cli:latest AS jira
 
 # TODO; @alexanderilyin: Implement SemVer release strategy in https://github.com/partcad/devcontainers-templates/
 # hadolint ignore=DL3007
-FROM ghcr.io/partcad/devcontainer-partcad:latest
+FROM ghcr.io/partcad/devcontainer-partcad:1.1.0
 
-COPY --from=jira /bin/jira /usr/local/bin/jira
+# TODO: @alexanderilyin: Move JIRA CLI installation to Dev Container Templates
+# hadolint ignore=DL3007
+COPY --from=ghcr.io/ankitpokhrel/jira-cli:latest /bin/jira /usr/local/bin/jira
 
 # TODO: @alexanderilyin: error libmamba Could not open lockfile '/home/vscode/miniforge3/pkgs/cache/cache.lock' \
 # TODO: @alexanderilyin: Run `mamba init`
