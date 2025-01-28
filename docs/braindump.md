@@ -381,10 +381,11 @@ history, turning your development timeline into something resembling an interste
 Additionally, there is a [`gource-visualization.yml`](.github/workflows/gource-visualization.yml) workflow which runs at
 the beginning of each week and generates visual representations of the repository's development history using Gource:
 
-- Runs automatically every Monday at 00:00 UTC.
-- Can be triggered manually with customizable visualization parameters.
-- Generates an MP4 video artifact that's available for 7 days.
-- Provides insights into the project's evolution and development patterns.
+- The workflow runs automatically every Monday at 00:00 UTC.
+- It can be triggered manually with customizable visualization parameters.
+- The workflow generates an MP4 video artifact that's available for 7 days.
+- Uploads to `ailin@partcad.org` YouTube account.
+- This visualization provides insights into the project's evolution and development patterns.
 
 1. Install Gource:
 
@@ -432,8 +433,12 @@ the beginning of each week and generates visual representations of the repositor
 
 #### Upload to YouTube
 
-- [YouTube Data API v3](https://console.cloud.google.com/marketplace/product/google/youtube.googleapis.com)
-- [Upload Video via GH Action](https://chatgpt.com/share/6774b2f3-b748-8001-a434-3aa069a696b3)
+The workflow automatically uploads the generated visualization to YouTube using:
+
+- [YouTube Data API v3](https://console.cloud.google.com/marketplace/product/google/youtube.googleapis.com) - For video
+  upload functionality
+- [GitHub Actions Integration Guide](https://developers.google.com/youtube/v3/guides/uploading_a_video) - Official
+  documentation for YouTube uploads
 
 ## Task Management
 
