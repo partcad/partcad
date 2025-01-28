@@ -45,7 +45,9 @@ The commands and options supported by PartCAD CLI:
   │            -q                     Decrease verbosity level                                                  │
   │ --no-ansi                         Produce plain text logs without colors or animations                      │
   │            -p  PATH               Specify the package path (YAML file or directory with 'partcad.yaml')     │
-  │ --format       [time|path|level]  Set the log prefix format                                                 │
+  │ --level                           Use log level as log prefix [default: level]                              │
+  │ --time                            Use time with milliseconds as log prefix [default: level]                 │
+  │ --path                            Use source file path and line number as log prefix [default: level]       │
   │ --help                            Show this message and exit.                                               │
   ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
   ╭─ Commands ──────────────────────────────────────────────────────────────────────────────────────────────────╮

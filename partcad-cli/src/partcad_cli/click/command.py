@@ -175,6 +175,9 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     show_envvar=True,
     help="Maximum number of attempts to incrementally fix the ai generated script if it's not working",
 )
+@click.option('--level', 'format', flag_value='level', default=True, help="Use log level as log prefix")
+@click.option('--time', 'format', flag_value='time', help="Use time with milliseconds as log prefix")
+@click.option('--path', 'format', flag_value='path', help="Use source file path and line number as log prefix")
 @click.pass_context
 def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     """
