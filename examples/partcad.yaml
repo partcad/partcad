@@ -10,7 +10,7 @@
 # In case this is the root package,
 # use the path prefix that we would expect in the real production use case.
 name: /pub/examples/partcad
-partcad: ">=0.7.75"
+partcad: ">=0.7.76"
 manufacturable: false
 
 cover:
