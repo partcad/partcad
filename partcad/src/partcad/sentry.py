@@ -13,7 +13,7 @@ from .user_config import user_config
 
 
 def init_sentry(version: str) -> None:
-    if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
+    if not sentry_sdk.is_initialized() and user_config.sentry_config.dsn:
         critical_to_ignore = [
             "action_start: ",
             "action_end: ",
@@ -39,13 +39,13 @@ def init_sentry(version: str) -> None:
             return event
 
         sentry_sdk.init(
-            dsn=user_config.get_string("sentry.dsn"),
+            dsn=user_config.sentry_config.dsn,
             release=version,
-            debug=user_config.get_bool("sentry.debug"),
-            shutdown_timeout=user_config.get_int("sentry.shutdown_timeout"),
+            debug=user_config.sentry_config.debug,
+            shutdown_timeout=user_config.sentry_config.shutdown_timeout,
             enable_tracing=True,
             attach_stacktrace=False,
-            traces_sample_rate=user_config.get_float("sentry.traces_sample_rate"),
+            traces_sample_rate=user_config.sentry_config.traces_sample_rate,
             integrations=[
                 LoggingIntegration(
                     level=logging.ERROR,

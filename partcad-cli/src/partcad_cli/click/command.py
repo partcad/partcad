@@ -175,6 +175,34 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     show_envvar=True,
     help="Maximum number of attempts to incrementally fix the ai generated script if it's not working",
 )
+@click.option(
+    "--sentry-dsn",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help="Sentry DSN for error reporting",
+)
+@click.option(
+    "--sentry-debug",
+    is_flag=True,
+    default=None,
+    show_envvar=True,
+    help="Enable Sentry debug mode",
+)
+@click.option(
+    "--sentry-shutdown-timeout",
+    type=int,
+    default=None,
+    show_envvar=True,
+    help="Shutdown timeout for Sentry in seconds",
+)
+@click.option(
+    "--sentry-traces-sample-rate",
+    type=float,
+    default=None,
+    show_envvar=True,
+    help="Traces sample rate for Sentry in percent",
+)
 @click.option('--level', 'format', flag_value='level', default=True, help="Use log level as log prefix")
 @click.option('--time', 'format', flag_value='time', help="Use time with milliseconds as log prefix")
 @click.option('--path', 'format', flag_value='path', help="Use source file path and line number as log prefix")
@@ -195,7 +223,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
         logging.getLogger("partcad").propagate = True
         logging.basicConfig()
     else:
-        if format is not None:
+        if verbose and format is not None:
 
             # Create a logger object.
             logger = logging.getLogger(__name__)
@@ -256,13 +284,20 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
         ("PC_MAX_GEOMETRIC_MODELING", "max_geometric_modeling"),
         ("PC_MAX_MODEL_GENERATION", "max_model_generation"),
         ("PC_MAX_SCRIPT_CORRECTION", "max_script_correction"),
+        ("PC_SENTRY_DSN", "sentry_dsn"),
+        ("PC_SENTRY_DEBUG", "sentry_debug"),
+        ("PC_SENTRY_SHUTDOWN_TIMEOUT", "sentry_shutdown_timeout"),
+        ("PC_SENTRY_TRACES_SAMPLE_RATE", "sentry_traces_sample_rate"),
     ]
-
 
     for env_var, attrib in user_config_options:
         value = kwargs.get(attrib, None)
         if value is not None and user_config._get_env(env_var) is None:
-            setattr(user_config, attrib, value)
+            if 'sentry' in attrib:
+                attrib = attrib.replace('sentry_', 'sentry.')
+                user_config.set(attrib, value)
+            else:
+                setattr(user_config, attrib, value)
 
     if ctx.invoked_subcommand in commands_with_forced_update:
         user_config.force_update = True
