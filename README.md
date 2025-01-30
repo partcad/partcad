@@ -6,7 +6,7 @@
 [![CD on Linux, macOS and Windows](https://github.com/partcad/partcad/actions/workflows/python-build.yml/badge.svg?event=schedule)](https://github.com/partcad/partcad/actions/workflows/python-build.yml?query=event%3Aschedule)
 [![Deployment to PyPI](https://github.com/partcad/partcad/actions/workflows/python-deploy.yml/badge.svg)](https://github.com/partcad/partcad/actions/workflows/python-deploy.yml)
 [![Documentation Status](https://readthedocs.org/projects/partcad/badge/?version=latest)](https://partcad.readthedocs.io/en/latest/?badge=latest)
-<a href="https://discord.gg/9AEu3vF7rv"><img alt="Discord" src="https://img.shields.io/discord/1091497262733074534?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
+<a href="https://discord.gg/h5qhbHtygj"><img alt="Discord" src="https://img.shields.io/discord/1308854595987968051?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
 
 Browse [our documentation] and visit [our website]. Watch our 💥💥[demos](https://youtube.com/@PartCAD)💥💥.
 
@@ -107,7 +107,7 @@ training), it makes PartCAD a better alternative to any cloud-based PDM, PLM or 
 
 ## Join us!
 
-Stay informed and share feedback by joining [our Discord server](https://discord.gg/9AEu3vF7rv). <br/>
+Stay informed and share feedback by joining [our Discord server](https://discord.gg/h5qhbHtygj). <br/>
 
 Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads] and [Twitter/X].
 
