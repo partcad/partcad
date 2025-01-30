@@ -2,9 +2,10 @@ from pathlib import Path
 import shutil
 import tempfile
 from partcad.context import Context
+from partcad.part import Part
 
 
-def convert_cad_file(input_filename, input_type, output_filename, output_type):
+def convert_cad_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
     """
     Convert a CAD file from one format to another.
 
@@ -30,12 +31,13 @@ def convert_cad_file(input_filename, input_type, output_filename, output_type):
 
         # Export the part to the desired output format
         export_part(part, output_filename, output_type, ctx)
+    except Exception:
+        raise RuntimeError("Failed to load the input part.")
     finally:
         shutil.rmtree(temp_dir)  # Cleanup temporary files
 
 
-
-def generate_partcad_config(temp_dir, input_type, temp_input_path):
+def generate_partcad_config(temp_dir: Path, input_type: str, temp_input_path: Path) -> None:
     """
     Generate a temporary partcad.yaml configuration for processing.
 
@@ -55,17 +57,17 @@ parts:
         config_file.write(config_content)
 
 
-def export_part(part, output_filename, output_type, ctx):
+def export_part(part: Part, output_filename: str | Path, output_type: str, ctx: Context) -> None:
     """
     Export a part to the desired format.
 
     Args:
-        part: The part to export.
-        output_filename (str): Path to save the exported file.
+        part (Part): The part to export.
+        output_filename (Path | str): Path to save the exported file.
         output_type (str): Format of the exported file.
-        ctx: The context required for export methods.
+        ctx (Context): The context required for export methods.
     """
-    export_methods = {
+    export_methods: dict[str, str] = {
         "step": "render_step",
         "brep": "render_brep",
         "stl": "render_stl",
@@ -81,6 +83,9 @@ def export_part(part, output_filename, output_type, ctx):
 
     if not hasattr(part, export_method):
         raise RuntimeError(f"Part does not support export to '{output_type}'.")
+
+    # Ensure output filename is a string
+    output_filename = str(output_filename)
 
     # Call the appropriate export method, passing the required context and filepath
     getattr(part, export_method)(ctx=ctx, filepath=output_filename)
