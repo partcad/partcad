@@ -88,15 +88,17 @@ Now the part can be exported:
     pc export -t stl :test
 
 Convert a CAD File
-------------------
+==================
 
-The pc adhoc convert command allows you to quickly convert a CAD file from one format to another without requiring a full project setup or configuration.
+The `pc adhoc convert` command allows you to quickly convert a CAD file from one format to another without requiring a full project setup or configuration.
 
 Supported formats:
-- Input: STL, STEP, BREP, 3MF, SCAD, CadQuery, Build123d
-- Output: STL, STEP, BREP, 3MF, ThreeJS, OBJ, GLTF
+------------------
+- **Input:** STL, STEP, BREP, 3MF, SCAD, CadQuery, Build123d
+- **Output:** STL, STEP, BREP, 3MF, ThreeJS, OBJ, GLTF
 
 Examples:
+---------
 
 .. code-block:: shell
 
@@ -109,7 +111,66 @@ Examples:
     # Default output filename
     pc adhoc convert input.stl --output step  # Creates input.step
 
-Note: If the conversion fails, the command will display an error message and exit with a non-zero status code.
+.. note::
+    If the conversion fails, the command will display an error message and exit with a non-zero status code.
+
+Convert a Part, Assembly, or Sketch
+===================================
+
+The `pc convert` command allows you to convert parts, assemblies, or sketches to a different format and optionally update their type in the `partcad.yaml` configuration.
+
+Examples:
+---------
+
+To convert a part defined in STL format to STEP format:
+
+.. code-block:: shell
+
+    # Convert the part "cube" to STEP format
+    pc convert -t step :cube
+
+To update the part's type in `partcad.yaml` after conversion, use the `--in-place` flag:
+
+.. code-block:: shell
+
+    # Convert the part "cube" to STEP format and update its type in the configuration
+    pc convert -t step --in-place :cube
+
+To specify an output directory for the converted files:
+
+.. code-block:: shell
+
+    # Convert the part "cube" to STEP format and save it in the specified directory
+    pc convert -t step -O ./output :cube
+
+To convert objects from a specific package, use the `--package` flag:
+
+.. code-block:: shell
+
+    # Convert the part "cube" in the "produce_part_stl" package to STEP format
+    pc convert -t step --package /produce_part_stl :cube
+
+For recursive processing of all packages, use the `--recursive` flag:
+
+.. code-block:: shell
+
+    # Convert all parts in the "produce_part_cadquery" package and its dependencies to STEP format
+    pc convert --recursive -t step --package /produce_part_cadquery
+
+Supported formats:
+------------------
+- STEP
+- BREP
+- STL
+- 3MF
+- Three.js (JSON)
+- OBJ
+- glTF (JSON)
+
+.. note::
+    - The object must exist in the `partcad.yaml` file and be defined as a part, assembly, or sketch.
+    - The `--in-place` option ensures that the type of the object is updated in `partcad.yaml` after conversion.
+    - If the target format is not supported by the object, a warning will be displayed, and the conversion will be skipped.
 Reset partcad
 ---------------------
 
