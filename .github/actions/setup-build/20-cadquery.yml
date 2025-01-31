@@ -4,13 +4,6 @@ description: "Prepare CadQuery and its dependencies"
 runs:
   using: "composite"
   steps:
-
-name: "Setup CadQuery"
-description: "Prepare CadQuery and its dependencies"
-
-runs:
-  using: "composite"
-  steps:
       - name: Set CadQuery version
         shell: bash
         run: |

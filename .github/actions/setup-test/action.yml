@@ -1,0 +1,10 @@
+name: "Setup all"
+description: "Prepare the runner to test"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup-all/10-prereqs.yml
+    - uses: ./.github/actions/setup-all/20-cadquery.yml
+    - uses: ./.github/actions/setup-all/30-openscad.yml
+    - uses: ./.github/actions/setup-all/70-registry.yml
