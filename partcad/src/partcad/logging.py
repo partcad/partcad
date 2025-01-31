@@ -11,6 +11,9 @@ from logging import DEBUG, INFO, WARN, WARNING, ERROR, CRITICAL
 import threading
 import time
 import sentry_sdk
+from opentelemetry import trace
+
+tracer = trace.get_tracer("PartCAD")
 
 # Track if any errors occurred during the execution for test purposes and for
 # the main program to know if it should exit with an error code.
@@ -133,6 +136,10 @@ class Process(object):
 
         if process_lock.acquire():
             self.start = time.time()
+            self.span = tracer.start_span(f"Process: {self.op}")
+            self.span.set_attribute("package", self.package)
+            if self.item:
+                self.span.set_attribute("item", self.item)
             ops.process_start(self.op, self.package, self.item)
             self.succeeded = True
         else:
@@ -149,7 +156,7 @@ class Process(object):
         if self.succeeded:
             process_lock.release()
             ops.process_end(self.op, self.package, self.item)
-
+            self.span.end()
             delta = time.time() - self.start
             if self.item is None:
                 info("DONE: %s: %s: %.2fs" % (self.op, self.package, delta))
@@ -170,10 +177,15 @@ class Action(object):
         self.__enter__()
 
     def __enter__(self):
+        self.span = tracer.start_span(f"Action: {self.op}")
+        self.span.set_attribute("package", self.package)
+        if self.item:
+            self.span.set_attribute("item", self.item)
         ops.action_start(self.op, self.package, self.item)
 
     async def __aexit__(self, *args):
         self.__exit__(*args)
 
     def __exit__(self, *_args):
+        self.span.end()
         ops.action_end(self.op, self.package, self.item)

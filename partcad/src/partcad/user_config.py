@@ -14,6 +14,65 @@ import vyper
 
 from . import logging as pc_logging
 
+class SentryConfig:
+    def __init__(self, v):
+        self.v: vyper.Vyper = v
+
+    @property
+    def dsn(self):
+        if self.v.is_set("sentry.dsn"):
+            return self.v.get("sentry.dsn")
+
+    @property
+    def debug(self):
+        if self.v.is_set("sentry.debug"):
+            return self.v.get_bool("sentry.debug")
+        return False
+
+    @property
+    def shutdown_timeout(self):
+        if self.v.is_set("sentry.shutdown_timeout"):
+            return self.v.get_int("sentry.shutdown_timeout")
+        return 20
+
+    @property
+    def traces_sample_rate(self):
+        if self.v.is_set("sentry.traces_sample_rate"):
+            return self.v.get_float("sentry.traces_sample_rate")
+        return 0.85
+
+    def __repr__(self):
+        properties = []
+        for name, val in vars(SentryConfig).items():
+            if isinstance(val, property):
+                properties.append((name, val.__get__(self, SentryConfig)))
+        return str({k: v for k, v in properties if v is not None})
+
+class GitConfig(dict):
+    def __init__(self, v):
+        self._v: vyper.Vyper = v
+
+    @property
+    def _config(self):
+        config = self._v.get("git.config")
+        if config is None:
+            config = {}
+        return config
+
+    def __getattr__(self, item):
+        return self._config.get(item)
+
+    def __getitem__(self, item):
+        return self._config.get(item)
+
+    def __iter__(self):
+        return iter(self._config)
+
+    def __len__(self):
+        return len(self._config)
+
+    def __repr__(self):
+        return str(self._config)
 
 class UserConfig(vyper.Vyper):
     @staticmethod
@@ -59,9 +118,6 @@ class UserConfig(vyper.Vyper):
 
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
-
-        self.set_default("sentry.shutdown_timeout", 5)
-        self.set_default("sentry.traces_sample_rate", 1.0)
 
         self.set_env_prefix("pc")
 
@@ -186,6 +242,23 @@ class UserConfig(vyper.Vyper):
         self.bind_env("maxScriptCorrection", "PC_MAX_SCRIPT_CORRECTION")
         if self.is_set("maxScriptCorrection"):
             self.max_script_correction = self.get_int("maxScriptCorrection")
+
+        # option: sentry
+        # description: Sentry configuration
+        # values: <dict>
+        # default: {"debug": "false", "shutdown_timeout": "5", "traces_sample_rate": "1.0"}
+        self.sentry_config = SentryConfig(self)
+        self.bind_env("sentry.dsn", "PC_SENTRY_DSN")
+        self.bind_env("sentry.debug", "PC_SENTRY_DEBUG")
+        self.bind_env("sentry.shutdown_timeout", "PC_SENTRY_SHUTDOWN_TIMEOUT")
+        self.bind_env("sentry.traces_sample_rate", "PC_SENTRY_TRACES_SAMPLE_RATE")
+
+        # option: git
+        # description: Git configuration
+        # values: <dict>
+        # default: {}
+        self.git_config = GitConfig(self)
+
 
 
 user_config = UserConfig()

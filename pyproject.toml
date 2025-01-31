@@ -76,7 +76,7 @@ poetry-plugin-shell = "^1.0.1"
 black = "^24.10.0"
 flake8 = "^7.1.1"
 isort = "^5.13.2"
-sentry-sdk = "^2.20.0"
+sentry-sdk = {extras = ["opentelemetry"], version = "^2.20.0"}
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.3.4"
