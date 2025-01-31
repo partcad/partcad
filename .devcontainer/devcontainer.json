@@ -31,7 +31,7 @@
   "customizations": {
     "vscode": {
       "settings": {
-        "dotfiles.repository": "partcad/dotfiles"
+        "dotfiles.repository": "partcad/devcontainer-dotfiles"
       },
       // <!-- prettier-ignore-start -->
       "extensions": [
