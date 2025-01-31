@@ -147,6 +147,7 @@ jobs:
     needs: test-cli-setup
     timeout-minutes: 10
 
+    steps:
       - name: Basic integration test for CLI (PartCAD examples)
         shell: bash
         run: |
@@ -184,6 +185,7 @@ jobs:
     needs: test-cli-setup
     timeout-minutes: 10
 
+    steps:
       - name: Basic integration test for CLI (all examples)
         shell: bash
         run: |
@@ -211,6 +213,7 @@ jobs:
     needs: test-cli-setup
     timeout-minutes: 30
 
+    steps:
       - name: Test the entire repository
         run: |
           # shellcheck disable=SC1090
