@@ -4,4 +4,5 @@ description: "Prepare the runner no matter what the job is"
 runs:
   using: "composite"
   steps:
+    - uses: actions/checkout@v4
     - uses: ./.github/actions/setup-all/10-python.yml

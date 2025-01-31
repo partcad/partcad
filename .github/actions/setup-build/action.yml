@@ -4,5 +4,6 @@ description: "Prepare the runner to build"
 runs:
   using: "composite"
   steps:
+    - uses: actions/checkout@v4
     - uses: ./.github/actions/setup-build/10-prereqs.yml
     - uses: ./.github/actions/setup-build/20-cadquery.yml
