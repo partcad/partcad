@@ -70,6 +70,7 @@ partcad = 'partcad_cli.click.command:cli'
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
+poetry-plugin-shell = "^1.0.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"

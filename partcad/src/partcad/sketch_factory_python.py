@@ -65,8 +65,8 @@ class SketchFactoryPython(SketchFactoryFile):
         info: dict[str, object] = sketch.shape_info(self.ctx)
         info.update(
             {
-                "runtime_version": self.runtime.version,
-                "runtime_path": self.runtime.path,
+                "sandbox_version": self.runtime.version,
+                "sandbox_path": self.runtime.path,
             }
         )
         return info

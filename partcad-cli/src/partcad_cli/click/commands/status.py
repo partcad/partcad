@@ -51,11 +51,11 @@ def get_tar():
         logging.info("Tar cache size: %.2fMB" % tar_total)
 
 
-def get_runtime():
+def get_sandbox():
     with logging.Action("Status", "sandbox"):
-        runtime_path = os.path.join(path, "sandbox")
-        runtime_total = (get_size(runtime_path)) / 1048576.0
-        logging.info("Sandbox environments size: %.2fMB" % runtime_total)
+        sandbox_path = os.path.join(path, "sandbox")
+        sandbox_total = (get_size(sandbox_path)) / 1048576.0
+        logging.info("Sandbox environments size: %.2fMB" % sandbox_total)
 
 
 @click.command(help="Display the state of internal data used by PartCAD")
@@ -71,16 +71,16 @@ def cli() -> None:
         thread_total = threading.Thread(target=get_total)
         thread_git = threading.Thread(target=get_git)
         thread_tar = threading.Thread(target=get_tar)
-        thread_runtime = threading.Thread(target=get_runtime)
+        thread_sandbox = threading.Thread(target=get_sandbox)
 
         # Launch threads
         thread_total.start()
         thread_git.start()
         thread_tar.start()
-        thread_runtime.start()
+        thread_sandbox.start()
 
         # Wait for threads to finish
         thread_total.join()
         thread_git.join()
         thread_tar.join()
-        thread_runtime.join()
+        thread_sandbox.join()
