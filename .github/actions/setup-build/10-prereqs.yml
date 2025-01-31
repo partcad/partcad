@@ -9,8 +9,8 @@ runs:
         if: ${{ startsWith(matrix.os, 'ubuntu') }}
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install libcairo2-dev pkg-config python3-dev
+          sudo apt-get update || exit 1
+          sudo apt-get install libcairo2-dev pkg-config python3-dev || exit 1
 
       - name: Install prerequisites
         shell: bash

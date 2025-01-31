@@ -5,9 +5,20 @@ runs:
   using: "composite"
   steps:
 
-      # cadquery-ocp hack for MacOS with ARM
-      - name: install cadquery-ocp on MacOS (Python 3.10)
-        if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.10') }}
+name: "Setup CadQuery"
+description: "Prepare CadQuery and its dependencies"
+
+runs:
+  using: "composite"
+  steps:
+      - name: Set CadQuery version
+        shell: bash
+        run: |
+          echo "CADQUERY_VERSION=7.7.2" >> $GITHUB_ENV
+          echo "CADQUERY_BASE_URL=https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64" >> $GITHUB_ENV
+
+      - name: install cadquery-ocp on MacOS
+        if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') }}
         shell: bash
         run: |
           # shellcheck disable=SC1090
@@ -15,59 +26,13 @@ runs:
           # shellcheck disable=SC1090
           . ~/.bash_profile
 
-          mamba activate env-build
-          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
-          mamba deactivate
+          PYTHON_VERSION="${{ matrix.python-version }}"
+          PYTHON_VERSION_NO_DOT="${PYTHON_VERSION//./}"
+          WHEEL_FILE="cadquery_ocp-${CADQUERY_VERSION}-cp${PYTHON_VERSION_NO_DOT}-cp${PYTHON_VERSION_NO_DOT}-macosx_11_0_arm64.whl"
+          WHEEL_URL="${CADQUERY_BASE_URL}/${WHEEL_FILE}"
 
-          mamba activate env-build-cli
-          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
-          mamba deactivate
-
-          # Done in action.yml
-          # mamba activate env-test
-          # python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp310-cp310-macosx_11_0_arm64.whl
-          # mamba deactivate
-
-      - name: install cadquery-ocp on MacOS (Python 3.11)
-        if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.11') }}
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          mamba activate env-build
-          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
-          mamba deactivate
-
-          mamba activate env-build-cli
-          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
-          mamba deactivate
-
-          # Done in action.yml
-          mamba activate env-test
-          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp311-cp311-macosx_11_0_arm64.whl
-          mamba deactivate
-
-      - name: install cadquery-ocp on MacOS (Python 3.12)
-        if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') && (matrix.python-version == '3.12') }}
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          mamba activate env-build
-          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
-          mamba deactivate
-
-          mamba activate env-build-cli
-          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
-          mamba deactivate
-
-          # Done in action.yml
-          mamba activate env-test
-          python -m pip install https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64/cadquery_ocp-7.7.2-cp312-cp312-macosx_11_0_arm64.whl
-          mamba deactivate
+          for env in env-build env-build-cli env-test; do
+            mamba activate $env
+            python -m pip install "$WHEEL_URL"
+            mamba deactivate
+          done
