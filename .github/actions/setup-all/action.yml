@@ -4,5 +4,68 @@ description: "Prepare the runner no matter what the job is"
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v4
-    - uses: ./.github/actions/setup-all/10-python.yml
+
+    ###################################################  PYTHON  ###################################################
+
+    # Miniconda
+    - uses: conda-incubator/setup-miniconda@v3
+      with:
+        miniforge-version: latest
+        channels: conda-forge,defaults
+        python-version: ${{ matrix.python-version }}
+
+    - name: Init mamba
+      shell: bash
+      run: |
+        command -v mamba
+        mamba --version
+        mamba init
+        touch ~/.bashrc
+        touch ~/.bash_profile
+
+    - uses: actions/cache@v4
+      id: cache
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.*') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    # TODO(clairbee): Cache mamba packages
+    # TODO(clairbee): Cache the mamba environment?
+
+    # Install dev dependencies
+    - name: install dev dependencies
+      shell: bash
+      run: |
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba clean --all
+        mamba create -n env-test python=${{ matrix.python-version }} -y
+        mamba activate env-test
+        python -m ensurepip --upgrade
+        python -m pip install --upgrade pip wheel mypy setuptools
+        mamba deactivate
+
+    # - name: Update Homebrew
+    #   if: matrix.os == 'macos-latest'
+    #   shell: bash
+    #   run: |
+    #     brew update --preinstall
+    #     # cat "$(brew --repository)/Library/Taps/homebrew/homebrew-core/Formula/nlopt.rb" > .github/brew-formulae
+    # # - name: Configure Homebrew cache
+    # #   if: matrix.os == 'macos-latest'
+    # #   uses: actions/cache@v2
+    # #   with:
+    # #     path: |
+    # #       ~/Library/Caches/Homebrew/nlopt--*
+    # #       ~/Library/Caches/Homebrew/downloads/*--nlopt-*
+    # #     key: brew-${{ hashFiles('.github/brew-formulae') }}
+    # #     restore-keys: brew-
+    # - name: Install Homebrew dependencies
+    #   if: matrix.os == 'macos-latest'
+    #   shell: bash
+    #   run: |
+    #     # env HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
+    #     HOMEBREW_NO_AUTO_UPDATE=1 brew install gcc
+    #     HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt

@@ -4,8 +4,81 @@ description: "Prepare the runner to test"
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v4
-    - uses: ./.github/actions/setup-test/10-prereqs.yml
-    - uses: ./.github/actions/setup-test/20-cadquery.yml
-    - uses: ./.github/actions/setup-test/30-openscad.yml
-    - uses: ./.github/actions/setup-test/70-registry.yml
+
+    ############################################## OS PREREQUISITES ################################################
+
+    - name: Install prerequisites
+      shell: bash
+      run: |
+        # shellcheck disable=SC1090
+        . ~/.bashrc
+        # shellcheck disable=SC1090
+        . ~/.bash_profile
+
+        mamba create -n test python=${{ matrix.python-version }} -y
+        mamba activate test
+        python -m pip install --upgrade pip
+        pip install -U pytest==8.3.4 pytest-cov==6.0.0 pytest-xdist==3.6.1
+        # Install all core and a subset of CLI dependencies, that are required for tests
+        pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
+        pip install -r partcad/requirements-dev.in
+        mamba deactivate
+
+    #################################################  CADQUERY  ####################################################
+
+    # cadquery-ocp hack for macOS with ARM
+    - name: install macos dev dependencies
+      if: startsWith(${{matrix.os}}, 'macos')
+      shell: bash
+      run: |
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba activate env-test
+        pip install swig
+        mamba deactivate
+
+    - name: install cadquery-ocp on macOS
+      if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') }}
+      shell: bash
+      run: |
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba activate env-test
+
+        VERSION="7.7.2"
+        PY_VERSION="${{ matrix.python-version }}"
+        PY_VERSION_NO_DOT="${PY_VERSION//./}"
+        WHEEL_URL="https://github.com/jdegenstein/ocp-build-system/releases/download/${VERSION}_macos_arm64/cadquery_ocp-${VERSION}-cp${PY_VERSION_NO_DOT}-cp${PY_VERSION_NO_DOT}-macosx_11_0_arm64.whl"
+        WHEEL_FILE="cadquery_ocp-${VERSION}-cp${PY_VERSION_NO_DOT}-cp${PY_VERSION_NO_DOT}-macosx_11_0_arm64.whl"
+
+        # Download wheel
+        curl -L -o "$WHEEL_FILE" "$WHEEL_URL"
+
+        pip install "$WHEEL_FILE"
+        mamba deactivate
+
+    #################################################  OPENSCAD  ####################################################
+
+    - name: Install OpenSCAD (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y openscad
+
+    - name: Install OpenSCAD (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install -f openscad || ( \
+          rm /Users/runner/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
+
+    - name: Install OpenSCAD (Windows)
+      if: runner.os == 'Windows'
+      run: .github/scripts/openscad.ps1
+      timeout-minutes: 1
+
+    #################################################  REGISTRY  ####################################################
+
+    - name: Fix Windows registry
+      if: runner.os == 'Windows'
+      run: .github/scripts/registry.ps1
+      timeout-minutes: 1
