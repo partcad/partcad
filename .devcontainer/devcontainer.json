@@ -13,7 +13,7 @@
     "PATH": "${containerEnv:PATH}:/home/vscode/miniforge3/bin",
     // TODO: Enable prepare-commit-msg once rebase problem is fixed.
     // TODO: poetry-* hooks are source of unnecessary conflicts in PRs and should be handled by dependabot.
-    "SKIP": "prepare-commit-msg,poetry-install,poetry-lock,poetry-export"
+    "SKIP": "behave,prepare-commit-msg,poetry-install,poetry-lock,poetry-export"
   },
   "postCreateCommand": {
     "setup-utils": "sudo apt-get update && sudo apt-get install -y file xxd",

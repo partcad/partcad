@@ -143,7 +143,7 @@ def cli(ctx: click.rich_context.RichContext, **kwargs):
                 kwargs[key] = f"{ROOT}{value}"
 
         if logging.had_errors:
-            logging.error(f"Failed creating package at '{dst_path}'")
+            logging.error(f"Failed creating '{dst_path}'!")
             return
 
     logging.info(f"Creating package configuration at '{dst_path}'...")
@@ -151,4 +151,4 @@ def cli(ctx: click.rich_context.RichContext, **kwargs):
     if create_package(dst_path, config_options):
         logging.info(f"Successfully created package at '{dst_path}'")
     else:
-        logging.error(f"Failed creating package at '{dst_path}'")
+        logging.error(f"Failed creating '{dst_path}'!")

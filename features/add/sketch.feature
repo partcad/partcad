@@ -9,6 +9,9 @@ Feature: `pc add sketch` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should be created with content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -103,6 +106,9 @@ Feature: `pc add sketch` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
         example:
@@ -124,6 +130,9 @@ Feature: `pc add sketch` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
         example:
@@ -182,6 +191,9 @@ Feature: `pc add sketch` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
         model:
@@ -200,6 +212,9 @@ Feature: `pc add sketch` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
         design:

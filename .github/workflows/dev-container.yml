@@ -382,7 +382,6 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
-          # TODO: Run ggshield and/or other secrets scanning tools as separate job
           env: |
             SKIP=poetry-export,poetry-lock,ggshield
           runCmd:

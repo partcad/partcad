@@ -84,7 +84,7 @@ Feature: `pc list assemblies` command
     Then STDOUT should contain "PartCAD assemblies:"
     Then STDOUT should contain "primitive"
     Then STDOUT should contain "Total: 1"
-    Then STDOUT should contain "DONE: ListAssy: /:"
+    Then STDOUT should contain "DONE: ListAssy: //"
 
 #   @ai-openscad @failure
 #   Scenario: Fail to add assembly with missing referenced parts

@@ -30,6 +30,9 @@ Feature: `pc add dep` command
     # And the package structure should be valid
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
         OpenVMP-robots:
           url: https://github.com/openvmp/openvmp-models.git

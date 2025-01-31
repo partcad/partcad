@@ -1,4 +1,5 @@
 import os
+import re
 import yaml
 from behave import then
 
@@ -12,6 +13,10 @@ def step_impl(context, filename):
     with open(location, "r") as file:
         actual_content = yaml.safe_load(file.read().strip())
 
+    # Regex check for pythonVersion and partcad version
+    for key, item in expected_content.items():
+        if key in ["pythonVersion", "partcad"] and re.match(item, actual_content[key]):
+            expected_content[key] = actual_content[key]
     assert (
         actual_content == expected_content
     ), f"File content does not match.\nExpected:\n{expected_content}\nActual:\n{actual_content}"
