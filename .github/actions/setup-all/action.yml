@@ -41,7 +41,7 @@ runs:
         . ~/.bashrc
         . ~/.bash_profile
         mamba clean --all
-        mamba create -n env-test python=${{ matrix.python-version }} -y
+        mamba create -n env-test python==${{ matrix.python-version }} -y
         mamba activate env-test
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools

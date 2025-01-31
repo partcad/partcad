@@ -15,7 +15,7 @@ runs:
         # shellcheck disable=SC1090
         . ~/.bash_profile
 
-        mamba create -n test python=${{ matrix.python-version }} -y
+        mamba create -n test python==${{ matrix.python-version }} -y
         mamba activate test
         python -m pip install --upgrade pip
         pip install -U pytest==8.3.4 pytest-cov==6.0.0 pytest-xdist==3.6.1
@@ -77,7 +77,6 @@ runs:
       if: runner.os == 'Windows'
       shell: powershell
       run: .github/scripts/openscad.ps1
-      timeout-minutes: 1
 
     #################################################  REGISTRY  ####################################################
 
@@ -85,4 +84,3 @@ runs:
       if: runner.os == 'Windows'
       shell: powershell
       run: .github/scripts/registry.ps1
-      timeout-minutes: 1

@@ -148,8 +148,14 @@ jobs:
           # BEGIN CLEAN PACKAGE
           mkdir new_pkg
           cd new_pkg
-          coverage run pc --no-ansi init
-          coverage run pc --no-ansi list all -r
+          if ! coverage run pc --no-ansi init; then
+            echo "Failed to initialize package"
+            exit 1
+          fi
+          if ! coverage run pc --no-ansi list all -r; then
+            echo "Failed to list package contents"
+            exit 1
+          fi
           # END CLEAN PACKAGE
 
           # BEGIN PARTCAD EXAMPLES
