@@ -9,8 +9,31 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import os
+from opentelemetry import context as otel_context
+from opentelemetry.trace import Tracer
+from typing import Callable
 
+from .sentry import tracer
 from .user_config import user_config
+
+class TracedThreadPoolExecutor(ThreadPoolExecutor):
+    def __init__(self, tracer: Tracer, *args, **kwargs):
+        self.tracer = tracer
+        super().__init__(*args, **kwargs)
+
+    def with_otel_context(self, context: otel_context.Context, fn: Callable):
+        otel_context.attach(context)
+        return fn()
+
+    def submit(self, fn, *args, **kwargs):
+        # get the current otel context
+        context = otel_context.get_current()
+        if context:
+            return super().submit(
+                lambda: self.with_otel_context(context, lambda: fn(*args, **kwargs)),
+            )
+        else:
+            return super().submit(lambda: fn(*args, **kwargs))
 
 if user_config.threads_max is not None:
     cpu_count = user_config.threads_max
@@ -34,8 +57,8 @@ if os.name == "nt":
     if unconstrained_cpu_count > 61:
         unconstrained_cpu_count = 61
 
-executor = ThreadPoolExecutor(constrained_cpu_count, "partcad-executor-")
-others = ThreadPoolExecutor(unconstrained_cpu_count, "partcad-executor-others-")
+executor = TracedThreadPoolExecutor(tracer, constrained_cpu_count, "partcad-executor-")
+others = TracedThreadPoolExecutor(tracer, unconstrained_cpu_count, "partcad-executor-others-")
 
 
 # run returns a future to wait for 'method' to be completed in a separate thread on the constrained executor
