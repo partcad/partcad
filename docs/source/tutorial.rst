@@ -87,6 +87,29 @@ Now the part can be exported:
 
     pc export -t stl :test
 
+Convert a CAD File
+------------------
+
+The pc adhoc convert command allows you to quickly convert a CAD file from one format to another without requiring a full project setup or configuration.
+
+Supported formats:
+- Input: STL, STEP, BREP, 3MF, SCAD, CadQuery, Build123d
+- Output: STL, STEP, BREP, 3MF, ThreeJS, OBJ, GLTF
+
+Examples:
+
+.. code-block:: shell
+
+    # Type inference from extensions
+    pc adhoc convert part.stl model.step  # STL to STEP
+
+    # Explicit type specification
+    pc adhoc convert input output.stl --input scad --output stl
+
+    # Default output filename
+    pc adhoc convert input.stl --output step  # Creates input.step
+
+Note: If the conversion fails, the command will display an error message and exit with a non-zero status code.
 Reset partcad
 ---------------------
 
