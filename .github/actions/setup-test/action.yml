@@ -61,18 +61,21 @@ runs:
 
     - name: Install OpenSCAD (Linux)
       if: runner.os == 'Linux'
+      shell: bash
       run: |
         sudo apt-get update
         sudo apt-get install -y openscad
 
     - name: Install OpenSCAD (macOS)
       if: runner.os == 'macOS'
+      shell: bash
       run: |
         brew install -f openscad || ( \
           rm /Users/runner/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
 
     - name: Install OpenSCAD (Windows)
       if: runner.os == 'Windows'
+      shell: powershell
       run: .github/scripts/openscad.ps1
       timeout-minutes: 1
 
@@ -80,5 +83,6 @@ runs:
 
     - name: Fix Windows registry
       if: runner.os == 'Windows'
+      shell: powershell
       run: .github/scripts/registry.ps1
       timeout-minutes: 1
