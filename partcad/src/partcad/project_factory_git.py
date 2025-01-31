@@ -77,10 +77,7 @@ class GitImportConfiguration:
 
     def _git_config_options(self) -> list[str]:
         params = []
-        git_config = user_config.get("git.config")
-        if git_config is None:
-            return params
-        for key, value in git_config.items():
+        for key, value in user_config.git_config.items():
             if key.find("url") != -1 and key.find("insteadOf") != -1:
                 continue
 
