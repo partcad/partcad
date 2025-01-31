@@ -16,7 +16,7 @@ class Runtime:
     def get_internal_state_dir():
         return os.path.join(
             user_config.internal_state_dir,
-            "runtime",
+            "sandbox",
         )
 
     def __init__(self, ctx, name):

@@ -18,26 +18,8 @@ packages or working on hermetic private repositories.
 Ideas and Feedback
 ==================
 
-Share your ideas and feedback on
-`our Discord server <https://discord.gg/h5qhbHtygj>`_.
-
-Participate in Decision Making
-==============================
-
-`Become a PartCAD supporter <https://patreon.com/PartCAD>`_ to vote for
-prioritization of different development tracks and for other decisions.
-
-Your contributions are used exclusively to fund the development process,
-not to pay back venture capitalists, and ensure PartCAD remains independent.
-
-For larger contributions
-(accompanied with a request to develop a particular feature or not),
-please, reach out to
-`the team <mailto:support@partcad.org>`_ directly.
-We also accept contributions in the form of GPUs and other AI-capable hardware.
-We are committed to never produce a single gram of CO2 by pointlessly peforming
-cryptographic operations for the purpose of financial speculations or taking
-advantage of cryptography challenged.
+Share your ideas and feedback using
+`PartCAD's Discord server <https://discord.gg/h5qhbHtygj>`_.
 
 Develop Features
 ================
@@ -46,7 +28,7 @@ Send a pull request to
 `the PartCAD's main Github repository <https://github.com/partcad/partcad/>`_.
 
 Engage with the community on
-`PartCAD's Discord channel <https://discord.gg/h5qhbHtygj>`_
+`PartCAD's Discord server <https://discord.gg/h5qhbHtygj>`_
 if you need help deciding what could be the best project for you to work on.
 
 Documentation and Tutorials

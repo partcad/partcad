@@ -113,7 +113,7 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     help="Ignore broken dependencies and cache at your own risk",
 )
 @click.option(
-    "--python-runtime",
+    "--python-sandbox",
     default=None,
     show_envvar=True,
     type=click.Choice(["none", "pypy", "conda"]),
@@ -247,7 +247,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
         ("PC_CACHE_MEMORY_MAX_ENTRY_SIZE", "cache_memory_max_entry_size"),
         ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
         ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
-        ("PC_PYTHON_SANDBOX", "python_runtime"),
+        ("PC_PYTHON_SANDBOX", "python_sandbox"),
         ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
         ("PC_FORCE_UPDATE", "force_update"),
         ("PC_GOOGLE_API_KEY", "google_api_key"),
