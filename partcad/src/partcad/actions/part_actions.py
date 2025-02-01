@@ -45,6 +45,7 @@ def deep_copy_metadata(source_path, target_path):
 
     logging.info(f"Preserved file attributes for {target_path}")
 
+
 def import_part_action(project, kind, name, source_path, config=None, target_format=None):
     """
     Import a part into the project by copying it, preserving metadata, and optionally converting it.
@@ -65,8 +66,12 @@ def import_part_action(project, kind, name, source_path, config=None, target_for
     if not source_path.exists():
         raise ValueError(f"Source file '{source_path}' does not exist.")
 
-    # Copy file and metadata
-    shutil.copy(source_path, target_path)
+    # Copy file and handle copy errors
+    try:
+        shutil.copy(source_path, target_path)
+    except shutil.Error as e:
+        raise ValueError(f"Failed to copy file from {source_path} to {target_path}: {e}")
+
     deep_copy_metadata(source_path, target_path)
 
     # Add part to project
