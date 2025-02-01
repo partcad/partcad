@@ -21,7 +21,7 @@ runs:
       with:
         miniforge-version: latest
         channels: conda-forge,defaults
-        python-version: ${{ matrix.python-version }}
+        # python-version: ${{ matrix.python-version }}
 
     - name: Init mamba
       shell: bash
