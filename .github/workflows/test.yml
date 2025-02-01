@@ -17,10 +17,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  OSES: [ubuntu-latest, windows-latest, macos-13, macos-latest, ubuntu-24.04-l, windows-latest-l]
-  OSES_SMALL: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-  OSES_BIG: [ubuntu-24.04-l, windows-latest-l]
-  PYTHON_VERSIONS: ["3.10", "3.11", "3.12"]
+  OSES: "ubuntu-latest,windows-latest,macos-13,macos-latest,ubuntu-24.04-l,windows-latest-l"
+  OSES_SMALL: "ubuntu-latest,windows-latest,macos-13,macos-latest"
+  OSES_BIG: "ubuntu-latest-l,windows-latest-l"
+  PYTHON_VERSIONS: "3.10,3.11,3.12"
 
 jobs:
   test-setup:
@@ -28,8 +28,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ env.OSES }}
-        python-version: ${{ env.PYTHON_VERSIONS }}
+        os: ${{ env.OSES.split(",") }}
+        python-version: ${{ env.PYTHON_VERSIONS.split(",") }}
     runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
     timeout-minutes: 10
@@ -49,8 +49,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ env.OSES }}
-        python-version: ${{ env.PYTHON_VERSIONS }}
+        os: ${{ env.OSES_SMALL.split(",") }}
+        python-version: ${{ env.PYTHON_VERSIONS.split(",") }}
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
     needs: test-setup
