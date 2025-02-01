@@ -43,8 +43,9 @@ jobs:
           mkdir -pv test-results
 
   test-pytest:
-    # runs-on: ${{ matrix.os }}
-    # if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
+    name: "Pytest"
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
     needs: test-setup
     timeout-minutes: 15
 
@@ -66,7 +67,6 @@ jobs:
           coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
           mamba deactivate
 
-      #- &uploadTestResults
       - name: Upload test results & coverage reports to github and codecov
         if: always()
         uses: ./.github/actions/upload-test-results
