@@ -16,20 +16,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-env:
-  OSES: "ubuntu-latest,windows-latest,macos-13,macos-latest,ubuntu-24.04-l,windows-latest-l"
-  OSES_SMALL: "ubuntu-latest,windows-latest,macos-13,macos-latest"
-  OSES_BIG: "ubuntu-latest-l,windows-latest-l"
-  PYTHON_VERSIONS: "3.10,3.11,3.12"
-
 jobs:
   test-setup:
     name: "Test Setup"
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ OSES.split(",") }}
-        python-version: ${{ PYTHON_VERSIONS.split(",") }}
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest, ubuntu-24.04-l, windows-latest-l]
+        python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
     timeout-minutes: 10
@@ -49,8 +43,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ env.OSES_SMALL.split(",") }}
-        python-version: ${{ env.PYTHON_VERSIONS.split(",") }}
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
     needs: test-setup
@@ -74,40 +68,56 @@ jobs:
           coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
           mamba deactivate
 
-      # - name: Upload test results & coverage reports to github and codecov
-      #   if: always()
-      #   uses: ./.github/actions/upload-test-results
-      #   with:
-      #     name: test-results
-      #     path: test-results/
-      #     retention-days: 7
-      #     status: ${{ job.status }}
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     codecov-files: test-results/junit.xml
-      #     coverage-report: test-results/coverage.xml
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
 
-  # test-behave:
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(runner.os, '-l') }}
-  #   needs: test-setup
-  #   timeout-minutes: 20
+  test-behave:
+    name: "Behave"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
+    needs: test-setup
+    timeout-minutes: 20
 
-  #   steps:
-  #     - name: Test with behave
-  #       shell: bash
-  #       run: |
-  #         # shellcheck disable=SC1090
-  #         . ~/.bashrc
-  #         # shellcheck disable=SC1090
-  #         . ~/.bash_profile
+    steps:
+      - name: Test with behave
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
 
-  #         DIR=$(pwd)
-  #         mamba activate test
-  #         coverage run behave
-  #         coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
-  #         mamba deactivate
+          DIR=$(pwd)
+          mamba activate test
+          coverage run behave
+          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          mamba deactivate
 
-  #     - *uploadTestResults
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
 
   # test-cli-setup:
   #   runs-on: ${{ matrix.os }}
