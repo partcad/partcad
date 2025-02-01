@@ -16,18 +16,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  OSES: [ubuntu-latest, windows-latest, macos-13, macos-latest, ubuntu-24.04-l, windows-latest-l]
+  OSES_SMALL: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+  OSES_BIG: [ubuntu-24.04-l, windows-latest-l]
+  PYTHON_VERSIONS: ["3.10", "3.11", "3.12"]
+
 jobs:
   test-setup:
     name: "Test Setup"
-    strategy: &strategy
+    strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest, ubuntu-24.04-l, windows-latest-l]
-        python-version:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          # - "3.13"
+        os: ${{ env.OSES }}
+        python-version: ${{ env.PYTHON_VERSIONS }}
     runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
     timeout-minutes: 10
@@ -44,7 +46,11 @@ jobs:
 
   test-pytest:
     name: "Pytest"
-    strategy: *strategy
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ env.OSES }}
+        python-version: ${{ env.PYTHON_VERSIONS }}
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
     needs: test-setup
