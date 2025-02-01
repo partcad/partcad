@@ -16,19 +16,22 @@ from partcad.conversion import convert_object
 @click.option("-t", "--target-format", help="Target conversion format",
               type=click.Choice(["step", "brep", "stl", "3mf", "threejs", "obj", "gltf"]), required=True)
 @click.option("-P", "--package", help="Package containing the object", type=str)
-@click.option("-r", "--recursive", help="Process packages recursively", is_flag=True)
+# @click.option("-r", "--recursive", help="Process packages recursively", is_flag=True)
 @click.option("-i", "--in-place", help="Update object's type in place", is_flag=True, default=False)
 @click.option("--dry-run", help="Simulate conversion without making any changes", is_flag=True)
 @click.argument("object", type=str, required=True)
 @click.pass_obj
 def cli(ctx: Context, create_dirs: bool, output_dir: Optional[str], target_format: str,
-        package: Optional[str], recursive: bool, in_place: bool, dry_run: bool, object: str) -> None:
+        package: Optional[str], in_place: bool, dry_run: bool, object: str) -> None:
     """CLI command for conversion."""
     logging.info(f"Starting conversion for '{object}' to '{target_format}', in_place={in_place}, dry_run={dry_run}")
     try:
         ctx.option_create_dirs = create_dirs
         package = package or ""
-        packages = _get_packages(ctx, package, recursive)
+
+        # NOTE: will add recursion feature later
+        # packages = _get_packages(ctx, package, recursive)
+        packages = _get_packages(ctx, package)
         for pkg in packages:
             resolved_package, resolved_object = _resolve_package_object(ctx, pkg, object)
             if not resolved_object:
@@ -61,18 +64,39 @@ def cli(ctx: Context, create_dirs: bool, output_dir: Optional[str], target_forma
         raise click.ClickException(f"Conversion failed: {e}") from e
 
 
-def _get_packages(ctx: Context, package: str, recursive: bool) -> List[str]:
+def _get_packages(ctx: Context, package: str, recursive: bool = False) -> List[str]:
     """Return list of packages to process."""
-    if recursive:
-        start_package = pc_utils.get_child_project_path(ctx.get_current_project_path(), package)
-        all_packages = ctx.get_all_packages(start_package)
-        return [pkg["name"] for pkg in all_packages]
-    return [package]
+    # If no package is provided, use the current project path.
+    if not package:
+        full_package = ctx.get_current_project_path()
+    else:
+        # If package starts with '/', treat it as relative to the project root.
+        if package.startswith("/"):
+            full_package = os.path.join(ctx.get_current_project_path(), package[1:])
+        else:
+            full_package = os.path.join(ctx.get_current_project_path(), package)
+
+    # NOTE: will add recursion feature later
+    # if recursive:
+    #     all_packages = ctx.get_all_packages(full_package)
+    #     return [pkg["name"] for pkg in all_packages]
+    # else:
+        # return [full_package]
+
+    return [full_package]
 
 
 def _resolve_package_object(ctx: Context, package: str, object_str: str) -> Tuple[str, str]:
     """Resolve package and object from the provided string."""
+    # Compute full package path in the same way as _get_packages.
+    if not package:
+        full_package = ctx.get_current_project_path()
+    else:
+        if package.startswith("/"):
+            full_package = os.path.join(ctx.get_current_project_path(), package[1:])
+        else:
+            full_package = os.path.join(ctx.get_current_project_path(), package)
     if ":" not in object_str:
         object_str = f":{object_str}"
-    resolved_package, resolved_object = pc_utils.resolve_resource_path(ctx.get_current_project_path() + package, object_str)
+    resolved_package, resolved_object = pc_utils.resolve_resource_path(full_package, object_str)
     return resolved_package, resolved_object
