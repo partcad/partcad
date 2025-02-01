@@ -17,16 +17,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-setup:
-    name: "Test Setup"
+  test-pytest:
+    name: "Pytest"
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest, ubuntu-24.04-l, windows-latest-l]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
         python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
-    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
-    timeout-minutes: 10
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -38,19 +38,6 @@ jobs:
         run: |
           mkdir -pv test-results
 
-  test-pytest:
-    name: "Pytest"
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
-    runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    needs: test-setup
-    timeout-minutes: 15
-
-    steps:
       - name: Test with pytest
         env:
           PYTHONPATH: partcad/src
@@ -89,10 +76,18 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    needs: test-setup
     timeout-minutes: 20
 
     steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
+
+      - name: Prepare folders
+        shell: bash
+        run: |
+          mkdir -pv test-results
+
       - name: Test with behave
         shell: bash
         run: |
@@ -108,7 +103,6 @@ jobs:
           mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
-        if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: test-results
@@ -119,19 +113,27 @@ jobs:
           codecov-files: test-results/junit.xml
           coverage-report: test-results/coverage.xml
 
-  test-cli-setup:
-    name: "Test CLI Setup"
+  test-examples-partcad:
+    name: "Examples (PartCAD)"
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest, ubuntu-24.04-l, windows-latest-l]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
         python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
-    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
-    needs: test-setup
-    timeout-minutes: 5
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 10
 
     steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
+
+      - name: Prepare folders
+        shell: bash
+        run: |
+          mkdir -pv test-results
+
       - name: Install CLI
         shell: bash
         run: |
@@ -144,19 +146,6 @@ jobs:
           pip install -U ./partcad ./partcad-cli
           mamba deactivate
 
-  test-examples-partcad:
-    name: "Examples (PartCAD)"
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
-    runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    needs: test-cli-setup
-    timeout-minutes: 10
-
-    steps:
       - name: Basic integration test for CLI (PartCAD examples)
         shell: bash
         run: |
@@ -212,10 +201,30 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    needs: test-cli-setup
     timeout-minutes: 10
 
     steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
+
+      - name: Prepare folders
+        shell: bash
+        run: |
+          mkdir -pv test-results
+
+      - name: Install CLI
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
+
+          mamba activate test
+          pip install -U ./partcad ./partcad-cli
+          mamba deactivate
+
       - name: Basic integration test for CLI (all examples)
         shell: bash
         run: |
@@ -254,10 +263,30 @@ jobs:
         python-version: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    needs: test-cli-setup
     timeout-minutes: 30
 
     steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
+
+      - name: Prepare folders
+        shell: bash
+        run: |
+          mkdir -pv test-results
+
+      - name: Install CLI
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
+
+          mamba activate test
+          pip install -U ./partcad ./partcad-cli
+          mamba deactivate
+
       - name: Test the entire repository
         shell: bash
         run: |
