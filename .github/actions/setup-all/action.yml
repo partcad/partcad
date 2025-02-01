@@ -26,8 +26,6 @@ runs:
     - name: Init conda
       shell: bash
       run: |
-        command -v conda
-        conda --version
         conda init
         touch ~/.bashrc
         touch ~/.bash_profile
