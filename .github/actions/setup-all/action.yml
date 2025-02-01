@@ -51,10 +51,10 @@ runs:
         . ~/.bash_profile
         mamba clean --all
         mamba create -n env-test python==${{ matrix.python-version }} -y
-        mamba activate env-test
+        conda activate env-test
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
-        mamba deactivate
+        conda deactivate
 
     # - name: Update Homebrew
     #   if: matrix.os == 'macos-latest'

@@ -16,12 +16,12 @@ runs:
         . ~/.bash_profile
 
         mamba create -n env-test python==${{ matrix.python-version }} -y
-        mamba activate env-test
+        conda activate env-test
         python -m pip install --upgrade pip
         # Install all core and a subset of CLI dependencies, that are required for tests
         python -m pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
         python -m pip install -r partcad/requirements-dev.in
-        mamba deactivate
+        conda deactivate
 
     #################################################  CADQUERY  ####################################################
 
@@ -32,9 +32,9 @@ runs:
       run: |
         . ~/.bashrc
         . ~/.bash_profile
-        mamba activate env-test
+        conda activate env-test
         pip install swig
-        mamba deactivate
+        conda deactivate
 
     - name: install cadquery-ocp on macOS
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') }}
@@ -42,7 +42,7 @@ runs:
       run: |
         . ~/.bashrc
         . ~/.bash_profile
-        mamba activate env-test
+        conda activate env-test
 
         VERSION="7.7.2"
         PY_VERSION="${{ matrix.python-version }}"
@@ -54,7 +54,7 @@ runs:
         curl -L -o "$WHEEL_FILE" "$WHEEL_URL"
 
         pip install "$WHEEL_FILE"
-        mamba deactivate
+        conda deactivate
 
     #################################################  OPENSCAD  ####################################################
 

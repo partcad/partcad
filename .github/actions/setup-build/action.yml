@@ -16,18 +16,18 @@ runs:
         . ~/.bash_profile
 
         mamba create -n env-build python==${{ matrix.python-version }} -y
-        mamba activate env-build
+        conda activate env-build
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         python -m pip install --upgrade build
-        mamba deactivate
+        conda deactivate
 
         mamba create -n env-build-cli python==${{ matrix.python-version }} -y
-        mamba activate env-build-cli
+        conda activate env-build-cli
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         python -m pip install --upgrade build
-        mamba deactivate
+        conda deactivate
 
     #################################################  CADQUERY  ####################################################
 
@@ -52,7 +52,7 @@ runs:
         WHEEL_URL="${CADQUERY_BASE_URL}/${WHEEL_FILE}"
 
         for env in env-build env-build-cli; do
-          mamba activate $env
+          conda activate $env
           python -m pip install "$WHEEL_URL"
-          mamba deactivate
+          conda deactivate
         done

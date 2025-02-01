@@ -45,13 +45,13 @@ jobs:
           . ~/.bash_profile
 
           DIR=$(pwd)
-          mamba activate env-test
+          conda activate env-test
           cd $DIR
 
           mkdir -pv pytest-test-results
           pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*"
           coverage xml --data-file=$DIR/.coverage -o ./pytest-test-results/coverage.xml
-          mamba deactivate
+          conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -91,13 +91,13 @@ jobs:
           DIR=$(pwd)
           mkdir -pv behave-test-results
 
-          mamba activate env-test
+          conda activate env-test
           cd $DIR
           python -m pip install -U ./partcad ./partcad-cli
 
           coverage run $(which behave)
           coverage xml --data-file=./.coverage -o $DIR/behave-test-results/coverage.xml
-          mamba deactivate
+          conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -136,7 +136,7 @@ jobs:
 
           mkdir -pv examples-partcad-test-results
 
-          mamba activate env-test
+          conda activate env-test
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PARTCAD EXAMPLES
@@ -146,8 +146,8 @@ jobs:
           coverage run $(which pc) --no-ansi render -r
           # END PARTCAD EXAMPLES
 
-          coverage xml --data-file=./.coverage -o ../examples-partcad-test-results/coverage.xm
-          mamba deactivate
+          coverage xml --data-file=./.coverage -o ../examples-partcad-test-results/coverage.xml
+          conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -187,7 +187,7 @@ jobs:
           DIR=$(pwd)
           mkdir -pv examples-all-test-results
 
-          mamba activate env-test
+          conda activate env-test
           cd $DIR
           python -m pip install -U ./partcad ./partcad-cli
 
@@ -197,7 +197,7 @@ jobs:
           # END ALL EXAMPLES
 
           coverage xml --data-file=./.coverage -o $DIR/examples-all-test-results/coverage.xml
-          mamba deactivate
+          conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -237,7 +237,7 @@ jobs:
           DIR=$(pwd)
           mkdir -pv pub-repo-test-results
 
-          mamba activate env-test
+          conda activate env-test
           cd $DIR
           python -m pip install -U ./partcad ./partcad-cli
 
@@ -247,7 +247,7 @@ jobs:
           # END PUBLIC REPO
 
           coverage xml --data-file=,/.coverage -o $DIR/pub-repo-test-results/coverage.xml
-          mamba deactivate
+          conda deactivate
 
 
       - name: Upload test results & coverage reports to github and codecov
