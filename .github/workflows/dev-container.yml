@@ -29,7 +29,7 @@ jobs:
 
   poetry-install:
     name: "Run: poetry install"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout (GitHub)
@@ -77,7 +77,7 @@ jobs:
 
   pytest:
     name: "Run: pytest"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: poetry-install
     steps:
@@ -150,8 +150,8 @@ jobs:
 
   pre-commit:
     name: "Run: pre-commit"
-    runs-on: ubuntu-22.04
-    timeout-minutes: 5
+    runs-on: ubuntu-24.04-l
+    timeout-minutes: 10
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -185,7 +185,7 @@ jobs:
 
   behave:
     name: "Run: behave"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: poetry-install
     steps:
@@ -272,7 +272,7 @@ jobs:
       matrix:
         # NOTE: OS below is the one which runs the container, not the one inside the container
         # TODO: @alexanderilyin: Add more OSes via https://github.com/partcad/devcontainers-templates
-        os: [ubuntu-22.04]
+        os: [ubuntu-24.04]
         python-version:
           # TODO: Enable 3.10 when pytest job is deprecated
           # - "3.10"
@@ -340,7 +340,7 @@ jobs:
   integration-tests:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: "Run: pc"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs: poetry-install
     steps:

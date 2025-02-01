@@ -6,7 +6,7 @@ permissions:
   contents: write
 jobs:
   update_version_and_tag:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: |
       !startsWith(github.event.head_commit.message, '[SKIP]') &&
       !startsWith(github.event.head_commit.message, 'Version updated')
