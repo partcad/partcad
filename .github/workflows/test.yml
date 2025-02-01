@@ -45,7 +45,7 @@ jobs:
           . ~/.bash_profile
 
           DIR=$(pwd)
-          mamba activate test
+          mamba activate env-test
           cd $DIR
 
           mkdir -pv pytest-test-results
@@ -91,7 +91,7 @@ jobs:
           DIR=$(pwd)
           mkdir -pv behave-test-results
 
-          mamba activate test
+          mamba activate env-test
           cd $DIR
           python -m pip install -U ./partcad ./partcad-cli
 
@@ -136,7 +136,7 @@ jobs:
 
           mkdir -pv examples-partcad-test-results
 
-          mamba activate test
+          mamba activate env-test
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PARTCAD EXAMPLES
@@ -187,7 +187,7 @@ jobs:
           DIR=$(pwd)
           mkdir -pv examples-all-test-results
 
-          mamba activate test
+          mamba activate env-test
           cd $DIR
           python -m pip install -U ./partcad ./partcad-cli
 
@@ -237,7 +237,7 @@ jobs:
           DIR=$(pwd)
           mkdir -pv pub-repo-test-results
 
-          mamba activate test
+          mamba activate env-test
           cd $DIR
           python -m pip install -U ./partcad ./partcad-cli
 

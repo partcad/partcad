@@ -1,7 +1,12 @@
+allure-behave
 allure-pytest
+behave==1.2.6
 click
 coloredlogs
-pytest-cov
+pyhamcrest==2.1.0
+pytest==8.3.4
+pytest-cov==6.0.0
 pytest-durations
 pytest-html
+pytest-xdist==3.6.1
 rich-click
