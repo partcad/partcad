@@ -25,9 +25,29 @@ def add_part_action(project, kind, path, config=None):
         logging.info(f"Part {name} added successfully.")
 
 
+def deep_copy_metadata(source_path, target_path):
+    """
+    Copies file attributes and metadata from the source to the target file.
+
+    :param source_path: Path to the source file.
+    :param target_path: Path to the copied file.
+    """
+    # Preserve timestamps and file permissions
+    shutil.copystat(source_path, target_path)
+
+    # If there's an associated metadata/config file, copy it too
+    meta_file = source_path.with_suffix(source_path.suffix + ".json")
+    target_meta_file = target_path.with_suffix(target_path.suffix + ".json")
+
+    if meta_file.exists():
+        shutil.copy(meta_file, target_meta_file)
+        logging.info(f"Copied metadata file: {meta_file} -> {target_meta_file}")
+
+    logging.info(f"Preserved file attributes for {target_path}")
+
 def import_part_action(project, kind, name, source_path, config=None, target_format=None):
     """
-    Import a part into the project by copying it and optionally converting it.
+    Import a part into the project by copying it, preserving metadata, and optionally converting it.
 
     :param project: Project object
     :param kind: Type of the part (e.g., stl, step, brep)
@@ -45,15 +65,17 @@ def import_part_action(project, kind, name, source_path, config=None, target_for
     if not source_path.exists():
         raise ValueError(f"Source file '{source_path}' does not exist.")
 
+    # Copy file and metadata
     shutil.copy(source_path, target_path)
+    deep_copy_metadata(source_path, target_path)
 
-    # Add the part to the project
+    # Add part to project
     project.add_part(kind, str(target_path), config)
     project.update_part_config(name, {"path": str(target_path)})
 
-    logging.info(f"Part {name} imported successfully.")
+    logging.info(f"Part {name} imported successfully with metadata.")
 
-    # Convert if a target format is specified
+    # Convert if needed
     if target_format and target_format != kind:
         logging.info(f"Converting {name} from {kind} to {target_format}...")
         convert_part_action(project, name, target_format, in_place=True)
