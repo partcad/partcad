@@ -1,5 +1,5 @@
 # https://github.com/devcontainers/ci/blob/main/docs/github-action.md
-name: CI
+name: CI-Dev
 on:
   workflow_dispatch:
   schedule:

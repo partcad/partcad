@@ -41,7 +41,7 @@ jobs:
 
   test-pytest:
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated')) && !endsWith(matrix.os, '-l') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
     needs: test-setup
     timeout-minutes: 15
 
@@ -78,7 +78,7 @@ jobs:
 
   test-behave:
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated')) && !endsWith(matrix.os, '-l') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
     needs: test-setup
     timeout-minutes: 20
 
@@ -120,7 +120,7 @@ jobs:
 
   test-examples-partcad:
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated')) && !endsWith(matrix.os, '-l') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
     needs: test-cli-setup
     timeout-minutes: 10
 
@@ -163,7 +163,7 @@ jobs:
 
   test-examples-all:
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated')) && !endsWith(matrix.os, '-l') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
     needs: test-cli-setup
     timeout-minutes: 10
 
@@ -190,7 +190,7 @@ jobs:
 
   test-entire-repo:
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated')) && endsWith(matrix.os, '-l') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && endsWith(matrix.os, '-l') }}
     needs: test-cli-setup
     timeout-minutes: 30
 
