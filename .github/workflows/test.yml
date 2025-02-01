@@ -119,119 +119,172 @@ jobs:
           codecov-files: test-results/junit.xml
           coverage-report: test-results/coverage.xml
 
-  # test-cli-setup:
-  #   runs-on: ${{ matrix.os }}
-  #   if: "!startsWith(github.event.head_commit.message, 'Version updated')"
-  #   needs: test-setup
-  #   timeout-minutes: 5
+  test-cli-setup:
+    name: "Test CLI Setup"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest, ubuntu-24.04-l, windows-latest-l]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    needs: test-setup
+    timeout-minutes: 5
 
-  #   steps:
-  #     - name: Install CLI
-  #       shell: bash
-  #       run: |
-  #         # shellcheck disable=SC1090
-  #         . ~/.bashrc
-  #         # shellcheck disable=SC1090
-  #         . ~/.bash_profile
+    steps:
+      - name: Install CLI
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
 
-  #         mamba activate test
-  #         pip install -U ./partcad ./partcad-cli
-  #         mamba deactivate
+          mamba activate test
+          pip install -U ./partcad ./partcad-cli
+          mamba deactivate
 
-  # test-examples-partcad:
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(runner.os, '-l') }}
-  #   needs: test-cli-setup
-  #   timeout-minutes: 10
+  test-examples-partcad:
+    name: "Examples (PartCAD)"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    needs: test-cli-setup
+    timeout-minutes: 10
 
-  #   steps:
-  #     - name: Basic integration test for CLI (PartCAD examples)
-  #       shell: bash
-  #       run: |
-  #         # shellcheck disable=SC1090
-  #         . ~/.bashrc
-  #         # shellcheck disable=SC1090
-  #         . ~/.bash_profile
+    steps:
+      - name: Basic integration test for CLI (PartCAD examples)
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
 
-  #         DIR=$(pwd)
-  #         mamba activate test
+          DIR=$(pwd)
+          mamba activate test
 
-  #         # BEGIN CLEAN PACKAGE
-  #         mkdir new_pkg
-  #         cd new_pkg
-  #         if ! coverage run pc --no-ansi init; then
-  #           echo "Failed to initialize package"
-  #           exit 1
-  #         fi
-  #         if ! coverage run pc --no-ansi list all -r; then
-  #           echo "Failed to list package contents"
-  #           exit 1
-  #         fi
-  #         # END CLEAN PACKAGE
+          # BEGIN CLEAN PACKAGE
+          mkdir new_pkg
+          cd new_pkg
+          if ! coverage run pc --no-ansi init; then
+            echo "Failed to initialize package"
+            exit 1
+          fi
+          if ! coverage run pc --no-ansi list all -r; then
+            echo "Failed to list package contents"
+            exit 1
+          fi
+          # END CLEAN PACKAGE
 
-  #         # BEGIN PARTCAD EXAMPLES
-  #         cd ../examples
-  #         coverage run pc --no-ansi list all -r
-  #         coverage run pc --no-ansi test -r
-  #         coverage run pc --no-ansi render -r
-  #         # END PARTCAD EXAMPLES
+          # BEGIN PARTCAD EXAMPLES
+          cd ../examples
+          coverage run pc --no-ansi list all -r
+          coverage run pc --no-ansi test -r
+          coverage run pc --no-ansi render -r
+          # END PARTCAD EXAMPLES
 
-  #         coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
-  #         mamba deactivate
+          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          mamba deactivate
 
-  #     - *uploadTestResults
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
 
-  # test-examples-all:
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(runner.os, '-l') }}
-  #   needs: test-cli-setup
-  #   timeout-minutes: 10
+  test-examples-all:
+    name: "Examples (All)"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    needs: test-cli-setup
+    timeout-minutes: 10
 
-  #   steps:
-  #     - name: Basic integration test for CLI (all examples)
-  #       shell: bash
-  #       run: |
-  #         # shellcheck disable=SC1090
-  #         . ~/.bashrc
-  #         # shellcheck disable=SC1090
-  #         . ~/.bash_profile
+    steps:
+      - name: Basic integration test for CLI (all examples)
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
 
-  #         DIR=$(pwd)
-  #         mamba activate test
-  #         # BEGIN ALL EXAMPLES
-  #         cd examples
-  #         coverage run pc --no-ansi test -r --package /pub/examples
-  #         # END ALL EXAMPLES
+          DIR=$(pwd)
+          mamba activate test
+          # BEGIN ALL EXAMPLES
+          cd examples
+          coverage run pc --no-ansi test -r --package /pub/examples
+          # END ALL EXAMPLES
 
-  #         coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
-  #         mamba deactivate
+          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          mamba deactivate
 
-  #     - *uploadTestResults
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
 
-  # test-entire-repo:
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && endsWith(runner.os, '-l') }}
-  #   needs: test-cli-setup
-  #   timeout-minutes: 30
+  test-entire-repo:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-l, windows-latest-l]
+        python-version: ["3.10", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    needs: test-cli-setup
+    timeout-minutes: 30
 
-  #   steps:
-  #     - name: Test the entire repository
-  #       shell: bash
-  #       run: |
-  #         # shellcheck disable=SC1090
-  #         . ~/.bashrc
-  #         # shellcheck disable=SC1090
-  #         . ~/.bash_profile
+    steps:
+      - name: Test the entire repository
+        shell: bash
+        run: |
+          # shellcheck disable=SC1090
+          . ~/.bashrc
+          # shellcheck disable=SC1090
+          . ~/.bash_profile
 
-  #         DIR=$(pwd)
-  #         mamba activate test
-  #         # BEGIN PUBLIC REPO
-  #         cd examples
-  #         coverage run pc --no-ansi test -r --package /pub
-  #         # END PUBLIC REPO
+          DIR=$(pwd)
+          mamba activate test
+          # BEGIN PUBLIC REPO
+          cd examples
+          coverage run pc --no-ansi test -r --package /pub
+          # END PUBLIC REPO
 
-  #         coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
-  #         mamba deactivate
+          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          mamba deactivate
 
 
-  #     - *uploadTestResults
+      - name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
