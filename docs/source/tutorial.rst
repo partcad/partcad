@@ -87,6 +87,7 @@ Now the part can be exported:
 
     pc export -t stl :test
 
+==================
 Convert a CAD File
 ==================
 
@@ -114,6 +115,7 @@ Examples:
 .. note::
     If the conversion fails, the command will display an error message and exit with a non-zero status code.
 
+===================================
 Convert a Part, Assembly, or Sketch
 ===================================
 
@@ -150,12 +152,12 @@ To convert objects from a specific package, use the `--package` flag:
     # Convert the part "cube" in the "produce_part_stl" package to STEP format
     pc convert -t step --package /produce_part_stl :cube
 
-For recursive processing of all packages, use the `--recursive` flag:
+.. For recursive processing of all packages, use the `--recursive` flag:
 
-.. code-block:: shell
+.. .. code-block:: shell
 
-    # Convert all parts in the "produce_part_cadquery" package and its dependencies to STEP format
-    pc convert --recursive -t step --package /produce_part_cadquery
+..     # Convert all parts in the "produce_part_cadquery" package and its dependencies to STEP format
+..     pc convert --recursive -t step --package /produce_part_cadquery
 
 Simulate conversion without modifying files
 -------------------------------------------
