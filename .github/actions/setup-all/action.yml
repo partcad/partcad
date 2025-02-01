@@ -23,12 +23,12 @@ runs:
         channels: conda-forge,defaults
         # python-version: ${{ matrix.python-version }}
 
-    - name: Init mamba
+    - name: Init conda
       shell: bash
       run: |
-        command -v mamba
-        mamba --version
-        mamba init
+        command -v conda
+        conda --version
+        conda init
         touch ~/.bashrc
         touch ~/.bash_profile
 
@@ -40,8 +40,8 @@ runs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    # TODO(clairbee): Cache mamba packages
-    # TODO(clairbee): Cache the mamba environment?
+    # TODO(clairbee): Cache conda packages
+    # TODO(clairbee): Cache the conda environment?
 
     # Install dev dependencies
     - name: install dev dependencies
@@ -49,11 +49,14 @@ runs:
       run: |
         . ~/.bashrc
         . ~/.bash_profile
-        mamba clean --all
-        mamba create -n env-test python==${{ matrix.python-version }} -y
+        conda clean --all
+        conda create -n env-test python=${{ matrix.python-version }} -y
         conda activate env-test
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
+        # Install all core and a subset of CLI dependencies, that are required for tests
+        python -m pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
+        python -m pip install -r partcad/requirements-dev.in
         conda deactivate
 
     # - name: Update Homebrew

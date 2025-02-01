@@ -5,24 +5,6 @@ runs:
   using: "composite"
   steps:
 
-    ###################################################  PYTHON  ###################################################
-
-    - name: Install prerequisites
-      shell: bash
-      run: |
-        # shellcheck disable=SC1090
-        . ~/.bashrc
-        # shellcheck disable=SC1090
-        . ~/.bash_profile
-
-        mamba create -n env-test python==${{ matrix.python-version }} -y
-        conda activate env-test
-        python -m pip install --upgrade pip
-        # Install all core and a subset of CLI dependencies, that are required for tests
-        python -m pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
-        python -m pip install -r partcad/requirements-dev.in
-        conda deactivate
-
     #################################################  CADQUERY  ####################################################
 
     # cadquery-ocp hack for macOS with ARM
