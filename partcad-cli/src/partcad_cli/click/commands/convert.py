@@ -18,12 +18,13 @@ from partcad.conversion import convert_object
 @click.option("-P", "--package", help="Package containing the object", type=str)
 @click.option("-r", "--recursive", help="Process packages recursively", is_flag=True)
 @click.option("-i", "--in-place", help="Update object's type in place", is_flag=True, default=False)
+@click.option("--dry-run", help="Simulate conversion without making any changes", is_flag=True)
 @click.argument("object", type=str, required=True)
 @click.pass_obj
 def cli(ctx: Context, create_dirs: bool, output_dir: Optional[str], target_format: str,
-        package: Optional[str], recursive: bool, in_place: bool, object: str) -> None:
+        package: Optional[str], recursive: bool, in_place: bool, dry_run: bool, object: str) -> None:
     """CLI command for conversion."""
-    logging.info(f"Starting conversion for '{object}' to '{target_format}', in_place={in_place}")
+    logging.info(f"Starting conversion for '{object}' to '{target_format}', in_place={in_place}, dry_run={dry_run}")
     try:
         ctx.option_create_dirs = create_dirs
         package = package or ""
@@ -33,12 +34,32 @@ def cli(ctx: Context, create_dirs: bool, output_dir: Optional[str], target_forma
             if not resolved_object:
                 raise ValueError("Object must be specified for conversion.")
             project: Project = ctx.get_project(resolved_package)
-            logging.info(f"Converting object '{resolved_object}' in project '{project.name}'")
-            convert_object(project, resolved_object, target_format, output_dir, in_place)
+            logging.info(f"Processing object '{resolved_object}' in project '{project.name}'")
+            if dry_run:
+                # Retrieve original file name from the part configuration.
+                part_config = project.get_part_config(resolved_object)
+                old_path = part_config.get("path")
+                if old_path:
+                    base_file_name = os.path.splitext(os.path.basename(old_path))[0]
+                    old_ext = os.path.splitext(old_path)[1]
+                    old_file = f"{base_file_name}{old_ext}"
+                else:
+                    old_file = resolved_object
+                    base_file_name = resolved_object
+                new_file = f"{base_file_name}.{target_format}"
+                out_dir_msg = output_dir if output_dir is not None else project.path
+                in_place_msg = "update configuration in place" if in_place else "not update configuration"
+                logging.info(
+                    f"Dry run: would convert object '{old_file}' to '{new_file}' using output directory "
+                    f"'{out_dir_msg}' and {in_place_msg}."
+                )
+            else:
+                convert_object(project, resolved_object, target_format, output_dir, in_place)
         logging.info("Conversion finished.")
     except Exception as e:
         logging.error(f"Conversion failed: {e}", exc_info=True)
         raise click.ClickException(f"Conversion failed: {e}") from e
+
 
 def _get_packages(ctx: Context, package: str, recursive: bool) -> List[str]:
     """Return list of packages to process."""
@@ -47,6 +68,7 @@ def _get_packages(ctx: Context, package: str, recursive: bool) -> List[str]:
         all_packages = ctx.get_all_packages(start_package)
         return [pkg["name"] for pkg in all_packages]
     return [package]
+
 
 def _resolve_package_object(ctx: Context, package: str, object_str: str) -> Tuple[str, str]:
     """Resolve package and object from the provided string."""
