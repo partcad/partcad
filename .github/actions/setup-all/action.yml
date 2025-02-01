@@ -5,6 +5,15 @@ runs:
   using: "composite"
   steps:
 
+    ############################################## OS PREREQUISITES ################################################
+
+    - name: Install prerequisites
+      if: ${{ startsWith(matrix.os, 'ubuntu') }}
+      shell: bash
+      run: |
+        sudo apt-get update || exit 1
+        sudo apt-get install libcairo2-dev pkg-config python3-dev || exit 1
+
     ###################################################  PYTHON  ###################################################
 
     # Miniconda
