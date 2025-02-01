@@ -12,7 +12,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update || exit 1
-        sudo apt-get install libcairo2-dev pkg-config python3-dev || exit 1
+        sudo apt-get install -y libcairo2-dev pkg-config python3-dev || exit 1
 
     ###################################################  PYTHON  ###################################################
 

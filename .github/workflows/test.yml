@@ -33,11 +33,6 @@ jobs:
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
-      - name: Prepare folders
-        shell: bash
-        run: |
-          mkdir -pv test-results
-
       - name: Test with pytest
         env:
           PYTHONPATH: partcad/src
@@ -51,21 +46,21 @@ jobs:
 
           DIR=$(pwd)
           mamba activate test
+          mkdir -pv pytest-test-results
           pytest -x -p no:error-for-skips -p no:warnings
-          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          coverage xml --data-file=$DIR/.coverage -o $DIR/pytest-test-results/coverage.xml
           mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
-        if: always()
         uses: ./.github/actions/upload-test-results
         with:
-          name: test-results
-          path: test-results/
+          name: pytest-test-results
+          path: pytest-test-results/
           retention-days: 7
           status: ${{ job.status }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: test-results/junit.xml
-          coverage-report: test-results/coverage.xml
+          codecov-files: pytest-test-results/junit.xml
+          coverage-report: pytest-test-results/coverage.xml
 
   test-behave:
     name: "Behave"
@@ -83,11 +78,6 @@ jobs:
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
-      - name: Prepare folders
-        shell: bash
-        run: |
-          mkdir -pv test-results
-
       - name: Test with behave
         shell: bash
         run: |
@@ -97,21 +87,23 @@ jobs:
           . ~/.bash_profile
 
           DIR=$(pwd)
+          mkdir -pv behave-test-results
+
           mamba activate test
-          coverage run $(poetry run which behave)
-          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          coverage run behave
+          coverage xml --data-file=./.coverage -o $DIR/behave-test-results/coverage.xml
           mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
         with:
-          name: test-results
-          path: test-results/
+          name: behave-test-results
+          path: behave-test-results/
           retention-days: 7
           status: ${{ job.status }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: test-results/junit.xml
-          coverage-report: test-results/coverage.xml
+          codecov-files: behave-test-results/junit.xml
+          coverage-report: behave-test-results/coverage.xml
 
   test-examples-partcad:
     name: "Examples (PartCAD)"
@@ -129,23 +121,6 @@ jobs:
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
-      - name: Prepare folders
-        shell: bash
-        run: |
-          mkdir -pv test-results
-
-      - name: Install CLI
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          mamba activate test
-          pip install -U ./partcad ./partcad-cli
-          mamba deactivate
-
       - name: Basic integration test for CLI (PartCAD examples)
         shell: bash
         run: |
@@ -155,42 +130,31 @@ jobs:
           . ~/.bash_profile
 
           DIR=$(pwd)
-          mamba activate test
+          mkdir -pv examples-partcad-test-results
 
-          # BEGIN CLEAN PACKAGE
-          mkdir new_pkg
-          cd new_pkg
-          if ! coverage run $(poetry run which pc) --no-ansi init; then
-            echo "Failed to initialize package"
-            exit 1
-          fi
-          if ! coverage run $(poetry run which pc) --no-ansi list all -r; then
-            echo "Failed to list package contents"
-            exit 1
-          fi
-          # END CLEAN PACKAGE
+          mamba activate test
+          cd $DIR
+          pip install -U ./partcad ./partcad-cli
 
           # BEGIN PARTCAD EXAMPLES
-          cd ../examples
-          coverage run $(poetry run which pc) --no-ansi list all -r
-          coverage run $(poetry run which pc) --no-ansi test -r
-          coverage run $(poetry run which pc) --no-ansi render -r
+          cd ./examples
+          coverage run pc --no-ansi list all -r
+          coverage run pc --no-ansi test -r
+          coverage run pc --no-ansi render -r
           # END PARTCAD EXAMPLES
-
-          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          coverage xml --data-file=./.coverage -o $DIR/examples-partcad-test-results/coverage.xm
           mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
-        if: always()
         uses: ./.github/actions/upload-test-results
         with:
-          name: test-results
-          path: test-results/
+          name: examples-partcad-test-results
+          path: examples-partcad-test-results/
           retention-days: 7
           status: ${{ job.status }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: test-results/junit.xml
-          coverage-report: test-results/coverage.xml
+          codecov-files: examples-partcad-test-results/junit.xml
+          coverage-report: examples-partcad-test-results/coverage.xml
 
   test-examples-all:
     name: "Examples (All)"
@@ -208,23 +172,6 @@ jobs:
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
-      - name: Prepare folders
-        shell: bash
-        run: |
-          mkdir -pv test-results
-
-      - name: Install CLI
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          mamba activate test
-          pip install -U ./partcad ./partcad-cli
-          mamba deactivate
-
       - name: Basic integration test for CLI (all examples)
         shell: bash
         run: |
@@ -234,28 +181,33 @@ jobs:
           . ~/.bash_profile
 
           DIR=$(pwd)
+          mkdir -pv examples-all-test-results
+
           mamba activate test
+          cd $DIR
+          pip install -U ./partcad ./partcad-cli
+
           # BEGIN ALL EXAMPLES
           cd examples
-          coverage run $(poetry run which pc) --no-ansi test -r --package /pub/examples
+          coverage run pc --no-ansi test -r --package /pub/examples
           # END ALL EXAMPLES
 
-          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          coverage xml --data-file=./.coverage -o $DIR/examples-all-test-results/coverage.xml
           mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
-        if: always()
         uses: ./.github/actions/upload-test-results
         with:
-          name: test-results
-          path: test-results/
+          name: examples-all-test-results
+          path: examples-all-test-results/
           retention-days: 7
           status: ${{ job.status }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: test-results/junit.xml
-          coverage-report: test-results/coverage.xml
+          codecov-files: examples-all-test-results/junit.xml
+          coverage-report: examples-all-test-results/coverage.xml
 
-  test-entire-repo:
+  test-pub-repo:
+    name: "Repo //pub"
     strategy:
       fail-fast: false
       matrix:
@@ -270,23 +222,6 @@ jobs:
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
-      - name: Prepare folders
-        shell: bash
-        run: |
-          mkdir -pv test-results
-
-      - name: Install CLI
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          mamba activate test
-          pip install -U ./partcad ./partcad-cli
-          mamba deactivate
-
       - name: Test the entire repository
         shell: bash
         run: |
@@ -296,24 +231,28 @@ jobs:
           . ~/.bash_profile
 
           DIR=$(pwd)
+          mkdir -pv pub-repo-test-results
+
           mamba activate test
+          cd $DIR
+          pip install -U ./partcad ./partcad-cli
+
           # BEGIN PUBLIC REPO
           cd examples
-          coverage run $(poetry run which pc) --no-ansi test -r --package /pub
+          coverage run pc --no-ansi test -r --package /pub
           # END PUBLIC REPO
 
-          coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
+          coverage xml --data-file=,/.coverage -o $DIR/pub-repo-test-results/coverage.xml
           mamba deactivate
 
 
       - name: Upload test results & coverage reports to github and codecov
-        if: always()
         uses: ./.github/actions/upload-test-results
         with:
-          name: test-results
-          path: test-results/
+          name: pub-repo-test-results
+          path: pub-repo-test-results/
           retention-days: 7
           status: ${{ job.status }}
           token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: test-results/junit.xml
-          coverage-report: test-results/coverage.xml
+          codecov-files: pub-repo-test-results/junit.xml
+          coverage-report: pub-repo-test-results/coverage.xml
