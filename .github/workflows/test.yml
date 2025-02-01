@@ -2,6 +2,8 @@
 name: CI # Keep the action badge icon short
 
 on:
+  workflow_dispatch:
+  merge_group:
   push:
     branches: ["main", "devel"]
   pull_request:

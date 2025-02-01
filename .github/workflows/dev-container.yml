@@ -2,10 +2,10 @@
 name: CI-Dev
 on:
   workflow_dispatch:
-  schedule:
-    # https://crontab.guru/#0_8_*_*_*
-    # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
-    - cron: "0 8 * * *" # Run daily at PST midnight
+  # schedule:
+  #   # https://crontab.guru/#0_8_*_*_*
+  #   # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
+  #   - cron: "0 8 * * *" # Run daily at PST midnight
   merge_group:
   pull_request:
     branches: ["main", "devel"]
