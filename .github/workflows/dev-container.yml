@@ -147,41 +147,41 @@ jobs:
           path: allure-report/
           retention-days: 7
 
-  # pre-commit:
-  #   name: "Run: pre-commit"
-  #   runs-on: ubuntu-24.04-l
-  #   timeout-minutes: 10
-  #   steps:
-  #     - name: Checkout (GitHub)
-  #       uses: actions/checkout@v4
+  pre-commit:
+    name: "Run: pre-commit"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
 
-  #     - name: Login to GitHub Container Registry
-  #       uses: docker/login-action@v3
-  #       with:
-  #         registry: ${{ env.CONTAINER_REGISTRY }}
-  #         username: ${{ github.repository_owner }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-  #     - name: Cache pre-commit dependencies
-  #       uses: actions/cache@v4
-  #       with:
-  #         path: |
-  #           .pre-commit
-  #         key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-  #         restore-keys: |
-  #           ${{ runner.os }}-pre-commit-
-  #     - name: Run pre-commit hooks
-  #       uses: devcontainers/ci@v0.3
-  #       with:
-  #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-  #         push: never
-  #         # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
-  #         # TODO: Run ggshield and/or other secrets scanning tools as separate job
-  #         env: |
-  #           SKIP=poetry-export,poetry-lock,ggshield
-  #         runCmd:
-  #           pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
-  #           --all-files
+      - name: Cache pre-commit dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .pre-commit
+          key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pre-commit-
+      - name: Run pre-commit hooks
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          push: never
+          # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
+          # TODO: Run ggshield and/or other secrets scanning tools as separate job
+          env: |
+            SKIP=poetry-export,poetry-lock,ggshield
+          runCmd:
+            pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
+            --all-files
 
   behave:
     name: "Run: behave"

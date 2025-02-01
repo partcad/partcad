@@ -14,42 +14,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-anchors: # ignore
-  strategy: &strategy
-    fail-fast: false
-    matrix:
-      os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-      python-version:
-        - "3.10"
-        - "3.11"
-        - "3.12"
-        # - "3.13"
-  strategy-large: &strategy-large
-    fail-fast: false
-    matrix:
-      os: [ubuntu-24.04-l, windows-latest-l]
-      python-version:
-        - "3.10"
-        - "3.11"
-        - "3.12"
-        # - "3.13"
-  reusableSteps:
-    - &uploadTestResults
-      name: Upload test results & coverage reports to github and codecov
-      if: always()
-      uses: ./.github/actions/upload-test-results
-      with:
-        name: test-results
-        path: test-results/
-        retention-days: 7
-        status: ${{ job.status }}
-        token: ${{ secrets.CODECOV_TOKEN }}
-        codecov-files: test-results/junit.xml
-        coverage-report: test-results/coverage.xml
-
 jobs:
   test-setup:
-    strategy: *strategy
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest, ubuntu-24.04-l, windows-latest-l]
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          # - "3.13"
     runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
     timeout-minutes: 10
@@ -65,9 +40,8 @@ jobs:
           mkdir -pv test-results
 
   test-pytest:
-    strategy: *strategy
     runs-on: ${{ matrix.os }}
-    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    if: (!startsWith(github.event.head_commit.message, 'Version updated')) AND !endsWith(matrix.os, '-l')
     needs: test-setup
     timeout-minutes: 15
 
@@ -89,12 +63,22 @@ jobs:
           coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
           mamba deactivate
 
-      - *uploadTestResults
+      - &uploadTestResults
+        name: Upload test results & coverage reports to github and codecov
+        if: always()
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: test-results/junit.xml
+          coverage-report: test-results/coverage.xml
 
   test-behave:
-    strategy: *strategy
     runs-on: ${{ matrix.os }}
-    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    if: (!startsWith(github.event.head_commit.message, 'Version updated')) AND !endsWith(matrix.os, '-l')
     needs: test-setup
     timeout-minutes: 20
 
@@ -116,7 +100,6 @@ jobs:
       - *uploadTestResults
 
   test-cli-setup:
-    strategy: *strategy
     runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
     needs: test-setup
@@ -136,9 +119,8 @@ jobs:
           mamba deactivate
 
   test-examples-partcad:
-    strategy: *strategy
     runs-on: ${{ matrix.os }}
-    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    if: (!startsWith(github.event.head_commit.message, 'Version updated')) AND !endsWith(matrix.os, '-l')
     needs: test-cli-setup
     timeout-minutes: 10
 
@@ -180,9 +162,8 @@ jobs:
       - *uploadTestResults
 
   test-examples-all:
-    strategy: *strategy
     runs-on: ${{ matrix.os }}
-    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    if: (!startsWith(github.event.head_commit.message, 'Version updated')) AND !endsWith(matrix.os, '-l')
     needs: test-cli-setup
     timeout-minutes: 10
 
@@ -208,9 +189,8 @@ jobs:
       - *uploadTestResults
 
   test-entire-repo:
-    strategy: *strategy-large
     runs-on: ${{ matrix.os }}
-    if: "!startsWith(github.event.head_commit.message, 'Version updated')"
+    if: (!startsWith(github.event.head_commit.message, 'Version updated')) AND endsWith(matrix.os, '-l')
     needs: test-cli-setup
     timeout-minutes: 30
 
