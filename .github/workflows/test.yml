@@ -19,7 +19,7 @@ concurrency:
 jobs:
   test-setup:
     name: "Test Setup"
-    strategy:
+    strategy: &strategy
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-13, macos-latest, ubuntu-24.04-l, windows-latest-l]
@@ -44,8 +44,9 @@ jobs:
 
   test-pytest:
     name: "Pytest"
+    strategy: *strategy
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(runner.os, '-l') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(matrix.os, '-l') }}
     needs: test-setup
     timeout-minutes: 15
 
