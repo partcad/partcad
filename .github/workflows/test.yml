@@ -43,7 +43,7 @@ jobs:
           mkdir -pv test-results
 
   test-pytest:
-    # runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') && !endsWith(runner.os, '-l') }}
     needs: test-setup
     timeout-minutes: 15
