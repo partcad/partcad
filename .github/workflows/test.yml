@@ -66,8 +66,8 @@ jobs:
           coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
           mamba deactivate
 
-      - &uploadTestResults
-        name: Upload test results & coverage reports to github and codecov
+      #- &uploadTestResults
+      - name: Upload test results & coverage reports to github and codecov
         if: always()
         uses: ./.github/actions/upload-test-results
         with:
