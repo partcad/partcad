@@ -157,6 +157,21 @@ For recursive processing of all packages, use the `--recursive` flag:
     # Convert all parts in the "produce_part_cadquery" package and its dependencies to STEP format
     pc convert --recursive -t step --package /produce_part_cadquery
 
+Simulate conversion without modifying files
+-------------------------------------------
+
+The `--dry-run` option allows you to simulate the conversion process without actually making any changes. This is useful for verifying which files would be affected before performing the actual conversion.
+
+.. code-block:: shell
+
+    # Simulate converting "cube" to STEP format without modifying anything
+    pc convert -t step --dry-run :cube
+
+    # Example output:
+    # Dry run: would convert object 'cube.stl' to 'cube.step' using output directory './' and not update configuration.
+
+This option ensures that no files are created or modified, and only logs the expected conversion actions.
+
 Supported formats:
 ------------------
 - STEP
@@ -171,6 +186,8 @@ Supported formats:
     - The object must exist in the `partcad.yaml` file and be defined as a part, assembly, or sketch.
     - The `--in-place` option ensures that the type of the object is updated in `partcad.yaml` after conversion.
     - If the target format is not supported by the object, a warning will be displayed, and the conversion will be skipped.
+    - The `--dry-run` option only simulates the conversion process without making actual changes.
+
 Reset partcad
 ---------------------
 
