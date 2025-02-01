@@ -32,8 +32,8 @@ repos:
       - id: check-dependabot
       - id: check-github-actions
       # TODO(clairbee): fix the below so that it doesn't get in the way of using anchors
-      # - id: check-github-workflows
-      #   args: ["--verbose"]
+      - id: check-github-workflows
+        args: ["--verbose"]
   - repo: https://github.com/python-poetry/poetry
     rev: 1.8.0
     hooks:

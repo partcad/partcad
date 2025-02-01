@@ -67,17 +67,17 @@ jobs:
           coverage xml --data-file=$DIR/.coverage -o $DIR/test-results/coverage.xml
           mamba deactivate
 
-      - name: Upload test results & coverage reports to github and codecov
-        if: always()
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: test-results
-          path: test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: test-results/junit.xml
-          coverage-report: test-results/coverage.xml
+      # - name: Upload test results & coverage reports to github and codecov
+      #   if: always()
+      #   uses: ./.github/actions/upload-test-results
+      #   with:
+      #     name: test-results
+      #     path: test-results/
+      #     retention-days: 7
+      #     status: ${{ job.status }}
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     codecov-files: test-results/junit.xml
+      #     coverage-report: test-results/coverage.xml
 
   # test-behave:
   #   runs-on: ${{ matrix.os }}
