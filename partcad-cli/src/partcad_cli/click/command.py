@@ -314,6 +314,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
         "add",
         "ai",
         "convert",
+        "import",
         "info",
         "inspect",
         "install",

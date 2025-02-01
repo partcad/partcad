@@ -1,5 +1,6 @@
 import rich_click as click  # import click
 import partcad as pc
+from partcad.actions.part_actions import add_part_action
 from pathlib import Path
 
 
@@ -45,21 +46,19 @@ from pathlib import Path
 )
 @click.argument("path", type=str)  # help="Path to the file"
 @click.pass_obj
-def cli(ctx, desc, kind, provider, path: str):
-    prj = ctx.get_project(pc.ROOT)
-    with pc.logging.Process("AddPart", prj.name):
-        config = {}
-        if desc:
-            config["desc"] = desc
-        if provider:
-            config["provider"] = provider
-            kind_ext = {
-                "ai-cadquery": "py",
-                "ai-openscad": "scad",
-            }
-            if path.lower().endswith((".%s" % kind_ext[kind]).lower()):
-                path = path.rsplit('.', 1)[0] + '.gen.' + kind_ext[kind]
-            else:
-                path += '.gen'
-        if prj.add_part(kind, path, config):
-            Path(path).touch()
+def cli(ctx, desc, kind, provider, path):
+    """
+    CLI command to add a part to the project without copying.
+    """
+    project = ctx.get_project(pc.ROOT)
+    if not project:
+        raise click.UsageError("Failed to retrieve the project.")
+
+    config = {}
+    if desc:
+        config["desc"] = desc
+    if provider:
+        config["provider"] = provider
+
+    add_part_action(project, kind, path, config)
+    click.echo(f"Part '{Path(path).stem}' added to the project.")
