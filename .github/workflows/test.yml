@@ -46,15 +46,17 @@ jobs:
 
           DIR=$(pwd)
           mamba activate test
+          cd $DIR
+
           mkdir -pv pytest-test-results
           pytest -x -p no:error-for-skips -p no:warnings
-          coverage xml --data-file=$DIR/.coverage -o $DIR/pytest-test-results/coverage.xml
+          coverage xml --data-file=$DIR/.coverage -o ./pytest-test-results/coverage.xml
           mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
         with:
-          name: pytest-test-results
+          name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: pytest-test-results/
           retention-days: 7
           status: ${{ job.status }}
@@ -90,6 +92,9 @@ jobs:
           mkdir -pv behave-test-results
 
           mamba activate test
+          cd $DIR
+          python -m pip install -U ./partcad ./partcad-cli
+
           coverage run $(which behave)
           coverage xml --data-file=./.coverage -o $DIR/behave-test-results/coverage.xml
           mamba deactivate
@@ -97,7 +102,7 @@ jobs:
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
         with:
-          name: behave-test-results
+          name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: behave-test-results/
           retention-days: 7
           status: ${{ job.status }}
@@ -129,12 +134,10 @@ jobs:
           # shellcheck disable=SC1090
           . ~/.bash_profile
 
-          DIR=$(pwd)
           mkdir -pv examples-partcad-test-results
 
           mamba activate test
-          cd $DIR
-          pip install -U ./partcad ./partcad-cli
+          python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PARTCAD EXAMPLES
           cd ./examples
@@ -143,13 +146,13 @@ jobs:
           coverage run $(which pc) --no-ansi render -r
           # END PARTCAD EXAMPLES
 
-          coverage xml --data-file=./.coverage -o $DIR/examples-partcad-test-results/coverage.xm
+          coverage xml --data-file=./.coverage -o ../examples-partcad-test-results/coverage.xm
           mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
         with:
-          name: examples-partcad-test-results
+          name: examples-partcad-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: examples-partcad-test-results/
           retention-days: 7
           status: ${{ job.status }}
@@ -186,7 +189,7 @@ jobs:
 
           mamba activate test
           cd $DIR
-          pip install -U ./partcad ./partcad-cli
+          python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
           cd examples
@@ -199,7 +202,7 @@ jobs:
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
         with:
-          name: examples-all-test-results
+          name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: examples-all-test-results/
           retention-days: 7
           status: ${{ job.status }}
@@ -236,7 +239,7 @@ jobs:
 
           mamba activate test
           cd $DIR
-          pip install -U ./partcad ./partcad-cli
+          python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO
           cd examples
@@ -250,7 +253,7 @@ jobs:
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
         with:
-          name: pub-repo-test-results
+          name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: pub-repo-test-results/
           retention-days: 7
           status: ${{ job.status }}
