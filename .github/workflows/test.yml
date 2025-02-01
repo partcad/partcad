@@ -24,6 +24,15 @@ anchors: # ignore
         - "3.11"
         - "3.12"
         # - "3.13"
+  strategy-large: &strategy-large
+    fail-fast: false
+    matrix:
+      os: [ubuntu-24.04-l, windows-latest-l]
+      python-version:
+        - "3.10"
+        - "3.11"
+        - "3.12"
+        # - "3.13"
   reusableSteps:
     - &uploadTestResults
       name: Upload test results & coverage reports to github and codecov
@@ -199,7 +208,7 @@ jobs:
       - *uploadTestResults
 
   test-entire-repo:
-    strategy: *strategy
+    strategy: *strategy-large
     runs-on: ${{ matrix.os }}
     if: "!startsWith(github.event.head_commit.message, 'Version updated')"
     needs: test-cli-setup
