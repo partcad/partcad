@@ -25,36 +25,38 @@ def add_part_action(project, kind, path, config=None):
         logging.info(f"Part {name} added successfully.")
 
 
-def import_part_action(project, kind, name, source_path, config=None):
+def import_part_action(project, kind, name, source_path, config=None, target_format=None):
     """
-    Import a part into the project by copying it and adding.
+    Import a part into the project by copying it and optionally converting it.
 
     :param project: Project object
     :param kind: Type of the part (e.g., stl, step, brep)
     :param name: Name of the part
     :param source_path: Path to the source file
     :param config: Additional configuration for the part
+    :param target_format: (Optional) Target format to convert the part
     """
     config = config or {}
-    source_path = Path(source_path)  # Ensure source_path is a Path object
-    target_path = Path(project.path) / f"{name}.{kind}"  # Define the target file path
+    source_path = Path(source_path)
+    target_path = Path(project.path) / f"{name}.{kind}"
 
-    logging.info(f"Importing the part {name} of type {kind} from {source_path} to {target_path}")
+    logging.info(f"Importing part {name} from {source_path} to {target_path}")
 
-    # Check if the source file exists
     if not source_path.exists():
         raise ValueError(f"Source file '{source_path}' does not exist.")
 
-    # Copy the file to the project directory
-    try:
-        shutil.copy(source_path, target_path)
-    except Exception as e:
-        raise ValueError(f"Failed to copy file from {source_path} to {target_path}: {e}")
+    shutil.copy(source_path, target_path)
 
     # Add the part to the project
     project.add_part(kind, str(target_path), config)
     project.update_part_config(name, {"path": str(target_path)})
-    logging.info(f"Part {name} imported and added successfully.")
+
+    logging.info(f"Part {name} imported successfully.")
+
+    # Convert if a target format is specified
+    if target_format and target_format != kind:
+        logging.info(f"Converting {name} from {kind} to {target_format}...")
+        convert_part_action(project, name, target_format, in_place=True)
 
 
 def convert_part_action(project, object_name, target_format, output_dir=None, in_place=False, dry_run=False):
