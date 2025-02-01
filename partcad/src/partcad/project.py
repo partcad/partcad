@@ -1460,7 +1460,12 @@ class Project(project_config.Configuration):
                 for shape in shapes
                 if hasattr(shape, f"render_{target_format}_async")
             ]
-            await asyncio.gather(*tasks)
+
+            try:
+                await asyncio.gather(*tasks)
+            except Exception as e:
+                # Raise a RuntimeError with additional info if any rendering task fails
+                raise RuntimeError(f"Failed to load: {e}") from e
 
             if in_place:
                 for shape in shapes:
