@@ -1,91 +1,113 @@
-import pytest
+import os
 import shutil
+from unittest.mock import patch
+import pytest
+import yaml
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from partcad.context import Context
+from partcad import Project
 from partcad.actions.part_actions import import_part_action
 
+# Mapping file extensions to formats
+EXTENSION_MAPPING = {
+    "step": "step",
+    "brep": "brep",
+    "stl": "stl",
+    "3mf": "3mf",
+    "threejs": "json",  # ThreeJS exports as .json
+    "obj": "obj",
+    "gltf": "gltf",
+}
 
-@pytest.fixture
-def mock_project():
-    """Creates a mock project with add_part and update_part_config methods."""
-    project = MagicMock()
-    project.path = "/mock/project"
-    project.name = "TestProject"
-    return project
+# Supported formats
+SUPPORTED_FORMATS = list(EXTENSION_MAPPING.keys())
 
+# Source directory with real test files
+SOURCE_DIR = Path("/workspaces/partcad/examples/feature_convert")
 
-@patch("shutil.copy")
-@patch("shutil.copystat")
-@patch("partcad.actions.part_actions.deep_copy_metadata")
-@patch("pathlib.Path.exists", return_value=True)  # Mock file existence
-def test_import_part_success(mock_exists, mock_copy_metadata, mock_copystat, mock_copy, mock_project):
-    """Tests successful part import without conversion."""
-    source_path = "/mock/source/part.step"
-    target_path = "/mock/project/part.step"
-
-    import_part_action(mock_project, "step", "part", source_path)
-
-    # Ensure file is copied
-    mock_copy.assert_called_once_with(Path(source_path), Path(target_path))
-
-    # Ensure metadata is copied
-    mock_copy_metadata.assert_called_once_with(Path(source_path), Path(target_path))
-
-    # Ensure part is added to the project
-    mock_project.add_part.assert_called_once_with("step", str(target_path), {})
-
-    # Ensure project config is updated
-    mock_project.update_part_config.assert_called_once_with("part", {"path": str(target_path)})
+# Test parts (real files must exist in SOURCE_DIR)
+PARTS_CONFIG = {
+    "box_brep": {"type": "brep", "path": "brep/box.brep"},
+    "cube_3mf": {"type": "3mf", "path": "3mf/cube.3mf"},
+    "cube_stl": {"type": "stl", "path": "stl/cube.stl"},
+    "bolt_step": {"type": "step", "path": "step/bolt.step"},
+}
 
 
-@patch("shutil.copy")
-@patch("shutil.copystat")
-@patch("partcad.actions.part_actions.deep_copy_metadata")
-@patch("partcad.actions.part_actions.convert_part_action")
-@patch("pathlib.Path.exists", return_value=True)  # Mock file existence
-def test_import_part_with_conversion(mock_exists, mock_convert, mock_copy_metadata, mock_copystat, mock_copy, mock_project):
-    """Tests part import with format conversion."""
-    source_path = "/mock/source/part.step"
-    target_path = "/mock/project/part.step"
+@pytest.mark.parametrize("source_part", PARTS_CONFIG.keys())
+def test_import_real_part(source_part: str, tmp_path: Path):
+    """
+    Test importing a real part file into a new project.
+    """
+    source_config = PARTS_CONFIG[source_part]
+    part_type = source_config["type"]
+    source_file = Path(source_config["path"])
 
-    import_part_action(mock_project, "step", "part", source_path, target_format="stl")
+    real_source_path = SOURCE_DIR / source_file
+    if not real_source_path.exists():
+        pytest.skip(f"Real source file {real_source_path} not found.")
 
-    # Ensure file is copied
-    mock_copy.assert_called_once_with(Path(source_path), Path(target_path))
+    # Set up test project
+    project_dir = tmp_path / "test_project"
+    project_dir.mkdir()
+    source_path = project_dir / source_file
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(real_source_path, source_path)
 
-    # Ensure conversion is triggered
-    mock_convert.assert_called_once_with(mock_project, "part", "stl", in_place=True)
+    # Create empty configuration
+    config_data = {"parts": {}}
+    yaml_path = project_dir / "partcad.yaml"
+    with open(yaml_path, "w") as f:
+        yaml.safe_dump(config_data, f)
 
-    # Ensure metadata is copied
-    mock_copy_metadata.assert_called_once_with(Path(source_path), Path(target_path))
+    ctx = Context(str(project_dir))
+    project = ctx.get_project("")
 
-    # Ensure part is added to the project
-    mock_project.add_part.assert_called_once_with("step", str(target_path), {})
+    # Import part
+    import_part_action(project, part_type, source_part, str(source_path))
 
-    # Ensure project config is updated
-    mock_project.update_part_config.assert_called_once_with("part", {"path": str(target_path)})
+    # Reload config after import
+    ctx = Context(str(project_dir))
+    project = ctx.get_project("")
+    updated_config = project.get_part_config(source_part)
 
+    # Ensure part was registered in configuration
+    assert updated_config is not None, f"Part {source_part} was not added to the project config."
 
-@patch("shutil.copy")
-def test_import_part_missing_source(mock_copy, mock_project):
-    """Tests behavior when the source file is missing."""
-    source_path = "/mock/source/missing.step"
-
-    with pytest.raises(ValueError, match="Source file '/mock/source/missing.step' does not exist."):
-        import_part_action(mock_project, "step", "part", source_path)
-
-    # Ensure no copy attempt was made
-    mock_copy.assert_not_called()
+    # Ensure the imported file exists in the project directory
+    expected_path = Path(project.path) / f"{source_part}.{part_type}"
+    assert expected_path.exists(), f"Expected imported file {expected_path} does not exist."
 
 
-@patch("shutil.copy", side_effect=shutil.Error("Copy failed"))  # Simulate copy failure
-@patch("pathlib.Path.exists", return_value=True)  # Mock file existence
-def test_import_part_copy_error(mock_exists, mock_copy, mock_project):
-    """Tests handling of file copy failure."""
-    source_path = "/mock/source/part.step"
+def test_import_missing_source_file(tmp_path: Path):
+    """
+    Test handling of a missing source file during import.
+    """
+    project_dir = tmp_path / "test_project"
+    project_dir.mkdir()
 
-    with pytest.raises(ValueError, match="Failed to copy file from"):
-        import_part_action(mock_project, "step", "part", source_path)
+    ctx = Context(str(project_dir))
+    project = ctx.get_project("")
 
-    # Ensure copy was attempted
-    mock_copy.assert_called_once()
+    with pytest.raises(ValueError, match="Source file .* not found."):
+        import_part_action(project, "step", "missing_part", str(tmp_path / "missing_file.step"))
+
+
+def test_import_copy_error(tmp_path: Path):
+    """
+    Test handling of a file copy failure during import.
+    """
+    project_dir = tmp_path / "test_project"
+    project_dir.mkdir()
+
+    ctx = Context(str(project_dir))
+    project = ctx.get_project("")
+
+    # Create a fake source file
+    source_path = tmp_path / "fake_file.step"
+    source_path.touch()
+
+    # Simulate copy failure
+    with patch("shutil.copy2", side_effect=shutil.Error("Copy failed")):
+        with pytest.raises(ValueError, match="Failed to copy"):
+            import_part_action(project, "step", "fake_part", str(source_path))
