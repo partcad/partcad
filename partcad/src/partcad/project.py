@@ -1435,7 +1435,6 @@ class Project(project_config.Configuration):
         assemblies: Optional[List[str]] = None,
         target_format: Optional[str] = None,
         output_dir: Optional[str] = None,
-        in_place: bool = False,
     ) -> None:
         """Asynchronously convert specified objects to a target format."""
         if not target_format:
@@ -1467,10 +1466,6 @@ class Project(project_config.Configuration):
                 # Raise a RuntimeError with additional info if any rendering task fails
                 raise RuntimeError(f"Failed to load: {e}") from e
 
-            if in_place:
-                for shape in shapes:
-                    self.update_part_config(shape.name, {"type": target_format})
-
 
     def convert(
         self,
@@ -1480,10 +1475,9 @@ class Project(project_config.Configuration):
         assemblies: Optional[List[str]] = None,
         target_format: Optional[str] = None,
         output_dir: Optional[str] = None,
-        in_place: bool = False,
     ) -> None:
         """Synchronous wrapper for async_convert."""
-        asyncio.run(self.async_convert(sketches, interfaces, parts, assemblies, target_format, output_dir, in_place))
+        asyncio.run(self.async_convert(sketches, interfaces, parts, assemblies, target_format, output_dir))
 
 
     def render_readme_async(self, render_cfg, output_dir):
