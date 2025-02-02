@@ -1454,17 +1454,19 @@ class Project(project_config.Configuration):
             pc_logging.info(f"Converting {len(shapes)} object(s) to '{target_format}'.")
 
             # Prepare async tasks for rendering
-            tasks = [
-                getattr(shape, f"render_{target_format}_async")(self.ctx, self, output_dir)
-                for shape in shapes
-                if hasattr(shape, f"render_{target_format}_async")
-            ]
+            tasks = []
+            for shape in shapes:
+                render_method = f"render_{target_format}_async"
+                if hasattr(shape, render_method):
+                    tasks.append(getattr(shape, render_method)(self.ctx, self, output_dir))
+                else:
+                    pc_logging.warn(f"Skipping '{shape.name}': {target_format} format not supported")
 
             try:
                 await asyncio.gather(*tasks)
             except Exception as e:
                 # Raise a RuntimeError with additional info if any rendering task fails
-                raise RuntimeError(f"Failed to load: {e}") from e
+                raise RuntimeError(f"Failed to convert to {target_format}: {str(e)}") from e
 
 
     def convert(

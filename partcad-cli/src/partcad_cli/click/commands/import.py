@@ -43,4 +43,4 @@ def cli(ctx: Context, part_type: str, existing_part: str, target_format: str, de
         click.echo(f"Part '{name}' imported successfully.")
     except Exception as e:
         pc_logging.exception(f"Error importing part '{name}' ({part_type})")
-        raise click.ClickException(f"Error importing part '{name}' ({part_type}): {e}")
+        raise click.ClickException(f"Error importing part '{name}' ({part_type}): {e}") from e
