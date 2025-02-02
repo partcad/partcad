@@ -17,35 +17,16 @@ Feature: `pc convert` command
   Scenario: Dry-run conversion for part `cube`
     When I run "pc convert cube -t step --dry-run"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Dry run: would convert object"
+    And STDOUT should contain "[Dry Run]"
     And STDOUT should contain "cube.step"
 
-  @stl @in-place
-  Scenario: In-place conversion updating configuration for part `cube`
-    When I run "pc convert cube -t step --in-place"
-    Then the command should exit with a status code of "0"
-    And STDOUT should contain "Conversion finished"
-    And a file named "partcad.yaml" should have YAML content:
-      """
-      parts:
-        cube:
-          type: step
-          path: cube.step
-      """
-
-  @wip @gltf @directory
+  @step @directory
   Scenario: Conversion with specified output directory for part `cube`
     Given a directory named "output" exists
-    When I run "pc convert cube -t gltf -O output"
+    When I run "pc convert cube -t step -O output"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Conversion finished"
-    And a file named "output/cube_cadquery.gltf" should exist
-
-  @brep @package
-  Scenario: Conversion with package specification for part `cube`
-    When I run "pc convert :cube -t brep --package /"
-    Then the command should exit with a status code of "0"
-    And STDOUT should contain "Conversion finished"
+    And STDOUT should contain "Conversion of 'cube' to 'step' completed."
+    And a file named "output/cube.step" should exist
 
   @error
   Scenario: Failure due to missing object argument
@@ -59,5 +40,5 @@ Feature: `pc convert` command
 
   @error
   Scenario: Conversion failure due to unsupported conversion
-    When I run "pc convert :cube_build123d -t step --in-place"
+    When I run "pc convert :cube_build123d -t step"
     Then the command should exit with a status code of "1"

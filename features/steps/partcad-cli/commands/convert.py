@@ -31,4 +31,4 @@ def step_impl(context, filename):
     """Check if the specified file exists in the test workspace."""
     file_path = os.path.join(context.test_dir, filename)
     assert os.path.exists(file_path), f"File '{file_path}' does not exist!"
-    logging.debug(f"✅ File exists: {file_path}")
+    logging.debug(f"File exists: {file_path}")
