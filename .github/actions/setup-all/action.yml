@@ -20,7 +20,7 @@ runs:
       with:
         miniforge-version: 24.11.2-1
         channels: conda-forge,defaults
-        # python-version: ${{ matrix.python-version }}
+        python-version: ${{ matrix.python-version }}
 
     - name: Init conda
       shell: bash
