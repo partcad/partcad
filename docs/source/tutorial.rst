@@ -97,6 +97,7 @@ Provide an optional description:
 Example log output:
 
 .. code-block:: text
+
     pc import part step my_part.step -t stl
     INFO: Importing part: my_part.step (step)
     INFO: Performing ad-hoc conversion: step → stl
