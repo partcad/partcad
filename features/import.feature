@@ -16,7 +16,7 @@ Feature: `pc import` command
 
   @stl
   Scenario: Import STL part into the project
-    When I run "pc import stl input_files/cube.stl"
+    When I run "pc import part stl input_files/cube.stl"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Part 'cube' imported successfully."
     And a file named "cube.stl" should exist
@@ -32,7 +32,7 @@ Feature: `pc import` command
 
   @stl @conversion
   Scenario: Import STL part and convert to STEP
-    When I run "pc import stl input_files/cube.stl -t step"
+    When I run "pc import part stl input_files/cube.stl -t step"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Ad-hoc conversion successful"
     And STDOUT should contain "Successfully imported part"
@@ -49,13 +49,13 @@ Feature: `pc import` command
 
   @error
   Scenario: Reject non-existent file import
-    When I run "pc import stl input_files/nonexistent.stl"
+    When I run "pc import part stl input_files/nonexistent.stl"
     Then the command should exit with a status code of "1"
 
   @error
   Scenario: Reject invalid file format conversion
     Given I copy file "examples/feature_convert/stl/cube.stl" to "input_files/cube.stl" inside test workspace
-    When I run "pc import stl input_files/cube.stl -t unknown_format"
+    When I run "pc import part stl input_files/cube.stl -t unknown_format"
     Then the command should exit with a status code of "2"
 
   @step
@@ -64,7 +64,7 @@ Feature: `pc import` command
       """
       -- STEP file content --
       """
-    When I run "pc import step input_files/part.step"
+    When I run "pc import part step input_files/part.step"
     Then the command should exit with a status code of "0"
     And a file named "part.step" should exist
     And a file named "partcad.yaml" should have YAML content:
@@ -79,7 +79,7 @@ Feature: `pc import` command
 
   @stl
   Scenario: Import and convert STL file to multiple formats
-    When I run "pc import stl input_files/cube.stl -t brep"
+    When I run "pc import part stl input_files/cube.stl -t brep"
     Then the command should exit with a status code of "0"
     And a file named "cube.brep" should exist
     And a file named "partcad.yaml" should have YAML content:
@@ -98,7 +98,7 @@ Feature: `pc import` command
       """
       -- 3MF file content --
       """
-    When I run "pc import 3mf input_files/design.3mf"
+    When I run "pc import part 3mf input_files/design.3mf"
     Then the command should exit with a status code of "0"
     And a file named "design.3mf" should exist
     And a file named "partcad.yaml" should have YAML content:

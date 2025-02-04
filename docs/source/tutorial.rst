@@ -71,7 +71,7 @@ Now let's add a declaration of this part to ``partcad.yaml``.
 Import an existing part
 -----------------------
 
-The `pc import` command allows you to import an existing part into a PartCAD project.
+The `pc import part` command allows you to import an existing part into a PartCAD project.
 You can also specify a target format to convert the part upon import.
 
 Basic import:
@@ -79,28 +79,28 @@ Basic import:
 .. code-block:: shell
 
     # Import a STEP file
-    pc import step my_part.step
+    pc import part step my_part.step
 
 Import and convert to STL:
 
 .. code-block:: shell
 
     # Import a STEP file and convert it to STL format
-    pc import step my_part.step -t stl
+    pc import part step my_part.step -t stl
 
 Provide an optional description:
 
 .. code-block:: shell
 
-    pc import stl my_model.stl --desc "3D model of a mechanical part"
+    pc import part stl my_model.stl --desc "3D model of a mechanical part"
 
 Example log output:
 
 .. code-block:: text
-
+    pc import part step my_part.step -t stl
     INFO: Importing part: my_part.step (step)
-    INFO: Converting 'my_part' (step → stl)
-    INFO: Conversion of 'my_part' completed.
+    INFO: Performing ad-hoc conversion: step → stl
+    INFO: Ad-hoc conversion successful: my_part.stl
     INFO: Successfully imported part: my_part
 
 .. note::
