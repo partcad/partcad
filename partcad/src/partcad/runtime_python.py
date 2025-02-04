@@ -96,7 +96,7 @@ class PythonRuntime(runtime.Runtime):
             if not self.initialized:
                 # Preinstall the most common packages to avoid race conditions
                 self.ensure_onced("ocp-tessellate==3.0.9")
-                self.ensure_onced("nlopt==2.9.0")
+                self.ensure_onced("nlopt==2.9.1")
                 self.ensure_onced("cadquery==2.5.2")
                 self.ensure_onced("numpy==2.2.1")
                 self.ensure_onced("typing_extensions==4.12.2")
@@ -111,7 +111,7 @@ class PythonRuntime(runtime.Runtime):
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
-                    await self.ensure_async_onced_locked("nlopt==2.9.0")
+                    await self.ensure_async_onced_locked("nlopt==2.9.1")
                     await self.ensure_async_onced_locked("cadquery==2.5.2")
                     await self.ensure_async_onced_locked("numpy==2.2.1")
                     await self.ensure_async_onced_locked("typing_extensions==4.12.2")

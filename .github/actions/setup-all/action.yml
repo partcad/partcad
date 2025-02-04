@@ -4,7 +4,6 @@ description: "Prepare the runner no matter what the job is"
 runs:
   using: "composite"
   steps:
-
     ############################################## OS PREREQUISITES ################################################
 
     - name: Install prerequisites
@@ -19,7 +18,7 @@ runs:
     # Miniconda
     - uses: conda-incubator/setup-miniconda@v3
       with:
-        miniforge-version: latest
+        miniforge-version: 24.11.2-1
         channels: conda-forge,defaults
         # python-version: ${{ matrix.python-version }}
 
