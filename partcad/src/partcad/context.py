@@ -8,6 +8,8 @@
 
 import asyncio
 import os
+import time
+import socket
 import threading
 
 from .cache import Cache
@@ -71,6 +73,35 @@ class Context(project_config.Configuration):
         def __exit__(self, *_args):
             self.lock.release()
 
+    def _check_connectivity(self):
+        try:
+            socket.create_connection(("8.8.8.8", 53), timeout=3.0)
+            return True
+        except OSError:
+            pc_logging.warning("No internet connection. Running in offline mode")
+            return False
+
+    def is_connected(self):
+        if user_config.offline:
+            return False
+
+        now = time.time()
+        # Use cached state if available and force_update is not set
+        if not user_config.force_update and self.connection_status:
+            # Set the expected time-to-live(ttl) to 60s for online(connected) and 300s for offline(disconnected)
+            ttl = 60 if self.connection_status["is_connected"] else 300
+
+            # Check if cached data has exceeded its ttl
+            # If not, return the cached value
+            if now - self.connection_status["last_checked"] <= ttl:
+                return self.connection_status["is_connected"]
+
+        # Check internet connection and update state
+        connected = self._check_connectivity()
+        self.connection_status = dict(last_checked=now, is_connected=connected)
+
+        return connected
+
     def __init__(self, root_path=None, search_root=True):
         """Initializes the context and loads the root project."""
         root_file = ""
@@ -133,6 +164,7 @@ class Context(project_config.Configuration):
         self.project_locks = {}
         self.project_locks_lock = threading.Lock()
         self._projects_being_loaded = {}
+        self.connection_status = {}
 
         with pc_logging.Process("InitCtx", self.config_dir):
             self.import_project(
