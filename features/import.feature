@@ -34,8 +34,8 @@ Feature: `pc import` command
   Scenario: Import STL part and convert to STEP
     When I run "pc import stl input_files/cube.stl -t step"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Conversion of 'cube' completed."
-    And STDOUT should contain "Successfully imported part: cube"
+    And STDOUT should contain "Ad-hoc conversion successful"
+    And STDOUT should contain "Successfully imported part"
     And a file named "cube.step" should exist
     And a file named "partcad.yaml" should have YAML content:
       """
@@ -44,7 +44,6 @@ Feature: `pc import` command
       parts:
         cube:
           type: step
-          path: cube.step
       assemblies:
       """
 
@@ -90,7 +89,6 @@ Feature: `pc import` command
       parts:
         cube:
           type: brep
-          path: cube.brep
       assemblies:
       """
 
