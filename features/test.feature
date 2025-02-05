@@ -26,7 +26,7 @@ Feature: `pc test` command
     When I run "pc test -r"
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "Git operations: 1"
-    Then STDOUT should contain "DONE: Test: this:"
+    Then STDOUT should contain "DONE: Test: //"
 
   @wip
   Scenario: Test with invalid configuration

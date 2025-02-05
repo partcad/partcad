@@ -106,7 +106,7 @@ Feature: `pc info` command
     Then the command should exit with a status code of "0"
     And STDOUT should contain "github.com"
     And STDOUT should contain "Url: 'https://github.com/"
-    And STDOUT should contain "Path: '/rob/dfrobot'"
+    And STDOUT should contain "Path: '//rob/dfrobot'"
 
   @success @pc-info
   Scenario: Show 'Path' as package info for local imports
@@ -123,7 +123,7 @@ Feature: `pc info` command
       """
     When I run "pc info test"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Path: '/'"
+    And STDOUT should contain "Path: '//'"
 # And STDOUT should contain "cube" in the parts list
 # And STDOUT should contain "cylinder" in the parts list
 # And STDOUT should contain valid location coordinates

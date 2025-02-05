@@ -4,6 +4,7 @@ from features.utils import expandvars  # type: ignore # TODO-64: @alexanderilyin
 import logging
 import yaml
 import os
+import re
 
 
 @given('a file named "{filename}" with content')
@@ -38,6 +39,11 @@ def step_impl(context, file_path):
     # Read and parse the actual YAML content from the file
     with open(file_path, "r") as file:
         actual_yaml = yaml.safe_load(file)
+
+    # Regex check for pythonVersion and partcad version
+    for key, item in expected_yaml.items():
+        if key in ["pythonVersion", "partcad"] and re.match(item, actual_yaml[key]):
+            expected_yaml[key] = actual_yaml[key]
 
     # Compare the dictionaries
     # assert actual_yaml == expected_yaml, f"Expected {expected_yaml}, but got {actual_yaml}"

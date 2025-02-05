@@ -9,6 +9,9 @@ Feature: `pc status` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should be created with content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:

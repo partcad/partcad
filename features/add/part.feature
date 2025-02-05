@@ -9,6 +9,9 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should be created with content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -24,9 +27,12 @@ Feature: `pc add part` command
     When I run "partcad add part scad test.scad"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Adding the part test.scad of type scad"
-    And STDOUT should contain "DONE: AddPart: /:"
+    And STDOUT should contain "DONE: AddPart: //"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -81,6 +87,9 @@ Feature: `pc add part` command
     # And a file named "$PWD/partcad.yaml" should have content:
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -102,6 +111,9 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -121,6 +133,9 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -139,6 +154,9 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -165,6 +183,9 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -183,6 +204,9 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -197,6 +221,9 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:
@@ -291,6 +318,9 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "0"
     And a file named "partcad.yaml" should have YAML content:
       """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:
       parts:

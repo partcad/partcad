@@ -35,7 +35,7 @@ Feature: `pc list interfaces` command
     Then STDOUT should contain "m3"
     Then STDOUT should contain "Abstract 3mm circular interface"
     Then STDOUT should contain "Total: 1"
-    Then STDOUT should contain "DONE: ListInterfaces: /:"
+    Then STDOUT should contain "DONE: ListInterfaces: //"
 
 # Feature: List Interfaces Command
 #   As a PartCAD user
