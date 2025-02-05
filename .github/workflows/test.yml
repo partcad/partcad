@@ -97,6 +97,7 @@ jobs:
 
           echo "$(which behavex)"
           ls -la "$(which behavex)"
+          ls -la "C:\Users\runneradmin\miniconda3\envs\env-test\Scripts" || true
           coverage run "$(which behavex)"
           coverage xml --data-file=./.coverage -o "$DIR/behave-test-results/coverage.xml"
           conda deactivate
