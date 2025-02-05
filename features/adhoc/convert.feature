@@ -18,34 +18,34 @@ Feature: `pc adhoc convert` command
       """
 
   Scenario: Convert STL to STEP
-    When I run "partcad adhoc convert test.stl test.step --input stl --output step"
+    When I run "pc adhoc convert test.stl test.step --input stl --output step"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting test.stl (stl) to test.step (step)..."
     And STDOUT should contain "Conversion complete: test.step"
 
   Scenario: Infer input type and convert STL to STEP
-    When I run "partcad adhoc convert test.stl test.step --output step"
+    When I run "pc adhoc convert test.stl test.step --output step"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting test.stl (stl) to test.step (step)..."
     And STDOUT should contain "Conversion complete: test.step"
 
   Scenario: Missing input file
-    When I run "partcad adhoc convert nonexistent.stl test.step"
+    When I run "pc adhoc convert nonexistent.stl test.step"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Error: [Errno 2] No such file or directory: 'nonexistent.stl'"
 
   Scenario: Unsupported output type
-    When I run "partcad adhoc convert test.stl --input stl --output unknown"
+    When I run "pc adhoc convert test.stl --input stl --output unknown"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Error during conversion: Unsupported export format: unknown"
 
   Scenario: Invalid input type
-    When I run "partcad adhoc convert test.stl test.step --input unknown --output step"
+    When I run "pc adhoc convert test.stl test.step --input unknown --output step"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Cannot infer input type. Please specify --input explicitly."
 
   Scenario: Convert STL to STEP without specifying output filename
-    When I run "partcad adhoc convert test.stl --output step"
+    When I run "pc adhoc convert test.stl --output step"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting test.stl (stl) to test.step (step)..."
     And STDOUT should contain "Conversion complete: test.step"
@@ -64,7 +64,7 @@ Feature: `pc adhoc convert` command
         endfacet
       /* Missing 'endsolid' keyword */
       """
-    When I run "partcad adhoc convert invalid.stl test.step --input stl --output step"
+    When I run "pc adhoc convert invalid.stl test.step --input stl --output step"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Error during conversion: Failed to load the input part."
 
@@ -72,12 +72,12 @@ Feature: `pc adhoc convert` command
     Given a file named "empty.stl" with content:
       """
       """
-    When I run "partcad adhoc convert empty.stl empty.step --input stl --output step"
+    When I run "pc adhoc convert empty.stl empty.step --input stl --output step"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Error during conversion: Failed to load the input part."
 
   Scenario: Ambiguous input file extension
-    When I run "partcad adhoc convert test.unknown test.step"
+    When I run "pc adhoc convert test.unknown test.step"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Cannot infer input type. Please specify --input explicitly."
 
@@ -86,7 +86,7 @@ Feature: `pc adhoc convert` command
       """
       Existing STEP content
       """
-    When I run "partcad adhoc convert test.stl test.step --input stl --output step"
+    When I run "pc adhoc convert test.stl test.step --input stl --output step"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting test.stl (stl) to test.step (step)..."
     And STDOUT should contain "Conversion complete: test.step"

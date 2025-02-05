@@ -7,7 +7,7 @@ Feature: `pc export` command
     Given a file named "partcad.yaml" does not exist
 
   Scenario Outline: `pc export` command
-    When I run "partcad -p /workspaces/partcad/examples export --package /produce_assembly_assy -t <type> -O ./ -a :logo_embedded"
+    When I run "pc -p $PARTCAD_ROOT/examples export --package /produce_assembly_assy -t <type> -O ./ -a :logo_embedded"
     Then the command should exit with a status code of "0"
     Then a file named "<filename>" should be created
     Given a file named "partcad.yaml" does not exist

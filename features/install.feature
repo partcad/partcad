@@ -18,7 +18,7 @@ Feature: `pc install` command
           url: https://github.com/partcad/partcad-electronics-sbcs-raspberrypi
       """
     # TODO-57: @alexanderilyin: Consider to move "partcad/partcad.git:examples" to "partcad/partcad-examples.git". Now clone takes 62.776s
-    When I run "partcad install"
+    When I run "pc install"
     Then STDOUT should contain "Cloning the GIT repo:"
     Then STDOUT should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
@@ -28,11 +28,11 @@ Feature: `pc install` command
 # PC-82: Gracefully handle git & network problems in 'pc update'
   Scenario: Install packages
     Given a file named "partcad.yaml" does not exist
-    When I run "partcad init"
+    When I run "pc init"
     Then STDOUT should contain "DONE: InitCtx: /tmp/sandbox/behave"
     And the command should exit with a status code of "0"
     And a file named "partcad.yaml" should be created
-    When I run "partcad install"
+    When I run "pc install"
     Then STDERR should contain "Cloning the GIT repo:"
     Then STDERR should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
@@ -54,7 +54,7 @@ Feature: `pc install` command
           url:
             "git@github.com:": "https://github.com/"
       """
-    When I run "partcad install"
+    When I run "pc install"
     Then STDOUT should contain "Cloning the GIT repo:"
     Then STDOUT should contain "git@github.com:"
     Then STDOUT should contain "DONE: Install: this:"
@@ -77,7 +77,7 @@ Feature: `pc install` command
           "user.name": "John Doe"
           "user.email": "johndoe@example.com"
       """
-    When I run "partcad install"
+    When I run "pc install"
     Then STDOUT should contain "Cloning the GIT repo:"
     Then STDOUT should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
@@ -90,7 +90,7 @@ Feature: `pc install` command
   Scenario: Install non-existent package
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
-    When I run "partcad install non-existent-package"
+    When I run "pc install non-existent-package"
     Then the command should exit with a non-zero status code
     And STDERR should contain "Package not found"
 
@@ -98,6 +98,6 @@ Feature: `pc install` command
   Scenario: Install with dependency resolution failure
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
-    When I run "partcad install package-with-conflicts"
+    When I run "pc install package-with-conflicts"
     Then the command should exit with a non-zero status code
     And STDERR should contain "Dependency resolution failed"

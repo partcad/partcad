@@ -46,11 +46,11 @@ jobs:
 
           DIR=$(pwd)
           conda activate env-test
-          cd $DIR
+          cd "$DIR"
 
           mkdir -pv pytest-test-results
           pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*"
-          coverage xml --data-file=$DIR/.coverage -o ./pytest-test-results/coverage.xml
+          coverage xml --data-file="$DIR/.coverage" -o ./pytest-test-results/coverage.xml
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -92,11 +92,11 @@ jobs:
           mkdir -pv behave-test-results
 
           conda activate env-test
-          cd $DIR
+          cd "$DIR"
           python -m pip install -U ./partcad ./partcad-cli
 
-          coverage run $(which behave)
-          coverage xml --data-file=./.coverage -o $DIR/behave-test-results/coverage.xml
+          coverage run "$(which behavex)"
+          coverage xml --data-file=./.coverage -o "$DIR/behave-test-results/coverage.xml"
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -141,9 +141,9 @@ jobs:
 
           # BEGIN PARTCAD EXAMPLES
           cd ./examples
-          coverage run $(which pc) --no-ansi list all -r
-          coverage run $(which pc) --no-ansi test -r
-          coverage run $(which pc) --no-ansi render -r
+          coverage run "$(which pc)" --no-ansi list all -r
+          coverage run "$(which pc)" --no-ansi test -r
+          coverage run "$(which pc)" --no-ansi render -r
           # END PARTCAD EXAMPLES
 
           coverage xml --data-file=./.coverage -o ../examples-partcad-test-results/coverage.xml
@@ -188,15 +188,15 @@ jobs:
           mkdir -pv examples-all-test-results
 
           conda activate env-test
-          cd $DIR
+          cd "$DIR"
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
           cd examples
-          coverage run $(which pc) --no-ansi test -r --package /pub/examples
+          coverage run "$(which pc)" --no-ansi test -r --package /pub/examples
           # END ALL EXAMPLES
 
-          coverage xml --data-file=./.coverage -o $DIR/examples-all-test-results/coverage.xml
+          coverage xml --data-file=./.coverage -o "$DIR/examples-all-test-results/coverage.xml"
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -238,17 +238,16 @@ jobs:
           mkdir -pv pub-repo-test-results
 
           conda activate env-test
-          cd $DIR
+          cd "$DIR"
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO
           cd examples
-          coverage run $(which pc) --no-ansi test -r --package /pub
+          coverage run "$(which pc)" --no-ansi test -r --package /pub
           # END PUBLIC REPO
 
-          coverage xml --data-file=,/.coverage -o $DIR/pub-repo-test-results/coverage.xml
+          coverage xml --data-file=./.coverage -o "$DIR/pub-repo-test-results/coverage.xml"
           conda deactivate
-
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results

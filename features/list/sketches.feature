@@ -19,12 +19,12 @@ Feature: `pc list assemblies` command
     Then the command should exit with a status code of "0"
     When I run command:
       """
-      cp -v /workspaces/partcad/examples/produce_sketch_basic/circle_01.svg ./
+      cp -v $PARTCAD_ROOT/examples/produce_sketch_basic/circle_01.svg ./
       """
     Then the command should exit with a status code of "0"
     When I run command:
       """
-      partcad list sketches
+      pc list sketches
       """
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "DONE: InitCtx:"
@@ -32,7 +32,7 @@ Feature: `pc list assemblies` command
     Then STDOUT should contain "circle_01"
     Then STDOUT should contain "The shortest way to create a basic circle in PartCAD"
     Then STDOUT should contain "Total: 1"
-    Then STDOUT should contain "DONE: ListSketches: //"
+    Then STDOUT should contain "DONE: ListSketches: //:"
 
 # Feature: List sketches recursively
 #   As a PartCAD user

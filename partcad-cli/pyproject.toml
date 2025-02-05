@@ -22,6 +22,7 @@ classifiers = [
 
 [project.scripts]
 pc = "partcad_cli.click.command:cli"
+partcad = "partcad_cli.click.command:cli"
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
