@@ -44,13 +44,11 @@ jobs:
           # shellcheck disable=SC1090
           . ~/.bash_profile
 
-          DIR=$(pwd)
           conda activate env-test
-          cd "$DIR"
 
           mkdir -pv pytest-test-results
           pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
-          coverage xml --data-file="$DIR/.coverage" -o ./pytest-test-results/coverage.xml
+          coverage xml --data-file=./.coverage -o ./pytest-test-results/coverage.xml
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -73,7 +71,7 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -88,15 +86,15 @@ jobs:
           # shellcheck disable=SC1090
           . ~/.bash_profile
 
-          DIR=$(pwd)
           mkdir -pv behave-test-results
 
           conda activate env-test
-          cd "$DIR"
           python -m pip install -U ./partcad ./partcad-cli
 
+          export SHELL=$(where bash)
+          export COMSPEC=$(where bash)
           coverage run -m behavex
-          coverage xml --data-file=./.coverage -o "$DIR/behave-test-results/coverage.xml"
+          coverage xml --data-file=./.coverage -o ./behave-test-results/coverage.xml
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -191,8 +189,10 @@ jobs:
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
-          cd examples
-          coverage run -m partcad_cli.click.command --no-ansi test -r --package /pub/examples
+          cd ./examples
+          coverage run -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+          # Limit RAM usage by restricting the number of threads
+          coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 test -r --package //pub/examples
           # END ALL EXAMPLES
 
           coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
@@ -240,7 +240,7 @@ jobs:
 
           # BEGIN PUBLIC REPO
           cd examples
-          coverage run -m partcad_cli.click.command --no-ansi test -r --package /pub
+          coverage run -m partcad_cli.click.command --no-ansi test -r --package //pub
           # END PUBLIC REPO
 
           coverage xml --data-file=./.coverage -o ../pub-repo-test-results/coverage.xml
