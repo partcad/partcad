@@ -18,13 +18,16 @@ runs:
     # Miniconda
     - uses: conda-incubator/setup-miniconda@v3
       with:
-        miniforge-version: 24.11.2-1
+        # miniforge-version: 24.11.2-1
+        miniconda-version: latest
         channels: conda-forge,defaults
         python-version: ${{ matrix.python-version }}
 
     - name: Init conda
       shell: bash
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
         conda init
         touch ~/.bashrc
         touch ~/.bash_profile
