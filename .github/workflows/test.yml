@@ -49,7 +49,7 @@ jobs:
           cd "$DIR"
 
           mkdir -pv pytest-test-results
-          pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*"
+          pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
           coverage xml --data-file="$DIR/.coverage" -o ./pytest-test-results/coverage.xml
           conda deactivate
 
@@ -142,8 +142,9 @@ jobs:
           # BEGIN PARTCAD EXAMPLES
           cd ./examples
           coverage run "$(which pc)" --no-ansi list all -r
-          coverage run "$(which pc)" --no-ansi test -r
-          coverage run "$(which pc)" --no-ansi render -r
+          # Limit RAM usage by restricting the number of threads
+          coverage run "$(which pc)" --no-ansi --threads-max=2 test -r
+          coverage run "$(which pc)" --no-ansi --threads-max=2 render -r
           # END PARTCAD EXAMPLES
 
           coverage xml --data-file=./.coverage -o ../examples-partcad-test-results/coverage.xml
