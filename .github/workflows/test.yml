@@ -95,7 +95,7 @@ jobs:
           cd "$DIR"
           python -m pip install -U ./partcad ./partcad-cli
 
-          coverage run "$(which behavex)"*
+          coverage run -m behavex
           coverage xml --data-file=./.coverage -o "$DIR/behave-test-results/coverage.xml"
           conda deactivate
 
@@ -141,10 +141,10 @@ jobs:
 
           # BEGIN PARTCAD EXAMPLES
           cd ./examples
-          coverage run "$(which pc)" --no-ansi list all -r
+          coverage run -m partcad_cli.click.command --no-ansi list all -r
           # Limit RAM usage by restricting the number of threads
-          coverage run "$(which pc)"* --no-ansi --threads-max=2 test -r
-          coverage run "$(which pc)"* --no-ansi --threads-max=2 render -r
+          coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 test -r
+          coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 render -r
           # END PARTCAD EXAMPLES
 
           coverage xml --data-file=./.coverage -o ../examples-partcad-test-results/coverage.xml
@@ -192,7 +192,7 @@ jobs:
 
           # BEGIN ALL EXAMPLES
           cd examples
-          coverage run "$(which pc)"* --no-ansi test -r --package /pub/examples
+          coverage run -m partcad_cli.click.command --no-ansi test -r --package /pub/examples
           # END ALL EXAMPLES
 
           coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
@@ -233,16 +233,14 @@ jobs:
           # shellcheck disable=SC1090
           . ~/.bash_profile
 
-          DIR=$(pwd)
           mkdir -pv pub-repo-test-results
 
           conda activate env-test
-          cd "$DIR"
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO
           cd examples
-          coverage run "$(which pc)"* --no-ansi test -r --package /pub
+          coverage run -m partcad_cli.click.command --no-ansi test -r --package /pub
           # END PUBLIC REPO
 
           coverage xml --data-file=./.coverage -o ../pub-repo-test-results/coverage.xml
