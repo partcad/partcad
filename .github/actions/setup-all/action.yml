@@ -22,7 +22,7 @@ runs:
         # Increase this value to reset cache if etc/example-environment.yml has not changed
         CACHE_NUMBER: 0
       with:
-        enableCrossOsArchive: true
+        # enableCrossOsArchive: true
         path: ~/conda_pkgs_dir
         key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
 
