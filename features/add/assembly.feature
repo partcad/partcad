@@ -5,7 +5,7 @@ Feature: `pc add assembly` command
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
 
-  @wip @PC-162
+  @PC-162
   Scenario: Add assembly from `logo.assy` file
     Given a file named "partcad.yaml" with content:
       """
@@ -60,23 +60,23 @@ Feature: `pc add assembly` command
       """
     When I run command:
       """
-      partcad add assembly assy primitive.assy
+      pc add assembly assy primitive.assy
       """
     Then the command should exit with a status code of "0"
     # INFO:  Adding the assembly primitive.assy of type assy
     When I run command:
       """
-      partcad inspect -V cube
+      pc test -f cad cube
       """
     Then the command should exit with a status code of "0"
     When I run command:
       """
-      partcad inspect -V cylinder
+      pc test -f cad cylinder
       """
     Then the command should exit with a status code of "0"
     When I run command:
       """
-      partcad inspect -V primitive
+      pc test -f cad -a primitive
       """
     Then the command should exit with a status code of "0"
 

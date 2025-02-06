@@ -38,8 +38,8 @@ def step_impl(context, substring):
 @then('STDERR should contain "{substring}" with path')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
-    logging.debug("STDERR: " + context.result.stderr)
-    logging.debug("STDOUT: " + context.result.stdout)
+    logging.debug(f"STDERR: {context.result.stderr}")
+    logging.debug(f"STDOUT: {context.result.stdout}")
     # TODO-73: @alexanderilyin: strip ASCII color codes from the output
     assert normalize_path(substring) in normalize_path(strip_ansi(context.result.stderr))
 
@@ -48,8 +48,8 @@ def step_impl(context, substring):
 @then('STDERR should contain "{substring}"')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
-    logging.debug("STDERR: " + context.result.stderr)
-    logging.debug("STDOUT: " + context.result.stdout)
+    logging.debug(f"STDERR: {context.result.stderr}")
+    logging.debug(f"STDOUT: {context.result.stdout}")
     # TODO-73: @alexanderilyin: strip ASCII color codes from the output
     assert substring in strip_ansi(context.result.stderr)
 
@@ -57,8 +57,8 @@ def step_impl(context, substring):
 @then('STDOUT should not contain "{substring}" with path')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
-    logging.debug("STDERR: " + context.result.stderr)
-    logging.debug("STDOUT: " + context.result.stdout)
+    logging.debug(f"STDERR: {context.result.stderr}")
+    logging.debug(f"STDOUT: {context.result.stdout}")
     # TODO-74: @alexanderilyin: strip ASCII color codes from the output
     assert normalize_path(substring) not in normalize_path(strip_ansi(context.result.stdout))
 
@@ -66,8 +66,8 @@ def step_impl(context, substring):
 @then('STDOUT should not contain "{substring}"')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
-    logging.debug("STDERR: " + context.result.stderr)
-    logging.debug("STDOUT: " + context.result.stdout)
+    logging.debug(f"STDERR: {context.result.stderr}")
+    logging.debug(f"STDOUT: {context.result.stdout}")
     # TODO-74: @alexanderilyin: strip ASCII color codes from the output
     assert substring not in context.result.stdout
 
@@ -75,7 +75,8 @@ def step_impl(context, substring):
 @then('STDERR should not contain "{substring}" with path')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
-    logging.debug(f"STDERR: {strip_ansi(context.result.stderr)}")
+    logging.debug(f"STDERR: {context.result.stderr}")
+    logging.debug(f"STDOUT: {context.result.stdout}")
     # TODO-75: @alexanderilyin: strip ASCII color codes from the output
     assert normalize_path(substring) not in normalize_path(strip_ansi(context.result.stderr))
 
@@ -83,8 +84,8 @@ def step_impl(context, substring):
 @then('STDERR should not contain "{substring}"')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
-    logging.debug("STDERR: " + context.result.stderr)
-    logging.debug("STDOUT: " + context.result.stdout)
+    logging.debug(f"STDERR: {context.result.stderr}")
+    logging.debug(f"STDOUT: {context.result.stdout}")
     # TODO-75: @alexanderilyin: strip ASCII color codes from the output
     assert substring not in context.result.stderr
 
