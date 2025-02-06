@@ -83,6 +83,12 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
 
+      - name: Set ComSpec
+        if: ${{ startsWith(matrix.os, 'windows') }}
+        shell: powershell
+        run: |
+          ::set-env name=ComSpec "C:\Windows\System32\cmd.exe"
+
       - name: Test with behave
         shell: bash
         run: |
@@ -202,7 +208,7 @@ jobs:
           coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 test -r --package //pub/examples
           # END ALL EXAMPLES
 
-          coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
+          # coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
           conda deactivate
 
       # - name: Upload test results & coverage reports to github and codecov
@@ -250,7 +256,7 @@ jobs:
           coverage run -m partcad_cli.click.command --no-ansi test -r --package //pub
           # END PUBLIC REPO
 
-          coverage xml --data-file=./.coverage -o ../pub-repo-test-results/coverage.xml
+          # coverage xml --data-file=./.coverage -o ../pub-repo-test-results/coverage.xml
           conda deactivate
 
       # - name: Upload test results & coverage reports to github and codecov
