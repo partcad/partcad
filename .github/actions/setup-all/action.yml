@@ -22,15 +22,16 @@ runs:
         miniconda-version: latest
         channels: conda-forge,defaults
         python-version: ${{ matrix.python-version }}
+        activate-environment: env
 
-    - name: Init conda
-      shell: bash
-      run: |
-        touch ~/.bashrc
-        touch ~/.bash_profile
-        . ~/.bashrc
-        . ~/.bash_profile
-        conda init
+    # - name: Init conda
+    #   shell: bash
+    #   run: |
+    #     touch ~/.bashrc
+    #     touch ~/.bash_profile
+    #     . ~/.bashrc
+    #     . ~/.bash_profile
+    #     conda init
 
     - uses: actions/cache@v4
       id: cache
@@ -47,9 +48,9 @@ runs:
     - name: install dev dependencies
       shell: bash
       run: |
-        . ~/.bashrc
-        . ~/.bash_profile
-        conda clean --all
+        # . ~/.bashrc
+        # . ~/.bash_profile
+        # conda clean --all
         conda create -n env-test python=${{ matrix.python-version }} -y
         conda activate env-test
         python -m ensurepip --upgrade

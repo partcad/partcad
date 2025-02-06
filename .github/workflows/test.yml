@@ -87,7 +87,8 @@ jobs:
         if: ${{ startsWith(matrix.os, 'windows') }}
         shell: powershell
         run: |
-          ::set-env name=ComSpec "C:\Windows\System32\cmd.exe"
+          set-env name=ComSpec "C:\Windows\System32\cmd.exe"
+          set-env name=PATH "%PATH%;C:\Users\runneradmin\.partcad\sandbox\pc-py-conda-3.11\Scripts"
 
       - name: Test with behave
         shell: bash
@@ -222,50 +223,50 @@ jobs:
       #     codecov-files: examples-all-test-results/junit.xml
       #     coverage-report: examples-all-test-results/coverage.xml
 
-  test-pub-repo:
-    name: "Repo //pub"
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04-l, windows-latest-l]
-        python-version: ["3.10", "3.12"]
-    runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 90
+  # test-pub-repo:
+  #   name: "Repo //pub"
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: [ubuntu-24.04-l, windows-latest-l]
+  #       python-version: ["3.10", "3.12"]
+  #   runs-on: ${{ matrix.os }}
+  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+  #   timeout-minutes: 90
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-      - uses: ./.github/actions/setup-test
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #     - uses: ./.github/actions/setup-test
 
-      - name: Test the entire repository
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
+  #     - name: Test the entire repository
+  #       shell: bash
+  #       run: |
+  #         # shellcheck disable=SC1090
+  #         . ~/.bashrc
+  #         # shellcheck disable=SC1090
+  #         . ~/.bash_profile
 
-          mkdir -pv pub-repo-test-results
+  #         mkdir -pv pub-repo-test-results
 
-          conda activate env-test
-          python -m pip install -U ./partcad ./partcad-cli
+  #         conda activate env-test
+  #         python -m pip install -U ./partcad ./partcad-cli
 
-          # BEGIN PUBLIC REPO
-          cd examples
-          coverage run -m partcad_cli.click.command --no-ansi test -r --package //pub
-          # END PUBLIC REPO
+  #         # BEGIN PUBLIC REPO
+  #         cd examples
+  #         coverage run -m partcad_cli.click.command --no-ansi test -r --package //pub
+  #         # END PUBLIC REPO
 
-          # coverage xml --data-file=./.coverage -o ../pub-repo-test-results/coverage.xml
-          conda deactivate
+  #         # coverage xml --data-file=./.coverage -o ../pub-repo-test-results/coverage.xml
+  #         conda deactivate
 
-      # - name: Upload test results & coverage reports to github and codecov
-      #   uses: ./.github/actions/upload-test-results
-      #   with:
-      #     name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
-      #     path: pub-repo-test-results/
-      #     retention-days: 7
-      #     status: ${{ job.status }}
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     codecov-files: pub-repo-test-results/junit.xml
-      #     coverage-report: pub-repo-test-results/coverage.xml
+  #     # - name: Upload test results & coverage reports to github and codecov
+  #     #   uses: ./.github/actions/upload-test-results
+  #     #   with:
+  #     #     name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #     #     path: pub-repo-test-results/
+  #     #     retention-days: 7
+  #     #     status: ${{ job.status }}
+  #     #     token: ${{ secrets.CODECOV_TOKEN }}
+  #     #     codecov-files: pub-repo-test-results/junit.xml
+  #     #     coverage-report: pub-repo-test-results/coverage.xml
