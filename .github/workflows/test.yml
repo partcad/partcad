@@ -53,6 +53,7 @@ jobs:
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
+        if: always()
         with:
           name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: pytest-test-results/
@@ -91,8 +92,9 @@ jobs:
           conda activate env-test
           python -m pip install -U ./partcad ./partcad-cli
 
-          export SHELL="$(which bash)"*
-          export ComSpec="$(which bash)"*
+          # For Windows, ensure the use of bash
+          setx ComSpec "$(which bash)"* /M || true
+
           # TODO(clairbee): get smarter about the number of processes
           coverage run -m behave
           coverage xml --data-file=./.coverage -o ./behave-test-results/coverage.xml
@@ -100,6 +102,7 @@ jobs:
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
+        if: always()
         with:
           name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: behave-test-results/
@@ -151,6 +154,7 @@ jobs:
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
+        if: always()
         with:
           name: examples-partcad-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: examples-partcad-test-results/
@@ -201,6 +205,7 @@ jobs:
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
+        if: always()
         with:
           name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: examples-all-test-results/
@@ -249,6 +254,7 @@ jobs:
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
+        if: always()
         with:
           name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: pub-repo-test-results/

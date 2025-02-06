@@ -12,7 +12,7 @@ Feature: `pc` command
     And STDOUT should contain "Increase verbosity level"
     And STDOUT should contain "Decrease verbosity level"
     # TODO-60: Due to different terminal size in CI ' or animations' is wrapped to the next line
-    And STDOUT should contain "Produce plain text logs without colors"
+    And STDOUT should contain "Produce plain text logs"
     # TODO-61: Due to different terminal size in CI' (YAML file or directory with 'partcad.yaml')' is wrapped to the next line
     And STDOUT should contain "Specify the package path"
     And STDOUT should contain "Set the log prefix format"
