@@ -15,8 +15,6 @@ runs:
 
     ###################################################  PYTHON  ###################################################
 
-    - uses: actions/checkout@v4
-
     # Miniconda
     - name: Cache conda
       uses: actions/cache@v3

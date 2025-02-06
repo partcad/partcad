@@ -36,6 +36,7 @@ jobs:
       BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
 
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-build
 

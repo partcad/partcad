@@ -29,6 +29,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
@@ -68,6 +69,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
@@ -129,6 +131,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
@@ -174,6 +177,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
@@ -218,6 +222,7 @@ jobs:
   #   timeout-minutes: 90
 
   #   steps:
+  #     - uses: actions/checkout@v4
   #     - uses: ./.github/actions/setup-all
   #     - uses: ./.github/actions/setup-test
 

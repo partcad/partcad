@@ -4,17 +4,11 @@ description: "Prepare the runner to build"
 runs:
   using: "composite"
   steps:
-
     ###################################################  PYTHON  ###################################################
 
     - name: Install prerequisites
-      shell: bash
+      shell: bash -l {0}
       run: |
-        # shellcheck disable=SC1090
-        . ~/.bashrc
-        # shellcheck disable=SC1090
-        . ~/.bash_profile
-
         conda create -n env-build python==${{ matrix.python-version }} -y
         conda activate env-build
         python -m ensurepip --upgrade
@@ -32,20 +26,15 @@ runs:
     #################################################  CADQUERY  ####################################################
 
     - name: Set CadQuery version
-      shell: bash
+      shell: bash -l {0}
       run: |
         echo "CADQUERY_VERSION=7.7.2" >> $GITHUB_ENV
         echo "CADQUERY_BASE_URL=https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64" >> $GITHUB_ENV
 
     - name: install cadquery-ocp on MacOS
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') }}
-      shell: bash
+      shell: bash -l {0}
       run: |
-        # shellcheck disable=SC1090
-        . ~/.bashrc
-        # shellcheck disable=SC1090
-        . ~/.bash_profile
-
         PYTHON_VERSION="${{ matrix.python-version }}"
         PYTHON_VERSION_NO_DOT="${PYTHON_VERSION//./}"
         WHEEL_FILE="cadquery_ocp-${CADQUERY_VERSION}-cp${PYTHON_VERSION_NO_DOT}-cp${PYTHON_VERSION_NO_DOT}-macosx_11_0_arm64.whl"
