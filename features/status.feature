@@ -23,7 +23,7 @@ Feature: `pc status` command
     When I run "partcad status"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "PartCAD version:"
-    And STDOUT should contain "Internal data storage location: $HOME/.partcad"
+    And STDOUT should contain "Internal data storage location: $HOME/.partcad" with path
     And STDOUT should match the regex "Tar cache size: \d\.\d+[KMGT]B"
     And STDOUT should match the regex "Git cache size: \d\.\d+[KMGT]B"
     And STDOUT should contain "Sandbox environments size:"

@@ -3,9 +3,12 @@ import yaml
 import partcad as pc
 import coloredlogs
 import logging
+import sys
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
+
+sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
 
 help_config = click.RichHelpConfiguration(
     text_markup="rich",
@@ -203,9 +206,9 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     show_envvar=True,
     help="Traces sample rate for Sentry in percent",
 )
-@click.option('--level', 'format', flag_value='level', default=True, help="Use log level as log prefix")
-@click.option('--time', 'format', flag_value='time', help="Use time with milliseconds as log prefix")
-@click.option('--path', 'format', flag_value='path', help="Use source file path and line number as log prefix")
+@click.option("--level", "format", flag_value="level", default=True, help="Use log level as log prefix")
+@click.option("--time", "format", flag_value="time", help="Use time with milliseconds as log prefix")
+@click.option("--path", "format", flag_value="path", help="Use source file path and line number as log prefix")
 @click.pass_context
 def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     """
@@ -293,8 +296,8 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     for env_var, attrib in user_config_options:
         value = kwargs.get(attrib, None)
         if value is not None and user_config._get_env(env_var) is None:
-            if 'sentry' in attrib:
-                attrib = attrib.replace('sentry_', 'sentry.')
+            if "sentry" in attrib:
+                attrib = attrib.replace("sentry_", "sentry.")
                 user_config.set(attrib, value)
             else:
                 setattr(user_config, attrib, value)

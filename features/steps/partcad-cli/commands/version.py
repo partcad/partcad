@@ -10,6 +10,16 @@ def step_impl(context, max_duration):
     assert context.duration < float(max_duration)
 
 
+@then("STDOUT should contain '{substring}' with path")
+@then('STDOUT should contain "{substring}" with path')
+def step_impl(context, substring):
+    # TODO-72: @alexanderilyin: refactor & unify all output matching related steps
+    substring = expandvars(substring, context)
+    logging.debug(f"STDERR: {strip_ansi(context.result.stderr)}")
+    logging.debug(f"STDOUT: {strip_ansi(context.result.stdout)}")
+    assert substring.replace("\\", "/") in strip_ansi(context.result.stdout.replace("\\", "/"))
+
+
 @then("STDOUT should contain '{substring}'")
 @then('STDOUT should contain "{substring}"')
 def step_impl(context, substring):
@@ -20,6 +30,17 @@ def step_impl(context, substring):
     assert substring in strip_ansi(context.result.stdout)
 
 
+@then("STDERR should contain '{substring}' with path")
+@then('STDERR should contain "{substring}" with path')
+def step_impl(context, substring):
+    substring = expandvars(substring, context)
+    logging.debug("STDERR: " + context.result.stderr)
+    logging.debug("STDOUT: " + context.result.stdout)
+    # TODO-73: @alexanderilyin: strip ASCII color codes from the output
+    assert substring.replace("\\", "/") in strip_ansi(context.result.stderr.replace("\\", "/"))
+
+
+@then("STDERR should contain '{substring}'")
 @then('STDERR should contain "{substring}"')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
@@ -29,6 +50,15 @@ def step_impl(context, substring):
     assert substring in strip_ansi(context.result.stderr)
 
 
+@then('STDOUT should not contain "{substring}" with path')
+def step_impl(context, substring):
+    substring = expandvars(substring, context)
+    logging.debug("STDERR: " + context.result.stderr)
+    logging.debug("STDOUT: " + context.result.stdout)
+    # TODO-74: @alexanderilyin: strip ASCII color codes from the output
+    assert substring.replace("\\", "/") not in context.result.stdout.replace("\\", "/")
+
+
 @then('STDOUT should not contain "{substring}"')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
@@ -36,6 +66,15 @@ def step_impl(context, substring):
     logging.debug("STDOUT: " + context.result.stdout)
     # TODO-74: @alexanderilyin: strip ASCII color codes from the output
     assert substring not in context.result.stdout
+
+
+@then('STDERR should not contain "{substring}" with path')
+def step_impl(context, substring):
+    substring = expandvars(substring, context)
+    logging.debug("STDERR: " + context.result.stderr)
+    logging.debug("STDOUT: " + context.result.stdout)
+    # TODO-75: @alexanderilyin: strip ASCII color codes from the output
+    assert substring.replace("\\", "/") not in context.result.stderr.replace("\\", "/")
 
 
 @then('STDERR should not contain "{substring}"')
