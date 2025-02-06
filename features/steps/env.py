@@ -1,4 +1,4 @@
-from behave import when, given
+from behave import then, given
 from behave.runner import Context
 import logging
 from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin python.autoComplete.extraPaths

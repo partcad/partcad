@@ -26,13 +26,13 @@ Feature: `pc` command
     When I run "pc -v status"
     Then the command should exit with a status code of "0"
     # TODO-62: @alexanderilyin: check that DEBUG prefix is present
-    And STDOUT should contain "PartCAD version:"
-    And STDOUT should contain "Internal data storage location: /tmp/sandbox/home/partcad-cli-" with path
-    And STDOUT should contain "Tar cache size:"
-    And STDOUT should contain "Git cache size:"
-    And STDOUT should contain "Sandbox environments size:"
-    And STDOUT should contain "Total internal data storage size:"
-    And STDOUT should contain "DONE: Status: this:"
+    And STDERR should contain "PartCAD version:"
+    And STDERR should contain "Internal data storage location: /tmp/sandbox/home/partcad-cli-" with path
+    And STDERR should contain "Tar cache size:"
+    And STDERR should contain "Git cache size:"
+    And STDERR should contain "Sandbox environments size:"
+    And STDERR should contain "Total internal data storage size:"
+    And STDERR should contain "DONE: Status: this:"
 
   @pc-quiet @pc-status
   Scenario: Do not show INFO messages with decreased verbosity

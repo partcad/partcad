@@ -29,8 +29,8 @@ def step_impl(context, substring):
 def step_impl(context, substring):
     # TODO-72: @alexanderilyin: refactor & unify all output matching related steps
     substring = expandvars(substring, context)
-    logging.debug(f"STDERR: {strip_ansi(context.result.stderr)}")
-    logging.debug(f"STDOUT: {strip_ansi(context.result.stdout)}")
+    logging.info(f"STDERR: {strip_ansi(context.result.stderr)}")
+    logging.info(f"STDOUT: {strip_ansi(context.result.stdout)}")
     assert substring in strip_ansi(context.result.stdout)
 
 

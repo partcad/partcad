@@ -43,6 +43,7 @@ def run(context: Context, command: str):
         text=True,
         cwd=cwd,
         env=env,
+        encoding="utf-8",
     )
     end_time = time.time()
     context.duration = end_time - start_time
@@ -52,9 +53,9 @@ def run(context: Context, command: str):
     logging.debug(f"Command return code: {result.returncode}")
 
     # Replace None with empty string
-    if not result.stdout:
+    if result.stdout is None:
         result.stdout = ""
-    if not result.stderr:
+    if result.stderr is None:
         result.stderr = ""
 
     # Store the result in the context for further steps

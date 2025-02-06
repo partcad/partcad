@@ -71,7 +71,7 @@ Feature: `pc config` command
 
   @success @pc-config
   Scenario: Override CLI options with environment variables
-    And environment variable "PC_THREADS_MAX" is set to "1234"
+    Given environment variable "PC_THREADS_MAX" is set to "1234"
     And environment variable "PC_OLLAMA_NUM_THREAD" is set to "5678"
     And environment variable "PC_MAX_SCRIPT_CORRECTION" is set to "4321"
     And environment variable "PC_MAX_MODEL_GENERATION" is set to "8765"
@@ -88,7 +88,7 @@ Feature: `pc config` command
     And environment variable "PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE" is set to "101"
     And environment variable "PC_CACHE_DEPENDENCIES_IGNORE" is set to "false"
     And environment variable "PC_SENTRY_DEBUG" is set to "false"
-    And environment variable "PC_SENTRY_TRACES_SAMPLE_RATE" is set to "0.55"
+    And environment variable "PC_SENTRY_TRACES_SAMPLE_RATE" is set to "0.65"
     And environment variable "PC_SENTRY_SHUTDOWN_TIMEOUT" is set to "11"
     When I run "pc --threads-max=1111 --ollama-num-thread=2222 --max-script-correction=3333 --max-model-generation=4444 --max-geometric-modeling=5555 --openai-api-key=notused --google-api-key=notused --internal-state-dir=/not/used --python-sandbox=pypy --force-update --cache --cache-max-entry-size=102 --cache-min-entry-size=12 --cache-memory-max-entry-size=102 --cache-memory-double-cache-max-entry-size=102 --cache-dependencies-ignore --sentry-debug --sentry-traces-sample-rate=0.3 --sentry-shutdown-timeout=200 config"
     Then the command should exit with a status code of "0"
@@ -197,7 +197,7 @@ Feature: `pc config` command
     And environment variable "PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE" is set to "101"
     And environment variable "PC_CACHE_DEPENDENCIES_IGNORE" is set to "true"
     And environment variable "PC_SENTRY_DEBUG" is set to "false"
-    And environment variable "PC_SENTRY_TRACES_SAMPLE_RATE" is set to "0.55"
+    And environment variable "PC_SENTRY_TRACES_SAMPLE_RATE" is set to "0.75"
     And environment variable "PC_SENTRY_SHUTDOWN_TIMEOUT" is set to "11"
     When I run "pc --threads-max=1111 --ollama-num-thread=2222 --max-script-correction=3333 --max-model-generation=4444 --max-geometric-modeling=5555 --openai-api-key=notused --google-api-key=notused --internal-state-dir=/not/used --python-sandbox=none --force-update --cache-max-entry-size=102 --cache-min-entry-size=12 --cache-memory-max-entry-size=102 --cache-memory-double-cache-max-entry-size=102 --sentry-debug --sentry-traces-sample-rate=0.35 --sentry-shutdown-timeout=44 config"
     Then the command should exit with a status code of "0"
