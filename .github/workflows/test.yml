@@ -53,7 +53,6 @@ jobs:
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
-        if: always()
         with:
           name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: pytest-test-results/
@@ -79,6 +78,11 @@ jobs:
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
+      - name: Start SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+
       - name: Test with behave
         shell: bash
         run: |
@@ -102,7 +106,6 @@ jobs:
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
-        if: always()
         with:
           name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: behave-test-results/
@@ -154,7 +157,6 @@ jobs:
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
-        if: always()
         with:
           name: examples-partcad-test-results-${{matrix.os}}-${{matrix.python-version}}
           path: examples-partcad-test-results/
@@ -203,17 +205,16 @@ jobs:
           coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
           conda deactivate
 
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        if: always()
-        with:
-          name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: examples-all-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: examples-all-test-results/junit.xml
-          coverage-report: examples-all-test-results/coverage.xml
+      # - name: Upload test results & coverage reports to github and codecov
+      #   uses: ./.github/actions/upload-test-results
+      #   with:
+      #     name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
+      #     path: examples-all-test-results/
+      #     retention-days: 7
+      #     status: ${{ job.status }}
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     codecov-files: examples-all-test-results/junit.xml
+      #     coverage-report: examples-all-test-results/coverage.xml
 
   test-pub-repo:
     name: "Repo //pub"
@@ -252,14 +253,13 @@ jobs:
           coverage xml --data-file=./.coverage -o ../pub-repo-test-results/coverage.xml
           conda deactivate
 
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        if: always()
-        with:
-          name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: pub-repo-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: pub-repo-test-results/junit.xml
-          coverage-report: pub-repo-test-results/coverage.xml
+      # - name: Upload test results & coverage reports to github and codecov
+      #   uses: ./.github/actions/upload-test-results
+      #   with:
+      #     name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
+      #     path: pub-repo-test-results/
+      #     retention-days: 7
+      #     status: ${{ job.status }}
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     codecov-files: pub-repo-test-results/junit.xml
+      #     coverage-report: pub-repo-test-results/coverage.xml
