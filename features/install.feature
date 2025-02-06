@@ -56,9 +56,9 @@ Feature: `pc install` command
             "git@github.com:": "https://github.com/"
       """
     When I run "pc install"
-    Then STDOUT should contain "Cloning the GIT repo:"
-    Then STDOUT should contain "git@github.com:"
-    Then STDOUT should contain "DONE: Install: this:"
+    Then STDERR should contain "Cloning the GIT repo:"
+    Then STDERR should contain "git@github.com:"
+    Then STDERR should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
 
   # The below scenario implies the use of "insteadOf" which is not always a case

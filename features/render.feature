@@ -11,8 +11,8 @@ Feature: `pc render` command
     Then the command should exit with a status code of "0"
     Then a file named "<filename>" should be created
     Given a file named "partcad.yaml" does not exist
-    Then STDOUT should contain "DONE: Render: this:"
-    Then STDOUT should not contain "WARN:"
+    Then STDERR should contain "DONE: Render: this:"
+    Then STDERR should not contain "WARN:"
 
   # TODO-63: @alexanderilyin: consider extracting `-t readme` as `pc generate readme` command
   # @wip @type-text

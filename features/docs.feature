@@ -23,7 +23,7 @@ Feature: `pc render` command
     Then the command should exit with a status code of "0"
     When I run "pc --no-ansi add part scad test.scad"
     Then the command should exit with a status code of "0"
-    When I run "pc --no-ansi inspect :test"
+    When I run "pc --no-ansi test -f cad :test"
     Then the command should exit with a status code of "0"
     When I run "pc --no-ansi export -t stl :test"
     Then the command should exit with a status code of "0"
