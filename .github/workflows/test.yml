@@ -92,7 +92,6 @@ jobs:
       - name: Test with behave
         shell: bash -l {0}
         env:
-          "%ComSpec%"": "C:\\Windows\\System32\\cmd.exe"
           ComSpec: "C:\\Windows\\System32\\cmd.exe"
           SystemRoot: "C:\\Windows"
         run: |
