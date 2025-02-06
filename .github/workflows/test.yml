@@ -17,8 +17,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-pytest:
-    name: "Pytest"
+  # test-pytest:
+  #   name: "Pytest"
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+  #       python-version: ["3.10", "3.11", "3.12"]
+  #   runs-on: ${{ matrix.os }}
+  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+  #   timeout-minutes: 30
+
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #     - uses: ./.github/actions/setup-test
+
+  #     - name: Test with pytest
+  #       env:
+  #         PYTHONPATH: partcad/src
+  #         PYTHONWARNINGS: ignore
+  #       shell: bash -l {0}
+  #       run: |
+  #         conda activate env-test
+
+  #         mkdir -pv pytest-test-results
+  #         pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
+  #         coverage xml --data-file=./.coverage -o ./pytest-test-results/coverage.xml
+  #         conda deactivate
+
+  #     - name: Upload test results & coverage reports to github and codecov
+  #       uses: ./.github/actions/upload-test-results
+  #       with:
+  #         name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: pytest-test-results/
+  #         retention-days: 7
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.CODECOV_TOKEN }}
+  #         codecov-files: pytest-test-results/junit.xml
+  #         coverage-report: pytest-test-results/coverage.xml
+
+  test-behave:
+    name: "Behave"
     strategy:
       fail-fast: false
       matrix:
@@ -26,46 +66,6 @@ jobs:
         # os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
         python-version: ["3.10"]
         # python-version: ["3.10", "3.11", "3.12"]
-    runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-      - uses: ./.github/actions/setup-test
-
-      - name: Test with pytest
-        env:
-          PYTHONPATH: partcad/src
-          PYTHONWARNINGS: ignore
-        shell: bash -l {0}
-        run: |
-          conda activate env-test
-
-          mkdir -pv pytest-test-results
-          pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
-          coverage xml --data-file=./.coverage -o ./pytest-test-results/coverage.xml
-          conda deactivate
-
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: pytest-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: pytest-test-results/junit.xml
-          coverage-report: pytest-test-results/coverage.xml
-
-  test-behave:
-    name: "Behave"
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 60
@@ -107,7 +107,7 @@ jobs:
           # setx ComSpec "$(which bash)"* || true
 
           # TODO(clairbee): get smarter about the number of processes
-          export ComSpec="C:\\Windows\\System32\\cmd.exe"
+          export COMSPEC="C:\\Windows\\System32\\cmd.exe"
           coverage run -m behave
           coverage xml --data-file=./.coverage -o ./behave-test-results/coverage.xml
           conda deactivate
@@ -123,136 +123,136 @@ jobs:
           codecov-files: behave-test-results/junit.xml
           coverage-report: behave-test-results/coverage.xml
 
-  test-examples-partcad:
-    name: "Examples (PartCAD)"
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
-    runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 60
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-      - uses: ./.github/actions/setup-test
-
-      - name: Basic integration test for CLI (PartCAD examples)
-        shell: bash -l {0}
-        run: |
-          mkdir -pv examples-partcad-test-results
-
-          conda activate env-test
-          python -m pip install -U ./partcad ./partcad-cli
-
-          # BEGIN PARTCAD EXAMPLES
-          cd ./examples
-          coverage run -m partcad_cli.click.command --no-ansi list all -r
-          # Limit RAM usage by restricting the number of threads
-          coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 test -r
-          coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 render -r
-          # END PARTCAD EXAMPLES
-
-          coverage xml --data-file=./.coverage -o ../examples-partcad-test-results/coverage.xml
-          conda deactivate
-
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: examples-partcad-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: examples-partcad-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: examples-partcad-test-results/junit.xml
-          coverage-report: examples-partcad-test-results/coverage.xml
-
-  test-examples-all:
-    name: "Examples (All)"
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
-    runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 60
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-      - uses: ./.github/actions/setup-test
-
-      - name: Basic integration test for CLI (all examples)
-        shell: bash -l {0}
-        run: |
-          mkdir -pv examples-all-test-results
-
-          conda activate env-test
-          python -m pip install -U ./partcad ./partcad-cli
-
-          # BEGIN ALL EXAMPLES
-          cd ./examples
-          coverage run -m partcad_cli.click.command --no-ansi list all -r //pub/examples
-          # Limit RAM usage by restricting the number of threads
-          coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 test -r --package //pub/examples
-          # END ALL EXAMPLES
-
-          # coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
-          conda deactivate
-
-      # - name: Upload test results & coverage reports to github and codecov
-      #   uses: ./.github/actions/upload-test-results
-      #   with:
-      #     name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
-      #     path: examples-all-test-results/
-      #     retention-days: 7
-      #     status: ${{ job.status }}
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     codecov-files: examples-all-test-results/junit.xml
-      #     coverage-report: examples-all-test-results/coverage.xml
-
-  # test-pub-repo:
-  #   name: "Repo //pub"
+  # test-examples-partcad:
+  #   name: "Examples (PartCAD)"
   #   strategy:
   #     fail-fast: false
   #     matrix:
-  #       os: [ubuntu-24.04-l, windows-latest-l]
-  #       python-version: ["3.10", "3.12"]
+  #       os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+  #       python-version: ["3.10", "3.11", "3.12"]
   #   runs-on: ${{ matrix.os }}
   #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-  #   timeout-minutes: 90
+  #   timeout-minutes: 60
 
   #   steps:
   #     - uses: actions/checkout@v4
   #     - uses: ./.github/actions/setup-all
   #     - uses: ./.github/actions/setup-test
 
-  #     - name: Test the entire repository
+  #     - name: Basic integration test for CLI (PartCAD examples)
   #       shell: bash -l {0}
   #       run: |
-  #         mkdir -pv pub-repo-test-results
+  #         mkdir -pv examples-partcad-test-results
 
   #         conda activate env-test
   #         python -m pip install -U ./partcad ./partcad-cli
 
-  #         # BEGIN PUBLIC REPO
-  #         cd examples
-  #         coverage run -m partcad_cli.click.command --no-ansi test -r --package //pub
-  #         # END PUBLIC REPO
+  #         # BEGIN PARTCAD EXAMPLES
+  #         cd ./examples
+  #         coverage run -m partcad_cli.click.command --no-ansi list all -r
+  #         # Limit RAM usage by restricting the number of threads
+  #         coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 test -r
+  #         coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 render -r
+  #         # END PARTCAD EXAMPLES
 
-  #         # coverage xml --data-file=./.coverage -o ../pub-repo-test-results/coverage.xml
+  #         coverage xml --data-file=./.coverage -o ../examples-partcad-test-results/coverage.xml
+  #         conda deactivate
+
+  #     - name: Upload test results & coverage reports to github and codecov
+  #       uses: ./.github/actions/upload-test-results
+  #       with:
+  #         name: examples-partcad-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: examples-partcad-test-results/
+  #         retention-days: 7
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.CODECOV_TOKEN }}
+  #         codecov-files: examples-partcad-test-results/junit.xml
+  #         coverage-report: examples-partcad-test-results/coverage.xml
+
+  # test-examples-all:
+  #   name: "Examples (All)"
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+  #       python-version: ["3.10", "3.11", "3.12"]
+  #   runs-on: ${{ matrix.os }}
+  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+  #   timeout-minutes: 60
+
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #     - uses: ./.github/actions/setup-test
+
+  #     - name: Basic integration test for CLI (all examples)
+  #       shell: bash -l {0}
+  #       run: |
+  #         mkdir -pv examples-all-test-results
+
+  #         conda activate env-test
+  #         python -m pip install -U ./partcad ./partcad-cli
+
+  #         # BEGIN ALL EXAMPLES
+  #         cd ./examples
+  #         coverage run -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+  #         # Limit RAM usage by restricting the number of threads
+  #         coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 test -r --package //pub/examples
+  #         # END ALL EXAMPLES
+
+  #         # coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
   #         conda deactivate
 
   #     # - name: Upload test results & coverage reports to github and codecov
   #     #   uses: ./.github/actions/upload-test-results
   #     #   with:
-  #     #     name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
-  #     #     path: pub-repo-test-results/
+  #     #     name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #     #     path: examples-all-test-results/
   #     #     retention-days: 7
   #     #     status: ${{ job.status }}
   #     #     token: ${{ secrets.CODECOV_TOKEN }}
-  #     #     codecov-files: pub-repo-test-results/junit.xml
-  #     #     coverage-report: pub-repo-test-results/coverage.xml
+  #     #     codecov-files: examples-all-test-results/junit.xml
+  #     #     coverage-report: examples-all-test-results/coverage.xml
+
+  # # test-pub-repo:
+  # #   name: "Repo //pub"
+  # #   strategy:
+  # #     fail-fast: false
+  # #     matrix:
+  # #       os: [ubuntu-24.04-l, windows-latest-l]
+  # #       python-version: ["3.10", "3.12"]
+  # #   runs-on: ${{ matrix.os }}
+  # #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+  # #   timeout-minutes: 90
+
+  # #   steps:
+  # #     - uses: actions/checkout@v4
+  # #     - uses: ./.github/actions/setup-all
+  # #     - uses: ./.github/actions/setup-test
+
+  # #     - name: Test the entire repository
+  # #       shell: bash -l {0}
+  # #       run: |
+  # #         mkdir -pv pub-repo-test-results
+
+  # #         conda activate env-test
+  # #         python -m pip install -U ./partcad ./partcad-cli
+
+  # #         # BEGIN PUBLIC REPO
+  # #         cd examples
+  # #         coverage run -m partcad_cli.click.command --no-ansi test -r --package //pub
+  # #         # END PUBLIC REPO
+
+  # #         # coverage xml --data-file=./.coverage -o ../pub-repo-test-results/coverage.xml
+  # #         conda deactivate
+
+  # #     # - name: Upload test results & coverage reports to github and codecov
+  # #     #   uses: ./.github/actions/upload-test-results
+  # #     #   with:
+  # #     #     name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
+  # #     #     path: pub-repo-test-results/
+  # #     #     retention-days: 7
+  # #     #     status: ${{ job.status }}
+  # #     #     token: ${{ secrets.CODECOV_TOKEN }}
+  # #     #     codecov-files: pub-repo-test-results/junit.xml
+  # #     #     coverage-report: pub-repo-test-results/coverage.xml
