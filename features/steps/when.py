@@ -20,7 +20,9 @@ def run(context: Context, command: str):
     system_root = os.environ.get("SYSTEMROOT", "C:\\Windows")
     comspec = os.path.join(system_root, "System32", "cmd.exe")
     os.environ["SYSTEMROOT"] = system_root
+    os.environ["SystemRoot"] = system_root
     os.environ["COMSPEC"] = comspec
+    os.environ["ComSpeC"] = comspec
 
     cwd = None
     if hasattr(context, "test_dir"):
