@@ -41,14 +41,14 @@ runs:
 
     - name: Install OpenSCAD (Linux)
       if: runner.os == 'Linux'
-      shell: bash
+      shell: bash -l {0}
       run: |
         sudo apt-get update
         sudo apt-get install -y openscad
 
     - name: Install OpenSCAD (macOS)
       if: runner.os == 'macOS'
-      shell: bash
+      shell: bash -l {0}
       run: |
         brew install -f openscad || ( \
           rm /Users/runner/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)

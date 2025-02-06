@@ -37,12 +37,12 @@ jobs:
         env:
           PYTHONPATH: partcad/src
           PYTHONWARNINGS: ignore
-        shell: bash
+        shell: bash -l {0}
         run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
+          # # shellcheck disable=SC1090
+          # . ~/.bashrc
+          # # shellcheck disable=SC1090
+          # . ~/.bash_profile
 
           conda activate env-test
 
@@ -85,13 +85,17 @@ jobs:
 
       - name: Set ComSpec
         if: ${{ startsWith(matrix.os, 'windows') }}
-        shell: powershell
+        # shell: powershell
+        shell: bash -l {0}
         run: |
-          set-env name=ComSpec "C:\Windows\System32\cmd.exe"
-          set-env name=PATH "%PATH%;C:\Users\runneradmin\.partcad\sandbox\pc-py-conda-3.11\Scripts"
+          # set-env name=ComSpec "C:\Windows\System32\cmd.exe"
+          # set-env name=PATH "%PATH%;C:\Users\runneradmin\.partcad\sandbox\pc-py-conda-3.11\Scripts"
+          echo "comspec=C:\\Windows\\System32\\cmd.exe" >> $GITHUB_ENV
 
       - name: Test with behave
         shell: bash -l {0}
+        env:
+          ComSpec: C:\\Windows\\System32\\cmd.exe"
         run: |
           # # shellcheck disable=SC1090
           # . ~/.bashrc
@@ -104,7 +108,7 @@ jobs:
           python -m pip install -U ./partcad ./partcad-cli
 
           # For Windows, ensure the use of bash
-          setx ComSpec "$(which bash)"* /M || true
+          # setx ComSpec "$(which bash)"* /M || true
 
           # TODO(clairbee): get smarter about the number of processes
           coverage run -m behave
@@ -139,12 +143,12 @@ jobs:
       - uses: ./.github/actions/setup-test
 
       - name: Basic integration test for CLI (PartCAD examples)
-        shell: bash
+        shell: bash -l {0}
         run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
+          # # shellcheck disable=SC1090
+          # . ~/.bashrc
+          # # shellcheck disable=SC1090
+          # . ~/.bash_profile
 
           mkdir -pv examples-partcad-test-results
 
@@ -190,12 +194,12 @@ jobs:
       - uses: ./.github/actions/setup-test
 
       - name: Basic integration test for CLI (all examples)
-        shell: bash
+        shell: bash -l {0}
         run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
+          # # shellcheck disable=SC1090
+          # . ~/.bashrc
+          # # shellcheck disable=SC1090
+          # . ~/.bash_profile
 
           mkdir -pv examples-all-test-results
 
@@ -240,7 +244,7 @@ jobs:
   #     - uses: ./.github/actions/setup-test
 
   #     - name: Test the entire repository
-  #       shell: bash
+  #       shell: bash -l {0}
   #       run: |
   #         # shellcheck disable=SC1090
   #         . ~/.bashrc
