@@ -15,10 +15,11 @@ def run(context: Context, command: str):
     if hasattr(context, "home_dir"):
         # Override the HOME variable
         env["HOME"] = context.home_dir
-    env["COMSPEC"] = os.environ.get("COMSPEC", "cmd.exe")
 
     if os.name == "nt" and not "COMSPEC" in os.environ:
-        os.environ["COMSPEC"] = "bash.exe"
+        os.environ["COMSPEC"] = "cmd.exe"
+        os.environ["ComSpec"] = "cmd.exe"
+        os.environ["SystemRoot"] = "C:\\Windows"
 
     cwd = None
     if hasattr(context, "test_dir"):
