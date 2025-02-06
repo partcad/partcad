@@ -17,15 +17,15 @@ Feature: `pc render` command
           type: git
           url: https://github.com/partcad/partcad-index.git
       """
-    And I run "pc list"
+    And I run "pc --no-ansi list"
     Then the command should exit with a status code of "0"
     When I run "echo "translate (v= [0,0,0])  cube (size = 10);" > test.scad"
     Then the command should exit with a status code of "0"
-    When I run "pc add part scad test.scad"
+    When I run "pc --no-ansi add part scad test.scad"
     Then the command should exit with a status code of "0"
-    When I run "pc inspect :test"
+    When I run "pc --no-ansi inspect :test"
     Then the command should exit with a status code of "0"
-    When I run "pc export -t stl :test"
+    When I run "pc --no-ansi export -t stl :test"
     Then the command should exit with a status code of "0"
     # TODO: Add more asserts
     # And STDOUT should contain "Rendering STL file"
@@ -194,7 +194,7 @@ Feature: `pc render` command
 
   @docs-use-cases
   Scenario: Troubleshooting: Command Line
-    Given environment variable "PC_NO_ANSI" is set to "1"
+    Given environment variable "PC_NO_ANSI" is set to "True"
     When I run "pc init"
     Then the command should exit with a status code of "0"
     When I run "pc export -t stl //pub/robotics/parts/gobilda:structure/u_channel_2"

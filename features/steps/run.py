@@ -49,6 +49,12 @@ def run(context: Context, command: str):
     logging.debug(f"Command error: {result.stderr}")
     logging.debug(f"Command return code: {result.returncode}")
 
+    # Replace None with empty string
+    if not result.stdout:
+        result.stdout = ""
+    if not result.stderr:
+        result.stderr = ""
+
     # Store the result in the context for further steps
     context.result = result
 

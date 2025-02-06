@@ -221,6 +221,7 @@ Feature: `pc config` command
 
   @success @pc-config
   Scenario: set cli options with environment variable
-    When I run "PC_VERBOSE=1 pc config"
+    Given environment variable "PC_VERBOSE" is set to "1"
+    When I run "pc config"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "DEBUG:"
