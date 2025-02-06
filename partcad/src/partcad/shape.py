@@ -22,6 +22,7 @@ from .plugins import *
 from .shape_config import ShapeConfiguration
 from .user_config import user_config
 from .utils import total_size
+from . import exception
 from . import logging as pc_logging
 from . import sync_threads as pc_thread
 from . import wrapper
@@ -486,6 +487,8 @@ class Shape(ShapeConfiguration):
             step_opts, filepath = self.render_getopts("step", ".step", project, filepath)
 
             obj = await self.get_wrapped(ctx)
+            if obj is None:
+                raise exception.PartIsEmptyOrFailed(self.name)
 
             def do_render_step() -> None:
                 nonlocal project, filepath, obj

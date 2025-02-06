@@ -1,8 +1,17 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import asyncio
 from pathlib import Path
 import shutil
 import tempfile
-from partcad.context import Context
-from partcad.part import Part
+
+from .. import logging as pc_logging
+from ..context import Context
+from ..part import Part
 
 
 def convert_cad_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
@@ -27,12 +36,21 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
         project = ctx.get_project("/")
         part = project.get_part("input_part")
         if not part:
-            raise RuntimeError("Failed to load the input part.")
+            raise RuntimeError("Failed to load the input part: no part returned")
+
+        shape = asyncio.run(part.get_wrapped(ctx))
+        if not shape:
+            raise RuntimeError("Failed to load the input part: no shape returned")
+        pc_logging.info(f"Loaded input part: {input_path}")
+        pc_logging.info(f"Shape: {type(shape)}")
+
+        if part.errors:
+            raise RuntimeError(f"Failed to load the input part: {part.errors}")
 
         # Export the part to the desired output format
         export_part(part, output_filename, output_type, ctx)
-    except Exception:
-        raise RuntimeError("Failed to load the input part.")
+    except Exception as e:
+        raise RuntimeError(f"Failed to convert: {e.with_traceback(None)}")
     finally:
         shutil.rmtree(temp_dir)  # Cleanup temporary files
 

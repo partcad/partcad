@@ -138,7 +138,11 @@
     ".venv": true,
     "docs/build": true,
     "partcad*/build": true,
-    "partcad*/dist": true
+    "partcad*/dist": true,
+    ".coverage": true,
+    "output": true,
+    "pytest-results": true,
+    "allure-results": true
   },
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
@@ -224,7 +228,11 @@
     ".venv": true,
     "docs/build": true,
     "partcad*/build": true,
-    "partcad*/dist": true
+    "partcad*/dist": true,
+    ".coverage": true,
+    "output": true,
+    "pytest-results": true,
+    "allure-results": true
   },
   // "security.workspace.trust.untrustedFiles": "open",
   "svg.preview.mode": "svg",

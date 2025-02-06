@@ -825,7 +825,7 @@ class Context(project_config.Configuration):
                     sys.version_info.minor,
                 )
             if python_runtime is None:
-                python_runtime = user_config.python_runtime
+                python_runtime = user_config.python_sandbox
             runtime_name = python_runtime + "-" + version
             if not runtime_name in self.runtimes_python:
                 self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)

@@ -60,7 +60,8 @@ Feature: `pc install` command
     Then STDOUT should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
 
-  @success @pc-init @pc-install @pc-ansi
+  # The below scenario implies the use of "insteadOf" which is not always a case
+  @wip @success @pc-init @pc-install @pc-ansi
   Scenario: Override git configuration
     Given a file named "partcad.yaml" with content:
       """
@@ -68,7 +69,8 @@ Feature: `pc install` command
         raspberrypi:
           desc: Raspberry Pi
           type: git
-          url: https://github.com/partcad/partcad-electronics-sbcs-raspberrypi
+          url: git@github.com:partcad/partcad-electronics-sbcs-raspberrypi.git
+          # url: https://github.com/partcad/partcad-electronics-sbcs-raspberrypi
       """
     And a user configuration file named "config.yaml" with content:
       """
@@ -81,9 +83,11 @@ Feature: `pc install` command
     Then STDOUT should contain "Cloning the GIT repo:"
     Then STDOUT should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
-    When I run "git -C ~/.partcad/git/*/ config --get user.name"
+    # When I run "git -C $HOME/.partcad/git/*/ config --list"
+    # Then STDOUT should contain "branch.main.remote"
+    When I run "git -C $HOME/.partcad/git/*/ config --get user.name"
     Then STDOUT should contain "John Doe"
-    When I run "git -C ~/.partcad/git/*/ config --get user.email"
+    When I run "git -C $HOME/.partcad/git/*/ config --get user.email"
     Then STDOUT should contain "johndoe@example.com"
 
   @wip @failure @pc-install

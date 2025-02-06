@@ -225,7 +225,7 @@ jobs:
 
           runCmd: |
             # TODO-26: PC-186: Allow to configure git clone protocol in settings
-            # git config --global url."git@github.com:".insteadOf "https://github.com/"
+            git config --global url."git@github.com:".insteadOf "https://github.com/"
             git config --global protocol.version 2
             mkdir -pv behave-results
             poetry --no-ansi --no-interaction run coverage run $(poetry run which behave)

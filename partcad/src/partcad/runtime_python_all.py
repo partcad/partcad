@@ -15,7 +15,7 @@ from . import runtime_python_conda
 
 def create(ctx, version, python_runtime=None):
     if python_runtime is None:
-        python_runtime = user_config.python_runtime
+        python_runtime = user_config.sandbox_runtime
     if python_runtime == "none":
         return runtime_python_none.NonePythonRuntime(ctx, version)
     elif python_runtime == "pypy":

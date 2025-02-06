@@ -14,6 +14,7 @@ import vyper
 
 from . import logging as pc_logging
 
+
 class SentryConfig:
     def __init__(self, v):
         self.v: vyper.Vyper = v
@@ -48,6 +49,7 @@ class SentryConfig:
                 properties.append((name, val.__get__(self, SentryConfig)))
         return str({k: v for k, v in properties if v is not None})
 
+
 class GitConfig(dict):
     def __init__(self, v):
         self._v: vyper.Vyper = v
@@ -73,6 +75,7 @@ class GitConfig(dict):
 
     def __repr__(self):
         return str(self._config)
+
 
 class UserConfig(vyper.Vyper):
     @staticmethod
@@ -177,7 +180,7 @@ class UserConfig(vyper.Vyper):
         # values: [none | pypy | conda]
         # default: conda
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
-        self.python_runtime = self.get_string("pythonSandbox")
+        self.python_sandbox = self.get_string("pythonSandbox")
 
         # option: internalStateDir
         # description: folder to store all temporary files
@@ -258,7 +261,6 @@ class UserConfig(vyper.Vyper):
         # values: <dict>
         # default: {}
         self.git_config = GitConfig(self)
-
 
 
 user_config = UserConfig()

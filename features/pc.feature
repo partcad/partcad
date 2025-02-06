@@ -29,7 +29,7 @@ Feature: `pc` command
     And STDOUT should contain "Internal data storage location: /tmp/sandbox/home/partcad-cli-"
     And STDOUT should contain "Tar cache size:"
     And STDOUT should contain "Git cache size:"
-    And STDOUT should contain "Runtime environments size:"
+    And STDOUT should contain "Sandbox environments size:"
     And STDOUT should contain "Total internal data storage size:"
     And STDOUT should contain "DONE: Status: this:"
 
@@ -41,7 +41,7 @@ Feature: `pc` command
     And STDOUT should not contain "INFO:partcad:Internal data storage location: /tmp/sandbox/home/partcad-cli-"
     And STDOUT should not contain "INFO:partcad:Tar cache size:"
     And STDOUT should not contain "INFO:partcad:Git cache size:"
-    And STDOUT should not contain "INFO:partcad:Runtime environments size:"
+    And STDOUT should not contain "INFO:partcad:Sandbox environments size:"
     And STDOUT should not contain "INFO:partcad:Total internal data storage size:"
     And STDOUT should not contain "INFO:partcad:DONE: Status: this:"
 
@@ -53,7 +53,7 @@ Feature: `pc` command
     And STDERR should contain "INFO:partcad:Internal data storage location: /tmp/sandbox/home/partcad-cli-"
     And STDERR should contain "INFO:partcad:Tar cache size:"
     And STDERR should contain "INFO:partcad:Git cache size:"
-    And STDERR should contain "INFO:partcad:Runtime environments size:"
+    And STDERR should contain "INFO:partcad:Sandbox environments size:"
     And STDERR should contain "INFO:partcad:Total internal data storage size:"
     And STDERR should contain "INFO:partcad:DONE: Status: this:"
 
