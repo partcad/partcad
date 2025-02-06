@@ -32,7 +32,7 @@ runs:
         miniconda-version: latest
         channels: conda-forge,defaults
         python-version: ${{ matrix.python-version }}
-        activate-environment: env
+        # activate-environment: env
         auto-activate-base: true
         use-only-tar-bz2: true
 

@@ -85,14 +85,15 @@ jobs:
         run: |
           # set-env name=ComSpec "C:\Windows\System32\cmd.exe"
           # set-env name=PATH "%PATH%;C:\Users\runneradmin\.partcad\sandbox\pc-py-conda-3.11\Scripts"
-          echo "ComSpec=C:\\Windows\\System32\\cmd.exe" >> $GITHUB_ENV
-          echo "SystemRoot=C:\\Windows" >> $GITHUB_ENV
+          # echo "ComSpec=C:\\Windows\\System32\\cmd.exe" >> $GITHUB_ENV
+          # echo "SystemRoot=C:\\Windows" >> $GITHUB_ENV
+          echo "::set-env name=ComSpec::C:\Windows\System32\cmd.exe"
 
       - name: Test with behave
         shell: bash -l {0}
-        env:
-          ComSpec: "C:\\Windows\\System32\\cmd.exe"
-          SystemRoot: "C:\\Windows"
+        # env:
+        #   ComSpec: "C:\\Windows\\System32\\cmd.exe"
+        #   SystemRoot: "C:\\Windows"
         run: |
           mkdir -pv behave-test-results
 
@@ -100,7 +101,7 @@ jobs:
           python -m pip install -U ./partcad ./partcad-cli
 
           # For Windows, ensure the use of bash
-          setx ComSpec "C:\\Windows\\System32\\cmd.exe"
+          # setx ComSpec "C:\\Windows\\System32\\cmd.exe"
           # setx ComSpec "$(which bash)"* || true
 
           # TODO(clairbee): get smarter about the number of processes
