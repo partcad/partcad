@@ -23,6 +23,7 @@ runs:
         channels: conda-forge,defaults
         python-version: ${{ matrix.python-version }}
         activate-environment: env
+        auto-activate-base: true
 
     # - name: Init conda
     #   shell: bash
