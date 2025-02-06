@@ -15,6 +15,7 @@ def run(context: Context, command: str):
     if hasattr(context, "home_dir"):
         # Override the HOME variable
         env["HOME"] = context.home_dir
+    env["ComSpec"] = os.environ.get("ComSpec", "cmd.exe")
 
     cwd = None
     if hasattr(context, "test_dir"):
