@@ -17,6 +17,9 @@ def run(context: Context, command: str):
         env["HOME"] = context.home_dir
     env["COMSPEC"] = os.environ.get("COMSPEC", "cmd.exe")
 
+    if os.name == "nt" and not "COMSPEC" in os.environ:
+        os.environ["COMSPEC"] = "bash.exe"
+
     cwd = None
     if hasattr(context, "test_dir"):
         cwd = context.test_dir
