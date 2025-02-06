@@ -91,12 +91,12 @@ jobs:
           set-env name=PATH "%PATH%;C:\Users\runneradmin\.partcad\sandbox\pc-py-conda-3.11\Scripts"
 
       - name: Test with behave
-        shell: bash
+        shell: bash -l {0}
         run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
+          # # shellcheck disable=SC1090
+          # . ~/.bashrc
+          # # shellcheck disable=SC1090
+          # . ~/.bash_profile
 
           mkdir -pv behave-test-results
 

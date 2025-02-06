@@ -4,26 +4,25 @@ description: "Prepare the runner to test"
 runs:
   using: "composite"
   steps:
-
     #################################################  CADQUERY  ####################################################
 
     # cadquery-ocp hack for macOS with ARM
     - name: install macos dev dependencies
       if: startsWith(${{matrix.os}}, 'macos')
-      shell: bash
+      shell: bash -l {0}
       run: |
-        . ~/.bashrc
-        . ~/.bash_profile
+        # . ~/.bashrc
+        # . ~/.bash_profile
         conda activate env-test
         pip install swig
         conda deactivate
 
     - name: install cadquery-ocp on macOS
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') }}
-      shell: bash
+      shell: bash -l {0}
       run: |
-        . ~/.bashrc
-        . ~/.bash_profile
+        # . ~/.bashrc
+        # . ~/.bash_profile
         conda activate env-test
 
         VERSION="7.7.2"

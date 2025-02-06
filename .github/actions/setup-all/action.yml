@@ -47,7 +47,7 @@ runs:
 
     # Install dev dependencies
     - name: install dev dependencies
-      shell: bash
+      shell: bash -l {0}
       run: |
         # . ~/.bashrc
         # . ~/.bash_profile
