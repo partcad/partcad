@@ -39,7 +39,8 @@ Feature: `pc install` command
 
   @success @pc-init @pc-install @pc-ansi
   Scenario: Install packages with ssh
-    Given a file named "partcad.yaml" with content:
+    Given environment variable "PC_NO_ANSI" is set to "1"
+    And a file named "partcad.yaml" with content:
       """
       dependencies:
         raspberrypi:

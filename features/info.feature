@@ -98,12 +98,11 @@ Feature: `pc info` command
 
   @success @pc-info
   Scenario: Show 'Path' as package info for local imports
-    When I run command:
+    Given a file named "test.scad" with content:
       """
-      echo "translate (v= [0,0,0])  cube (size = 10);" > test.scad
+      translate (v= [0,0,0])  cube (size = 10);
       """
-    Then the command should exit with a status code of "0"
-    Given a file named "partcad.yaml" with content:
+    And a file named "partcad.yaml" with content:
       """
         parts:
           test:

@@ -1,4 +1,4 @@
-from behave import when
+from behave import when, given
 from behave.runner import Context
 import time
 import logging
@@ -71,9 +71,3 @@ def i_run_command_multiline(context: Context):
 @when('I run "{command}"')
 def i_run_command_oneline(context: Context, command: str):
     run(context, command)
-
-
-@when('Environment variable "{variable}" is set to "{value}"')
-def environment_variable_is_set_to(context: Context, variable: str, value: str):
-    context.env[variable] = value
-    logging.debug(f"Set environment variable {variable} to {value}")

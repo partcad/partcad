@@ -100,7 +100,10 @@ jobs:
           mkdir -pv behave-test-results
 
           conda activate env-test
-          python -m pip install -U ./partcad ./partcad-cli
+          if ! python -m pip install -U ./partcad ./partcad-cli; then
+            echo "Failed to install packages"
+            exit 1
+          fi
 
           # For Windows, ensure the use of bash
           # setx ComSpec "C:\\Windows\\System32\\cmd.exe"
@@ -108,8 +111,14 @@ jobs:
 
           # TODO(clairbee): get smarter about the number of processes
           # export COMSPEC="C:\\Windows\\System32\\cmd.exe"
-          coverage run -m behave
-          coverage xml --data-file=./.coverage -o ./behave-test-results/coverage.xml
+          if ! coverage run -m behave; then
+            echo "Behave tests failed"
+            exit 1
+          fi
+          if ! coverage xml --data-file=./.coverage -o ./behave-test-results/coverage.xml; then
+            echo "Failed to generate coverage report"
+            exit 1
+          fi
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov

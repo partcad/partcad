@@ -5,6 +5,10 @@ from features.utils import expandvars
 from strip_ansi import strip_ansi
 
 
+def normalize_path(text: str) -> str:
+    return text.replace("\\", "/").replace("//", "/")
+
+
 @then('command takes less than "{max_duration}" seconds')
 def step_impl(context, max_duration):
     assert context.duration < float(max_duration)
@@ -17,7 +21,7 @@ def step_impl(context, substring):
     substring = expandvars(substring, context)
     logging.debug(f"STDERR: {strip_ansi(context.result.stderr)}")
     logging.debug(f"STDOUT: {strip_ansi(context.result.stdout)}")
-    assert substring.replace("\\", "/") in strip_ansi(context.result.stdout.replace("\\", "/"))
+    assert normalize_path(substring) in normalize_path(strip_ansi(context.result.stdout))
 
 
 @then("STDOUT should contain '{substring}'")
@@ -37,7 +41,7 @@ def step_impl(context, substring):
     logging.debug("STDERR: " + context.result.stderr)
     logging.debug("STDOUT: " + context.result.stdout)
     # TODO-73: @alexanderilyin: strip ASCII color codes from the output
-    assert substring.replace("\\", "/") in strip_ansi(context.result.stderr.replace("\\", "/"))
+    assert normalize_path(substring) in normalize_path(strip_ansi(context.result.stderr))
 
 
 @then("STDERR should contain '{substring}'")
@@ -56,7 +60,7 @@ def step_impl(context, substring):
     logging.debug("STDERR: " + context.result.stderr)
     logging.debug("STDOUT: " + context.result.stdout)
     # TODO-74: @alexanderilyin: strip ASCII color codes from the output
-    assert substring.replace("\\", "/") not in context.result.stdout.replace("\\", "/")
+    assert normalize_path(substring) not in normalize_path(strip_ansi(context.result.stdout))
 
 
 @then('STDOUT should not contain "{substring}"')
@@ -71,10 +75,9 @@ def step_impl(context, substring):
 @then('STDERR should not contain "{substring}" with path')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
-    logging.debug("STDERR: " + context.result.stderr)
-    logging.debug("STDOUT: " + context.result.stdout)
+    logging.debug(f"STDERR: {strip_ansi(context.result.stderr)}")
     # TODO-75: @alexanderilyin: strip ASCII color codes from the output
-    assert substring.replace("\\", "/") not in context.result.stderr.replace("\\", "/")
+    assert normalize_path(substring) not in normalize_path(strip_ansi(context.result.stderr))
 
 
 @then('STDERR should not contain "{substring}"')

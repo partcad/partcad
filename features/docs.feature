@@ -155,20 +155,27 @@ Feature: `pc render` command
 
   @docs-use-cases
   Scenario: Troubleshooting: Command Line
+    Given environment variable "PC_NO_ANSI" is set to "1"
     When I run "pc init"
     Then the command should exit with a status code of "0"
     When I run "pc list"
     Then the command should exit with a status code of "0"
-    When I run "pc list sketches -r"
+    When I run "pc list sketches -r //pub/examples"
     Then the command should exit with a status code of "0"
-    When I run "pc list interfaces -r"
+    When I run "pc list interfaces -r //pub/examples"
     Then the command should exit with a status code of "0"
     # TODO: TypeError: startswith first arg must be str or a tuple of str, not Project
-    # When I run "pc list mates -r"
+    # When I run "pc list mates -r //pub/examples"
     # Then the command should exit with a status code of "0"
-    When I run "pc list parts -r"
+
+  @docs-use-cases
+  Scenario: Troubleshooting: Command Line
+    Given environment variable "PC_NO_ANSI" is set to "1"
+    When I run "pc init"
     Then the command should exit with a status code of "0"
-    When I run "pc list assemblies -r"
+    When I run "pc list parts -r //pub/examples"
+    Then the command should exit with a status code of "0"
+    When I run "pc list assemblies -r //pub/examples"
     Then the command should exit with a status code of "0"
     # TODO Failure to pip install from GH repo
     # When I run "pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
@@ -184,6 +191,12 @@ Feature: `pc render` command
     #       //pub/std/metric/cqwarehouse:fastener/hexhead-din931
     #   """
     # Then the command should exit with a status code of "0"
+
+  @docs-use-cases
+  Scenario: Troubleshooting: Command Line
+    Given environment variable "PC_NO_ANSI" is set to "1"
+    When I run "pc init"
+    Then the command should exit with a status code of "0"
     When I run "pc export -t stl //pub/robotics/parts/gobilda:structure/u_channel_2"
     Then the command should exit with a status code of "0"
     When I run "pc export -t step -a //pub/robotics/parts/gobilda:examples/wormgear"

@@ -22,6 +22,7 @@ Feature: `pc` command
 
   @pc-verbose @pc-status
   Scenario: Show DEBUG messages with increased verbosity
+    Given environment variable "PC_NO_ANSI" is set to "1"
     When I run "pc -v status"
     Then the command should exit with a status code of "0"
     # TODO-62: @alexanderilyin: check that DEBUG prefix is present
@@ -35,7 +36,7 @@ Feature: `pc` command
 
   @pc-quiet @pc-status
   Scenario: Do not show INFO messages with decreased verbosity
-    When I run "pc -q status"
+    When I run "pc --no-ansi -q status"
     Then the command should exit with a status code of "0"
     And STDOUT should not contain "INFO:partcad:PartCAD version:"
     And STDOUT should not contain "INFO:partcad:Internal data storage location: /tmp/sandbox/home/partcad-cli-" with path
