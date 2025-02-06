@@ -36,18 +36,12 @@ jobs:
       BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
 
     steps:
-      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-build
 
       - name: Test building and packaging
-        shell: bash
+        shell: bash -l {0}
         run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
           conda activate env-build
           cp .github/LICENSE.txt .github/apache20.svg partcad
           (cd partcad && python -m build)
@@ -61,13 +55,8 @@ jobs:
           conda deactivate
 
       - name: Test installation
-        shell: bash
+        shell: bash -l {0}
         run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
           conda activate env-test
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
@@ -76,13 +65,8 @@ jobs:
           conda deactivate
 
       - name: Build documentation
-        shell: bash
+        shell: bash -l {0}
         run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
           conda activate env-test
           # python -m pip install -r .devcontainer/requirements.txt
           python -m pip install -r docs/requirements.txt

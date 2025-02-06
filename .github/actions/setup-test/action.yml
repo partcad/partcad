@@ -11,8 +11,6 @@ runs:
       if: startsWith(${{matrix.os}}, 'macos')
       shell: bash -l {0}
       run: |
-        # . ~/.bashrc
-        # . ~/.bash_profile
         conda activate env-test
         pip install swig
         conda deactivate
@@ -21,8 +19,6 @@ runs:
       if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') }}
       shell: bash -l {0}
       run: |
-        # . ~/.bashrc
-        # . ~/.bash_profile
         conda activate env-test
 
         VERSION="7.7.2"
