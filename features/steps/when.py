@@ -18,11 +18,10 @@ def run(context: Context, command: str):
 
     # In case of Windows, we need to ensure that SYSTEMROOT and COMSPEC variables are set
     if os.name == "nt":
-        # system_root = os.environ.get("SYSTEMROOT", "C:\\Windows")
-        # comspec = os.path.join(system_root, "System32", "cmd.exe")
-        # os.environ["SYSTEMROOT"] = system_root
-        # os.environ["COMSPEC"] = comspec
-        os.environ["COMSPEC"] = "bash.exe"
+        system_root = os.environ.get("SYSTEMROOT", "C:\\Windows")
+        comspec = os.path.join(system_root, "System32", "cmd.exe")
+        os.environ["SYSTEMROOT"] = system_root
+        os.environ["COMSPEC"] = comspec
 
     cwd = None
     if hasattr(context, "test_dir"):
@@ -71,3 +70,9 @@ def i_run_command_multiline(context: Context):
 @when('I run "{command}"')
 def i_run_command_oneline(context: Context, command: str):
     run(context, command)
+
+
+@when('Environment variable "{variable}" is set to "{value}"')
+def environment_variable_is_set_to(context: Context, variable: str, value: str):
+    context.env[variable] = value
+    logging.debug(f"Set environment variable {variable} to {value}")
