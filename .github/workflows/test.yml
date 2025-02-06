@@ -92,6 +92,7 @@ jobs:
       - name: Test with behave
         shell: bash -l {0}
         env:
+          "%ComSpec%"": "C:\\Windows\\System32\\cmd.exe"
           ComSpec: "C:\\Windows\\System32\\cmd.exe"
           SystemRoot: "C:\\Windows"
         run: |
@@ -105,6 +106,7 @@ jobs:
           # setx ComSpec "$(which bash)"* || true
 
           # TODO(clairbee): get smarter about the number of processes
+          export ComSpec="C:\\Windows\\System32\\cmd.exe"
           coverage run -m behave
           coverage xml --data-file=./.coverage -o ./behave-test-results/coverage.xml
           conda deactivate
