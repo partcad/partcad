@@ -8,7 +8,6 @@ import sys
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
 
-sys.setdefaultencoding("utf-8")
 sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
 sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
 
