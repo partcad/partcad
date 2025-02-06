@@ -94,7 +94,7 @@ jobs:
           export SHELL="$(which bash)"*
           export ComSpec="$(which bash)"*
           # TODO(clairbee): get smarter about the number of processes
-          coverage run -m behavex --parallel-processes=4
+          coverage run -m behave
           coverage xml --data-file=./.coverage -o ./behave-test-results/coverage.xml
           conda deactivate
 
