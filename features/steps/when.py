@@ -17,11 +17,10 @@ def run(context: Context, command: str):
         env["HOME"] = context.home_dir
 
     # In case of Windows, we need to ensure that SYSTEMROOT and COMSPEC variables are set
-    if os.name == "nt":
-        system_root = os.environ.get("SYSTEMROOT", "C:\\Windows")
-        comspec = os.path.join(system_root, "System32", "cmd.exe")
-        os.environ["SYSTEMROOT"] = system_root
-        os.environ["COMSPEC"] = comspec
+    system_root = os.environ.get("SYSTEMROOT", "C:\\Windows")
+    comspec = os.path.join(system_root, "System32", "cmd.exe")
+    os.environ["SYSTEMROOT"] = system_root
+    os.environ["COMSPEC"] = comspec
 
     cwd = None
     if hasattr(context, "test_dir"):

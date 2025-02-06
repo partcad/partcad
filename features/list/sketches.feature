@@ -6,17 +6,14 @@ Feature: `pc list assemblies` command
     And I have temporary $HOME in "/tmp/sandbox/home"
 
   Scenario: Add assembly from `logo.assy` file
-    When I run command:
+    Given a file named "partcad.yaml" with content:
       """
-      cat << EOF > partcad.yaml
       sketches:
         circle_01:
           type: basic
           desc: The shortest way to create a basic circle in PartCAD
           circle: 5
-      EOF
       """
-    Then the command should exit with a status code of "0"
     When I run command:
       """
       cp -v $PARTCAD_ROOT/examples/produce_sketch_basic/circle_01.svg ./

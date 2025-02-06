@@ -9,18 +9,15 @@ Feature: `pc render` command
   Scenario: Tutorial
     When I run "pc init -p"
     Then the command should exit with a status code of "0"
-    When I run command:
+    When a file named "partcad.yaml" is written with content:
       """
-      cat <<EOF > partcad.yaml
       dependencies:
         # Public PartCAD repository (reference it explicitly if required)
         pub:
           type: git
           url: https://github.com/partcad/partcad-index.git
-      EOF
       """
-    Then the command should exit with a status code of "0"
-    When I run "pc list"
+    And I run "pc list"
     Then the command should exit with a status code of "0"
     When I run "echo "translate (v= [0,0,0])  cube (size = 10);" > test.scad"
     Then the command should exit with a status code of "0"
@@ -91,7 +88,10 @@ Feature: `pc render` command
     When I run command:
       """
       mkdir -pv $HOME/.partcad
-      cat <<EOF > $HOME/.partcad/config.yaml
+      """
+    Then the command should exit with a status code of "0"
+    When a file named "$HOME/.partcad/config.yaml" is written with content:
+      """
       # https://aistudio.google.com/apikey
       # TODO: Create dedicated token for CI and create version of test for success scenario
       googleApiKey: $PARTCAD_GOOGLE_API_KEY_MISSING
@@ -99,10 +99,8 @@ Feature: `pc render` command
       maxGeometricModeling: 1
       maxModelGeneration: 1
       maxScriptCorrection: 1
-      EOF
       """
-    Then the command should exit with a status code of "0"
-    When I run "pc init"
+    And I run "pc init"
     Then the command should exit with a status code of "0"
     When I run "pc add part ai-openscad --ai google --desc 'Pixel phone case of a surprising shape' 'generated-case.scad'"
     Then the command should exit with a status code of "0"

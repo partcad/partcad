@@ -7,9 +7,8 @@ Feature: `pc add assembly` command
 
   @wip @PC-162
   Scenario: Add assembly from `logo.assy` file
-    When I run command:
+    Given a file named "partcad.yaml" with content:
       """
-      cat << EOF > partcad.yaml
       parts:
         cube:
           type: cadquery
@@ -25,12 +24,9 @@ Feature: `pc add assembly` command
           type: cadquery
           path: cylinder.py
           desc: This is a cylinder from examples
-      EOF
       """
-    Then the command should exit with a status code of "0"
-    When I run command:
+    And a file named "cylinder.py" with content:
       """
-      cat << EOF > cylinder.py
       import cadquery as cq
 
       if __name__ != "__cqgi__":
@@ -38,12 +34,9 @@ Feature: `pc add assembly` command
 
       shape = cq.Workplane("front").circle(10.0).extrude(10.0)
       show_object(shape)
-      EOF
       """
-    Then the command should exit with a status code of "0"
-    When I run command:
+    And a file named "cube.py" with content:
       """
-      cat << EOF > cube.py
       import cadquery as cq
 
       if __name__ != "__cqgi__":
@@ -56,20 +49,15 @@ Feature: `pc add assembly` command
       shape = cq.Workplane("front").box(width, length, height)
 
       show_object(shape)
-      EOF
       """
-    Then the command should exit with a status code of "0"
-    When I run command:
+    And a file named "primitive.assy" with content:
       """
-      cat << EOF > primitive.assy
       links:
         - part: cube
           location: [[0,0,0], [0,0,1], 0]
         - part: cylinder
           location: [[0,0,5], [0,0,1], 0]
-      EOF
       """
-    Then the command should exit with a status code of "0"
     When I run command:
       """
       partcad add assembly assy primitive.assy
