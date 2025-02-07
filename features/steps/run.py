@@ -12,7 +12,6 @@ def run(context: Context, command: str):
     # We need to keep current environment variables
     # TODO-78: @alexanderilyin: merge this with features/steps/partcad-cli/commands/version.py
     env = dict(os.environ)
-    env["LC_ALL"] = "en_US.UTF-8"
     if hasattr(context, "env"):
         env.update(context.env)
     if hasattr(context, "home_dir"):
