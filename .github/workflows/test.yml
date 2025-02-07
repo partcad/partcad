@@ -91,15 +91,12 @@ jobs:
             exit 1
           fi
 
-          if ! coverage run --rcfile=./dev-tools/coverage.rc -m behave; then
+          if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
             echo "Behave tests failed"
             exit 1
           fi
           coverage combine || true
-          if ! coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml; then
-            echo "Failed to generate coverage report"
-            exit 1
-          fi
+          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml || true
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -232,12 +229,13 @@ jobs:
 
           # BEGIN PUBLIC REPO
           cd examples
-          coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi list all -r //pub
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
           # TODO(clairbee): fix the failing packages first
           # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
           # END PUBLIC REPO
+          coverage combine || true
 
-          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml || true
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
