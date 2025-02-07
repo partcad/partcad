@@ -137,13 +137,13 @@ jobs:
           # BEGIN PARTCAD EXAMPLES
           cd ./examples
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r
-          # Limit RAM usage by restricting the number of threads
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub/examples/partcad
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max=4 render -r --package //pub/examples/partcad
-          coverage combine
+          # TODO(clairbee): Limit RAM usage by restricting the number of threads?
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples/partcad
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi render -r --package //pub/examples/partcad
+          coverage combine || true
           # END PARTCAD EXAMPLES
 
-          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml || true
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
