@@ -12,9 +12,11 @@ from partcad_cli.click.loader import Loader
 locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
 
 help_config = click.RichHelpConfiguration(
-    color_system=None if platform.system() == "Windows" else "auto",
-    text_markup="rich",
+    color_system="windows" if platform.system() == "Windows" else "auto",
+    force_terminal=platform.system() != "Windows",
     show_arguments=True,
+    text_markup="rich",
+    use_markdown_emoji=False,
 )
 help_config.dump_to_globals()
 
