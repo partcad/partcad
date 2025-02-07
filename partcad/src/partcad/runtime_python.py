@@ -85,8 +85,8 @@ class PythonRuntime(runtime.Runtime):
         #     self.python_flags.append("-P")
 
         self.pip_flags = []
-        # if platform.system() == "Windows": ???
-        self.pip_flags += ["--no-warn-script-location"]
+        if platform.system() == "Windows":
+            self.pip_flags += ["--no-warn-script-location"]
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):

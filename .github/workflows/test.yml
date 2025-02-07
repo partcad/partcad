@@ -91,7 +91,7 @@ jobs:
             exit 1
           fi
 
-          if ! coverage run --concurrency=multiprocessing,thread -m behave; then
+          if ! coverage run --concurrency=thread -m behave; then
             echo "Behave tests failed"
             exit 1
           fi
