@@ -243,13 +243,13 @@ jobs:
           coverage xml --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
           conda deactivate
 
-      # - name: Upload test results & coverage reports to github and codecov
-      #   uses: ./.github/actions/upload-test-results
-      #   with:
-      #     name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
-      #     path: pub-repo-test-results/
-      #     retention-days: 7
-      #     status: ${{ job.status }}
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     codecov-files: pub-repo-test-results/junit.xml
-      #     coverage-report: pub-repo-test-results/coverage.xml
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: pub-repo-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: pub-repo-test-results/junit.xml
+          coverage-report: pub-repo-test-results/coverage.xml
