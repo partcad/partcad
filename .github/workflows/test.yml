@@ -187,12 +187,14 @@ jobs:
           # BEGIN ALL EXAMPLES
           cd ./examples
           coverage run --concurrency=thread -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+          coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
+          rm -f ./.coverage
           # Limit RAM usage by restricting the number of threads
           coverage run --concurrency=thread -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
           # END ALL EXAMPLES
-          coverage combine
 
-          coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
+          # TODO(clairbee): Fix the coverage data from the test command above, and upload complete coverage data
+          coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage2.xml || true
           ls -la ../examples-all-test-results
           conda deactivate
 

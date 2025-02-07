@@ -5,14 +5,11 @@ import coloredlogs
 import logging
 import locale
 import platform
-import sys
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
 
 locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
-sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
-sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
 
 help_config = click.RichHelpConfiguration(
     color_system=None if platform.system() == "Windows" else "auto",
