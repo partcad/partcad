@@ -85,8 +85,9 @@ class PythonRuntime(runtime.Runtime):
         #     self.python_flags.append("-P")
 
         self.pip_flags = []
+        self.pip_install_flags = []
         if platform.system() == "Windows":
-            self.pip_flags += ["--no-warn-script-location"]
+            self.pip_install_flags += ["--no-warn-script-location"]
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
@@ -268,7 +269,9 @@ class PythonRuntime(runtime.Runtime):
                 if not path is None:
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
-                    self.run_onced(["-m", "pip", *self.pip_flags, "install", python_package], path=path)
+                    self.run_onced(
+                        ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package], path=path
+                    )
                 pathlib.Path(guard_path).touch()
 
     async def ensure_async(self, python_package, session=None, path=None):
@@ -298,7 +301,7 @@ class PythonRuntime(runtime.Runtime):
                             item += " in " + path
                         with pc_logging.Action("PipInst", self.version, item):
                             await self.run_async_onced(
-                                ["-m", "pip", *self.pip_flags, "install", python_package],
+                                ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
                                 path=path,
                             )
                         pathlib.Path(guard_path).touch()
@@ -324,7 +327,7 @@ class PythonRuntime(runtime.Runtime):
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
                     await self.run_async_onced(
-                        ["-m", "pip", *self.pip_flags, "install", python_package],
+                        ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
                         path=path,
                     )
                 pathlib.Path(guard_path).touch()
