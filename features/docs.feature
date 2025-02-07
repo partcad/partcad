@@ -19,7 +19,10 @@ Feature: `pc render` command
       """
     And I run "pc --no-ansi list"
     Then the command should exit with a status code of "0"
-    When I run "echo "translate (v= [0,0,0])  cube (size = 10);" > test.scad"
+    When a file named "test.scad" is written with content:
+      """
+      translate (v= [0,0,0])  cube (size = 10);
+      """
     Then the command should exit with a status code of "0"
     When I run "pc --no-ansi add part scad test.scad"
     Then the command should exit with a status code of "0"

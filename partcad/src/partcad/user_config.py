@@ -80,7 +80,8 @@ class GitConfig(dict):
 class UserConfig(vyper.Vyper):
     @staticmethod
     def get_config_dir():
-        return os.path.join(Path.home(), ".partcad")
+        home = os.environ.get("HOME", Path.home())
+        return os.path.join(home, ".partcad")
 
     def __init__(self):
         super().__init__()

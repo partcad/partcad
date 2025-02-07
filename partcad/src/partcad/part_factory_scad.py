@@ -64,6 +64,7 @@ class PartFactoryScad(PartFactoryFile):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 shell=False,
+                encoding="utf-8",
             )
             _, errors = await p.communicate()
             if len(errors) > 0:
