@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import os
 import pathlib
+import platform
 import subprocess
 import sys
 import threading
@@ -75,6 +76,9 @@ class PythonRuntime(runtime.Runtime):
 
         # Isolate this sandbox environment from the rest of the system
         self.python_flags = ["-sOOIu"]
+
+        if platform.system() == "Windows":
+            self.python_flags += ["--no-warn-script-location"]
 
         # TODO(clairbee): To improve portability, warn about uses of default encoding
         # self.python_flags += ["-X", "warn_default_encoding=1"]

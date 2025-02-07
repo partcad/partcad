@@ -91,10 +91,11 @@ jobs:
             exit 1
           fi
 
-          if ! coverage run --concurrency=thread -m behave; then
+          if ! coverage run --concurrency=multiprocess,thread -m behave; then
             echo "Behave tests failed"
             exit 1
           fi
+          coverage combine || true
           if ! coverage xml --data-file=./.coverage -o ./behave-test-results/coverage.xml; then
             echo "Failed to generate coverage report"
             exit 1

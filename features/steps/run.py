@@ -8,6 +8,11 @@ from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin py
 
 
 def run(context: Context, command: str):
+    if command.startswith("pc "):
+        command = f"coverage run --data-file=$PARTCAD_ROOT/.coverage --concurrency=thread -m partcad_cli.click.command {command[3:]}"
+    elif command.startswith("partcad "):
+        command = f"coverage run --data-file=$PARTCAD_ROOT/.coverage --concurrency=thread -m partcad_cli.click.command {command[8:]}"
+
     command = expandvars(command, context)
     # We need to keep current environment variables
     # TODO-78: @alexanderilyin: merge this with features/steps/partcad-cli/commands/version.py

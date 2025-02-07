@@ -11,7 +11,6 @@ import os
 import shutil
 import subprocess
 import json
-import platform
 
 from . import runtime_python
 from . import logging as pc_logging
@@ -52,9 +51,6 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     "conda",
                     path=search_path_strings,
                 )
-
-            if platform.system() == "Windows":
-                self.python_flags += ["--no-warn-script-location"]
 
     def once(self):
         with self.lock:
