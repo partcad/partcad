@@ -62,10 +62,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        os: [windows-latest]
-        python-version: ["3.10"]
-        # python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        # os: [windows-latest]
+        # python-version: ["3.10"]
+        python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 60
@@ -91,7 +91,7 @@ jobs:
             exit 1
           fi
 
-          if ! coverage run --concurrency=multiprocess,thread -m behave; then
+          if ! coverage run --concurrency=multiprocessing,thread -m behave; then
             echo "Behave tests failed"
             exit 1
           fi
@@ -164,8 +164,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        os: [windows-latest]
+        # os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version: ["3.10"]
+        # python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 60
