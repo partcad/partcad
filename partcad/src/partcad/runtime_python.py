@@ -217,7 +217,6 @@ class PythonRuntime(runtime.Runtime):
             shell=False,
             # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
             cwd=cwd,
-            encoding="utf-8",
         )
         stdout, stderr = await p.communicate(
             input=stdin.encode(),
