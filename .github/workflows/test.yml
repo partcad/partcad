@@ -115,11 +115,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        os: [ubuntu-latest-l, windows-latest-l, macos-13, macos-latest]
         python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 90
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -128,6 +128,8 @@ jobs:
 
       - name: Basic integration test for CLI (PartCAD examples)
         shell: bash -l {0}
+        env:
+          PC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           mkdir -pv examples-partcad-test-results
 
@@ -138,8 +140,8 @@ jobs:
           cd ./examples
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples/partcad
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi render -r --package //pub/examples/partcad
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 2 test -r --package //pub/examples/partcad
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi -v --threads-max 2 render -r --package //pub/examples/partcad
           coverage combine || true
           # END PARTCAD EXAMPLES
 
@@ -166,7 +168,7 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 90
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
