@@ -53,7 +53,7 @@
         "cProfile",
         "-o",
         "partcad-${input:componentType}.prof",
-        "/workspaces/partcad/.venv/bin/partcad", // "$(command -v partcad)",
+        "${workspaceFolder}/.venv/bin/partcad", // "$(command -v partcad)",
         "${input:componentType}"
       ],
       // python -m cProfile -o pc-version.prof $(command -v pc) version

@@ -177,7 +177,7 @@ class UserConfig(vyper.Vyper):
         # values: [none | pypy | conda]
         # default: conda
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
-        self.python_runtime = self.get_string("pythonSandbox")
+        self.python_sandbox = self.get_string("pythonSandbox")
 
         # option: internalStateDir
         # description: folder to store all temporary files

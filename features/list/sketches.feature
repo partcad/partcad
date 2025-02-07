@@ -19,7 +19,7 @@ Feature: `pc list assemblies` command
     Then the command should exit with a status code of "0"
     When I run command:
       """
-      cp -v /workspaces/partcad/examples/produce_sketch_basic/circle_01.svg ./
+      cp -v $PWD/examples/produce_sketch_basic/circle_01.svg ./
       """
     Then the command should exit with a status code of "0"
     When I run command:

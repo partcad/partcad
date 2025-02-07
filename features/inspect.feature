@@ -10,13 +10,13 @@ Feature: `pc inspect` command
     Given steps for testing
 
   Scenario Outline: `pc inspect -a` command
-    When I run "partcad -p /workspaces/partcad/examples inspect -a -V --package <package> <part>"
+    When I run "partcad -p $PWD/examples inspect -a -V --package <package> <part>"
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "DONE: Inspect: this:"
     Then STDOUT should not contain "WARN:"
     Then STDOUT should not contain "ERROR:"
 
-  # for PACKAGE in $(find /workspaces/partcad/examples/produce_assembly_* -type d -print); do for SKETCH in $(yq -r '.assemblies | keys[]' $PACKAGE/partcad.yaml); do echo "| $PACKAGE | $SKETCH |"; done; done;
+  # for PACKAGE in $(find $PWD/examples/produce_assembly_* -type d -print); do for SKETCH in $(yq -r '.assemblies | keys[]' $PACKAGE/partcad.yaml); do echo "| $PACKAGE | $SKETCH |"; done; done;
   @assembly
   Examples: Assembly
     | package | part |
@@ -27,13 +27,13 @@ Feature: `pc inspect` command
     | /produce_assembly_assy | primitive |
 
   Scenario Outline: `pc inspect -s` command
-    When I run "partcad -p /workspaces/partcad/examples inspect -s -V --package <package> <part>"
+    When I run "partcad -p $PWD/examples inspect -s -V --package <package> <part>"
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "DONE: Inspect: this:"
     Then STDOUT should not contain "WARN:"
     Then STDOUT should not contain "ERROR:"
 
-  # for PACKAGE in $(find /workspaces/partcad/examples/produce_sketch_* -type d -print); do for SKETCH in $(yq -r '.sketches | keys[]' $PACKAGE/partcad.yaml); do echo "| $PACKAGE | $SKETCH |"; done; done;
+  # for PACKAGE in $(find $PWD/examples/produce_sketch_* -type d -print); do for SKETCH in $(yq -r '.sketches | keys[]' $PACKAGE/partcad.yaml); do echo "| $PACKAGE | $SKETCH |"; done; done;
 
   @basic
   Examples: Sketch: basic
@@ -65,13 +65,13 @@ Feature: `pc inspect` command
     | /produce_sketch_svg | svg_01 |
 
   Scenario Outline: `pc inspect` command
-    When I run "partcad -p /workspaces/partcad/examples inspect -V --package <package> <part>"
+    When I run "partcad -p $PWD/examples inspect -V --package <package> <part>"
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "DONE: Inspect: this:"
     Then STDOUT should not contain "WARN:"
     Then STDOUT should not contain "ERROR:"
 
-  # for PACKAGE in $(find /workspaces/partcad/examples/produce_part_* -type d -print); do for PART in $(yq -r '.parts | keys[]' $PACKAGE/partcad.yaml); do echo "| $PACKAGE | $PART |"; done; done;
+  # for PACKAGE in $(find $PWD/examples/produce_part_* -type d -print); do for PART in $(yq -r '.parts | keys[]' $PACKAGE/partcad.yaml); do echo "| $PACKAGE | $PART |"; done; done;
 
   @3mf
   Examples: Part: 3mf
