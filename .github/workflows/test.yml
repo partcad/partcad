@@ -214,7 +214,7 @@ jobs:
   #       python-version: ["3.10", "3.12"]
   #   runs-on: ${{ matrix.os }}
   #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-  #   timeout-minutes: 90
+  #   timeout-minutes: 15
 
   #   steps:
   #     - uses: actions/checkout@v4
