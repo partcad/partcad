@@ -1,0 +1,8 @@
+[run]
+concurrency = thread
+omit =
+        */.partcad/*
+        */sandbox/*
+
+[report]
+ignore_errors = True

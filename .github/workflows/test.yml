@@ -17,45 +17,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # test-pytest:
-  #   name: "Pytest"
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-  #       python-version: ["3.10", "3.11", "3.12"]
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-  #   timeout-minutes: 30
+  test-pytest:
+    name: "Pytest"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 30
 
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/setup-all
-  #     - uses: ./.github/actions/setup-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
 
-  #     - name: Test with pytest
-  #       env:
-  #         PYTHONPATH: partcad/src
-  #         PYTHONWARNINGS: ignore
-  #       shell: bash -l {0}
-  #       run: |
-  #         conda activate env-test
+      - name: Test with pytest
+        env:
+          PYTHONPATH: partcad/src
+          PYTHONWARNINGS: ignore
+        shell: bash -l {0}
+        run: |
+          conda activate env-test
 
-  #         mkdir -pv pytest-test-results
-  #         pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
-  #         coverage xml --data-file=.coverage -o ./pytest-test-results/coverage.xml
-  #         conda deactivate
+          mkdir -pv pytest-test-results
+          pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
+          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
+          conda deactivate
 
-  #     - name: Upload test results & coverage reports to github and codecov
-  #       uses: ./.github/actions/upload-test-results
-  #       with:
-  #         name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
-  #         path: pytest-test-results/
-  #         retention-days: 7
-  #         status: ${{ job.status }}
-  #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         codecov-files: pytest-test-results/junit.xml
-  #         coverage-report: pytest-test-results/coverage.xml
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: pytest-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: pytest-test-results/junit.xml
+          coverage-report: pytest-test-results/coverage.xml
 
   test-behave:
     name: "Behave"
@@ -91,12 +91,12 @@ jobs:
             exit 1
           fi
 
-          if ! coverage run --concurrency=thread -m behave; then
+          if ! coverage run --rcfile=./dev-tools/coverage.rc -m behave; then
             echo "Behave tests failed"
             exit 1
           fi
           coverage combine || true
-          if ! coverage xml --data-file=.coverage -o ./behave-test-results/coverage.xml; then
+          if ! coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml; then
             echo "Failed to generate coverage report"
             exit 1
           fi
@@ -139,14 +139,14 @@ jobs:
 
           # BEGIN PARTCAD EXAMPLES
           cd ./examples
-          coverage run --data-file=.coverage.1 --concurrency=thread -m partcad_cli.click.command --no-ansi list all -r
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r
           # Limit RAM usage by restricting the number of threads
-          coverage run --data-file=.coverage.2 --concurrency=thread -m partcad_cli.click.command --no-ansi --threads-max=2 test -r
-          coverage run --data-file=.coverage.3 --concurrency=thread -m partcad_cli.click.command --no-ansi --threads-max=2 render -r
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub/examples/partcad
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max=4 render -r --package //pub/examples/partcad
           coverage combine
           # END PARTCAD EXAMPLES
 
-          coverage xml --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -186,16 +186,13 @@ jobs:
 
           # BEGIN ALL EXAMPLES
           cd ./examples
-          coverage run --concurrency=thread -m partcad_cli.click.command --no-ansi list all -r //pub/examples
-          coverage xml --data-file=.coverage -o ../examples-all-test-results/coverage.xml
-          rm -f .coverage
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          coverage run --concurrency=thread -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
+          coverage combine || true
           # END ALL EXAMPLES
 
-          # TODO(clairbee): Fix the coverage data from the test command above, and upload complete coverage data
-          coverage xml --data-file=.coverage -o ../examples-all-test-results/coverage2.xml || true
-          ls -la ../examples-all-test-results
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml || true
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -235,12 +232,12 @@ jobs:
 
           # BEGIN PUBLIC REPO
           cd examples
-          coverage run -m partcad_cli.click.command --no-ansi list all -r //pub
+          coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi list all -r //pub
           # TODO(clairbee): fix the failing packages first
-          # coverage run -m partcad_cli.click.command --no-ansi test -r --package //pub
+          # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
           # END PUBLIC REPO
 
-          coverage xml --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
