@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import json
+import platform
 
 from . import runtime_python
 from . import logging as pc_logging
@@ -25,7 +26,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         if self.conda_path is not None:
             self.is_mamba = True
             # TODO(clairbee): Initialize the environment variables properly, including PATH
-            if os.name == "nt":
+            if platform.system() == "Windows":
                 self.python_flags += ["--no-warn-script-location"]
         else:
             self.conda_path = shutil.which("conda")
