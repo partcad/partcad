@@ -185,13 +185,15 @@ jobs:
           # BEGIN ALL EXAMPLES
           cd ./examples
           coverage run -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+          coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
+          rm -f ./.coverage
           # Limit RAM usage by restricting the number of threads
           coverage run -m partcad_cli.click.command --no-ansi --threads-max=2 test -r --package //pub/examples
           # END ALL EXAMPLES
           ls -la ./.coverage
           ls -la ../examples-all-test-results
 
-          coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage.xml
+          coverage xml --data-file=./.coverage -o ../examples-all-test-results/coverage2.xml
           ls -la ../examples-all-test-results
           conda deactivate
 

@@ -215,7 +215,7 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
 @click.pass_context
 def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     """
-    \b
+
     ██████╗  █████╗ ██████╗ ████████╗ ██████╗ █████╗ ██████╗
     ██╔══██╗██╔══██╗██╔══██╗╚══██╔══╝██╔════╝██╔══██╗██╔══██╗
     ██████╔╝███████║██████╔╝   ██║   ██║     ███████║██║  ██║
