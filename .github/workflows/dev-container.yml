@@ -374,9 +374,9 @@ jobs:
             mkdir -pv pc-test-results
             poetry --no-ansi --no-interaction show --tree
             # TODO: Use similar 'coverage run' in behave steps when calling pc
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r /)"
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r)"
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r)"
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r //pub/examples)"
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r --package //pub/examples)"
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r --package //pub/examples)"
             poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml
 
       - name: Upload test results & coverage reports to github and codecov

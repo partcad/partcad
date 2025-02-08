@@ -60,3 +60,12 @@ runs:
       if: runner.os == 'Windows'
       shell: powershell
       run: .github/scripts/registry.ps1
+
+    #################################################  GIT SETUP  ###################################################
+
+    - name: Configure Git
+      shell: bash -l {0}
+      run: |
+        # TODO(clairbee): Switch to SSH for most of jobs, but not for all of them
+        # git config --global url."git@github.com:".insteadOf "https://github.com/"
+        git config --global protocol.version 2
