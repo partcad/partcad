@@ -1,0 +1,71 @@
+name: "Setup all"
+description: "Prepare the runner to test"
+
+runs:
+  using: "composite"
+  steps:
+    #################################################  CADQUERY  ####################################################
+
+    # cadquery-ocp hack for macOS with ARM
+    - name: install macos dev dependencies
+      if: startsWith(${{matrix.os}}, 'macos')
+      shell: bash -l {0}
+      run: |
+        conda activate env-test
+        pip install swig
+        conda deactivate
+
+    - name: install cadquery-ocp on macOS
+      if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') }}
+      shell: bash -l {0}
+      run: |
+        conda activate env-test
+
+        VERSION="7.7.2"
+        PY_VERSION="${{ matrix.python-version }}"
+        PY_VERSION_NO_DOT="${PY_VERSION//./}"
+        WHEEL_URL="https://github.com/jdegenstein/ocp-build-system/releases/download/${VERSION}_macos_arm64/cadquery_ocp-${VERSION}-cp${PY_VERSION_NO_DOT}-cp${PY_VERSION_NO_DOT}-macosx_11_0_arm64.whl"
+        WHEEL_FILE="cadquery_ocp-${VERSION}-cp${PY_VERSION_NO_DOT}-cp${PY_VERSION_NO_DOT}-macosx_11_0_arm64.whl"
+
+        # Download wheel
+        curl -L -o "$WHEEL_FILE" "$WHEEL_URL"
+
+        pip install "$WHEEL_FILE"
+        conda deactivate
+
+    #################################################  OPENSCAD  ####################################################
+
+    - name: Install OpenSCAD (Linux)
+      if: runner.os == 'Linux'
+      shell: bash -l {0}
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y openscad
+
+    - name: Install OpenSCAD (macOS)
+      if: runner.os == 'macOS'
+      shell: bash -l {0}
+      run: |
+        brew install -f openscad || ( \
+          rm /Users/runner/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
+
+    - name: Install OpenSCAD (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: .github/scripts/openscad.ps1
+
+    #################################################  REGISTRY  ####################################################
+
+    - name: Fix Windows registry
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: .github/scripts/registry.ps1
+
+    #################################################  GIT SETUP  ###################################################
+
+    - name: Configure Git
+      shell: bash -l {0}
+      run: |
+        # TODO(clairbee): Switch to SSH for most of jobs, but not for all of them
+        # git config --global url."git@github.com:".insteadOf "https://github.com/"
+        git config --global protocol.version 2

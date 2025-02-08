@@ -1,0 +1,47 @@
+name: "Setup build environment"
+description: "Prepare the runner to build"
+
+runs:
+  using: "composite"
+  steps:
+    ###################################################  PYTHON  ###################################################
+
+    - name: Install prerequisites
+      shell: bash -l {0}
+      run: |
+        conda create -n env-build python==${{ matrix.python-version }} -y
+        conda activate env-build
+        python -m ensurepip --upgrade
+        python -m pip install --upgrade pip wheel mypy setuptools
+        python -m pip install --upgrade build
+        conda deactivate
+
+        conda create -n env-build-cli python==${{ matrix.python-version }} -y
+        conda activate env-build-cli
+        python -m ensurepip --upgrade
+        python -m pip install --upgrade pip wheel mypy setuptools
+        python -m pip install --upgrade build
+        conda deactivate
+
+    #################################################  CADQUERY  ####################################################
+
+    - name: Set CadQuery version
+      shell: bash -l {0}
+      run: |
+        echo "CADQUERY_VERSION=7.7.2" >> $GITHUB_ENV
+        echo "CADQUERY_BASE_URL=https://github.com/jdegenstein/ocp-build-system/releases/download/7.7.2_macos_arm64" >> $GITHUB_ENV
+
+    - name: install cadquery-ocp on MacOS
+      if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') }}
+      shell: bash -l {0}
+      run: |
+        PYTHON_VERSION="${{ matrix.python-version }}"
+        PYTHON_VERSION_NO_DOT="${PYTHON_VERSION//./}"
+        WHEEL_FILE="cadquery_ocp-${CADQUERY_VERSION}-cp${PYTHON_VERSION_NO_DOT}-cp${PYTHON_VERSION_NO_DOT}-macosx_11_0_arm64.whl"
+        WHEEL_URL="${CADQUERY_BASE_URL}/${WHEEL_FILE}"
+
+        for env in env-build env-build-cli; do
+          conda activate $env
+          python -m pip install "$WHEEL_URL"
+          conda deactivate
+        done

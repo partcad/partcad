@@ -1,0 +1,75 @@
+# CD on Linux, MacOS and Windows
+name: CD # Keep the action badge icon short
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 0 * * *" # Run daily at midnight
+  merge_group:
+  push:
+    branches: ["main", "devel"]
+  pull_request:
+    branches: ["main", "devel"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          # - "3.13"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    env:
+      BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-build
+
+      - name: Test building and packaging
+        shell: bash -l {0}
+        run: |
+          conda activate env-build
+          cp .github/LICENSE.txt .github/apache20.svg partcad
+          (cd partcad && python -m build)
+          conda deactivate
+
+          conda activate env-build-cli
+          cp .github/LICENSE.txt .github/apache20.svg README.md partcad-cli
+          python -m pip install -r partcad/requirements.txt
+          python -m pip install --no-index --find-links=partcad/dist partcad
+          (cd partcad-cli && python -m build)
+          conda deactivate
+
+      - name: Test installation
+        shell: bash -l {0}
+        run: |
+          conda activate env-test
+          python -m pip install -r partcad/requirements.txt
+          python -m pip install --no-index --find-links=partcad/dist partcad
+          python -m pip install -r partcad-cli/requirements.txt
+          python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli
+          conda deactivate
+
+      - name: Build documentation
+        shell: bash -l {0}
+        run: |
+          conda activate env-test
+          # python -m pip install -r .devcontainer/requirements.txt
+          python -m pip install -r docs/requirements.txt
+          sphinx-build  -M html docs/source docs/build -n -W
+          conda deactivate

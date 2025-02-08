@@ -41,6 +41,14 @@ def step_impl(context, filename):
         raise FileNotFoundError(f"File '{filename}' was not created")
 
 
+@then('a file named "{filename}" should not exist')
+def step_impl(context, filename):
+    # Check if the file exists in the current directory
+    file_path = os.path.join(context.test_dir, filename)
+    if os.path.isfile(file_path):
+        raise Exception(f"File '{filename}' was created")
+
+
 @given('a file named "{filename}" does not exist')
 def step_impl(context, filename):
     file_path = os.path.join(context.test_dir, filename)

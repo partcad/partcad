@@ -12,6 +12,7 @@
 import base64
 
 # import fcntl  # TODO(clairbee): replace it with whatever works on Windows if needed
+import locale
 import os
 import pickle
 import sys
@@ -23,6 +24,8 @@ def handle_input():
     if len(sys.argv) < 2:
         sys.stderr.write("Usage: %s <path>\n" % sys.argv[0])
         sys.exit(1)
+
+    locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
 
     # Handle the input
     # - Comand line parameters

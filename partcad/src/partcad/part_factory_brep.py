@@ -14,11 +14,12 @@ from .exception import FileReadError, PartFactoryError
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 
+
 class PartFactoryBrep(PartFactoryFile):
     # Constants
     MIN_SIMPLE_INFLIGHT = 1
     MIN_SUBPROCESS_FILE_SIZE = 64 * 1024  # 64 KB
-    PYTHON_RUNTIME_VERSION = "3.10"
+    PYTHON_SANDBOX_VERSION = "3.10"
 
     # Shared counters for inflight operations
     lock = threading.Lock()
@@ -100,7 +101,7 @@ class PartFactoryBrep(PartFactoryFile):
         # Initialize runtime if not already done
         if self.runtime is None:
             pc_logging.debug("Initializing subprocess runtime...")
-            self.runtime = self.ctx.get_python_runtime(self.PYTHON_RUNTIME_VERSION)
+            self.runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
             if self.runtime is None:
                 raise RuntimeError("Failed to initialize runtime for subprocess execution.")
             pc_logging.debug(f"Subprocess runtime initialized: {self.runtime}")

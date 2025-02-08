@@ -99,7 +99,12 @@ class CacheHash:
             return
 
         try:
-            self.hasher.update(struct.pack("f", os.path.getmtime(filename)))
+            # Track changes to the file content
+            with open(filename, "rb") as f:
+                self.hasher.update(f.read())
+
+            # TODO(clairbee): optionally, track changes by file modification time only
+            # self.hasher.update(struct.pack("f", os.path.getmtime(filename)))
         except FileNotFoundError:
             # TODO(clairbee): trigger preload if content hashing is back
             # This happens for all files that are not yet downloaded

@@ -1,11 +1,11 @@
 # https://github.com/devcontainers/ci/blob/main/docs/github-action.md
-name: CI
+name: CI-Dev
 on:
   workflow_dispatch:
-  schedule:
-    # https://crontab.guru/#0_8_*_*_*
-    # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
-    - cron: "0 8 * * *" # Run daily at PST midnight
+  # schedule:
+  #   # https://crontab.guru/#0_8_*_*_*
+  #   # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
+  #   - cron: "0 8 * * *" # Run daily at PST midnight
   merge_group:
   pull_request:
     branches: ["main", "devel"]
@@ -26,212 +26,6 @@ env:
   INSTALL_TIMEOUT: 300
 
 jobs:
-  test:
-    strategy:
-      fail-fast: false
-      matrix:
-        # NOTE: ubuntu-24.04 based runs were moved to dev-container.yml
-        os: [windows-latest, macos-13] # macos-latest has an issue with nlopt
-        python-version:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-        exclude:
-          # PC-191: AttributeError: 'NoneType' object has no attribute 'TShape'
-          - os: "macos-13"
-            python-version: "3.12"
-          # PC-190: No module named 'OCP.OCP'; 'OCP' is not a package
-          # - os: "ubuntu-24.04"
-          #   python-version: "3.12"
-          # Reduce costs by testing one version of Python on MacOS
-          - os: "macos-13"
-            python-version: "3.10"
-          # - os: "macos-13"
-          #   python-version: "3.11"
-          # False negatives on Windows for pytest result evaluation
-          # - os: "windows-latest"
-          #   python-version: "3.11"
-          - os: "windows-latest"
-            python-version: "3.12"
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-
-      # BEGIN OS-SPECIFIC
-      - name: Install OS-specific dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y openscad
-
-      - name: Install OS-specific dependencies (MacOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install -f openscad || ( \
-            rm /Users/runner/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
-
-      - name: Install OS-specific dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: .github/scripts/openscad.ps1
-        timeout-minutes: 1
-      # END OS-SPECIFIC
-      #
-      - name: Install dependencies
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          mamba create -n test python=${{ matrix.python-version }} -y
-          mamba activate test
-          python -m pip install --upgrade pip
-          pip install -U pytest
-          # Install all core and a subset of CLI dependencies, that are required for tests
-          pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
-          pip install -r partcad/requirements-dev.in
-          mamba deactivate
-
-      - name: Start SSH Agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
-
-      - name: Test with pytest
-        env:
-          PYTHONPATH: partcad/src
-          PYTHONWARNINGS: ignore
-          # TODO-30: Workaround for "Host key verification failed."
-          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          # TODO-31: PC-186: Allow to configure git clone protocol in settings
-          git config --global url."git@github.com:".insteadOf "https://github.com/"
-
-          mamba activate test
-          pytest -x -p no:error-for-skips -p no:warnings --ignore-glob="openscad*"
-          mamba deactivate
-
-      - name: Install CLI
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          mamba activate test
-          # NOTE: When troubleshooting, use `--editable` flag
-          pip install --upgrade ./partcad ./partcad-cli
-          mamba deactivate
-
-      - name: Basic integration test for CLI
-        env:
-          # TODO-32: Workaround for "Host key verification failed."
-          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          # Display Executed Commands
-          set -x
-
-          # Confirm that OpenSCAD works
-          openscad --version
-
-          mamba activate test
-
-          # BEGIN CLEAN PACKAGE
-          mkdir new_pkg
-          cd new_pkg
-          pc --no-ansi init
-          pc --no-ansi list all -r
-          # END CLEAN PACKAGE
-
-          # BEGIN EXAMPLES
-          cd ../examples
-          pc --no-ansi list all -r
-          pc --no-ansi test -r
-          pc --no-ansi render -r
-          # END EXAMPLES
-
-          mamba deactivate
-
-      - name: Basic integration test for CLI
-        if: runner.os == 'Linux'
-        env:
-          # TODO-33: Workaround for "Host key verification failed."
-          GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        shell: bash
-        run: |
-          # shellcheck disable=SC1090
-          . ~/.bashrc
-          # shellcheck disable=SC1090
-          . ~/.bash_profile
-
-          # Display Executed Commands
-          set -x
-
-          mamba activate test
-          # BEGIN PUBLIC REPO
-          cd examples
-          pc --no-ansi test -r --package //pub/examples
-          # END PUBLIC REPO
-          mamba deactivate
-
-  # No testing resources for the below:
-  #test-repo:
-  #  strategy:
-  #    fail-fast: false
-  #    matrix:
-  #      os: ["ubuntu-24.04-m"]
-  #      python-version: ["3.12"]
-  #  runs-on: ${{ matrix.os }}
-  #  if: "!startsWith(github.event.head_commit.message, 'Version updated')"
-  #  steps:
-  #    - uses: actions/checkout@v3
-  #    - uses: ./.github/actions/setup
-  #    - name: Install dependencies
-  #      run: |
-  #        python -m pip install --upgrade pip
-  #        pip install -U pytest
-  #        pip install -r partcad/requirements.txt
-  #        # Install a subset of CLI dependencies, that are required for tests
-  #        pip install svglib rlPyCairo renderlab
-  #        # pip install -r partcad-cli/requirements.txt
-  #    - name: Install OS-specific dependencies (Linux)
-  #      if: runner.os == 'Linux'
-  #      run: |
-  #        sudo apt-get update
-  #        sudo apt-get install -y openscad
-  #    - name: Install OS-specific dependencies (MacOS)
-  #      if: runner.os == 'macOS'
-  #      run: |
-  #        brew install openscad
-  #    - name: Install OS-specific dependencies (Windows)
-  #      if: runner.os == 'Windows'
-  #      run: |
-  #        curl -o openscad-installer.exe https://files.openscad.org/OpenSCAD-2021.01-x86-64-Installer.exe
-  #        ./openscad-installer.exe
-  #    - name: Test the entire repository
-  #      run: |
-  #        pip install -U ./partcad ./partcad-cli
-  #        cd examples
-  #        pc --no-ansi test -r --package //pub
-
   poetry-install:
     name: "Run: poetry install"
     runs-on: ubuntu-24.04
@@ -353,40 +147,41 @@ jobs:
           path: allure-report/
           retention-days: 7
 
-  pre-commit:
-    name: "Run: pre-commit"
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Checkout (GitHub)
-        uses: actions/checkout@v4
+  # pre-commit:
+  #   name: "Run: pre-commit"
+  #   runs-on: ubuntu-24.04
+  #   timeout-minutes: 10
+  #   steps:
+  #     - name: Checkout (GitHub)
+  #       uses: actions/checkout@v4
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.CONTAINER_REGISTRY }}
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Login to GitHub Container Registry
+  #       uses: docker/login-action@v3
+  #       with:
+  #         registry: ${{ env.CONTAINER_REGISTRY }}
+  #         username: ${{ github.repository_owner }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cache pre-commit dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            .pre-commit
-          key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pre-commit-
-      - name: Run pre-commit hooks
-        uses: devcontainers/ci@v0.3
-        with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-          push: never
-          # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
-          env: |
-            SKIP=poetry-export,poetry-lock,ggshield
-          runCmd:
-            pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
-            --all-files
+  #     - name: Cache pre-commit dependencies
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: |
+  #           .pre-commit
+  #         key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+  #         restore-keys: |
+  #           ${{ runner.os }}-pre-commit-
+  #     - name: Run pre-commit hooks
+  #       uses: devcontainers/ci@v0.3
+  #       with:
+  #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+  #         push: never
+  #         # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
+  #         # TODO: Run ggshield and/or other secrets scanning tools as separate job
+  #         env: |
+  #           SKIP=poetry-export,poetry-lock,ggshield
+  #         runCmd:
+  #           pre-commit run --config .devcontainer/.pre-commit-config.yaml --show-diff-on-failure --color=always
+  #           --all-files
 
   behave:
     name: "Run: behave"
@@ -431,6 +226,7 @@ jobs:
           runCmd: |
             # TODO-26: PC-186: Allow to configure git clone protocol in settings
             git config --global url."git@github.com:".insteadOf "https://github.com/"
+            git config --global protocol.version 2
             mkdir -pv behave-results
             poetry --no-ansi --no-interaction run coverage run $(poetry run which behave)
             poetry --no-ansi --no-interaction run coverage xml --data-file=./.coverage -o behave-results/coverage.xml
@@ -542,7 +338,7 @@ jobs:
       #     retention-days: 7
 
   integration-tests:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: "Run: pc"
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -575,12 +371,12 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
           push: never
           runCmd: |
-            mkdir -pv test-results
+            mkdir -pv pc-test-results
             poetry --no-ansi --no-interaction show --tree
             # TODO: Use similar 'coverage run' in behave steps when calling pc
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r /)"
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r)"
-            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r)"
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi list all -r //pub/examples)"
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi test -r --package //pub/examples)"
+            poetry --no-ansi --no-interaction run sh -c "(cd examples && coverage run $(poetry run which pc) --no-ansi render -r --package //pub/examples)"
             poetry --no-ansi --no-interaction run coverage xml --data-file=examples/.coverage -o pc-test-results/coverage.xml
 
       - name: Upload test results & coverage reports to github and codecov

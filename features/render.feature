@@ -7,12 +7,12 @@ Feature: `pc render` command
     Given a file named "partcad.yaml" does not exist
 
   Scenario Outline: `pc render` command
-    When I run "partcad -p /workspaces/partcad/examples render --package /produce_assembly_assy -t <type> -O ./ -a :logo_embedded"
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t <type> -O ./ -a :logo_embedded"
     Then the command should exit with a status code of "0"
     Then a file named "<filename>" should be created
     Given a file named "partcad.yaml" does not exist
-    Then STDOUT should contain "DONE: Render: this:"
-    Then STDOUT should not contain "WARN:"
+    Then STDERR should contain "DONE: Render: this:"
+    Then STDERR should not contain "WARN:"
 
   # TODO-63: @alexanderilyin: consider extracting `-t readme` as `pc generate readme` command
   # @wip @type-text
@@ -31,18 +31,18 @@ Feature: `pc render` command
     |     png | logo_embedded.png     |
 
 
-# pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t readme -a :logo_embedded
-# pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t svg -a :logo_embedded
-# pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t png -a :logo_embedded
-# pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t step -a :logo_embedded
-# pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t stl -a :logo_embedded
-# pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t 3mf -a :logo_embedded
-# pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t threejs -a :logo_embedded
-# pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t obj -a :logo_embedded
-# pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t gltf -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t readme -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t svg -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t png -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t step -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t stl -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t 3mf -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t threejs -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t obj -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t gltf -a :logo_embedded
 
-# ⬢ [Docker] ❯ pc -p /workspaces/partcad/examples render --package /produce_assembly_assy -t readme -O $PWD -a :logo_embedded
-# INFO:  DONE: InitCtx: /workspaces/partcad/examples: 0.01s
+# ⬢ [Docker] ❯ pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t readme -O $PWD -a :logo_embedded
+# INFO:  DONE: InitCtx: $PARTCAD_ROOT/examples: 0.01s
 # WARN: Skipping rendering of logo: no image found at ./logo.svg
 # WARN: Skipping rendering of logo_embedded: no image found at ./logo_embedded.svg
 # WARN: Skipping rendering of partcad_logo: no image found at ./logo.svg

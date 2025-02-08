@@ -9,26 +9,26 @@ Feature: `pc render` command
   Scenario: Tutorial
     When I run "pc init -p"
     Then the command should exit with a status code of "0"
-    When I run command:
+    When a file named "partcad.yaml" is written with content:
       """
-      cat <<EOF > partcad.yaml
       dependencies:
         # Public PartCAD repository (reference it explicitly if required)
         pub:
           type: git
           url: https://github.com/partcad/partcad-index.git
-      EOF
+      """
+    And I run "pc --no-ansi list"
+    Then the command should exit with a status code of "0"
+    When a file named "test.scad" is written with content:
+      """
+      translate (v= [0,0,0])  cube (size = 10);
       """
     Then the command should exit with a status code of "0"
-    When I run "pc list"
+    When I run "pc --no-ansi add part scad test.scad"
     Then the command should exit with a status code of "0"
-    When I run "echo "translate (v= [0,0,0])  cube (size = 10);" > test.scad"
+    When I run "pc --no-ansi test -f cad :test"
     Then the command should exit with a status code of "0"
-    When I run "pc add part scad test.scad"
-    Then the command should exit with a status code of "0"
-    When I run "pc inspect :test"
-    Then the command should exit with a status code of "0"
-    When I run "pc export -t stl :test"
+    When I run "pc --no-ansi export -t stl :test"
     Then the command should exit with a status code of "0"
     # TODO: Add more asserts
     # And STDOUT should contain "Rendering STL file"
@@ -91,7 +91,10 @@ Feature: `pc render` command
     When I run command:
       """
       mkdir -pv $HOME/.partcad
-      cat <<EOF > $HOME/.partcad/config.yaml
+      """
+    Then the command should exit with a status code of "0"
+    When a file named "$HOME/.partcad/config.yaml" is written with content:
+      """
       # https://aistudio.google.com/apikey
       # TODO: Create dedicated token for CI and create version of test for success scenario
       googleApiKey: $PARTCAD_GOOGLE_API_KEY_MISSING
@@ -99,10 +102,8 @@ Feature: `pc render` command
       maxGeometricModeling: 1
       maxModelGeneration: 1
       maxScriptCorrection: 1
-      EOF
       """
-    Then the command should exit with a status code of "0"
-    When I run "pc init"
+    And I run "pc init"
     Then the command should exit with a status code of "0"
     When I run "pc add part ai-openscad --ai google --desc 'Pixel phone case of a surprising shape' 'generated-case.scad'"
     Then the command should exit with a status code of "0"
@@ -157,20 +158,27 @@ Feature: `pc render` command
 
   @docs-use-cases
   Scenario: Troubleshooting: Command Line
+    Given environment variable "PC_NO_ANSI" is set to "1"
     When I run "pc init"
     Then the command should exit with a status code of "0"
     When I run "pc list"
     Then the command should exit with a status code of "0"
-    When I run "pc list sketches -r"
+    When I run "pc list sketches -r //pub/examples"
     Then the command should exit with a status code of "0"
-    When I run "pc list interfaces -r"
+    When I run "pc list interfaces -r //pub/examples"
     Then the command should exit with a status code of "0"
     # TODO: TypeError: startswith first arg must be str or a tuple of str, not Project
-    # When I run "pc list mates -r"
+    # When I run "pc list mates -r //pub/examples"
     # Then the command should exit with a status code of "0"
-    When I run "pc list parts -r"
+
+  @docs-use-cases
+  Scenario: Troubleshooting: Command Line
+    Given environment variable "PC_NO_ANSI" is set to "1"
+    When I run "pc init"
     Then the command should exit with a status code of "0"
-    When I run "pc list assemblies -r"
+    When I run "pc list parts -r //pub/examples"
+    Then the command should exit with a status code of "0"
+    When I run "pc list assemblies -r //pub/examples"
     Then the command should exit with a status code of "0"
     # TODO Failure to pip install from GH repo
     # When I run "pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
@@ -186,6 +194,12 @@ Feature: `pc render` command
     #       //pub/std/metric/cqwarehouse:fastener/hexhead-din931
     #   """
     # Then the command should exit with a status code of "0"
+
+  @docs-use-cases
+  Scenario: Troubleshooting: Command Line
+    Given environment variable "PC_NO_ANSI" is set to "True"
+    When I run "pc init"
+    Then the command should exit with a status code of "0"
     When I run "pc export -t stl //pub/robotics/parts/gobilda:structure/u_channel_2"
     Then the command should exit with a status code of "0"
     When I run "pc export -t step -a //pub/robotics/parts/gobilda:examples/wormgear"

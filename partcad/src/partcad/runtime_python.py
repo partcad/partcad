@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import os
 import pathlib
+import platform
 import subprocess
 import sys
 import threading
@@ -83,6 +84,11 @@ class PythonRuntime(runtime.Runtime):
         # if TODO version >= "3.11":
         #     self.python_flags.append("-P")
 
+        self.pip_flags = []
+        self.pip_install_flags = []
+        if platform.system() == "Windows":
+            self.pip_install_flags += ["--no-warn-script-location"]
+
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
             self.tls.async_locks = {}
@@ -96,7 +102,7 @@ class PythonRuntime(runtime.Runtime):
             if not self.initialized:
                 # Preinstall the most common packages to avoid race conditions
                 self.ensure_onced("ocp-tessellate==3.0.9")
-                self.ensure_onced("nlopt==2.9.0")
+                self.ensure_onced("nlopt==2.9.1")
                 self.ensure_onced("cadquery==2.5.2")
                 self.ensure_onced("numpy==2.2.1")
                 self.ensure_onced("typing_extensions==4.12.2")
@@ -111,7 +117,7 @@ class PythonRuntime(runtime.Runtime):
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
-                    await self.ensure_async_onced_locked("nlopt==2.9.0")
+                    await self.ensure_async_onced_locked("nlopt==2.9.1")
                     await self.ensure_async_onced_locked("cadquery==2.5.2")
                     await self.ensure_async_onced_locked("numpy==2.2.1")
                     await self.ensure_async_onced_locked("typing_extensions==4.12.2")
@@ -263,7 +269,9 @@ class PythonRuntime(runtime.Runtime):
                 if not path is None:
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
-                    self.run_onced(["-m", "pip", "install", python_package], path=path)
+                    self.run_onced(
+                        ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package], path=path
+                    )
                 pathlib.Path(guard_path).touch()
 
     async def ensure_async(self, python_package, session=None, path=None):
@@ -293,7 +301,7 @@ class PythonRuntime(runtime.Runtime):
                             item += " in " + path
                         with pc_logging.Action("PipInst", self.version, item):
                             await self.run_async_onced(
-                                ["-m", "pip", "install", python_package],
+                                ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
                                 path=path,
                             )
                         pathlib.Path(guard_path).touch()
@@ -319,7 +327,7 @@ class PythonRuntime(runtime.Runtime):
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
                     await self.run_async_onced(
-                        ["-m", "pip", "install", python_package],
+                        ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
                         path=path,
                     )
                 pathlib.Path(guard_path).touch()

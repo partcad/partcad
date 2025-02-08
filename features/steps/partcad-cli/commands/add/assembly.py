@@ -1,4 +1,4 @@
-from behave import given, then
+from behave import given, then, when
 from hamcrest import assert_that, equal_to
 from features.utils import expandvars  # type: ignore # TODO-64: @alexanderilyin python.autoComplete.extraPaths
 import logging
@@ -7,6 +7,7 @@ import os
 import re
 
 
+@when('a file named "{filename}" is written with content')
 @given('a file named "{filename}" with content')
 def step_impl(context, filename):
     content = context.text
@@ -16,6 +17,7 @@ def step_impl(context, filename):
         logging.debug(f"Creating file: {filename}")
         file.write(content)
 
+
 @given('a user configuration file named "{filename}" with content')
 def step_impl(context, filename):
     content = context.text
@@ -24,6 +26,7 @@ def step_impl(context, filename):
     with open(filename, "w") as file:
         logging.debug(f"Creating file: {filename}")
         file.write(content)
+
 
 @then('a file named "{file_path}" should have YAML content')
 def step_impl(context, file_path):

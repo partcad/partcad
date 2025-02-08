@@ -1,4 +1,4 @@
-from behave import when
+from behave import when, given
 from behave.runner import Context
 import time
 import logging
@@ -8,13 +8,28 @@ from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin py
 
 
 def run(context: Context, command: str):
+    if command.startswith("pc "):
+        command = f"coverage run --rcfile=$PARTCAD_ROOT/dev-tools/coverage.rc --data-file=$PARTCAD_ROOT/.coverage --parallel -m partcad_cli.click.command {command[3:]}"
+    elif command.startswith("partcad "):
+        command = f"coverage run --rcfile=$PARTCAD_ROOT/dev-tools/coverage.rc --data-file=$PARTCAD_ROOT/.coverage --parallel -m partcad_cli.click.command {command[8:]}"
+
     command = expandvars(command, context)
     # We need to keep current environment variables
     # TODO-78: @alexanderilyin: merge this with features/steps/partcad-cli/commands/version.py
     env = dict(os.environ)
+    if hasattr(context, "env"):
+        env.update(context.env)
     if hasattr(context, "home_dir"):
         # Override the HOME variable
         env["HOME"] = context.home_dir
+
+    # In case of Windows, we need to ensure that SYSTEMROOT and COMSPEC variables are set
+    system_root = os.environ.get("SYSTEMROOT", "C:\\Windows")
+    comspec = os.path.join(system_root, "System32", "cmd.exe")
+    os.environ["SYSTEMROOT"] = system_root
+    os.environ["SystemRoot"] = system_root
+    os.environ["COMSPEC"] = comspec
+    os.environ["ComSpeC"] = comspec
 
     cwd = None
     if hasattr(context, "test_dir"):
@@ -33,6 +48,7 @@ def run(context: Context, command: str):
         text=True,
         cwd=cwd,
         env=env,
+        encoding="utf-8",
     )
     end_time = time.time()
     context.duration = end_time - start_time
@@ -40,6 +56,12 @@ def run(context: Context, command: str):
     logging.debug(f"Command output: {result.stdout}")
     logging.debug(f"Command error: {result.stderr}")
     logging.debug(f"Command return code: {result.returncode}")
+
+    # Replace None with empty string
+    if result.stdout is None:
+        result.stdout = ""
+    if result.stderr is None:
+        result.stderr = ""
 
     # Store the result in the context for further steps
     context.result = result

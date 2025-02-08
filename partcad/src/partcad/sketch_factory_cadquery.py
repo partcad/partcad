@@ -87,7 +87,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "nlopt==2.9.0",
+                "nlopt==2.9.1",
                 session=self.session,
             )
             await self.runtime.ensure_async(

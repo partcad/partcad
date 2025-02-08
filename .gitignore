@@ -1,7 +1,7 @@
 __pycache__
 .cache_ggshield
 .conda
-.coverage
+.coverage*
 .ocp_vscode
 .op/
 .partcad

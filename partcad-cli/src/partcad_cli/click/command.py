@@ -3,13 +3,20 @@ import yaml
 import partcad as pc
 import coloredlogs
 import logging
+import locale
+import platform
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
 
+locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+
 help_config = click.RichHelpConfiguration(
-    text_markup="rich",
+    color_system="windows" if platform.system() == "Windows" else "auto",
+    force_terminal=platform.system() != "Windows",
     show_arguments=True,
+    text_markup="rich",
+    use_markdown_emoji=False,
 )
 help_config.dump_to_globals()
 
@@ -203,9 +210,9 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     show_envvar=True,
     help="Traces sample rate for Sentry in percent",
 )
-@click.option('--level', 'format', flag_value='level', default=True, help="Use log level as log prefix")
-@click.option('--time', 'format', flag_value='time', help="Use time with milliseconds as log prefix")
-@click.option('--path', 'format', flag_value='path', help="Use source file path and line number as log prefix")
+@click.option("--level", "format", flag_value="level", default=True, help="Use log level as log prefix")
+@click.option("--time", "format", flag_value="time", help="Use time with milliseconds as log prefix")
+@click.option("--path", "format", flag_value="path", help="Use source file path and line number as log prefix")
 @click.pass_context
 def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     """
@@ -293,8 +300,8 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     for env_var, attrib in user_config_options:
         value = kwargs.get(attrib, None)
         if value is not None and user_config._get_env(env_var) is None:
-            if 'sentry' in attrib:
-                attrib = attrib.replace('sentry_', 'sentry.')
+            if "sentry" in attrib:
+                attrib = attrib.replace("sentry_", "sentry.")
                 user_config.set(attrib, value)
             else:
                 setattr(user_config, attrib, value)

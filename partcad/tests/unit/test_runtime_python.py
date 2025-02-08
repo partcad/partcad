@@ -22,7 +22,7 @@ def test_runtime_python_version_3_9_none():
         #     "Make no assumptions about availability of other Python versions, other than the current one"
         # )
         return
-    user_config.python_runtime = "none"
+    user_config.sandbox_runtime = "none"
     ctx = pc.Context("partcad/tests")
     runtime = ctx.get_python_runtime("3.9")
     version_string, errors = asyncio.run(runtime.run_async(["--version"]))
@@ -36,7 +36,7 @@ def test_runtime_python_version_3_10_none():
         #     "Make no assumptions about availability of other Python versions, other than the current one"
         # )
         return
-    user_config.python_runtime = "none"
+    user_config.sandbox_runtime = "none"
     ctx = pc.Context("partcad/tests")
     runtime = ctx.get_python_runtime("3.10")
     version_string, errors = asyncio.run(runtime.run_async(["--version"]))
@@ -50,7 +50,7 @@ def test_runtime_python_version_3_11_none():
         #     "Make no assumptions about availability of other Python versions, other than the current one"
         # )
         return
-    user_config.python_runtime = "none"
+    user_config.sandbox_runtime = "none"
     ctx = pc.Context("partcad/tests")
     runtime = ctx.get_python_runtime("3.11")
     version_string, errors = asyncio.run(runtime.run_async(["--version"]))
@@ -64,7 +64,7 @@ def test_runtime_python_version_3_12_none():
         #     "Make no assumptions about availability of other Python versions, other than the current one"
         # )
         return
-    user_config.python_runtime = "none"
+    user_config.sandbox_runtime = "none"
     ctx = pc.Context("partcad/tests")
     runtime = ctx.get_python_runtime("3.12")
     version_string, errors = asyncio.run(runtime.run_async(["--version"]))
@@ -73,7 +73,7 @@ def test_runtime_python_version_3_12_none():
 
 
 def test_runtime_python_version_3_9_conda():
-    user_config.python_runtime = "conda"
+    user_config.sandbox_runtime = "conda"
     ctx = pc.Context("partcad/tests")
     runtime = ctx.get_python_runtime("3.9")
     version_string, errors = asyncio.run(runtime.run_async(["--version"]))
@@ -82,7 +82,7 @@ def test_runtime_python_version_3_9_conda():
 
 
 def test_runtime_python_version_3_10_conda():
-    user_config.python_runtime = "conda"
+    user_config.sandbox_runtime = "conda"
     ctx = pc.Context("partcad/tests")
     runtime = ctx.get_python_runtime("3.10")
     version_string, errors = asyncio.run(runtime.run_async(["--version"]))
@@ -91,7 +91,7 @@ def test_runtime_python_version_3_10_conda():
 
 
 def test_runtime_python_version_3_11_conda():
-    user_config.python_runtime = "conda"
+    user_config.sandbox_runtime = "conda"
     ctx = pc.Context("partcad/tests")
     runtime = ctx.get_python_runtime("3.11")
     version_string, errors = asyncio.run(runtime.run_async(["--version"]))
@@ -100,7 +100,7 @@ def test_runtime_python_version_3_11_conda():
 
 
 def test_runtime_python_version_3_12_conda():
-    user_config.python_runtime = "conda"
+    user_config.sandbox_runtime = "conda"
     ctx = pc.Context("partcad/tests")
     runtime = ctx.get_python_runtime("3.12")
     version_string, errors = asyncio.run(runtime.run_async(["--version"]))

@@ -32,13 +32,7 @@ import partcad.logging as logging
     "-t",
     "--format",
     help="The type of file to export",
-    type=click.Choice(
-        [
-            "readme",
-            "svg",
-            "png"
-        ]
-    ),
+    type=click.Choice(["readme", "svg", "png"]),
     show_envvar=True,
 )
 @click.option(
@@ -88,10 +82,14 @@ import partcad.logging as logging
 def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
     with logging.Process("Render", "this"):
         ctx.option_create_dirs = create_dirs
-        package = package if package is not None else ""
+        package = package if package is not None else "."
+        package_obj = ctx.get_project(package)
+        if not package_obj:
+            logging.error(f"Package {package} is not found")
+            return
+        package = package_obj.name
         if recursive:
-            start_package = pc_utils.get_child_project_path(ctx.get_current_project_path(), package)
-            all_packages = ctx.get_all_packages(start_package)
+            all_packages = ctx.get_all_packages(package)
             packages = list(
                 map(
                     lambda p: p["name"],

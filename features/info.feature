@@ -7,9 +7,8 @@ Feature: `pc info` command
 
   @pc-info @add-assembly
   Scenario: Add assembly from `logo.assy` file
-    When I run command:
+    Given a file named "partcad.yaml" with content:
       """
-      cat << EOF > partcad.yaml
       parts:
         cube:
           type: cadquery
@@ -25,12 +24,9 @@ Feature: `pc info` command
           type: cadquery
           path: cylinder.py
           desc: This is a cylinder from examples
-      EOF
       """
-    Then the command should exit with a status code of "0"
-    When I run command:
+    Given a file named "cylinder.py" with content:
       """
-      cat << EOF > cylinder.py
       import cadquery as cq
 
       if __name__ != "__cqgi__":
@@ -38,12 +34,9 @@ Feature: `pc info` command
 
       shape = cq.Workplane("front").circle(10.0).extrude(10.0)
       show_object(shape)
-      EOF
       """
-    Then the command should exit with a status code of "0"
-    When I run command:
+    Given a file named "cube.py" with content:
       """
-      cat << EOF > cube.py
       import cadquery as cq
 
       if __name__ != "__cqgi__":
@@ -56,20 +49,15 @@ Feature: `pc info` command
       shape = cq.Workplane("front").box(width, length, height)
 
       show_object(shape)
-      EOF
       """
-    Then the command should exit with a status code of "0"
-    When I run command:
+    Given a file named "primitive.assy" with content:
       """
-      cat << EOF > primitive.assy
       links:
         - part: cube
           location: [[0,0,0], [0,0,1], 0]
         - part: cylinder
           location: [[0,0,5], [0,0,1], 0]
-      EOF
       """
-    Then the command should exit with a status code of "0"
     When I run command:
       """
       partcad add assembly assy primitive.assy
@@ -110,12 +98,11 @@ Feature: `pc info` command
 
   @success @pc-info
   Scenario: Show 'Path' as package info for local imports
-    When I run command:
+    Given a file named "test.scad" with content:
       """
-      echo "translate (v= [0,0,0])  cube (size = 10);" > test.scad
+      translate (v= [0,0,0])  cube (size = 10);
       """
-    Then the command should exit with a status code of "0"
-    Given a file named "partcad.yaml" with content:
+    And a file named "partcad.yaml" with content:
       """
         parts:
           test:
@@ -138,7 +125,7 @@ Feature: `pc info` command
   #   Given I am in "/tmp/sandbox/behave" directory
   #   And I have temporary $HOME in "/tmp/sandbox/home"
   #   And a file named "partcad.yaml" does not exist
-  #   When I run "partcad --no-ansi init"
+  #   When I run "pc --no-ansi init"
   #   Then the command should exit with a status code of "0"
   #   And a file named "partcad.yaml" should be created with content:
   #     """
@@ -152,21 +139,21 @@ Feature: `pc info` command
 
   # @pc-info
   # Scenario: Show part details
-  #   When I run "partcad info //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
+  #   When I run "pc info //pub/std/metric/cqwarehouse:fastener/hexhead-din931"
   #   Then the command should exit with a status code of "0"
   #   And STDOUT should contain "'name': 'fastener/hexhead-din931',"
   #   And STDOUT should contain "'orig_name': 'fastener/hexhead-din931',"
 
   # @pc-info
   # Scenario: Show simplified part information
-  #   When I run "partcad info -s //pub/std/metric/m:m3"
+  #   When I run "pc info -s //pub/std/metric/m:m3"
   #   Then the command should exit with a status code of "0"
   #   And STDOUT should contain only essential fields
   #   And STDOUT should not contain detailed specifications
 
   # @pc-info
   # Scenario: Show interactive part information
-  #   When I run "partcad info -i //pub/std/metric/m:m3-screw"
+  #   When I run "pc info -i //pub/std/metric/m:m3-screw"
   #   Then the command should exit with a status code of "0"
   #   And an interactive viewer should be launched
   #   And the viewer should display the part model

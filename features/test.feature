@@ -13,19 +13,33 @@ Feature: `pc test` command
     And the output should contain "Test completed successfully"
     And no errors should be reported
 
+  # @success
+  # Scenario: `Recursively test all imported packages and pass`
+  #   Given a file named "partcad.yaml" with content:
+  #     """
+  #     dependencies:
+  #       gobilda:
+  #         type: git
+  #         url: https://github.com/partcad/partcad-robotics-part-vendor-gobilda
+  #     """
+  #   When I run "pc test -r"
+  #   Then the command should exit with a status code of "0"
+  #   Then STDOUT should contain "Git operations: 1"
+  #   Then STDOUT should contain "DONE: Test: //"
+
   @success
-  Scenario: `Recursively test all imported packages`
+  Scenario: `Recursively test all imported packages and fail`
     Given a file named "partcad.yaml" with content:
       """
       dependencies:
-        raspberrypi:
-          desc: Raspberry Pi
+        dfrobot:
           type: git
           url: https://github.com/partcad/partcad-robotics-part-vendor-dfrobot
       """
     When I run "pc test -r"
-    Then the command should exit with a status code of "0"
+    Then the command should exit with a status code of "1"
     Then STDOUT should contain "Git operations: 1"
+    Then STDOUT should contain "cam: No suppliers found"
     Then STDOUT should contain "DONE: Test: //"
 
   @wip

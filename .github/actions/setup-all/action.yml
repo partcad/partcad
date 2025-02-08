@@ -1,0 +1,96 @@
+name: "Setup all"
+description: "Prepare the runner no matter what the job is"
+
+runs:
+  using: "composite"
+  steps:
+    ############################################## OS PREREQUISITES ################################################
+
+    - name: Install prerequisites
+      if: ${{ startsWith(matrix.os, 'ubuntu') }}
+      shell: bash
+      run: |
+        sudo apt-get update || exit 1
+        sudo apt-get install -y libcairo2-dev pkg-config python3-dev || exit 1
+
+    ###################################################  PYTHON  ###################################################
+
+    # Miniconda
+    # - name: Cache conda
+    #   uses: actions/cache@v3
+    #   env:
+    #     # Increase this value to reset cache if etc/example-environment.yml has not changed
+    #     CACHE_NUMBER: 1
+    #   with:
+    #     # enableCrossOsArchive: true
+    #     path: ~/conda_pkgs_dir
+    #     key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
+
+    - uses: conda-incubator/setup-miniconda@v3
+      with:
+        # miniforge-version: 24.11.2-1
+        miniconda-version: latest
+        channels: conda-forge,defaults
+        python-version: ${{ matrix.python-version }}
+        # activate-environment: env
+        auto-activate-base: true
+        # use-only-tar-bz2: true
+
+    # - name: Init conda
+    #   shell: bash
+    #   run: |
+    #     touch ~/.bashrc
+    #     touch ~/.bash_profile
+    #     . ~/.bashrc
+    #     . ~/.bash_profile
+    #     conda init
+
+    # - uses: actions/cache@v4
+    #   id: cache
+    #   with:
+    #     path: ~/.cache/pip
+    #     key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.*') }}
+    #     restore-keys: |
+    #       ${{ runner.os }}-pip-
+
+    # TODO(clairbee): Cache conda packages
+    # TODO(clairbee): Cache the conda environment?
+
+    # Install dev dependencies
+    - name: install dev dependencies
+      shell: bash -l {0}
+      run: |
+        # . ~/.bashrc
+        # . ~/.bash_profile
+        # conda clean --all
+        conda create -n env-test python=${{ matrix.python-version }} -y
+        conda activate env-test
+        # python -m ensurepip --upgrade
+        python -m pip install --upgrade pip wheel mypy setuptools
+        # Install all core and a subset of CLI dependencies, that are required for tests
+        python -m pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
+        python -m pip install -r partcad/requirements-dev.in
+        conda deactivate
+
+    # - name: Update Homebrew
+    #   if: matrix.os == 'macos-latest'
+    #   shell: bash
+    #   run: |
+    #     brew update --preinstall
+    #     # cat "$(brew --repository)/Library/Taps/homebrew/homebrew-core/Formula/nlopt.rb" > .github/brew-formulae
+    # # - name: Configure Homebrew cache
+    # #   if: matrix.os == 'macos-latest'
+    # #   uses: actions/cache@v2
+    # #   with:
+    # #     path: |
+    # #       ~/Library/Caches/Homebrew/nlopt--*
+    # #       ~/Library/Caches/Homebrew/downloads/*--nlopt-*
+    # #     key: brew-${{ hashFiles('.github/brew-formulae') }}
+    # #     restore-keys: brew-
+    # - name: Install Homebrew dependencies
+    #   if: matrix.os == 'macos-latest'
+    #   shell: bash
+    #   run: |
+    #     # env HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt
+    #     HOMEBREW_NO_AUTO_UPDATE=1 brew install gcc
+    #     HOMEBREW_NO_AUTO_UPDATE=1 brew install nlopt

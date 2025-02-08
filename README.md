@@ -2,9 +2,9 @@
 
 [![License](https://github.com/partcad/partcad/blob/main/apache20.svg?raw=true)](./LICENSE.txt)
 
-[![CI on Linux, macOS and Windows](https://github.com/partcad/partcad/actions/workflows/dev-container.yml/badge.svg?event=schedule)](https://github.com/partcad/partcad/actions/workflows/dev-container.yml?query=event%3Aschedule)
-[![CD on Linux, macOS and Windows](https://github.com/partcad/partcad/actions/workflows/python-build.yml/badge.svg?event=schedule)](https://github.com/partcad/partcad/actions/workflows/python-build.yml?query=event%3Aschedule)
-[![Deployment to PyPI](https://github.com/partcad/partcad/actions/workflows/python-deploy.yml/badge.svg)](https://github.com/partcad/partcad/actions/workflows/python-deploy.yml)
+[![CI on Linux, macOS and Windows](https://github.com/partcad/partcad/actions/workflows/test.yml/badge.svg?event=schedule)](https://github.com/partcad/partcad/actions/workflows/test.yml?query=event%3Aschedule)
+[![CD on Linux, macOS and Windows](https://github.com/partcad/partcad/actions/workflows/build.yml/badge.svg?event=schedule)](https://github.com/partcad/partcad/actions/workflows/build.yml?query=event%3Aschedule)
+[![Deployment to PyPI](https://github.com/partcad/partcad/actions/workflows/deploy.yml/badge.svg)](https://github.com/partcad/partcad/actions/workflows/deploy.yml)
 [![Documentation Status](https://readthedocs.org/projects/partcad/badge/?version=latest)](https://partcad.readthedocs.io/en/latest/?badge=latest)
 <a href="https://discord.gg/h5qhbHtygj"><img alt="Discord" src="https://img.shields.io/discord/1308854595987968051?logo=discord&logoColor=white&label=Discord&labelColor=353c43&color=31c151"></a>
 

@@ -6,24 +6,18 @@ import partcad.logging as logging
 
 @click.command(help="Convert CAD files between formats")
 @click.option(
-    "--input", "input_type",
-    type=click.Choice(
-      [
-         "step",
-         "brep",
-         "stl",
-         "3mf",
-         "scad",
-         "cadquery",
-         "build123d"
-       ]),
+    "--input",
+    "input_type",
+    type=click.Choice(["step", "brep", "stl", "3mf", "scad", "cadquery", "build123d"]),
     help="Input file type. Inferred from filename if not provided.",
     required=False,
+    default=None,
 )
 @click.option(
-    "--output", "output_type",
+    "--output",
+    "output_type",
     type=click.Choice(
-      [
+        [
             "step",
             "brep",
             "stl",
@@ -31,9 +25,11 @@ import partcad.logging as logging
             "threejs",
             "obj",
             "gltf",
-        ]),
+        ]
+    ),
     help="Output file type. Inferred from filename if not provided.",
     required=False,
+    default=None,
 )
 @click.argument("input_filename", type=click.Path(exists=True))
 @click.argument("output_filename", type=click.Path(), required=False)
@@ -41,19 +37,20 @@ def cli(input_type, output_type, input_filename, output_filename):
     """
     Convert CAD files from one format to another.
     """
+
     def infer_type_from_filename(filename):
         extension = Path(filename).suffix.lower()
         return {
-        ".step": "step",
-        ".stl": "stl",
-        ".3mf": "3mf",
-        ".scad": "scad",
-        ".brep": "brep",
-        ".json": "threejs",
-        ".obj": "obj",
-        ".gltf": "gltf",
-        ".md": "markdown",
-        ".txt": "txt",
+            ".step": "step",
+            ".stl": "stl",
+            ".3mf": "3mf",
+            ".scad": "scad",
+            ".brep": "brep",
+            ".json": "threejs",
+            ".obj": "obj",
+            ".gltf": "gltf",
+            ".md": "markdown",
+            ".txt": "txt",
         }.get(extension, None)
 
     # Infer types if not explicitly provided

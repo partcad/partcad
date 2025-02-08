@@ -6,9 +6,8 @@ Feature: `pc list interfaces` command
     And I have temporary $HOME in "/tmp/sandbox/home"
 
   Scenario: Configure m3 interface
-    When I run command:
+    Given a file named "partcad.yaml" with content:
       """
-      cat << EOF > partcad.yaml
       sketches:
         m3:
           type: basic
@@ -22,9 +21,7 @@ Feature: `pc list interfaces` command
             m3:
               location: [[0, 0, 0], [0, 0, 1], 0] # redundant, for demonstration
               sketch: m3
-      EOF
       """
-    Then the command should exit with a status code of "0"
     When I run command:
       """
       partcad list interfaces

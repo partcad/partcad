@@ -29,6 +29,9 @@ class WithPorts(Interface):
             return self.interfaces
 
     def get_interface(self, interface_name: str):
+        if interface_name.startswith("/") and not interface_name.startswith("//"):
+            # Workaround the old syntax for absolute package paths
+            interface_name = "/" + interface_name
         return self.get_interfaces()[interface_name]
 
     def instantiate_interfaces(self):
