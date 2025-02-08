@@ -26,3 +26,4 @@ output
 pc-test-results/
 pytest-results/
 test-results/
+*.code-workspace

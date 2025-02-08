@@ -115,11 +115,12 @@ class CacheHash:
         self.dependencies = dependencies
 
     def get(self) -> str | None:
-        # TODO(clairbee): make I/O asynchronous and parallel, but maintain the order of hashing
-        for filename in self.dependencies:
-            self.add_filename(filename)
+        if not self.is_used:
+            # TODO(clairbee): make I/O asynchronous and parallel, but maintain the order of hashing
+            for filename in self.dependencies:
+                self.add_filename(filename)
 
-        self.used = True
+        self.is_used = True
         if self.is_empty:
             return None
 

@@ -23,13 +23,3 @@ class Sketch(ShapeWithAi):
 
     async def get_shape(self, ctx):
         return await pc_thread.run_async(self.instantiate, self)
-
-    def ref_inc(self):
-        # Not applicable to sketches
-        pass
-
-    def clone(self):
-        # Not applicable to sketches
-        # TODO(clairbee): move clone() from Shape to another class
-        #                 that would be used by both Part and Assembly
-        pass

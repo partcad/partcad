@@ -256,8 +256,6 @@ class Interface:
         self.inherits = None
         self.compatible_with = set()
 
-        self.count = 0
-
         # pc_logging.debug("Initializing interface: %s" % name)
 
         # Initialize parameters space and freedom of movement

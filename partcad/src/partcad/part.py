@@ -18,7 +18,6 @@ from . import logging as pc_logging
 class Part(ShapeWithAi):
     path: typing.Optional[str] = None
     url: typing.Optional[str] = None
-    count: int
 
     def __init__(self, project_name: str, config: dict = {}, shape=None):
         super().__init__(project_name, config)
@@ -29,19 +28,9 @@ class Part(ShapeWithAi):
         self.url = None
         if "url" in config:
             self.url = config["url"]
-        self.count = 0
 
     async def get_shape(self, ctx):
         return await pc_thread.run_async(self.instantiate, self)
-
-    def ref_inc(self):
-        # TODO(clairbee): add a thread lock here
-        self.count += 1
-
-    def clone(self):
-        cloned = Part(self.project_name, self.config, self._wrapped)
-        cloned.count = self.count
-        return cloned
 
     async def get_mcftt(self, property: str):
         """Get the material, color, finish, texture or tolerance of the part."""
@@ -81,39 +70,3 @@ class Part(ShapeWithAi):
         ):
             return None
         return self.config["parameters"][property]["default"]
-
-    def _render_txt_real(self, file):
-        file.write(self.name + ": " + self.count + "\n")
-
-    def _render_markdown_real(self, file):
-        name = self.name
-        if not self.desc is None:
-            name = self.desc
-        store_data = self.get_store_data()
-        vendor = store_data.vendor or ""
-        sku = store_data.sku or ""
-        if self.url is None:
-            label = name
-        else:
-            label = f"[{name}]({self.url})"
-            sku = f"[{sku}]({self.url})" if sku else ""
-        count = str(math.ceil(self.count / store_data.count_per_sku))
-        img_url = self._get_svg_url()
-
-        file.write(
-            "| "
-            + label
-            + " | "
-            + count
-            + " |"
-            + vendor
-            + " |"
-            + sku
-            + " |"
-            + " !["
-            + name
-            + "]("
-            + img_url
-            + ")"
-            + " |\n"
-        )

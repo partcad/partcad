@@ -27,9 +27,8 @@ class ProjectFactoryLocal(pf.ProjectFactory, LocalImportConfiguration):
 
         self.path = self.import_config_path
 
-        if not self.can_be_empty:
-            if not os.path.exists(self.import_config_path):
-                raise Exception("PartCAD config not found: %s" % self.import_config_path)
+        if not self.can_be_empty and not os.path.exists(self.import_config_path):
+            raise Exception("PartCAD config not found: %s" % self.import_config_path)
 
         # Complement the config object here if necessary
         self._create(config)

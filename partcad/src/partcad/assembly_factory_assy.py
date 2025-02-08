@@ -84,8 +84,6 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             result = await self.handle_node(assembly, assy)
             if result is not None:
                 assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
-                # Keep part reference counter for bill-of-materials purposes
-                result[0].ref_inc()
             else:
                 pc_logging.warning("Assembly is empty")
 
@@ -102,8 +100,6 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 result = f[0].pop().result()
                 if result is not None:
                     assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
-                    # Keep part reference counter for bill-of-materials purposes
-                    result[0].ref_inc()
 
         for link in node_list:
             if "connect" in link or "connectPorts" in link:
