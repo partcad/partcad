@@ -93,7 +93,8 @@ Feature: `pc info` command
     When I run "pc info /rob/dfrobot:motion/rubber_wheel_136_24"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "github.com"
-    And STDOUT should contain "Url: 'https://github.com/"
+    And STDOUT should contain "Url: 'https://www.dfrobot.com/"
+    And STDOUT should contain "ImportUrl: 'https://github.com/"
     And STDOUT should contain "Path: '//rob/dfrobot'"
 
   @success @pc-info

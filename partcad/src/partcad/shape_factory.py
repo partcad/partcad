@@ -38,5 +38,7 @@ class ShapeFactory(factory.Factory):
         info: dict = shape.shape_info(self.ctx)
         if "url" in self.project.config_obj and self.project.config_obj["url"] is not None:
             info["Url"] = self.project.config_obj["url"]
+        if "importUrl" in self.project.config_obj and self.project.config_obj["importUrl"] is not None:
+            info["ImportUrl"] = self.project.config_obj["importUrl"]
         info["Path"] = self.project.name
         return info
