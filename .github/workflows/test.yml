@@ -187,8 +187,8 @@ jobs:
           # BEGIN ALL EXAMPLES
           cd ./examples
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
+          coverage run --source=partcad --parallel-mode --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+          coverage run --source=partcad --parallel-mode --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
           coverage combine || true
           # END ALL EXAMPLES
 
