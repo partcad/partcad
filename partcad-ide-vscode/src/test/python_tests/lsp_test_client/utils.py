@@ -60,7 +60,8 @@ def get_initialization_options():
     server_info = package_json["serverInfo"]
     server_id = server_info["module"]
 
-    properties = package_json["contributes"]["configuration"]["properties"]
+    property_groups = package_json["contributes"]["configuration"]
+    properties = list(map(lambda g: g["properties"], property_groups))
     setting = {}
     for prop in properties:
         name = prop[len(server_id) + 1 :]

@@ -162,16 +162,32 @@ Configuration file is located at `.devcontainer/.pre-commit-config.yaml` where y
 
 !!! warning
 
-    You also able to remove local git hooks completely but your PR won't be able to
-    merge until hooks checks pass in CI:
+    While you can remove local git hooks completely, be aware that:
+    1. Your PR will be blocked from merging until all hook checks pass in CI
+    2. You'll miss early feedback that could prevent CI failures
+      3. You may need to make additional commits to fix issues that hooks would have caught locally
 
-    ```bash
-    pre-commit uninstall --config .devcontainer/.pre-commit-config.yaml
-    ```
+      ```bash
+      # Option 1: Using pre-commit (recommended)
+      # To remove hooks:
+      pre-commit uninstall --config .devcontainer/.pre-commit-config.yaml
+      # To restore hooks later:
+      pre-commit install --config .devcontainer/.pre-commit-config.yaml
+      ```
 
-    Option w/o using 3rd-parties tools:
+      Option 2: Manual removal (use with caution):
 
-    ```bash
+      ```bash
+      # Make sure you're in the right directory first
+      if [ -d ".git/hooks" ]; then
+        # Backup hooks first
+        mkdir -p .git/hooks_backup
+        mv .git/hooks/* .git/hooks_backup/
+        echo "Hooks backed up to .git/hooks_backup/"
+      else
+        echo "Error: .git/hooks directory not found"
+      fi
+      ```
     rm .git/hooks/*
     ```
 
