@@ -30,7 +30,7 @@ jobs:
           - "3.12"
           # - "3.13"
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 20
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     env:
       BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
