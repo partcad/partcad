@@ -229,6 +229,7 @@ jobs:
 
           conda activate env-test
           python -m pip install -U ./partcad ./partcad-cli
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.reset -m partcad_cli.click.command --no-ansi reset
 
           # BEGIN PUBLIC REPO
           cd examples
