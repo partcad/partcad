@@ -40,7 +40,6 @@ class Mating:
         self.source = source
         self.target = target
         self.desc = config["desc"] if "desc" in config else ""
-        self.count = 0
 
         if "sourcePortSelector" in config:
             if reverse:

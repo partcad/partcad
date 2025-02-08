@@ -102,7 +102,7 @@ class ShapeCache(Cache):
             if serialization == SERIALIZATION_PICKLE:
                 try:
                     obj = pickle.loads(data)
-                except pickle.UnpicklingError:
+                except:
                     results[key] = None
                     in_memory[key] = False
                     continue

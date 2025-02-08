@@ -127,7 +127,7 @@ class Shape(ShapeConfiguration):
                             self._wrapped = cached[self.kind]
                         if to_cache_in_memory.get("cmps", False):
                             self.components = cached["cmps"]
-                        if cached.get(self.kind, None):
+                        if self.kind in cached and cached[self.kind] is not None:
                             return cached[self.kind]
                     else:
                         if user_config.cache:
@@ -873,44 +873,6 @@ class Shape(ShapeConfiguration):
         angularTolerance=None,
     ) -> None:
         asyncio.run(self.render_gltf_async(ctx, project, filepath, tolerance, angularTolerance))
-
-    async def render_txt_async(self, ctx, project=None, filepath=None) -> None:
-        with pc_logging.Action("RenderTXT", self.project_name, self.name):
-            if filepath is None:
-                filepath = self.path + "/bom.txt"
-
-            if not project is None:
-                project.ctx.ensure_dirs_for_file(filepath)
-            file = open(filepath, "w+")
-            file.write("BoM:\n")
-            await self._render_txt_real(file)
-            file.close()
-
-    def render_txt(self, ctx, project=None, filepath=None) -> None:
-        asyncio.run(self.render_txt_async(ctx, project, filepath))
-
-    async def render_markdown_async(self, ctx, project=None, filepath=None) -> None:
-        with pc_logging.Action("RenderMD", self.project_name, self.name):
-            if filepath is None:
-                filepath = self.path + "/README.md"
-
-            bom_file = open(filepath, "w+")
-            bom_file.write(
-                "# "
-                + self.name
-                + "\n"
-                + "## Bill of Materials\n"
-                + "| Part | Count* | Vendor | SKU | Preview |\n"
-                + "| -- | -- | -- | -- | -- |\n"
-            )
-            self._render_markdown_real(bom_file)
-            bom_file.write(
-                """
-(\\*) The `Count` field is the number of SKUs to be ordered.
-It already takes into account the number of items per SKU.
-            """
-            )
-            bom_file.close()
 
     def render_markdown(self, ctx, project=None, filepath=None) -> None:
         asyncio.run(self.render_markdown_async(ctx, project, filepath))

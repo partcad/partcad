@@ -1,6 +1,6 @@
 import rich_click as click
-from partcad.logging import Process
-from partcad import logging
+from partcad import logging as pc_logging
+from partcad.context import Context
 
 
 @click.command(help="List available sketches")
@@ -11,32 +11,19 @@ from partcad import logging
     help="Recursively process all imported packages",
     show_envvar=True,
 )
-@click.option(
-    "-u",
-    "--used_by",
-    type=str,
-    required=False,
-    help="Only process objects used by the given assembly or scene.",
-    show_envvar=True,
-)
 @click.argument("package", type=str, required=False, default=".")  # help="Package to retrieve the object from"
 @click.pass_obj
-def cli(ctx, recursive, used_by, package):
+def cli(ctx: Context, recursive: bool, package: str) -> None:
     package_obj = ctx.get_project(package)
     if not package_obj:
-        logging.error(f"Package {package} is not found")
+        pc_logging.error(f"Package {package} is not found")
         return
     package = package_obj.name
 
-    with Process("ListSketches", package):
-        sketch_count = 0
+    with pc_logging.Process("ListSketches", package):
         sketch_kinds = 0
 
-        if used_by is not None:
-            logging.info("Instantiating %s..." % used_by)
-            ctx.get_assembly(used_by)
-        else:
-            ctx.get_all_packages()
+        ctx.get_all_packages()
 
         output = "PartCAD sketches:\n"
         for project_name in ctx.projects:
@@ -49,18 +36,11 @@ def cli(ctx, recursive, used_by, package):
             project = ctx.projects[project_name]
 
             for sketch_name, sketch in project.sketches.items():
-                if used_by is not None and sketch.count == 0:
-                    continue
-
                 line = "\t"
                 if recursive:
                     line += "%s" % project_name
                     line += " " + " " * (35 - len(project_name))
                 line += "%s" % sketch_name
-                if used_by is not None:
-                    sketch = project.sketches[sketch_name]
-                    line += "(%d)" % sketch.count
-                    sketch_count = sketch_count + sketch.count
                 line += " " + " " * (35 - len(sketch_name))
 
                 desc = sketch.desc if sketch.desc is not None else ""
@@ -70,13 +50,7 @@ def cli(ctx, recursive, used_by, package):
                 sketch_kinds = sketch_kinds + 1
 
         if sketch_kinds > 0:
-            if used_by is None:
-                output += "Total: %d\n" % sketch_kinds
-            else:
-                output += "Total: %d sketches of %d kinds\n" % (
-                    sketch_count,
-                    sketch_kinds,
-                )
+            output += "Total: %d\n" % sketch_kinds
         else:
             output += "\t<none>\n"
-        logging.info(output)
+        pc_logging.info(output)

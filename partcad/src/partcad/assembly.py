@@ -36,9 +36,6 @@ class Assembly(ShapeWithAi):
         # self.children contains all child parts and assemblies before they turn into 'self.shape'
         self.children = []
 
-        # TODO(clairbee): add reference counter to assemblies
-        self.count = 0
-
     async def do_instantiate(self):
         if len(self.children) == 0:
             self._wrapped = None  # Invalidate if any
@@ -54,15 +51,7 @@ class Assembly(ShapeWithAi):
         loc=b3d.Location((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.0),
     ):
         self.children.append(AssemblyChild(child_item, name, loc))
-
-        # Keep part reference counter for bill-of-materials purposes
-        child_item.ref_inc()
-
         self._wrapped = None  # Invalidate if any
-
-    def ref_inc(self):
-        for child in self.children:
-            child.item.ref_inc()
 
     async def get_shape(self, ctx):
         await self.do_instantiate()
@@ -137,17 +126,3 @@ class Assembly(ShapeWithAi):
                 else:
                     bom[part_name] = 1
         return bom
-
-    async def _render_txt_real(self, file):
-        with self.lock:
-            async with self.get_async_lock():
-                await self.do_instantiate()
-        for child in self.children:
-            child._render_txt_real(file)
-
-    async def _render_markdown_real(self, file):
-        with self.lock:
-            async with self.get_async_lock():
-                await self.do_instantiate()
-        for child in self.children:
-            child._render_markdown_real(file)

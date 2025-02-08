@@ -27,14 +27,15 @@ class CacheHash:
 
         if hasher != None:
             self.hasher = hasher.copy()
-        elif algo == "md5":
-            self.hasher = hashlib.md5()
-        elif algo == "sha1":
-            self.hasher = hashlib.sha1()
-        elif algo == "sha256":
-            self.hasher = hashlib.sha256()
         else:
-            raise ValueError(f"Unknown hash algorithm: {algo}")
+            if algo == "md5":
+                self.hasher = hashlib.md5()
+            elif algo == "sha1":
+                self.hasher = hashlib.sha1()
+            elif algo == "sha256":
+                self.hasher = hashlib.sha256()
+            else:
+                raise ValueError(f"Unknown hash algorithm: {algo}")
 
         self.dependencies = []
 
@@ -115,11 +116,12 @@ class CacheHash:
         self.dependencies = dependencies
 
     def get(self) -> str | None:
-        # TODO(clairbee): make I/O asynchronous and parallel, but maintain the order of hashing
-        for filename in self.dependencies:
-            self.add_filename(filename)
+        if not self.is_used:
+            # TODO(clairbee): make I/O asynchronous and parallel, but maintain the order of hashing
+            for filename in self.dependencies:
+                self.add_filename(filename)
 
-        self.used = True
+        self.is_used = True
         if self.is_empty:
             return None
 

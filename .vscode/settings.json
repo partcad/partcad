@@ -139,7 +139,7 @@
     "docs/build": true,
     "partcad*/build": true,
     "partcad*/dist": true,
-    ".coverage": true,
+    ".coverage*": true,
     "output": true,
     "pytest-results": true,
     "allure-results": true
@@ -229,7 +229,7 @@
     "docs/build": true,
     "partcad*/build": true,
     "partcad*/dist": true,
-    ".coverage": true,
+    ".coverage*": true,
     "output": true,
     "pytest-results": true,
     "allure-results": true
