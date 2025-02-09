@@ -1,7 +1,8 @@
 [run]
 branch = True
 concurrency = thread
-source = partcad
+include = */partcad/*
+parallel = True
 omit =
         */.partcad/*
         */sandbox/*
