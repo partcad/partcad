@@ -1,7 +1,9 @@
 [run]
 branch = True
 concurrency = thread
-include = */partcad/*
+source =
+    partcad
+    partcad-cli
 parallel = True
 omit =
         */.partcad/*
