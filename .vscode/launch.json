@@ -236,10 +236,10 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}"
+        "--extensionDevelopmentPath=${workspaceFolder}/partcad-ide-vscode",
       ],
       "outFiles": [
-        "${workspaceFolder}/partcad-ide-vscode/dist/**/*.js"
+        "partcad-ide-vscode/dist/**/*.js"
       ],
       "env": {
         "USE_DEBUGPY": "True"
@@ -249,7 +249,7 @@
         "group": "",
         "order": 4
       },
-      "localRoot": "${workspaceFolder}/partcad-ide-vscode"
+      "localRoot": "partcad-ide-vscode"
     },
     {
       "name": "Python debug server (hidden)",

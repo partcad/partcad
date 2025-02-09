@@ -714,6 +714,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     partcadInspector = new PartcadInspector(context.extensionUri);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(PartcadInspector.viewType, partcadInspector));
 
+    vscode.languages.registerImplementationProvider('scad', {
+        provideImplementation(
+            _document: vscode.TextDocument,
+            _position: vscode.Position,
+            _token: vscode.CancellationToken,
+        ) {
+            let openscadExtension = vscode.extensions.getExtension('antyos.openscad');
+            if (openscadExtension === undefined) {
+                vscode.window.showInformationMessage('OpenSCAD extension is not installed', 'Install').then((value) => {
+                    if (value === 'Install') {
+                        vscode.commands.executeCommand('workbench.extensions.installExtension', 'antyos.openscad');
+                    }
+                });
+            }
+            return undefined;
+        },
+    });
+
     /* Instantiate code completion */
     let completionPython = vscode.languages.registerCompletionItemProvider('python', {
         provideCompletionItems(
@@ -858,22 +876,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export async function deactivate(): Promise<void> {
-    if (lsClient === undefined) {
-        return undefined;
-    }
-    return vscode.commands.executeCommand('setContext', 'partcad.activated', false).then(() => {
-        const lsClientSaved = lsClient;
+    try {
+        if (!lsClient) {
+            return;
+        }
+
+        await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
+
+        const clientToStop = lsClient;
         lsClient = undefined;
-        return lsClientSaved?.stop().then(undefined, (err) => {
-            console.log('deactivate: ', err);
-        });
-    });
-    // if (lsClient !== undefined) {
-    //     if (lsClient.isRunning()) {
-    //         await lsClient.stop().then(undefined, (e) => {
-    //             console.log('deactivate: ', e);
-    //         });
-    //     }
-    //     lsClient = undefined; // FIXME(clairbee): is this ok???
-    // }
+
+        await clientToStop.stop();
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`Failed to deactivate extension: ${error}`);
+        // vscode.window.showErrorMessage(`Failed to deactivate extension: ${error.message}`);
+        throw error;
+    }
 }

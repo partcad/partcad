@@ -809,17 +809,6 @@ files = [
 colorama = {version = "*", markers = "platform_system == \"Windows\""}
 
 [[package]]
-name = "cloudpickle"
-version = "3.1.1"
-description = "Pickler class to extend the standard pickle.Pickler functionality"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "cloudpickle-3.1.1-py3-none-any.whl", hash = "sha256:c8c5a44295039331ee9dad40ba100a9c7297b6f988e50e87ccdf3765a668350e"},
-    {file = "cloudpickle-3.1.1.tar.gz", hash = "sha256:b216fa8ae4019d5482a8ac3c95d8f6346115d8835911fd4aefd1a445e4242c64"},
-]
-
-[[package]]
 name = "colorama"
 version = "0.4.6"
 description = "Cross-platform colored terminal text."
@@ -1355,17 +1344,6 @@ dev = ["Cython", "Pillow", "PyMuPDF (>=1.20.0)", "PySide6", "matplotlib", "pytes
 dev5 = ["Cython", "Pillow", "PyMuPDF (>=1.20.0)", "PyQt5", "matplotlib", "pytest", "setuptools", "wheel"]
 draw = ["Pillow", "PyMuPDF (>=1.20.0)", "PySide6", "matplotlib"]
 draw5 = ["Pillow", "PyMuPDF (>=1.20.0)", "PyQt5", "matplotlib"]
-
-[[package]]
-name = "farama-notifications"
-version = "0.0.4"
-description = "Notifications for all Farama Foundation maintained libraries."
-optional = false
-python-versions = "*"
-files = [
-    {file = "Farama-Notifications-0.0.4.tar.gz", hash = "sha256:13fceff2d14314cf80703c8266462ebf3733c7d165336eee998fc58e545efd18"},
-    {file = "Farama_Notifications-0.0.4-py3-none-any.whl", hash = "sha256:14de931035a41961f7c056361dc7f980762a143d05791ef5794a751a2caf05ae"},
-]
 
 [[package]]
 name = "fastjsonschema"
@@ -1922,36 +1900,6 @@ grpcio = ">=1.70.0"
 protobuf = ">=5.26.1,<6.0dev"
 
 [[package]]
-name = "gymnasium"
-version = "1.0.0"
-description = "A standard API for reinforcement learning and a diverse set of reference environments (formerly Gym)."
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "gymnasium-1.0.0-py3-none-any.whl", hash = "sha256:b6f40e1e24c5bd419361e1a5b86a9117d2499baecc3a660d44dfff4c465393ad"},
-    {file = "gymnasium-1.0.0.tar.gz", hash = "sha256:9d2b66f30c1b34fe3c2ce7fae65ecf365d0e9982d2b3d860235e773328a3b403"},
-]
-
-[package.dependencies]
-cloudpickle = ">=1.2.0"
-farama-notifications = ">=0.0.1"
-numpy = ">=1.21.0"
-typing-extensions = ">=4.3.0"
-
-[package.extras]
-all = ["ale-py (>=0.9)", "box2d-py (==2.3.5)", "cython (<3)", "flax (>=0.5.0)", "imageio (>=2.14.1)", "jax (>=0.4.0)", "jaxlib (>=0.4.0)", "matplotlib (>=3.0)", "moviepy (>=1.0.0)", "mujoco (>=2.1.5)", "mujoco-py (>=2.1,<2.2)", "opencv-python (>=3.0)", "pygame (>=2.1.3)", "swig (==4.*)", "torch (>=1.0.0)"]
-atari = ["ale-py (>=0.9)"]
-box2d = ["box2d-py (==2.3.5)", "pygame (>=2.1.3)", "swig (==4.*)"]
-classic-control = ["pygame (>=2.1.3)", "pygame (>=2.1.3)"]
-jax = ["flax (>=0.5.0)", "jax (>=0.4.0)", "jaxlib (>=0.4.0)"]
-mujoco = ["imageio (>=2.14.1)", "mujoco (>=2.1.5)"]
-mujoco-py = ["cython (<3)", "cython (<3)", "mujoco-py (>=2.1,<2.2)", "mujoco-py (>=2.1,<2.2)"]
-other = ["matplotlib (>=3.0)", "moviepy (>=1.0.0)", "opencv-python (>=3.0)"]
-testing = ["dill (>=0.3.7)", "pytest (==7.1.3)", "scipy (>=1.7.3)"]
-torch = ["torch (>=1.0.0)"]
-toy-text = ["pygame (>=2.1.3)", "pygame (>=2.1.3)"]
-
-[[package]]
 name = "h11"
 version = "0.14.0"
 description = "A pure-Python, bring-your-own-I/O implementation of HTTP/1.1"
@@ -2058,55 +2006,6 @@ files = [
 
 [package.extras]
 all = ["flake8 (>=7.1.1)", "mypy (>=1.11.2)", "pytest (>=8.3.2)", "ruff (>=0.6.2)"]
-
-[[package]]
-name = "imageio"
-version = "2.37.0"
-description = "Library for reading and writing a wide range of image, video, scientific, and volumetric data formats."
-optional = false
-python-versions = ">=3.9"
-files = [
-    {file = "imageio-2.37.0-py3-none-any.whl", hash = "sha256:11efa15b87bc7871b61590326b2d635439acc321cf7f8ce996f812543ce10eed"},
-    {file = "imageio-2.37.0.tar.gz", hash = "sha256:71b57b3669666272c818497aebba2b4c5f20d5b37c81720e5e1a56d59c492996"},
-]
-
-[package.dependencies]
-numpy = "*"
-pillow = ">=8.3.2"
-
-[package.extras]
-all-plugins = ["astropy", "av", "imageio-ffmpeg", "numpy (>2)", "pillow-heif", "psutil", "rawpy", "tifffile"]
-all-plugins-pypy = ["av", "imageio-ffmpeg", "pillow-heif", "psutil", "tifffile"]
-build = ["wheel"]
-dev = ["black", "flake8", "fsspec[github]", "pytest", "pytest-cov"]
-docs = ["numpydoc", "pydata-sphinx-theme", "sphinx (<6)"]
-ffmpeg = ["imageio-ffmpeg", "psutil"]
-fits = ["astropy"]
-full = ["astropy", "av", "black", "flake8", "fsspec[github]", "gdal", "imageio-ffmpeg", "itk", "numpy (>2)", "numpydoc", "pillow-heif", "psutil", "pydata-sphinx-theme", "pytest", "pytest-cov", "rawpy", "sphinx (<6)", "tifffile", "wheel"]
-gdal = ["gdal"]
-itk = ["itk"]
-linting = ["black", "flake8"]
-pillow-heif = ["pillow-heif"]
-pyav = ["av"]
-rawpy = ["numpy (>2)", "rawpy"]
-test = ["fsspec[github]", "pytest", "pytest-cov"]
-tifffile = ["tifffile"]
-
-[[package]]
-name = "imageio-ffmpeg"
-version = "0.6.0"
-description = "FFMPEG wrapper for Python"
-optional = false
-python-versions = ">=3.9"
-files = [
-    {file = "imageio_ffmpeg-0.6.0-py3-none-macosx_10_9_intel.macosx_10_9_x86_64.whl", hash = "sha256:9d2baaf867088508d4a3458e61eeb30e945c4ad8016025545f66c4b5aaef0a61"},
-    {file = "imageio_ffmpeg-0.6.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:b1ae3173414b5fc5f538a726c4e48ea97edc0d2cdc11f103afee655c463fa742"},
-    {file = "imageio_ffmpeg-0.6.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:1d47bebd83d2c5fc770720d211855f208af8a596c82d17730aa51e815cdee6dc"},
-    {file = "imageio_ffmpeg-0.6.0-py3-none-manylinux2014_x86_64.whl", hash = "sha256:c7e46fcec401dd990405049d2e2f475e2b397779df2519b544b8aab515195282"},
-    {file = "imageio_ffmpeg-0.6.0-py3-none-win32.whl", hash = "sha256:196faa79366b4a82f95c0f4053191d2013f4714a715780f0ad2a68ff37483cc2"},
-    {file = "imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl", hash = "sha256:02fa47c83703c37df6bfe4896aab339013f62bf02c5ebf2dce6da56af04ffc0a"},
-    {file = "imageio_ffmpeg-0.6.0.tar.gz", hash = "sha256:e2556bed8e005564a9f925bb7afa4002d82770d6b08825078b7697ab88ba1755"},
-]
 
 [[package]]
 name = "imagesize"
@@ -2945,30 +2844,6 @@ files = [
     {file = "more-itertools-10.6.0.tar.gz", hash = "sha256:2cd7fad1009c31cc9fb6a035108509e6547547a7a738374f10bd49a09eb3ee3b"},
     {file = "more_itertools-10.6.0-py3-none-any.whl", hash = "sha256:6eb054cb4b6db1473f6e15fcc676a08e4732548acd47c708f0e179c2c7c01e89"},
 ]
-
-[[package]]
-name = "moviepy"
-version = "1.0.3"
-description = "Video editing with Python"
-optional = false
-python-versions = "*"
-files = [
-    {file = "moviepy-1.0.3.tar.gz", hash = "sha256:2884e35d1788077db3ff89e763c5ba7bfddbd7ae9108c9bc809e7ba58fa433f5"},
-]
-
-[package.dependencies]
-decorator = ">=4.0.2,<5.0"
-imageio = {version = ">=2.5,<3.0", markers = "python_version >= \"3.4\""}
-imageio_ffmpeg = {version = ">=0.2.0", markers = "python_version >= \"3.4\""}
-numpy = {version = ">=1.17.3", markers = "python_version > \"2.7\""}
-proglog = "<=1.0.0"
-requests = ">=2.8.1,<3.0"
-tqdm = ">=4.11.2,<5.0"
-
-[package.extras]
-doc = ["Sphinx (>=1.5.2,<2.0)", "numpydoc (>=0.6.0,<1.0)", "pygame (>=1.9.3,<2.0)", "sphinx_rtd_theme (>=0.1.10b0,<1.0)"]
-optional = ["matplotlib (>=2.0.0,<3.0)", "opencv-python (>=3.0,<4.0)", "scikit-image (>=0.13.0,<1.0)", "scikit-learn", "scipy (>=0.19.0,<1.5)", "youtube_dl"]
-test = ["coverage (<5.0)", "coveralls (>=1.1,<2.0)", "pytest (>=3.0.0,<4.0)", "pytest-cov (>=2.5.1,<3.0)", "requests (>=2.8.1,<3.0)"]
 
 [[package]]
 name = "msgpack"
@@ -3831,20 +3706,6 @@ files = [
 pexpect = ">=4.7.0,<5.0.0"
 poetry = ">=2.0,<3.0"
 shellingham = ">=1.5,<2.0"
-
-[[package]]
-name = "proglog"
-version = "0.1.10"
-description = "Log and progress bar manager for console, notebooks, web..."
-optional = false
-python-versions = "*"
-files = [
-    {file = "proglog-0.1.10-py3-none-any.whl", hash = "sha256:19d5da037e8c813da480b741e3fa71fb1ac0a5b02bf21c41577c7f327485ec50"},
-    {file = "proglog-0.1.10.tar.gz", hash = "sha256:658c28c9c82e4caeb2f25f488fff9ceace22f8d69b15d0c1c86d64275e4ddab4"},
-]
-
-[package.dependencies]
-tqdm = "*"
 
 [[package]]
 name = "prompt-toolkit"
@@ -4941,20 +4802,6 @@ files = [
     {file = "regex-2024.11.6-cp39-cp39-win_amd64.whl", hash = "sha256:b2837718570f95dd41675328e111345f9b7095d821bac435aac173ac80b19983"},
     {file = "regex-2024.11.6.tar.gz", hash = "sha256:7ab159b063c52a0333c884e4679f8d7a85112ee3078fe3d9004b2dd875585519"},
 ]
-
-[[package]]
-name = "renderlab"
-version = "0.1.20230421184216"
-description = "Render Gymnasium environments in Google Colaboratory"
-optional = false
-python-versions = "*"
-files = [
-    {file = "renderlab-0.1.20230421184216-py3-none-any.whl", hash = "sha256:8a5880b75dd026a534eee47c17b18cd82f0cab6c04355f705f93f7e124bd2028"},
-]
-
-[package.dependencies]
-gymnasium = "*"
-moviepy = "*"
 
 [[package]]
 name = "reportlab"

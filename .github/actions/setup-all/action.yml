@@ -68,7 +68,7 @@ runs:
         # python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
-        python -m pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
+        python -m pip install -r partcad/requirements.txt && pip install svglib rlPyCairo
         python -m pip install -r partcad/requirements-dev.in
         conda deactivate
 

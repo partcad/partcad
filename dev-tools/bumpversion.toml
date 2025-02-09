@@ -65,3 +65,13 @@ replace = "version=\"{new_version}\""
 filename = "partcad-ide-vscode/bundled/tool/lsp_server.py"
 search = "(>={current_version})"
 replace = "(>={new_version})"
+
+[[tool.bumpversion.files]]
+filename = ".github/workflows/test-dev.yml"
+search = "VERSION: {current_version}"
+replace = "VERSION: {new_version}"
+
+[[tool.bumpversion.files]]
+filename = ".devcontainer/Dockerfile"
+search = "IMAGE_VERSION={current_version}"
+replace = "IMAGE_VERSION={new_version}"

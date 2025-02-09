@@ -42,7 +42,7 @@ jobs:
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          bump-my-version bump --config-file .devcontainer/.bumpversion.toml --config-file .devcontainer/.bumpversion.toml major
+          bump-my-version bump --config-file dev-tools/bumpversion.toml major
           echo "SKIPBUMP=TRUE" >> "${GITHUB_ENV}"
         if: startsWith(github.event.head_commit.message, '[MAJOR]')
 
@@ -50,7 +50,7 @@ jobs:
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          bump-my-version bump --config-file .devcontainer/.bumpversion.toml minor
+          bump-my-version bump --config-file dev-tools/bumpversion.toml minor
           echo "SKIPBUMP=TRUE" >> "${GITHUB_ENV}"
         if: startsWith(github.event.head_commit.message, '[FEATURE]')
 
@@ -59,7 +59,7 @@ jobs:
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          bump-my-version bump --config-file .devcontainer/.bumpversion.toml patch
+          bump-my-version bump --config-file dev-tools/bumpversion.toml patch
         if: env.SKIPBUMP == 'FALSE'
 
       - name: Commit version change to repo

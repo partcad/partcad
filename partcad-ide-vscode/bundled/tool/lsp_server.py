@@ -1022,12 +1022,13 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
         LSP_SERVER.send_notification("?/partcad/error", "Failed to install PartCAD: %s" % e)
 
 
-# @LSP_SERVER.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
-# def did_open(params: lsp.DidOpenTextDocumentParams) -> None:
-#     """LSP handler for textDocument/didOpen request."""
-#     document = LSP_SERVER.workspace.get_document(params.text_document.uri)
-#     diagnostics: list[lsp.Diagnostic] = _linting_helper(document)
-#     LSP_SERVER.publish_diagnostics(document.uri, diagnostics)
+@LSP_SERVER.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
+def did_open(params: lsp.DidOpenTextDocumentParams) -> None:
+    """LSP handler for textDocument/didOpen request."""
+    document = LSP_SERVER.workspace.get_document(params.text_document.uri)
+    diagnostics: list[lsp.Diagnostic] = []
+    # diagnostics: list[lsp.Diagnostic] = [{"source": "partcad"}]
+    LSP_SERVER.publish_diagnostics(document.uri, diagnostics)
 
 
 @LSP_SERVER.feature(lsp.TEXT_DOCUMENT_DID_SAVE)
@@ -1259,6 +1260,7 @@ def initialize(params: lsp.InitializeParams) -> None:
     )
     partcad_log_thread.start()
     atexit.register(log_thread_kill)
+    return {}
 
 
 @LSP_SERVER.feature(lsp.EXIT)

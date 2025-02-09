@@ -1,0 +1,12 @@
+{
+  "name": "PartCAD Development Environment",
+  "build": {
+    "dockerfile": "./Dockerfile",
+    "cacheFrom": [
+      "ghcr.io/partcad/devcontainer-partcad:latest"
+    ],
+    "options": [
+      "--add-host=host.docker.internal:host-gateway"
+    ]
+  }
+}

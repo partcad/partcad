@@ -29,9 +29,7 @@ class PythonFile:
 
     def __init__(self, contents, root):
         self.contents = contents
-        self.basename = "".join(
-            choice("abcdefghijklmnopqrstuvwxyz") if i < 8 else ".py" for i in range(9)
-        )
+        self.basename = "".join(choice("abcdefghijklmnopqrstuvwxyz") if i < 8 else ".py" for i in range(9))
         self.fullpath = os.path.join(root, self.basename)
 
     def __enter__(self):
@@ -64,9 +62,20 @@ def get_initialization_options():
     properties = list(map(lambda g: g["properties"], property_groups))
     setting = {}
     for prop in properties:
-        name = prop[len(server_id) + 1 :]
-        value = properties[prop]["default"]
-        setting[name] = value
+        if isinstance(prop, dict):
+            propKeys = list(prop.keys())
+            for propKey in propKeys:
+                propItem = prop[propKey]
+                if propKey.startswith(server_id):
+                    name = propKey[len(server_id) + 1 :]
+                    value = propItem["default"]
+                    setting[name] = value
+                else:
+                    raise Exception("Invalid property name: " + prop)
+        else:
+            name = prop[len(server_id) + 1 :]
+            value = properties[prop]["default"]
+            setting[name] = value
 
     setting["workspace"] = as_uri(str(PROJECT_ROOT))
     setting["interpreter"] = []

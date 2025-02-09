@@ -25,6 +25,7 @@
   },
   "typescript.tsc.autoDetect": "off",
   "[typescript]": {
+    "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "eslint.workingDirectories": [
@@ -106,7 +107,6 @@
   "editor.accessibilitySupport": "off",
   "editor.autoIndent": "full",
   "editor.detectIndentation": false,
-  "editor.fontFamily": "'Hack Nerd Font Mono'",
   "editor.formatOnSave": true,
   "editor.formatOnType": true,
   "editor.insertSpaces": true,
@@ -141,7 +141,6 @@
     ".tox": true,
     ".venv": true,
     "docs/build": true,
-    "partcad*/requirements.txt": true,
     "partcad*/build": true,
     "partcad*/dist": true,
     ".coverage*": true,
@@ -209,7 +208,7 @@
   "python.analysis.extraPaths": [
     "./partcad/src",
     "./partcad-cli/src",
-    "./partcad-ide-vscode/bindled/libs"
+    "./partcad-ide-vscode/bundled/libs"
   ],
   "python.envFile": "${workspaceFolder}/.env",
   // https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage
@@ -259,7 +258,6 @@
   },
   // "security.workspace.trust.untrustedFiles": "open",
   "svg.preview.mode": "svg",
-  "terminal.integrated.fontFamily": "'Hack Nerd Font Mono', monospace",
   "terminal.integrated.scrollback": 100000,
   "testing.automaticallyOpenPeekView": "never",
   // "yaml.format.bracketSpacing": false,

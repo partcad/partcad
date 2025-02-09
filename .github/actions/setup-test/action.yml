@@ -52,14 +52,14 @@ runs:
     - name: Install OpenSCAD (Windows)
       if: runner.os == 'Windows'
       shell: powershell
-      run: .github/scripts/openscad.ps1
+      run: .github/actions/setup-test/openscad.ps1
 
     #################################################  REGISTRY  ####################################################
 
     - name: Fix Windows registry
       if: runner.os == 'Windows'
       shell: powershell
-      run: .github/scripts/registry.ps1
+      run: .github/actions/setup-test/registry.ps1
 
     #################################################  GIT SETUP  ###################################################
 

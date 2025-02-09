@@ -10,6 +10,5 @@
 
 # Packages needed by the testing framework.
 pytest
-hamcrest
 PyHamcrest
 python-jsonrpc-server

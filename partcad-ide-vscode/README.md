@@ -1,14 +1,12 @@
 # PartCAD
 
-PartCAD is the first package manager for CAD models
-and a framework for managing assemblies.
-It aims to complement Git with everything necessary to substitute
-commercial Product Lifecycle Management (PLM) tools.
+[PartCAD](https://github.com/partcad/partcad) is the standard for documenting manufacturable physical products. It comes with a set of tools to maintain product information and to facilitate efficient and effective workflows at all product lifecycle phases.
 
-PartCAD maintains information about mechanical parts and
-how they come together to form larger assemblies.
-The same parts are reused in multiple assemblies and multiple projects.
-And all of that is supercharged by the ultimate versioning and collaboration features of Git.
+PartCAD is more than just a traditional CAD tool for drawing. In fact, it’s not for drawing at all. The letters “CAD” in PartCAD stand for “computer-aided design” in a more generic sense, where “design” stands for the process of getting from an idea to a clear and deterministic specification of a manufacturable physical product using a computer (including the use of AI models). While PartCAD started as the first package manager for hardware, it is now the next-generation CAD that can turn a single visionary individual into a one person corporation, or make one future Product Manager as productive (and much faster!) as 10 corporate engineering departments of the past.
+
+PartCAD is constantly evolving, with new features and integrations being added all the time. [Contact us](mailto:support@partcad.org) to discuss how [PartCAD](https://partcad.org/) can revolutionize your product development process.
+
+## PartCAD VSCode Extension
 
 This extension helps create PartCAD packages and explore packages that are already published.
 To learn more about PartCAD, see [the documentation](https://partcad.readthedocs.io/) or [the project repo](https://github.com/openvmp/partcad).
@@ -65,24 +63,24 @@ saving the file makes it displayed in the OCP CAD Viewer view.
 ## Inspecting published PartCAD packages
 
 To see a good example of a package with parts, it is recommended to browse
-``pub`` -> ``robotics`` -> ``parts`` -> ``gobilda``.
+`pub` -> `robotics` -> `parts` -> `gobilda`.
 
 To see a basic example of a package with assemblies, it is recommended to browse
-``pub`` -> ``furniture`` -> ``workspace`` -> ``basic``.
+`pub` -> `furniture` -> `workspace` -> `basic`.
 Please, note, that there are customizable parameters that can be tweaked in the PartCAD Inspector view
 (the bottom left view).
 
 To see an example of a package with more complex assemblies, it is recommended to browse
-``pub`` -> ``robotics`` -> ``multimodal`` -> ``openvmp`` -> ``robots`` -> ``don1``.
+`pub` -> `robotics` -> `multimodal` -> `openvmp` -> `robots` -> `don1`.
 Please, note, that it takes A LOT OF resources to render the full `robot` assembly.
-It's easier to test some parts of the robot like ``link-lower-arm`` or ``link-base``.
+It's easier to test some parts of the robot like `link-lower-arm` or `link-base`.
 
 ## Implementation notes
 
-### Failed to load PartCAD: _nlopt
+### Failed to load PartCAD: \_nlopt
 
 If you see the above error message then you are probably using Windows and not using Conda.
-Please, switch to a Python environment created with Conda and Python >=3.9 and <=3.11.
+Please, switch to a Python environment created with Conda and Python >=3.10 and <=3.11.
 
 ## More documentation
 
