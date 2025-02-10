@@ -16,6 +16,7 @@
         "semi": "off"
     },
     "ignorePatterns": [
+        "node_modules",
         "out",
         "dist",
         "**/*.d.ts"

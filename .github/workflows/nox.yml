@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+
       - working-directory: partcad-ide-vscode
         run: python -m pip install nox
       - working-directory: partcad-ide-vscode

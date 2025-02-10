@@ -8,6 +8,7 @@
         "strict": true,
         "noImplicitReturns": true,
         "noFallthroughCasesInSwitch": true,
-        "noUnusedParameters": true
-    }
+        "noUnusedParameters": true,
+    },
+    "exclude": ["node_modules", "out", "dist", "**/*.d.ts"]
 }

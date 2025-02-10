@@ -73,6 +73,7 @@ RUN \
 #   && sudo apt-get install -y nodejs
 
 # TODO(clairbee): fix the scripts that led to the wrong permissions instead of chmod
+# hadolint ignore=DL3004
 RUN \
   --mount=type=bind,source=./docker-build-bootstrap.sh,target=/tmp/docker-build-bootstrap.sh \
   --mount=type=bind,source=./docker-build-xvfb.sh,target=/tmp/docker-build-xvfb.sh \
@@ -80,6 +81,6 @@ RUN \
   /tmp/docker-build-bootstrap.sh \
   && /tmp/docker-build-xvfb.sh \
   && /tmp/docker-build-dbus.sh \
-  && sudo chown -R $(whoami):$(whoami) \
-      /home/$(whoami)/.cache \
-      /home/$(whoami)/.local/share
+  && sudo chown -R "$(whoami):$(whoami)" \
+      "/home/$(whoami)/.cache" \
+      "/home/$(whoami)/.local/share"

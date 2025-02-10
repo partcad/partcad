@@ -1,6 +1,0 @@
-name: "Setup all"
-description: "Prepare the runner no matter what the job is"
-
-runs:
-  using: "composite"
-  steps:
