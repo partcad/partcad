@@ -160,7 +160,7 @@ jobs:
 
       - name: Prepare the container config
         run: |
-          sed s/"${{ env.IMAGE_TAG}}"/"${{ env.ESCAPED_PUBLISH_IMAGE_TAG }"'/g' < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
+          sed s/"${{ env.IMAGE_TAG }}"/"${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}"'/g' < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
