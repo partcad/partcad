@@ -63,7 +63,12 @@ jobs:
           # TODO(clairbee): detect major and minor version updates
           IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          if [ "${{ steps.extract_branch.outputs.branch }}" == "devel" ]; then
+            export PUBLISH_IMAGE_TAG=$IMAGE_TAG
+          else
+            export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ steps.extract_branch.outputs.branch }}"
+          fi
+          echo "IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
 
           # Remember to build the container
           echo "BUILD_DEVCONTAINER=true" >> $GITHUB_ENV
@@ -109,16 +114,15 @@ jobs:
         if: env.BUILD_DEVCONTAINER == 'true'
         with:
           imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
-          imageTag: ${{ env.IMAGE_TAG }}
+          imageTag: ${{ steps.tag.outputs.IMAGE_TAG }}
           configFile: .devcontainer/devcontainer-build.json
-          # push: always
-          push: never
+          push: always
 
   poetry-install:
     name: "Run: poetry install"
     needs: devcontainer
     env:
-      IMAGE_TAG: ${{ needs.devcontainer.output.IMAGE_TAG }}
+      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -129,7 +133,7 @@ jobs:
         run: |
           echo "env.IMAGE_TAG=${{ env.IMAGE_TAG }}"
           echo "needs.devcontainer.env.IMAGE_TAG=${{ needs.devcontainer.env.IMAGE_TAG }}"
-          echo "needs.devcontainer.output.IMAGE_TAG=${{ needs.devcontainer.output.IMAGE_TAG }}"
+          echo "needs.devcontainer.outputs.IMAGE_TAG=${{ needs.devcontainer.outputs.IMAGE_TAG }}"
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
