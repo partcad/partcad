@@ -29,6 +29,7 @@ env:
 jobs:
   devcontainer:
     name: "Build: Dev Container"
+    id: devcontainer
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -113,6 +114,8 @@ jobs:
   poetry-install:
     name: "Run: poetry install"
     needs: devcontainer
+    env:
+      IMAGE_TAG: ${{ needs.devcontainer.env.IMAGE_TAG }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
