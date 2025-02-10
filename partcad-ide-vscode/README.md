@@ -85,4 +85,4 @@ Please, switch to a Python environment created with Conda and Python >=3.10 and 
 ## More documentation
 
 To learn more about PartCAD and for a more detailed tutorial,
-see [the PartCAD documentation website](https://partcad.readthedocs.io/).com/openvmp/partcad).
+see [the PartCAD documentation website](https://partcad.readthedocs.io/).

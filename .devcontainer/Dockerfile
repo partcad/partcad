@@ -87,8 +87,9 @@ RUN \
   \
   && (curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | sudo -u vscode bash) \
   && export NVM_DIR="home/vscode/.nvm" \
-  && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" \
-  && [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion" \
+  && [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" \
+  && [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion" \
+  && source /home/vscode/.bashrc \
   && sudo -u vscode nvm install 22 \
   && sudo -u vscode nvm use 22 \
   && sudo -u vscode nvm alias default 22

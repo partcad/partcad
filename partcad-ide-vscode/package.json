@@ -114,16 +114,14 @@
         "order": 1,
         "properties": {
           "partcad.pythonSandbox": {
-            "default": "",
+            "default": "conda",
             "description": "What sandboxing method to use for invoking Python scripts?",
             "enum": [
-              "",
               "conda",
               "pypy",
               "none"
             ],
             "enumDescriptions": [
-              "Stick to the user defaults (initialized to 'conda').",
               "Use conda to create a sandboxed environment.",
               "Use pypy to create a sandboxed environment.",
               "Do not create a sandboxed environment. Use the current Python environment instead."
@@ -164,7 +162,6 @@
               "error"
             ],
             "enumDescriptions": [
-              "Stick to the user defaults (initialized to 'info').",
               "Show debug information (especially useful for debugging AI).",
               "Show regular informational messages.",
               "Show errors only."
@@ -186,7 +183,6 @@
               "false"
             ],
             "enumDescriptions": [
-              "Stick to the user defaults (initialized to 'false').",
               "Update all dependencies on each run.",
               "Update dependencies once a day."
             ],
