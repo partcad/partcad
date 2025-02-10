@@ -16,12 +16,13 @@ def step_impl(context, src, dest):
     if not hasattr(context, "test_dir"):
         raise RuntimeError("Test directory (context.test_dir) is not set yet.")
 
-    base_src_path = "/workspaces/partcad/"
+    base_src_path = getattr(context, "project_root", os.getcwd())
+
     src_path = os.path.join(base_src_path, src)
     dest_path = os.path.join(context.test_dir, dest)
 
     if not os.path.exists(src_path):
-        raise FileNotFoundError(f"Source file '{src_path}' does not exist.")
+        raise FileNotFoundError(f"Source file '{src_path}' does not exist. Check repository path: {base_src_path}")
 
     shutil.copy(src_path, dest_path)
     logging.debug(f"Copied {src_path} to {dest_path}")
