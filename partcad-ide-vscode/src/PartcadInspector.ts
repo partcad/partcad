@@ -8,6 +8,7 @@
 //
 
 import * as vscode from 'vscode';
+import * as utils from './utils';
 
 type ItemData = { pkg: string; name: string; itemPath: string | undefined };
 export class PartcadInspector implements vscode.WebviewViewProvider {
@@ -530,16 +531,12 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
 
     private _getHtmlForWebview(webview: vscode.Webview) {
         // Get the local path to main script run in the webview, then convert it to a uri we can use in the webview.
-        const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'resources', 'js', 'inspector.js'),
-        );
+        const scriptUri = webview.asWebviewUri(utils.joinPath(this._extensionUri, 'resources', 'js', 'inspector.js'));
 
         // Do the same for the stylesheet.
-        const styleMainUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'resources', 'css', 'main.css'),
-        );
+        const styleMainUri = webview.asWebviewUri(utils.joinPath(this._extensionUri, 'resources', 'css', 'main.css'));
         const styleVscodeUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'resources', 'css', 'vscode.css'),
+            utils.joinPath(this._extensionUri, 'resources', 'css', 'vscode.css'),
         );
 
         // Use a nonce to only allow a specific script to be run.

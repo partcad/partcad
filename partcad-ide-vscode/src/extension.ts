@@ -28,10 +28,11 @@ import { PartcadInspector } from './PartcadInspector';
 import { PartcadContext } from './PartcadContext';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
+import * as utils from './utils';
 
 let lsClient: LanguageClient | undefined;
 let partcadExplorer: PartcadExplorer | undefined;
-let partcadExplorerView: vscode.TreeView<PartcadItem.PartcadItem> | undefined;
+let partcadExplorerView: vscode.TreeView<PartcadItem.PartcadItem | void>;
 let partcadContext: PartcadContext | undefined;
 let partcadInspector: PartcadInspector | undefined;
 let partcadTerminal: vscode.Terminal | undefined;
@@ -119,7 +120,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         vscode.workspace.workspaceFolders &&
                         vscode.workspace.workspaceFolders.length === 1
                     ) {
-                        const path = vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, packagePath).fsPath;
+                        const path = utils.joinPath(vscode.workspace.workspaceFolders[0].uri, packagePath).fsPath;
                         await vscode.commands.executeCommand('partcad.loadPackage', path);
                     } else {
                         await vscode.commands.executeCommand('partcad.loadPackage');
@@ -334,7 +335,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
         registerCommand(`partcad.promptInitPackage`, async () => {
             if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length === 1) {
-                const path = vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, 'partcad.yaml').fsPath;
+                const path = utils.joinPath(vscode.workspace.workspaceFolders[0].uri, 'partcad.yaml').fsPath;
                 await vscode.commands.executeCommand('setContext', 'partcad.itemsReceived', false);
                 await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
                 await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
@@ -417,7 +418,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         if (prompt) {
                             // Create an empty file
                             const wsedit = new vscode.WorkspaceEdit();
-                            wsedit.createFile(uri, { ignoreIfExists: true, contents: Uint8Array.from([]) });
+                            wsedit.createFile(uri, { ignoreIfExists: true });
                             await vscode.workspace.applyEdit(wsedit);
 
                             await vscode.commands.executeCommand('partcad.addPartReal', {
@@ -511,7 +512,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                             var exampleContents = new TextEncoder().encode(exampleText);
 
                             const wsedit = new vscode.WorkspaceEdit();
-                            wsedit.createFile(uri, { ignoreIfExists: false, contents: exampleContents });
+                            wsedit.createFile(uri, { ignoreIfExists: false });
+                            wsedit.replace(uri, new vscode.Range(0, 0, 0, 0), exampleText);
                             await vscode.workspace.applyEdit(wsedit);
                         }
                     }

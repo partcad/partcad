@@ -207,13 +207,13 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         return Promise.resolve(this.expandItems(this.packages['/']));
     }
 
-    private _onDidChangeTreeData: vscode.EventEmitter<PartcadItem | undefined | null | void> = new vscode.EventEmitter<
-        PartcadItem | undefined | null | void
+    private _onDidChangeTreeData: vscode.EventEmitter<PartcadItem | undefined | null> = new vscode.EventEmitter<
+        PartcadItem | undefined | null
     >();
-    readonly onDidChangeTreeData: vscode.Event<PartcadItem | undefined | null | void> = this._onDidChangeTreeData.event;
+    readonly onDidChangeTreeData: vscode.Event<PartcadItem | undefined | null> = this._onDidChangeTreeData.event;
 
     refresh(): void {
-        this._onDidChangeTreeData.fire();
+        this._onDidChangeTreeData.fire(undefined);
     }
 
     public async exportItem(

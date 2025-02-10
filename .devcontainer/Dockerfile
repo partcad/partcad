@@ -30,10 +30,12 @@ RUN apt-get update \
     && apt-get install -y \
       # PartCAD VSCode Extension requirements
       nodejs npm \
-      # PartCAD VSCode Extensio: bundled Python wheels: pillow
+      # PartCAD VSCode Extension: bundled Python wheels: pillow
       libtiff5-dev libjpeg62-turbo-dev libopenjp2-7-dev zlib1g-dev \
       libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
       python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev \
+      # PartCAD VSCode Extension: testing
+      libatk1.0-0 libatk-bridge2.0-0 libgtk3.0-cil-dev \
       # PartCAD mandatory requirements
       pkg-config \
       libcairo2-dev \
@@ -84,7 +86,9 @@ RUN \
   && sudo -u vscode bash "Miniforge3-$(uname)-$(uname -m).sh" -b -p /home/vscode/miniforge3 \
   \
   && (curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | sudo -u vscode bash) \
-  && . /home/vscode/.bashrc \
+  && export NVM_DIR="home/vscode/.nvm" \
+  && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" \
+  && [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion" \
   && sudo -u vscode nvm install 22 \
   && sudo -u vscode nvm use 22 \
   && sudo -u vscode nvm alias default 22

@@ -236,7 +236,7 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/partcad-ide-vscode",
+        "--extensionDevelopmentPath=${workspaceFolder}/partcad-ide-vscode"
       ],
       "outFiles": [
         "partcad-ide-vscode/dist/**/*.js"
