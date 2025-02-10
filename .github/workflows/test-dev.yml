@@ -73,7 +73,7 @@ jobs:
 
           export ESCAPED_PUBLISH_IMAGE_TAG=$(echo $PUBLISH_IMAGE_TAG | sed 's/\//\\\//g')
 
-          sed s/"$IMAGE_TAG"/"$ESCAPED_PUBLISH_IMAGE_TAG"'/g' < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
+          # sed s/"$IMAGE_TAG"/"$ESCAPED_PUBLISH_IMAGE_TAG"'/g' < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
           echo "ESCAPED_PUBLISH_IMAGE_TAG=$ESCAPED_PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
 
           # Remember to build the container
@@ -157,6 +157,10 @@ jobs:
           key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
           restore-keys: |
             ${{ runner.os }}-poetry-
+
+      - name: Prepare the container config
+        run: |
+          sed s/"${{ env.IMAGE_TAG}}"/"${{ env.ESCAPED_PUBLISH_IMAGE_TAG }"'/g' < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
