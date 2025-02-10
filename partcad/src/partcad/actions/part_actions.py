@@ -28,7 +28,7 @@ def add_part_action(project: Project, kind: str, path: str, config: Optional[dic
 
     pc_logging.info(f"Adding part '{name}' ({kind}) from '{path}'")
 
-    with pc_logging.Process("Adding Part", name):
+    with pc_logging.Process("AddPart", project.name):
         result = project.add_part(kind, str(path), config)
         if result:
             pc_logging.info(f"Part '{name}' added successfully.")
