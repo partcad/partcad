@@ -22,6 +22,8 @@ COPY --from=ghcr.io/hadolint/hadolint:v2.12.1-beta-debian /bin/hadolint /usr/loc
 # hadolint ignore=DL3007
 COPY --from=ghcr.io/ankitpokhrel/jira-cli:latest /bin/jira /usr/local/bin/jira
 
+SHELL ["/bin/bash", "-c"]
+
 # TODO(clairbee): merge RUN commands even more? any way to reliably cache docker layes in CI?
 
 # Install app APT packages here
@@ -81,18 +83,13 @@ RUN apt-get update \
 # TODO: @alexanderilyin: error libmamba Could not open lockfile '/home/vscode/miniforge3/pkgs/cache/cache.lock' \
 # TODO: @alexanderilyin: Run `mamba init`
 # hadolint ignore=DL3004,DL4006,SC1091
+
 RUN \
   curl -L -O "https://github.com/conda-forge/miniforge/releases/download/24.11.3-0/Miniforge3-$(uname)-$(uname -m).sh" \
   && sudo -u vscode bash "Miniforge3-$(uname)-$(uname -m).sh" -b -p /home/vscode/miniforge3 \
   \
   && (curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | sudo -u vscode bash) \
-  && export NVM_DIR="home/vscode/.nvm" \
-  && [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh" \
-  && [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion" \
-  && source /home/vscode/.bashrc \
-  && sudo -u vscode nvm install 22 \
-  && sudo -u vscode nvm use 22 \
-  && sudo -u vscode nvm alias default 22
+  && sudo -u vscode bash -c "(export NVM_DIR=/home/vscode/.nvm && source /home/vscode/.nvm/nvm.sh && nvm install 22 && nvm use 22 && nvm alias default 22)"
 
 # TODO(clairbee): install Node in the following way?
 # RUN \
@@ -105,7 +102,4 @@ RUN \
   --mount=type=bind,source=./docker-build-bootstrap.sh,target=/tmp/docker-build-bootstrap.sh \
   --mount=type=bind,source=./docker-build-dbus.sh,target=/tmp/docker-build-dbus.sh \
   /tmp/docker-build-bootstrap.sh \
-  && /tmp/docker-build-dbus.sh \
-  && chown -R "vscode:vscode" \
-      "/home/vscode/.cache" \
-      "/home/vscode/.local/share"
+  && /tmp/docker-build-dbus.sh
