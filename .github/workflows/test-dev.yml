@@ -161,7 +161,8 @@ jobs:
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          configFile: .devcontainer/devcontainer-test.json
           push: never
           runCmd: |
             start_time=$SECONDS
