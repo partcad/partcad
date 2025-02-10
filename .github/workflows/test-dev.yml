@@ -60,6 +60,7 @@ jobs:
           # TODO(clairbee): detect major and minor version updates
           IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
           # Remember to build the container
           echo "BUILD_DEVCONTAINER=true" >> $GITHUB_ENV
@@ -114,7 +115,7 @@ jobs:
     name: "Run: poetry install"
     needs: devcontainer
     env:
-      IMAGE_TAG: ${{ needs.devcontainer.env.IMAGE_TAG }}
+      IMAGE_TAG: ${{ needs.devcontainer.output.IMAGE_TAG }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
