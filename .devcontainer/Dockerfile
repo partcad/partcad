@@ -83,7 +83,8 @@ RUN \
   curl -L -O "https://github.com/conda-forge/miniforge/releases/download/24.11.3-0/Miniforge3-$(uname)-$(uname -m).sh" \
   && sudo -u vscode bash "Miniforge3-$(uname)-$(uname -m).sh" -b -p /home/vscode/miniforge3 \
   \
-  && (curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash) \
+  && (curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | sudo -u vscode bash) \
+  && . /home/vscode/.bashrc \
   && sudo -u vscode nvm install 22 \
   && sudo -u vscode nvm use 22 \
   && sudo -u vscode nvm alias default 22

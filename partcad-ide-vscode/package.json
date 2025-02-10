@@ -82,7 +82,7 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "format-check": "prettier --check 'src/**/*.ts' 'build/**/*.yml' '.github/**/*.yml'",
-    "test": "node ./out/test/runTest.js",
+    "test": "node ./out/test/suite/extension.test.js",
     "vsce-package": "vsce package -o partcad.vsix"
   },
   "contributes": {
