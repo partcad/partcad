@@ -84,7 +84,7 @@ jobs:
         shell: bash -l {0}
         run: |
           ls -lR examples/feature_convert/stl || true
-          ls -lR /workspaces/partcad/examples/feature_convert/stl || true
+          ls -LR $(pwd)/examples/feature_convert/stl || true
 
       - name: Test with behave
         shell: bash -l {0}
