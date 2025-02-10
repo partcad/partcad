@@ -10,8 +10,8 @@ runs:
       if: ${{ startsWith(matrix.os, 'ubuntu') }}
       shell: bash
       run: |
-        sudo apt-get update || exit 1
-        sudo apt-get install -y libcairo2-dev pkg-config python3-dev || exit 1
+        sudo apt-get -q update || exit 1
+        sudo apt-get -q install -y libcairo2-dev pkg-config python3-dev || exit 1
 
     ###################################################  PYTHON  ###################################################
 
@@ -28,8 +28,7 @@ runs:
 
     - uses: conda-incubator/setup-miniconda@v3
       with:
-        # miniforge-version: 24.11.2-1
-        miniconda-version: latest
+        miniforge-version: 24.11.3-0
         channels: conda-forge,defaults
         python-version: ${{ matrix.python-version }}
         # activate-environment: env

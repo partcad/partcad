@@ -9,6 +9,6 @@
         "noImplicitReturns": true,
         "noFallthroughCasesInSwitch": true,
         "noUnusedParameters": true,
+        "skipLibCheck": true,
     },
-    "exclude": ["node_modules", "out", "dist", "**/*.d.ts"]
 }

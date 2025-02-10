@@ -80,13 +80,13 @@ RUN apt-get update \
 # TODO: @alexanderilyin: Run `mamba init`
 # hadolint ignore=DL3004,DL4006,SC1091
 RUN \
-  curl -L -O "https://github.com/conda-forge/miniforge/releases/24.11.3-0/download/Miniforge3-$(uname)-$(uname -m).sh" \
+  curl -L -O "https://github.com/conda-forge/miniforge/releases/download/24.11.3-0/Miniforge3-$(uname)-$(uname -m).sh" \
   && sudo -u vscode bash "Miniforge3-$(uname)-$(uname -m).sh" -b -p /home/vscode/miniforge3 \
   \
   && (curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash) \
-  && nvm install 22 \
-  && nvm use 22 \
-  && nvm alias default 22
+  && sudo -u vscode nvm install 22 \
+  && sudo -u vscode nvm use 22 \
+  && sudo -u vscode nvm alias default 22
 
 # TODO(clairbee): install Node in the following way?
 # RUN \
@@ -100,6 +100,6 @@ RUN \
   --mount=type=bind,source=./docker-build-dbus.sh,target=/tmp/docker-build-dbus.sh \
   /tmp/docker-build-bootstrap.sh \
   && /tmp/docker-build-dbus.sh \
-  && chown -R "$(whoami):$(whoami)" \
-      "/home/$(whoami)/.cache" \
-      "/home/$(whoami)/.local/share"
+  && chown -R "vscode:vscode" \
+      "/home/vscode/.cache" \
+      "/home/vscode/.local/share"
