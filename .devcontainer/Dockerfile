@@ -26,23 +26,23 @@ COPY --from=ghcr.io/ankitpokhrel/jira-cli:latest /bin/jira /usr/local/bin/jira
 
 # Install app APT packages here
 # hadolint ignore=DL3004
-RUN sudo apt-get update \
-    && sudo apt-get install -y \
-      echo "PartCAD VSCode Extension requirements" \
+RUN apt-get update \
+    && apt-get install -y \
+      # PartCAD VSCode Extension requirements
       nodejs npm \
-      echo "PartCAD VSCode Extensio: bundled Python wheels: pillow" \
+      # PartCAD VSCode Extensio: bundled Python wheels: pillow
       libtiff5-dev libjpeg62-turbo-dev libopenjp2-7-dev zlib1g-dev \
       libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
       python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev \
-      echo "PartCAD mandatory requirements" \
+      # PartCAD mandatory requirements
       pkg-config \
       libcairo2-dev \
       python3-dev \
-      echo "PartCAD optional requirements" \
+      # PartCAD optional requirements
       openscad \
       pypy3 \
       pypy3-dev \
-      echo "Development tools" \
+      # Development tools
       file xxd \
       bash-completion \
       cmake \
@@ -51,7 +51,28 @@ RUN sudo apt-get update \
       libxext6 \
       shellcheck \
       time \
-    && sudo rm -rf /var/lib/apt/lists/*
+      # xvfb requirements
+      libnss3 \
+      libatk1.0-0 \
+      libatk-bridge2.0-0 \
+      libcups2 \
+      libdrm2 \
+      libgtk-3-0 \
+      libgbm1 \
+      libasound2 \
+      # xvfb requirements
+      xvfb \
+      # xvfb related, but possible excessive
+      libxext6 \
+      libx11-xcb1 \
+      libxcb-icccm4 \
+      libxcb-image0 \
+      libxcb-keysyms1 \
+      libxcb-randr0 \
+      libxcb-render-util0 \
+      libxcb-xinerama0 \
+      libxcb-xkb1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # TODO(clairbee): install Miniforge securely
 # TODO(clairbee): install nvm securely
@@ -69,18 +90,16 @@ RUN \
 
 # TODO(clairbee): install Node in the following way?
 # RUN \
-#   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - \
-#   && sudo apt-get install -y nodejs
+#   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+#   && apt-get install -y nodejs
 
 # TODO(clairbee): fix the scripts that led to the wrong permissions instead of chmod
 # hadolint ignore=DL3004
 RUN \
   --mount=type=bind,source=./docker-build-bootstrap.sh,target=/tmp/docker-build-bootstrap.sh \
-  --mount=type=bind,source=./docker-build-xvfb.sh,target=/tmp/docker-build-xvfb.sh \
   --mount=type=bind,source=./docker-build-dbus.sh,target=/tmp/docker-build-dbus.sh \
   /tmp/docker-build-bootstrap.sh \
-  && /tmp/docker-build-xvfb.sh \
   && /tmp/docker-build-dbus.sh \
-  && sudo chown -R "$(whoami):$(whoami)" \
+  && chown -R "$(whoami):$(whoami)" \
       "/home/$(whoami)/.cache" \
       "/home/$(whoami)/.local/share"

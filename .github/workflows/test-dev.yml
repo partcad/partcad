@@ -58,7 +58,7 @@ jobs:
         run: |
           # The version tag is about to get bumped. Let's predict the next version.
           # TODO(clairbee): detect major and minor version updates
-          IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1 "." $2 "." ($3 + 1)}')
+          IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
           echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
 
           # Remember to build the container
@@ -80,7 +80,7 @@ jobs:
           echo "BUILD_DEVCONTAINER=true" >> "$GITHUB_ENV"
 
           # Make sure the 'devcontainer.json' is up-to-date to predict the next version
-          NEXT_IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F. '{print $1"."$2"."$3+1}')
+          NEXT_IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F. '{print $1"."$2"."($3+1)}')
           sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
             grep "\\S" | \
             yq .build.cacheFrom[0] | \
@@ -90,7 +90,7 @@ jobs:
         if: steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch == 'main'
         run: |
           # Just use the referenced container
-          IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json |  grep "\\S" | yq .build.cacheFrom[0] | awk -F: '{print $2})"
+          IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | yq .build.cacheFrom[0] | awk -F: '{print $2}')"
           echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
 
       - name: Login to GitHub Container Registry
