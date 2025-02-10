@@ -8,10 +8,10 @@ on:
     # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
     - cron: "0 18 * * *" # Run daily at PST morning
   merge_group:
-  push:
-    branches: ["main", "devel"]
-  pull_request:
-    branches: ["main", "devel"]
+  # push:
+  #   branches: ["main", "devel"]
+  # pull_request:
+  #   branches: ["main", "devel"]
 
 permissions:
   contents: read

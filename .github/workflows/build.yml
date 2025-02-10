@@ -6,10 +6,10 @@ on:
   # schedule:
   #   - cron: "0 0 * * *" # Run daily at midnight
   merge_group:
-  push:
-    branches: ["main", "devel"]
-  pull_request:
-    branches: ["main", "devel"]
+  # push:
+  #   branches: ["main", "devel"]
+  # pull_request:
+  #   branches: ["main", "devel"]
 
 permissions:
   contents: write
