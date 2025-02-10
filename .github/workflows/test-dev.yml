@@ -67,7 +67,7 @@ jobs:
           # Make sure the 'devcontainer.json' is up-to-date
           sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
             grep "\\S" | \
-            yq .build.cacheFrom[0] | \
+            yq .image | \
             grep -q $IMAGE_TAG # Error out if the target devcontainer version is not referenced
 
       - name: Not on 'devel' and the devcontainer needs to be rebuilt
@@ -83,7 +83,7 @@ jobs:
           NEXT_IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F. '{print $1"."$2"."($3+1)}')
           sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
             grep "\\S" | \
-            yq .build.cacheFrom[0] | \
+            yq .image | \
             grep -q $NEXT_IMAGE_TAG # Error out if the predicted devcontainer version is not referenced
 
       - name: The devcontainer does not need to be rebuilt
