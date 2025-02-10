@@ -38,6 +38,7 @@ jobs:
       packages: write
     outputs:
       IMAGE_TAG: ${{ steps.tag.outputs.IMAGE_TAG }}
+      ESCAPED_PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.ESCAPED_PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -70,6 +71,11 @@ jobs:
           fi
           echo "IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
 
+          export ESCAPED_PUBLISH_IMAGE_TAG=$(echo $PUBLISH_IMAGE_TAG | sed 's/\//\\\//g')
+
+          sed s/"$IMAGE_TAG"/"$ESCAPED_PUBLISH_IMAGE_TAG"'/g' < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
+          echo "ESCAPED_PUBLISH_IMAGE_TAG=$ESCAPED_PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
+
           # Remember to build the container
           echo "BUILD_DEVCONTAINER=true" >> $GITHUB_ENV
 
@@ -78,6 +84,11 @@ jobs:
             grep "\\S" | \
             yq .image | \
             grep -q $IMAGE_TAG # Error out if the target devcontainer version is not referenced
+
+           # What are the variables above?
+           # IMAGE_TAG: the version of the container in 'devcontainer.json' (the next patch version)
+           # PUBLISHED_IMAGE_TAG: the name of an ephemeral container version for this branch only
+           # ESCAPED_PUBLISH_IMAGE_TAG: the name of the ephemeral container version with slashes escaped
 
       # - name: Not on 'devel' and the devcontainer needs to be rebuilt
       #   if: steps.changes.outputs.devcontainer == 'true' && steps.extract_branch.outputs.branch != 'devel' && steps.extract_branch.outputs.branch != 'main'
@@ -123,17 +134,12 @@ jobs:
     needs: devcontainer
     env:
       IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
+      ESCAPED_PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.ESCAPED_PUBLISH_IMAGE_TAG }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
-
-      - name: test
-        run: |
-          echo "env.IMAGE_TAG=${{ env.IMAGE_TAG }}"
-          echo "needs.devcontainer.env.IMAGE_TAG=${{ needs.devcontainer.env.IMAGE_TAG }}"
-          echo "needs.devcontainer.outputs.IMAGE_TAG=${{ needs.devcontainer.outputs.IMAGE_TAG }}"
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -155,7 +161,7 @@ jobs:
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}"
           push: never
           runCmd: |
             start_time=$SECONDS
