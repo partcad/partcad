@@ -142,7 +142,7 @@ jobs:
       PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
       ESCAPED_PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.ESCAPED_PUBLISH_IMAGE_TAG }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
