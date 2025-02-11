@@ -30,6 +30,8 @@ SHELL ["/bin/bash", "-c"]
 # hadolint ignore=DL3004
 RUN apt-get update \
     && apt-get install -y \
+      # Python 3.10 requirements
+      libgdbm-compat-dev \
       # PartCAD VSCode Extension requirements
       nodejs npm \
       # PartCAD VSCode Extension: bundled Python wheels: pillow
@@ -41,8 +43,6 @@ RUN apt-get update \
       # PartCAD mandatory requirements
       pkg-config \
       libcairo2-dev \
-      libgdbm-compat-dev \
-      python3 \
       python3-dev \
       # PartCAD optional requirements
       openscad \

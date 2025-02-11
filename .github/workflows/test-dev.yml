@@ -167,13 +167,13 @@ jobs:
       - name: Prepare the container config
         run: |
           echo "Replacing devcontainer:${{ env.IMAGE_TAG }} with devcontainer:${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
-          sed "s/devcontainer:${{ env.IMAGE_TAG }}/devcontainer:${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}/g" < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
+          sed "s/devcontainer:${{ env.IMAGE_TAG }}/devcontainer:${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}/g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
-          configFile: .devcontainer/devcontainer-test.json
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             start_time=$SECONDS
