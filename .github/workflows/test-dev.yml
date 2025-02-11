@@ -163,7 +163,7 @@ jobs:
       - name: Prepare the container config
         run: |
           echo "Replacing partcad:${{ env.IMAGE_TAG }} with partcad:${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
-          sed "s/partcad:${{ env.IMAGE_TAG }}/partcad:${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}/g" < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
+          sed "s/devcontainer:${{ env.IMAGE_TAG }}/devcontainer:${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}/g" < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
