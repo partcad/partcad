@@ -164,8 +164,8 @@ jobs:
       - name: Prepare the container config
         run: |
           echo "Replacing ${{ env.IMAGE_TAG }} with ${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/Dockerfile"
-          sed s/Dockerfile/Dockerfile-test/g' < .devcontainer/devcontainer-build.json > .devcontainer/devcontainer-test.json
-          sed s/"${{ env.IMAGE_TAG }}"/"${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}"'/g' < .devcontainer/Dockerfile > .devcontainer/Dockerfile-test
+          sed s/Dockerfile/Dockerfile-test/g < .devcontainer/devcontainer-build.json > .devcontainer/devcontainer-test.json
+          sed s/"${{ env.IMAGE_TAG }}"/"${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}"/g < .devcontainer/Dockerfile > .devcontainer/Dockerfile-test
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
