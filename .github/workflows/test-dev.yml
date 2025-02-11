@@ -75,7 +75,6 @@ jobs:
 
           export ESCAPED_PUBLISH_IMAGE_TAG=$(echo $PUBLISH_IMAGE_TAG | sed 's/\//\\\//g')
 
-          # sed s/"$IMAGE_TAG"/"$ESCAPED_PUBLISH_IMAGE_TAG"'/g' < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
           echo "ESCAPED_PUBLISH_IMAGE_TAG=$ESCAPED_PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
 
           # Remember to build the container
@@ -163,14 +162,13 @@ jobs:
 
       - name: Prepare the container config
         run: |
-          echo "Replacing ${{ env.IMAGE_TAG }} with ${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/Dockerfile"
-          sed s/Dockerfile/Dockerfile-test/g < .devcontainer/devcontainer-build.json > .devcontainer/devcontainer-test.json
-          sed s/"${{ env.IMAGE_TAG }}"/"${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}"/g < .devcontainer/Dockerfile > .devcontainer/Dockerfile-test
+          echo "Replacing partcad:${{ env.IMAGE_TAG }} with partcad:${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
+          sed "s/partcad:${{ env.IMAGE_TAG }}/partcad:${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}/g" < .devcontainer/devcontainer.json > .devcontainer/devcontainer-test.json
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
           configFile: .devcontainer/devcontainer-test.json
           push: never
           runCmd: |
