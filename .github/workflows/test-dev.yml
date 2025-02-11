@@ -39,7 +39,6 @@ jobs:
     outputs:
       IMAGE_TAG: ${{ steps.tag.outputs.IMAGE_TAG }}
       PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
-      ESCAPED_PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.ESCAPED_PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -73,10 +72,6 @@ jobs:
           echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
           echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
 
-          export ESCAPED_PUBLISH_IMAGE_TAG=$(echo $PUBLISH_IMAGE_TAG | sed 's/\//\\\//g')
-
-          echo "ESCAPED_PUBLISH_IMAGE_TAG=$ESCAPED_PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
-
           # Remember to build the container
           echo "BUILD_DEVCONTAINER=true" >> $GITHUB_ENV
 
@@ -89,7 +84,6 @@ jobs:
            # What are the variables above?
            # IMAGE_TAG: the version of the container in 'devcontainer.json' (the next patch version)
            # PUBLISHED_IMAGE_TAG: the name of an ephemeral container version for this branch only
-           # ESCAPED_PUBLISH_IMAGE_TAG: the name of the ephemeral container version with slashes escaped
 
       # - name: Not on 'devel' and the devcontainer needs to be rebuilt
       #   if: steps.changes.outputs.devcontainer == 'true' && steps.extract_branch.outputs.branch != 'devel' && steps.extract_branch.outputs.branch != 'main'
@@ -140,7 +134,6 @@ jobs:
     env:
       IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
       PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
-      ESCAPED_PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.ESCAPED_PUBLISH_IMAGE_TAG }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -167,7 +160,7 @@ jobs:
       - name: Prepare the container config
         run: |
           echo "Replacing devcontainer:${{ env.IMAGE_TAG }} with devcontainer:${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
-          sed "s/devcontainer:${{ env.IMAGE_TAG }}/devcontainer:${{ env.ESCAPED_PUBLISH_IMAGE_TAG }}/g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
+          sed "s|devcontainer:${{ env.IMAGE_TAG }}|devcontainer:${{ env.PUBLISH_IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
