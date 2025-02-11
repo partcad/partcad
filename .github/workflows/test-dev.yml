@@ -22,7 +22,7 @@ permissions:
 env:
   VERSION: 0.7.96
   CONTAINER_REGISTRY: ghcr.io
-  IMAGE_NAME: devcontainer-${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository }}/devcontainer-${{ github.repository }}
   TOTAL_TIMEOUT: 900
   INSTALL_TIMEOUT: 300
 
