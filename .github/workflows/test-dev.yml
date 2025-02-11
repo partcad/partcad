@@ -125,7 +125,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         if: env.BUILD_DEVCONTAINER == 'true'
         with:
-          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}
           imageTag: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
           configFile: .devcontainer/devcontainer-build.json
           push: always
