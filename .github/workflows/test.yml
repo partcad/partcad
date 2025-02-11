@@ -95,8 +95,8 @@ jobs:
             echo "Behave tests failed"
             exit 1
           fi
-          coverage combine || true
-          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml || true
+          coverage combine
+          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -189,10 +189,10 @@ jobs:
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
-          coverage combine || true
+          coverage combine
           # END ALL EXAMPLES
 
-          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml || true
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
@@ -236,9 +236,9 @@ jobs:
           # TODO(clairbee): fix the failing packages first
           # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
           # END PUBLIC REPO
-          coverage combine || true
+          coverage combine
 
-          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml || true
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
           conda deactivate
 
       - name: Upload test results & coverage reports to github and codecov
