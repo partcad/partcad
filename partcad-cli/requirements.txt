@@ -1,7 +1,7 @@
 click
 coloredlogs==15.0.1
 ocp_vscode
-partcad==0.7.96
+partcad==0.7.97
 renderlab
 rich-click==1.8.5
 rlPyCairo
