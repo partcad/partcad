@@ -25,15 +25,6 @@
 			"installDirectlyFromGitHubRelease": true,
 			"version": "2.63.2"
 		},
-		// "ghcr.io/devcontainers/features/python:1": {
-		// 	"installTools": true,
-		// 	"toolsToInstall": "pre-commit,poetry,actionlint-py",
-		// 	// "optimize": true,
-		// 	"version": "3.10.6"
-		// },
-		// "ghcr.io/devcontainers/features/conda:1": {
-		// 	"version": "24.5.0" // GH has 24.11.1
-		// },
 		"ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
 			"jqVersion": "1.7.1",
 			"yqVersion": "4.44.6",

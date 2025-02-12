@@ -37,8 +37,8 @@ jobs:
       contents: read
       packages: write
     outputs:
-      IMAGE_TAG: ${{ steps.tag.outputs.IMAGE_TAG }}
-      PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
+      IMAGE_TAG: "${{ steps.tag.outputs.IMAGE_TAG ? steps.tag.outputs.IMAGE_TAG : steps.tag2.outputs.IMAGE_TAG }}"
+      PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG:-${{ steps.tag2.outputs.PUBLISH_IMAGE_TAG}} }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -85,28 +85,14 @@ jobs:
            # IMAGE_TAG: the version of the container in 'devcontainer.json' (the next patch version)
            # PUBLISHED_IMAGE_TAG: the name of an ephemeral container version for this branch only
 
-      # - name: Not on 'devel' and the devcontainer needs to be rebuilt
-      #   if: steps.changes.outputs.devcontainer == 'true' && steps.extract_branch.outputs.branch != 'devel' && steps.extract_branch.outputs.branch != 'main'
-      #   run: |
-      #     IMAGE_TAG="${{ env.VERSION }}-${{ steps.extract_branch.outputs.branch }}"
-      #     echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-
-      #     # Remember to build the container
-      #     echo "BUILD_DEVCONTAINER=true" >> $GITHUB_ENV
-
-      #     # Make sure the 'devcontainer.json' is up-to-date to predict the next version
-      #     NEXT_IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F. '{print $1"."$2"."($3+1)}')
-      #     sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
-      #       grep "\\S" | \
-      #       yq .image | \
-      #       grep -q $NEXT_IMAGE_TAG # Error out if the predicted devcontainer version is not referenced
-
-      # - name: The devcontainer does not need to be rebuilt
-      #   if: steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch == 'main'
-      #   run: |
-      #     # Just use the referenced container
-      #     IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | yq .build.cacheFrom[0] | awk -F: '{print $2}')"
-      #     echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+      - name: The devcontainer does not need to be rebuilt
+        if: steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch == 'main'
+        id: tag2
+        run: |
+          # Just use the referenced container
+          IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | yq .build.cacheFrom[0] | awk -F: '{print $2}')"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -191,6 +177,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: poetry-install
+    env:
+      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
+      PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -216,7 +205,7 @@ jobs:
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
           push: never
           runCmd: |
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
@@ -264,6 +253,9 @@ jobs:
   #   needs: devcontainer
   #   runs-on: ubuntu-24.04
   #   timeout-minutes: 10
+  # env:
+  #   IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
+  #   PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
   #   steps:
   #     - name: Checkout (GitHub)
   #       uses: actions/checkout@v4
@@ -286,7 +278,7 @@ jobs:
   #     - name: Run pre-commit hooks
   #       uses: devcontainers/ci@v0.3
   #       with:
-  #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+  #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
   #         push: never
   #         # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
   #         # TODO: Run ggshield and/or other secrets scanning tools as separate job
@@ -303,6 +295,9 @@ jobs:
     timeout-minutes: 30
 
     needs: poetry-install
+    env:
+      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
+      PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -332,7 +327,7 @@ jobs:
       - name: Run Behave
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
           push: never
           env: |
             # TODO-25: Workaround for "Host key verification failed."
@@ -362,7 +357,7 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -397,6 +392,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     needs: poetry-install
+    env:
+      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
+      PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -424,7 +422,7 @@ jobs:
       - name: Run Nox
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
           push: never
           runCmd: |
             poetry --no-ansi --no-interaction run nox --noxfile dev-tools/noxfile.py --python ${{ matrix.python-version }}
@@ -458,6 +456,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs: poetry-install
+    env:
+      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
+      PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -483,7 +484,7 @@ jobs:
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
           push: never
           runCmd: |
             mkdir -pv pc-test-results
