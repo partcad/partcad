@@ -91,7 +91,6 @@ jobs:
 
           export PYTHONUTF8=1
           export PYTHONIOENCODING=utf-8
-          export PC_NO_ANSI=1
 
           if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
             echo "Behave tests failed"
