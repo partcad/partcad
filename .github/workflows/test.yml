@@ -75,17 +75,34 @@ jobs:
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
-      - name: Start SSH Agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+      - name: Start SSH Agent & Add Key
+        shell: bash -l {0}
+        run: |
+          mkdir -p ~/.ssh
+          
+          printf "%s" "${{ secrets.SSH_PRIVATE_KEY_RO }}" | base64 --decode > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
+
+          cat <<EOF > ~/.ssh/config
+          Host github.com
+            IdentityFile ~/.ssh/id_rsa
+            StrictHostKeyChecking no
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Debug SSH Connection
         shell: bash -l {0}
         run: |
-          eval $(ssh-agent -s)
-          ssh-add -l || echo "No SSH keys found"
           ssh -vT git@github.com || echo "SSH connection failed"
+
+      - name: Force SSH to use correct key
+        shell: bash -l {0}
+        run: |
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
+
 
       - name: Test with behave
         shell: bash -l {0}
