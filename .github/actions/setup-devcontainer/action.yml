@@ -18,7 +18,7 @@ outputs:
     value: ${{ steps.tag1.outputs.BUILD_DEVCONTAINER || 'false' }}
 
 runs:
-  using: "composite"
+  # using: "composite"
   steps:
     - name: Extract branch name
       id: extract_branch
@@ -79,7 +79,7 @@ runs:
       shell: bash
       run: |
         # Just use the referenced container
-        IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | jq -r .build.cacheFrom[0] | awk -F: '{print $2}')"
+        export IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | jq -r .build.cacheFrom[0] | awk -F: '{print $2}')"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
         echo "PUBLISH_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
