@@ -41,7 +41,7 @@
     //   "version": "1.6.1",
     //   "nodeGypDependencies": true
     // },
-    "ghcr.io/devcontainers-community/features/typescript": {
+    "ghcr.io/devcontainers-community/npm-features/typescript:1": {
       "version": "5.7.3"
     }
   },
