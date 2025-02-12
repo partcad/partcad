@@ -206,6 +206,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
@@ -229,7 +230,8 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -328,6 +330,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           env: |
             # TODO-25: Workaround for "Host key verification failed."
@@ -358,6 +361,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -423,6 +427,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             poetry --no-ansi --no-interaction run nox --noxfile dev-tools/noxfile.py --python ${{ matrix.python-version }}
@@ -431,7 +436,8 @@ jobs:
       #   if: always()
       #   uses: devcontainers/ci@v0.3
       #   with:
-      #     cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+      #     cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
+      #     configFile: .devcontainer/.devcontainer.json
       #     push: never
       #     runCmd: |
       #       if [ ! -d "allure-results" ]; then
@@ -485,6 +491,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             mkdir -pv pc-test-results
