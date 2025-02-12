@@ -11,7 +11,7 @@ runs:
   steps:
     - name: Extract branch name
       id: extract_branch
-      shell: bash
+      shell: bash -l {0}
       run: echo "BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_ENV
 
     - name: Check for changes that require the container to be rebuilt
@@ -25,6 +25,7 @@ runs:
     - name: On 'devel' and the devcontainer needs to be rebuilt
       id: tag
       if: steps.changes.outputs.devcontainer == 'true' && env.BRANCH == 'devel'
+      shell: bash -l {0}
       run: |
         # The version tag is about to get bumped. Let's predict the next version.
         # TODO(clairbee): detect major and minor version updates
@@ -49,6 +50,7 @@ runs:
     - name: The devcontainer does not need to be rebuilt
       if: steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch != 'devel'
       id: tag2
+      shell: bash -l {0}
       run: |
         # Just use the referenced container
         IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | yq .build.cacheFrom[0] | awk -F: '{print $2}')"
@@ -56,6 +58,7 @@ runs:
         echo "PUBLISH_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
     - name: Prepare the container config
+      shell: bash -l {0}
       run: |
         echo "Replacing devcontainer:${{ env.IMAGE_TAG }} with devcontainer:${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
         sed "s|devcontainer:${{ env.IMAGE_TAG }}|devcontainer:${{ env.PUBLISH_IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
