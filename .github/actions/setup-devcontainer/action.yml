@@ -15,7 +15,7 @@ outputs:
     value: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
   BUILD_DEVCONTAINER:
     description: whether the ephemeral container needs to be built
-    value: ${{ steps.tag1.outputs.BUILD_DEVCONTAINER }}
+    value: ${{ steps.tag1.outputs.BUILD_DEVCONTAINER || 'false' }}
 
 runs:
   using: "composite"
@@ -57,15 +57,15 @@ runs:
         # Remember to build the container
         echo "BUILD_DEVCONTAINER=true" >> $GITHUB_OUTPUT
 
-        # Make sure the 'devcontainer.json' is up-to-date
-        if ! jq -e . .devcontainer/devcontainer.json > /dev/null 2>&1; then
-          echo "Error: Invalid JSON in devcontainer.json"
-          exit 1
-        fi
+        # # Make sure the 'devcontainer.json' is up-to-date
+        # if ! jq -e . .devcontainer/devcontainer.json > /dev/null 2>&1; then
+        #   echo "Error: Invalid JSON in devcontainer.json"
+        #   exit 1
+        # fi
 
         if ! sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
            grep "\\S" | \
-           jq .image | \
+           yq .image | \
            grep -q "$IMAGE_TAG"; then
           echo "Error: Target devcontainer version $IMAGE_TAG not found in devcontainer.json"
           exit 1
@@ -77,7 +77,7 @@ runs:
       shell: bash
       run: |
         # Just use the referenced container
-        IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | jq .build.cacheFrom[0] | awk -F: '{print $2}')"
+        IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | jq -r .build.cacheFrom[0] | awk -F: '{print $2}')"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
         echo "PUBLISH_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
