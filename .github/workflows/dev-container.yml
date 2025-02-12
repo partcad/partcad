@@ -187,9 +187,7 @@ jobs:
     name: "Run: behave"
     runs-on: ubuntu-24.04
     
-    # Temporary, for test purposes (@sasuke13)
-    # timeout-minutes: 20
-    timeout-minutes: 60
+    timeout-minutes: 30
 
     needs: poetry-install
     steps:
