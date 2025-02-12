@@ -73,6 +73,7 @@ runs:
       id: tag2
       shell: bash -l {0}
       run: |
+        echo "changes ${{ steps.changes.outputs.devcontainer }}"
         # Just use the referenced container
         export IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | jq -r .build.cacheFrom[0] | awk -F: '{print $2}')"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
