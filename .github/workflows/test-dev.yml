@@ -121,6 +121,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: poetry-install
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: read
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -152,7 +156,6 @@ jobs:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
           push: never
-          shell: bash
           runCmd: |
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
@@ -243,6 +246,10 @@ jobs:
     timeout-minutes: 30
 
     needs: poetry-install
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: read
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -342,6 +349,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     needs: poetry-install
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: read
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
@@ -408,6 +419,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs: poetry-install
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: read
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
