@@ -37,7 +37,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      IMAGE_TAG: "${{ steps.tag.outputs.IMAGE_TAG :- steps.tag2.outputs.IMAGE_TAG }}"
+      IMAGE_TAG: "${{ steps.tag.outputs.IMAGE_TAG || steps.tag2.outputs.IMAGE_TAG }}"
       PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG:-${{ steps.tag2.outputs.PUBLISH_IMAGE_TAG}} }}
     steps:
       - name: Checkout (GitHub)
