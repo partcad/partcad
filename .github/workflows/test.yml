@@ -88,7 +88,8 @@ jobs:
       - name: Debug SSH Connection
         shell: bash -l {0}
         run: |
-          ssh -vT git@github.com || echo "SSH connection failed"
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          ssh -o StrictHostKeyChecking=no -o BatchMode=yes -vT git@github.com || echo "SSH connection failed"
 
       - name: Force SSH to use correct key
         shell: bash -l {0}
