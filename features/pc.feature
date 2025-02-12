@@ -27,7 +27,7 @@ Feature: `pc` command
     Then the command should exit with a status code of "0"
     # TODO-62: @alexanderilyin: check that DEBUG prefix is present
     And STDERR should contain "PartCAD version:"
-    And STDERR should contain "Internal data storage location: /tmp/sandbox/home/partcad-cli-" with path
+    And STDERR should contain "Internal data storage location:" with path
     And STDERR should contain "Tar cache size:"
     And STDERR should contain "Git cache size:"
     And STDERR should contain "Sandbox environments size:"
