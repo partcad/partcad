@@ -36,63 +36,10 @@ jobs:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
       packages: write
-    outputs:
-      IMAGE_TAG: "${{ steps.tag.outputs.IMAGE_TAG || steps.tag2.outputs.IMAGE_TAG }}"
-      PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG || steps.tag2.outputs.PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
-
-      - name: Extract branch name
-        id: extract_branch
-        shell: bash
-        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> "$GITHUB_OUTPUT"
-
-      - name: Check for changes that require the container to be rebuilt
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            devcontainer:
-              - .devcontainer/*
-
-      - name: On 'devel' and the devcontainer needs to be rebuilt
-        id: tag
-        # if: steps.changes.outputs.devcontainer == 'true' && steps.extract_branch.outputs.branch == 'devel'
-        run: |
-          # The version tag is about to get bumped. Let's predict the next version.
-          # TODO(clairbee): detect major and minor version updates
-          IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-          if [ "${{ steps.extract_branch.outputs.branch }}" == "devel" ]; then
-            export PUBLISH_IMAGE_TAG=$IMAGE_TAG
-          else
-            export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ steps.extract_branch.outputs.branch }}"
-          fi
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
-          echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
-
-          # Remember to build the container
-          echo "BUILD_DEVCONTAINER=true" >> $GITHUB_ENV
-
-          # Make sure the 'devcontainer.json' is up-to-date
-          sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
-            grep "\\S" | \
-            yq .image | \
-            grep -q $IMAGE_TAG # Error out if the target devcontainer version is not referenced
-
-           # What are the variables above?
-           # IMAGE_TAG: the version of the container in 'devcontainer.json' (the next patch version)
-           # PUBLISHED_IMAGE_TAG: the name of an ephemeral container version for this branch only
-
-      - name: The devcontainer does not need to be rebuilt
-        if: steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch == 'main'
-        id: tag2
-        run: |
-          # Just use the referenced container
-          IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | yq .build.cacheFrom[0] | awk -F: '{print $2}')"
-          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
-          echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
+      - uses: .github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -106,7 +53,7 @@ jobs:
         if: env.BUILD_DEVCONTAINER == 'true'
         with:
           imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
-          imageTag: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
+          imageTag: ${{ env.PUBLISH_IMAGE_TAG }}
           configFile: .devcontainer/devcontainer-build.json
           push: always
 
@@ -117,14 +64,12 @@ jobs:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
       packages: read
-    env:
-      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
-      PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+      - uses: .github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -142,11 +87,6 @@ jobs:
           key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
           restore-keys: |
             ${{ runner.os }}-poetry-
-
-      - name: Prepare the container config
-        run: |
-          echo "Replacing devcontainer:${{ env.IMAGE_TAG }} with devcontainer:${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
-          sed "s|devcontainer:${{ env.IMAGE_TAG }}|devcontainer:${{ env.PUBLISH_IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
@@ -177,12 +117,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: poetry-install
-    env:
-      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
-      PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+      - uses: .github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -255,12 +193,10 @@ jobs:
   #   needs: devcontainer
   #   runs-on: ubuntu-24.04
   #   timeout-minutes: 10
-  # env:
-  #   IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
-  #   PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
   #   steps:
   #     - name: Checkout (GitHub)
   #       uses: actions/checkout@v4
+  #     - uses: .github/actions/setup-devcontainer
 
   #     - name: Login to GitHub Container Registry
   #       uses: docker/login-action@v3
@@ -281,6 +217,7 @@ jobs:
   #       uses: devcontainers/ci@v0.3
   #       with:
   #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
+  #         configFile: .devcontainer/.devcontainer.json
   #         push: never
   #         # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
   #         # TODO: Run ggshield and/or other secrets scanning tools as separate job
@@ -297,12 +234,10 @@ jobs:
     timeout-minutes: 30
 
     needs: poetry-install
-    env:
-      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
-      PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+      - uses: .github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -396,12 +331,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     needs: poetry-install
-    env:
-      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
-      PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+      - uses: .github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -462,12 +395,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs: poetry-install
-    env:
-      IMAGE_TAG: ${{ needs.devcontainer.outputs.IMAGE_TAG }}
-      PUBLISH_IMAGE_TAG: ${{ needs.devcontainer.outputs.PUBLISH_IMAGE_TAG }}
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+      - uses: .github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
