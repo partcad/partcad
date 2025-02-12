@@ -6,12 +6,19 @@ description: "Get the temporary image name and prepare the config for it"
 # PUBLISHED_IMAGE_TAG: the name of the ephemeral container version for this branch only (if different from IMAGE_TAG)
 # BUILD_DEVCONTAINER: whether the ephemeral container needs to be built
 
+outputs:
+  IMAGE_TAG:
+    description: the version of the container in 'devcontainer.json' (the next patch version)
+    value: ${{ steps.tag.outputs.IMAGE_TAG }}
+  PUBLISH_IMAGE_TAG:
+    description: the name of the ephemeral container version for this branch only (if different from IMAGE_TAG)
+    value: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
+  BUILD_DEVCONTAINER:
+    description: whether the ephemeral container needs to be built
+    value: ${{ steps.tag1.outputs.BUILD_DEVCONTAINER }}
+
 runs:
   using: "composite"
-  outputs:
-    IMAGE_TAG: ${{ steps.tag.outputs.IMAGE_TAG }}
-    PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
-    BUILD_DEVCONTAINER: ${{ steps.tag1.outputs.BUILD_DEVCONTAINER }}
   steps:
     - name: Extract branch name
       id: extract_branch
