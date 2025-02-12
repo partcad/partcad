@@ -36,10 +36,12 @@ runs:
           export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
         fi
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
         echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_ENV
+        echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
 
         # Remember to build the container
-        echo "BUILD_DEVCONTAINER=true" >> $GITHUB_ENV
+        echo "BUILD_DEVCONTAINER=true" >> $GITHUB_OUTPUT
 
         # Make sure the 'devcontainer.json' is up-to-date
         sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
@@ -55,7 +57,9 @@ runs:
         # Just use the referenced container
         IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | yq .build.cacheFrom[0] | awk -F: '{print $2}')"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
         echo "PUBLISH_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "PUBLISH_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
 
     - name: Prepare the container config
       shell: bash -l {0}
