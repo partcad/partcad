@@ -1,0 +1,61 @@
+name: "Setup devcontainer"
+description: "Get the temporary image name and prepare the config for it"
+
+# What are the environment variables defined here?
+# IMAGE_TAG: the version of the container in 'devcontainer.json' (the next patch version)
+# PUBLISHED_IMAGE_TAG: the name of the ephemeral container version for this branch only (if different from IMAGE_TAG)
+# BUILD_DEVCONTAINER: whether the ephemeral container needs to be built
+
+runs:
+  using: "composite"
+  steps:
+    - name: Extract branch name
+      id: extract_branch
+      shell: bash
+      run: echo "BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_ENV
+
+    - name: Check for changes that require the container to be rebuilt
+      uses: dorny/paths-filter@v3
+      id: changes
+      with:
+        filters: |
+          devcontainer:
+            - .devcontainer/*
+
+    - name: On 'devel' and the devcontainer needs to be rebuilt
+      id: tag
+      if: steps.changes.outputs.devcontainer == 'true' && env.BRANCH == 'devel'
+      run: |
+        # The version tag is about to get bumped. Let's predict the next version.
+        # TODO(clairbee): detect major and minor version updates
+        IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
+        if [ "${{ env.BRANCH }}" == "devel" ]; then
+          export PUBLISH_IMAGE_TAG=$IMAGE_TAG
+        else
+          export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
+        fi
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_ENV
+
+        # Remember to build the container
+        echo "BUILD_DEVCONTAINER=true" >> $GITHUB_ENV
+
+        # Make sure the 'devcontainer.json' is up-to-date
+        sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
+          grep "\\S" | \
+          yq .image | \
+          grep -q $IMAGE_TAG # Error out if the target devcontainer version is not referenced
+
+    - name: The devcontainer does not need to be rebuilt
+      if: steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch != 'devel'
+      id: tag2
+      run: |
+        # Just use the referenced container
+        IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | yq .build.cacheFrom[0] | awk -F: '{print $2}')"
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "PUBLISH_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+    - name: Prepare the container config
+      run: |
+        echo "Replacing devcontainer:${{ env.IMAGE_TAG }} with devcontainer:${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
+        sed "s|devcontainer:${{ env.IMAGE_TAG }}|devcontainer:${{ env.PUBLISH_IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
