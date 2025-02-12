@@ -80,6 +80,13 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
 
+      - name: Debug SSH Connection
+        shell: bash -l {0}
+        run: |
+          eval $(ssh-agent -s)
+          ssh-add -l || echo "No SSH keys found"
+          ssh -vT git@github.com || echo "SSH connection failed"
+
       - name: Test with behave
         shell: bash -l {0}
         run: |
