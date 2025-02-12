@@ -68,6 +68,46 @@ Now let's add a declaration of this part to ``partcad.yaml``.
 
     pc add part scad test.scad
 
+Import an existing part
+-----------------------
+
+The `pc import part` command allows you to import an existing part into a PartCAD project.
+You can also specify a target format to convert the part upon import.
+
+Basic import:
+
+.. code-block:: shell
+
+    # Import a STEP file
+    pc import part step my_part.step
+
+Import and convert to STL:
+
+.. code-block:: shell
+
+    # Import a STEP file and convert it to STL format
+    pc import part step my_part.step -t stl
+
+Provide an optional description:
+
+.. code-block:: shell
+
+    pc import part stl my_model.stl --desc "3D model of a mechanical part"
+
+Example log output:
+
+.. code-block:: text
+
+    pc import part step my_part.step -t stl
+    INFO: Importing part: my_part.step (step)
+    INFO: Performing ad-hoc conversion: step → stl
+    INFO: Ad-hoc conversion successful: my_part.stl
+    INFO: Successfully imported part: my_part
+
+.. note::
+    - The imported part is added to the project directory.
+    - If a target format is specified, the part is converted automatically.
+
 
 Inspect the part
 ----------------
@@ -87,16 +127,19 @@ Now the part can be exported:
 
     pc export -t stl :test
 
+==================
 Convert a CAD File
-------------------
+==================
 
-The pc adhoc convert command allows you to quickly convert a CAD file from one format to another without requiring a full project setup or configuration.
+The `pc adhoc convert` command allows you to quickly convert a CAD file from one format to another without requiring a full project setup or configuration.
 
 Supported formats:
-- Input: STL, STEP, BREP, 3MF, SCAD, CadQuery, Build123d
-- Output: STL, STEP, BREP, 3MF, ThreeJS, OBJ, GLTF
+------------------
+- **Input:** STL, STEP, BREP, 3MF, SCAD, CadQuery, Build123d
+- **Output:** STL, STEP, BREP, 3MF, ThreeJS, OBJ, GLTF
 
 Examples:
+---------
 
 .. code-block:: shell
 
@@ -109,7 +152,69 @@ Examples:
     # Default output filename
     pc adhoc convert input.stl --output step  # Creates input.step
 
-Note: If the conversion fails, the command will display an error message and exit with a non-zero status code.
+.. note::
+    If the conversion fails, the command will display an error message and exit with a non-zero status code.
+
+===================================
+Convert a Part
+===================================
+
+The `pc convert` command allows you to convert parts, assemblies, or sketches to a different format.
+It supports optional output directory specification and a dry-run mode for simulation.
+
+Usage:
+---------
+
+To convert a part from STL to STEP format:
+
+.. code-block:: shell
+
+    # Convert the part "cube" to STEP format
+    pc convert cube -t step
+
+To specify an output directory for the converted files:
+
+.. code-block:: shell
+
+    # Convert the part "cube" to STEP format and save it in the specified directory
+    pc convert cube -t step -O ./output
+
+Simulate conversion without modifying files
+-------------------------------------------
+
+The `--dry-run` option allows you to simulate the conversion process without making any changes.
+This is useful for verifying which files would be affected before performing the actual conversion.
+
+.. code-block:: shell
+
+    # Simulate converting "cube" to STEP format without modifying anything
+    pc convert cube -t step --dry-run
+
+    # Example output:
+    # INFO: Starting conversion: 'cube' → 'step', dry_run=True
+    # INFO: Resolving package '', part 'cube'
+    # INFO: Using project '', located at '/workspaces/partcad/examples'
+    # INFO: Converting 'cube' (stl → step) → '/workspaces/partcad/examples/cube.step'
+    # INFO: [Dry Run] No changes made for 'cube'.
+
+This option ensures that no files are created or modified, and only logs the expected conversion actions.
+
+Supported formats:
+------------------
+- STEP
+- BREP
+- STL
+- 3MF
+- Three.js (JSON)
+- OBJ
+- glTF (JSON)
+
+.. note::
+    - The object must exist in the `partcad.yaml` file and be defined as a part.
+    - If the target format is not supported by the object, an error will be displayed, and the conversion will be aborted.
+    - The `--dry-run` option only simulates the conversion process without making actual changes.
+    - The converted file will be saved in the same directory as the original unless an output directory is specified.
+
 Reset partcad
 ---------------------
 

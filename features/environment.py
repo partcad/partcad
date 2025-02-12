@@ -1,3 +1,4 @@
+import os
 from allure_behave.hooks import allure_report
 
 
