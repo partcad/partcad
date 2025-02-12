@@ -9,7 +9,7 @@
     "SKIP": "behave,prepare-commit-msg,poetry-install,poetry-lock,poetry-export"
   },
   "postCreateCommand": {
-    "Start D-Bus": "sudo service dbus start & dbus-daemon --session --address=$DBUS_SESSION_BUS_ADDRESS --nofork --nopidfile --syslog-only && sleep 2",
+    "Start D-Bus": "sudo service dbus start && until systemctl is-active --quiet dbus; do sleep 1; done"
   },
   "postStartCommand": {
     "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
