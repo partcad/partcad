@@ -153,14 +153,15 @@ jobs:
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
-            poetry --no-ansi --no-interaction run pytest --verbose --color=no | ts -i %.S | ts -s
+            poetry --no-ansi --no-interaction run pytest --verbose --color=no
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
@@ -178,8 +179,9 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -282,8 +284,9 @@ jobs:
       - name: Run Behave
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # configFile: .devcontainer/.devcontainer.json
           push: never
           env: |
             # TODO-25: Workaround for "Host key verification failed."
@@ -367,16 +370,16 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cache Python Environment
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pypoetry
-            .venv
-          # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
+      # - name: Cache Python Environment
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       ~/.cache/pypoetry
+      #       .venv
+      #     # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
+      #     key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-poetry-
 
       # TODO: @alexanderilyin Add caching for: "Creating virtual environment (virtualenv) using python3.11 in .nox/pytest-3-11"
 
