@@ -92,7 +92,7 @@ allure-behave = "^2.13.5"
 pytest-xdist = "^3.6.1"
 pyhamcrest = "^2.1.0"
 strip-ansi = "^0.1.1"
-nox = "^2024.10.9"
+nox = "^2025.2.9"
 nox-poetry = "^1.0.3"
 
 [tool.poetry.group.docs.dependencies]
