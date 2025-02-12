@@ -30,8 +30,7 @@ runs:
             - .devcontainer/*
 
     - name: On 'devel' and the devcontainer needs to be rebuilt
-      id: tag1
-      # if: ${{ steps.changes.outputs.devcontainer == 'true' && steps.extract_branch.outputs.BRANCH == 'devel' }}
+      id: tag
       shell: bash -l {0}
       env:
         BRANCH: ${{ steps.extract_branch.outputs.BRANCH }}
@@ -39,7 +38,7 @@ runs:
         # The version tag is about to get bumped. Let's predict the next version.
         # TODO(clairbee): detect major and minor version updates
         export IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
-        if [ "${{ env.BRANCH }}" == "devel" ]; then
+        if [ "${{ env.BRANCH }}" == "devel" || "${{ env.BRANCH }}" == "main" ]; then
           export PUBLISH_IMAGE_TAG="$IMAGE_TAG"
         else
           export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
@@ -67,31 +66,6 @@ runs:
           echo "Error: Target devcontainer version $IMAGE_TAG not found in devcontainer.json"
           exit 1
         fi
-
-    # - name: The devcontainer does not need to be rebuilt
-    #   if: ${{ steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch != 'devel' }}
-    #   id: tag2
-    #   shell: bash -l {0}
-    #   run: |
-    #     echo "branch ${{ steps.extract_branch.outputs.branch }}"
-    #     # Just use the referenced container
-    #     export IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | jq -r .build.cacheFrom[0] | awk -F: '{print $2}')"
-    #     echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-    #     echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
-    #     echo "PUBLISH_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-    #     echo "PUBLISH_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-    - name: Consolidate tag names
-      id: tag
-      shell: bash -l {0}
-      env:
-        IMAGE_TAG: ${{ steps.tag1.outputs.IMAGE_TAG || steps.tag2.outputs.IMAGE_TAG }}
-        PUBLISH_IMAGE_TAG: ${{ steps.tag1.outputs.PUBLISH_IMAGE_TAG || steps.tag2.outputs.PUBLISH_IMAGE_TAG }}
-      run: |
-        echo "tag2.outputs.IMAGE_TAG=${{ steps.tag2.outputs.IMAGE_TAG }}"
-        echo "tag2.outputs.PUBLISH_IMAGE_TAG=${{ steps.tag2.outputs.PUBLISH_IMAGE_TAG }}"
-        echo "IMAGE_TAG=${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-        echo "PUBLISH_IMAGE_TAG=${{ env.PUBLISH_IMAGE_TAG }}" >> $GITHUB_OUTPUT
 
     - name: Prepare the container config
       shell: bash -l {0}
