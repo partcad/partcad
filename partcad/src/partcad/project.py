@@ -42,9 +42,7 @@ from . import part_factory_step as pfs
 from . import part_factory_stl as pfstl
 from . import part_factory_obj as pfo
 from . import part_factory_3mf as pf3
-from .part_factory_ai_cadquery import PartFactoryAiCadquery
-from .part_factory_ai_build123d import PartFactoryAiBuild123d
-from .part_factory_ai_openscad import PartFactoryAiScad
+from .part_factory_ai import PartFactoryAi
 from . import part_factory_cadquery as pfc
 from . import part_factory_build123d as pfb
 from . import part_factory_alias as pfa
@@ -550,56 +548,44 @@ class Project(project_config.Configuration):
 
         part_name: str = config["name"]
 
-        if not "type" in config:
-            raise Exception("ERROR: Part type is not specified: %s: %s" % (part_name, config))
-        elif config["type"] == "ai-cadquery":
-            PartFactoryAiCadquery(self.ctx, source_project, self, config)
-        elif config["type"] == "ai-build123d":
-            PartFactoryAiBuild123d(self.ctx, source_project, self, config)
-        elif config["type"] == "ai-openscad":
-            PartFactoryAiScad(self.ctx, source_project, self, config)
-        elif config["type"] == "cadquery":
-            pfc.PartFactoryCadquery(self.ctx, source_project, self, config)
-        elif config["type"] == "build123d":
-            pfb.PartFactoryBuild123d(self.ctx, source_project, self, config)
-        elif config["type"] == "step":
-            pfs.PartFactoryStep(self.ctx, source_project, self, config)
-        elif config["type"] == "brep":
-            pfbr.PartFactoryBrep(self.ctx, source_project, self, config)
-        elif config["type"] == "stl":
-            pfstl.PartFactoryStl(self.ctx, source_project, self, config)
-        elif config["type"] == "3mf":
-            pf3.PartFactory3mf(self.ctx, source_project, self, config)
-        elif config["type"] == "obj":
-            pfo.PartFactoryObj(self.ctx, source_project, self, config)
-        elif config["type"] == "scad":
-            pfscad.PartFactoryScad(self.ctx, source_project, self, config)
-        elif config["type"] == "kicad":
-            pfkicad.PartFactoryKicad(self.ctx, source_project, self, config)
-        elif config["type"] == "extrude":
-            PartFactoryExtrude(self.ctx, source_project, self, config)
-        elif config["type"] == "sweep":
-            PartFactorySweep(self.ctx, source_project, self, config)
-        elif config["type"] == "alias":
-            pfa.PartFactoryAlias(self.ctx, source_project, self, config)
-        elif config["type"] == "enrich":
-            pfe.PartFactoryEnrich(self.ctx, source_project, self, config)
-        else:
-            pc_logging.error("Invalid part type encountered: %s: %s" % (part_name, config))
+        if "type" not in config:
+            pc_logging.error(f"ERROR: Part type is not specified: {part_name}: {config}")
             return None
 
-        # Initialize aliases if they are declared implicitly
-        if "aliases" in config and not config["aliases"] is None:
+        part_type = config["type"]
+        is_ai_generated = config.get("fileFrom") == "ai"
+
+        factory_mapping = {
+            "cadquery": pfc.PartFactoryCadquery,
+            "build123d": pfb.PartFactoryBuild123d,
+            "step": pfs.PartFactoryStep,
+            "brep": pfbr.PartFactoryBrep,
+            "stl": pfstl.PartFactoryStl,
+            "3mf": pf3.PartFactory3mf,
+            "scad": pfscad.PartFactoryScad,
+            "extrude": PartFactoryExtrude,
+            "sweep": PartFactorySweep,
+            "alias": pfa.PartFactoryAlias,
+            "enrich": pfe.PartFactoryEnrich,
+        }
+
+        # Use PartFactoryAi for AI-generated parts
+        factory = PartFactoryAi if is_ai_generated else factory_mapping.get(part_type)
+
+        if factory:
+            factory(self.ctx, source_project, self, config)
+        else:
+            pc_logging.error(f"Invalid part type encountered: {part_name}: {config}")
+            return None
+
+        # Initialize aliases if they are declared
+        if "aliases" in config and config["aliases"]:
             for alias in config["aliases"]:
                 if ";" in part_name:
-                    # Copy parameters
-                    alias += part_name[part_name.index(";") :]
-                alias_part_config = {
-                    "type": "alias",
-                    "name": alias,
-                    "source": ":" + part_name,
-                }
-                alias_part_config = part_config.PartConfiguration.normalize(alias, alias_part_config)
+                    alias += part_name[part_name.index(";"):]
+                alias_part_config = part_config.PartConfiguration.normalize(
+                    alias, {"type": "alias", "name": alias, "source": f":{part_name}"}
+                )
                 pfa.PartFactoryAlias(self.ctx, source_project, self, alias_part_config)
 
     def get_part(self, part_name, func_params=None, quiet=False) -> part.Part:
