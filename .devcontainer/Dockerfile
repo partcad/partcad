@@ -92,6 +92,7 @@ RUN \
   && sudo -u vscode /home/vscode/miniforge3/condabin/conda init \
   && sudo -u vscode /home/vscode/miniforge3/condabin/conda install python=3.10.16 \
   && sudo -u vscode /home/vscode/miniforge3/condabin/conda config --set auto_activate_base true \
+  && sudo -u vscode python -m pip install poetry \
   \
   && (curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | sudo -u vscode bash) \
   && sudo -u vscode bash -c "(export NVM_DIR=/home/vscode/.nvm && source /home/vscode/.nvm/nvm.sh && nvm install 22 && nvm use 22 && nvm alias default 22)"

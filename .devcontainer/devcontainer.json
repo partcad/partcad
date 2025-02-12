@@ -12,7 +12,7 @@
     "Start D-Bus": "sudo service dbus start && (until systemctl is-active --quiet dbus; do sleep 1; done)"
   },
   "postStartCommand": {
-    "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
+    "pre-commit": "python -m pip install poetry && python -m poetry run pre-commit install --config dev-tools/pre-commit-config.yaml"
   },
   "mounts": [
     // TODO: For some reason this leads to tests hanging in the CI.
