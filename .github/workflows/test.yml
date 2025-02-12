@@ -78,20 +78,12 @@ jobs:
       - name: Start SSH Agent & Add Key
         shell: bash -l {0}
         run: |
-          mkdir -p ~/.ssh
-          
-          printf "%s" "${{ secrets.SSH_PRIVATE_KEY_RO }}" | base64 --decode > ~/.ssh/id_rsa
+          eval $(ssh-agent -s)
+          ssh-add -l || echo "No SSH keys found"
+          echo "${{ secrets.SSH_PRIVATE_KEY_RO }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-
-          eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/id_rsa
-
-          cat <<EOF > ~/.ssh/config
-          Host github.com
-            IdentityFile ~/.ssh/id_rsa
-            StrictHostKeyChecking no
-          EOF
-          chmod 600 ~/.ssh/config
+          ssh-add -l
 
       - name: Debug SSH Connection
         shell: bash -l {0}
@@ -102,7 +94,6 @@ jobs:
         shell: bash -l {0}
         run: |
           export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
-
 
       - name: Test with behave
         shell: bash -l {0}
