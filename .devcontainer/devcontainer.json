@@ -37,13 +37,12 @@
       "installDirectlyFromGitHubRelease": true,
       "version": "3.6.0"
     },
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "1.6.1",
-      "nodeGypDependencies": true
-    },
-    "ghcr.io/devcontainers-community/npm-features/typescript": {
-      "version": "1.1.0",
-      "nodeGypDependencies": true
+    // "ghcr.io/devcontainers/features/node:1": {
+    //   "version": "1.6.1",
+    //   "nodeGypDependencies": true
+    // },
+    "ghcr.io/devcontainers-community/features/typescript": {
+      "version": "5.7.3"
     }
   },
   "customizations": {
