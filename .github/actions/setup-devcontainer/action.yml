@@ -38,7 +38,7 @@ runs:
         # The version tag is about to get bumped. Let's predict the next version.
         # TODO(clairbee): detect major and minor version updates
         export IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
-        if [ "${{ env.BRANCH }}" == "devel" || "${{ env.BRANCH }}" == "main" ]; then
+        if [ "${{ env.BRANCH }}" == "devel" ] || [ "${{ env.BRANCH }}" == "main" ]; then
           export PUBLISH_IMAGE_TAG="$IMAGE_TAG"
         else
           export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
