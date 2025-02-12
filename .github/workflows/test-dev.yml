@@ -161,10 +161,10 @@ jobs:
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
-            poetry --no-ansi --no-interaction run pytest --verbose --color=no
+            poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="partcad-ide-vscode/bundled" --dist no --verbose --color=no
 
       - name: Upload test results & coverage reports to github and codecov
-        if: always()
+        # if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: pytest-results
@@ -176,7 +176,7 @@ jobs:
           coverage-report: pytest-results/coverage.xml
 
       - name: Generate Allure Report
-        if: always()
+        # if: always()
         uses: devcontainers/ci@v0.3
         with:
           imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
@@ -193,7 +193,7 @@ jobs:
             fi
 
       - name: Publish Allure Report
-        if: always()
+        # if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest-allure-report
@@ -230,6 +230,7 @@ jobs:
   #     - name: Run pre-commit hooks
   #       uses: devcontainers/ci@v0.3
   #       with:
+  #         imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
   #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
   #         configFile: .devcontainer/.devcontainer.json
   #         push: never
@@ -301,7 +302,7 @@ jobs:
             poetry --no-ansi --no-interaction run coverage xml --data-file=./.coverage -o behave-results/coverage.xml
 
       - name: Upload test results & coverage reports to github and codecov
-        if: always()
+        # if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: behave-results
@@ -313,11 +314,12 @@ jobs:
           coverage-report: behave-results/coverage.xml
 
       - name: Generate Allure Report
-        if: always()
+        # if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -329,7 +331,7 @@ jobs:
             fi
 
       - name: Publish Allure Report
-        if: always()
+        # if: always()
         uses: actions/upload-artifact@v4
         with:
           name: behave-allure-report
@@ -386,8 +388,9 @@ jobs:
       - name: Run Nox
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             poetry --no-ansi --no-interaction run nox --noxfile dev-tools/noxfile.py --python ${{ matrix.python-version }}
@@ -454,8 +457,9 @@ jobs:
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
-          configFile: .devcontainer/.devcontainer.json
+          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          # configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             mkdir -pv pc-test-results
