@@ -10,7 +10,7 @@ outputs:
     value: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
   BUILD_DEVCONTAINER:
     description: "Whether the ephemeral container needs to be built or not."
-    value: ${{ steps.tag1.outputs.BUILD_DEVCONTAINER || 'false' }}
+    value: ${{ steps.tag.outputs.BUILD_DEVCONTAINER }}
 
 runs:
   using: composite
@@ -37,11 +37,14 @@ runs:
       run: |
         # The version tag is about to get bumped. Let's predict the next version.
         # TODO(clairbee): detect major and minor version updates
-        export IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
         if [ "${{ env.BRANCH }}" == "devel" ] || [ "${{ env.BRANCH }}" == "main" ]; then
+          export IMAGE_TAG="${{ env.VERSION }}"
           export PUBLISH_IMAGE_TAG="$IMAGE_TAG"
+          export BUILD_DEVCONTAINER="false"
         else
+          export IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
           export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
+          export BUILD_DEVCONTAINER="true"
         fi
         echo "IMAGE_TAG=$IMAGE_TAG"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
@@ -49,9 +52,8 @@ runs:
         echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG"
         echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_ENV
         echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
-
-        # Remember to build the container
-        echo "BUILD_DEVCONTAINER=true" >> $GITHUB_OUTPUT
+        echo "BUILD_DEVCONTAINER=$BUILD_DEVCONTAINER"
+        echo "BUILD_DEVCONTAINER=$BUILD_DEVCONTAINER" >> $GITHUB_OUTPUT
 
         # # Make sure the 'devcontainer.json' is up-to-date
         # if ! jq -e . .devcontainer/devcontainer.json > /dev/null 2>&1; then
