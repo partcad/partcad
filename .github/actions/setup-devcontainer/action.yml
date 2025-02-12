@@ -1,24 +1,19 @@
-name: "Setup devcontainer"
-description: "Get the temporary image name and prepare the config for it"
-
-# What are the environment variables defined here?
-# IMAGE_TAG: the version of the container in 'devcontainer.json' (the next patch version)
-# PUBLISHED_IMAGE_TAG: the name of the ephemeral container version for this branch only (if different from IMAGE_TAG)
-# BUILD_DEVCONTAINER: whether the ephemeral container needs to be built
+name: Setup devcontainer
+description: Get the temporary image name and prepare the config for it
 
 outputs:
   IMAGE_TAG:
-    description: the tag of the container in 'devcontainer.json' (the next patch version)
+    description: "The tag of the container in 'devcontainer.json' (the next patch version)""
     value: ${{ steps.tag.outputs.IMAGE_TAG }}
   PUBLISH_IMAGE_TAG:
-    description: the tag of the ephemeral container version for this branch only (if different from IMAGE_TAG)
+    description: "The tag of the ephemeral container version for this branch only (if different from IMAGE_TAG)""
     value: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
   BUILD_DEVCONTAINER:
-    description: whether the ephemeral container needs to be built
+    description: "Whether the ephemeral container needs to be built or not"
     value: ${{ steps.tag1.outputs.BUILD_DEVCONTAINER || 'false' }}
 
 runs:
-  # using: "composite"
+  using: "composite"
   steps:
     - name: Extract branch name
       id: extract_branch
@@ -36,7 +31,7 @@ runs:
 
     - name: On 'devel' and the devcontainer needs to be rebuilt
       id: tag1
-      if: steps.changes.outputs.devcontainer == 'true' && steps.extract_branch.outputs.BRANCH == 'devel'
+      if: ${{ steps.changes.outputs.devcontainer == 'true' && steps.extract_branch.outputs.BRANCH == 'devel' }}
       shell: bash
       env:
         BRANCH: ${{ steps.extract_branch.outputs.BRANCH }}
@@ -45,7 +40,7 @@ runs:
         # TODO(clairbee): detect major and minor version updates
         export IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
         if [ "${{ env.BRANCH }}" == "devel" ]; then
-          export PUBLISH_IMAGE_TAG=$IMAGE_TAG
+          export PUBLISH_IMAGE_TAG="$IMAGE_TAG"
         else
           export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
         fi
@@ -74,7 +69,7 @@ runs:
         fi
 
     - name: The devcontainer does not need to be rebuilt
-      if: steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch != 'devel'
+      if: ${{ steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch != 'devel' }}
       id: tag2
       shell: bash
       run: |
