@@ -39,7 +39,8 @@ jobs:
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
-      - id: setup
+      - name: Setup Dev Container
+        id: setup
         uses: ./.github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
@@ -144,7 +145,7 @@ jobs:
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ steps.setup.outputs.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
@@ -169,7 +170,7 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ steps.setup.outputs.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
@@ -216,7 +217,7 @@ jobs:
   #     - name: Run pre-commit hooks
   #       uses: devcontainers/ci@v0.3
   #       with:
-  #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ steps.setup.outputs.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+  #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
   #         configFile: .devcontainer/.devcontainer.json
   #         push: never
   #         # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
@@ -263,7 +264,7 @@ jobs:
       - name: Run Behave
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ steps.setup.outputs.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
           push: never
           env: |
@@ -294,7 +295,7 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ steps.setup.outputs.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
@@ -357,7 +358,7 @@ jobs:
       - name: Run Nox
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ steps.setup.outputs.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
@@ -418,7 +419,7 @@ jobs:
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ steps.setup.outputs.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
