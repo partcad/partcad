@@ -9,7 +9,7 @@
     "SKIP": "behave,prepare-commit-msg,poetry-install,poetry-lock,poetry-export"
   },
   "postCreateCommand": {
-    "Start D-Bus": "sudo service dbus start && until systemctl is-active --quiet dbus; do sleep 1; done"
+    "Start D-Bus": "sudo service dbus start && (until systemctl is-active --quiet dbus; do sleep 1; done)"
   },
   "postStartCommand": {
     "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
@@ -25,15 +25,15 @@
 			"installDirectlyFromGitHubRelease": true,
 			"version": "2.63.2"
 		},
-		"ghcr.io/devcontainers/features/python:1": {
-			"installTools": true,
-			"toolsToInstall": "pre-commit,poetry,actionlint-py",
-			"optimize": true,
-			"version": "3.10"
-		},
-		"ghcr.io/devcontainers/features/conda:1": {
-			"version": "24.5.0" // GH has 24.11.1
-		},
+		// "ghcr.io/devcontainers/features/python:1": {
+		// 	"installTools": true,
+		// 	"toolsToInstall": "pre-commit,poetry,actionlint-py",
+		// 	// "optimize": true,
+		// 	"version": "3.10.6"
+		// },
+		// "ghcr.io/devcontainers/features/conda:1": {
+		// 	"version": "24.5.0" // GH has 24.11.1
+		// },
 		"ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
 			"jqVersion": "1.7.1",
 			"yqVersion": "4.44.6",

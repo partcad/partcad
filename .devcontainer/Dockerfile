@@ -89,6 +89,7 @@ RUN apt-get update \
 RUN \
   curl -L -O "https://github.com/conda-forge/miniforge/releases/download/24.11.3-0/Miniforge3-$(uname)-$(uname -m).sh" \
   && sudo -u vscode bash "Miniforge3-$(uname)-$(uname -m).sh" -b -p /home/vscode/miniforge3 \
+  && sudo -u vscode /home/vscode/miniforge3/condabin/conda init \
   \
   && (curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | sudo -u vscode bash) \
   && sudo -u vscode bash -c "(export NVM_DIR=/home/vscode/.nvm && source /home/vscode/.nvm/nvm.sh && nvm install 22 && nvm use 22 && nvm alias default 22)"
