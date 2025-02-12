@@ -38,14 +38,16 @@ runs:
       id: tag1
       if: steps.changes.outputs.devcontainer == 'true' && steps.extract_branch.outputs.BRANCH == 'devel'
       shell: bash
+      env:
+        BRANCH: ${{ steps.extract_branch.outputs.BRANCH }}
       run: |
         # The version tag is about to get bumped. Let's predict the next version.
         # TODO(clairbee): detect major and minor version updates
         IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
-        if [ "${{ steps.extract_branch.outputs.BRANCH }}" == "devel" ]; then
+        if [ "${{ env.BRANCH }}" == "devel" ]; then
           export PUBLISH_IMAGE_TAG=$IMAGE_TAG
         else
-          export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ steps.extract_branch.outputs.BRANCH }}"
+          export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
         fi
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
@@ -84,12 +86,18 @@ runs:
     - name: Consolidate tag names
       id: tag
       shell: bash
+      env:
+        IMAGE_TAG: ${{ steps.tag1.outputs.IMAGE_TAG || steps.tag2.outputs.IMAGE_TAG }}
+        PUBLISH_IMAGE_TAG: ${{ steps.tag1.outputs.PUBLISH_IMAGE_TAG || steps.tag2.outputs.PUBLISH_IMAGE_TAG }}
       run: |
-        echo "IMAGE_TAG=${{ steps.tag1.outputs.IMAGE_TAG || steps.tag2.outputs.IMAGE_TAG }}" >> $GITHUB_OUTPUT
-        echo "PUBLISH_IMAGE_TAG=${{ steps.tag1.outputs.PUBLISH_IMAGE_TAG || steps.tag2.outputs.PUBLISH_IMAGE_TAG }}" >> $GITHUB_OUTPUT
+        echo "IMAGE_TAG=${{ env.IMAGE_TAG }}" >> $GITHUB_OUTPUT
+        echo "PUBLISH_IMAGE_TAG=${{ env.PUBLISH_IMAGE_TAG }}" >> $GITHUB_OUTPUT
 
     - name: Prepare the container config
       shell: bash
+      env:
+        IMAGE_TAG: ${{ steps.tag.outputs.IMAGE_TAG }}
+        PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
       run: |
-        echo "Replacing devcontainer:${{ steps.tag.outputs.IMAGE_TAG }} with devcontainer:${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
-        sed "s|devcontainer:${{ steps.tag.outputs.IMAGE_TAG }}|devcontainer:${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
+        echo "Replacing devcontainer:${{ env.IMAGE_TAG }} with devcontainer:${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
+        sed "s|devcontainer:${{ env.IMAGE_TAG }}|devcontainer:${{ env.PUBLISH_IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
