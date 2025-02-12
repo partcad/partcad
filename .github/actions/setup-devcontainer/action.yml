@@ -44,10 +44,18 @@ runs:
         echo "BUILD_DEVCONTAINER=true" >> $GITHUB_OUTPUT
 
         # Make sure the 'devcontainer.json' is up-to-date
-        sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
-          grep "\\S" | \
-          yq .image | \
-          grep -q $IMAGE_TAG # Error out if the target devcontainer version is not referenced
+        if ! jq -e . .devcontainer/devcontainer.json > /dev/null 2>&1; then
+          echo "Error: Invalid JSON in devcontainer.json"
+          exit 1
+        fi
+
+        if ! sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
+           grep "\\S" | \
+           jq .image | \
+           grep -q "$IMAGE_TAG"; then
+          echo "Error: Target devcontainer version $IMAGE_TAG not found in devcontainer.json"
+          exit 1
+        fi
 
     - name: The devcontainer does not need to be rebuilt
       if: steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch != 'devel'
