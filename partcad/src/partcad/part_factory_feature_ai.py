@@ -32,71 +32,62 @@ class PartFactoryFeatureAi(Ai):
 
     LANG_PYTHON = "Python"
 
-    part_type: str
-    script_type: str
-    prompt_suffix: str
-
     def __init__(self, config, part_type, script_type, prompt_suffix=""):
         self.part_type = part_type
         self.script_type = script_type
         self.prompt_suffix = prompt_suffix
 
-        desc = config.get("desc", None)
+        desc = config.get("desc")
         if desc is None:
-            error = "%s: Prompt is not set" % config["name"]
+            error = f"{config['name']}: Prompt is not set"
             pc_logging.error(error)
             raise Exception(error)
 
         self.ai_config = copy.deepcopy(config)
-        if "numGeometricModeling" in self.ai_config:
-            self.num_geometric_modling = self.ai_config["numGeometricModeling"]
-        else:
-            self.num_geometric_modeling = DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING
-        if (
-            user_config.max_geometric_modeling is not None
-            and self.num_geometric_modeling > user_config.max_geometric_modeling
-        ):
-            self.num_geometric_modeling = user_config.max_geometric_modeling
 
-        if "numModelGeneration" in self.ai_config:
-            self.num_model_generation = self.ai_config[("numModelGeneration")]
-        else:
-            self.num_model_generation = DEFAULT_ALTERNATIVES_MODEL_GENERATION
-        if (
-            user_config.max_model_generation is not None
-            and self.num_model_generation > user_config.max_model_generation
-        ):
-            self.num_model_generation = user_config.max_model_generation
+        # Load model configuration dynamically
+        model_name = self.ai_config.get("model", "default")  # Default model if not specified
+        self.model_config = self._load_model_config(model_name)
 
-        if "numScriptCorrection" in self.ai_config:
-            self.num_script_correction = self.ai_config[("numScriptCorrection")]
-        else:
-            self.num_script_correction = DEFAULT_INCREMENTAL_SCRIPT_CORRECTION
-        if (
-            user_config.max_script_correction is not None
-            and self.num_script_correction > user_config.max_script_correction
-        ):
-            self.num_script_correction = user_config.max_script_correction
+        # Validate model configuration
+        if "provider" not in self.model_config or "model" not in self.model_config:
+            raise Exception(f"Invalid model configuration: {self.model_config}")
 
-        # Normalize the input configuration
-        pc_logging.debug("AI configuration: %s" % self.ai_config)
+        # Extract model parameters
+        self.provider = self.model_config["provider"]
+        self.model = self.model_config["model"]
+        self.parameters = self.model_config.get("parameters", {})
 
-        if (
-            not "tokens" in self.ai_config
-            or not isinstance(self.ai_config["tokens"], int)
-            or self.ai_config["tokens"] == 0
-        ):
-            self.ai_config["tokens"] = 2048
-            pc_logging.debug("Setting the default number of tokens: 2048")
-        if not "images" in self.ai_config:
-            self.ai_config["images"] = []
-        # Use `temperature` and `top_p` values recommended for code generation
-        # if no other preferences are set
-        if not "temperature" in self.ai_config:
-            self.ai_config["temperature"] = 0.2
-        if not "top_p" in self.ai_config:
-            self.ai_config["top_p"] = 0.1
+        # Default AI parameters
+        self.num_geometric_modeling = self.ai_config.get("numGeometricModeling", DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING)
+        self.num_model_generation = self.ai_config.get("numModelGeneration", DEFAULT_ALTERNATIVES_MODEL_GENERATION)
+        self.num_script_correction = self.ai_config.get("numScriptCorrection", DEFAULT_INCREMENTAL_SCRIPT_CORRECTION)
 
+        # Normalize max values from user config
+        self.num_geometric_modeling = min(self.num_geometric_modeling, user_config.max_geometric_modeling or self.num_geometric_modeling)
+        self.num_model_generation = min(self.num_model_generation, user_config.max_model_generation or self.num_model_generation)
+        self.num_script_correction = min(self.num_script_correction, user_config.max_script_correction or self.num_script_correction)
+
+        # Normalize AI parameters
+        self.parameters.setdefault("tokens", 2048)
+        self.parameters.setdefault("temperature", 0.2)
+        self.parameters.setdefault("top_p", 0.1)
+
+        pc_logging.debug(f"AI configuration: {self.ai_config}")
+        pc_logging.debug(f"Model configuration: {self.model_config}")
+
+    def _load_model_config(self, model_name):
+        """Load model configuration from external package or use defaults."""
+        model_packages = user_config.get("models", {})  # Models are stored in user config
+        return model_packages.get(model_name, {
+            "provider": "openai",
+            "model": "gpt-4o",
+            "parameters": {
+                "tokens": 16000,
+                "temperature": 0.5,
+                "top_p": 0.9,
+            },
+        })
     def post_create(self) -> None:
         self.part.hash.add_dict(self.ai_config)
         super().post_create()
