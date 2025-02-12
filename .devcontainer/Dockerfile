@@ -57,6 +57,7 @@ RUN apt-get update \
       libxext6 \
       shellcheck \
       time \
+      moreutils \
       # xvfb requirements
       libnss3 \
       libatk1.0-0 \
