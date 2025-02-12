@@ -79,11 +79,11 @@ jobs:
         shell: bash -l {0}
         run: |
           eval $(ssh-agent -s)
-          ssh-add -l || echo "No SSH keys found"
+          mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY_RO }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-add ~/.ssh/id_rsa
-          ssh-add -l
+          ssh-add -l || echo "No SSH keys found"
 
       - name: Debug SSH Connection
         shell: bash -l {0}
