@@ -8,10 +8,10 @@ description: "Get the temporary image name and prepare the config for it"
 
 outputs:
   IMAGE_TAG:
-    description: the version of the container in 'devcontainer.json' (the next patch version)
+    description: the tag of the container in 'devcontainer.json' (the next patch version)
     value: ${{ steps.tag.outputs.IMAGE_TAG }}
   PUBLISH_IMAGE_TAG:
-    description: the name of the ephemeral container version for this branch only (if different from IMAGE_TAG)
+    description: the tag of the ephemeral container version for this branch only (if different from IMAGE_TAG)
     value: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
   BUILD_DEVCONTAINER:
     description: whether the ephemeral container needs to be built
@@ -22,8 +22,9 @@ runs:
   steps:
     - name: Extract branch name
       id: extract_branch
-      shell: bash -l {0}
-      run: echo "BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+      shell: bash
+      run: |
+        echo "BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
 
     - name: Check for changes that require the container to be rebuilt
       uses: dorny/paths-filter@v3
@@ -36,7 +37,7 @@ runs:
     - name: On 'devel' and the devcontainer needs to be rebuilt
       id: tag1
       if: steps.changes.outputs.devcontainer == 'true' && steps.extract_branch.outputs.BRANCH == 'devel'
-      shell: bash -l {0}
+      shell: bash
       run: |
         # The version tag is about to get bumped. Let's predict the next version.
         # TODO(clairbee): detect major and minor version updates
@@ -71,10 +72,10 @@ runs:
     - name: The devcontainer does not need to be rebuilt
       if: steps.changes.outputs.devcontainer != 'true' || steps.extract_branch.outputs.branch != 'devel'
       id: tag2
-      shell: bash -l {0}
+      shell: bash
       run: |
         # Just use the referenced container
-        IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | yq .build.cacheFrom[0] | awk -F: '{print $2}')"
+        IMAGE_TAG="$(sed 's/\/\/.*$//' .devcontainer/devcontainer.json | grep "\\S" | jq .build.cacheFrom[0] | awk -F: '{print $2}')"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
         echo "PUBLISH_IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
@@ -82,13 +83,13 @@ runs:
 
     - name: Consolidate tag names
       id: tag
-      shell: bash -l {0}
+      shell: bash
       run: |
         echo "IMAGE_TAG=${{ steps.tag1.outputs.IMAGE_TAG || steps.tag2.outputs.IMAGE_TAG }}" >> $GITHUB_OUTPUT
         echo "PUBLISH_IMAGE_TAG=${{ steps.tag1.outputs.PUBLISH_IMAGE_TAG || steps.tag2.outputs.PUBLISH_IMAGE_TAG }}" >> $GITHUB_OUTPUT
 
     - name: Prepare the container config
-      shell: bash -l {0}
+      shell: bash
       run: |
         echo "Replacing devcontainer:${{ steps.tag.outputs.IMAGE_TAG }} with devcontainer:${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
         sed "s|devcontainer:${{ steps.tag.outputs.IMAGE_TAG }}|devcontainer:${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
