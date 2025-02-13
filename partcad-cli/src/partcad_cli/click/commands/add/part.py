@@ -38,6 +38,7 @@ from pathlib import Path
             "brep",
             "stl",
             "3mf",
+            "obj",
             "ai-cadquery",
             "ai-openscad",
         ]
@@ -53,6 +54,10 @@ def cli(ctx, desc, kind, provider, path):
     project = ctx.get_project(pc.ROOT)
     if not project:
         raise click.UsageError("Failed to retrieve the project.")
+
+    file_path = Path(path)
+    if not file_path.exists():
+        raise click.UsageError(f"ERROR: The part file '{file_path}' does not exist.")
 
     config = {}
     if desc:
