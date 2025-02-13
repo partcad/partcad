@@ -26,3 +26,7 @@ parts:
   cube_stl:
     type: stl
     path: stl/cube.stl
+
+  bolt_enrich:
+    type: enrich
+    source: //pub/examples/partcad/feature_convert:bolt_step

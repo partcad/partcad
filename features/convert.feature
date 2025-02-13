@@ -11,6 +11,12 @@ Feature: `pc convert` command
         cube:
           type: stl
           path: cube.stl
+        cube_enrich:
+          type: enrich
+          source: ":cube"
+          with:
+            height: 4
+            width: 4
       """
 
   @stl @dry-run
@@ -36,9 +42,35 @@ Feature: `pc convert` command
   @error
   Scenario: Failure due to non-existent object
     When I run "pc convert :nonexistent -t brep"
-    Then the command should exit with a status code of "1"
+    Then the command should exit with a status code of "2"
 
   @error
   Scenario: Conversion failure due to unsupported conversion
     When I run "pc convert :cube_build123d -t step"
-    Then the command should exit with a status code of "1"
+    Then the command should exit with a status code of "2"
+
+  @enrich @resolve
+  Scenario: Resolving an enrich part
+    When I run "pc convert cube_enrich"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Resolved enrich part 'cube_enrich'."
+    And a file named "cube_enrich.stl" should exist
+
+  @enrich @error
+  Scenario: Resolving a non-existent enrich part
+    When I run "pc convert :nonexistent_enrich"
+    Then the command should exit with a status code of "2"
+
+  @enrich @convert
+  Scenario: Resolving and converting an enrich part
+    When I run "pc convert cube_enrich -t brep"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Converted 'cube_enrich' to 'brep'."
+    And a file named "cube_enrich.brep" should exist
+
+  @enrich @output-dir
+  Scenario: Resolving an enrich part with a specified output directory
+    Given a directory named "output" exists
+    When I run "pc convert cube_enrich -t step -O output"
+    Then the command should exit with a status code of "0"
+    And a file named "output/cube_enrich.step" should exist

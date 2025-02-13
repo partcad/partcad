@@ -1,6 +1,6 @@
-import os
-import shutil
+import copy
 from pathlib import Path
+import shutil
 import tempfile
 from typing import Optional
 import partcad
@@ -140,3 +140,65 @@ def convert_part_action(project: Project, object_name: str, target_format: str,
     project.update_part_config(part_name, new_config)
 
     pc_logging.info(f"Updated configuration for '{part_name}': {config_path}")
+
+
+def resolve_enrich_action(project: Project, part_name: str, dry_run: bool = False):
+    """
+    Resolve an enrich part to its original type and update its definition.
+
+    :param project: Project object
+    :param part_name: Name of the enrich part to resolve.
+    :param dry_run: If True, simulates resolution without making actual changes.
+    """
+
+    package_name, part_name = resolve_resource_path(project.name, part_name)
+
+    pc_logging.info(f"Resolving package '{package_name}', part '{part_name}'")
+
+    if project.name != package_name:
+        project = project.ctx.get_project(package_name)
+
+    part_config = project.get_part_config(part_name)
+    if not part_config or part_config["type"] != "enrich":
+        raise ValueError(f"Invalid or missing enrich part '{part_name}' in project '{project.name}'.")
+
+    source_name = part_config["source"]
+    source_project_name, source_part_name = resolve_resource_path(project.name, source_name)
+
+    if source_project_name.startswith(project.name):
+        pc_logging.info("Source is a subdirectory of the same project, using current project.")
+        source_project = project
+    else:
+        source_project = project.ctx.get_project(source_project_name)
+
+    if not source_project:
+        raise ValueError(f"Source project '{source_project_name}' not found for part '{source_part_name}'.")
+
+    source_part = source_project.get_part(source_part_name)
+    if not source_part or not source_part.path:
+        raise ValueError(f"Source part '{source_part_name}' has no valid path in project '{source_project_name}'.")
+
+    source_config = source_part.config
+    resolved_config = copy.deepcopy(source_config)
+
+    for key, value in part_config.get("with", {}).items():
+        resolved_config.setdefault("parameters", {}).setdefault(key, {})
+        resolved_config["parameters"][key].update({
+            "type": type(value).__name__,
+            "default": value,
+        })
+    resolved_config.setdefault("ports", {}).update(part_config.get("ports", {}))
+
+    file_extension = EXTENSION_MAPPING.get(resolved_config["type"], resolved_config["type"])
+    target_path = Path(project.path) / f"{part_name}.{file_extension}"
+
+    if dry_run:
+        pc_logging.info(f"[Dry Run] Would resolve enrich part '{part_name}' and save it to '{target_path}'.")
+        return
+
+    shutil.copy(Path(source_part.path), target_path)
+    pc_logging.info(f"Copied source part from {source_part.path} to {target_path}")
+
+    resolved_config["path"] = str(target_path)
+    project.update_part_config(part_name, resolved_config)
+    pc_logging.info(f"Resolved part '{part_name}' updated in project configuration.")
