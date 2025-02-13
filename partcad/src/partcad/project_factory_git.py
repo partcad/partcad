@@ -137,7 +137,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
             attempt = 0
             max_retries = user_config.get_int("git.clone.retry.max")
             patience = user_config.get_float("git.clone.retry.patience")
-            while attempt <= max_retries:
+            while attempt <= max_retries and self.ctx.is_connected():
                 # Check if the repository is already cached.
                 if os.path.exists(cache_path):
                     # Update the repository if it is already cached.

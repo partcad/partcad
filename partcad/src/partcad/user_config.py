@@ -263,5 +263,11 @@ class UserConfig(vyper.Vyper):
         # default: {}
         self.git_config = GitConfig(self)
 
+        # option: offline
+        # description: offline mode
+        # values: [True | False]
+        # default: False
+        self.offline = False
+        self.bind_env("offline", "PC_OFFLINE")
 
 user_config = UserConfig()
