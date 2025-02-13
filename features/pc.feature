@@ -27,7 +27,7 @@ Feature: `pc` command
     Then the command should exit with a status code of "0"
     # TODO-62: @alexanderilyin: check that DEBUG prefix is present
     And STDERR should contain "PartCAD version:"
-    And STDERR should contain "Internal data storage location: /tmp/sandbox/home/partcad-cli-" with path
+    And STDERR should contain "Internal data storage location:" with path
     And STDERR should contain "Tar cache size:"
     And STDERR should contain "Git cache size:"
     And STDERR should contain "Sandbox environments size:"
@@ -39,7 +39,7 @@ Feature: `pc` command
     When I run "pc --no-ansi -q status"
     Then the command should exit with a status code of "0"
     And STDOUT should not contain "INFO:partcad:PartCAD version:"
-    And STDOUT should not contain "INFO:partcad:Internal data storage location: /tmp/sandbox/home/partcad-cli-" with path
+    And STDOUT should not contain "INFO:partcad:Internal data storage location:" with path
     And STDOUT should not contain "INFO:partcad:Tar cache size:"
     And STDOUT should not contain "INFO:partcad:Git cache size:"
     And STDOUT should not contain "INFO:partcad:Sandbox environments size:"
@@ -51,7 +51,7 @@ Feature: `pc` command
     When I run "pc --no-ansi status"
     Then the command should exit with a status code of "0"
     And STDERR should contain "INFO:partcad:PartCAD version:"
-    And STDERR should contain "INFO:partcad:Internal data storage location: /tmp/sandbox/home/partcad-cli-" with path
+    And STDERR should contain "INFO:partcad:Internal data storage location:" with path
     And STDERR should contain "INFO:partcad:Tar cache size:"
     And STDERR should contain "INFO:partcad:Git cache size:"
     And STDERR should contain "INFO:partcad:Sandbox environments size:"

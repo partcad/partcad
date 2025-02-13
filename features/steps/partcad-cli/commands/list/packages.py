@@ -5,6 +5,12 @@ import logging
 import tempfile
 import shutil
 
+def remove_readonly(func, path, exc_info):
+    try:
+        os.chmod(path, 0o777)
+        func(path)
+    except Exception as e:
+        logging.warning("Cannot delete %s: %s", path, e)
 
 @given('I have temporary $HOME in "{directory}"')
 def step_impl(context: Context, directory: str) -> None:
@@ -23,4 +29,4 @@ def step_impl(context: Context, directory: str) -> None:
     # TODO-71: @alexanderilyin: mention in docs
     # Clean up after the test
     if os.environ.get("BEHAVE_NO_CLEANUP", "0") != "1":
-        context.add_cleanup(shutil.rmtree, context.home_dir)
+        context.add_cleanup(shutil.rmtree, context.home_dir, onerror=remove_readonly)
