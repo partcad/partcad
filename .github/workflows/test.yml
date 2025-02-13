@@ -17,53 +17,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # test-pytest:
-  #   name: "Pytest"
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-  #       python-version: ["3.10", "3.11", "3.12"]
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-  #   timeout-minutes: 30
+  test-pytest:
+    name: "Pytest"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 30
 
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/setup-all
-  #     - uses: ./.github/actions/setup-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
 
-  #     - name: Test with pytest
-  #       env:
-  #         PYTHONPATH: partcad/src
-  #         PYTHONWARNINGS: ignore
-  #       shell: bash -l {0}
-  #       run: |
-  #         conda activate env-test
+      - name: Test with pytest
+        env:
+          PYTHONPATH: partcad/src
+          PYTHONWARNINGS: ignore
+        shell: bash -l {0}
+        run: |
+          conda activate env-test
 
-  #         mkdir -pv pytest-test-results
-  #         pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
-  #         coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
-  #         conda deactivate
+          mkdir -pv pytest-test-results
+          pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
+          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
+          conda deactivate
 
-  #     - name: Upload test results & coverage reports to github and codecov
-  #       uses: ./.github/actions/upload-test-results
-  #       with:
-  #         name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
-  #         path: pytest-test-results/
-  #         retention-days: 7
-  #         status: ${{ job.status }}
-  #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         codecov-files: pytest-test-results/junit.xml
-  #         coverage-report: pytest-test-results/coverage.xml
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: pytest-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: pytest-test-results/junit.xml
+          coverage-report: pytest-test-results/coverage.xml
 
   test-behave:
     name: "Behave"
     strategy:
       fail-fast: false
       matrix:
-        # os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        os: [windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
         python-version: ["3.10", "3.11", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
@@ -75,26 +74,10 @@ jobs:
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
-      - name: Start SSH Agent & Add Key
-        shell: bash -l {0}
-        run: |
-          eval $(ssh-agent -s)
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY_RO }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-add ~/.ssh/id_rsa
-          ssh-add -l || echo "No SSH keys found"
-
-      - name: Debug SSH Connection
-        shell: bash -l {0}
-        run: |
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          ssh -o StrictHostKeyChecking=no -o BatchMode=yes -vT git@github.com || echo "SSH connection failed"
-
-      - name: Force SSH to use correct key
-        shell: bash -l {0}
-        run: |
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
+      - name: Start SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
 
       - name: Test with behave
         shell: bash -l {0}
@@ -110,10 +93,21 @@ jobs:
           export PYTHONUTF8=1
           export PYTHONIOENCODING=utf-8
 
-          if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
+          BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            BEHAVE_CMD="$BEHAVE_CMD --tags=-skip-windows"
+          fi
+
+          if ! eval "$BEHAVE_CMD"; then
             echo "Behave tests failed"
             exit 1
           fi
+
+          # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
+          #   echo "Behave tests failed"
+          #   exit 1
+          # fi
+
           coverage combine
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
           conda deactivate
@@ -179,94 +173,94 @@ jobs:
   #         codecov-files: examples-partcad-test-results/junit.xml
   #         coverage-report: examples-partcad-test-results/coverage.xml
 
-  # test-examples-all:
-  #   name: "Examples (All)"
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-  #       python-version: ["3.10", "3.11", "3.12"]
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-  #   timeout-minutes: 30
+  test-examples-all:
+    name: "Examples (All)"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 30
 
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/setup-all
-  #     - uses: ./.github/actions/setup-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
 
-  #     - name: Basic integration test for CLI (all examples)
-  #       shell: bash -l {0}
-  #       run: |
-  #         mkdir -pv examples-all-test-results
+      - name: Basic integration test for CLI (all examples)
+        shell: bash -l {0}
+        run: |
+          mkdir -pv examples-all-test-results
 
-  #         conda activate env-test
-  #         python -m pip install -U ./partcad ./partcad-cli
+          conda activate env-test
+          python -m pip install -U ./partcad ./partcad-cli
 
-  #         # BEGIN ALL EXAMPLES
-  #         cd ./examples
-  #         # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
-  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
-  #         coverage combine
-  #         # END ALL EXAMPLES
+          # BEGIN ALL EXAMPLES
+          cd ./examples
+          # TODO(clairbee): Limit RAM usage by restricting the number of threads?
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
+          coverage combine
+          # END ALL EXAMPLES
 
-  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
-  #         conda deactivate
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
+          conda deactivate
 
-  #     - name: Upload test results & coverage reports to github and codecov
-  #       uses: ./.github/actions/upload-test-results
-  #       with:
-  #         name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
-  #         path: examples-all-test-results/
-  #         retention-days: 7
-  #         status: ${{ job.status }}
-  #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         codecov-files: examples-all-test-results/junit.xml
-  #         coverage-report: examples-all-test-results/coverage.xml
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: examples-all-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: examples-all-test-results/junit.xml
+          coverage-report: examples-all-test-results/coverage.xml
 
-  # test-pub-repo:
-  #   name: "Repo //pub"
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os: [ubuntu-24.04-l, windows-latest-l]
-  #       python-version: ["3.10", "3.12"]
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-  #   timeout-minutes: 15
+  test-pub-repo:
+    name: "Repo //pub"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-l, windows-latest-l]
+        python-version: ["3.10", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 15
 
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/setup-all
-  #     - uses: ./.github/actions/setup-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
 
-  #     - name: Test the entire repository
-  #       shell: bash -l {0}
-  #       run: |
-  #         mkdir -pv pub-repo-test-results
+      - name: Test the entire repository
+        shell: bash -l {0}
+        run: |
+          mkdir -pv pub-repo-test-results
 
-  #         conda activate env-test
-  #         python -m pip install -U ./partcad ./partcad-cli
+          conda activate env-test
+          python -m pip install -U ./partcad ./partcad-cli
 
-  #         # BEGIN PUBLIC REPO
-  #         cd examples
-  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
-  #         # TODO(clairbee): fix the failing packages first
-  #         # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
-  #         # END PUBLIC REPO
-  #         coverage combine
+          # BEGIN PUBLIC REPO
+          cd examples
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
+          # TODO(clairbee): fix the failing packages first
+          # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
+          # END PUBLIC REPO
+          coverage combine
 
-  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
-  #         conda deactivate
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
+          conda deactivate
 
-  #     - name: Upload test results & coverage reports to github and codecov
-  #       uses: ./.github/actions/upload-test-results
-  #       with:
-  #         name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
-  #         path: pub-repo-test-results/
-  #         retention-days: 7
-  #         status: ${{ job.status }}
-  #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         codecov-files: pub-repo-test-results/junit.xml
-  #         coverage-report: pub-repo-test-results/coverage.xml
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: pub-repo-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: pub-repo-test-results/junit.xml
+          coverage-report: pub-repo-test-results/coverage.xml

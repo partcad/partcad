@@ -37,8 +37,8 @@ Feature: `pc install` command
     Then STDERR should contain "DONE: Install: this:"
     Then the command should exit with a status code of "0"
 
-  # TODO: fix test stopping on Windows (@sasuke13)
-  @success @pc-init @pc-install @pc-ansi
+  # TODO: Investigate SSH-related hangs in Windows runners
+  @success @pc-init @pc-install @pc-ansi @skip-windows
   Scenario: Install packages with ssh
     Given environment variable "PC_NO_ANSI" is set to "1"
     And a file named "partcad.yaml" with content:
