@@ -9,7 +9,7 @@ from OCP.BRepTools import BRepTools
 from OCP.TopoDS import TopoDS_Shape
 
 sys.path.append(os.path.dirname(__file__))
-import wrapper_common
+from . import wrapper_common
 
 
 def process(path, request):
