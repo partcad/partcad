@@ -16,6 +16,7 @@ import ruamel.yaml
 import threading
 import typing
 
+from typing import Optional, List
 
 from . import consts
 from . import factory
@@ -1425,6 +1426,61 @@ class Project(project_config.Configuration):
         output_dir=None,
     ):
         asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
+
+    async def async_convert(
+        self,
+        sketches: Optional[List[str]] = None,
+        interfaces: Optional[List[str]] = None,
+        parts: Optional[List[str]] = None,
+        assemblies: Optional[List[str]] = None,
+        target_format: Optional[str] = None,
+        output_dir: Optional[str] = None,
+    ) -> None:
+        """Asynchronously convert specified objects to a target format."""
+        if not target_format:
+            raise ValueError("Target format must be specified for conversion.")
+
+        with pc_logging.Action("Convert", self.name):
+            shapes = []
+            if sketches:
+                shapes.extend(self.get_sketch(name) for name in sketches)
+            if interfaces:
+                shapes.extend(self.get_interface(name) for name in interfaces)
+            if parts:
+                shapes.extend(self.get_part(name) for name in parts)
+            if assemblies:
+                shapes.extend(self.get_assembly(name) for name in assemblies)
+
+            pc_logging.info(f"Converting {len(shapes)} object(s) to '{target_format}'.")
+
+            # Prepare async tasks for rendering
+            tasks = []
+            for shape in shapes:
+                render_method = f"render_{target_format}_async"
+                if hasattr(shape, render_method):
+                    tasks.append(getattr(shape, render_method)(self.ctx, self, output_dir))
+                else:
+                    pc_logging.warn(f"Skipping '{shape.name}': {target_format} format not supported")
+
+            try:
+                await asyncio.gather(*tasks)
+            except Exception as e:
+                # Raise a RuntimeError with additional info if any rendering task fails
+                raise RuntimeError(f"Failed to convert to {target_format}: {str(e)}") from e
+
+
+    def convert(
+        self,
+        sketches: Optional[List[str]] = None,
+        interfaces: Optional[List[str]] = None,
+        parts: Optional[List[str]] = None,
+        assemblies: Optional[List[str]] = None,
+        target_format: Optional[str] = None,
+        output_dir: Optional[str] = None,
+    ) -> None:
+        """Synchronous wrapper for async_convert."""
+        asyncio.run(self.async_convert(sketches, interfaces, parts, assemblies, target_format, output_dir))
+
 
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:

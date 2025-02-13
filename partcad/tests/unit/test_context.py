@@ -8,9 +8,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import pytest
 import asyncio
-
 import partcad as pc
+from unittest.mock import patch
 
 
 def test_ctx1():
@@ -69,3 +70,27 @@ def test_ctx_fini():
     pc.fini()
     ctx3 = pc.init()
     assert ctx3 is not None
+
+
+@pytest.mark.parametrize("variation", [(True, False), (False, True), (False, False)])
+def test_offline_mode(variation):
+    offline, force_update = variation
+
+    ctx = pc.Context()
+    with patch.object(pc.user_config, "offline", offline), \
+        patch.object(pc.user_config, "force_update", force_update):
+        checks = [
+            (0, True, True),          # At time 0, should check connectivity with result of True
+            (20, False, True),        # At time 20, should not check connectivity and saved state must return True
+            (80, True, False),        # At time 80, should check connectivity with result of False
+            (120, False, False),      # At time 120, should not check connectivity and saved state must return False
+            (240, False, False),      # At time 240, should not check connectivity and saved state must return False
+            (400, True, True)         # At time 400, should check connectivity with result of True
+        ]
+
+        for timestamp, should_check_connection, has_connection in checks:
+            with patch('time.time', return_value=timestamp), \
+              patch.object(ctx, "_check_connectivity", return_value=has_connection) as check_connectivity_mock:
+                assert ctx.is_connected() == (has_connection and not offline)
+                if (should_check_connection or force_update) and not offline:
+                    check_connectivity_mock.assert_called_once()

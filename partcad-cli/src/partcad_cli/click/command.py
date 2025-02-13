@@ -141,6 +141,13 @@ pc.plugins.export_png = pc.PluginExportPngReportlab()
     help="Update all repositories even if they are fresh",
 )
 @click.option(
+    "--offline",
+    is_flag=True,
+    show_envvar=True,
+    default=None,
+    help="Operate in offline mode, without any repo updates",
+)
+@click.option(
     "--google-api-key",
     type=str,
     default=None,
@@ -285,6 +292,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
         ("PC_PYTHON_SANDBOX", "python_sandbox"),
         ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
         ("PC_FORCE_UPDATE", "force_update"),
+        ("PC_OFFLINE", "offline"),
         ("PC_GOOGLE_API_KEY", "google_api_key"),
         ("PC_OPENAI_API_KEY", "openai_api_key"),
         ("PC_OLLAMA_NUM_THREAD", "ollama_num_thread"),
@@ -313,6 +321,8 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     commands_with_context = [
         "add",
         "ai",
+        "convert",
+        "import",
         "info",
         "inspect",
         "install",
