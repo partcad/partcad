@@ -151,6 +151,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `BREP`
     - [x] `STL`
     - [x] `3MF`
+    - [x] `OBJ`
   - Generating with LLM/GenAI
     - [x] Google AI (`Gemini`)
     - [x] OpenAI (`ChatGPT`)
