@@ -54,7 +54,7 @@ jobs:
         uses: devcontainers/ci@v0.3
         # if: steps.setup.outputs.BUILD_DEVCONTAINER == 'true'
         with:
-          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
           configFile: .devcontainer/devcontainer-build.json
           push: always
