@@ -43,8 +43,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     # If this is the original copy of PartCAD, then use the org's self-hosted runners
-    runs-on: ${{ matrix.os }}
-    # runs-on: github.repository == 'partcad/partcad' && fromJson('["self-hosted", "${{ matrix.os }}"]' || "${{ matrix.os }}"
+    # runs-on: ${{ matrix.os }}
+    runs-on: ${{ github.repository == 'partcad/partcad' && fromJson('["self-hosted", "${{ matrix.os }}"]' || "${{ matrix.os }}" }}
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 30
