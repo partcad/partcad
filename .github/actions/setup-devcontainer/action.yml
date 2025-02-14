@@ -75,8 +75,8 @@ runs:
         if ! sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
            grep "\\S" | \
            yq .image | \
-           grep -q "$IMAGE_TAG"; then
-          echo "Error: Target devcontainer version $IMAGE_TAG not found in devcontainer.json"
+           grep -q "${{ env.VERSION }}"; then
+          echo "Error: Target devcontainer version ${{ env.VERSION }} not found in devcontainer.json"
           exit 1
         fi
 
