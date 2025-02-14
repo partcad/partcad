@@ -55,5 +55,5 @@ __all__ = [
     "exception",
 ]
 
-__version__: str = "0.7.103"
+__version__: str = "0.7.104"
 init_sentry(__version__)
