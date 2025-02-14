@@ -153,7 +153,8 @@ jobs:
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}"
+          imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
           # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
           # configFile: .devcontainer/.devcontainer.json
           push: never
@@ -285,7 +286,8 @@ jobs:
       - name: Run Behave
         uses: devcontainers/ci@v0.3
         with:
-          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}"
+          imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
           # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           # configFile: .devcontainer/.devcontainer.json
           push: never
@@ -457,7 +459,8 @@ jobs:
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
         with:
-          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}"
+          imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
           # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           # configFile: .devcontainer/.devcontainer.json
           push: never
