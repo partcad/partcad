@@ -23,7 +23,7 @@ concurrency:
 env:
   # If this is the original copy of PartCAD, then use the org's self-hosted runners
   OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-15", "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
-  PYTHONS: ${{ github.branch == 'devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+  PYTHONS: ${{ ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} == 'devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
 
 jobs:
   test_pytest:
@@ -31,7 +31,7 @@ jobs:
     env:
       # If this is the original copy of PartCAD, then use the org's self-hosted runners
       OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-15", "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
-      PYTHONS: ${{ github.branch == 'devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+      PYTHONS: ${{ ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} == 'devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
     strategy:
       fail-fast: false
       matrix:
