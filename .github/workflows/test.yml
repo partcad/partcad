@@ -26,7 +26,7 @@ env:
 #   PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
 
 jobs:
-  test_pytest:
+  test-pytest:
     name: "Pytest"
     env:
       # If this is the original copy of PartCAD, then use the org's self-hosted runners
@@ -36,9 +36,9 @@ jobs:
       fail-fast: false
       matrix:
         # os: ["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]
-        os: ${{ fromJson(test_pytest.env.OSES) }}
+        os: ${{ fromJson(env.OSES) }}
         python-version: ["3.10", "3.11", "3.12"]
-        # python-version: ${{ fromJson(test_pytest.env.PYTHONS) }}
+        # python-version: ${{ fromJson(env.PYTHONS) }}
     # If this is the original copy of PartCAD, then use the org's self-hosted runners
     runs-on: github.repository == 'partcad/partcad' && fromJson('["self-hosted", "${{ matrix.os }}"]' || "${{ matrix.os }}"
     # Don't run the tests for the commit created by "bumpversion"

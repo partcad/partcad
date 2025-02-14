@@ -323,7 +323,9 @@ jobs:
         # if: always()
         uses: devcontainers/ci@v0.3
         with:
-          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
+          # imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
           # configFile: .devcontainer/.devcontainer.json
           push: never
