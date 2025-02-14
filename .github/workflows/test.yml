@@ -6,7 +6,7 @@ on:
   schedule:
     # https://crontab.guru/#0_8_*_*_*
     # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
-    - cron: "0 18 * * *" # Run daily at PST morning
+    - cron: "0 18 * * *" # Run daily at Pacific time morning
   merge_group:
   # push:
   #   branches: ["main", "devel"]
