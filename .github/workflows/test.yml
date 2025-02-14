@@ -34,6 +34,7 @@ jobs:
     steps:
       - name: Set matrix
         id: set-matrix
+        run: |
           echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }} }" >> $GITHUB_OUTPUT
   test-pytest:
     name: "Pytest"
