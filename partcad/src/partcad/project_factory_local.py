@@ -26,6 +26,7 @@ class ProjectFactoryLocal(pf.ProjectFactory, LocalImportConfiguration):
             self.import_config_path = os.path.join(self.config_dir, self.import_config_path)
 
         self.path = self.import_config_path
+        # TODO(clairbee): figure `import_config_url` out using `parent.import_config_url` and `self.path`
 
         if not self.can_be_empty and not os.path.exists(self.import_config_path):
             raise Exception("PartCAD config not found: %s" % self.import_config_path)
