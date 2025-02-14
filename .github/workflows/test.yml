@@ -23,24 +23,27 @@ concurrency:
 env:
   # If this is the original copy of PartCAD, then use the org's self-hosted runners
   OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-15", "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
-#   PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+  PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
 
 jobs:
+  set-matrix:
+    name: "Set matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Set matrix
+        id: set-matrix
+          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }} }" >> $GITHUB_OUTPUT
   test-pytest:
     name: "Pytest"
-    env:
-      # If this is the original copy of PartCAD, then use the org's self-hosted runners
-      OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-15", "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
-    #   PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+    needs: set-matrix
     strategy:
       fail-fast: false
-      matrix:
-        # os: ["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]
-        os: ${{ fromJson(env.OSES) }}
-        python-version: ["3.10", "3.11", "3.12"]
-        # python-version: ${{ fromJson(env.PYTHONS) }}
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     # If this is the original copy of PartCAD, then use the org's self-hosted runners
-    runs-on: github.repository == 'partcad/partcad' && fromJson('["self-hosted", "${{ matrix.os }}"]' || "${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    # runs-on: github.repository == 'partcad/partcad' && fromJson('["self-hosted", "${{ matrix.os }}"]' || "${{ matrix.os }}"
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 30
