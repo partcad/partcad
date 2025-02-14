@@ -72,6 +72,11 @@ search = "VERSION: {current_version}"
 replace = "VERSION: {new_version}"
 
 [[tool.bumpversion.files]]
+filename = ".devcontainer/devcontainer.json"
+search = "devcontainer:{current_version}"
+replace = "devcontainer:{new_version}"
+
+[[tool.bumpversion.files]]
 filename = ".devcontainer/Dockerfile"
 search = "IMAGE_VERSION={current_version}"
 replace = "IMAGE_VERSION={new_version}"

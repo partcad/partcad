@@ -5,12 +5,12 @@ outputs:
   IMAGE_TAG:
     description: "The tag of the container in 'devcontainer.json' (the next patch version)"
     value: ${{ steps.tag.outputs.IMAGE_TAG }}
-  PUBLISH_IMAGE_TAG:
-    description: "The tag of the ephemeral container version for this branch only (if different from IMAGE_TAG)"
-    value: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
-  BUILD_DEVCONTAINER:
-    description: "Whether the ephemeral container needs to be built or not."
-    value: ${{ steps.tag.outputs.BUILD_DEVCONTAINER }}
+  # PUBLISH_IMAGE_TAG:
+  #   description: "The tag of the ephemeral container version for this branch only (if different from IMAGE_TAG)"
+  #   value: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
+  # BUILD_DEVCONTAINER:
+  #   description: "Whether the ephemeral container needs to be built or not."
+  #   value: ${{ steps.tag.outputs.BUILD_DEVCONTAINER }}
 
 runs:
   using: composite
@@ -29,38 +29,49 @@ runs:
           devcontainer:
             - .devcontainer/*
 
-    - name: On 'devel' and the devcontainer needs to be rebuilt
+    - name: The devcontainer needs to be rebuilt
       id: tag
       shell: bash -l {0}
       env:
         BRANCH: ${{ steps.extract_branch.outputs.BRANCH }}
       run: |
-        # The version tag is about to get bumped. Let's predict the next version.
-        # TODO(clairbee): detect major and minor version updates
-        if [ "${{ env.BRANCH }}" == "devel" ] || [ "${{ env.BRANCH }}" == "main" ]; then
+        if [[ "X${{ github.event.head_commit.message }}" == "Version updated"* ]]; then
+          # Do not add the branch name to the tag if the commit is created by "bumpversion"
           export IMAGE_TAG="${{ env.VERSION }}"
-          export PUBLISH_IMAGE_TAG="$IMAGE_TAG"
-          export BUILD_DEVCONTAINER="false"
         else
-          export IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
-          export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
-          export BUILD_DEVCONTAINER="true"
+          export IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
         fi
         echo "IMAGE_TAG=$IMAGE_TAG"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
-        echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG"
-        echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_ENV
-        echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
-        echo "BUILD_DEVCONTAINER=$BUILD_DEVCONTAINER"
-        echo "BUILD_DEVCONTAINER=$BUILD_DEVCONTAINER" >> $GITHUB_OUTPUT
 
-        # # Make sure the 'devcontainer.json' is up-to-date
+        # # The version tag is about to get bumped. Let's predict the next version.
+        # # TODO(clairbee): detect major and minor version updates
+        # if [ "${{ env.BRANCH }}" == "devel" ] || [ "${{ env.BRANCH }}" == "main" ]; then
+        #   export IMAGE_TAG="${{ env.VERSION }}"
+        #   export PUBLISH_IMAGE_TAG="$IMAGE_TAG"
+        #   export BUILD_DEVCONTAINER="false"
+        # else
+        #   export IMAGE_TAG=$(echo "${{ env.VERSION }}" | awk -F '.' '{print $1"."$2"."($3 + 1)}')
+        #   export PUBLISH_IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
+        #   export BUILD_DEVCONTAINER="true"
+        # fi
+        # echo "IMAGE_TAG=$IMAGE_TAG"
+        # echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        # echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+        # echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG"
+        # echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_ENV
+        # echo "PUBLISH_IMAGE_TAG=$PUBLISH_IMAGE_TAG" >> $GITHUB_OUTPUT
+        # echo "BUILD_DEVCONTAINER=$BUILD_DEVCONTAINER"
+        # echo "BUILD_DEVCONTAINER=$BUILD_DEVCONTAINER" >> $GITHUB_OUTPUT
+
+        # Make sure the 'devcontainer.json' is valid
         # if ! jq -e . .devcontainer/devcontainer.json > /dev/null 2>&1; then
         #   echo "Error: Invalid JSON in devcontainer.json"
         #   exit 1
         # fi
 
+        # Make sure the 'devcontainer.json' is up-to-date
         if ! sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
            grep "\\S" | \
            yq .image | \
@@ -73,7 +84,6 @@ runs:
       shell: bash -l {0}
       env:
         IMAGE_TAG: ${{ steps.tag.outputs.IMAGE_TAG }}
-        PUBLISH_IMAGE_TAG: ${{ steps.tag.outputs.PUBLISH_IMAGE_TAG }}
       run: |
-        echo "Replacing devcontainer:${{ env.IMAGE_TAG }} with devcontainer:${{ env.PUBLISH_IMAGE_TAG }} in .devcontainer/devcontainer.json"
-        sed "s|devcontainer:${{ env.IMAGE_TAG }}|devcontainer:${{ env.PUBLISH_IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
+        echo "Replacing devcontainer:${{ env.VERSION }} with devcontainer:${{ env.IMAGE_TAG }} in .devcontainer/devcontainer.json"
+        sed "s|devcontainer:${{ env.VERSION }}|devcontainer:${{ env.IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json
