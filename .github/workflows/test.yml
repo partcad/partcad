@@ -20,23 +20,25 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-env:
-  # If this is the original copy of PartCAD, then use the org's self-hosted runners
-  OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-15", "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
-  PYTHONS: ${{ ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} == 'devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+# env:
+#   # If this is the original copy of PartCAD, then use the org's self-hosted runners
+#   OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-15", "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
+#   PYTHONS: ${{ ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} == 'devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
 
 jobs:
   test_pytest:
     name: "Pytest"
-    env:
-      # If this is the original copy of PartCAD, then use the org's self-hosted runners
-      OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-15", "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
-      PYTHONS: ${{ ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} == 'devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+    # env:
+    #   # If this is the original copy of PartCAD, then use the org's self-hosted runners
+    #   OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-15", "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
+    #   PYTHONS: ${{ ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} == 'devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJson(test_pytest.env.OSES) }}
-        python-version: ${{ fromJson(test_pytest.env.PYTHONS) }}
+        os: ["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]
+        # os: ${{ fromJson(test_pytest.env.OSES) }}
+        python-version: ["3.10", "3.11", "3.12"]
+        # python-version: ${{ fromJson(test_pytest.env.PYTHONS) }}
     # If this is the original copy of PartCAD, then use the org's self-hosted runners
     runs-on: ${{ github.repository == 'partcad/partcad' && ["self-hosted", matrix.os] || matrix.os }}
     # Don't run the tests for the commit created by "bumpversion"
