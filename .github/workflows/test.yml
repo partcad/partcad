@@ -22,7 +22,7 @@ concurrency:
 
 env:
   # If this is the original copy of PartCAD, then use the org's self-hosted runners
-  OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-15", "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
+  OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", ["self-hosted", "macos-15-large"], "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
   PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
 
 jobs:
@@ -43,8 +43,8 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     # If this is the original copy of PartCAD, then use the org's self-hosted runners
-    # runs-on: ${{ matrix.os }}
-    runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
+    runs-on: ${{ matrix.os }}
+    # runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 30
