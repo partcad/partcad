@@ -100,6 +100,8 @@ nox-poetry = "^1.0.3"
 #packaging = "^24.2"
 #typing_extensions = "^4.12.2"
 python-jsonrpc-server = "^0.4.0"
+nox = "^2024.10.9"
+nox-poetry = "^1.1.0"
 
 [tool.poetry.group.docs.dependencies]
 sphinx = "^8.1.3"

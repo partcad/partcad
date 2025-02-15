@@ -22,7 +22,8 @@ concurrency:
 
 env:
   # If this is the original copy of PartCAD, then use the org's self-hosted runners
-  OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", ["self-hosted", "macos-15-large"], "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
+  OSES: ["ubuntu-latest", "windows-latest", "macos-15-large", "macos-latest"]
+  # OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", ["self-hosted", "macos-15-large"], "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-latest"]' }}
   PYTHONS: '["3.10"]'
   # PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
 

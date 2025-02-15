@@ -46,8 +46,12 @@ runs:
       if: runner.os == 'macOS'
       shell: bash -l {0}
       run: |
-        brew install -f openscad || ( \
-          rm /Users/$USER/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
+        # The below "rm" command does not have "-f" on purpose:
+        # the second "brew install" command is only needed when the dmg file is corrupted
+        which openscad || \
+          brew install -f openscad || ( \
+            rm /Users/$USER/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad \
+          )
 
     - name: Install OpenSCAD (Windows)
       if: runner.os == 'Windows'
