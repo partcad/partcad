@@ -23,7 +23,8 @@ concurrency:
 env:
   # If this is the original copy of PartCAD, then use the org's self-hosted runners
   OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", ["self-hosted", "macos-15-large"], "macos-latest"]' || '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]' }}
-  PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+  PYTHONS: '["3.10"]'
+  # PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
 
 jobs:
   set-matrix:
@@ -36,6 +37,7 @@ jobs:
         id: set-matrix
         run: |
           echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }} }' >> $GITHUB_OUTPUT
+
   test-pytest:
     name: "Pytest"
     needs: set-matrix
@@ -56,14 +58,17 @@ jobs:
 
       - name: Test with pytest
         env:
-          PYTHONPATH: partcad/src
+          # PYTHONPATH: partcad/src
           PYTHONWARNINGS: ignore
         shell: bash -l {0}
         run: |
           conda activate env-test
 
           mkdir -pv pytest-test-results
-          pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
+          pytest \
+            partcad partad-cli \
+            -x -p no:error-for-skips -p no:warnings --dist no \
+            --ignore-glob="openscad*" --ignore-glob="partcad-ide-vscode/bundled/libs/*"
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
           conda deactivate
 
@@ -77,6 +82,57 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           codecov-files: pytest-test-results/junit.xml
           coverage-report: pytest-test-results/coverage.xml
+
+  test-pytest-ide-vscode:
+    name: "Pytest (VS Code extension)"
+    needs: set-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+    # If this is the original copy of PartCAD, then use the org's self-hosted runners
+    runs-on: ${{ matrix.os }}
+    # runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
+    # Don't run the tests for the commit created by "bumpversion"
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
+
+      - name: Build the VS Code extension
+        shell: bash -l {0}
+        run: |
+          conda activate env-test
+          (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
+          conda deactivate
+
+      - name: Test VS Code extension with pytest
+        env:
+          PYTHONWARNINGS: ignore
+        shell: bash -l {0}
+        run: |
+          conda activate env-test
+
+          mkdir -pv pytest-vscode-test-results
+          pytest \
+            partcad-ide-vscode \
+            -x -p no:error-for-skips -p no:warnings --dist no \
+            --ignore-glob="openscad*" --ignore-glob="partcad-ide-vscode/bundled/libs/*"
+          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-vscode-test-results/coverage.xml
+          conda deactivate
+
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: pytest-vscode-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: pytest-vscode-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: pytest-vscode-test-results/junit.xml
+          coverage-report: pytest-vscode-test-results/coverage.xml
 
   # test-behave:
   #   name: "Behave"

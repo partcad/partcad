@@ -47,7 +47,7 @@ runs:
       shell: bash -l {0}
       run: |
         brew install -f openscad || ( \
-          rm /Users/runner/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
+          rm /Users/$USER/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
 
     - name: Install OpenSCAD (Windows)
       if: runner.os == 'Windows'
