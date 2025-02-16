@@ -32,6 +32,7 @@ runs:
       run: |
         choco uninstall StrawberryPerl -y
         choco install pkgconfiglite
+        choco install pacman
         pacman -S mingw-w64-x86_64-gtk3
         pacman -S mingw64/mingw-w64-x86_64-cairo
 
