@@ -3,7 +3,7 @@ description: "Installs the proper CadQuery for OS that requires a specific wheel
 
 runs:
   using: "composite"
-  parameters:
+  inputs:
     envs:
       description: "The name of the conda environment to install CadQuery into"
       required: true
