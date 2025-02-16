@@ -24,13 +24,15 @@ runs:
       if: ${{ startsWith(matrix.os, 'macos') }}
       shell: bash
       run: |
-        HOMEBREW_NO_AUTO_UPDATE=1 brew install jpeg cairo
+        HOMEBREW_NO_AUTO_UPDATE=1 brew install jpeg
 
     - name: Install prerequisites
       if: ${{ startsWith(matrix.os, 'windows') }}
       shell: bash
       run: |
         choco uninstall StrawberryPerl -y
+        choco install pkgconfiglite
+        choco install cairo
 
     ###################################################  PYTHON  ###################################################
 
