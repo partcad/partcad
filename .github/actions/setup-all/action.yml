@@ -6,9 +6,10 @@ runs:
   steps:
     ############################################## OS PREREQUISITES ################################################
 
+    # TODO(clairbee): minimize these pre-requisites by moving the VSCode build job away from the test workflow (ci.yml)
     - name: Install prerequisites
       if: ${{ startsWith(matrix.os, 'ubuntu') }}
-      shell: bash
+      shell: bash -l {0}
       run: |
         sudo apt-get -q update || exit 1
         sudo apt-get -q install -y \
@@ -22,32 +23,37 @@ runs:
 
     - name: Install prerequisites
       if: ${{ startsWith(matrix.os, 'macos') }}
-      shell: bash
+      shell: bash -l {0}
       run: |
         HOMEBREW_NO_AUTO_UPDATE=1 brew install jpeg
 
     - name: Install prerequisites
       if: ${{ startsWith(matrix.os, 'windows') }}
-      shell: bash
+      shell: bash -l {0}
       run: |
         vcpkg.exe install pkgconf
         vcpkg.exe install freetype
+
+    - name: Install prerequisites (part 2)
+      if: ${{ startsWith(matrix.os, 'windows') }}
+      shell: bash
+      run: |
         vcpkg.exe install cairo
         choco uninstall StrawberryPerl -y
         # choco install pkgconfiglite
         # choco install pacman
         # pacman -Syu mingw-w64-x86_64-gtk3
         # pacman -Syu mingw-w64-x86_64-cairo
-        echo "Searching for pkgconf"
+        echo "Searching for pkg-config"
         which pkgconf || echo "pkgconf not found"
         which pkg-config || echo "pkg-config not found"
-        dir "C:\"
-        echo "C:\msys64\usr\bin" >> $ENV:PATH
-        echo "C:\msys64\usr\lib\pkgconfig" >> $ENV:PKG_CONFIG_PATH
-        echo "C:\msys2\mingw64\bin" >> $ENV:PATH
-        echo "C:\msys2\mingw64\lib\pkgconfig" >> $ENV:PKG_CONFIG_PATH
-        echo "C:\msys64\mingw64\bin" >> $ENV:PATH
-        echo "C:\msys64\mingw64\lib\pkgconfig" >> $ENV:PKG_CONFIG_PATH
+        dir "C:\\"
+        echo "C:\\msys64\\usr\\bin" >> $ENV:PATH
+        echo "C:\\msys64\\usr\\lib\\pkgconfig" >> $ENV:PKG_CONFIG_PATH
+        echo "C:\\msys2\\mingw64\\bin" >> $ENV:PATH
+        echo "C:\\msys2\\mingw64\\lib\\pkgconfig" >> $ENV:PKG_CONFIG_PATH
+        echo "C:\\msys64\\mingw64\\bin" >> $ENV:PATH
+        echo "C:\\msys64\\mingw64\\lib\\pkgconfig" >> $ENV:PKG_CONFIG_PATH
 
     ###################################################  PYTHON  ###################################################
 
