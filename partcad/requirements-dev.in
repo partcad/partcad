@@ -13,3 +13,6 @@ pytest-html
 pytest-xdist==3.6.1
 rich-click
 strip-ansi==0.1.1
+python-jsonrpc-server==0.4.0
+nox==2025.2.9
+nox-poetry==1.0.3
