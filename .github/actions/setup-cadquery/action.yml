@@ -1,12 +1,13 @@
 name: "Setup CadQuery"
 description: "Installs the proper CadQuery for OS that requires a specific wheel"
 
+inputs:
+  envs:
+    description: "The name of the conda environment to install CadQuery into"
+    required: true
+
 runs:
   using: "composite"
-  inputs:
-    envs:
-      description: "The name of the conda environment to install CadQuery into"
-      required: true
   steps:
     - name: Set CadQuery version
       shell: bash -l {0}
@@ -18,7 +19,7 @@ runs:
       if: startsWith(${{matrix.os}}, 'macos')
       shell: bash -l {0}
       run: |
-        for env in ${{ parameters.envs }}; do
+        for env in ${{ github.event.inputs.envs }}; do
           conda activate $env
           pip install swig
           conda deactivate
@@ -37,7 +38,7 @@ runs:
         # Download wheel
         curl -L -o "$WHEEL_FILE" "$WHEEL_URL"
 
-        for env in ${{ parameters.envs }}; do
+        for env in ${{ github.event.inputs.envs }}; do
           conda activate $env
           pip install "$WHEEL_FILE"
           conda deactivate

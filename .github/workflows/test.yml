@@ -68,8 +68,7 @@ jobs:
           mkdir -pv pytest-test-results
           pytest \
             partcad partcad-cli \
-            -x -p no:error-for-skips -p no:warnings --dist no \
-            --ignore-glob="openscad*" --ignore-glob="partcad-ide-vscode/bundled/libs/*"
+            -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
           conda deactivate
 
@@ -95,7 +94,7 @@ jobs:
     # runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -119,8 +118,7 @@ jobs:
           mkdir -pv pytest-vscode-test-results
           pytest \
             partcad-ide-vscode \
-            -x -p no:error-for-skips -p no:warnings --dist no \
-            --ignore-glob="openscad*" --ignore-glob="partcad-ide-vscode/bundled/libs/*"
+            -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-vscode-test-results/coverage.xml
           conda deactivate
 

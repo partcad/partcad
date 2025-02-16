@@ -12,6 +12,8 @@ addopts = """
     --junitxml=pytest-results/junit.xml
     --log-cli-level=DEBUG
     --self-contained-html
+    --ignore-glob="openscad*"
+    --ignore-glob="partcad-ide-vscode/bundled/libs/*"
     """
 filterwarnings = [
     "ignore:.*is a deprecated alias for.*:DeprecationWarning"
