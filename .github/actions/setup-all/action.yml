@@ -37,10 +37,15 @@ runs:
         # choco install pacman
         # pacman -Syu mingw-w64-x86_64-gtk3
         # pacman -Syu mingw-w64-x86_64-cairo
-        # echo "C:\msys64\usr\bin" >> $ENV:PATH
-        # echo "C:\msys64\usr\lib\pkgconfig" >> $ENV:PKG_CONFIG_PATH
-        # echo "C:\msys2\mingw64\bin" >> $ENV:PATH
-        # echo "C:\msys2\mingw64\lib\pkgconfig" >> $ENV:PKG_CONFIG_PATH
+        echo "Searching for pkgconf"
+        which pkgconf || echo "pkgconf not found"
+        dir C:\
+        echo "C:\msys64\usr\bin" >> $ENV:PATH
+        echo "C:\msys64\usr\lib\pkgconfig" >> $ENV:PKG_CONFIG_PATH
+        echo "C:\msys2\mingw64\bin" >> $ENV:PATH
+        echo "C:\msys2\mingw64\lib\pkgconfig" >> $ENV:PKG_CONFIG_PATH
+        echo "C:\msys64\mingw64\bin" >> $ENV:PATH
+        echo "C:\msys64\mingw64\lib\pkgconfig" >> $ENV:PKG_CONFIG_PATH
 
     ###################################################  PYTHON  ###################################################
 
