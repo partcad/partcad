@@ -1,0 +1,44 @@
+name: "Setup CadQuery"
+description: "Installs the proper CadQuery for OS that requires a specific wheel"
+
+runs:
+  using: "composite"
+  parameters:
+    envs:
+      description: "The name of the conda environment to install CadQuery into"
+      required: true
+  steps:
+    - name: Set CadQuery version
+      shell: bash -l {0}
+      run: |
+        echo "OS=$(uname)" >> $GITHUB_ENV
+        echo "ARCH=$(uname -m)" >> $GITHUB_ENV
+
+    - name: install macos dev dependencies
+      if: startsWith(${{matrix.os}}, 'macos')
+      shell: bash -l {0}
+      run: |
+        for env in ${{ parameters.envs }}; do
+          conda activate $env
+          pip install swig
+          conda deactivate
+        done
+
+    - name: install cadquery-ocp on macOS
+      if: ${{ startsWith(matrix.os, 'macos') && env.ARCH == 'arm64' }}
+      shell: bash -l {0}
+      run: |
+        VERSION="7.7.2"
+        PY_VERSION="${{ matrix.python-version }}"
+        PY_VERSION_NO_DOT="${PY_VERSION//./}"
+        WHEEL_URL="https://github.com/jdegenstein/ocp-build-system/releases/download/${VERSION}_${OS}_${ARCH}/cadquery_ocp-${VERSION}-cp${PY_VERSION_NO_DOT}-cp${PY_VERSION_NO_DOT}-macosx_11_0_${ARCH}.whl"
+        WHEEL_FILE="cadquery_ocp-${VERSION}-cp${PY_VERSION_NO_DOT}-cp${PY_VERSION_NO_DOT}-macosx_11_0_${ARCH}.whl"
+
+        # Download wheel
+        curl -L -o "$WHEEL_FILE" "$WHEEL_URL"
+
+        for env in ${{ parameters.envs }}; do
+          conda activate $env
+          pip install "$WHEEL_FILE"
+          conda deactivate
+        done
