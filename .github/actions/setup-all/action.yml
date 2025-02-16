@@ -20,6 +20,18 @@ runs:
           libcairo2-dev pkg-config python3-dev \
             || exit 1
 
+    - name: Install prerequisites
+      if: ${{ startsWith(matrix.os, 'macos') }}
+      shell: bash
+      run: |
+        HOMEBREW_NO_AUTO_UPDATE=1 brew install jpeg cairo
+
+    - name: Install prerequisites
+      if: ${{ startsWith(matrix.os, 'windows') }}
+      shell: bash
+      run: |
+        choco uninstall StrawberryPerl -y
+
     ###################################################  PYTHON  ###################################################
 
     # Miniconda
