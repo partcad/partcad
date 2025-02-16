@@ -30,6 +30,7 @@ runs:
       if: ${{ startsWith(matrix.os, 'windows') }}
       shell: bash
       run: |
+        vcpkg.exe install cairo
         choco uninstall StrawberryPerl -y
         choco install pkgconfiglite
         choco install pacman
