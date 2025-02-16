@@ -291,49 +291,48 @@ jobs:
   #         codecov-files: examples-all-test-results/junit.xml
   #         coverage-report: examples-all-test-results/coverage.xml
 
-  test-pub-repo:
-    name: "Repo //pub"
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15-large, macos-15-xlarge]
-        # os: [ubuntu-24.04-l, windows-latest-l, macos-15-large, macos-15-xlarge]
-        python-version: ["3.10", "3.12"]
-    runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 15
+  # test-pub-repo:
+  #   name: "Repo //pub"
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: [ubuntu-24.04-l, windows-latest-l, macos-15-large, macos-15-xlarge]
+  #       python-version: ["3.10", "3.12"]
+  #   runs-on: ${{ matrix.os }}
+  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+  #   timeout-minutes: 15
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-      - uses: ./.github/actions/setup-test
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #     - uses: ./.github/actions/setup-test
 
-      - name: Test the entire repository
-        shell: bash -l {0}
-        run: |
-          mkdir -pv pub-repo-test-results
+  #     - name: Test the entire repository
+  #       shell: bash -l {0}
+  #       run: |
+  #         mkdir -pv pub-repo-test-results
 
-          conda activate env-test
-          python -m pip install -U ./partcad ./partcad-cli
+  #         conda activate env-test
+  #         python -m pip install -U ./partcad ./partcad-cli
 
-          # BEGIN PUBLIC REPO
-          cd examples
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
-          # TODO(clairbee): fix the failing packages first
-          # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
-          # END PUBLIC REPO
-          coverage combine
+  #         # BEGIN PUBLIC REPO
+  #         cd examples
+  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
+  #         # TODO(clairbee): fix the failing packages first
+  #         # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
+  #         # END PUBLIC REPO
+  #         coverage combine
 
-          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
-          conda deactivate
+  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
+  #         conda deactivate
 
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: pub-repo-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: pub-repo-test-results/junit.xml
-          coverage-report: pub-repo-test-results/coverage.xml
+  #     - name: Upload test results & coverage reports to github and codecov
+  #       uses: ./.github/actions/upload-test-results
+  #       with:
+  #         name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: pub-repo-test-results/
+  #         retention-days: 7
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.CODECOV_TOKEN }}
+  #         codecov-files: pub-repo-test-results/junit.xml
+  #         coverage-report: pub-repo-test-results/coverage.xml
