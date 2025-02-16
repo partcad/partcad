@@ -31,7 +31,7 @@ runs:
       shell: bash
       run: |
         vcpkg.exe install cairo
-        # choco uninstall StrawberryPerl -y
+        choco uninstall StrawberryPerl -y
         # choco install pkgconfiglite
         # choco install pacman
         # pacman -Syu mingw-w64-x86_64-gtk3
