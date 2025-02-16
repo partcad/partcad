@@ -10,6 +10,3 @@ coverage/**
 **/requirements.in
 **/tool/_debug_server.py
 **/.conda/**
-**/dist/**
-**/build/**
-**/out/**
