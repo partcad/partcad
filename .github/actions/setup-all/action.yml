@@ -41,7 +41,8 @@ runs:
         vcpkg.exe install cairo
         choco uninstall StrawberryPerl -y
         # choco install pkgconfiglite
-        # choco install pacman
+        choco install pacman
+        pacman -Sy pkgconf
         # pacman -Syu mingw-w64-x86_64-gtk3
         # pacman -Syu mingw-w64-x86_64-cairo
         echo "Searching for pkg-config"
