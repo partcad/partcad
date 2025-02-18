@@ -23,7 +23,7 @@ from .user_config import user_config
 
 # Global lock for conda that can be shared across threads
 global _global_conda_lock
-_global_conda_lock = FileLock(os.path.join(user_config.internal_state_dir, ".conda.lock"), thread_local=False)
+_global_conda_lock = FileLock(os.path.join(user_config.internal_state_dir, ".conda.lock"))
 
 
 class VenvLock:
