@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.7.106",
+  "version": "0.7.112",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"

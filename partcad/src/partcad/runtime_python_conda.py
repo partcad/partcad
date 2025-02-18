@@ -63,6 +63,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 self.once_conda_locked()
         await super().once_async()
 
+    # TODO(clairbee): Make an async version of this function
     def once_conda_locked(self):
         # Lock the global conda lock and create a new environment
         with runtime_python._global_conda_lock:

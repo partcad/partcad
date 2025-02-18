@@ -28,6 +28,10 @@ class NonePythonRuntime(runtime_python.PythonRuntime):
             else:
                 self.exec_path = which
 
-        if not self.initialized:
-            os.makedirs(self.path)
-            self.initialized = True
+    def once(self):
+        os.makedirs(self.path, exist_ok=True)
+        super().once()
+
+    async def once_async(self):
+        os.makedirs(self.path, exist_ok=True)
+        await super().once_async()
