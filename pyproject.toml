@@ -19,6 +19,15 @@ filterwarnings = [
     "ignore:.*is a deprecated alias for.*:DeprecationWarning"
 ]
 
+# TODO(clairbee): make the below work instead of "behave.ini"
+# [tool.behave]
+# tags = ["~@wip"]
+# logging_level = "DEBUG"
+# log_capture = true
+# paths = ["features/"]
+# format = "allure_behave.formatter:AllureFormatter"
+# outfile = "allure-results"
+
 [tool.black]
 line-length = 120
 target-version = ['py310']

@@ -3,13 +3,13 @@ name: CD # Keep the action badge icon short
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: "0 0 * * *" # Run daily at midnight
+  schedule:
+    - cron: "0 18 * * *" # Run daily at Pacific time morning
   merge_group:
-  # push:
-  #   branches: ["main", "devel"]
-  # pull_request:
-  #   branches: ["main", "devel"]
+  push:
+    branches: ["main", "devel"]
+  pull_request:
+    branches: ["main", "devel"]
 
 permissions:
   contents: write

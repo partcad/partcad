@@ -1,3 +1,5 @@
+# Minimalistic workflow to build the VS Code extension
+# TODO(clairbee): build the extension as part of the "build" and "deploy" workflows
 name: nox
 
 on:

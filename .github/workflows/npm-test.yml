@@ -1,3 +1,4 @@
+# Run JavaScript tests for the VS Code extension
 # TODO(clairbee): to be integrated into test.yml
 name: npm test
 

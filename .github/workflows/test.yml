@@ -8,8 +8,8 @@ on:
     # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
     - cron: "0 18 * * *" # Run daily at Pacific time morning
   merge_group:
-  # push:
-  #   branches: ["main", "devel"]
+  push:
+    branches: ["main", "devel"]
   pull_request:
     branches: ["main", "devel"]
 
@@ -59,7 +59,6 @@ jobs:
 
       - name: Test with pytest
         env:
-          # PYTHONPATH: partcad/src
           PYTHONWARNINGS: ignore
         shell: bash -l {0}
         run: |
@@ -134,171 +133,77 @@ jobs:
           codecov-files: pytest-vscode-test-results/junit.xml
           coverage-report: pytest-vscode-test-results/coverage.xml
 
-  # test-behave:
-  #   name: "Behave"
+  test-behave:
+    name: "Behave"
+    needs: set-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
+
+      - name: Start SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+
+      - name: Test with behave
+        shell: bash -l {0}
+        run: |
+          mkdir -pv behave-test-results
+
+          conda activate env-test
+          if ! python -m pip install -U ./partcad ./partcad-cli; then
+            echo "Failed to install packages"
+            exit 1
+          fi
+
+          export PYTHONUTF8=1
+          export PYTHONIOENCODING=utf-8
+
+          BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            BEHAVE_CMD="$BEHAVE_CMD --tags=-skip-windows"
+          fi
+
+          if ! eval "$BEHAVE_CMD"; then
+            echo "Behave tests failed"
+            exit 1
+          fi
+
+          # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
+          #   echo "Behave tests failed"
+          #   exit 1
+          # fi
+
+          coverage combine
+          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
+          conda deactivate
+
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: behave-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: behave-test-results/junit.xml
+          coverage-report: behave-test-results/coverage.xml
+
+  # test-examples-partcad:
+  #   name: "Examples (PartCAD)"
   #   needs: set-matrix
   #   strategy:
   #     fail-fast: false
   #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-
-  #   timeout-minutes: 60
-
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/setup-all
-  #     - uses: ./.github/actions/setup-test
-
-  #     - name: Start SSH Agent
-  #       uses: webfactory/ssh-agent@v0.9.0
-  #       with:
-  #         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
-
-  #     - name: Test with behave
-  #       shell: bash -l {0}
-  #       run: |
-  #         mkdir -pv behave-test-results
-
-  #         conda activate env-test
-  #         if ! python -m pip install -U ./partcad ./partcad-cli; then
-  #           echo "Failed to install packages"
-  #           exit 1
-  #         fi
-
-  #         export PYTHONUTF8=1
-  #         export PYTHONIOENCODING=utf-8
-
-  #         BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave"
-  #         if [[ "$RUNNER_OS" == "Windows" ]]; then
-  #           BEHAVE_CMD="$BEHAVE_CMD --tags=-skip-windows"
-  #         fi
-
-  #         if ! eval "$BEHAVE_CMD"; then
-  #           echo "Behave tests failed"
-  #           exit 1
-  #         fi
-
-  #         # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
-  #         #   echo "Behave tests failed"
-  #         #   exit 1
-  #         # fi
-
-  #         coverage combine
-  #         coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
-  #         conda deactivate
-
-  #     - name: Upload test results & coverage reports to github and codecov
-  #       uses: ./.github/actions/upload-test-results
-  #       with:
-  #         name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
-  #         path: behave-test-results/
-  #         retention-days: 7
-  #         status: ${{ job.status }}
-  #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         codecov-files: behave-test-results/junit.xml
-  #         coverage-report: behave-test-results/coverage.xml
-
-  # # test-examples-partcad:
-  # #   name: "Examples (PartCAD)"
-  # #   needs: set-matrix
-  # #   strategy:
-  # #     fail-fast: false
-  # #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-  # #   runs-on: ${{ matrix.os }}
-  # #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-  # #   timeout-minutes: 15
-
-  # #   steps:
-  # #     - uses: actions/checkout@v4
-  # #     - uses: ./.github/actions/setup-all
-  # #     - uses: ./.github/actions/setup-test
-
-  # #     - name: Basic integration test for CLI (PartCAD examples)
-  # #       shell: bash -l {0}
-  # #       env:
-  # #         PC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-  # #       run: |
-  # #         mkdir -pv examples-partcad-test-results
-
-  # #         conda activate env-test
-  # #         python -m pip install -U ./partcad ./partcad-cli
-
-  # #         # BEGIN PARTCAD EXAMPLES
-  # #         cd ./examples
-  # #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r
-  # #         # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-  # #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 2 test -r --package //pub/examples/partcad
-  # #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi -v --threads-max 2 render -r --package //pub/examples/partcad
-  # #         coverage combine || true
-  # #         # END PARTCAD EXAMPLES
-
-  # #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml || true
-  # #         conda deactivate
-
-  # #     - name: Upload test results & coverage reports to github and codecov
-  # #       uses: ./.github/actions/upload-test-results
-  # #       with:
-  # #         name: examples-partcad-test-results-${{matrix.os}}-${{matrix.python-version}}
-  # #         path: examples-partcad-test-results/
-  # #         retention-days: 7
-  # #         status: ${{ job.status }}
-  # #         token: ${{ secrets.CODECOV_TOKEN }}
-  # #         codecov-files: examples-partcad-test-results/junit.xml
-  # #         coverage-report: examples-partcad-test-results/coverage.xml
-
-  # test-examples-all:
-  #   name: "Examples (All)"
-  #   needs: set-matrix
-  #   strategy:
-  #     fail-fast: false
-  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-  #   timeout-minutes: 30
-
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/setup-all
-  #     - uses: ./.github/actions/setup-test
-
-  #     - name: Basic integration test for CLI (all examples)
-  #       shell: bash -l {0}
-  #       run: |
-  #         mkdir -pv examples-all-test-results
-
-  #         conda activate env-test
-  #         python -m pip install -U ./partcad ./partcad-cli
-
-  #         # BEGIN ALL EXAMPLES
-  #         cd ./examples
-  #         # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
-  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
-  #         coverage combine
-  #         # END ALL EXAMPLES
-
-  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
-  #         conda deactivate
-
-  #     - name: Upload test results & coverage reports to github and codecov
-  #       uses: ./.github/actions/upload-test-results
-  #       with:
-  #         name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
-  #         path: examples-all-test-results/
-  #         retention-days: 7
-  #         status: ${{ job.status }}
-  #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         codecov-files: examples-all-test-results/junit.xml
-  #         coverage-report: examples-all-test-results/coverage.xml
-
-  # test-pub-repo:
-  #   name: "Repo //pub"
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os: [ubuntu-24.04-l, windows-latest-l, macos-15-large, macos-15-xlarge]
-  #       python-version: ["3.10", "3.12"]
   #   runs-on: ${{ matrix.os }}
   #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
   #   timeout-minutes: 15
@@ -308,32 +213,126 @@ jobs:
   #     - uses: ./.github/actions/setup-all
   #     - uses: ./.github/actions/setup-test
 
-  #     - name: Test the entire repository
+  #     - name: Basic integration test for CLI (PartCAD examples)
   #       shell: bash -l {0}
+  #       env:
+  #         PC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
   #       run: |
-  #         mkdir -pv pub-repo-test-results
+  #         mkdir -pv examples-partcad-test-results
 
   #         conda activate env-test
   #         python -m pip install -U ./partcad ./partcad-cli
 
-  #         # BEGIN PUBLIC REPO
-  #         cd examples
-  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
-  #         # TODO(clairbee): fix the failing packages first
-  #         # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
-  #         # END PUBLIC REPO
-  #         coverage combine
+  #         # BEGIN PARTCAD EXAMPLES
+  #         cd ./examples
+  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r
+  #         # TODO(clairbee): Limit RAM usage by restricting the number of threads?
+  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 2 test -r --package //pub/examples/partcad
+  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi -v --threads-max 2 render -r --package //pub/examples/partcad
+  #         coverage combine || true
+  #         # END PARTCAD EXAMPLES
 
-  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
+  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml || true
   #         conda deactivate
 
   #     - name: Upload test results & coverage reports to github and codecov
   #       uses: ./.github/actions/upload-test-results
   #       with:
-  #         name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
-  #         path: pub-repo-test-results/
+  #         name: examples-partcad-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: examples-partcad-test-results/
   #         retention-days: 7
   #         status: ${{ job.status }}
   #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         codecov-files: pub-repo-test-results/junit.xml
-  #         coverage-report: pub-repo-test-results/coverage.xml
+  #         codecov-files: examples-partcad-test-results/junit.xml
+  #         coverage-report: examples-partcad-test-results/coverage.xml
+
+  test-examples-all:
+    name: "Examples (All)"
+    needs: set-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
+
+      - name: Basic integration test for CLI (all examples)
+        shell: bash -l {0}
+        run: |
+          mkdir -pv examples-all-test-results
+
+          conda activate env-test
+          python -m pip install -U ./partcad ./partcad-cli
+
+          # BEGIN ALL EXAMPLES
+          cd ./examples
+          # TODO(clairbee): Limit RAM usage by restricting the number of threads?
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
+          coverage combine
+          # END ALL EXAMPLES
+
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
+          conda deactivate
+
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: examples-all-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: examples-all-test-results/junit.xml
+          coverage-report: examples-all-test-results/coverage.xml
+
+  test-pub-repo:
+    name: "Repo //pub"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-l, windows-latest-l, macos-15-large, macos-15-xlarge]
+        python-version: ["3.10", "3.12"]
+    runs-on: ${{ matrix.os }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+      - uses: ./.github/actions/setup-test
+
+      - name: Test the entire repository
+        shell: bash -l {0}
+        run: |
+          mkdir -pv pub-repo-test-results
+
+          conda activate env-test
+          python -m pip install -U ./partcad ./partcad-cli
+
+          # BEGIN PUBLIC REPO
+          cd examples
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
+          # TODO(clairbee): fix the failing packages first
+          # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
+          # END PUBLIC REPO
+          coverage combine
+
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
+          conda deactivate
+
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: pub-repo-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: pub-repo-test-results/junit.xml
+          coverage-report: pub-repo-test-results/coverage.xml
