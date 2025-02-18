@@ -3,4 +3,3 @@ coloredlogs==15.0.1
 ocp_vscode
 partcad==0.7.112
 rich-click==1.8.5
-svglib

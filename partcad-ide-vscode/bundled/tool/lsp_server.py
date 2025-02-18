@@ -662,8 +662,6 @@ def load_partcad():
 
             partcad = importlib.reload(partcad)
 
-        partcad.plugins.export_png = partcad.PluginExportPngReportlab()
-
         settings = copy.deepcopy(_get_settings_by_document(None))
         if "pythonSandbox" in settings and len(settings["pythonSandbox"]) > 0:
             partcad.user_config.python_runtime = settings["pythonSandbox"]

@@ -27,10 +27,11 @@ runs:
       run: |
         HOMEBREW_NO_AUTO_UPDATE=1 brew install jpeg
 
-    # - name: Install prerequisites
-    #   if: ${{ startsWith(matrix.os, 'windows') }}
-    #   shell: bash -l {0}
-    #   run: |
+    - name: Install prerequisites
+      if: ${{ startsWith(matrix.os, 'windows') }}
+      shell: bash -l {0}
+      run: |
+        vcpkg.exe install zlib
     #     vcpkg.exe install pkgconf
     #     vcpkg.exe install freetype
 
@@ -119,7 +120,7 @@ runs:
         # python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
-        python -m pip install -r partcad/requirements.txt && pip install svglib
+        python -m pip install -r partcad/requirements.txt
         python -m pip install -r partcad/requirements-dev.in
         python -m pip install -r partcad-ide-vscode/src/test/python_tests/requirements.txt
         conda deactivate
