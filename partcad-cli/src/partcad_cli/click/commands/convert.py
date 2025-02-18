@@ -28,7 +28,7 @@ def cli(ctx: Context, object_name: str, target_format: str, output_dir: str, dry
     :param output_dir: (Optional) Output directory for the converted file
     :param dry_run: If True, simulates conversion without actual changes
     """
-    pc_logging.info(f"Starting conversion: '{object_name}' → '{target_format}', dry_run={dry_run}")
+    pc_logging.info(f"Starting conversion: '{object_name}' -> '{target_format}', dry_run={dry_run}")
 
     project = ctx.get_project("")
     if not project:

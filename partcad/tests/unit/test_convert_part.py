@@ -68,7 +68,7 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
 
     assert (project_dir / relative_source_path).exists(), f"Missing source file: {relative_source_path}"
 
-    pc_logging.info(f"Converting {source_part} ({source_format}) → {target_format}")
+    pc_logging.info(f"Converting {source_part} ({source_format}) -> {target_format}")
 
     convert_part_action(project, source_part, target_format, output_dir=str(output_dir))
 
@@ -76,7 +76,7 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
     expected_files = list(output_dir.glob(f"*.{expected_ext}"))
 
     assert expected_files, f"No converted file found in {output_dir}"
-    pc_logging.info(f"Conversion successful: {source_part} → {target_format}")
+    pc_logging.info(f"Conversion successful: {source_part} -> {target_format}")
 
 
 def test_invalid_file_conversion(tmp_path: Path):
