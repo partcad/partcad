@@ -9,6 +9,7 @@
 #
 
 import platform
+import pytest
 import tempfile
 
 import partcad as pc
@@ -53,10 +54,7 @@ def test_render_svg_assy_2():
 def test_render_project():
     """Render an entire project"""
     if platform.system() == "Windows":
-        # pytest.skip(
-        #     "Rendering to PNG is not supported in Windows CI due to Cairo"
-        # )
-        return
+        pytest.skip("Rendering to PNG is not supported in Windows CI due to Cairo")
     ctx = pc.init("examples")
     prj = ctx.get_project("//feature_export")
     assert prj is not None

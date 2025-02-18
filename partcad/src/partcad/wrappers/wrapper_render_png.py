@@ -15,8 +15,6 @@ import os
 import sys
 import tempfile
 
-import build123d as b3d
-
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 import wrapper_render_svg

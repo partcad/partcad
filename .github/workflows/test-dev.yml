@@ -29,6 +29,7 @@ env:
 jobs:
   devcontainer:
     name: "Build: Dev Container"
+    # TODO(clairbee): Verify how the build works for the bumpversion commit
     # if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
