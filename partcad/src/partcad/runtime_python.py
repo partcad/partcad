@@ -14,17 +14,36 @@ import platform
 import subprocess
 import sys
 import threading
+from filelock import FileLock
 
 from . import runtime
 from . import logging as pc_logging
 from . import sync_threads
+from .user_config import user_config
+
+# Global lock for conda that can be shared across threads
+global _global_conda_lock
+_global_conda_lock = FileLock(
+    os.path.join(user_config.internal_state_dir, ".conda.lock"),
+    thread_local=False
+)
 
 
 class VenvLock:
     def __init__(self, runtime, venv: str):
         runtime.venv_locks_lock.acquire()
+
+        # Setup lock for given venv.
+        # If venv is None then use default (no venv)
+        if venv is None:
+            venv = f"{runtime.sandbox}.default"
+            venv_lock_name = f".{venv}.lock"
+        else:
+            venv_lock_name = f".{runtime.sandbox}.{venv}.lock"
         if venv not in runtime.venv_locks:
-            runtime.venv_locks[venv] = threading.Lock()
+            runtime.venv_locks[venv] = FileLock(
+                os.path.join(user_config.internal_state_dir, venv_lock_name), thread_local=False
+            )
         self.lock = runtime.venv_locks[venv]
         runtime.venv_locks_lock.release()
 
@@ -38,12 +57,23 @@ class VenvLock:
 class AsyncVenvLock:
     def __init__(self, runtime, venv: str):
         self.runtime = runtime
-        self.venv = venv
+
+        # Setup lock for given venv.
+        # If venv is None then use default (no venv)
+        if venv is None:
+            self.venv = f"{runtime.sandbox}.default"
+            self.venv_lock_name = f".{self.venv}.lock"
+        else:
+            self.venv = venv
+            self.venv_lock_name = f".{runtime.sandbox}.{venv}.lock"
 
     async def __aenter__(self, *_args):
         await sync_threads.run_detached(self.runtime.venv_locks_lock.acquire)
         if not self.venv in self.runtime.venv_locks:
-            self.runtime.venv_locks[self.venv] = threading.Lock()
+            self.runtime.venv_locks[self.venv] = FileLock(
+                os.path.join(user_config.internal_state_dir, self.venv_lock_name),
+                thread_local=False
+            )
         self.lock = self.runtime.venv_locks[self.venv]
         self.runtime.venv_locks_lock.release()
 
@@ -61,6 +91,7 @@ class PythonRuntime(runtime.Runtime):
         if version is None:
             version = "%d.%d" % (sys.version_info.major, sys.version_info.minor)
         super().__init__(ctx, "py-" + sandbox + "-" + version)
+        self.sandbox = sandbox
         self.version = version
         self.is_mamba = False
 
@@ -131,9 +162,10 @@ class PythonRuntime(runtime.Runtime):
         return self.run_onced(cmd, stdin=stdin, cwd=cwd, session=session)
 
     def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        if session and session["dirty"]:
-            # The venv environment has to be created
-            with VenvLock(self, session["hash"]):
+        venv = session["hash"] if session is not None else None
+        with VenvLock(self, venv):
+            if session and session["dirty"]:
+                # The venv environment has to be created
                 if not os.path.exists(session["path"]):
                     with pc_logging.Action("v-env", self.version, session["name"]):
                         # Create the venv environment
@@ -150,51 +182,52 @@ class PythonRuntime(runtime.Runtime):
                 for dep in session["deps"]:
                     self.ensure_onced_locked(dep, path=session["path"])
 
-        python_path = self.get_venv_python_path(session, path)
-        cmd = [python_path, *self.python_flags, *cmd]
-        pc_logging.debug("Running: %s", cmd)
-        # pc_logging.debug("stdin: %s", stdin)
-        p = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=False,
-            encoding="utf-8",
-            # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-            cwd=cwd,
-        )
-        stdout, stderr = p.communicate(
-            input=stdin.encode(),
-            # TODO(clairbee): add timeout
-        )
+            python_path = self.get_venv_python_path(session, path)
+            cmd = [python_path, *self.python_flags, *cmd]
+            pc_logging.debug("Running: %s", cmd)
+            # pc_logging.debug("stdin: %s", stdin)
+            p = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=False,
+                encoding="utf-8",
+                # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                cwd=cwd,
+            )
+            stdout, stderr = p.communicate(
+                input=stdin.encode(),
+                # TODO(clairbee): add timeout
+            )
 
-        stdout = stdout.decode()
-        stderr = stderr.decode()
+            stdout = stdout.decode()
+            stderr = stderr.decode()
 
-        # if stdout:
-        #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
-        if stderr:
-            pc_logging.debug("Error in %s: %s" % (cmd, stderr))
+            # if stdout:
+            #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+            if stderr:
+                pc_logging.debug("Error in %s: %s" % (cmd, stderr))
 
-        # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
-        # f = open("/tmp/log", "w")
-        # f.write("Completed: %s\n" % cmd)
-        # f.write(" stdin: %s\n" % stdin)
-        # f.write(" stderr: %s\n" % stderr)
-        # f.write(" stdout: %s\n" % stdout)
-        # f.close()
+            # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
+            # f = open("/tmp/log", "w")
+            # f.write("Completed: %s\n" % cmd)
+            # f.write(" stdin: %s\n" % stdin)
+            # f.write(" stderr: %s\n" % stderr)
+            # f.write(" stdout: %s\n" % stdout)
+            # f.close()
 
-        return stdout, stderr
+            return stdout, stderr
 
     async def run_async(self, cmd, stdin="", cwd=None, session=None):
         await self.once_async()
         return await self.run_async_onced(cmd, stdin=stdin, cwd=cwd, session=session)
 
     async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        if session and session["dirty"]:
-            # The venv environment has to be created
-            async with AsyncVenvLock(self, session["hash"]):
+        venv = session["hash"] if session is not None else None
+        async with AsyncVenvLock(self, venv):
+            if session and session["dirty"]:
+                # The venv environment has to be created
                 if not os.path.exists(session["path"]):
                     with pc_logging.Action("v-env", self.version, session["name"]):
                         # Create the venv environment
@@ -211,45 +244,47 @@ class PythonRuntime(runtime.Runtime):
                 for dep in session["deps"]:
                     await self.ensure_async_onced_locked(dep, path=session["path"])
 
-        python_path = self.get_venv_python_path(session, path)
-        cmd = [python_path, *self.python_flags, *cmd]
-        pc_logging.debug("Running: %s", cmd)
-        # pc_logging.debug("stdin: %s", stdin)
-        p = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=False,
-            # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-            cwd=cwd,
-        )
-        stdout, stderr = await p.communicate(
-            input=stdin.encode(),
-            # TODO(clairbee): add timeout
-        )
+            python_path = self.get_venv_python_path(session, path)
+            cmd = [python_path, *self.python_flags, *cmd]
+            pc_logging.debug("Running: %s", cmd)
+            # pc_logging.debug("stdin: %s", stdin)
+            p = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=False,
+                # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                cwd=cwd,
+            )
+            stdout, stderr = await p.communicate(
+                input=stdin.encode(),
+                # TODO(clairbee): add timeout
+            )
 
-        stdout = stdout.decode()
-        stderr = stderr.decode()
+            stdout = stdout.decode()
+            stderr = stderr.decode()
 
-        # if stdout:
-        #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
-        if stderr:
-            pc_logging.error("Error in %s: %s" % (cmd, stderr))
+            # if stdout:
+            #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+            if stderr:
+                pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
-        # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
-        # f = open("/tmp/log", "w")
-        # f.write("Completed: %s\n" % cmd)
-        # f.write(" stdin: %s\n" % stdin)
-        # f.write(" stderr: %s\n" % stderr)
-        # f.write(" stdout: %s\n" % stdout)
-        # f.close()
+            # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
+            # f = open("/tmp/log", "w")
+            # f.write("Completed: %s\n" % cmd)
+            # f.write(" stdin: %s\n" % stdin)
+            # f.write(" stderr: %s\n" % stderr)
+            # f.write(" stdout: %s\n" % stdout)
+            # f.close()
 
-        return stdout, stderr
+            return stdout, stderr
 
     def ensure(self, python_package, session=None, path=None):
-        self.once()
-        self.ensure_onced(python_package, session=session, path=path)
+        venv = session["hash"] if session is not None else None
+        with VenvLock(self, venv):
+            self.once()
+            self.ensure_onced(python_package, session=session, path=path)
 
     def ensure_onced(self, python_package, session=None, path=None):
         if path is None:
@@ -275,8 +310,10 @@ class PythonRuntime(runtime.Runtime):
                 pathlib.Path(guard_path).touch()
 
     async def ensure_async(self, python_package, session=None, path=None):
-        await self.once_async()
-        await self.ensure_async_onced(python_package, session=session, path=path)
+        venv = session["hash"] if session is not None else None
+        async with AsyncVenvLock(self, venv):
+            await self.once_async()
+            await self.ensure_async_onced(python_package, session=session, path=path)
 
     async def ensure_async_onced(self, python_package, session=None, path=None):
         if path is None:

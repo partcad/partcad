@@ -18,27 +18,30 @@ class PyPyPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, "pypy", version)
 
         self.exec_name = "pypy" if os.name != "nt" else "pypy.exe"
-        if not self.initialized:
-            which = shutil.which("pypy")
-            if which is None:
-                raise Exception(
-                    "ERROR: PartCAD is configured to use missing pypy to execute Python scripts (CadQuery, build123d etc)"
-                )
-            self.exec_path = which
+        # Lock the global conda lock and create a new conda environment
+        with runtime_python._global_conda_lock:
+            if not self.initialized:
+                which = shutil.which("pypy")
+                if which is None:
+                    raise Exception(
+                        "ERROR: PartCAD is configured to use missing pypy to execute Python scripts (CadQuery, build123d etc)"
+                    )
+                self.exec_path = which
 
-            os.makedirs(self.path)
-            try:
-                subprocess.run(
-                    [
-                        "conda",
-                        "create",
-                        "-p",
-                        self.path,
-                        "pypy",
-                        "python=%s" % version,
-                    ]
-                )
-                subprocess.run(["conda", "install", "-p", self.path, "scipy"])
-            except Exception as e:
-                shutil.rmtree(self.path)
-                raise e
+                try:
+                    subprocess.run(
+                        [
+                            "conda",
+                            "create",
+                            "-p",
+                            self.path,
+                            "pypy",
+                            "python=%s" % version,
+                        ]
+                    )
+                    subprocess.run(["conda", "install", "-p", self.path, "scipy"])
+
+                    self.initialized = True
+                except Exception as e:
+                    shutil.rmtree(self.path)
+                    raise e

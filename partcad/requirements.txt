@@ -13,6 +13,7 @@ aiohttp
 vyper-config==1.2.1
 sentry-sdk[opentelemetry]==2.21.0
 async-lru==2.0.4
+filelock==3.17.0
 
 # Google AI
 google.generativeai
