@@ -15,7 +15,6 @@ typing_extensions
 python-jsonrpc-server
 
 # partcad-cli
-rlPyCairo
 svglib
 
 # partcad
