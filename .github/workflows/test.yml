@@ -149,6 +149,12 @@ jobs:
       - uses: ./.github/actions/setup-all
       - uses: ./.github/actions/setup-test
 
+      # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
+      - name: Set SSH Agent Service to Manual
+        if: runner.os == 'Windows'
+        run: Set-Service -Name ssh-agent -StartupType Manual
+        shell: pwsh
+
       - name: Start SSH Agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
