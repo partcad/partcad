@@ -1,3 +1,4 @@
+import asyncio
 import copy
 from pathlib import Path
 import shutil
@@ -6,6 +7,7 @@ from typing import Optional
 import partcad
 from partcad.context import Context
 import partcad.logging as pc_logging
+from partcad.part_factory_enrich import PartFactoryEnrich
 from partcad.project import Project
 from partcad.utils import resolve_resource_path
 from partcad.adhoc.convert import convert_cad_file
@@ -144,61 +146,63 @@ def convert_part_action(project: Project, object_name: str, target_format: str,
 
 def resolve_enrich_action(project: Project, part_name: str, dry_run: bool = False):
     """
-    Resolve an enrich part to its original type and update its definition.
+    Resolves an enrich part using PartFactoryEnrich and updates its configuration.
 
-    :param project: Project object
+    :param project: The project where the enrich part exists.
     :param part_name: Name of the enrich part to resolve.
     :param dry_run: If True, simulates resolution without making actual changes.
+    :return: The resolved part object.
     """
+    with pc_logging.Process("Resolve Enrich", part_name):
+        package_name, part_name = resolve_resource_path(project.name, part_name)
+        pc_logging.info(f"Resolving enrich part '{part_name}' from package '{package_name}'")
 
-    package_name, part_name = resolve_resource_path(project.name, part_name)
+        if project.name != package_name:
+            project = project.ctx.get_project(package_name)
 
-    pc_logging.info(f"Resolving package '{package_name}', part '{part_name}'")
+        part = project.get_part(part_name)
+        if not part:
+            raise ValueError(f"Part '{part_name}' not found in project '{project.name}'.")
 
-    if project.name != package_name:
-        project = project.ctx.get_project(package_name)
+        part_config = part.config
+        if part_config.get("type") != "enrich":
+            raise ValueError(f"Invalid or missing enrich part '{part_name}' in project '{project.name}'.")
 
-    part_config = project.get_part_config(part_name)
-    if not part_config or part_config["type"] != "enrich":
-        raise ValueError(f"Invalid or missing enrich part '{part_name}' in project '{project.name}'.")
+        pc_logging.info(f"Processing enrich part '{part_name}' using PartFactoryEnrich...")
 
-    source_name = part_config["source"]
-    source_project_name, source_part_name = resolve_resource_path(project.name, source_name)
+        # Instantiate the enrich part
+        factory = PartFactoryEnrich(project.ctx, project, project, part_config)
+        asyncio.run(factory.instantiate(project.get_part(part_name)))
 
-    if source_project_name.startswith(project.name):
-        pc_logging.info("Source is a subdirectory of the same project, using current project.")
-        source_project = project
-    else:
-        source_project = project.ctx.get_project(source_project_name)
+        resolved_part = project.get_part(part_name)
+        if not resolved_part:
+            raise ValueError(f"Failed to resolve enrich part '{part_name}'.")
 
-    if not source_project:
-        raise ValueError(f"Source project '{source_project_name}' not found for part '{source_part_name}'.")
+        resolved_type = resolved_part.config.get("type")
+        pc_logging.info(f"Successfully resolved enrich part '{part_name}' to type '{resolved_type}'.")
 
-    source_part = source_project.get_part(source_part_name)
-    if not source_part or not source_part.path:
-        raise ValueError(f"Source part '{source_part_name}' has no valid path in project '{source_project_name}'.")
+        if dry_run:
+            pc_logging.info(f"[Dry Run] Enrich part '{part_name}' would be resolved to type '{resolved_type}'.")
+            return resolved_part
 
-    source_config = source_part.config
-    resolved_config = copy.deepcopy(source_config)
+        resolved_config = copy.deepcopy(resolved_part.config)
 
-    for key, value in part_config.get("with", {}).items():
-        resolved_config.setdefault("parameters", {}).setdefault(key, {})
-        resolved_config["parameters"][key].update({
-            "type": type(value).__name__,
-            "default": value,
-        })
-    resolved_config.setdefault("ports", {}).update(part_config.get("ports", {}))
+        # Remove unnecessary metadata fields
+        for key in ["orig_name", "source", "name", "with", "manufacturable"]:
+            resolved_config.pop(key, None)
 
-    file_extension = EXTENSION_MAPPING.get(resolved_config["type"], resolved_config["type"])
-    target_path = Path(project.path) / f"{part_name}.{file_extension}"
+        part_type = resolved_config["type"]
+        file_extension = "py" if part_type in ["cadquery", "build123d"] else EXTENSION_MAPPING.get(part_type, part_type)
+        target_path = Path(project.path) / f"{part_name}.{file_extension}"
 
-    if dry_run:
-        pc_logging.info(f"[Dry Run] Would resolve enrich part '{part_name}' and save it to '{target_path}'.")
-        return
+        if not dry_run:
+            shutil.copy(Path(resolved_part.path), target_path)
+            pc_logging.info(f"Copied resolved part to '{target_path}'.")
 
-    shutil.copy(Path(source_part.path), target_path)
-    pc_logging.info(f"Copied source part from {source_part.path} to {target_path}")
+        # Update project configuration with the new path
+        resolved_config["path"] = str(target_path)
+        project.set_part_config(part_name, resolved_config)
 
-    resolved_config["path"] = str(target_path)
-    project.update_part_config(part_name, resolved_config)
-    pc_logging.info(f"Resolved part '{part_name}' updated in project configuration.")
+        pc_logging.info(f"Updated project configuration for resolved part '{part_name}'.")
+
+        return resolved_part

@@ -1237,6 +1237,10 @@ class Project(project_config.Configuration):
         if "orig_name" in part_config:
             del part_config["orig_name"]
 
+        if "offset" in part_config and isinstance(part_config["offset"], list):
+            part_config["offset"] = ruamel.yaml.comments.CommentedSeq(part_config["offset"])
+            part_config["offset"].fa.set_flow_style()
+
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
         with open(self.config_path) as fp:
