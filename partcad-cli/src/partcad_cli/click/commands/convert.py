@@ -4,7 +4,7 @@ from partcad.context import Context
 import partcad.logging as pc_logging
 
 @click.command(help="Convert parts to another format.")
-@click.argument("object_name", type=str, required=True)
+@click.argument("part_name", type=str, required=True)
 @click.option(
     "-t", "--target-format",
     help="Target conversion format.",
@@ -17,25 +17,25 @@ import partcad.logging as pc_logging
 )
 @click.option("--dry-run", help="Simulate conversion without making any changes.", is_flag=True)
 @click.pass_obj
-def cli(ctx: Context, object_name: str, target_format: str, output_dir: str, dry_run: bool):
+def cli(ctx: Context, part_name: str, target_format: str, output_dir: str, dry_run: bool):
     """
     CLI command to convert a part to a new format.
 
     :param ctx: PartCAD context
-    :param object_name: Name of the part to convert
+    :param part_name: Name of the part to convert
     :param target_format: Desired target format
     :param output_dir: (Optional) Output directory for the converted file
     :param dry_run: If True, simulates conversion without actual changes
     """
-    pc_logging.info(f"Starting conversion: '{object_name}'.")
+    pc_logging.info(f"Starting conversion: '{part_name}'.")
 
     project = ctx.get_project("")
     if not project:
         pc_logging.error("Project retrieval failed. Ensure you are inside a valid PartCAD project.")
         raise click.UsageError("Failed to retrieve the project.")
 
-    convert_part_action(project, object_name, target_format, output_dir=output_dir, dry_run=dry_run)
+    convert_part_action(project, part_name, target_format, output_dir=output_dir, dry_run=dry_run)
 
-    msg = f"Conversion of '{object_name}' completed."
+    msg = f"Conversion of '{part_name}' completed."
     pc_logging.info(msg)
     click.echo(msg)

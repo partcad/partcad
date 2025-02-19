@@ -91,59 +91,6 @@ def import_part_action(project: Project, kind: str, name: str, source_path: str,
             pc_logging.warning(f"Failed to remove temp directory '{temp_dir}': {e}")
 
 
-def convert_part_action(project: Project, object_name: str, target_format: str,
-                        output_dir: Optional[str] = None, dry_run: bool = False):
-    """Convert a part to a new format and update its configuration."""
-    package_name, part_name = resolve_resource_path(project.name, object_name)
-
-    pc_logging.info(f"Resolving package '{package_name}', part '{part_name}'")
-
-    if project.name != package_name:
-        project = project.ctx.get_project(package_name)
-
-    if project is None:
-        raise ValueError(f"Project '{package_name}' not found for '{part_name}'")
-
-    pc_logging.info(f"Using project '{project.name}', located at '{project.path}'")
-
-    part_config = project.get_part_config(part_name)
-    if part_config is None:
-        raise ValueError(f"Object '{part_name}' not found in project configuration.")
-
-    part_path = part_config.get("path")
-    old_path = (Path(project.path) / part_path) if part_path else Path(project.config_dir) / f"{part_name}.{target_format}"
-
-    new_extension = EXTENSION_MAPPING.get(target_format, target_format)
-    full_output_dir = Path(output_dir).resolve() if output_dir else old_path.parent.resolve()
-    new_path = full_output_dir / f"{old_path.stem}.{new_extension}"
-
-    pc_logging.info(f"Converting '{part_name}' ({old_path.suffix[1:]} -> {new_extension}) -> {new_path}")
-
-    full_output_dir.mkdir(parents=True, exist_ok=True)
-
-    if dry_run:
-        pc_logging.info(f"[Dry Run] No changes made for '{part_name}'.")
-        return
-
-    with pc_logging.Process("Convert", part_name):
-        project.convert(
-            sketches=[], interfaces=[], parts=[part_name], assemblies=[],
-            target_format=target_format, output_dir=str(new_path)
-        )
-
-    pc_logging.info(f"Conversion of '{part_name}' completed.")
-
-    try:
-        config_path = new_path.relative_to(project.path)
-    except ValueError:
-        config_path = new_path
-
-    new_config = {"type": target_format, "path": str(config_path)}
-    project.update_part_config(part_name, new_config)
-
-    pc_logging.info(f"Updated configuration for '{part_name}': {config_path}")
-
-
 def deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge two dictionaries; override values take precedence."""
     result = base.copy()
@@ -153,6 +100,7 @@ def deep_merge(base: dict, override: dict) -> dict:
         else:
             result[key] = value
     return result
+
 
 def convert_part_action(project: Project, object_name: str, target_format: Optional[str] = None,
                         output_dir: Optional[str] = None, dry_run: bool = False):
@@ -234,26 +182,11 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         pc_logging.info(f"[Dry Run] No changes made for '{part_name}'.")
         return
 
-    # Perform conversion
-    if conversion_target in ("cadquery", "build123d", "scad"):
-        source_path = old_path
-    else:
-        current_ext = old_path.suffix[1:].lower()
-        if current_ext != new_ext:
-            temp_dir = Path(tempfile.mkdtemp())
-            temp_conv_path = temp_dir / f"{part_name}.{conversion_target}"
-            pc_logging.info(f"Performing ad-hoc conversion: {current_ext} → {conversion_target}")
-            convert_cad_file(str(old_path), current_ext, str(temp_conv_path), conversion_target)
-            if not temp_conv_path.exists():
-                raise RuntimeError(f"Ad-hoc conversion failed: {old_path} → {temp_conv_path}")
-            source_path = temp_conv_path
-            pc_logging.info(f"Ad-hoc conversion successful: {temp_conv_path}")
-        else:
-            source_path = old_path
+    source_path = old_path
 
     # Copy the file into the target package.
     target_path = (Path(project.path) / new_file_name).resolve()
-    if not ((target_path.exists() and source_path.samefile(target_path)) or conversion_target == conversion_target):
+    if not ((target_path.exists() and source_path.samefile(target_path)) or part_type == conversion_target):
         try:
             shutil.copy2(source_path, target_path)
         except shutil.Error as e:
@@ -284,11 +217,3 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
             final_config_path = final_new_path
         project.update_part_config(part_name, {"type": target_format, "path": str(final_config_path)})
         pc_logging.debug(f"Final updated configuration for '{part_name}': {final_config_path}")
-
-    # Cleanup temp directory
-    if "temp_dir" in locals() and temp_dir.exists():
-        try:
-            shutil.rmtree(temp_dir)
-            pc_logging.info(f"Cleaned up temporary directory: {temp_dir}")
-        except Exception as e:
-            pc_logging.warning(f"Failed to remove temp directory '{temp_dir}': {e}")
