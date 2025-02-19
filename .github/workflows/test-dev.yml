@@ -155,7 +155,7 @@ jobs:
       - name: Build the VS Code extension
         shell: bash -l {0}
         run: |
-          (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
+          (cd partcad-ide-vscode && poetry run nox --session setup && poetry run nox --session build_package)
 
       - name: Run PyTest
         uses: devcontainers/ci@v0.3

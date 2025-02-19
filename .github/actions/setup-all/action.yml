@@ -88,7 +88,8 @@ runs:
         # activate-environment: env
         auto-activate-base: false
         # use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
-        pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+        # pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+        pkgs-dirs: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
 
     # - uses: mamba-org/setup-micromamba@v2
     #   with:
