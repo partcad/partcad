@@ -125,6 +125,8 @@ runs:
         python -m pip install -r partcad-ide-vscode/src/test/python_tests/requirements.txt
         conda deactivate
 
+        echo "PC_INTERNAL_STATE_DIR=$(mktemp -d)" >> $GITHUB_ENV
+
     # - name: Update Homebrew
     #   if: matrix.os == 'macos-latest'
     #   shell: bash
