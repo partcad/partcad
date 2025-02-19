@@ -19,7 +19,6 @@ from filelock import FileLock
 
 from . import runtime
 from . import logging as pc_logging
-from . import sync_threads
 from .user_config import user_config
 
 
