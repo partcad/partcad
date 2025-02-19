@@ -14,7 +14,7 @@ runs:
     - name: Setup CadQuery
       uses: ./.github/actions/setup-cadquery
       with:
-        envs: ${{ format('env-test-{0}-{1}', env.INPUT_JOB, matrix.python-version) }}
+        envs: ${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}
 
     #################################################  OPENSCAD  ####################################################
 

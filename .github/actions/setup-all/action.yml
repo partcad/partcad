@@ -135,8 +135,8 @@ runs:
         # . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        conda create -p ~/${{ format('env-test-{0}-{1}', env.INPUT_JOB, matrix.python-version) }} python=${{ matrix.python-version }} -y
-        conda activate ~/${{ format('env-test-{0}-{1}', env.INPUT_JOB, matrix.python-version) }}
+        conda create -p ~/${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }} python=${{ matrix.python-version }} -y
+        conda activate ~/${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}
         # python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests

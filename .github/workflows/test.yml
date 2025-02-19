@@ -352,7 +352,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04-l, windows-latest-l, macos-15-large, macos-15-xlarge]
+        os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
+        # os: [ubuntu-24.04-l, windows-latest-l, macos-15-large, macos-15-xlarge]
         python-version: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
