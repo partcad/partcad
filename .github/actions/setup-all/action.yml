@@ -69,24 +69,26 @@ runs:
     ###################################################  PYTHON  ###################################################
 
     # Miniconda
-    # - name: Cache conda
-    #   uses: actions/cache@v3
-    #   env:
-    #     # Increase this value to reset cache if etc/example-environment.yml has not changed
-    #     CACHE_NUMBER: 1
-    #   with:
-    #     # enableCrossOsArchive: true
-    #     path: ~/conda_pkgs_dir
-    #     key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
+    - name: Cache conda
+      uses: actions/cache@v4
+      env:
+        # Increase this value to reset cache if etc/example-environment.yml has not changed
+        CACHE_NUMBER: 3
+      with:
+        enableCrossOsArchive: true
+        path: ${{ runner.os == 'Windows' && 'D:\\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
+        key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
 
     - uses: conda-incubator/setup-miniconda@v3
       with:
         miniforge-version: 24.11.3-0
         channels: conda-forge,defaults
+        channel-priority: strict
         python-version: ${{ matrix.python-version }}
         # activate-environment: env
         auto-activate-base: true
-        # use-only-tar-bz2: true
+        use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        pkg-dirs: ${{ runner.os == 'Windows' && 'D:\\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
 
     # - name: Init conda
     #   shell: bash

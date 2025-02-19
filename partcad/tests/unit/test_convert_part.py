@@ -1,10 +1,8 @@
-import os
 import shutil
 from pathlib import Path
 import pytest
 import yaml
 from partcad.context import Context
-from partcad import Project
 from partcad.actions.part_actions import convert_part_action
 import partcad.logging as pc_logging  # Logging
 
@@ -22,7 +20,7 @@ EXTENSION_MAPPING = {
 SUPPORTED_FORMATS = list(EXTENSION_MAPPING.keys())
 
 # Source directory with real test files
-SOURCE_DIR = Path("/workspaces/partcad/examples/feature_convert")
+SOURCE_DIR = Path("./examples/feature_convert")
 
 # Test parts configuration
 PARTS_CONFIG = {
@@ -31,6 +29,7 @@ PARTS_CONFIG = {
     "bolt_step": {"type": "step", "path": "step/bolt.step"},
     "cube_stl": {"type": "stl", "path": "stl/cube.stl"},
 }
+
 
 @pytest.mark.parametrize("source_part", PARTS_CONFIG.keys())
 @pytest.mark.parametrize("target_format", SUPPORTED_FORMATS)

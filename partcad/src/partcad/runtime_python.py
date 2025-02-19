@@ -96,6 +96,7 @@ class PythonRuntime(runtime.Runtime):
 
     @contextlib.contextmanager
     def sync_lock(self, session=None):
+        """Lock the runtime and the venv environment for executing a command"""
         with self.lock:
             venv = session["hash"] if session is not None else None
             with VenvLock(self, venv):
@@ -103,39 +104,52 @@ class PythonRuntime(runtime.Runtime):
 
     @contextlib.asynccontextmanager
     async def async_lock(self, session=None):
+        """Lock the runtime and the venv environment for executing a command"""
         async with self.get_async_lock():
             with self.lock:
                 venv = session["hash"] if session is not None else None
                 with VenvLock(self, venv):
                     yield
 
+    @contextlib.contextmanager
+    def sync_lock_install(self, session=None):
+        """Lock the runtime and the venv environment for installation of packages"""
+        yield
+
+    @contextlib.asynccontextmanager
+    async def async_lock_install(self, session=None):
+        """Lock the runtime and the venv environment for installation of packages"""
+        yield
+
     def once(self):
         with self.sync_lock():
-            if not self.initialized:
-                # Preinstall the most common packages to avoid race conditions
-                self.ensure_onced_locked("ocp-tessellate==3.0.9")
-                self.ensure_onced_locked("nlopt==2.9.1")
-                self.ensure_onced_locked("cadquery==2.5.2")
-                self.ensure_onced_locked("numpy==2.2.1")
-                self.ensure_onced_locked("typing_extensions==4.12.2")
-                self.ensure_onced_locked("cadquery-ocp==7.7.2")
-                self.ensure_onced_locked("ocpsvg==0.3.4")
-                self.ensure_onced_locked("build123d==0.8.0")
-                self.initialized = True
+            with self.sync_lock_install():
+                if not self.initialized:
+                    # Preinstall the most common packages to avoid race conditions
+                    self.ensure_onced_locked("ocp-tessellate==3.0.9")
+                    self.ensure_onced_locked("nlopt==2.9.1")
+                    self.ensure_onced_locked("cadquery==2.5.2")
+                    self.ensure_onced_locked("numpy==2.2.1")
+                    self.ensure_onced_locked("typing_extensions==4.12.2")
+                    self.ensure_onced_locked("cadquery-ocp==7.7.2")
+                    self.ensure_onced_locked("ocpsvg==0.3.4")
+                    self.ensure_onced_locked("build123d==0.8.0")
+                    self.initialized = True
 
     async def once_async(self):
-        async with self.get_async_lock():
-            if not self.initialized:
-                # Preinstall the most common packages to avoid
-                await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
-                await self.ensure_async_onced_locked("nlopt==2.9.1")
-                await self.ensure_async_onced_locked("cadquery==2.5.2")
-                await self.ensure_async_onced_locked("numpy==2.2.1")
-                await self.ensure_async_onced_locked("typing_extensions==4.12.2")
-                await self.ensure_async_onced_locked("cadquery-ocp==7.7.2")
-                await self.ensure_async_onced_locked("ocpsvg==0.3.4")
-                await self.ensure_async_onced_locked("build123d==0.8.0")
-                self.initialized = True
+        async with self.async_lock():
+            async with self.async_lock_install():
+                if not self.initialized:
+                    # Preinstall the most common packages to avoid
+                    await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
+                    await self.ensure_async_onced_locked("nlopt==2.9.1")
+                    await self.ensure_async_onced_locked("cadquery==2.5.2")
+                    await self.ensure_async_onced_locked("numpy==2.2.1")
+                    await self.ensure_async_onced_locked("typing_extensions==4.12.2")
+                    await self.ensure_async_onced_locked("cadquery-ocp==7.7.2")
+                    await self.ensure_async_onced_locked("ocpsvg==0.3.4")
+                    await self.ensure_async_onced_locked("build123d==0.8.0")
+                    self.initialized = True
 
     def run(self, cmd, stdin="", cwd=None, session=None):
         self.once()
@@ -387,16 +401,17 @@ class PythonRuntime(runtime.Runtime):
                 session["dirty"] = True
         else:
             with self.sync_lock():
-                if not os.path.exists(guard_path):
-                    item = python_package
-                    if not path is None:
-                        item += " in " + path
-                    with pc_logging.Action("PipInst", self.version, item):
-                        self.run_onced_locked(
-                            ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
-                            path=path,
-                        )
-                    pathlib.Path(guard_path).touch()
+                with self.sync_lock_install():
+                    if not os.path.exists(guard_path):
+                        item = python_package
+                        if not path is None:
+                            item += " in " + path
+                        with pc_logging.Action("PipInst", self.version, item):
+                            self.run_onced_locked(
+                                ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
+                                path=path,
+                            )
+                        pathlib.Path(guard_path).touch()
 
     def ensure_onced_locked(self, python_package, session=None, path=None):
         if path is None:
@@ -441,16 +456,17 @@ class PythonRuntime(runtime.Runtime):
                 session["dirty"] = True
         else:
             async with self.async_lock():
-                if not os.path.exists(guard_path):
-                    item = python_package
-                    if not path is None:
-                        item += " in " + path
-                    with pc_logging.Action("PipInst", self.version, item):
-                        await self.run_async_onced_locked(
-                            ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
-                            path=path,
-                        )
-                    pathlib.Path(guard_path).touch()
+                async with self.async_lock_install():
+                    if not os.path.exists(guard_path):
+                        item = python_package
+                        if not path is None:
+                            item += " in " + path
+                        with pc_logging.Action("PipInst", self.version, item):
+                            await self.run_async_onced_locked(
+                                ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
+                                path=path,
+                            )
+                        pathlib.Path(guard_path).touch()
 
     async def ensure_async_onced_locked(self, python_package, session=None, path=None):
         if path is None:

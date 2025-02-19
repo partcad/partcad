@@ -6,6 +6,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+import contextlib
 from filelock import FileLock
 import importlib
 import os
@@ -88,6 +89,16 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     pc_logging.warning("conda venv check error: %s" % e)
                     self.conda_initialized = False
 
+    @contextlib.contextmanager
+    def sync_lock_install(self, session=None):
+        with self.global_conda_lock:
+            yield
+
+    @contextlib.asynccontextmanager
+    async def async_lock_install(self, session=None):
+        with self.global_conda_lock:
+            yield
+
     def once(self):
         with self.sync_lock():
             self.once_conda_locked()
@@ -97,6 +108,17 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         async with self.async_lock():
             self.once_conda_locked()
         await super().once_async()
+
+    def once_conda_locked(self):
+        with self.sync_lock_install():
+            if not self.conda_initialized:
+                self.once_conda_locked_attempt()
+            if not self.conda_initialized:
+                # Sometime it fails to create from the first attempt
+                self.once_conda_locked_attempt()
+            # TODO(clairbee): Does it make sense to retry more than once?
+            if not self.conda_initialized:
+                raise Exception("ERROR: Conda environment initialization failed")
 
     # TODO(clairbee): Make an async version of this function
     def once_conda_locked_attempt(self):
@@ -153,15 +175,3 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
             except Exception as e:
                 shutil.rmtree(self.path)
                 raise e
-
-    def once_conda_locked(self):
-        # Lock the global conda lock and create a new environment
-        with self.global_conda_lock:
-            if not self.conda_initialized:
-                self.once_conda_locked_attempt()
-            if not self.conda_initialized:
-                # Sometime it fails to create from the first attempt
-                self.once_conda_locked_attempt()
-            # TODO(clairbee): Does it make sense to retry more than once?
-            if not self.conda_initialized:
-                raise Exception("ERROR: Conda environment initialization failed")
