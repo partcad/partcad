@@ -20,6 +20,9 @@ EXTENSION_MAPPING = {
     "threejs": "json",
     "obj": "obj",
     "gltf": "gltf",
+    "cadquery": "py",
+    "build123d": "py",
+    "scad": "scad",
 }
 
 def add_part_action(project: Project, kind: str, path: str, config: Optional[dict] = None):
@@ -144,65 +147,158 @@ def convert_part_action(project: Project, object_name: str, target_format: str,
     pc_logging.info(f"Updated configuration for '{part_name}': {config_path}")
 
 
-def resolve_enrich_action(project: Project, part_name: str, dry_run: bool = False):
+def deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge two dictionaries; override values take precedence."""
+    result = base.copy()
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+def convert_part_action(project: Project, object_name: str, target_format: Optional[str] = None,
+                        output_dir: Optional[str] = None, dry_run: bool = False):
     """
-    Resolves an enrich part using PartFactoryEnrich and updates its configuration.
+    Convert a part to a new format and update its configuration.
 
-    :param project: The project where the enrich part exists.
-    :param part_name: Name of the enrich part to resolve.
-    :param dry_run: If True, simulates resolution without making actual changes.
-    :return: The resolved part object.
+    For enrich/alias/AI parts (identified by a "source" field), the original configuration is
+    merged with the enrich modifications. The file is looked up from the source project and base part.
+
+    If target_format is not provided, conversion uses the original type.
+    If provided and different, a secondary conversion is applied.
     """
-    with pc_logging.Process("Resolve Enrich", part_name):
-        package_name, part_name = resolve_resource_path(project.name, part_name)
-        pc_logging.info(f"Resolving enrich part '{part_name}' from package '{package_name}'")
+    # Resolve package and part name.
+    package_name, part_name = resolve_resource_path(project.name, object_name)
+    pc_logging.debug(f"Resolving package '{package_name}', part '{part_name}'")
+    if project.name != package_name:
+        project = project.ctx.get_project(package_name)
+    if project is None:
+        raise ValueError(f"Project '{package_name}' not found for '{part_name}'")
+    pc_logging.debug(f"Using project '{project.name}', located at '{project.path}'")
 
-        if project.name != package_name:
-            project = project.ctx.get_project(package_name)
+    # Load current part configuration.
+    part_config = project.get_part_config(part_name)
+    part_type = part_config["type"]
 
-        part = project.get_part(part_name)
-        if not part:
-            raise ValueError(f"Part '{part_name}' not found in project '{project.name}'.")
+    if part_config is None:
+        raise ValueError(f"Object '{part_name}' not found in project configuration.")
 
-        part_config = part.config
-        if part_config.get("type") != "enrich":
-            raise ValueError(f"Invalid or missing enrich part '{part_name}' in project '{project.name}'.")
+    # If "source" exists, merge base config and use the base part's name for file lookup.
+    if "source" in part_config:
+        source_spec = part_config["source"]
+        if not source_spec:
+            raise ValueError(f"Part '{part_name}' has an empty 'source' field.")
+        base_package, base_part_name = resolve_resource_path(project.name, source_spec)
+        base_project = project.ctx.get_project(base_package)
+        if base_project is None:
+            raise ValueError(f"Base project '{base_package}' not found for part '{part_name}'.")
+        base_part_config = base_project.get_part_config(base_part_name)
+        if base_part_config is None:
+            raise ValueError(f"Base part '{base_part_name}' not found in project '{base_project.name}'.")
+        original_type = base_part_config.get("type")
+        merged_config = deep_merge(base_part_config, part_config)
+        merged_config["type"] = original_type  # Reset to original type.
+        merged_config.pop("source", None)
 
-        pc_logging.info(f"Processing enrich part '{part_name}' using PartFactoryEnrich...")
+        # Use base part's file path if not provided.
+        if "path" not in merged_config and "path" in base_part_config:
+            merged_config["path"] = base_part_config["path"]
 
-        # Instantiate the enrich part
-        factory = PartFactoryEnrich(project.ctx, project, project, part_config)
-        asyncio.run(factory.instantiate(project.get_part(part_name)))
+        # Remove unwanted keys
+        for key in ["name", "orig_name", "manufacturable"]:
+            merged_config.pop(key, None)
 
-        resolved_part = project.get_part(part_name)
-        if not resolved_part:
-            raise ValueError(f"Failed to resolve enrich part '{part_name}'.")
+        new_config = merged_config
+        source_project_for_file = base_project
+        file_source_name = base_part_name  # Use base part name for file lookup.
+    else:
+        original_type = part_config.get("type")
+        new_config = part_config.copy()
+        source_project_for_file = project
+        file_source_name = part_name
 
-        resolved_type = resolved_part.config.get("type")
-        pc_logging.info(f"Successfully resolved enrich part '{part_name}' to type '{resolved_type}'.")
+        # Remove unwanted keys
+        for key in ["name", "orig_name", "manufacturable"]:
+            new_config.pop(key, None)
 
-        if dry_run:
-            pc_logging.info(f"[Dry Run] Enrich part '{part_name}' would be resolved to type '{resolved_type}'.")
-            return resolved_part
+    # Determine conversion target type.
+    conversion_target = original_type if not target_format else original_type
 
-        resolved_config = copy.deepcopy(resolved_part.config)
+    # Determine source file location.
+    if new_config.get("path"):
+        old_path = (Path(source_project_for_file.path) / new_config["path"]).resolve()
+    else:
+        old_path = Path(source_project_for_file.config_dir) / f"{file_source_name}.{EXTENSION_MAPPING.get(original_type)}"
 
-        # Remove unnecessary metadata fields
-        for key in ["orig_name", "source", "name", "with", "manufacturable"]:
-            resolved_config.pop(key, None)
+    new_ext = EXTENSION_MAPPING.get(conversion_target, conversion_target)
+    full_output_dir = Path(output_dir).resolve() if output_dir else Path(project.path).resolve()
+    new_file_name = f"{part_name}.{new_ext}"
 
-        part_type = resolved_config["type"]
-        file_extension = "py" if part_type in ["cadquery", "build123d"] else EXTENSION_MAPPING.get(part_type, part_type)
-        target_path = Path(project.path) / f"{part_name}.{file_extension}"
+    pc_logging.info(f"Converting '{part_name}' from '{part_type}' to '{conversion_target}'.")
+    full_output_dir.mkdir(parents=True, exist_ok=True)
 
-        if not dry_run:
-            shutil.copy(Path(resolved_part.path), target_path)
-            pc_logging.info(f"Copied resolved part to '{target_path}'.")
+    if dry_run:
+        pc_logging.info(f"[Dry Run] No changes made for '{part_name}'.")
+        return
 
-        # Update project configuration with the new path
-        resolved_config["path"] = str(target_path)
-        project.set_part_config(part_name, resolved_config)
+    # For cadquery and build123d, use the source file directly.
+    if conversion_target in ("cadquery", "build123d", "scad"):
+        source_path = old_path
+    else:
+        current_ext = old_path.suffix[1:].lower()
+        if current_ext != new_ext:
+            temp_dir = Path(tempfile.mkdtemp())
+            temp_conv_path = temp_dir / f"{part_name}.{conversion_target}"
+            pc_logging.info(f"Performing ad-hoc conversion: {current_ext} → {conversion_target}")
+            convert_cad_file(str(old_path), current_ext, str(temp_conv_path), conversion_target)
+            if not temp_conv_path.exists():
+                raise RuntimeError(f"Ad-hoc conversion failed: {old_path} → {temp_conv_path}")
+            source_path = temp_conv_path
+            pc_logging.info(f"Ad-hoc conversion successful: {temp_conv_path}")
+        else:
+            source_path = old_path
 
-        pc_logging.info(f"Updated project configuration for resolved part '{part_name}'.")
+    # Copy the file into the target package.
+    target_path = (Path(project.path) / new_file_name).resolve()
+    if target_path.exists() and source_path.samefile(target_path):
+        pc_logging.warning(f"Skipping copy: source and target are the same ({source_path}).")
+    else:
+        try:
+            shutil.copy2(source_path, target_path)
+        except shutil.Error as e:
+            raise ValueError(f"Failed to copy '{source_path}' → '{target_path}': {e}")
 
-        return resolved_part
+    try:
+        config_path = target_path.relative_to(Path(project.path))
+    except ValueError:
+        config_path = target_path
+    updated_config = deep_merge(new_config, {"type": conversion_target, "path": str(config_path)})
+    if "with" in updated_config.keys():
+        updated_config.pop("with")
+
+    project.set_part_config(part_name, updated_config)
+    pc_logging.debug(f"Updated configuration for '{part_name}': {config_path}")
+
+    if target_format and target_format != conversion_target:
+        final_ext = EXTENSION_MAPPING.get(target_format, target_format)
+        final_file_name = f"{part_name}.{final_ext}"
+        final_new_path = full_output_dir / final_file_name
+        pc_logging.info(f"Performing secondary conversion: {conversion_target} → {target_format} → {final_new_path}")
+        project.convert(
+            sketches=[], interfaces=[], parts=[part_name], assemblies=[],
+            target_format=target_format, output_dir=str(final_new_path)
+        )
+        try:
+            final_config_path = final_new_path.relative_to(Path(project.path))
+        except ValueError:
+            final_config_path = final_new_path
+        project.update_part_config(part_name, {"type": target_format, "path": str(final_config_path)})
+        pc_logging.info(f"Final updated configuration for '{part_name}': {final_config_path}")
+
+    if "temp_dir" in locals() and temp_dir.exists():
+        try:
+            shutil.rmtree(temp_dir)
+            pc_logging.info(f"Cleaned up temporary directory: {temp_dir}")
+        except Exception as e:
+            pc_logging.warning(f"Failed to remove temp directory '{temp_dir}': {e}")

@@ -1,5 +1,5 @@
 import rich_click as click
-from partcad.actions.part_actions import convert_part_action, resolve_enrich_action
+from partcad.actions.part_actions import convert_part_action
 from partcad.context import Context
 import partcad.logging as pc_logging
 
@@ -19,51 +19,23 @@ import partcad.logging as pc_logging
 @click.pass_obj
 def cli(ctx: Context, object_name: str, target_format: str, output_dir: str, dry_run: bool):
     """
-    CLI command to convert an object (part, assembly, or scene) to a new format.
+    CLI command to convert a part to a new format.
 
     :param ctx: PartCAD context
-    :param object_name: Name of the object to convert
-    :param target_format: Desired target format (if applicable)
+    :param object_name: Name of the part to convert
+    :param target_format: Desired target format
     :param output_dir: (Optional) Output directory for the converted file
     :param dry_run: If True, simulates conversion without actual changes
     """
-    pc_logging.info(f"Converting '{object_name}' to {target_format}, dry_run={dry_run}")
+    pc_logging.info(f"Starting conversion: '{object_name}'.")
 
     project = ctx.get_project("")
     if not project:
         pc_logging.error("Project retrieval failed. Ensure you are inside a valid PartCAD project.")
         raise click.UsageError("Failed to retrieve the project.")
 
-    part = ctx.get_part(object_name)
-    if not part:
-        raise click.UsageError(f"Object '{object_name}' not found in project.")
+    convert_part_action(project, object_name, target_format, output_dir=output_dir, dry_run=dry_run)
 
-    try:
-        part_type = part.config.get("type", "unknown")
-        pc_logging.info(f"Object '{object_name}' identified as type '{part_type}'.")
-
-        if part_type == "enrich":
-            pc_logging.info(f"Resolving enrich part '{object_name}'...")
-            resolve_enrich_action(project, object_name, dry_run=dry_run)
-            pc_logging.info(f"Resolved enrich part '{object_name}'.")
-
-            if not target_format:
-                click.echo(f"Resolved enrich part '{object_name}'. No conversion needed.")
-                return
-
-            # Refresh context after resolving enrich
-            ctx = Context(project.ctx.root_path)
-            project = ctx.get_project("")
-
-        if not target_format:
-            raise click.UsageError("Error: Target format must be specified for non-enrich parts.")
-
-        pc_logging.info(f"Starting conversion of '{object_name}' to '{target_format}'...")
-        convert_part_action(project, object_name, target_format, output_dir=output_dir, dry_run=dry_run)
-
-    except Exception as e:
-        pc_logging.error(f"Conversion failed: {e}")
-        raise click.UsageError(str(e)) from e
-
-    pc_logging.info(f"Successfully converted '{object_name}' to '{target_format}'.")
-    click.echo(f"Converted '{object_name}' to '{target_format}'.")
+    msg = f"Conversion of '{object_name}' completed."
+    pc_logging.info(msg)
+    click.echo(msg)
