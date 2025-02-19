@@ -88,7 +88,7 @@ runs:
         # activate-environment: env
         auto-activate-base: true
         use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
-        pkg-dirs: ${{ runner.os == 'Windows' && 'D:\\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
+        pkgs-dirs: ${{ runner.os == 'Windows' && 'D:\\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
 
     # - name: Init conda
     #   shell: bash
@@ -116,7 +116,8 @@ runs:
       run: |
         # . ~/.bashrc
         # . ~/.bash_profile
-        conda clean --all
+        # conda clean --all
+        # conda clean -y -i
         conda create -n env-test python=${{ matrix.python-version }} -y
         conda activate env-test
         # python -m ensurepip --upgrade
