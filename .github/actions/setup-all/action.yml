@@ -69,15 +69,15 @@ runs:
     ###################################################  PYTHON  ###################################################
 
     # Miniconda
-    - name: Cache conda
-      uses: actions/cache@v4
-      env:
-        # Increase this value to reset cache if etc/example-environment.yml has not changed
-        CACHE_NUMBER: 3
-      with:
-        enableCrossOsArchive: true
-        path: ${{ runner.os == 'Windows' && 'D:\\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
-        key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
+    # - name: Cache conda
+    #   uses: actions/cache@v4
+    #   env:
+    #     # Increase this value to reset cache if etc/example-environment.yml has not changed
+    #     CACHE_NUMBER: 3
+    #   with:
+    #     enableCrossOsArchive: true
+    #     path: ${{ runner.os == 'Windows' && 'D:\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
+    #     key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
 
     - uses: conda-incubator/setup-miniconda@v3
       with:
@@ -86,9 +86,9 @@ runs:
         # channel-priority: strict
         python-version: ${{ matrix.python-version }}
         # activate-environment: env
-        auto-activate-base: true
-        use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
-        pkgs-dirs: ${{ runner.os == 'Windows' && 'D:\\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
+        auto-activate-base: false
+        # use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        # pkgs-dirs: ${{ runner.os == 'Windows' && 'D:\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
 
     # - name: Init conda
     #   shell: bash
@@ -116,7 +116,7 @@ runs:
       run: |
         # . ~/.bashrc
         # . ~/.bash_profile
-        # conda clean --all
+        conda clean --all
         # conda clean -y -i
         conda create -n env-test python=${{ matrix.python-version }} -y
         conda activate env-test
