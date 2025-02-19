@@ -110,7 +110,7 @@ class PythonRuntime(runtime.Runtime):
                     yield
 
     def once(self):
-        with self.lock:
+        with self.sync_lock():
             if not self.initialized:
                 # Preinstall the most common packages to avoid race conditions
                 self.ensure_onced_locked("ocp-tessellate==3.0.9")
@@ -124,19 +124,18 @@ class PythonRuntime(runtime.Runtime):
                 self.initialized = True
 
     async def once_async(self):
-        with self.lock:
-            async with self.get_async_lock():
-                if not self.initialized:
-                    # Preinstall the most common packages to avoid
-                    await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
-                    await self.ensure_async_onced_locked("nlopt==2.9.1")
-                    await self.ensure_async_onced_locked("cadquery==2.5.2")
-                    await self.ensure_async_onced_locked("numpy==2.2.1")
-                    await self.ensure_async_onced_locked("typing_extensions==4.12.2")
-                    await self.ensure_async_onced_locked("cadquery-ocp==7.7.2")
-                    await self.ensure_async_onced_locked("ocpsvg==0.3.4")
-                    await self.ensure_async_onced_locked("build123d==0.8.0")
-                    self.initialized = True
+        async with self.get_async_lock():
+            if not self.initialized:
+                # Preinstall the most common packages to avoid
+                await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
+                await self.ensure_async_onced_locked("nlopt==2.9.1")
+                await self.ensure_async_onced_locked("cadquery==2.5.2")
+                await self.ensure_async_onced_locked("numpy==2.2.1")
+                await self.ensure_async_onced_locked("typing_extensions==4.12.2")
+                await self.ensure_async_onced_locked("cadquery-ocp==7.7.2")
+                await self.ensure_async_onced_locked("ocpsvg==0.3.4")
+                await self.ensure_async_onced_locked("build123d==0.8.0")
+                self.initialized = True
 
     def run(self, cmd, stdin="", cwd=None, session=None):
         self.once()

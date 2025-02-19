@@ -31,6 +31,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         super().__init__(ctx, sandbox_type_name, version)
 
         self.global_conda_lock = FileLock(os.path.join(user_config.internal_state_dir, ".conda.lock"))
+        self.conda_initialized = self.initialized
 
         self.conda_path = shutil.which("mamba")
         if self.conda_path is not None:
@@ -63,7 +64,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     path=search_path_strings,
                 )
 
-        if self.initialized:
+        if self.conda_initialized:
             # Make a best effort attempt to determine if it's valid
             python_path = self.get_venv_python_path()
             if os.path.exists(python_path):
@@ -77,24 +78,24 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     )
                     stdout, stderr = p.communicate()
                     if not stderr is None and stderr.strip() != "":
-                        pc_logging.error("conda venv check error: %s" % stderr)
-                    if not stdout is None and stdout.strip() != "":
+                        pc_logging.warning("conda venv check error: %s" % stderr)
+                        self.conda_initialized = False
+                    elif not stdout is None and stdout.strip() != "":
                         if not self.version in stdout:
                             pc_logging.warning("conda venv check warning: %s" % stdout)
-                            self.initialized = False
+                            self.conda_initialized = False
                 except Exception as e:
-                    pc_logging.error("conda venv check error: %s" % e)
-                    self.initialized = False
+                    pc_logging.warning("conda venv check error: %s" % e)
+                    self.conda_initialized = False
 
     def once(self):
-        with self.lock:
+        with self.sync_lock():
             self.once_conda_locked()
         super().once()
 
     async def once_async(self):
-        with self.lock:
-            async with self.get_async_lock():
-                self.once_conda_locked()
+        async with self.async_lock():
+            self.once_conda_locked()
         await super().once_async()
 
     # TODO(clairbee): Make an async version of this function
@@ -146,9 +147,9 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 _, stderr = p.communicate()
                 if not stderr is None and stderr.strip() != "":
                     pc_logging.error("conda pip install error: %s" % stderr)
-                    self.initialized = False
+                    self.conda_initialized = False
                 else:
-                    self.initialized = True
+                    self.conda_initialized = True
             except Exception as e:
                 shutil.rmtree(self.path)
                 raise e
@@ -156,11 +157,11 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
     def once_conda_locked(self):
         # Lock the global conda lock and create a new environment
         with self.global_conda_lock:
-            if not self.initialized:
+            if not self.conda_initialized:
                 self.once_conda_locked_attempt()
-            if not self.initialized:
+            if not self.conda_initialized:
                 # Sometime it fails to create from the first attempt
                 self.once_conda_locked_attempt()
             # TODO(clairbee): Does it make sense to retry more than once?
-            if not self.initialized:
+            if not self.conda_initialized:
                 raise Exception("ERROR: Conda environment initialization failed")
