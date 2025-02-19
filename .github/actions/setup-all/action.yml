@@ -79,26 +79,26 @@ runs:
     #     path: ${{ runner.os == 'Windows' && 'D:\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
     #     key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
 
-    - uses: conda-incubator/setup-miniconda@v3
-      with:
-        miniforge-version: 24.11.3-0
-        channels: conda-forge,defaults
-        channel-priority: flexible
-        python-version: ${{ matrix.python-version }}
-        # activate-environment: env
-        auto-activate-base: false
-        # use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
-        # pkgs-dirs: ${{ runner.os == 'Windows' && 'D:\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
+    # - uses: conda-incubator/setup-miniconda@v3
+    #   with:
+    #     miniforge-version: 24.11.3-0
+    #     channels: conda-forge,defaults
+    #     channel-priority: flexible
+    #     python-version: ${{ matrix.python-version }}
+    #     # activate-environment: env
+    #     auto-activate-base: false
+    #     # use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+    #     # pkgs-dirs: ${{ runner.os == 'Windows' && 'D:\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
 
-      - uses: mamba-org/setup-micromamba@v2
-        with:
-          micromamba-version: 2.0.5-0
-          # environment-file: environment.yml
-          init-shell: >-
-            bash
-            powershell
-          cache-environment: true
-          post-cleanup: 'all'
+    - uses: mamba-org/setup-micromamba@v2
+      with:
+        micromamba-version: 2.0.5-0
+        # environment-file: environment.yml
+        init-shell: >-
+          bash
+          powershell
+        cache-environment: true
+        post-cleanup: "all"
 
     # - name: Init conda
     #   shell: bash
