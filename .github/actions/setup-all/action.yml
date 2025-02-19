@@ -97,7 +97,7 @@ runs:
         init-shell: >-
           bash
           powershell
-        cache-environment: true
+        # cache-environment: true
         post-cleanup: "all"
 
     # - name: Init conda
