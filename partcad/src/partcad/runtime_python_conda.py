@@ -66,28 +66,35 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 )
 
         if self.conda_initialized:
-            # Make a best effort attempt to determine if it's valid
-            python_path = self.get_venv_python_path()
-            if os.path.exists(python_path):
-                try:
-                    p = subprocess.Popen(
-                        [python_path, "-c", "import sys; print(sys.version)"],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        shell=False,
-                        encoding="utf-8",
-                    )
-                    stdout, stderr = p.communicate()
-                    if not stderr is None and stderr.strip() != "":
-                        pc_logging.warning("conda venv check error: %s" % stderr)
-                        self.conda_initialized = False
-                    elif not stdout is None and stdout.strip() != "":
-                        if not stdout.strip().startswith("Python %s" % self.version):
-                            pc_logging.warning("conda venv check warning: %s" % stdout)
-                            self.conda_initialized = False
-                except Exception as e:
-                    pc_logging.warning("conda venv check error: %s" % e)
+            self.verify_conda()
+
+    def verify_conda(self):
+        # Make a best effort attempt to determine if it's valid
+        python_path = self.get_venv_python_path()
+        if os.path.exists(python_path):
+            try:
+                p = subprocess.Popen(
+                    [python_path, "-c", "import sys; print(sys.version)"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                    encoding="utf-8",
+                )
+                stdout, stderr = p.communicate()
+                if not stderr is None and stderr.strip() != "":
+                    pc_logging.warning("conda venv check error: %s" % stderr)
                     self.conda_initialized = False
+                elif stdout is None or stdout.strip() == "":
+                    pc_logging.warning("conda venv check warning: empty version")
+                    self.conda_initialized = False
+                elif not stdout.strip().startswith("Python %s" % self.version):
+                    pc_logging.warning("conda venv check warning: %s" % stdout)
+                    self.conda_initialized = False
+                else:
+                    self.conda_initialized = True
+            except Exception as e:
+                pc_logging.warning("conda venv check error: %s" % e)
+                self.conda_initialized = False
 
     @contextlib.contextmanager
     def sync_lock_install(self, session=None):
@@ -111,14 +118,18 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
     def once_conda_locked(self):
         with self.sync_lock_install():
+            # See if it just got created
+            if os.path.exists(self.path):
+                self.verify_conda()
+
             if not self.conda_initialized:
                 self.once_conda_locked_attempt()
-            if not self.conda_initialized:
-                # Sometime it fails to create from the first attempt
-                self.once_conda_locked_attempt()
-            # TODO(clairbee): Does it make sense to retry more than once?
-            if not self.conda_initialized:
-                raise Exception("ERROR: Conda environment initialization failed")
+                if not self.conda_initialized:
+                    # Sometime it fails to create from the first attempt
+                    self.once_conda_locked_attempt()
+                # TODO(clairbee): Does it make sense to retry more than once?
+                if not self.conda_initialized:
+                    raise Exception("ERROR: Conda environment initialization failed")
 
     # TODO(clairbee): Make an async version of this function
     def once_conda_locked_attempt(self):
