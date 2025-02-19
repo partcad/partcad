@@ -88,14 +88,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
+        with:
+          job: pytest
       - uses: ./.github/actions/setup-test
+        with:
+          job: pytest
 
       - name: Test with pytest
         # env:
         #   PYTHONWARNINGS: ignore
         shell: bash -l {0}
         run: |
-          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-pytest-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-test-results
           pytest \
@@ -134,13 +138,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
+        with:
+          job: pytest-ide-vscode
       - uses: ./.github/actions/setup-test
+        with:
+          job: pytest-ide-vscode
 
       # TODO(clairbee): Move this step to the build jobs. Merge build.yml and test.yml to form a ci.yml, where this test job may 'needs' that build job
       - name: Build the VS Code extension
         shell: bash -l {0}
         run: |
-          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
           (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
           conda deactivate
 
@@ -149,7 +157,7 @@ jobs:
           PYTHONWARNINGS: ignore
         shell: bash -l {0}
         run: |
-          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-vscode-test-results
           pytest \
@@ -185,7 +193,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
+        with:
+          job: behave
       - uses: ./.github/actions/setup-test
+        with:
+          job: behave
 
       # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
       - name: Set SSH Agent Service to Manual
@@ -203,7 +215,7 @@ jobs:
         run: |
           mkdir -pv behave-test-results
 
-          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-behave-{0}', matrix.python-version) }}
           if ! python -m pip install -U ./partcad ./partcad-cli; then
             echo "Failed to install packages"
             exit 1
@@ -255,7 +267,11 @@ jobs:
   #   steps:
   #     - uses: actions/checkout@v4
   #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: examples-partcad
   #     - uses: ./.github/actions/setup-test
+  #       with:
+  #         job: examples-partcad
 
   #     - name: Basic integration test for CLI (PartCAD examples)
   #       shell: bash -l {0}
@@ -264,7 +280,7 @@ jobs:
   #       run: |
   #         mkdir -pv examples-partcad-test-results
 
-  #         conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
+  #         conda activate ~/${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
   #         python -m pip install -U ./partcad ./partcad-cli
 
   #         # BEGIN PARTCAD EXAMPLES
@@ -306,14 +322,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
+        with:
+          job: examples-all
       - uses: ./.github/actions/setup-test
+        with:
+          job: examples-all
 
       - name: Basic integration test for CLI (all examples)
         shell: bash -l {0}
         run: |
           mkdir -pv examples-all-test-results
 
-          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-examples-all-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
@@ -347,22 +367,23 @@ jobs:
         python-version: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    concurrency:
-      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
-      cancel-in-progress: false
     timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
+        with:
+          job: pub-repo
       - uses: ./.github/actions/setup-test
+        with:
+          job: pub-repo
 
       - name: Test the entire repository
         shell: bash -l {0}
         run: |
           mkdir -pv pub-repo-test-results
 
-          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO

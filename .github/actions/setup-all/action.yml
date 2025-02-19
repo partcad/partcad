@@ -1,6 +1,11 @@
 name: "Setup all"
 description: "Prepare the runner no matter what the job is"
 
+inputs:
+  job:
+    description: "The name of the job calling this action"
+    default: "default"
+
 runs:
   using: "composite"
   steps:
@@ -90,7 +95,7 @@ runs:
         auto-activate-base: false
         # use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
         # pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
-        pkgs-dirs: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+        # pkgs-dirs: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
 
     # - uses: mamba-org/setup-micromamba@v2
     #   with:
@@ -130,8 +135,8 @@ runs:
         # . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        conda create -p ~/${{ format('env-test-{0}', matrix.python-version) }} python=${{ matrix.python-version }} -y
-        conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
+        conda create -p ~/${{ format('env-test-{0}-{1}', github.event.inputs.job, matrix.python-version) }} python=${{ matrix.python-version }} -y
+        conda activate ~/${{ format('env-test-{0}-{1}', github.event.inputs.job, matrix.python-version) }}
         # python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
