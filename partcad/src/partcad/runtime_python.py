@@ -138,7 +138,7 @@ class PythonRuntime(runtime.Runtime):
 
     async def once_async(self):
         async with self.async_lock():
-            async with self.async_lock_install():
+            with self.sync_lock_install():
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
@@ -456,7 +456,7 @@ class PythonRuntime(runtime.Runtime):
                 session["dirty"] = True
         else:
             async with self.async_lock():
-                async with self.async_lock_install():
+                with self.sync_lock_install():
                     if not os.path.exists(guard_path):
                         item = python_package
                         if not path is None:
