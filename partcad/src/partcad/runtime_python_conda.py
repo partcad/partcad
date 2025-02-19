@@ -178,8 +178,11 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     encoding="utf-8",
                 )
                 _, stderr = p.communicate()
+                p.returncode
                 if not stderr is None and stderr.strip() != "":
-                    pc_logging.error("conda pip install error: %s" % stderr)
+                    pc_logging.warning("conda pip install error: %s" % stderr)
+                if p.returncode != 0:
+                    pc_logging.error("conda pip install return code: %s" % p.returncode)
                     self.conda_initialized = False
                 else:
                     self.conda_initialized = True
