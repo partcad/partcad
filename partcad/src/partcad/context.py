@@ -11,6 +11,10 @@ import os
 import time
 import socket
 import threading
+from typing import Optional
+
+from partcad.part import Part
+from partcad.project import Project
 
 from .cache import Cache
 from .cache_shape import ShapeCache
@@ -253,7 +257,7 @@ class Context(project_config.Configuration):
 
         return get_child_project_path(project_path, rel_project_path)
 
-    def get_project(self, rel_project_path: str):
+    def get_project(self, rel_project_path: str) -> Optional[Project]:
         project_path = self.get_project_abs_path(rel_project_path)
 
         with self.lock:
@@ -789,7 +793,8 @@ class Context(project_config.Configuration):
         pc_logging.debug("Retrieving %s from %s" % (part_name, project_name))
         return prj.get_provider(part_name, params)
 
-    def _get_part(self, part_spec, params=None):
+    def _get_part(self, part_spec, params=None) -> Optional[Part]:
+        pc_logging.info(2)
         project_name, part_name = resolve_resource_path(
             self.current_project_path,
             part_spec,
@@ -802,7 +807,8 @@ class Context(project_config.Configuration):
         pc_logging.debug("Retrieving %s from %s" % (part_name, project_name))
         return prj.get_part(part_name, params)
 
-    def get_part(self, part_spec, params=None):
+    def get_part(self, part_spec, params=None) -> Optional[Part]:
+        pc_logging.info(1)
         return self._get_part(part_spec, params)
 
     def get_part_shape(self, part_spec, params=None):

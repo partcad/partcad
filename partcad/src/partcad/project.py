@@ -33,7 +33,7 @@ from .sketch_factory_dxf import SketchFactoryDxf
 from .sketch_factory_svg import SketchFactorySvg
 from .sketch_factory_build123d import SketchFactoryBuild123d
 from .sketch_factory_cadquery import SketchFactoryCadquery
-from . import part
+from .part import Part
 from . import part_config
 from .part_factory_extrude import PartFactoryExtrude
 from .part_factory_sweep import PartFactorySweep
@@ -544,7 +544,7 @@ class Project(project_config.Configuration):
             config = part_config.PartConfiguration.normalize(part_name, config)
             self.init_part_by_config(config)
 
-    def init_part_by_config(self, config, source_project=None):
+    def init_part_by_config(self, config: dict, source_project: "Project" = None):
         if source_project is None:
             source_project = self
 
@@ -602,7 +602,7 @@ class Project(project_config.Configuration):
                 alias_part_config = part_config.PartConfiguration.normalize(alias, alias_part_config)
                 pfa.PartFactoryAlias(self.ctx, source_project, self, alias_part_config)
 
-    def get_part(self, part_name, func_params=None, quiet=False) -> part.Part:
+    def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
         if func_params is None or not func_params:
             has_func_params = False
         else:
@@ -636,9 +636,9 @@ class Project(project_config.Configuration):
 
         # See if it's already available
         if result_name in self.parts and not self.parts[result_name] is None:
-            p = self.parts[result_name]
+            part = self.parts[result_name]
             self.lock.release()
-            return p
+            return part
 
         with Project.PartLock(self, result_name):
             # Release the project lock, and continue with holding the part lock only
