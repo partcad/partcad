@@ -84,6 +84,8 @@ runs:
         miniforge-version: 24.11.3-0
         channels: conda-forge,defaults
         # channel-priority: strict
+        channel-priority: flexible
+        continue-on-error: true
         python-version: ${{ matrix.python-version }}
         # activate-environment: env
         auto-activate-base: false

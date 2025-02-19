@@ -87,7 +87,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 elif stdout is None or stdout.strip() == "":
                     pc_logging.warning("conda venv check warning: empty version")
                     self.conda_initialized = False
-                elif not stdout.strip().startswith("Python %s" % self.version):
+                elif not stdout.strip().startswith(self.version):
                     pc_logging.warning("conda venv check warning: %s" % stdout)
                     self.conda_initialized = False
                 else:
