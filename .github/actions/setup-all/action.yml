@@ -114,7 +114,7 @@ runs:
       run: |
         # . ~/.bashrc
         # . ~/.bash_profile
-        # conda clean --all
+        conda clean --all
         conda create -n env-test python=${{ matrix.python-version }} -y
         conda activate env-test
         # python -m ensurepip --upgrade

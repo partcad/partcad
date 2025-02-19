@@ -81,7 +81,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         pc_logging.warning("conda venv check error: %s" % stderr)
                         self.conda_initialized = False
                     elif not stdout is None and stdout.strip() != "":
-                        if not self.version in stdout:
+                        if not stdout.strip().startswith("Python %s" % self.version):
                             pc_logging.warning("conda venv check warning: %s" % stdout)
                             self.conda_initialized = False
                 except Exception as e:
