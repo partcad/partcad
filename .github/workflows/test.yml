@@ -22,7 +22,8 @@ concurrency:
 
 env:
   # If this is the original copy of PartCAD, then use the org's self-hosted runners
-  OSES: '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]'
+  OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
+  # OSES: '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]'
   # OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", ["self-hosted", "macos-15-large"], "macos-15-xlarge"]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]' }}
   # PYTHONS: '["3.10"]'
   PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
@@ -80,9 +81,6 @@ jobs:
     # runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    concurrency:
-      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
-      cancel-in-progress: false
     timeout-minutes: 30
 
     steps:
@@ -130,9 +128,6 @@ jobs:
     # runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    concurrency:
-      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
-      cancel-in-progress: false
     timeout-minutes: 20
 
     steps:
@@ -185,9 +180,6 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    concurrency:
-      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
-      cancel-in-progress: false
     timeout-minutes: 60
 
     steps:
@@ -314,9 +306,6 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-    concurrency:
-      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
-      cancel-in-progress: false
     timeout-minutes: 30
 
     steps:
