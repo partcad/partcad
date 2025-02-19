@@ -45,8 +45,13 @@ env:
   #       ["ubuntu-latest", "3.11"],
   #       ["ubuntu-latest", "3.12"],
   #       ["windows-latest", "3.10"],
+  #       ["windows-latest", "3.11"],
   #       ["windows-latest", "3.12"],
   #       ["macos-15-large", "3.10"],
+  #       ["macos-15-large", "3.11"],
+  #       ["macos-15-large", "3.12"],
+  #       ["macos-15-xlarge", "3.10"],
+  #       ["macos-15-xlarge", "3.11"],
   #       ["macos-15-xlarge", "3.12"]
   #     ]'
   #   }}
@@ -77,6 +82,7 @@ jobs:
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     concurrency:
       group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
+      cancel-in-progress: false
     timeout-minutes: 30
 
     steps:
@@ -89,7 +95,7 @@ jobs:
         #   PYTHONWARNINGS: ignore
         shell: bash -l {0}
         run: |
-          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-test-results
           pytest \
@@ -122,6 +128,7 @@ jobs:
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     concurrency:
       group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
+      cancel-in-progress: false
     timeout-minutes: 20
 
     steps:
@@ -133,7 +140,7 @@ jobs:
       - name: Build the VS Code extension
         shell: bash -l {0}
         run: |
-          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
           (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
           conda deactivate
 
@@ -142,7 +149,7 @@ jobs:
           PYTHONWARNINGS: ignore
         shell: bash -l {0}
         run: |
-          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-vscode-test-results
           pytest \
@@ -172,6 +179,7 @@ jobs:
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     concurrency:
       group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
+      cancel-in-progress: false
     timeout-minutes: 60
 
     steps:
@@ -195,7 +203,7 @@ jobs:
         run: |
           mkdir -pv behave-test-results
 
-          conda activate ${{ format('env-test-{0}', matrix.python-version) }}env-test
+          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
           if ! python -m pip install -U ./partcad ./partcad-cli; then
             echo "Failed to install packages"
             exit 1
@@ -256,7 +264,7 @@ jobs:
   #       run: |
   #         mkdir -pv examples-partcad-test-results
 
-  #         conda activate ${{ format('env-test-{0}', matrix.python-version) }}
+  #         conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
   #         python -m pip install -U ./partcad ./partcad-cli
 
   #         # BEGIN PARTCAD EXAMPLES
@@ -292,6 +300,7 @@ jobs:
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     concurrency:
       group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
+      cancel-in-progress: false
     timeout-minutes: 30
 
     steps:
@@ -304,7 +313,7 @@ jobs:
         run: |
           mkdir -pv examples-all-test-results
 
-          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
@@ -340,6 +349,7 @@ jobs:
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     concurrency:
       group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
+      cancel-in-progress: false
     timeout-minutes: 15
 
     steps:
@@ -352,7 +362,7 @@ jobs:
         run: |
           mkdir -pv pub-repo-test-results
 
-          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
+          conda activate ~/${{ format('env-test-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO
