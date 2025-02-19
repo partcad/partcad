@@ -14,6 +14,16 @@ parts:
   cube_cadquery:
     type: cadquery
     path: cadquery/cube.py
+    parameters:
+      width:
+        type: int
+        default: 10
+      height:
+        type: int
+        default: 10
+      length:
+        type: float
+        default: 10
 
   prism_scad:
     type: scad
@@ -27,6 +37,14 @@ parts:
     type: stl
     path: stl/cube.stl
 
-  bolt_enrich:
+  cube_enrich:
     type: enrich
-    source: //pub/examples/partcad/feature_convert:bolt_step
+    source: :cube_cadquery
+    with:
+      height: 2
+      width: 5
+  
+  cube_alias:
+    desc: This is an example of an alias to a part
+    type: alias
+    source: :cube_cadquery
