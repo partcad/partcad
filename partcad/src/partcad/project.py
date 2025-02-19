@@ -6,6 +6,9 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import asyncio
 import copy
 import os
@@ -58,6 +61,8 @@ from . import provider_config
 from .render import render_cfg_merge
 from .utils import resolve_resource_path, normalize_resource_path
 
+if TYPE_CHECKING:
+    from partcad.context import Context
 
 class Project(project_config.Configuration):
 
@@ -133,7 +138,7 @@ class Project(project_config.Configuration):
 
     def __init__(
         self,
-        ctx,
+        ctx: Context,
         name: str,
         path: str,
         include_paths: list[str] = [],
