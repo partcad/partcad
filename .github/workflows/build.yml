@@ -58,7 +58,7 @@ jobs:
       - name: Test installation
         shell: bash -l {0}
         run: |
-          conda activate env-test
+          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
           python -m pip install -r partcad-cli/requirements.txt
@@ -68,7 +68,7 @@ jobs:
       - name: Build documentation
         shell: bash -l {0}
         run: |
-          conda activate env-test
+          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
           # python -m pip install -r .devcontainer/requirements.txt
           python -m pip install -r docs/requirements.txt
           sphinx-build  -M html docs/source docs/build -n -W

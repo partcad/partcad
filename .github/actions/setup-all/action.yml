@@ -85,6 +85,7 @@ runs:
         channels: conda-forge,defaults
         channel-priority: flexible
         python-version: ${{ matrix.python-version }}
+        conda-solver: classic
         # activate-environment: env
         auto-activate-base: false
         # use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
@@ -129,8 +130,8 @@ runs:
         # . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        conda create -n env-test python=${{ matrix.python-version }} -y
-        conda activate env-test
+        conda create -p ${{ format('env-test-{0}', matrix.python-version) }} python=${{ matrix.python-version }} -y
+        conda activate ${{ format('env-test-{0}', matrix.python-version) }}
         # python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests

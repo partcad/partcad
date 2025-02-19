@@ -75,6 +75,8 @@ jobs:
     # runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    concurrency:
+      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
     timeout-minutes: 30
 
     steps:
@@ -87,7 +89,7 @@ jobs:
         #   PYTHONWARNINGS: ignore
         shell: bash -l {0}
         run: |
-          conda activate env-test
+          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-test-results
           pytest \
@@ -118,6 +120,8 @@ jobs:
     # runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    concurrency:
+      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
     timeout-minutes: 20
 
     steps:
@@ -129,7 +133,7 @@ jobs:
       - name: Build the VS Code extension
         shell: bash -l {0}
         run: |
-          conda activate env-test
+          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
           (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
           conda deactivate
 
@@ -138,7 +142,7 @@ jobs:
           PYTHONWARNINGS: ignore
         shell: bash -l {0}
         run: |
-          conda activate env-test
+          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-vscode-test-results
           pytest \
@@ -166,7 +170,8 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-
+    concurrency:
+      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
     timeout-minutes: 60
 
     steps:
@@ -190,7 +195,7 @@ jobs:
         run: |
           mkdir -pv behave-test-results
 
-          conda activate env-test
+          conda activate ${{ format('env-test-{0}', matrix.python-version) }}env-test
           if ! python -m pip install -U ./partcad ./partcad-cli; then
             echo "Failed to install packages"
             exit 1
@@ -251,7 +256,7 @@ jobs:
   #       run: |
   #         mkdir -pv examples-partcad-test-results
 
-  #         conda activate env-test
+  #         conda activate ${{ format('env-test-{0}', matrix.python-version) }}
   #         python -m pip install -U ./partcad ./partcad-cli
 
   #         # BEGIN PARTCAD EXAMPLES
@@ -285,6 +290,8 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    concurrency:
+      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
     timeout-minutes: 30
 
     steps:
@@ -297,7 +304,7 @@ jobs:
         run: |
           mkdir -pv examples-all-test-results
 
-          conda activate env-test
+          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
@@ -331,6 +338,8 @@ jobs:
         python-version: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    concurrency:
+      group: ${{ github.workflow }}-$${{ matrix.os }}-${{ matrix.python-version }}
     timeout-minutes: 15
 
     steps:
@@ -343,7 +352,7 @@ jobs:
         run: |
           mkdir -pv pub-repo-test-results
 
-          conda activate env-test
+          conda activate ${{ format('env-test-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO

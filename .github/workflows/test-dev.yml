@@ -53,7 +53,6 @@ jobs:
 
       - name: Build Dev Container
         uses: devcontainers/ci@v0.3
-        # if: steps.setup.outputs.BUILD_DEVCONTAINER == 'true'
         with:
           imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
@@ -156,10 +155,6 @@ jobs:
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
-          # imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}"
-          # imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
-          # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
-          # configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             (cd partcad-ide-vscode && poetry run nox --session setup && poetry run nox --session build_package)
@@ -182,12 +177,11 @@ jobs:
           coverage-report: pytest-results/coverage.xml
 
       - name: Generate Allure Report
-        # if: always()
+        if: always()
         uses: devcontainers/ci@v0.3
         with:
-          imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}"
-          # configFile: .devcontainer/.devcontainer.json
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -199,7 +193,7 @@ jobs:
             fi
 
       - name: Publish Allure Report
-        # if: always()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest-allure-report
@@ -299,10 +293,6 @@ jobs:
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
-          # imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}"
-          # imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
-          # # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
-          # # configFile: .devcontainer/.devcontainer.json
           push: never
           env: |
             # TODO-25: Workaround for "Host key verification failed."
@@ -317,7 +307,7 @@ jobs:
             poetry --no-ansi --no-interaction run coverage xml --data-file=./.coverage -o behave-results/coverage.xml
 
       - name: Upload test results & coverage reports to github and codecov
-        # if: always()
+        if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: behave-results
@@ -329,14 +319,11 @@ jobs:
           coverage-report: behave-results/coverage.xml
 
       - name: Generate Allure Report
-        # if: always()
+        if: always()
         uses: devcontainers/ci@v0.3
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
-          # imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
-          # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
-          # configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -348,7 +335,7 @@ jobs:
             fi
 
       - name: Publish Allure Report
-        # if: always()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: behave-allure-report
@@ -476,10 +463,6 @@ jobs:
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           configFile: .devcontainer/.devcontainer.json
-          # imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}"
-          # imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
-          # # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
-          # # configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             mkdir -pv pc-test-results
