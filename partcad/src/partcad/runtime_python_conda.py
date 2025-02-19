@@ -138,27 +138,33 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 raise Exception("ERROR: PartCAD is configured to use conda, but conda is missing")
 
             try:
-                # Install new conda environment with the preferred Python version
-                p = subprocess.Popen(
-                    [
-                        self.conda_path,
-                        "create",
-                        "-y",
-                        "-q",
-                        "--json",
-                        "-p",
-                        self.path,
-                        *self.variant_packages,
-                        "python==%s" % self.version if self.is_mamba else "python=%s" % self.version,
-                    ],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=False,
-                    encoding="utf-8",
-                )
-                _, stderr = p.communicate()
-                if not stderr is None and stderr.strip() != "":
-                    pc_logging.error("conda env install error: %s" % stderr)
+                attempts = 0
+                while attempts < 3:
+                    # Install new conda environment with the preferred Python version
+                    p = subprocess.Popen(
+                        [
+                            self.conda_path,
+                            "create",
+                            "-y",
+                            "-q",
+                            "--json",
+                            "-p",
+                            self.path,
+                            *self.variant_packages,
+                            "python==%s" % self.version if self.is_mamba else "python=%s" % self.version,
+                        ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        shell=False,
+                        encoding="utf-8",
+                    )
+                    _, stderr = p.communicate()
+                    if not stderr is None and stderr.strip() != "":
+                        pc_logging.error("conda env install error: %s" % stderr)
+                        if "Found incorrect download" in stderr:
+                            attempts += 1
+                            continue
+                    break
 
                 # Install pip into the newly created conda environment
                 p = subprocess.Popen(

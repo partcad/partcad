@@ -23,9 +23,7 @@ concurrency:
 env:
   # If this is the original copy of PartCAD, then use the org's self-hosted runners
   OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
-  # OSES: '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]'
-  # OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", ["self-hosted", "macos-15-large"], "macos-15-xlarge"]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]' }}
-  # PYTHONS: '["3.10"]'
+  # OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest", ["self-hosted", "macos-15-large"]]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]' }}
   PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
   # OSPY: >-
   #   ${{
@@ -36,9 +34,16 @@ env:
   #       ["ubuntu-latest", "3.11"],
   #       ["ubuntu-latest", "3.12"],
   #       ["windows-latest", "3.10"],
+  #       ["windows-latest", "3.11"],
   #       ["windows-latest", "3.12"],
+  #       ["macos-13", "3.10"],
+  #       ["macos-13", "3.11"],
+  #       ["macos-13", "3.12"],
+  #       ["macos-latest", "3.10"],
+  #       ["macos-latest", "3.11"],
+  #       ["macos-latest", "3.12"],
   #       [["self-hosted", "macos-15-large"], "3.10"],
-  #       ["macos-15-xlarge", "3.12"]
+  #       [["self-hosted", "macos-15-xlarge"], "3.12"]
   #     ]'
   #     ||
   #     '[
@@ -76,9 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-    # If this is the original copy of PartCAD, then use the org's self-hosted runners
     runs-on: ${{ matrix.os }}
-    # runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 30
@@ -123,9 +126,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-    # If this is the original copy of PartCAD, then use the org's self-hosted runners
     runs-on: ${{ matrix.os }}
-    # runs-on: ${{ github.repository == 'partcad/partcad' && fromJson(format('["self-hosted", "{0}"]', matrix.os)) || matrix.os }}
     # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 20
@@ -352,8 +353,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # TODO(clairbee): Move this to the environment variables too
         os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
-        # os: [ubuntu-24.04-l, windows-latest-l, macos-15-large, macos-15-xlarge]
         python-version: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
