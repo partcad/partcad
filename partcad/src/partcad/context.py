@@ -794,7 +794,6 @@ class Context(project_config.Configuration):
         return prj.get_provider(part_name, params)
 
     def _get_part(self, part_spec, params=None) -> Optional[Part]:
-        pc_logging.info(2)
         project_name, part_name = resolve_resource_path(
             self.current_project_path,
             part_spec,
@@ -808,7 +807,6 @@ class Context(project_config.Configuration):
         return prj.get_part(part_name, params)
 
     def get_part(self, part_spec, params=None) -> Optional[Part]:
-        pc_logging.info(1)
         return self._get_part(part_spec, params)
 
     def get_part_shape(self, part_spec, params=None):

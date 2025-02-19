@@ -1,5 +1,3 @@
-import asyncio
-import copy
 from pathlib import Path
 import shutil
 import tempfile
@@ -7,7 +5,6 @@ from typing import Optional
 import partcad
 from partcad.context import Context
 import partcad.logging as pc_logging
-from partcad.part_factory_enrich import PartFactoryEnrich
 from partcad.project import Project
 from partcad.utils import resolve_resource_path
 from partcad.adhoc.convert import convert_cad_file
@@ -162,7 +159,7 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     """
     Convert a part to a new format and update its configuration.
 
-    For enrich/alias/AI parts (identified by a "source" field), the original configuration is
+    For enrich/alias/AI parts, the original configuration is
     merged with the enrich modifications. The file is looked up from the source project and base part.
 
     If target_format is not provided, conversion uses the original type.
@@ -173,7 +170,7 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     pc_logging.debug(f"Resolving package '{package_name}', part '{part_name}'")
     if project.name != package_name:
         project = project.ctx.get_project(package_name)
-    if project is None:
+    if not project:
         raise ValueError(f"Project '{package_name}' not found for '{part_name}'")
     pc_logging.debug(f"Using project '{project.name}', located at '{project.path}'")
 
@@ -186,15 +183,13 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
 
     # If "source" exists, merge base config and use the base part's name for file lookup.
     if "source" in part_config:
-        source_spec = part_config["source"]
-        if not source_spec:
-            raise ValueError(f"Part '{part_name}' has an empty 'source' field.")
-        base_package, base_part_name = resolve_resource_path(project.name, source_spec)
+        base_package, base_part_name = resolve_resource_path(project.name, part_config["source"])
         base_project = project.ctx.get_project(base_package)
-        if base_project is None:
+        if not base_project:
             raise ValueError(f"Base project '{base_package}' not found for part '{part_name}'.")
+
         base_part_config = base_project.get_part_config(base_part_name)
-        if base_part_config is None:
+        if not base_part_config:
             raise ValueError(f"Base part '{base_part_name}' not found in project '{base_project.name}'.")
         original_type = base_part_config.get("type")
         merged_config = deep_merge(base_part_config, part_config)
@@ -205,22 +200,18 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         if "path" not in merged_config and "path" in base_part_config:
             merged_config["path"] = base_part_config["path"]
 
-        # Remove unwanted keys
-        for key in ["name", "orig_name", "manufacturable"]:
-            merged_config.pop(key, None)
-
         new_config = merged_config
         source_project_for_file = base_project
-        file_source_name = base_part_name  # Use base part name for file lookup.
+        file_source_name = base_part_name
     else:
         original_type = part_config.get("type")
         new_config = part_config.copy()
         source_project_for_file = project
         file_source_name = part_name
 
-        # Remove unwanted keys
-        for key in ["name", "orig_name", "manufacturable"]:
-            new_config.pop(key, None)
+    # Remove unnecessary keys
+    for key in ["name", "orig_name", "manufacturable", "with"]:
+        new_config.pop(key, None)
 
     # Determine conversion target type.
     conversion_target = original_type if not target_format else original_type
@@ -235,14 +226,15 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     full_output_dir = Path(output_dir).resolve() if output_dir else Path(project.path).resolve()
     new_file_name = f"{part_name}.{new_ext}"
 
-    pc_logging.info(f"Converting '{part_name}' from '{part_type}' to '{conversion_target}'.")
+    if part_type != conversion_target:
+        pc_logging.info(f"Converting '{part_name}' from '{part_type}' to '{conversion_target}'.")
     full_output_dir.mkdir(parents=True, exist_ok=True)
 
     if dry_run:
         pc_logging.info(f"[Dry Run] No changes made for '{part_name}'.")
         return
 
-    # For cadquery and build123d, use the source file directly.
+    # Perform conversion
     if conversion_target in ("cadquery", "build123d", "scad"):
         source_path = old_path
     else:
@@ -261,9 +253,7 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
 
     # Copy the file into the target package.
     target_path = (Path(project.path) / new_file_name).resolve()
-    if target_path.exists() and source_path.samefile(target_path):
-        pc_logging.warning(f"Skipping copy: source and target are the same ({source_path}).")
-    else:
+    if not ((target_path.exists() and source_path.samefile(target_path)) or conversion_target == conversion_target):
         try:
             shutil.copy2(source_path, target_path)
         except shutil.Error as e:
@@ -273,18 +263,17 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         config_path = target_path.relative_to(Path(project.path))
     except ValueError:
         config_path = target_path
-    updated_config = deep_merge(new_config, {"type": conversion_target, "path": str(config_path)})
-    if "with" in updated_config.keys():
-        updated_config.pop("with")
 
+    # Update configuration
+    updated_config = deep_merge(new_config, {"type": conversion_target, "path": str(config_path)})
     project.set_part_config(part_name, updated_config)
     pc_logging.debug(f"Updated configuration for '{part_name}': {config_path}")
 
+    # Secondary conversion if needed
     if target_format and target_format != conversion_target:
         final_ext = EXTENSION_MAPPING.get(target_format, target_format)
-        final_file_name = f"{part_name}.{final_ext}"
-        final_new_path = full_output_dir / final_file_name
-        pc_logging.info(f"Performing secondary conversion: {conversion_target} → {target_format} → {final_new_path}")
+        final_new_path = Path(f"{str(old_path).split('.')[0]}.{final_ext}")
+        pc_logging.info(f"Converting: {conversion_target} to {target_format}.")
         project.convert(
             sketches=[], interfaces=[], parts=[part_name], assemblies=[],
             target_format=target_format, output_dir=str(final_new_path)
@@ -294,8 +283,9 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         except ValueError:
             final_config_path = final_new_path
         project.update_part_config(part_name, {"type": target_format, "path": str(final_config_path)})
-        pc_logging.info(f"Final updated configuration for '{part_name}': {final_config_path}")
+        pc_logging.debug(f"Final updated configuration for '{part_name}': {final_config_path}")
 
+    # Cleanup temp directory
     if "temp_dir" in locals() and temp_dir.exists():
         try:
             shutil.rmtree(temp_dir)
