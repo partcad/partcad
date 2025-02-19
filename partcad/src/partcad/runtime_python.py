@@ -23,7 +23,9 @@ from .user_config import user_config
 
 
 class VenvLock:
-    def __init__(self, runtime, venv: str):
+    lock: FileLock
+
+    def __init__(self, runtime: "PythonRuntime", venv: str):
         runtime.venv_locks_lock.acquire()
 
         # Setup lock for given venv.
@@ -99,7 +101,7 @@ class PythonRuntime(runtime.Runtime):
             with VenvLock(self, venv):
                 yield
 
-    # async_lock is used lock the runtime for asynchronous operations
+    @contextlib.asynccontextmanager
     async def async_lock(self, session=None):
         async with self.get_async_lock():
             with self.lock:
