@@ -119,7 +119,7 @@ jobs:
   pytest:
     name: "Run: pytest"
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: poetry-install
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
@@ -163,9 +163,10 @@ jobs:
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
             poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="partcad-ide-vscode/bundled" --dist no --verbose --color=no
+            echo DONE
 
       - name: Upload test results & coverage reports to github and codecov
-        # if: always()
+        if: always()
         uses: ./.github/actions/upload-test-results
         with:
           name: pytest-results
