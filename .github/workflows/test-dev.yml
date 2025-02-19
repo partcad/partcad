@@ -151,12 +151,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-poetry-
 
-      # TODO(clairbee): Move this step to the build jobs. Merge build.yml and test.yml to form a ci.yml, where this test job may 'needs' that build job
-      - name: Build the VS Code extension
-        shell: bash -l {0}
-        run: |
-          (cd partcad-ide-vscode && poetry run nox --session setup && poetry run nox --session build_package)
-
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
@@ -168,6 +162,8 @@ jobs:
           # configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
+            (cd partcad-ide-vscode && poetry run nox --session setup && poetry run nox --session build_package)
+
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
