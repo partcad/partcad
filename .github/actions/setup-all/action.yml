@@ -90,6 +90,16 @@ runs:
         # use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
         # pkgs-dirs: ${{ runner.os == 'Windows' && 'D:\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
 
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          micromamba-version: 2.0.5-0
+          # environment-file: environment.yml
+          init-shell: >-
+            bash
+            powershell
+          cache-environment: true
+          post-cleanup: 'all'
+
     # - name: Init conda
     #   shell: bash
     #   run: |
