@@ -57,7 +57,7 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
     # Create project configuration
     yaml_path = project_dir / "partcad.yaml"
     config_data = {"parts": {source_part: {"type": source_format, "path": str(relative_source_path)}}}
-    with open(yaml_path, "w") as f:
+    with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config_data, f)
 
     ctx = Context(str(project_dir))
@@ -86,7 +86,7 @@ def test_invalid_file_conversion(tmp_path: Path):
 
     yaml_path = project_dir / "partcad.yaml"
     config_data = {"parts": {}}
-    with open(yaml_path, "w") as f:
+    with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config_data, f)
 
     ctx = Context(str(project_dir))
@@ -120,7 +120,7 @@ def test_convert_with_dry_run(tmp_path: Path):
 
     yaml_path = project_dir / "partcad.yaml"
     config_data = {"parts": {part_name: {"type": "stl", "path": str(input_file.relative_to(project_dir))}}}
-    with open(yaml_path, "w") as f:
+    with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config_data, f)
 
     ctx = Context(str(project_dir))
@@ -155,7 +155,7 @@ def test_invalid_format_conversion(tmp_path: Path):
 
     yaml_path = project_dir / "partcad.yaml"
     config_data = {"parts": {part_name: {"type": "stl", "path": "cube.stl"}}}
-    with open(yaml_path, "w") as f:
+    with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config_data, f)
 
     ctx = Context(str(project_dir))

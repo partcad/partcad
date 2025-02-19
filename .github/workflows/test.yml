@@ -25,6 +25,30 @@ env:
   # OSES: '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]'
   OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", ["self-hosted", "macos-15-large"], "macos-15-xlarge"]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]' }}
   PYTHONS: '["3.10"]'
+  # OSPY: >-
+  #   ${{
+  #     github.repository == 'partcad/partcad'
+  #     &&
+  #     '[
+  #       ["ubuntu-latest", "3.10"],
+  #       ["ubuntu-latest", "3.11"],
+  #       ["ubuntu-latest", "3.12"],
+  #       ["windows-latest", "3.10"],
+  #       ["windows-latest", "3.12"],
+  #       [["self-hosted", "macos-15-large"], "3.10"],
+  #       ["macos-15-xlarge", "3.12"]
+  #     ]'
+  #     ||
+  #     '[
+  #       ["ubuntu-latest", "3.10"],
+  #       ["ubuntu-latest", "3.11"],
+  #       ["ubuntu-latest", "3.12"],
+  #       ["windows-latest", "3.10"],
+  #       ["windows-latest", "3.12"],
+  #       ["macos-15-large", "3.10"],
+  #       ["macos-15-xlarge", "3.12"]
+  #     ]'
+  #   }}
   # PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
 
 jobs:
@@ -38,6 +62,7 @@ jobs:
         id: set-matrix
         run: |
           echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }} }' >> $GITHUB_OUTPUT
+          # echo 'matrix={"ospy": ${{ env.OSPY }} }' >> $GITHUB_OUTPUT
 
   test-pytest:
     name: "Pytest"

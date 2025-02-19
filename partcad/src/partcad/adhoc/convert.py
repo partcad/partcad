@@ -69,9 +69,9 @@ def generate_partcad_config(temp_dir: Path, input_type: str, temp_input_path: Pa
 parts:
   input_part:
     type: {input_type}
-    path: {temp_input_path}
+    path: "{temp_input_path}"
     """
-    with open(config_path, "w") as config_file:
+    with open(config_path, "w", encoding="utf-8") as config_file:
         config_file.write(config_content)
 
 
