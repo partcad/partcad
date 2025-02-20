@@ -66,6 +66,7 @@ jobs:
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
+    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -82,8 +83,6 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    # Don't run the tests for the commit created by "bumpversion"
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 30
 
     steps:
@@ -127,8 +126,6 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    # Don't run the tests for the commit created by "bumpversion"
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 20
 
     steps:
@@ -180,7 +177,6 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 60
 
     steps:
@@ -306,7 +302,6 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 30
 
     steps:
@@ -357,7 +352,7 @@ jobs:
         os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
         python-version: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
-    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 15
 
     steps:

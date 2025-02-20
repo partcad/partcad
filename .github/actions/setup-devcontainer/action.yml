@@ -14,6 +14,7 @@ runs:
       shell: bash -l {0}
       run: |
         echo "BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+        echo "BRANCH_SANITIZED=$(echo -n ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} | sed s/\//_/g)" >> $GITHUB_OUTPUT
 
     - name: Check for changes that require the container to be rebuilt
       uses: dorny/paths-filter@v3
@@ -33,7 +34,7 @@ runs:
           # Do not add the branch name to the tag if the commit is created by "bumpversion"
           export IMAGE_TAG="${{ env.VERSION }}"
         else
-          export IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
+          export IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH_SANITIZED }}"
         fi
         echo "IMAGE_TAG=$IMAGE_TAG"
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV

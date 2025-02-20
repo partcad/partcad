@@ -160,10 +160,20 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     )
                     _, stderr = p.communicate()
                     if not stderr is None and stderr.strip() != "":
-                        pc_logging.error("conda env install error: %s" % stderr)
+                        # Handle most common sporadic conda/mamba failures
                         if "Found incorrect download" in stderr:
+                            pc_logging.warn("conda env install error: %s" % stderr)
                             attempts += 1
                             continue
+                        if "libmamba libarchive" in stderr:
+                            pc_logging.warn("conda env install error: %s" % stderr)
+                            attempts += 1
+                            continue
+                        if "Found incorrect download" in stderr:
+                            pc_logging.warn("conda env install error: %s" % stderr)
+                            attempts += 1
+                            continue
+                        pc_logging.error("conda env install error: %s" % stderr)
                     break
 
                 # Install pip into the newly created conda environment
