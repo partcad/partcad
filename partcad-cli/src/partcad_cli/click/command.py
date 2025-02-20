@@ -30,10 +30,6 @@ help_config.dump_to_globals()
 #     ]
 # }
 
-# Initialize plugins that are not enabled by default
-# TODO-85: @alexanderilyin: figure out what this is for
-pc.plugins.export_png = pc.PluginExportPngReportlab()
-
 
 @click.command(cls=Loader)
 @click.option(

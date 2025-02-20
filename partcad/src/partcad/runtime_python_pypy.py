@@ -10,38 +10,17 @@ import os
 import shutil
 import subprocess
 
-from . import runtime_python
+from . import runtime_python_conda
 
 
-class PyPyPythonRuntime(runtime_python.PythonRuntime):
+class PyPyPythonRuntime(runtime_python_conda.CondaPythonRuntime):
     def __init__(self, ctx, version=None):
-        super().__init__(ctx, "pypy", version)
+        super().__init__(ctx, version, variant="pypy")
 
         self.exec_name = "pypy" if os.name != "nt" else "pypy.exe"
-        # Lock the global conda lock and create a new conda environment
-        with runtime_python._global_conda_lock:
-            if not self.initialized:
-                which = shutil.which("pypy")
-                if which is None:
-                    raise Exception(
-                        "ERROR: PartCAD is configured to use missing pypy to execute Python scripts (CadQuery, build123d etc)"
-                    )
-                self.exec_path = which
-
-                try:
-                    subprocess.run(
-                        [
-                            "conda",
-                            "create",
-                            "-p",
-                            self.path,
-                            "pypy",
-                            "python=%s" % version,
-                        ]
-                    )
-                    subprocess.run(["conda", "install", "-p", self.path, "scipy"])
-
-                    self.initialized = True
-                except Exception as e:
-                    shutil.rmtree(self.path)
-                    raise e
+        which = shutil.which(self.exec_name)
+        if which is None:
+            raise Exception(
+                "ERROR: PartCAD is configured to use missing pypy to execute Python scripts (CadQuery, build123d etc)"
+            )
+        self.exec_path = which

@@ -1,0 +1,659 @@
+{
+  "name": "partcad",
+  "displayName": "PartCAD",
+  "description": "Build system and package manager for CAD files, and assembly modeling framework",
+  "markdown": "github",
+  "icon": "resources/logo_128x128.png",
+  "version": "0.7.112",
+  "serverInfo": {
+    "name": "PartCAD",
+    "module": "partcad"
+  },
+  "publisher": "OpenVMP",
+  "license": "Apache-2.0",
+  "homepage": "https://partcad.readthedocs.io/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openvmp/partcad.git"
+  },
+  "bugs": {
+    "url": "https://github.com/openvmp/partcad/issues"
+  },
+  "galleryBanner": {
+    "color": "#1e415e",
+    "theme": "dark"
+  },
+  "keywords": [
+    "partcad",
+    "cad",
+    "cadquery",
+    "build123d",
+    "openscad",
+    "step",
+    "stl",
+    "dxf",
+    "threejs",
+    "autodesk",
+    "solidworks"
+  ],
+  "engines": {
+    "vscode": "^1.78.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "extensionDependencies": [
+    "ms-python.python",
+    "bernhard-42.ocp-cad-viewer"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "PartCAD does not support untrusted workspaces."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Virtual Workspaces are not supported with PartCAD."
+    }
+  },
+  "activationEvents": [
+    "workspaceContains:partcad.yaml",
+    "onView:ocpCadStatus",
+    "onWebviewPanel:OcpCadViewer",
+    "workspaceContains:*.assy",
+    "workspaceContains:*cadquery*",
+    "workspaceContains:*build123d*",
+    "workspaceContains:*.scad",
+    "workspaceContains:*.step",
+    "workspaceContains:*.stl",
+    "workspaceContains:*.3mf",
+    "workspaceContains:*.dxf",
+    "workspaceContains:*.svg"
+  ],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool source-map --config ./webpack.config.js",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "format-check": "prettier --check 'src/**/*.ts' 'build/**/*.yml' '.github/**/*.yml'",
+    "test": "vscode-test",
+    "vsce-package": "vsce package -o partcad.vsix"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "filenames": [
+          "partcad.yaml"
+        ],
+        "id": "yaml",
+        "icon": {
+          "light": "./resources/logo.svg",
+          "dark": "./resources/logo.svg"
+        }
+      },
+      {
+        "id": "yaml",
+        "extensions": [
+          ".assy"
+        ],
+        "icon": {
+          "light": "./resources/logo.svg",
+          "dark": "./resources/logo.svg"
+        }
+      }
+    ],
+    "configuration": [
+      {
+        "title": "Python",
+        "order": 1,
+        "properties": {
+          "partcad.pythonSandbox": {
+            "default": "conda",
+            "description": "What sandboxing method to use for invoking Python scripts?",
+            "enum": [
+              "conda",
+              "pypy",
+              "none"
+            ],
+            "enumDescriptions": [
+              "Use conda to create a sandboxed environment.",
+              "Use pypy to create a sandboxed environment.",
+              "Do not create a sandboxed environment. Use the current Python environment instead."
+            ],
+            "scope": "machine",
+            "type": "string"
+          }
+        }
+      },
+      {
+        "title": "Generative AI",
+        "order": 2,
+        "properties": {
+          "partcad.googleApiKey": {
+            "default": "",
+            "description": "Google AI API key.",
+            "scope": "machine",
+            "type": "string"
+          },
+          "partcad.openaiApiKey": {
+            "default": "",
+            "description": "OpenAI API key.",
+            "scope": "machine",
+            "type": "string"
+          }
+        }
+      },
+      {
+        "title": "General",
+        "order": 3,
+        "properties": {
+          "partcad.verbosity": {
+            "default": "info",
+            "description": "What level of logs need to be displayed in the PartCAD terminal view?",
+            "enum": [
+              "debug",
+              "info",
+              "error"
+            ],
+            "enumDescriptions": [
+              "Show debug information (especially useful for debugging AI).",
+              "Show regular informational messages.",
+              "Show errors only."
+            ],
+            "scope": "machine",
+            "type": "string"
+          },
+          "partcad.packagePath": {
+            "default": ".",
+            "description": "Relative path to the PartCad package root from the workspace root.",
+            "scope": "resource",
+            "type": "string"
+          },
+          "partcad.forceUpdate": {
+            "default": "false",
+            "description": "Whether to update all dependencies on each run, instead of once a day.",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "enumDescriptions": [
+              "Update all dependencies on each run.",
+              "Update dependencies once a day."
+            ],
+            "scope": "machine",
+            "type": "string"
+          },
+          "partcad.importStrategy": {
+            "default": "useBundled",
+            "description": "Defines where `partcad` is imported from. This setting may be ignored if `partcad.path` is set.",
+            "enum": [
+              "useBundled",
+              "fromEnvironment"
+            ],
+            "enumDescriptions": [
+              "Always use the bundled version of `partcad`.",
+              "Use `partcad` from environment, fallback to bundled version only if `partcad` not available in the environment."
+            ],
+            "scope": "window",
+            "type": "string"
+          },
+          "partcad.interpreter": {
+            "default": [],
+            "description": "When set to a path to python executable, extension will use that to launch the server and any subprocess.",
+            "scope": "resource",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "partcad.showNotifications": {
+            "default": "off",
+            "description": "Controls when notifications are shown by this extension.",
+            "enum": [
+              "off",
+              "onError",
+              "onWarning",
+              "always"
+            ],
+            "enumDescriptions": [
+              "All notifications are turned off, any errors or warning are still available in the logs.",
+              "Notifications are shown only in the case of an error.",
+              "Notifications are shown for errors and warnings.",
+              "Notifications are show for anything that the server chooses to show."
+            ],
+            "scope": "machine",
+            "type": "string"
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "title": "Restart PartCAD",
+        "category": "PartCAD",
+        "command": "partcad.restart",
+        "icon": "$(refresh)"
+      },
+      {
+        "title": "Update PartCAD",
+        "category": "PartCAD",
+        "command": "partcad.update",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "partcad.promptInitPackage",
+        "category": "PartCAD",
+        "title": "Initialize new package",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "partcad.promptInitPackageCustom",
+        "category": "PartCAD",
+        "title": "Initialize new package at a custom path",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "partcad.promptLoadPackage",
+        "category": "PartCAD",
+        "title": "Open package",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "title": "Reload the package",
+        "category": "PartCAD",
+        "command": "partcad.refresh",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "partcad.addPart",
+        "category": "PartCAD",
+        "title": "Add a part to the current package",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "partcad.genPart",
+        "category": "PartCAD",
+        "title": "Generate a part with AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "partcad.addAssembly",
+        "category": "PartCAD",
+        "title": "Add an assembly file to the current package",
+        "icon": "$(diff-added)"
+      },
+      {
+        "command": "partcad.inspectSketch",
+        "category": "PartCAD",
+        "title": "View the sketch",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "partcad.inspectInterface",
+        "category": "PartCAD",
+        "title": "View the interface",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "partcad.inspectPart",
+        "category": "PartCAD",
+        "title": "View the part",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "partcad.inspectPartWithCode",
+        "category": "PartCAD",
+        "title": "View the part and its source code",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "partcad.inspectAssembly",
+        "category": "PartCAD",
+        "title": "View the part",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "partcad.inspectSource",
+        "category": "PartCAD",
+        "title": "View the source code",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "partcad.regeneratePart",
+        "category": "PartCAD",
+        "group": "AI",
+        "title": "Regenerate with AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "partcad.changePart",
+        "category": "PartCAD",
+        "group": "AI",
+        "title": "Change with AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "partcad.exportToSVG",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "SVG...",
+        "icon": "$(export)"
+      },
+      {
+        "command": "partcad.exportToPNG",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "PNG...",
+        "icon": "$(export)"
+      },
+      {
+        "command": "partcad.exportToSTEP",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "STEP...",
+        "icon": "$(export)"
+      },
+      {
+        "command": "partcad.exportToSTL",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "STL...",
+        "icon": "$(export)"
+      },
+      {
+        "command": "partcad.exportTo3MF",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "3MF...",
+        "icon": "$(export)"
+      },
+      {
+        "command": "partcad.exportToThreeJS",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "ThreeJS...",
+        "icon": "$(export)"
+      },
+      {
+        "command": "partcad.exportToOBJ",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "OBJ...",
+        "icon": "$(export)"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "partcad.submenu.export",
+        "label": "Export"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "partcad.promptLoadPackage",
+          "when": "view == partcadContext",
+          "group": "navigation"
+        },
+        {
+          "command": "partcad.update",
+          "when": "view == partcadContext",
+          "group": "navigation"
+        },
+        {
+          "command": "partcad.restart",
+          "when": "view == partcadContext",
+          "group": "navigation"
+        },
+        {
+          "command": "partcad.addPart",
+          "when": "partcad.packageLoaded && view == partcadExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "partcad.genPart",
+          "when": "partcad.packageLoaded && view == partcadExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "partcad.addAssembly",
+          "when": "partcad.packageLoaded && view == partcadExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "partcad.refresh",
+          "when": "partcad.packageLoaded && view == partcadExplorer",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "partcad.inspectSketch",
+          "group": "navigation",
+          "when": "view == partcadExplorer && (viewItem == sketch || viewItem == sketchWithCode)"
+        },
+        {
+          "command": "partcad.inspectInterface",
+          "group": "navigation",
+          "when": "view == partcadExplorer && viewItem == interface"
+        },
+        {
+          "command": "partcad.inspectPart",
+          "group": "navigation",
+          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode)"
+        },
+        {
+          "command": "partcad.inspectAssembly",
+          "group": "navigation",
+          "when": "view == partcadExplorer && viewItem == assembly"
+        },
+        {
+          "command": "partcad.inspectAssembly",
+          "group": "navigation",
+          "when": "view == partcadExplorer && viewItem == assemblyWithCode"
+        },
+        {
+          "command": "partcad.inspectSource",
+          "group": "inline",
+          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode)"
+        },
+        {
+          "command": "partcad.changePart",
+          "group": "AI",
+          "when": "view == partcadExplorer && viewItem == partWithAI"
+        },
+        {
+          "command": "partcad.regeneratePart",
+          "group": "AI",
+          "when": "view == partcadExplorer && viewItem == partWithAI"
+        },
+        {
+          "command": "partcad.inspectSource",
+          "group": "navigation",
+          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode)"
+        },
+        {
+          "submenu": "partcad.submenu.export",
+          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == assembly || viewItem == assemblyWithCode)",
+          "group": "additional_commands"
+        }
+      ],
+      "partcad.submenu.export": [
+        {
+          "command": "partcad.exportToSVG",
+          "when": "view == partcadExplorer"
+        },
+        {
+          "command": "partcad.exportToPNG",
+          "when": "view == partcadExplorer"
+        },
+        {
+          "command": "partcad.exportToSTEP",
+          "when": "view == partcadExplorer"
+        },
+        {
+          "command": "partcad.exportToSTL",
+          "when": "view == partcadExplorer"
+        },
+        {
+          "command": "partcad.exportTo3MF",
+          "when": "view == partcadExplorer"
+        },
+        {
+          "command": "partcad.exportToThreeJS",
+          "when": "view == partcadExplorer"
+        },
+        {
+          "command": "partcad.exportToOBJ",
+          "when": "view == partcadExplorer"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "partcad-container",
+          "title": "PartCAD (Beta)",
+          "icon": "resources/logo.svg"
+        }
+      ]
+    },
+    "views": {
+      "partcad-container": [
+        {
+          "id": "partcadContext",
+          "type": "webview",
+          "name": "Context",
+          "contextualTitle": "PartCAD Context",
+          "initialSize": 5,
+          "visibility": "collapsed"
+        },
+        {
+          "id": "partcadExplorer",
+          "name": "Explorer",
+          "icon": "resources/logo.svg",
+          "contextualTitle": "PartCAD Explorer"
+        },
+        {
+          "id": "partcadInspector",
+          "type": "webview",
+          "name": "Inspector",
+          "contextualTitle": "PartCAD Inspector"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "partcadExplorer",
+        "contents": "Hang in there!\nThe PartCAD extension is being initialized...",
+        "when": "!partcad.activated && !partcad.failed"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "PartCAD initialization failed!",
+        "when": "!partcad.activated && partcad.failed && partcad.pythonIsGood && partcad.workspaceIsGood"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "No workspace initialized.",
+        "when": "!partcad.activated && partcad.failed && !partcad.workspaceIsGood"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "Setup or switch to a working Python environment (>=3.10).",
+        "when": "!partcad.activated && partcad.failed && !partcad.pythonIsGood"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "PartCAD Python module v0.7.96 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD Python module](command:partcad.startInstall)",
+        "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "PartCAD Python module needs to be updated for the current package to work properly.\n\n[Update PartCAD Python module](command:partcad.startInstall)",
+        "when": "partcad.needsUpdate"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "Hang in there!\nPartCAD is being installed...",
+        "when": "partcad.activated && !partcad.installed && partcad.beingInstalled"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "Loading the package...\n\nPlease, wait... \n\nSee the terminal view for more information on what exactly is taking time.",
+        "when": "partcad.activated && partcad.installed && partcad.packageContentsBeingLoaded"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "No PartCAD package is detected.\n\nThe default package configuration file is `partcad.yaml` in the top workspace folder.",
+        "when": "partcad.activated && partcad.installed && !partcad.beingLoaded && !partcad.packageLoaded && !partcad.needsUpdate"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "[Create package](command:partcad.promptInitPackage)",
+        "when": "partcad.activated && partcad.installed && !partcad.beingLoaded && !partcad.packageLoaded && !partcad.needsUpdate"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "If you are an advanced PartCAD user and you prefer to use another configuration file then create a custom package.",
+        "when": "partcad.activated && partcad.installed && !partcad.beingLoaded && !partcad.packageLoaded && !partcad.needsUpdate"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "[Create custom package](command:partcad.promptInitPackageCustom)",
+        "when": "partcad.activated && partcad.installed && !partcad.beingLoaded && !partcad.packageLoaded && !partcad.needsUpdate"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "If there is already an existing PartCAD package in another folder of this workspace, then open the package folder or the package configuration file.\n[Open existing package](command:partcad.promptLoadPackage)",
+        "when": "partcad.activated && partcad.installed && !partcad.beingLoaded && !partcad.packageLoaded && !partcad.needsUpdate"
+      },
+      {
+        "view": "partcadExplorer",
+        "contents": "This package is empty.\n[Add a part](command:partcad.addPart)\n[Generate a part](command:partcad.genPart)\n[Add an assembly](command:partcad.addAssembly)",
+        "when": "partcad.activated && partcad.installed && partcad.packageLoaded && !partcad.packageContentsBeingLoaded && !partcad.itemsReceived"
+      },
+      {
+        "view": "partcadInspector",
+        "contents": "",
+        "when": "!partcad.packageLoaded"
+      },
+      {
+        "view": "partcadInspector",
+        "contents": "Select a package or a model in the Explorer view above.",
+        "when": "partcad.packageLoaded && !partcad.itemSelected"
+      }
+    ]
+  },
+  "dependencies": {
+    "@vscode/python-extension": "^1.0.5",
+    "fs-extra": "^11.2.0",
+    "vscode-languageclient": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/glob": "^8.1.0",
+    "@types/jest": "^29.5.14",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "16.x",
+    "@types/vscode": "1.78.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.1",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^2.31.1",
+    "eslint": "^8.57.0",
+    "glob": "^10.4.2",
+    "prettier": "^3.3.3",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.5.3",
+    "webpack": "^5.93.0",
+    "webpack-cli": "^5.1.4"
+  }
+}

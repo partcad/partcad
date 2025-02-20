@@ -1,10 +1,8 @@
-import os
 import shutil
 from pathlib import Path
 import pytest
 import yaml
 from partcad.context import Context
-from partcad import Project
 from partcad.actions.part_actions import convert_part_action
 import partcad.logging as pc_logging  # Logging
 
@@ -22,7 +20,7 @@ EXTENSION_MAPPING = {
 SUPPORTED_FORMATS = list(EXTENSION_MAPPING.keys())
 
 # Source directory with real test files
-SOURCE_DIR = Path("/workspaces/partcad/examples/feature_convert")
+SOURCE_DIR = Path("./examples/feature_convert")
 
 # Test parts configuration
 PARTS_CONFIG = {
@@ -31,6 +29,7 @@ PARTS_CONFIG = {
     "bolt_step": {"type": "step", "path": "step/bolt.step"},
     "cube_stl": {"type": "stl", "path": "stl/cube.stl"},
 }
+
 
 @pytest.mark.parametrize("source_part", PARTS_CONFIG.keys())
 @pytest.mark.parametrize("target_format", SUPPORTED_FORMATS)
@@ -58,7 +57,7 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
     # Create project configuration
     yaml_path = project_dir / "partcad.yaml"
     config_data = {"parts": {source_part: {"type": source_format, "path": str(relative_source_path)}}}
-    with open(yaml_path, "w") as f:
+    with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config_data, f)
 
     ctx = Context(str(project_dir))
@@ -68,7 +67,7 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
 
     assert (project_dir / relative_source_path).exists(), f"Missing source file: {relative_source_path}"
 
-    pc_logging.info(f"Converting {source_part} ({source_format}) → {target_format}")
+    pc_logging.info(f"Converting {source_part} ({source_format}) -> {target_format}")
 
     convert_part_action(project, source_part, target_format, output_dir=str(output_dir))
 
@@ -76,7 +75,7 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
     expected_files = list(output_dir.glob(f"*.{expected_ext}"))
 
     assert expected_files, f"No converted file found in {output_dir}"
-    pc_logging.info(f"Conversion successful: {source_part} → {target_format}")
+    pc_logging.info(f"Conversion successful: {source_part} -> {target_format}")
 
 
 def test_invalid_file_conversion(tmp_path: Path):
@@ -87,7 +86,7 @@ def test_invalid_file_conversion(tmp_path: Path):
 
     yaml_path = project_dir / "partcad.yaml"
     config_data = {"parts": {}}
-    with open(yaml_path, "w") as f:
+    with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config_data, f)
 
     ctx = Context(str(project_dir))
@@ -121,7 +120,7 @@ def test_convert_with_dry_run(tmp_path: Path):
 
     yaml_path = project_dir / "partcad.yaml"
     config_data = {"parts": {part_name: {"type": "stl", "path": str(input_file.relative_to(project_dir))}}}
-    with open(yaml_path, "w") as f:
+    with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config_data, f)
 
     ctx = Context(str(project_dir))
@@ -156,7 +155,7 @@ def test_invalid_format_conversion(tmp_path: Path):
 
     yaml_path = project_dir / "partcad.yaml"
     config_data = {"parts": {part_name: {"type": "stl", "path": "cube.stl"}}}
-    with open(yaml_path, "w") as f:
+    with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config_data, f)
 
     ctx = Context(str(project_dir))

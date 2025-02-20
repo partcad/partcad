@@ -20,19 +20,60 @@ permissions:
   contents: read
 
 env:
+  VERSION: 0.7.112
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
   TOTAL_TIMEOUT: 900
   INSTALL_TIMEOUT: 300
 
 jobs:
-  poetry-install:
-    name: "Run: poetry install"
+  devcontainer:
+    name: "Build: Dev Container"
+    # TODO(clairbee): Verify how the build works for the bumpversion commit
+    # if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: write
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+      - name: Setup Dev Container
+        id: setup
+        uses: ./.github/actions/setup-devcontainer
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Dev Container
+        uses: devcontainers/ci@v0.3
+        with:
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
+          imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
+          configFile: .devcontainer/devcontainer-build.json
+          push: always
+
+  poetry-install:
+    name: "Run: poetry install"
+    needs: devcontainer
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+      - name: Setup Dev Container
+        id: setup
+        uses: ./.github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -54,7 +95,8 @@ jobs:
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             start_time=$SECONDS
@@ -77,11 +119,18 @@ jobs:
   pytest:
     name: "Run: pytest"
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     needs: poetry-install
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: read
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+      - name: Setup Dev Container
+        id: setup
+        uses: ./.github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -104,13 +153,17 @@ jobs:
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
+            (cd partcad-ide-vscode && poetry run nox --session setup && poetry run nox --session build_package)
+
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
-            poetry --no-ansi --no-interaction run pytest --verbose --color=no | ts -i %.S | ts -s
+            poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="partcad-ide-vscode/bundled" --dist no --verbose --color=no
+            echo DONE
 
       - name: Upload test results & coverage reports to github and codecov
         if: always()
@@ -128,7 +181,8 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -149,11 +203,15 @@ jobs:
 
   # pre-commit:
   #   name: "Run: pre-commit"
+  #   needs: devcontainer
   #   runs-on: ubuntu-24.04
   #   timeout-minutes: 10
   #   steps:
   #     - name: Checkout (GitHub)
   #       uses: actions/checkout@v4
+  #     - name: Setup Dev Container
+  #       id: setup
+  #       uses: ./.github/actions/setup-devcontainer
 
   #     - name: Login to GitHub Container Registry
   #       uses: docker/login-action@v3
@@ -173,7 +231,9 @@ jobs:
   #     - name: Run pre-commit hooks
   #       uses: devcontainers/ci@v0.3
   #       with:
-  #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+  #         imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+  #         cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{env.IMAGE_NAME }}:${{ env.VERSION }}"
+  #         configFile: .devcontainer/.devcontainer.json
   #         push: never
   #         # TODO-24: Add custom @dependabot-like job to open PR to update dependencies
   #         # TODO: Run ggshield and/or other secrets scanning tools as separate job
@@ -186,13 +246,20 @@ jobs:
   behave:
     name: "Run: behave"
     runs-on: ubuntu-24.04
-    
+
     timeout-minutes: 30
 
     needs: poetry-install
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: read
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+      - name: Setup Dev Container
+        id: setup
+        uses: ./.github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -211,6 +278,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-poetry-
 
+      # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
+      - name: Set SSH Agent Service to Manual
+        if: runner.os == 'Windows'
+        run: Set-Service -Name ssh-agent -StartupType Manual
+        shell: pwsh
+
       - name: Start SSH Agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -219,7 +292,8 @@ jobs:
       - name: Run Behave
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           env: |
             # TODO-25: Workaround for "Host key verification failed."
@@ -249,7 +323,8 @@ jobs:
         if: always()
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             if [ ! -d "allure-results" ]; then
@@ -268,76 +343,86 @@ jobs:
           path: allure-report/
           retention-days: 7
 
-  nox:
-    strategy:
-      fail-fast: false
-      matrix:
-        # NOTE: OS below is the one which runs the container, not the one inside the container
-        # TODO: @alexanderilyin: Add more OSes via https://github.com/partcad/devcontainers-templates
-        os: [ubuntu-24.04]
-        python-version:
-          # TODO: Enable 3.10 when pytest job is deprecated
-          # - "3.10"
-          - "3.11"
-          - "3.12"
-    name: "Run: nox"
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    needs: poetry-install
-    steps:
-      - name: Checkout (GitHub)
-        uses: actions/checkout@v4
+  # nox:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       # NOTE: OS below is the one which runs the container, not the one inside the container
+  #       # TODO: @alexanderilyin: Add more OSes via https://github.com/partcad/devcontainers-templates
+  #       os: [ubuntu-24.04]
+  #       python-version:
+  #         # TODO: Enable 3.10 when pytest job is deprecated
+  #         # - "3.10"
+  #         - "3.11"
+  #         - "3.12"
+  #   name: "Run: nox"
+  #   runs-on: ${{ matrix.os }}
+  #   timeout-minutes: 10
+  #   needs: poetry-install
+  #   permissions:
+  #     # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+  #     contents: read
+  #     packages: read
+  #   steps:
+  #     - name: Checkout (GitHub)
+  #       uses: actions/checkout@v4
+  #     - name: Setup Dev Container
+  #       id: setup
+  #       uses: ./.github/actions/setup-devcontainer
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.CONTAINER_REGISTRY }}
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Login to GitHub Container Registry
+  #       uses: docker/login-action@v3
+  #       with:
+  #         registry: ${{ env.CONTAINER_REGISTRY }}
+  #         username: ${{ github.repository_owner }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cache Python Environment
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pypoetry
-            .venv
-          # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
+  #     # - name: Cache Python Environment
+  #     #   uses: actions/cache@v4
+  #     #   with:
+  #     #     path: |
+  #     #       ~/.cache/pypoetry
+  #     #       .venv
+  #     #     # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
+  #     #     key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+  #     #     restore-keys: |
+  #     #       ${{ runner.os }}-poetry-
 
-      # TODO: @alexanderilyin Add caching for: "Creating virtual environment (virtualenv) using python3.11 in .nox/pytest-3-11"
+  #     # TODO: @alexanderilyin Add caching for: "Creating virtual environment (virtualenv) using python3.11 in .nox/pytest-3-11"
 
-      - name: Run Nox
-        uses: devcontainers/ci@v0.3
-        with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-          push: never
-          runCmd: |
-            poetry --no-ansi --no-interaction run nox --python ${{ matrix.python-version }}
+  #     - name: Run Nox
+  #       uses: devcontainers/ci@v0.3
+  #       with:
+  #         imageName: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+  #         # cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.PUBLISH_IMAGE_TAG }}"
+  #         # configFile: .devcontainer/.devcontainer.json
+  #         push: never
+  #         runCmd: |
+  #           poetry --no-ansi --no-interaction run nox --noxfile dev-tools/noxfile.py --python ${{ matrix.python-version }}
 
-      # - name: Generate Allure Report
-      #   if: always()
-      #   uses: devcontainers/ci@v0.3
-      #   with:
-      #     cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-      #     push: never
-      #     runCmd: |
-      #       if [ ! -d "allure-results" ]; then
-      #         echo "##[warning]allure-results directory not found. Skipping report generation."
-      #         exit 0
-      #       fi
-      #       if ! allure generate --config .devcontainer/allure.ymlallure-results -o allure-report; then
-      #         echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
-      #       fi
+  #     # - name: Generate Allure Report
+  #     #   if: always()
+  #     #   uses: devcontainers/ci@v0.3
+  #     #   with:
+  #     #     cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.PUBLISH_IMAGE_TAG }}"
+  #     #     configFile: .devcontainer/.devcontainer.json
+  #     #     push: never
+  #     #     runCmd: |
+  #     #       if [ ! -d "allure-results" ]; then
+  #     #         echo "##[warning]allure-results directory not found. Skipping report generation."
+  #     #         exit 0
+  #     #       fi
+  #     #       if ! allure generate --config .devcontainer/allure.ymlallure-results -o allure-report; then
+  #     #         echo "##[warning]Allure report generation failed. This won't fail the build, but please investigate."
+  #     #       fi
 
-      # - name: Publish Allure Report
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: pytest-allure-report
-      #     path: allure-report/
-      #     retention-days: 7
+  #     # - name: Publish Allure Report
+  #     #   if: always()
+  #     #   uses: actions/upload-artifact@v4
+  #     #   with:
+  #     #     name: pytest-allure-report
+  #     #     path: allure-report/
+  #     #     retention-days: 7
 
   integration-tests:
     # if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -345,9 +430,16 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs: poetry-install
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: read
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
+      - name: Setup Dev Container
+        id: setup
+        uses: ./.github/actions/setup-devcontainer
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -370,7 +462,8 @@ jobs:
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
             mkdir -pv pc-test-results

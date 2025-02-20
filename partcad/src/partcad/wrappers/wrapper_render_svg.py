@@ -72,9 +72,10 @@ def process(path, request):
         }
 
 
-path, request = wrapper_common.handle_input()
+if __name__ == "__main__":
+    path, request = wrapper_common.handle_input()
 
-# Perform rendering
-response = process(path, request)
+    # Perform rendering
+    response = process(path, request)
 
-wrapper_common.handle_output(response)
+    wrapper_common.handle_output(response)

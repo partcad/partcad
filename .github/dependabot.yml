@@ -6,11 +6,47 @@
 
 version: 2
 updates:
-  - package-ecosystem: "devcontainers"
-    directory: "/"
+  # TODO(clairbee): Enable this when there are dedicated DevOps resources, use groups and get rid of pip/poetry duality
+  # - package-ecosystem: "devcontainers"
+  #   directory: "/"
+  #   schedule:
+  #     interval: weekly
+  # - package-ecosystem: "pip"
+  #   directory: "/"
+  #   schedule:
+  #     interval: weekly
+
+  - package-ecosystem: "github-actions"
+    directory: /
     schedule:
-      interval: weekly
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: weekly
+      interval: monthly
+    labels:
+      - "no-changelog"
+
+  # - package-ecosystem: "pip"
+  #   directory: /partcad-ide-vscode/src/test/python_tests
+  #   schedule:
+  #     interval: daily
+  #   labels:
+  #     - "no-changelog"
+
+  # - package-ecosystem: "pip"
+  #   directory: /partcad-ide-vscode
+  #   schedule:
+  #     interval: daily
+  #   labels:
+  #     - "debt"
+  #   commit-message:
+  #     include: "scope"
+  #     prefix: "pip"
+
+  # - package-ecosystem: "npm"
+  #   directory: /partcad-ide-vscode
+  #   schedule:
+  #     interval: monthly
+  #   labels:
+  #     - "no-changelog"
+  #   ignore:
+  #     - dependency-name: "@types/vscode"
+  #     - dependency-name: "@types/node"
+  #     - dependency-name: "vscode-languageclient"

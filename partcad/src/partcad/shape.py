@@ -18,7 +18,6 @@ import threading
 
 from .cache_hash import CacheHash
 from .render import *
-from .plugins import *
 from .shape_config import ShapeConfiguration
 from .user_config import user_config
 from .utils import total_size
@@ -439,10 +438,14 @@ class Shape(ShapeConfiguration):
         filepath=None,
         width=None,
         height=None,
+        line_weight=None,
+        viewport_origin=None,
     ) -> None:
         with pc_logging.Action("RenderPNG", self.project_name, self.name):
-            if not plugins.export_png.is_supported():
-                pc_logging.error("Export to PNG is not supported")
+            obj = await self.get_wrapped(ctx)
+            if obj is None:
+                # pc_logging.error("The shape failed to instantiate")
+                self.svg_path = None
                 return
 
             png_opts, filepath = self.render_getopts("png", ".png", project, filepath)
@@ -457,15 +460,54 @@ class Shape(ShapeConfiguration):
                     height = png_opts["height"]
                 else:
                     height = DEFAULT_RENDER_HEIGHT
+            if line_weight is None:
+                if "lineWeight" in png_opts and not png_opts["lineWeight"] is None:
+                    line_weight = png_opts["lineWeight"]
+                else:
+                    line_weight = 1.0
+            if viewport_origin is None:
+                if "viewportOrigin" in png_opts and not png_opts["viewportOrigin"] is None:
+                    viewport_origin = png_opts["viewportOrigin"]
+                else:
+                    viewport_origin = [100, -100, 100]
 
-            # Render the vector image
-            svg_path = await self._get_svg_path(ctx=ctx, project=project)
+            if not project is None:
+                project.ctx.ensure_dirs_for_file(filepath)
 
-            def do_render_png() -> None:
-                nonlocal project, svg_path, width, height, filepath
-                plugins.export_png.export(project, svg_path, width, height, filepath)
+            wrapper_path = wrapper.get("render_png.py")
+            request = {
+                "wrapped": obj,
+                "width": width,
+                "height": height,
+                "line_weight": line_weight,
+                "viewport_origin": viewport_origin,
+            }
+            register_ocp_helper()
+            picklestring = pickle.dumps(request)
+            request_serialized = base64.b64encode(picklestring).decode()
 
-            await pc_thread.run(do_render_png)
+            # We don't care about customer preferences much here
+            # as this is expected to be hermetic.
+            # Stick to the version where CadQuery and build123d are known to work.
+            runtime = ctx.get_python_runtime(version="3.11")
+            await runtime.ensure_async("svglib==1.5.1")
+            await runtime.ensure_async("reportlab")
+            await runtime.ensure_async("rlpycairo==0.3.0")
+            response_serialized, errors = await runtime.run_async(
+                [
+                    wrapper_path,
+                    os.path.abspath(filepath),
+                ],
+                request_serialized,
+            )
+            sys.stderr.write(errors)
+
+            response = base64.b64decode(response_serialized)
+            result = pickle.loads(response)
+            if not result["success"]:
+                pc_logging.error("RenderPNG failed: %s:%s: %s" % (self.project_name, self.name, result["exception"]))
+            if "exception" in result and not result["exception"] is None:
+                pc_logging.exception("RenderPNG exception: %s" % result["exception"])
 
     def render_png(
         self,
@@ -474,8 +516,10 @@ class Shape(ShapeConfiguration):
         filepath=None,
         width=None,
         height=None,
+        line_weight=None,
+        viewport_origin=None,
     ) -> None:
-        asyncio.run(self.render_png_async(ctx, project, filepath, width, height))
+        asyncio.run(self.render_png_async(ctx, project, filepath, width, height, line_weight, viewport_origin))
 
     async def render_step_async(
         self,

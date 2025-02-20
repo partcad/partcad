@@ -1,37 +1,20 @@
 name: "Setup all"
 description: "Prepare the runner to test"
 
+inputs:
+  job:
+    description: "The name of the job calling this action"
+    default: "default"
+
 runs:
   using: "composite"
   steps:
     #################################################  CADQUERY  ####################################################
 
-    # cadquery-ocp hack for macOS with ARM
-    - name: install macos dev dependencies
-      if: startsWith(${{matrix.os}}, 'macos')
-      shell: bash -l {0}
-      run: |
-        conda activate env-test
-        pip install swig
-        conda deactivate
-
-    - name: install cadquery-ocp on macOS
-      if: ${{ startsWith(matrix.os, 'macos') && (matrix.os != 'macos-13') }}
-      shell: bash -l {0}
-      run: |
-        conda activate env-test
-
-        VERSION="7.7.2"
-        PY_VERSION="${{ matrix.python-version }}"
-        PY_VERSION_NO_DOT="${PY_VERSION//./}"
-        WHEEL_URL="https://github.com/jdegenstein/ocp-build-system/releases/download/${VERSION}_macos_arm64/cadquery_ocp-${VERSION}-cp${PY_VERSION_NO_DOT}-cp${PY_VERSION_NO_DOT}-macosx_11_0_arm64.whl"
-        WHEEL_FILE="cadquery_ocp-${VERSION}-cp${PY_VERSION_NO_DOT}-cp${PY_VERSION_NO_DOT}-macosx_11_0_arm64.whl"
-
-        # Download wheel
-        curl -L -o "$WHEEL_FILE" "$WHEEL_URL"
-
-        pip install "$WHEEL_FILE"
-        conda deactivate
+    - name: Setup CadQuery
+      uses: ./.github/actions/setup-cadquery
+      with:
+        envs: ${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}
 
     #################################################  OPENSCAD  ####################################################
 
@@ -46,20 +29,26 @@ runs:
       if: runner.os == 'macOS'
       shell: bash -l {0}
       run: |
-        brew install -f openscad || ( \
-          rm /Users/runner/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg && brew install -f openscad)
+        # The below "rm" command does not have "-f" on purpose:
+        # the second "brew install" command is only needed when the dmg file is psesent but corrupted
+        which openscad \
+          || HOMEBREW_NO_AUTO_UPDATE=1 brew install -f openscad \
+          || ( \
+            rm /Users/$USER/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg \
+            && HOMEBREW_NO_AUTO_UPDATE=1 brew install -f openscad \
+          )
 
     - name: Install OpenSCAD (Windows)
       if: runner.os == 'Windows'
       shell: powershell
-      run: .github/scripts/openscad.ps1
+      run: .github/actions/setup-test/openscad.ps1
 
     #################################################  REGISTRY  ####################################################
 
     - name: Fix Windows registry
       if: runner.os == 'Windows'
       shell: powershell
-      run: .github/scripts/registry.ps1
+      run: .github/actions/setup-test/registry.ps1
 
     #################################################  GIT SETUP  ###################################################
 

@@ -12,10 +12,21 @@ addopts = """
     --junitxml=pytest-results/junit.xml
     --log-cli-level=DEBUG
     --self-contained-html
+    --ignore-glob="openscad*"
+    --ignore-glob="partcad-ide-vscode/bundled/libs/*"
     """
 filterwarnings = [
     "ignore:.*is a deprecated alias for.*:DeprecationWarning"
 ]
+
+# TODO(clairbee): make the below work instead of "behave.ini"
+# [tool.behave]
+# tags = ["~@wip"]
+# logging_level = "DEBUG"
+# log_capture = true
+# paths = ["features/"]
+# format = "allure_behave.formatter:AllureFormatter"
+# outfile = "allure-results"
 
 [tool.black]
 line-length = 120
@@ -94,6 +105,7 @@ pyhamcrest = "^2.1.0"
 strip-ansi = "^0.1.1"
 nox = "^2025.2.9"
 nox-poetry = "^1.0.3"
+python-jsonrpc-server = "^0.4.0"
 
 [tool.poetry.group.docs.dependencies]
 sphinx = "^8.1.3"
@@ -137,9 +149,6 @@ google-generativeai = "^0.8.3"
 pillow = "^11.0.0"
 openai = "^1.63.2"
 ollama = "^0.4.1"
-renderlab = "^0.1.20230421184216"
-rlpycairo = "^0.3.0"
-svglib = "^1.5.1"
 ocp-vscode = "^2.6.1"
 coloredlogs = "^15.0.1"
 click = "^8.1.7"

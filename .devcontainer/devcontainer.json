@@ -1,13 +1,6 @@
 {
-  "name": "PartCAD Dev Container",
-  "build": {
-    "cacheFrom": [
-      "ghcr.io/partcad/devcontainer-partcad:latest",
-      "ghcr.io/partcad/devcontainer-partcad:devel",
-      "ghcr.io/partcad/devcontainer-partcad:main"
-    ],
-    "dockerfile": "./Dockerfile"
-  },
+  "name": "PartCAD Development Environment",
+  "image": "ghcr.io/partcad/partcad-devcontainer:0.7.112",
   "remoteEnv": {
     // TODO: @alexanderilyin do not patch PATH here but make `mamba` discoverable.
     "PATH": "${containerEnv:PATH}:/home/vscode/miniforge3/bin",
@@ -16,11 +9,10 @@
     "SKIP": "behave,prepare-commit-msg,poetry-install,poetry-lock,poetry-export"
   },
   "postCreateCommand": {
-    "setup-utils": "sudo apt-get update && sudo apt-get install -y file xxd",
-    "~/.cache": "sudo chown -R $(whoami):$(whoami) /home/$(whoami)/.cache"
+    "Start D-Bus": "sudo service dbus start && (until systemctl is-active --quiet dbus; do sleep 1; done)"
   },
   "postStartCommand": {
-    "pre-commit": "pre-commit install --config .devcontainer/.pre-commit-config.yaml"
+    "pre-commit": "pre-commit install --config dev-tools/pre-commit-config.yaml"
   },
   "mounts": [
     // TODO: For some reason this leads to tests hanging in the CI.
@@ -28,10 +20,40 @@
     "source=partcad-cache,target=/home/vscode/.cache,type=volume",
     "source=partcad-config,target=/home/vscode/.config,type=volume"
   ],
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "installDirectlyFromGitHubRelease": true,
+      "version": "2.63.2"
+    },
+    "ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
+      "jqVersion": "1.7.1",
+      "yqVersion": "4.44.6",
+      "gojqVersion": "none",
+      "xqVersion": "none",
+      "jaqVersion": "none"
+    },
+    "ghcr.io/devcontainers/features/git-lfs:1": {
+      "autoPull": true,
+      "installDirectlyFromGitHubRelease": true,
+      "version": "3.6.0"
+    },
+    // "ghcr.io/devcontainers/features/node:1": {
+    //   "version": "1.6.1",
+    //   "nodeGypDependencies": true
+    // },
+    "ghcr.io/devcontainers-community/npm-features/typescript:1": {
+      "version": "5.7.3"
+    }
+  },
   "customizations": {
     "vscode": {
       "settings": {
         "dotfiles.repository": "partcad/devcontainer-dotfiles"
+      },
+      "remote.extensionKind": {
+        "codecov.codecov": [
+          "ui"
+        ]
       },
       // <!-- prettier-ignore-start -->
       "extensions": [

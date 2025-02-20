@@ -1,40 +1,111 @@
 name: "Setup all"
 description: "Prepare the runner no matter what the job is"
 
+inputs:
+  job:
+    description: "The name of the job calling this action"
+    default: "default"
+
 runs:
   using: "composite"
   steps:
     ############################################## OS PREREQUISITES ################################################
 
+    # TODO(clairbee): minimize these pre-requisites by moving the VSCode build job away from the test workflow (ci.yml)
     - name: Install prerequisites
       if: ${{ startsWith(matrix.os, 'ubuntu') }}
-      shell: bash
+      shell: bash -l {0}
       run: |
-        sudo apt-get update || exit 1
-        sudo apt-get install -y libcairo2-dev pkg-config python3-dev || exit 1
+        sudo apt-get -q update || exit 1
+        sudo apt-get -q install -y \
+          nodejs npm \
+          libtiff5-dev libjpeg-dev libopenjp2-7-dev zlib1g-dev \
+          libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
+          python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev \
+          libxml2-dev libxslt-dev \
+          libcairo2-dev pkg-config python3-dev \
+            || exit 1
+
+    - name: Install prerequisites
+      if: ${{ startsWith(matrix.os, 'macos') }}
+      shell: bash -l {0}
+      run: |
+        HOMEBREW_NO_AUTO_UPDATE=1 brew install jpeg
+
+    - name: Install prerequisites
+      if: ${{ startsWith(matrix.os, 'windows') }}
+      shell: bash -l {0}
+      run: |
+        vcpkg.exe install zlib
+    #     vcpkg.exe install pkgconf
+    #     vcpkg.exe install freetype
+
+    # - name: Install prerequisites (part 2)
+    #   if: ${{ startsWith(matrix.os, 'windows') }}
+    #   shell: bash -l {0}
+    #   run: |
+    #     vcpkg.exe install cairo
+    #     choco uninstall StrawberryPerl -y
+    #     # choco install pkgconfiglite
+    #     choco install pacman
+    #     pacman -Sy pkgconf
+    #     # pacman -Syu mingw-w64-x86_64-gtk3
+    #     # pacman -Syu mingw-w64-x86_64-cairo
+    #     echo "Searching for pkg-config"
+    #     which pkgconf || echo "pkgconf not found"
+    #     which pkg-config || echo "pkg-config not found"
+    #     echo "C:\\msys64"
+    #     dir "C:\\msys64"
+    #     echo "C:\\msys64\\usr\\bin"
+    #     dir "C:\\msys64\\usr\\bin"
+    #     echo "C:\\msys64\\usr\\lib"
+    #     dir "C:\\msys64\\usr\\lib"
+    #     echo "C:\\mingw64"
+    #     dir "C:\\mingw64"
+    #     echo "C:\\mingw64\\usr\\bin"
+    #     dir "C:\\mingw64\\usr\\bin"
+    #     echo "C:\\mingw64\\usr\\lib"
+    #     dir "C:\\mingw64\\usr\\lib"
+    #     echo "C:\\msys64\\usr\\bin" >> $ENV:PATH
+    #     echo "C:\\msys64\\usr\\lib\\pkgconfig" >> $ENV:PKG_CONFIG_PATH
+    #     # echo "C:\\msys64\\mingw64\\bin" >> $ENV:PATH
+    #     # echo "C:\\msys64\\mingw64\\lib\\pkgconfig" >> $ENV:PKG_CONFIG_PATH
 
     ###################################################  PYTHON  ###################################################
 
     # Miniconda
     # - name: Cache conda
-    #   uses: actions/cache@v3
+    #   uses: actions/cache@v4
     #   env:
     #     # Increase this value to reset cache if etc/example-environment.yml has not changed
-    #     CACHE_NUMBER: 1
+    #     CACHE_NUMBER: 3
     #   with:
-    #     # enableCrossOsArchive: true
-    #     path: ~/conda_pkgs_dir
+    #     enableCrossOsArchive: true
+    #     path: ${{ runner.os == 'Windows' && 'D:\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
     #     key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
 
     - uses: conda-incubator/setup-miniconda@v3
       with:
-        # miniforge-version: 24.11.2-1
-        miniconda-version: latest
+        miniforge-version: 24.11.3-0
         channels: conda-forge,defaults
+        channel-priority: flexible
         python-version: ${{ matrix.python-version }}
+        conda-solver: classic
         # activate-environment: env
-        auto-activate-base: true
-        # use-only-tar-bz2: true
+        auto-activate-base: false
+        # use-only-tar-bz2: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        # pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+        # pkgs-dirs: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+
+    # - uses: mamba-org/setup-micromamba@v2
+    #   with:
+    #     micromamba-version: 2.0.5-0
+    #     # environment-file: environment.yml
+    #     init-shell: >-
+    #       bash
+    #       powershell
+    #     # cache-environment: true
+    #     post-cleanup: "all"
 
     # - name: Init conda
     #   shell: bash
@@ -63,14 +134,18 @@ runs:
         # . ~/.bashrc
         # . ~/.bash_profile
         # conda clean --all
-        conda create -n env-test python=${{ matrix.python-version }} -y
-        conda activate env-test
+        # conda clean -y -i
+        conda create -p ~/${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }} python=${{ matrix.python-version }} -y
+        conda activate ~/${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}
         # python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
-        python -m pip install -r partcad/requirements.txt && pip install svglib rlPyCairo renderlab
+        python -m pip install -r partcad/requirements.txt
         python -m pip install -r partcad/requirements-dev.in
+        python -m pip install -r partcad-ide-vscode/src/test/python_tests/requirements.txt
         conda deactivate
+
+        # echo "PC_INTERNAL_STATE_DIR=$(mktemp -d)" >> $GITHUB_ENV
 
     # - name: Update Homebrew
     #   if: matrix.os == 'macos-latest'

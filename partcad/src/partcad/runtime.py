@@ -22,8 +22,9 @@ class Runtime:
     def __init__(self, ctx, name):
         self.ctx = ctx
         self.name = name
+        self.sandbox_dir = "pc-" + name  # Leave "pc-" for UX (e.g. in VS Code)
         self.path = os.path.join(
             Runtime.get_internal_state_dir(),
-            "pc-" + name,  # Leave "pc-" for UX (e.g. in VS Code)
+            self.sandbox_dir,
         )
         self.initialized = os.path.exists(self.path)

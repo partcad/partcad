@@ -6,6 +6,8 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+import contextlib
+from filelock import FileLock
 import importlib
 import os
 import shutil
@@ -14,13 +16,24 @@ import json
 
 from . import runtime_python
 from . import logging as pc_logging
+from .user_config import user_config
+
+# Global lock for conda that can be shared across threads
 
 
 class CondaPythonRuntime(runtime_python.PythonRuntime):
-    def __init__(self, ctx, version=None):
-        super().__init__(ctx, "conda", version)
+    def __init__(self, ctx, version=None, variant=None):
+        if variant is None:
+            sandbox_type_name = "conda"
+            self.variant_packages = []
+        else:
+            sandbox_type_name = f"conda-{variant}"
+            self.variant_packages = [f"{variant}"]
+        super().__init__(ctx, sandbox_type_name, version)
 
-        self.initialized_conda = self.initialized
+        self.global_conda_lock = FileLock(os.path.join(user_config.internal_state_dir, ".conda.lock"))
+        self.conda_initialized = self.initialized
+
         self.conda_path = shutil.which("mamba")
         if self.conda_path is not None:
             self.is_mamba = True
@@ -52,69 +65,133 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     path=search_path_strings,
                 )
 
+        if self.conda_initialized:
+            self.verify_conda()
+
+    def verify_conda(self):
+        # Make a best effort attempt to determine if it's valid
+        python_path = self.get_venv_python_path()
+        if os.path.exists(python_path):
+            try:
+                p = subprocess.Popen(
+                    [python_path, "-c", "import sys; print(sys.version)"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                    encoding="utf-8",
+                )
+                stdout, stderr = p.communicate()
+                if not stderr is None and stderr.strip() != "":
+                    pc_logging.warning("conda venv check error: %s" % stderr)
+                    self.conda_initialized = False
+                elif stdout is None or stdout.strip() == "":
+                    pc_logging.warning("conda venv check warning: empty version")
+                    self.conda_initialized = False
+                elif not stdout.strip().startswith(self.version):
+                    pc_logging.warning("conda venv check warning: %s" % stdout)
+                    self.conda_initialized = False
+                else:
+                    self.conda_initialized = True
+            except Exception as e:
+                pc_logging.warning("conda venv check error: %s" % e)
+                self.conda_initialized = False
+
+    @contextlib.contextmanager
+    def sync_lock_install(self, session=None):
+        with self.global_conda_lock:
+            yield
+
+    @contextlib.asynccontextmanager
+    async def async_lock_install(self, session=None):
+        with self.global_conda_lock:
+            yield
+
     def once(self):
-        with self.lock:
+        with self.sync_lock():
             self.once_conda_locked()
         super().once()
 
     async def once_async(self):
-        with self.lock:
-            async with self.get_async_lock():
-                self.once_conda_locked()
+        async with self.async_lock():
+            self.once_conda_locked()
         await super().once_async()
 
     def once_conda_locked(self):
-        # Lock the global conda lock and create a new environment
-        with runtime_python._global_conda_lock:
-            if not self.initialized_conda:
-                with pc_logging.Action("Conda", "create", self.version):
-                    if self.conda_path is None:
-                        raise Exception("ERROR: PartCAD is configured to use conda, but conda is missing")
+        with self.sync_lock_install():
+            # See if it just got created
+            if os.path.exists(self.path):
+                self.verify_conda()
 
-                    try:
-                        # Install new conda environment with the preferred Python version
-                        p = subprocess.Popen(
-                            [
-                                self.conda_path,
-                                "create",
-                                "-y",
-                                "-q",
-                                "--json",
-                                "-p",
-                                self.path,
-                                "python==%s" % self.version if self.is_mamba else "python=%s" % self.version,
-                            ],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            shell=False,
-                            encoding="utf-8",
-                        )
-                        _, stderr = p.communicate()
-                        if not stderr is None and stderr.strip() != "":
-                            pc_logging.error("conda env install error: %s" % stderr)
+            if not self.conda_initialized:
+                self.once_conda_locked_attempt()
+                if not self.conda_initialized:
+                    # Sometime it fails to create from the first attempt
+                    self.once_conda_locked_attempt()
+                # TODO(clairbee): Does it make sense to retry more than once?
+                if not self.conda_initialized:
+                    raise Exception("ERROR: Conda environment initialization failed")
 
-                        # Install pip into the newly created conda environment
-                        p = subprocess.Popen(
-                            [
-                                self.conda_path,
-                                "install",
-                                "-y",
-                                "-q",
-                                "--json",
-                                "-p",
-                                self.path,
-                                "pip",
-                            ],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            shell=False,
-                            encoding="utf-8",
-                        )
-                        _, stderr = p.communicate()
-                        if not stderr is None and stderr.strip() != "":
-                            pc_logging.error("conda pip install error: %s" % stderr)
+    # TODO(clairbee): Make an async version of this function
+    def once_conda_locked_attempt(self):
+        with pc_logging.Action("Conda", "create", self.version):
+            if self.conda_path is None:
+                raise Exception("ERROR: PartCAD is configured to use conda, but conda is missing")
 
-                        self.initialized_conda = True
-                    except Exception as e:
-                        shutil.rmtree(self.path)
-                        raise e
+            try:
+                attempts = 0
+                while attempts < 3:
+                    # Install new conda environment with the preferred Python version
+                    p = subprocess.Popen(
+                        [
+                            self.conda_path,
+                            "create",
+                            "-y",
+                            "-q",
+                            "--json",
+                            "-p",
+                            self.path,
+                            *self.variant_packages,
+                            "python==%s" % self.version if self.is_mamba else "python=%s" % self.version,
+                        ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        shell=False,
+                        encoding="utf-8",
+                    )
+                    _, stderr = p.communicate()
+                    if not stderr is None and stderr.strip() != "":
+                        pc_logging.error("conda env install error: %s" % stderr)
+                        if "Found incorrect download" in stderr:
+                            attempts += 1
+                            continue
+                    break
+
+                # Install pip into the newly created conda environment
+                p = subprocess.Popen(
+                    [
+                        self.conda_path,
+                        "install",
+                        "-y",
+                        "-q",
+                        "--json",
+                        "-p",
+                        self.path,
+                        "pip",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                    encoding="utf-8",
+                )
+                _, stderr = p.communicate()
+                p.returncode
+                if not stderr is None and stderr.strip() != "":
+                    pc_logging.warning("conda pip install error: %s" % stderr)
+                if p.returncode != 0:
+                    pc_logging.error("conda pip install return code: %s" % p.returncode)
+                    self.conda_initialized = False
+                else:
+                    self.conda_initialized = True
+            except Exception as e:
+                shutil.rmtree(self.path)
+                raise e

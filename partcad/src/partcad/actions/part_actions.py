@@ -51,11 +51,11 @@ def import_part_action(project: Project, kind: str, name: str, source_path: str,
         temp_dir = Path(tempfile.mkdtemp())
         converted_path = temp_dir / f"{name}.{target_format}"
 
-        pc_logging.info(f"Performing ad-hoc conversion: {kind} → {target_format}")
+        pc_logging.info(f"Performing ad-hoc conversion: {kind} -> {target_format}")
         convert_cad_file(str(source_path), kind, str(converted_path), target_format)
 
         if not converted_path.exists():
-            raise RuntimeError(f"Ad-hoc conversion failed: {source_path} → {converted_path}")
+            raise RuntimeError(f"Ad-hoc conversion failed: {source_path} -> {converted_path}")
 
         # Update the kind and source path for further processing
         kind = target_format
@@ -71,7 +71,7 @@ def import_part_action(project: Project, kind: str, name: str, source_path: str,
         try:
             shutil.copy2(source_path, target_path)
         except shutil.Error as e:
-            raise ValueError(f"Failed to copy '{source_path}' → '{target_path}': {e}")
+            raise ValueError(f"Failed to copy '{source_path}' -> '{target_path}': {e}")
 
     add_part_action(project, kind, str(target_path), config)
     pc_logging.info(f"Part '{name}' imported successfully.")
@@ -115,7 +115,7 @@ def convert_part_action(project: Project, object_name: str, target_format: str,
     full_output_dir = Path(output_dir).resolve() if output_dir else old_path.parent.resolve()
     new_path = full_output_dir / f"{old_path.stem}.{new_extension}"
 
-    pc_logging.info(f"Converting '{part_name}' ({old_path.suffix[1:]} → {new_extension}) → {new_path}")
+    pc_logging.info(f"Converting '{part_name}' ({old_path.suffix[1:]} -> {new_extension}) -> {new_path}")
 
     full_output_dir.mkdir(parents=True, exist_ok=True)
 

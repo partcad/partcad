@@ -1,0 +1,38 @@
+# Run JavaScript tests for the VS Code extension
+# TODO(clairbee): to be integrated into test.yml
+name: npm test
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - devel
+    paths:
+      - partcad-ide-vscode/**
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest] # windows-latest for some reason doesn't run test suite.
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: "npm"
+          cache-dependency-path: partcad-ide-vscode/package-lock.json
+      - working-directory: partcad-ide-vscode
+        run: npm install
+      - working-directory: partcad-ide-vscode
+        run: xvfb-run -a npm test
+        if: runner.os == 'Linux'
+      - working-directory: partcad-ide-vscode
+        run: npm test
+        if: runner.os != 'Linux'

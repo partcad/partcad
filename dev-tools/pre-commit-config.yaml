@@ -3,11 +3,11 @@
 default_install_hook_types: [pre-commit, prepare-commit-msg]
 # TODO: [TODO-18] @alexanderilyin: Add hook to check author email. We should only accept commits from partcad.org email addresses.
 repos:
-  - repo: https://github.com/partcad/pre-commit
-    rev: v1.8.2
-    hooks:
-      - id: prepare-commit-msg
-        args: ["--open-source", "--commit-msg-filename"]
+  # - repo: https://github.com/partcad/pre-commit
+  #   rev: v1.8.2
+  #   hooks:
+  #     - id: prepare-commit-msg
+  #       args: ["--open-source", "--commit-msg-filename"]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -90,3 +90,16 @@ repos:
     rev: v1.7.5
     hooks:
       - id: actionlint
+  - repo: local
+    hooks:
+      - id: eslint
+        files: \.ts$
+        name: eslint
+        language: system
+        entry: npm run lint
+      # TODO: Add this back in when `npm run x-test` is fast
+      # - id: x-test
+      #   files: \.ts$
+      #   name: x-test
+      #   language: system
+      #   entry: npm run x-test

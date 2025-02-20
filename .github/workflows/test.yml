@@ -3,6 +3,10 @@ name: CI # Keep the action badge icon short
 
 on:
   workflow_dispatch:
+  schedule:
+    # https://crontab.guru/#0_8_*_*_*
+    # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
+    - cron: "0 18 * * *" # Run daily at Pacific time morning
   merge_group:
   push:
     branches: ["main", "devel"]
@@ -16,33 +20,92 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  # If this is the original copy of PartCAD, then use the org's self-hosted runners
+  OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
+  # OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest", ["self-hosted", "macos-15-large"]]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]' }}
+  PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+  # OSPY: >-
+  #   ${{
+  #     github.repository == 'partcad/partcad'
+  #     &&
+  #     '[
+  #       ["ubuntu-latest", "3.10"],
+  #       ["ubuntu-latest", "3.11"],
+  #       ["ubuntu-latest", "3.12"],
+  #       ["windows-latest", "3.10"],
+  #       ["windows-latest", "3.11"],
+  #       ["windows-latest", "3.12"],
+  #       ["macos-13", "3.10"],
+  #       ["macos-13", "3.11"],
+  #       ["macos-13", "3.12"],
+  #       ["macos-latest", "3.10"],
+  #       ["macos-latest", "3.11"],
+  #       ["macos-latest", "3.12"],
+  #       [["self-hosted", "macos-15-large"], "3.10"],
+  #       [["self-hosted", "macos-15-xlarge"], "3.12"]
+  #     ]'
+  #     ||
+  #     '[
+  #       ["ubuntu-latest", "3.10"],
+  #       ["ubuntu-latest", "3.11"],
+  #       ["ubuntu-latest", "3.12"],
+  #       ["windows-latest", "3.10"],
+  #       ["windows-latest", "3.11"],
+  #       ["windows-latest", "3.12"],
+  #       ["macos-15-large", "3.10"],
+  #       ["macos-15-large", "3.11"],
+  #       ["macos-15-large", "3.12"],
+  #       ["macos-15-xlarge", "3.10"],
+  #       ["macos-15-xlarge", "3.11"],
+  #       ["macos-15-xlarge", "3.12"]
+  #     ]'
+  #   }}
+
 jobs:
+  set-matrix:
+    name: "Set matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Set matrix
+        id: set-matrix
+        run: |
+          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }} }' >> $GITHUB_OUTPUT
+          # echo 'matrix={"ospy": ${{ env.OSPY }} }' >> $GITHUB_OUTPUT
+
   test-pytest:
     name: "Pytest"
+    needs: set-matrix
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
+    # Don't run the tests for the commit created by "bumpversion"
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
+        with:
+          job: pytest
       - uses: ./.github/actions/setup-test
+        with:
+          job: pytest
 
       - name: Test with pytest
-        env:
-          PYTHONPATH: partcad/src
-          PYTHONWARNINGS: ignore
+        # env:
+        #   PYTHONWARNINGS: ignore
         shell: bash -l {0}
         run: |
-          conda activate env-test
+          conda activate ~/${{ format('env-test-pytest-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-test-results
-          pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --dist no
+          pytest \
+            partcad partcad-cli \
+            -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
           conda deactivate
 
@@ -57,22 +120,83 @@ jobs:
           codecov-files: pytest-test-results/junit.xml
           coverage-report: pytest-test-results/coverage.xml
 
-  test-behave:
-    name: "Behave"
+  test-pytest-ide-vscode:
+    name: "Pytest (VS Code extension)"
+    needs: set-matrix
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    # Don't run the tests for the commit created by "bumpversion"
+    if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+        with:
+          job: pytest-ide-vscode
+      - uses: ./.github/actions/setup-test
+        with:
+          job: pytest-ide-vscode
+
+      # TODO(clairbee): Move this step to the build jobs. Merge build.yml and test.yml to form a ci.yml, where this test job may 'needs' that build job
+      - name: Build the VS Code extension
+        shell: bash -l {0}
+        run: |
+          conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+          (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
+          conda deactivate
+
+      - name: Test VS Code extension with pytest
+        env:
+          PYTHONWARNINGS: ignore
+        shell: bash -l {0}
+        run: |
+          conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+
+          mkdir -pv pytest-vscode-test-results
+          pytest \
+            partcad-ide-vscode \
+            -x -p no:error-for-skips -p no:warnings --dist no
+          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-vscode-test-results/coverage.xml
+          conda deactivate
+
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: pytest-vscode-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: pytest-vscode-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: pytest-vscode-test-results/junit.xml
+          coverage-report: pytest-vscode-test-results/coverage.xml
+
+  test-behave:
+    name: "Behave"
+    needs: set-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-
     timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
+        with:
+          job: behave
       - uses: ./.github/actions/setup-test
+        with:
+          job: behave
+
+      # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
+      - name: Set SSH Agent Service to Manual
+        if: runner.os == 'Windows'
+        run: Set-Service -Name ssh-agent -StartupType Manual
+        shell: pwsh
 
       - name: Start SSH Agent
         uses: webfactory/ssh-agent@v0.9.0
@@ -84,7 +208,7 @@ jobs:
         run: |
           mkdir -pv behave-test-results
 
-          conda activate env-test
+          conda activate ~/${{ format('env-test-behave-{0}', matrix.python-version) }}
           if ! python -m pip install -U ./partcad ./partcad-cli; then
             echo "Failed to install packages"
             exit 1
@@ -125,12 +249,10 @@ jobs:
 
   # test-examples-partcad:
   #   name: "Examples (PartCAD)"
+  #   needs: set-matrix
   #   strategy:
   #     fail-fast: false
-  #     matrix:
-  #       # TODO(clairbee): switch to smaller runners after done treoubleshooting
-  #       os: [ubuntu-latest-l, windows-latest-l, macos-13, macos-latest]
-  #       python-version: ["3.10", "3.11", "3.12"]
+  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
   #   runs-on: ${{ matrix.os }}
   #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
   #   timeout-minutes: 15
@@ -138,7 +260,11 @@ jobs:
   #   steps:
   #     - uses: actions/checkout@v4
   #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: examples-partcad
   #     - uses: ./.github/actions/setup-test
+  #       with:
+  #         job: examples-partcad
 
   #     - name: Basic integration test for CLI (PartCAD examples)
   #       shell: bash -l {0}
@@ -147,7 +273,7 @@ jobs:
   #       run: |
   #         mkdir -pv examples-partcad-test-results
 
-  #         conda activate env-test
+  #         conda activate ~/${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
   #         python -m pip install -U ./partcad ./partcad-cli
 
   #         # BEGIN PARTCAD EXAMPLES
@@ -175,11 +301,10 @@ jobs:
 
   test-examples-all:
     name: "Examples (All)"
+    needs: set-matrix
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 30
@@ -187,14 +312,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
+        with:
+          job: examples-all
       - uses: ./.github/actions/setup-test
+        with:
+          job: examples-all
 
       - name: Basic integration test for CLI (all examples)
         shell: bash -l {0}
         run: |
           mkdir -pv examples-all-test-results
 
-          conda activate env-test
+          conda activate ~/${{ format('env-test-examples-all-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
@@ -224,7 +353,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04-l, windows-latest-l]
+        # TODO(clairbee): Move this to the environment variables too
+        os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
         python-version: ["3.10", "3.12"]
     runs-on: ${{ matrix.os }}
     if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
@@ -233,14 +363,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
+        with:
+          job: pub-repo
       - uses: ./.github/actions/setup-test
+        with:
+          job: pub-repo
 
       - name: Test the entire repository
         shell: bash -l {0}
         run: |
           mkdir -pv pub-repo-test-results
 
-          conda activate env-test
+          conda activate ~/${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO

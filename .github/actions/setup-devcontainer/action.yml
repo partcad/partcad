@@ -1,0 +1,63 @@
+name: Setup devcontainer
+description: Get the temporary image name and prepare the config for it
+
+outputs:
+  IMAGE_TAG:
+    description: "The tag of the container in 'devcontainer.json' (the next patch version)"
+    value: ${{ steps.tag.outputs.IMAGE_TAG }}
+
+runs:
+  using: composite
+  steps:
+    - name: Extract branch name
+      id: extract_branch
+      shell: bash -l {0}
+      run: |
+        echo "BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+
+    - name: Check for changes that require the container to be rebuilt
+      uses: dorny/paths-filter@v3
+      id: changes
+      with:
+        filters: |
+          devcontainer:
+            - .devcontainer/*
+
+    - name: The devcontainer needs to be rebuilt
+      id: tag
+      shell: bash -l {0}
+      env:
+        BRANCH: ${{ steps.extract_branch.outputs.BRANCH }}
+      run: |
+        if [[ "X${{ github.event.head_commit.message }}" == "Version updated"* ]]; then
+          # Do not add the branch name to the tag if the commit is created by "bumpversion"
+          export IMAGE_TAG="${{ env.VERSION }}"
+        else
+          export IMAGE_TAG="${{ env.VERSION }}-${{ env.BRANCH }}"
+        fi
+        echo "IMAGE_TAG=$IMAGE_TAG"
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+        # Make sure the 'devcontainer.json' is valid
+        # if ! jq -e . .devcontainer/devcontainer.json > /dev/null 2>&1; then
+        #   echo "Error: Invalid JSON in devcontainer.json"
+        #   exit 1
+        # fi
+
+        # Make sure the 'devcontainer.json' is up-to-date
+        if ! sed 's/\/\/.*$//' .devcontainer/devcontainer.json | \
+           grep "\\S" | \
+           yq .image | \
+           grep -q "${{ env.VERSION }}"; then
+          echo "Error: Target devcontainer version ${{ env.VERSION }} not found in devcontainer.json"
+          exit 1
+        fi
+
+    - name: Prepare the container config
+      shell: bash -l {0}
+      env:
+        IMAGE_TAG: ${{ steps.tag.outputs.IMAGE_TAG }}
+      run: |
+        echo "Replacing devcontainer:${{ env.VERSION }} with devcontainer:${{ env.IMAGE_TAG }} in .devcontainer/devcontainer.json"
+        sed "s|devcontainer:${{ env.VERSION }}|devcontainer:${{ env.IMAGE_TAG }}|g" < .devcontainer/devcontainer.json > .devcontainer/.devcontainer.json

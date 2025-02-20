@@ -23,9 +23,14 @@
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter"
   },
+  "typescript.tsc.autoDetect": "off",
   "[typescript]": {
+    "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
+  "eslint.workingDirectories": [
+    "${workspaceFolder}/partcad-ide-vscode"
+  ],
   "[typescriptreact]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
@@ -102,7 +107,6 @@
   "editor.accessibilitySupport": "off",
   "editor.autoIndent": "full",
   "editor.detectIndentation": false,
-  "editor.fontFamily": "'Hack Nerd Font Mono'",
   "editor.formatOnSave": true,
   "editor.formatOnType": true,
   "editor.insertSpaces": true,
@@ -141,8 +145,16 @@
     "partcad*/dist": true,
     ".coverage*": true,
     "output": true,
-    "pytest-results": true,
-    "allure-results": true
+    "**/*test-results": true,
+    "**/allure-results": true,
+    "partcad-ide-vscode/bundled/libs": true,
+    "partcad-ide-vscode/.nox": true,
+    "partcad-ide-vscode/out": true,
+    "partcad-ide-vscode/dist": true,
+    "partcad-ide-vscode/node_modules": true,
+    "partcad-ide-vscode/.conda": true,
+    "partcad-ide-vscode/partcad.vsix": true,
+    ".pre-commit": true
   },
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
@@ -194,7 +206,9 @@
     }
   ],
   "python.analysis.extraPaths": [
-    "./partcad/src"
+    "./partcad/src",
+    "./partcad-cli/src",
+    "./partcad-ide-vscode/bundled/libs"
   ],
   "python.envFile": "${workspaceFolder}/.env",
   // https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage
@@ -231,11 +245,20 @@
     "partcad*/dist": true,
     ".coverage*": true,
     "output": true,
-    "pytest-results": true,
-    "allure-results": true
+    "**/*test-results": true,
+    "**/allure-results": true,
+    "partcad-ide-vscode/bundled/libs": true,
+    "partcad-ide-vscode/.nox": true,
+    "partcad-ide-vscode/out": true,
+    "partcad-ide-vscode/dist": true,
+    "partcad-ide-vscode/node_modules": true,
+    "partcad-ide-vscode/.conda": true,
+    "partcad-ide-vscode/partcad.vsix": true,
+    ".pre-commit": true
   },
   // "security.workspace.trust.untrustedFiles": "open",
   "svg.preview.mode": "svg",
+  "terminal.integrated.scrollback": 100000,
   "testing.automaticallyOpenPeekView": "never",
   // "yaml.format.bracketSpacing": false,
   "testing.automaticallyOpenTestResults": "neverOpen", // prevent YAML formatter from breaking Jinja2 templates
