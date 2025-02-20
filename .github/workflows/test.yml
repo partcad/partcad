@@ -89,9 +89,8 @@ jobs:
       - uses: ./.github/actions/setup-all
         with:
           job: conda-preheat
-      - uses: ./.github/actions/setup-test
-        with:
-          job: conda-preheat
+          preheat_only: true
+
       - name: Preheat conda caches
         shell: bash -el {0}
         run: |
