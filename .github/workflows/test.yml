@@ -76,9 +76,30 @@ jobs:
           echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }} }' >> $GITHUB_OUTPUT
           # echo 'matrix={"ospy": ${{ env.OSPY }} }' >> $GITHUB_OUTPUT
 
+  conda-preheat:
+    name: "Update conda caches"
+    needs: set-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+        with:
+          job: conda-preheat
+      - uses: ./.github/actions/setup-test
+        with:
+          job: conda-preheat
+      - name: Preheat conda caches
+        shell: bash -el {0}
+        run: |
+          conda activate ~/${{ format('env-test-preheat-{0}', matrix.python-version) }}
+          conda deactivate
+
   test-pytest:
     name: "Pytest"
-    needs: set-matrix
+    needs: conda-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -97,7 +118,7 @@ jobs:
       - name: Test with pytest
         # env:
         #   PYTHONWARNINGS: ignore
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           conda activate ~/${{ format('env-test-pytest-{0}', matrix.python-version) }}
 
@@ -121,7 +142,7 @@ jobs:
 
   test-pytest-ide-vscode:
     name: "Pytest (VS Code extension)"
-    needs: set-matrix
+    needs: conda-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -139,7 +160,7 @@ jobs:
 
       # TODO(clairbee): Move this step to the build jobs. Merge build.yml and test.yml to form a ci.yml, where this test job may 'needs' that build job
       - name: Build the VS Code extension
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
           (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
@@ -148,7 +169,7 @@ jobs:
       - name: Test VS Code extension with pytest
         env:
           PYTHONWARNINGS: ignore
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
 
@@ -172,7 +193,7 @@ jobs:
 
   test-behave:
     name: "Behave"
-    needs: set-matrix
+    needs: conda-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -200,7 +221,7 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
 
       - name: Test with behave
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           mkdir -pv behave-test-results
 
@@ -245,7 +266,7 @@ jobs:
 
   # test-examples-partcad:
   #   name: "Examples (PartCAD)"
-  #   needs: set-matrix
+  #   needs: conda-preheat
   #   strategy:
   #     fail-fast: false
   #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -263,7 +284,7 @@ jobs:
   #         job: examples-partcad
 
   #     - name: Basic integration test for CLI (PartCAD examples)
-  #       shell: bash -l {0}
+  #       shell: bash -el {0}
   #       env:
   #         PC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
   #       run: |
@@ -297,7 +318,7 @@ jobs:
 
   test-examples-all:
     name: "Examples (All)"
-    needs: set-matrix
+    needs: conda-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -314,7 +335,7 @@ jobs:
           job: examples-all
 
       - name: Basic integration test for CLI (all examples)
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           mkdir -pv examples-all-test-results
 
@@ -365,7 +386,7 @@ jobs:
           job: pub-repo
 
       - name: Test the entire repository
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           mkdir -pv pub-repo-test-results
 

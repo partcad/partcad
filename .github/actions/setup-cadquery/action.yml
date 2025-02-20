@@ -10,14 +10,14 @@ runs:
   using: "composite"
   steps:
     - name: Set CadQuery version
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
         echo "OS=$(uname)" >> $GITHUB_ENV
         echo "ARCH=$(uname -m)" >> $GITHUB_ENV
 
     - name: install macos dev dependencies
       if: startsWith(${{matrix.os}}, 'macos')
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
         for env in ${{ github.event.inputs.envs }}; do
           conda activate $env
@@ -27,7 +27,7 @@ runs:
 
     - name: install cadquery-ocp on macOS
       if: ${{ startsWith(matrix.os, 'macos') && env.ARCH == 'arm64' }}
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
         VERSION="7.7.2"
         PY_VERSION="${{ matrix.python-version }}"

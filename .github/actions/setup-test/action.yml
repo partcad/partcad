@@ -20,14 +20,14 @@ runs:
 
     - name: Install OpenSCAD (Linux)
       if: runner.os == 'Linux'
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
         sudo apt-get update
         sudo apt-get install -y openscad
 
     - name: Install OpenSCAD (macOS)
       if: runner.os == 'macOS'
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
         # The below "rm" command does not have "-f" on purpose:
         # the second "brew install" command is only needed when the dmg file is psesent but corrupted
@@ -53,7 +53,7 @@ runs:
     #################################################  GIT SETUP  ###################################################
 
     - name: Configure Git
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
         # TODO(clairbee): Switch to SSH for most of jobs, but not for all of them
         # git config --global url."git@github.com:".insteadOf "https://github.com/"

@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
 
 jobs:
   build:
@@ -43,7 +43,7 @@ jobs:
       - uses: ./.github/actions/setup-build
 
       - name: Test building and packaging
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           conda activate env-build
           cp .github/LICENSE.txt .github/apache20.svg partcad
@@ -58,7 +58,7 @@ jobs:
           conda deactivate
 
       - name: Test installation
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           conda activate ~/${{ format('env-test-build-{0}', matrix.python-version) }}
           python -m pip install -r partcad/requirements.txt
@@ -68,7 +68,7 @@ jobs:
           conda deactivate
 
       - name: Build documentation
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           conda activate ~/${{ format('env-test-build-{0}', matrix.python-version) }}
           # python -m pip install -r .devcontainer/requirements.txt

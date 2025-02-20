@@ -7,7 +7,7 @@ runs:
     ###################################################  PYTHON  ###################################################
 
     - name: Install prerequisites
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
         conda create -n env-build python==${{ matrix.python-version }} -y
         conda activate env-build
