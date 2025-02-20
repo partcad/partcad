@@ -89,7 +89,7 @@ runs:
     - name: Init conda
       shell: bash -el {0}
       run: |
-        mamba init
+        mamba init || (mamba create -n base ${{ matrix.python-version }} -y && mamba init)
         [[ -f ~/.bashrc ]] || touch ~/.bashrc
         [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
 
@@ -116,6 +116,7 @@ runs:
         # conda clean -y -i
         mamba create -p $ENV_PATH python=${{ matrix.python-version }} -y
         mamba activate $ENV_PATH
+        python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
         python -m pip install --upgrade -r partcad/requirements.txt

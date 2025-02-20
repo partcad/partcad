@@ -94,6 +94,8 @@ jobs:
       - name: Preheat conda caches
         shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mamba activate ~/${{ format('env-test-preheat-{0}', matrix.python-version) }}
           mamba deactivate
 
