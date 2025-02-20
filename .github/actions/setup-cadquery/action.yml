@@ -19,6 +19,8 @@ runs:
       if: startsWith(${{matrix.os}}, 'macos')
       shell: bash -el {0}
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
         for env in ${{ github.event.inputs.envs }}; do
           mamba activate $env
           pip install swig
@@ -29,6 +31,8 @@ runs:
       if: ${{ startsWith(matrix.os, 'macos') && env.ARCH == 'arm64' }}
       shell: bash -el {0}
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
         VERSION="7.7.2"
         PY_VERSION="${{ matrix.python-version }}"
         PY_VERSION_NO_DOT="${PY_VERSION//./}"

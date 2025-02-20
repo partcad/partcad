@@ -9,6 +9,8 @@ runs:
     - name: Install prerequisites
       shell: bash -el {0}
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
         mamba create -n env-build python==${{ matrix.python-version }} -y
         mamba activate env-build
         python -m ensurepip --upgrade
