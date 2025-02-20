@@ -52,12 +52,11 @@ runs:
       uses: actions/cache@v4
       env:
         # Increase this value to reset cache if etc/example-environment.yml has not changed
-        CACHE_NUMBER: 3
+        CACHE_NUMBER: 4
       with:
         enableCrossOsArchive: true
-        # path: ~/conda_pkgs_dir
         path: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
-        key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
+        key: ${{ runner.os }}-partcad-conda-${{ env.CACHE_NUMBER }}
 
     - uses: conda-incubator/setup-miniconda@v3
       continue-on-error: true # Usually it fails while setting up the unwanted 'test' environment
@@ -65,7 +64,7 @@ runs:
         miniforge-version: 24.11.3-0
         use-mamba: true
         channels: conda-forge,defaults
-        channel-priority: flexible
+        channel-priority: strict
         python-version: ${{ matrix.python-version }}
         # conda-solver: classic
         activate-environment: test
@@ -89,8 +88,10 @@ runs:
     - name: Init conda
       shell: bash -el {0}
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
         # Sometimes in GitHub workflows, the test environment is not created from the first attempt due to networking issues
-        mamba init || (mamba create -y -n test python=${{ matrix.python-version }} && mamba init)
+        mamba init || (mamba create -y -n test && mamba init)
         [[ -f ~/.bashrc ]] || touch ~/.bashrc
         [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
 
