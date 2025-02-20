@@ -69,7 +69,7 @@ runs:
         python-version: ${{ matrix.python-version }}
         # conda-solver: classic
         # activate-environment: env
-        auto-activate-base: true
+        auto-activate-base: false
         auto-update-conda: true
         use-only-tar-bz2: true
         # pkgs-dirs: ~/conda_pkgs_dir
@@ -86,14 +86,10 @@ runs:
     #     # cache-environment: true
     #     post-cleanup: "all"
 
-    # - name: Init conda
-    #   shell: bash
-    #   run: |
-    #     touch ~/.bashrc
-    #     touch ~/.bash_profile
-    #     . ~/.bashrc
-    #     . ~/.bash_profile
-    #     conda init
+    - name: Init conda
+      shell: bash -el {0}
+      run: |
+        mamba init
 
     # - uses: actions/cache@v4
     #   id: cache
