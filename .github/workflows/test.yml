@@ -379,6 +379,8 @@ jobs:
 
   test-pub-repo:
     name: "Repo //pub"
+    # Note: preheat is using another set of machines
+    needs: conda-preheat
     strategy:
       fail-fast: false
       matrix:

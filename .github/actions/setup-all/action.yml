@@ -95,7 +95,7 @@ runs:
         . ~/.bashrc
         . ~/.bash_profile
         # Sometimes in GitHub workflows, the test environment is not created from the first attempt due to networking issues
-        mamba init || (mamba create -y -n test && mamba init)
+        mamba init || (rm -rf ~/miniconda3/envs/test && mamba create -y -n test && mamba init)
 
     - uses: actions/cache@v4
       id: pip_cache
