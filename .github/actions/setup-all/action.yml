@@ -90,7 +90,7 @@ runs:
       shell: bash -el {0}
       run: |
         # Sometimes in GitHub workflows, the test environment is not created from the first attempt due to networking issues
-        mamba init || (mamba create -n test ${{ matrix.python-version }} -y && mamba init)
+        mamba init || (mamba create -y -n test python=${{ matrix.python-version }} && mamba init)
         [[ -f ~/.bashrc ]] || touch ~/.bashrc
         [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
 
@@ -115,7 +115,7 @@ runs:
         . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        mamba create -p $ENV_PATH python=${{ matrix.python-version }} -y
+        mamba create -y -p $ENV_PATH python=${{ matrix.python-version }}
         mamba activate $ENV_PATH
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools

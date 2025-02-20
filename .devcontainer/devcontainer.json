@@ -32,11 +32,11 @@
       "xqVersion": "none",
       "jaqVersion": "none"
     },
-    "ghcr.io/devcontainers/features/git-lfs:1": {
-      "autoPull": true,
-      "installDirectlyFromGitHubRelease": true,
-      "version": "3.6.0"
-    },
+    // "ghcr.io/devcontainers/features/git-lfs:1": {
+    //   "autoPull": true,
+    //   "installDirectlyFromGitHubRelease": true,
+    //   "version": "3.6.0"
+    // },
     // "ghcr.io/devcontainers/features/node:1": {
     //   "version": "1.6.1",
     //   "nodeGypDependencies": true
