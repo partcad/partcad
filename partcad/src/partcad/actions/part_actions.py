@@ -103,12 +103,21 @@ def deep_merge(base: dict, override: dict) -> dict:
     return result
 
 def get_base_part_config(project: Project, part_config: dict, part_name: str):
-    """Retrieve the base part configuration if the part is an 'enrich' or 'alias'."""
+    """Retrieve the base part configuration if the part is an 'enrich' or 'alias' and extract parameters from name."""
     if "source" not in part_config and "source_resolved" not in part_config:
         return part_config, project, part_name
 
     source_key = "source_resolved" if "source_resolved" in part_config else "source"
-    base_package, base_part_name = resolve_resource_path(project.name, part_config[source_key])
+    source_value = part_config[source_key]
+
+    if ";" in source_value:
+        base_source, params_suffix = source_value.split(";", 1)
+        extra_params = dict(param.split("=") for param in params_suffix.split(","))
+    else:
+        base_source = source_value
+        extra_params = {}
+
+    base_package, base_part_name = resolve_resource_path(project.name, base_source)
     base_project = project.ctx.get_project(base_package)
     if not base_project:
         raise ValueError(f"Base project '{base_package}' not found for part '{part_name}'.")
@@ -120,6 +129,10 @@ def get_base_part_config(project: Project, part_config: dict, part_name: str):
     merged_config = deep_merge(base_part_config, part_config)
     merged_config["type"] = base_part_config.get("type", part_config["type"])
     merged_config.pop(source_key, None)
+
+    if extra_params:
+        merged_config.setdefault("with", {}).update(extra_params)
+
     if "path" not in merged_config and "path" in base_part_config:
         merged_config["path"] = base_part_config["path"]
 
@@ -135,8 +148,13 @@ def update_parameters_with_defaults(part_config: dict):
 
     for param_name, new_value in with_values.items():
         if param_name in parameters:
-
             param_data = parameters[param_name]
+
+            if param_data["type"] == "int":
+                new_value = int(new_value)
+            elif param_data["type"] == "float":
+                new_value = float(new_value)
+
             param_data["default"] = new_value
 
             if "min" in param_data and param_data["min"] == new_value:
