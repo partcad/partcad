@@ -63,12 +63,13 @@ runs:
       continue-on-error: true # Usually it fails while setting up the unwanted 'test' environment
       with:
         miniforge-version: 24.11.3-0
-        channels: conda-forge,cadquery,defaults
+        use-mamba: true
+        channels: conda-forge,defaults
         channel-priority: flexible
         python-version: ${{ matrix.python-version }}
         # conda-solver: classic
         # activate-environment: env
-        auto-activate-base: false
+        auto-activate-base: true
         auto-update-conda: true
         use-only-tar-bz2: true
         # pkgs-dirs: ~/conda_pkgs_dir
