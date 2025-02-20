@@ -49,6 +49,7 @@ runs:
 
     # Miniconda
     - name: Cache conda
+      id: conda_cache
       uses: actions/cache@v4
       env:
         # Increase this value to reset cache if etc/example-environment.yml has not changed
@@ -59,6 +60,7 @@ runs:
         key: ${{ runner.os }}-partcad-conda-${{ env.CACHE_NUMBER }}
 
     - uses: conda-incubator/setup-miniconda@v3
+      if: steps.conda_cache.outputs.cache-hit != 'true'
       continue-on-error: true # Usually it fails while setting up the unwanted 'test' environment
       with:
         miniforge-version: 24.11.3-0
@@ -88,15 +90,15 @@ runs:
     - name: Init conda
       shell: bash -el {0}
       run: |
+        [[ -f ~/.bashrc ]] || touch ~/.bashrc
+        [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
         . ~/.bashrc
         . ~/.bash_profile
         # Sometimes in GitHub workflows, the test environment is not created from the first attempt due to networking issues
         mamba init || (mamba create -y -n test && mamba init)
-        [[ -f ~/.bashrc ]] || touch ~/.bashrc
-        [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
 
     - uses: actions/cache@v4
-      id: cache
+      id: pip_cache
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('partcad/requirements.txt,partcad/requirements-dev.in,partcad-ide-vscode/src/test/python_tests/requirements.txt') }}
@@ -108,6 +110,7 @@ runs:
 
     # Install dev dependencies
     - name: install dev dependencies
+      if: steps.pip_cache.outputs.cache-hit != 'true'
       shell: bash -el {0}
       env:
         ENV_PATH: ~/${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}
