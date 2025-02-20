@@ -1,6 +1,6 @@
 {
   "name": "PartCAD Development Environment",
-  "image": "ghcr.io/partcad/partcad-devcontainer:0.7.112",
+  "image": "ghcr.io/partcad/partcad-devcontainer:0.7.113",
   "remoteEnv": {
     // TODO: @alexanderilyin do not patch PATH here but make `mamba` discoverable.
     "PATH": "${containerEnv:PATH}:/home/vscode/miniforge3/bin",
