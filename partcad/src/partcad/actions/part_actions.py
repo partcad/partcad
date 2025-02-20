@@ -125,6 +125,27 @@ def get_base_part_config(project: Project, part_config: dict, part_name: str):
 
     return merged_config, base_project, base_part_name
 
+def update_parameters_with_defaults(part_config: dict):
+    """Update parameters' default values using 'with' overrides and clean up redundant min/max."""
+    if "with" not in part_config or "parameters" not in part_config:
+        return part_config
+
+    with_values = part_config["with"]
+    parameters = part_config["parameters"]
+
+    for param_name, new_value in with_values.items():
+        if param_name in parameters:
+
+            param_data = parameters[param_name]
+            param_data["default"] = new_value
+
+            if "min" in param_data and param_data["min"] == new_value:
+                del param_data["min"]
+            if "max" in param_data and param_data["max"] == new_value:
+                del param_data["max"]
+
+    return part_config
+
 def get_source_path(project: Project, config: dict, part_name: str):
     """Determine the source file location based on part configuration."""
     if "path" in config:
@@ -179,6 +200,9 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     part_config = part.config
     part_type = part_config.get("type")
 
+    if "source" not in part_config and "package" not in part_config and not target_format:
+        raise ValueError(f"Part '{part_name}' requires '-t' (target format) to be specified.")
+
     part_config, source_project, source_part_name = get_base_part_config(project, part_config, part_name)
     source_path = get_source_path(source_project, part_config, source_part_name)
     conversion_target = part_config.get("type")
@@ -195,8 +219,12 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         config_path = converted_path.relative_to(Path(project.path))
 
     updated_config = deep_merge(part_config, {"type": conversion_target, "path": str(config_path)})
+
+    updated_config = update_parameters_with_defaults(updated_config)
+
     updated_config.pop("package", None)
     updated_config.pop("with", None)
+
     project.set_part_config(part_name, updated_config)
     pc_logging.debug(f"Updated configuration for '{part_name}': {config_path}")
 
@@ -210,3 +238,5 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
             final_config_path = final_path
         project.update_part_config(part_name, {"type": target_format, "path": str(final_config_path)})
         pc_logging.debug(f"Final updated configuration for '{part_name}': {final_config_path}")
+
+    pc_logging.info(f"Conversion of '{part_name}' completed.")

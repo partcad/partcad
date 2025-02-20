@@ -33,9 +33,9 @@ def cli(ctx: Context, part_name: str, target_format: str, output_dir: str, dry_r
     if not project:
         pc_logging.error("Project retrieval failed. Ensure you are inside a valid PartCAD project.")
         raise click.UsageError("Failed to retrieve the project.")
+    try:
+        convert_part_action(project, part_name, target_format, output_dir=output_dir, dry_run=dry_run)
+    except ValueError as e:
+        raise click.UsageError(str(e))
 
-    convert_part_action(project, part_name, target_format, output_dir=output_dir, dry_run=dry_run)
-
-    msg = f"Conversion of '{part_name}' completed."
-    pc_logging.info(msg)
-    click.echo(msg)
+    click.echo(f"Conversion of '{part_name}' completed.")
