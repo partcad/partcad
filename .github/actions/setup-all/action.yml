@@ -76,7 +76,7 @@ runs:
         miniforge-version: 24.11.3-0
         use-mamba: true
         channels: conda-forge,defaults
-        channel-priority: strict
+        # channel-priority: strict
         python-version: ${{ matrix.python-version }}
         # conda-solver: classic
         activate-environment: test
