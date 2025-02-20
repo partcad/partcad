@@ -491,6 +491,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: poetry-install
+    if: ${{ github.ref == 'refs/heads/devel' && startsWith(github.event.head_commit.message, 'Version updated') }}
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
       contents: read
