@@ -56,14 +56,14 @@ runs:
       with:
         enableCrossOsArchive: true
         # path: ~/conda_pkgs_dir
-        path: ${{ runner.os == 'Windows' && 'D:\\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
+        path: ${{ runner.os == 'Windows' && 'D:\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
         key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
 
     - uses: conda-incubator/setup-miniconda@v3
       continue-on-error: true # Usually it fails while setting up the unwanted 'test' environment
       with:
         miniforge-version: 24.11.3-0
-        channels: conda-forge,defaults
+        channels: conda-forge,cadquery,defaults
         channel-priority: flexible
         python-version: ${{ matrix.python-version }}
         # conda-solver: classic
@@ -72,7 +72,7 @@ runs:
         auto-update-conda: true
         use-only-tar-bz2: true
         # pkgs-dirs: ~/conda_pkgs_dir
-        pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+        pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
         # pkgs-dirs: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
 
     # - uses: mamba-org/setup-micromamba@v2
@@ -115,14 +115,14 @@ runs:
         # . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        conda create -p $ENV_PATH python=${{ matrix.python-version }} -y
-        conda activate $ENV_PATH
-        conda install -p $ENV_PATH --yes pip wheel mypy setuptools
+        mamba create -p $ENV_PATH python=${{ matrix.python-version }} -y
+        mamba activate $ENV_PATH
+        mamba install -p $ENV_PATH --yes pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
-        conda install -p $ENV_PATH --yes --file partcad/requirements.txt
-        conda install -p $ENV_PATH --yes --file partcad/requirements-dev.in
-        conda install -p $ENV_PATH --yes --file partcad-ide-vscode/src/test/python_tests/requirements.txt
-        conda deactivate
+        mamba install -p $ENV_PATH --yes --file partcad/requirements.txt
+        mamba install -p $ENV_PATH --yes --file partcad/requirements-dev.in
+        mamba install -p $ENV_PATH --yes --file partcad-ide-vscode/src/test/python_tests/requirements.txt
+        mamba deactivate
 
         # echo "PC_INTERNAL_STATE_DIR=$(mktemp -d)" >> $GITHUB_ENV
 
