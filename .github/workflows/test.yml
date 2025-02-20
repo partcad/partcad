@@ -234,7 +234,7 @@ jobs:
           export PYTHONUTF8=1
           export PYTHONIOENCODING=utf-8
 
-          BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave"
+          BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behavex"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             BEHAVE_CMD="$BEHAVE_CMD --tags=-skip-windows"
           fi
@@ -244,7 +244,7 @@ jobs:
             exit 1
           fi
 
-          # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
+          # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behavex; then
           #   echo "Behave tests failed"
           #   exit 1
           # fi

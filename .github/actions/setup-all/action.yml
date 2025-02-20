@@ -114,11 +114,11 @@ runs:
         # conda clean -y -i
         mamba create -p $ENV_PATH python=${{ matrix.python-version }} -y
         mamba activate $ENV_PATH
-        mamba install -p $ENV_PATH --yes pip wheel mypy setuptools
+        python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
-        mamba install -p $ENV_PATH --yes --file partcad/requirements.txt
-        mamba install -p $ENV_PATH --yes --file partcad/requirements-dev.in
-        mamba install -p $ENV_PATH --yes --file partcad-ide-vscode/src/test/python_tests/requirements.txt
+        python -m pip install --upgrade -r partcad/requirements.txt
+        python -m pip install --upgrade -r partcad/requirements-dev.in
+        python -m pip install --upgrade -r partcad-ide-vscode/src/test/python_tests/requirements.txt
         mamba deactivate
 
         # echo "PC_INTERNAL_STATE_DIR=$(mktemp -d)" >> $GITHUB_ENV
