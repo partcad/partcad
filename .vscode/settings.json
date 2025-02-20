@@ -275,6 +275,6 @@
     "devel"
   ],
   "yaml.schemas": {
-    "docs/mkdocs/docs/schema/partcad.json": "*/partcad.yaml"
+    "partcad/src/partcad/schema/partcad.json": "*/partcad.yaml"
   }
 }

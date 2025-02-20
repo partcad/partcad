@@ -88,10 +88,25 @@
               "type": "object",
               "patternProperties": {
                 "^[a-zA-Z0-9_-]+$": {
-                  "type": "object",
+                  "type": [
+                    "object",
+                    "string",
+                    "number",
+                    "boolean"
+                  ],
                   "properties": {
                     "type": {
                       "type": "string"
+                    },
+                    "min": {
+                      "type": [
+                        "number"
+                      ]
+                    },
+                    "max": {
+                      "type": [
+                        "number"
+                      ]
                     },
                     "default": {
                       "type": [
