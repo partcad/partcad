@@ -36,7 +36,7 @@ interfaces:
     abstract: True
     ports:
       m3:
-        location: [[0, 0, 0], [0, 0, 1], 0] # redandant, for demonstration
+        location: [[0, 0, 0], [0, 0, 1], 0] # redundant, for demonstration
         sketch: m3
   m3-opening:
     abstract: True
@@ -215,7 +215,7 @@ parts:
       m4-slotted-30-thru-3:
         L: # top left
           location: [[-15.0, -27.0, 27.0], [1.0, 0.0, 0.0], 90.0]
-          params: {offset: -15}
+          params: { offset: -15 }
         R: # top right
           location: [[15.0, -27.0, 27.0], [1.0, 0.0, 0.0], 90.0]
           # params: {offset: -15}
