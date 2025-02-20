@@ -8,9 +8,9 @@ on:
   #   - cron: "0 8 * * *" # Run daily at PST midnight
   merge_group:
   pull_request:
-    branches: ["main", "devel"]
+    branches: ["devel"]
   push:
-    branches: ["main", "devel"]
+    branches: ["devel"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -484,3 +484,56 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           codecov-files: pc-test-results/junit.xml
           coverage-report: pc-test-results/coverage.xml
+
+  mkdocs:
+    # if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: "Deploy: Developer's Handbook"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: poetry-install
+    permissions:
+      # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+      - name: Setup Dev Container
+        id: setup
+        uses: ./.github/actions/setup-devcontainer
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Python Environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pypoetry
+            .venv
+          # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Deploy Developer's Handbook
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
+          configFile: .devcontainer/.devcontainer.json
+          push: never
+          runCmd: |
+            # Configure Git Credentials
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+
+            # Install Dependencies
+            poetry install --only=docs
+
+            # Build & Deploy Documentation
+            cd docs/mkdocs
+            poetry run mkdocs gh-deploy --force
