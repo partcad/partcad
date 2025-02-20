@@ -20,9 +20,9 @@ runs:
       shell: bash -el {0}
       run: |
         for env in ${{ github.event.inputs.envs }}; do
-          conda activate $env
+          mamba activate $env
           pip install swig
-          conda deactivate
+          mamba deactivate
         done
 
     - name: install cadquery-ocp on macOS
@@ -39,7 +39,7 @@ runs:
         curl -L -o "$WHEEL_FILE" "$WHEEL_URL"
 
         for env in ${{ github.event.inputs.envs }}; do
-          conda activate $env
+          mamba activate $env
           pip install "$WHEEL_FILE"
-          conda deactivate
+          mamba deactivate
         done

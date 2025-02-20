@@ -94,8 +94,8 @@ jobs:
       - name: Preheat conda caches
         shell: bash -el {0}
         run: |
-          conda activate ~/${{ format('env-test-preheat-{0}', matrix.python-version) }}
-          conda deactivate
+          mamba activate ~/${{ format('env-test-preheat-{0}', matrix.python-version) }}
+          mamba deactivate
 
   test-pytest:
     name: "Pytest"
@@ -120,14 +120,14 @@ jobs:
         #   PYTHONWARNINGS: ignore
         shell: bash -el {0}
         run: |
-          conda activate ~/${{ format('env-test-pytest-{0}', matrix.python-version) }}
+          mamba activate ~/${{ format('env-test-pytest-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-test-results
           pytest \
             partcad partcad-cli \
             -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -162,23 +162,23 @@ jobs:
       - name: Build the VS Code extension
         shell: bash -el {0}
         run: |
-          conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+          mamba activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
           (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
-          conda deactivate
+          mamba deactivate
 
       - name: Test VS Code extension with pytest
         env:
           PYTHONWARNINGS: ignore
         shell: bash -el {0}
         run: |
-          conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+          mamba activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-vscode-test-results
           pytest \
             partcad-ide-vscode \
             -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-vscode-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -225,7 +225,7 @@ jobs:
         run: |
           mkdir -pv behave-test-results
 
-          conda activate ~/${{ format('env-test-behave-{0}', matrix.python-version) }}
+          mamba activate ~/${{ format('env-test-behave-{0}', matrix.python-version) }}
           if ! python -m pip install -U ./partcad ./partcad-cli; then
             echo "Failed to install packages"
             exit 1
@@ -251,7 +251,7 @@ jobs:
 
           coverage combine
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -290,7 +290,7 @@ jobs:
   #       run: |
   #         mkdir -pv examples-partcad-test-results
 
-  #         conda activate ~/${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
+  #         mamba activate ~/${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
   #         python -m pip install -U ./partcad ./partcad-cli
 
   #         # BEGIN PARTCAD EXAMPLES
@@ -303,7 +303,7 @@ jobs:
   #         # END PARTCAD EXAMPLES
 
   #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml || true
-  #         conda deactivate
+  #         mamba deactivate
 
   #     - name: Upload test results & coverage reports to github and codecov
   #       uses: ./.github/actions/upload-test-results
@@ -339,7 +339,7 @@ jobs:
         run: |
           mkdir -pv examples-all-test-results
 
-          conda activate ~/${{ format('env-test-examples-all-{0}', matrix.python-version) }}
+          mamba activate ~/${{ format('env-test-examples-all-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
@@ -351,7 +351,7 @@ jobs:
           # END ALL EXAMPLES
 
           coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -390,7 +390,7 @@ jobs:
         run: |
           mkdir -pv pub-repo-test-results
 
-          conda activate ~/${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
+          mamba activate ~/${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO
@@ -402,7 +402,7 @@ jobs:
           coverage combine
 
           coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results

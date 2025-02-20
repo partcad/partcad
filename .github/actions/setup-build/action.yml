@@ -9,19 +9,19 @@ runs:
     - name: Install prerequisites
       shell: bash -el {0}
       run: |
-        conda create -n env-build python==${{ matrix.python-version }} -y
-        conda activate env-build
+        mamba create -n env-build python==${{ matrix.python-version }} -y
+        mamba activate env-build
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         python -m pip install --upgrade build
-        conda deactivate
+        mamba deactivate
 
-        conda create -n env-build-cli python==${{ matrix.python-version }} -y
-        conda activate env-build-cli
+        mamba create -n env-build-cli python==${{ matrix.python-version }} -y
+        mamba activate env-build-cli
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         python -m pip install --upgrade build
-        conda deactivate
+        mamba deactivate
 
     #################################################  CADQUERY  ####################################################
 
