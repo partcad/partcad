@@ -63,8 +63,8 @@ replace = "version=\"{new_version}\""
 
 [[tool.bumpversion.files]]
 filename = "partcad-ide-vscode/bundled/tool/lsp_server.py"
-search = "(>={current_version})"
-replace = "(>={new_version})"
+search = "(\">={current_version}\")"
+replace = "(\">={new_version}\")"
 
 [[tool.bumpversion.files]]
 filename = ".github/workflows/test-dev.yml"

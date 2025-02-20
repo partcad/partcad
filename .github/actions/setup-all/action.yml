@@ -39,37 +39,11 @@ runs:
         vcpkg.exe install zlib
     #     vcpkg.exe install pkgconf
     #     vcpkg.exe install freetype
-
-    # - name: Install prerequisites (part 2)
-    #   if: ${{ startsWith(matrix.os, 'windows') }}
-    #   shell: bash -l {0}
-    #   run: |
     #     vcpkg.exe install cairo
     #     choco uninstall StrawberryPerl -y
     #     # choco install pkgconfiglite
     #     choco install pacman
     #     pacman -Sy pkgconf
-    #     # pacman -Syu mingw-w64-x86_64-gtk3
-    #     # pacman -Syu mingw-w64-x86_64-cairo
-    #     echo "Searching for pkg-config"
-    #     which pkgconf || echo "pkgconf not found"
-    #     which pkg-config || echo "pkg-config not found"
-    #     echo "C:\\msys64"
-    #     dir "C:\\msys64"
-    #     echo "C:\\msys64\\usr\\bin"
-    #     dir "C:\\msys64\\usr\\bin"
-    #     echo "C:\\msys64\\usr\\lib"
-    #     dir "C:\\msys64\\usr\\lib"
-    #     echo "C:\\mingw64"
-    #     dir "C:\\mingw64"
-    #     echo "C:\\mingw64\\usr\\bin"
-    #     dir "C:\\mingw64\\usr\\bin"
-    #     echo "C:\\mingw64\\usr\\lib"
-    #     dir "C:\\mingw64\\usr\\lib"
-    #     echo "C:\\msys64\\usr\\bin" >> $ENV:PATH
-    #     echo "C:\\msys64\\usr\\lib\\pkgconfig" >> $ENV:PKG_CONFIG_PATH
-    #     # echo "C:\\msys64\\mingw64\\bin" >> $ENV:PATH
-    #     # echo "C:\\msys64\\mingw64\\lib\\pkgconfig" >> $ENV:PKG_CONFIG_PATH
 
     ###################################################  PYTHON  ###################################################
 

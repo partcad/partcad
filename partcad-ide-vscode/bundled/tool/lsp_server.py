@@ -692,7 +692,7 @@ def do_activate(params: lsp.ExecuteCommandParams) -> None:
     try:
         load_partcad()
 
-        partcad_requirements = SpecifierSet(">=0.7.112")
+        partcad_requirements = SpecifierSet(">=0.7.113")
         if partcad.__version__ in partcad_requirements:
             LSP_SERVER.send_notification("?/partcad/loaded")
     except Exception as e:
