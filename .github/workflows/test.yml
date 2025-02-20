@@ -120,6 +120,8 @@ jobs:
         #   PYTHONWARNINGS: ignore
         shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mamba activate ~/${{ format('env-test-pytest-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-test-results
@@ -162,6 +164,8 @@ jobs:
       - name: Build the VS Code extension
         shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mamba activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
           (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
           mamba deactivate
@@ -171,6 +175,8 @@ jobs:
           PYTHONWARNINGS: ignore
         shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mamba activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-vscode-test-results
@@ -223,6 +229,8 @@ jobs:
       - name: Test with behave
         shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mkdir -pv behave-test-results
 
           mamba activate ~/${{ format('env-test-behave-{0}', matrix.python-version) }}
@@ -337,6 +345,8 @@ jobs:
       - name: Basic integration test for CLI (all examples)
         shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mkdir -pv examples-all-test-results
 
           mamba activate ~/${{ format('env-test-examples-all-{0}', matrix.python-version) }}
@@ -388,6 +398,8 @@ jobs:
       - name: Test the entire repository
         shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mkdir -pv pub-repo-test-results
 
           mamba activate ~/${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
