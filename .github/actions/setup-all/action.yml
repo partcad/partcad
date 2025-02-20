@@ -89,7 +89,8 @@ runs:
     - name: Init conda
       shell: bash -el {0}
       run: |
-        mamba init || (mamba create -n base ${{ matrix.python-version }} -y && mamba init)
+        # Sometimes in GitHub workflows, the test environment is not created from the first attempt due to networking issues
+        mamba init || (mamba create -n test ${{ matrix.python-version }} -y && mamba init)
         [[ -f ~/.bashrc ]] || touch ~/.bashrc
         [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
 

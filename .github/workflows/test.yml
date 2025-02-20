@@ -24,7 +24,8 @@ env:
   # If this is the original copy of PartCAD, then use the org's self-hosted runners
   OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
   # OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest", ["self-hosted", "macos-15-large"]]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]' }}
-  PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+  PYTHONS: '["3.10", "3.11", "3.12"]'
+  # PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
   # OSPY: >-
   #   ${{
   #     github.repository == 'partcad/partcad'
@@ -96,7 +97,7 @@ jobs:
         run: |
           . ~/.bashrc
           . ~/.bash_profile
-          mamba activate ~/${{ format('env-test-preheat-{0}', matrix.python-version) }}
+          mamba activate ~/${{ format('env-test-conda-preheat-{0}', matrix.python-version) }}
           mamba deactivate
 
   test-pytest:
