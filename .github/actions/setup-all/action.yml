@@ -56,7 +56,7 @@ runs:
       with:
         enableCrossOsArchive: true
         # path: ~/conda_pkgs_dir
-        path: ${{ runner.os == 'Windows' && 'D:\conda_pkgs_dir' || '~/conda_pkgs_dir' }}
+        path: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
         key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}
 
     - uses: conda-incubator/setup-miniconda@v3
@@ -90,8 +90,8 @@ runs:
       shell: bash -el {0}
       run: |
         mamba init
-        [[ ! -f ~/.bashrc ]] && touch ~/.bashrc
-        [[ ! -f ~/.bash_profile ]] && touch ~/.bash_profile
+        [[ -f ~/.bashrc ]] || touch ~/.bashrc
+        [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
 
     - uses: actions/cache@v4
       id: cache
