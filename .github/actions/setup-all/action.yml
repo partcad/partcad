@@ -89,7 +89,7 @@ runs:
       id: pip_cache
       with:
         path: ~/.cache/pip
-        key: ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt' }}-${{ hashFiles('partcad/requirements-dev.in' }}-${{ hashFiles('partcad-ide-vscode/src/test/python_tests/requirements.txt') }}
+        key: ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}-${{ hashFiles('partcad/requirements-dev.in') }}-${{ hashFiles('partcad-ide-vscode/src/test/python_tests/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
