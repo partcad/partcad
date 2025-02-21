@@ -6,6 +6,8 @@ import base64
 import sys
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
 from OCP.gp import gp_Pnt
+from OCP.TopoDS import TopoDS_Compound
+from OCP.BRep import BRep_Builder
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 from . import wrapper
@@ -46,6 +48,9 @@ class PartFactoryObj(PartFactoryFile):
                 shape = await self._process_obj_subprocess()
             else:
                 shape = self._load_obj_directly()
+
+            if not isinstance(shape, TopoDS_Compound):
+                shape = self._create_compound(shape)
 
             # Update counters
             with PartFactoryObj.lock:
@@ -103,7 +108,7 @@ class PartFactoryObj(PartFactoryFile):
                 polygon.Close()
                 shape_faces.append(BRepBuilderAPI_MakeFace(polygon.Wire()).Face())
 
-            return shape_faces  # Optionally combine faces into a compound
+            return self._create_compound(shape_faces)
         except Exception as e:
             pc_logging.error(f"Error loading OBJ file: {e}")
             raise
@@ -144,7 +149,21 @@ class PartFactoryObj(PartFactoryFile):
                 pc_logging.error(response["exception"])
                 raise PartFactoryError(response["exception"])
 
-            return response["shape"]
+            shape = response["shape"]
+            if isinstance(shape, list):
+                shape = self._create_compound(shape)
+            return shape
         except Exception as e:
             pc_logging.error(f"Subprocess execution failed: {e}")
             raise
+
+    def _create_compound(self, faces):
+        """
+        Convert a list of TopoDS_Face objects into a TopoDS_Compound.
+        """
+        builder = BRep_Builder()
+        compound = TopoDS_Compound()
+        builder.MakeCompound(compound)
+        for face in faces:
+            builder.Add(compound, face)
+        return compound
