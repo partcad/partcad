@@ -13,10 +13,6 @@ runs:
   using: "composite"
   steps:
     ############################################## OS PREREQUISITES ################################################
-    - uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
     - uses: awalsh128/cache-apt-pkgs-action@latest
       if: ${{ startsWith(matrix.os, 'ubuntu') }}
       with:
@@ -75,6 +71,10 @@ runs:
     #     pacman -Sy pkgconf
 
     ###################################################  PYTHON  ###################################################
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
 
     # Miniconda
     - name: Cache conda
