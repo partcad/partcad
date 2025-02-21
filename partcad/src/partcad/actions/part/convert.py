@@ -173,6 +173,7 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     updated_config = update_parameters_with_defaults(updated_config)
 
     updated_config.pop("package", None)
+    updated_config.pop("source", None)
     updated_config.pop("with", None)
 
     project.set_part_config(part_name, updated_config)
