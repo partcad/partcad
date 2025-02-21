@@ -144,6 +144,7 @@ runs:
         mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
         mamba activate ${{ env.ENV_PATH }}
         mamba install libffi
+        mamba install python=${{ matrix.python-version }}
         echo "Running ensurepip"
         python -m ensurepip --upgrade || echo "ensurepip failes on Windows sometimes"
         echo "Running pip"
