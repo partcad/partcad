@@ -11,27 +11,38 @@ Feature: `pc convert` command
         cube:
           type: stl
           path: cube.stl
+          parameters:
+            width:
+              type: int
+              default: 2
+              name: width
+            height:
+              type: int
+              default: 2
+              name: height
         cube_enrich:
           type: enrich
           source: ":cube"
           with:
             height: 4
             width: 4
+        cube_alias:
+          type: alias
+          source: ":cube;width=10,height=10"
       """
 
   @stl @dry-run
   Scenario: Dry-run conversion for part `cube`
-    When I run "pc convert cube -t step --dry-run"
+    When I run "pc convert :cube -t step --dry-run"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "[Dry Run]"
-    And STDOUT should contain "cube.step"
+    And STDOUT should contain "[Dry Run] No changes made for 'cube'."
 
   @step @directory
   Scenario: Conversion with specified output directory for part `cube`
     Given a directory named "output" exists
-    When I run "pc convert cube -t step -O output"
+    When I run "pc convert :cube -t step -O output"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Conversion of 'cube' to 'step' completed."
+    And STDOUT should contain "Converting 'cube': stl to step"
     And a file named "output/cube.step" should exist
 
   @error
@@ -51,10 +62,48 @@ Feature: `pc convert` command
 
   @enrich @resolve
   Scenario: Resolving an enrich part
-    When I run "pc convert cube_enrich"
+    When I run "pc convert :cube_enrich"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Resolved enrich part 'cube_enrich'."
+    And STDOUT should contain "Converting 'cube_enrich': enrich to stl"
     And a file named "cube_enrich.stl" should exist
+    And a file named "partcad.yaml" should have YAML content:
+      """
+      parts:
+        cube:
+          type: stl
+          path: cube.stl
+          parameters:
+            width:
+              type: int
+              default: 2
+              name: width
+            height:
+              type: int
+              default: 2
+              name: height
+
+        cube_enrich:
+          type: stl
+          path: cube_enrich.stl
+          parameters:
+            width:
+              type: int
+              default: 4
+              name: width
+              min: 2
+              max: 2
+            height:
+              type: int
+              default: 4
+              name: height
+              min: 2
+              max: 2
+          manufacturable: True
+
+        cube_alias:
+          type: alias
+          source: ":cube;width=10,height=10"
+      """
 
   @enrich @error
   Scenario: Resolving a non-existent enrich part
@@ -63,14 +112,83 @@ Feature: `pc convert` command
 
   @enrich @convert
   Scenario: Resolving and converting an enrich part
-    When I run "pc convert cube_enrich -t brep"
+    When I run "pc convert :cube_enrich -t brep"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Converted 'cube_enrich' to 'brep'."
+    And STDOUT should contain "Converting 'cube_enrich': enrich to stl"
+    And STDOUT should contain "Converting 'cube_enrich': stl to brep"
     And a file named "cube_enrich.brep" should exist
 
   @enrich @output-dir
   Scenario: Resolving an enrich part with a specified output directory
     Given a directory named "output" exists
-    When I run "pc convert cube_enrich -t step -O output"
+    When I run "pc convert :cube_enrich -t step -O output"
     Then the command should exit with a status code of "0"
     And a file named "output/cube_enrich.step" should exist
+
+  @alias @resolve
+  Scenario: Resolving an alias part
+    When I run "pc convert cube_alias"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Converting 'cube_alias': alias to stl"
+    And a file named "cube_alias.stl" should exist
+    And a file named "partcad.yaml" should have YAML content:
+      """
+      parts:
+        cube:
+          type: stl
+          path: cube.stl
+          parameters:
+            width:
+              type: int
+              default: 2
+              name: width
+            height:
+              type: int
+              default: 2
+              name: height
+
+        cube_enrich:
+          type: enrich
+          source: ":cube"
+          with:
+            height: 4
+            width: 4
+
+        cube_alias:
+          type: stl
+          path: cube_alias.stl
+          parameters:
+            width:
+              type: int
+              default: 10
+              name: width
+              min: 2
+              max: 2
+            height:
+              type: int
+              default: 10
+              name: height
+              min: 2
+              max: 2
+          manufacturable: True
+      """
+
+  @alias @convert
+  Scenario: Resolving and converting an alias part
+    When I run "pc convert :cube_alias -t brep"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Converting 'cube_alias': alias to stl"
+    And STDOUT should contain "Converting 'cube_alias': stl to brep"
+    And a file named "cube_alias.brep" should exist
+
+  @alias @output-dir
+  Scenario: Resolving an alias part with a specified output directory
+    Given a directory named "output" exists
+    When I run "pc convert :cube_alias -t step -O output"
+    Then the command should exit with a status code of "0"
+    And a file named "output/cube_alias.step" should exist
+
+  @alias @error
+  Scenario: Resolving a non-existent alias part
+    When I run "pc convert :nonexistent_alias"
+    Then the command should exit with a status code of "2"
