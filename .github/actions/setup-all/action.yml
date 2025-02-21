@@ -73,7 +73,7 @@ runs:
           ${{ runner.os }}-pip-
 
     - uses: conda-incubator/setup-miniconda@v3
-      if: ${{ input.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
+      if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
       continue-on-error: true # Usually it fails while setting up the unwanted 'test' environment
       with:
         miniforge-version: 24.11.3-0
@@ -101,7 +101,7 @@ runs:
     #     post-cleanup: "all"
 
     - name: Init conda
-      if: ${{ input.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
+      if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
       shell: bash -el {0}
       run: |
         [[ -f ~/.bashrc ]] || touch ~/.bashrc
@@ -115,7 +115,7 @@ runs:
 
     # Install dev dependencies
     - name: install dev dependencies
-      if: ${{ input.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
+      if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
       shell: bash -el {0}
       env:
         ENV_PATH: ~/${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}
