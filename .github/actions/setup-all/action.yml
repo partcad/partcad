@@ -141,7 +141,7 @@ runs:
         . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.12' && 'reg delete HKEY_LOCAL_MACHINE\\SOFTWARE\\Python\\PythonCore\\3.11\\PythonPath' || ''}}
+        ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.12' && 'reg delete /f HKEY_LOCAL_MACHINE\\SOFTWARE\\Python\\PythonCore\\3.12\\PythonPath' || ''}}
         mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
         mamba activate ${{ env.ENV_PATH }}
         echo "Running ensurepip"
