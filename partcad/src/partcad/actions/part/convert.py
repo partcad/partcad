@@ -1,14 +1,11 @@
 from contextlib import suppress
 from pathlib import Path
 import shutil
-import tempfile
 from typing import Optional
-import partcad
-from partcad.context import Context
 import partcad.logging as pc_logging
 from partcad.project import Project
 from partcad.utils import resolve_resource_path
-from partcad.adhoc.convert import convert_cad_file
+
 
 EXTENSION_MAPPING = {
     "step": "step",
@@ -22,75 +19,6 @@ EXTENSION_MAPPING = {
     "build123d": "py",
     "scad": "scad",
 }
-
-def add_part_action(project: Project, kind: str, path: str, config: Optional[dict] = None):
-    """Add an existing part to the project without copying."""
-    config = config or {}
-    path = Path(path)
-    name = path.stem
-
-    pc_logging.info(f"Adding part '{name}' ({kind}) from '{path}'")
-
-    with pc_logging.Process("AddPart", project.name):
-        result = project.add_part(kind, str(path), config)
-        if result:
-            pc_logging.info(f"Part '{name}' added successfully.")
-
-
-def import_part_action(project: Project, kind: str, name: str, source_path: str,
-                       config: Optional[dict] = None, target_format: Optional[str] = None):
-    """Import an existing part into the project, optionally converting it first using ad-hoc conversion."""
-    config = config or {}
-    source_path = Path(source_path).resolve()
-    original_source = source_path
-
-    pc_logging.info(f"Importing '{name}' ({kind}) from '{source_path}'")
-
-    if not source_path.exists():
-        raise ValueError(f"Source file '{source_path}' not found.")
-
-    # If a target format is specified, perform ad-hoc conversion before adding to project
-    if target_format and target_format != kind:
-        temp_dir = Path(tempfile.mkdtemp())
-        converted_path = temp_dir / f"{name}.{target_format}"
-
-        pc_logging.info(f"Performing ad-hoc conversion: {kind} -> {target_format}")
-        convert_cad_file(str(source_path), kind, str(converted_path), target_format)
-
-        if not converted_path.exists():
-            raise RuntimeError(f"Ad-hoc conversion failed: {source_path} -> {converted_path}")
-
-        # Update the kind and source path for further processing
-        kind = target_format
-        source_path = converted_path
-        pc_logging.info(f"Ad-hoc conversion successful: {converted_path}")
-
-    # Define target path inside the project
-    target_path = (Path(project.path) / f"{name}.{kind}").resolve()
-
-    if target_path.exists() and source_path.samefile(target_path):
-        pc_logging.warning(f"Skipping copy: source and target paths are the same ({source_path}).")
-    else:
-        try:
-            shutil.copy2(source_path, target_path)
-        except shutil.Error as e:
-            raise ValueError(f"Failed to copy '{source_path}' -> '{target_path}': {e}")
-
-    add_part_action(project, kind, str(target_path), config)
-    pc_logging.info(f"Part '{name}' imported successfully.")
-
-    # Reload context to refresh project parts
-    ctx = Context(project.ctx.root_path)
-    project = ctx.get_project(partcad.ROOT)
-
-    # Cleanup temporary converted file if ad-hoc conversion was performed
-    if source_path != original_source:
-        try:
-            shutil.rmtree(temp_dir)
-            pc_logging.info(f"Cleaned up temporary conversion directory: {temp_dir}")
-        except Exception as e:
-            pc_logging.warning(f"Failed to remove temp directory '{temp_dir}': {e}")
-
 
 def deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge two dictionaries; override values take precedence."""
@@ -229,12 +157,18 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         pc_logging.info(f"[Dry Run] No changes made for '{part_name}'.")
         return
 
+    converted_path = source_path
+
     if part_type != conversion_target:
         converted_path = perform_conversion(project, part_name, part_type, part_config,
                                             source_path, conversion_target, output_dir)
-
-    with suppress(ValueError):
+    pc_logging.info(part_name)
+    pc_logging.info(source_part_name)
+    pc_logging.info(converted_path)
+    try:
         config_path = converted_path.relative_to(Path(project.path))
+    except ValueError:
+        config_path = converted_path
 
     updated_config = deep_merge(part_config, {"type": conversion_target, "path": str(config_path)})
 
@@ -258,3 +192,5 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         pc_logging.debug(f"Final updated configuration for '{part_name}': {final_config_path}")
 
     pc_logging.info(f"Conversion of '{part_name}' completed.")
+
+    return converted_path, updated_config,

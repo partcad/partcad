@@ -1,5 +1,5 @@
 import rich_click as click
-from partcad.actions.part_actions import convert_part_action
+from partcad.actions.part import convert_part_action
 from partcad.context import Context
 import partcad.logging as pc_logging
 
