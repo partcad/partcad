@@ -144,7 +144,7 @@ runs:
         mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
         mamba activate ${{ env.ENV_PATH }}
         echo "Running ensurepip"
-        ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.12' && 'echo Skip ensurepip' || 'python -m ensurepip --upgrade' }}
+        ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.12' && 'mamba install python-dev' || 'python -m ensurepip --upgrade' }}
         # python -m ensurepip --upgrade || echo "ensurepip failes on Windows sometimes"
         echo "Running pip"
         python -m pip install --upgrade pip wheel mypy setuptools
