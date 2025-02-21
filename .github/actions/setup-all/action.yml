@@ -35,8 +35,18 @@ runs:
       run: |
         HOMEBREW_NO_AUTO_UPDATE=1 brew install jpeg
 
+    # Cache for vspkg
+    - name: Export GitHub Actions cache environment variables
+      uses: actions/github-script@v7
+      with:
+        script: |
+          core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
     - name: Install prerequisites
       if: ${{ startsWith(matrix.os, 'windows') }}
+      env:
+        VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
       shell: bash -el {0}
       run: |
         vcpkg.exe install zlib
@@ -79,16 +89,12 @@ runs:
         miniforge-version: 24.11.3-0
         use-mamba: true
         channels: conda-forge,defaults
-        # channel-priority: strict
         python-version: ${{ matrix.python-version }}
-        # conda-solver: classic
         activate-environment: test
         auto-activate-base: false
-        auto-update-conda: true
+        # auto-update-conda: true
         use-only-tar-bz2: true
-        # pkgs-dirs: ~/conda_pkgs_dir
         pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
-        # pkgs-dirs: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
 
     # - uses: mamba-org/setup-micromamba@v2
     #   with:
@@ -126,7 +132,7 @@ runs:
         # conda clean -y -i
         mamba create -y -p $ENV_PATH python=${{ matrix.python-version }}
         mamba activate $ENV_PATH
-        python -m ensurepip --upgrade
+        python -m ensurepip --upgrade || echo "ensurepip failes on Windows sometimes"
         python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
         python -m pip install --upgrade -r partcad/requirements.txt
