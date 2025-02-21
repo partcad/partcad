@@ -67,7 +67,7 @@ def get_base_part_config(project: Project, part_config: dict, part_name: str):
     return merged_config, base_project, base_part_name
 
 def update_parameters_with_defaults(part_config: dict):
-    """Update parameters' default values using 'with' overrides and clean up redundant min/max."""
+    """Update parameters' default values using 'with' overrides."""
     if "with" not in part_config or "parameters" not in part_config:
         return part_config
 
@@ -104,10 +104,10 @@ def perform_conversion(project: Project, part_name, original_type: str,
     """Handles file conversion and updates project configuration."""
     new_ext = EXTENSION_MAPPING.get(target_format, target_format)
     if output_dir:
-        output_path = Path(output_dir) / f"{source_path.stem}.{new_ext}"
+        output_path = Path(output_dir) / f"{part_name}.{new_ext}"
     elif "path" in part_config:
         existing_path = Path(project.path) / part_config["path"]
-        output_path = existing_path.with_suffix(f".{new_ext}")
+        output_path = existing_path.with_name(f"{part_name}.{new_ext}")
     else:
         output_path = Path(project.path) / f"{part_name}.{new_ext}"
 
@@ -162,9 +162,7 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     if part_type != conversion_target:
         converted_path = perform_conversion(project, part_name, part_type, part_config,
                                             source_path, conversion_target, output_dir)
-    pc_logging.info(part_name)
-    pc_logging.info(source_part_name)
-    pc_logging.info(converted_path)
+
     try:
         config_path = converted_path.relative_to(Path(project.path))
     except ValueError:
