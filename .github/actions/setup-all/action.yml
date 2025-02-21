@@ -103,6 +103,7 @@ runs:
         python-version: ${{ matrix.python-version }}
         activate-environment: test
         auto-activate-base: false
+        auto-update-conda: true
         use-only-tar-bz2: true
         pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
 
