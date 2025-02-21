@@ -116,7 +116,7 @@ jobs:
         run: |
           . ~/.bashrc
           . ~/.bash_profile
-          mamba activate ~/${{ format('env-test-pytest-{0}', matrix.python-version) }}
+          mamba activate ${{ format('env-test-pytest-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-test-results
           pytest \
@@ -160,7 +160,7 @@ jobs:
         run: |
           . ~/.bashrc
           . ~/.bash_profile
-          mamba activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+          mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
           (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
           mamba deactivate
 
@@ -171,7 +171,7 @@ jobs:
         run: |
           . ~/.bashrc
           . ~/.bash_profile
-          mamba activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+          mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-vscode-test-results
           pytest \
@@ -227,7 +227,7 @@ jobs:
           . ~/.bash_profile
           mkdir -pv behave-test-results
 
-          mamba activate ~/${{ format('env-test-behave-{0}', matrix.python-version) }}
+          mamba activate ${{ format('env-test-behave-{0}', matrix.python-version) }}
           if ! python -m pip install -U ./partcad ./partcad-cli; then
             echo "Failed to install packages"
             exit 1
@@ -292,7 +292,7 @@ jobs:
   #       run: |
   #         mkdir -pv examples-partcad-test-results
 
-  #         mamba activate ~/${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
+  #         mamba activate ${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
   #         python -m pip install -U ./partcad ./partcad-cli
 
   #         # BEGIN PARTCAD EXAMPLES
@@ -343,7 +343,7 @@ jobs:
           . ~/.bash_profile
           mkdir -pv examples-all-test-results
 
-          mamba activate ~/${{ format('env-test-examples-all-{0}', matrix.python-version) }}
+          mamba activate ${{ format('env-test-examples-all-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
@@ -398,7 +398,7 @@ jobs:
           . ~/.bash_profile
           mkdir -pv pub-repo-test-results
 
-          mamba activate ~/${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
+          mamba activate ${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
           python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO
