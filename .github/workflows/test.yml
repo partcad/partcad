@@ -91,14 +91,6 @@ jobs:
           job: conda-preheat
           preheat_only: true
 
-      - name: Preheat conda caches
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mamba activate ~/${{ format('env-test-conda-preheat-{0}', matrix.python-version) }}
-          mamba deactivate
-
   test-pytest:
     name: "Pytest"
     needs: conda-preheat
