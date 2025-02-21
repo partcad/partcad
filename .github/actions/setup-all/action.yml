@@ -134,14 +134,14 @@ runs:
       if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
       shell: bash -el {0}
       env:
-        ENV_PATH: "${{ format('env-test-{1}-{2}', inputs.job, matrix.python-version) }}"
+        ENV_PATH: "${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}"
         # ENV_PATH: "${{ format('{0}env-test-{1}-{2}', runner.os == 'Windows' && 'C:\\Users\\runneradmin\\' || '~/', inputs.job, matrix.python-version) }}"
       run: |
         . ~/.bashrc
         . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        mamba create -y -p ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
+        mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
         mamba activate ${{ env.ENV_PATH }}
         echo "Running ensurepip"
         python -m ensurepip --upgrade || echo "ensurepip failes on Windows sometimes"
