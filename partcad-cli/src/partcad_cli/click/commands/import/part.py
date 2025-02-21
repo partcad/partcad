@@ -1,7 +1,7 @@
 import rich_click as click
 from pathlib import Path
 import partcad.logging as pc_logging
-from partcad.actions.part_actions import import_part_action
+from partcad.actions.part import import_part_action
 from partcad.context import Context
 
 @click.command(help="Import an existing part and optionally convert its format.")

@@ -1,6 +1,6 @@
 import rich_click as click  # import click
 import partcad as pc
-from partcad.actions.part_actions import add_part_action
+from partcad.actions.part import add_part_action
 from pathlib import Path
 
 
