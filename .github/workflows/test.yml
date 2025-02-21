@@ -89,7 +89,7 @@ jobs:
       - uses: ./.github/actions/setup-all
         with:
           job: conda-preheat
-          preheat_only: true
+          preheat_only: "true"
 
   test-pytest:
     name: "Pytest"

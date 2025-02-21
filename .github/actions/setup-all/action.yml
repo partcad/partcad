@@ -77,7 +77,7 @@ runs:
       uses: actions/cache@v4
       env:
         # Increase this value to reset cache if etc/example-environment.yml has not changed
-        CACHE_NUMBER: 4
+        CACHE_NUMBER: 5
       with:
         enableCrossOsArchive: true
         path: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
@@ -101,7 +101,7 @@ runs:
         use-mamba: true
         channels: conda-forge,defaults
         python-version: ${{ matrix.python-version }}
-        activate-environment: test
+        # activate-environment: test
         auto-activate-base: false
         # auto-update-conda: true
         use-only-tar-bz2: true
@@ -141,9 +141,8 @@ runs:
         . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        mamba create -y -p $ENV_PATH libffi python=${{ matrix.python-version }}
+        mamba create -y -p $ENV_PATH python=${{ matrix.python-version }}
         mamba activate $ENV_PATH
-        # mamba install -y -p $ENV_PATH libffi-dev
         echo "Running ensurepip"
         python -m ensurepip --upgrade || echo "ensurepip failes on Windows sometimes"
         echo "Running pip"
