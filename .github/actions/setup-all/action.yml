@@ -103,7 +103,6 @@ runs:
         python-version: ${{ matrix.python-version }}
         activate-environment: test
         auto-activate-base: false
-        auto-update-conda: true
         use-only-tar-bz2: true
         pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
 
@@ -142,10 +141,8 @@ runs:
         . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
+        mamba create -y -n ${{ env.ENV_PATH }} libffi python=${{ matrix.python-version }}
         mamba activate ${{ env.ENV_PATH }}
-        mamba install libffi
-        mamba install python=${{ matrix.python-version }}
         echo "Running ensurepip"
         python -m ensurepip --upgrade || echo "ensurepip failes on Windows sometimes"
         echo "Running pip"
