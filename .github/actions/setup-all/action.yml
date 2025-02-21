@@ -141,16 +141,17 @@ runs:
         . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        mamba create -y -p $ENV_PATH python=${{ matrix.python-version }}
+        mamba create -y -p $ENV_PATH libffi-dev python=${{ matrix.python-version }}
         mamba activate $ENV_PATH
+        # mamba install -y -p $ENV_PATH libffi-dev
         echo "Running ensurepip"
         python -m ensurepip --upgrade || echo "ensurepip failes on Windows sometimes"
         echo "Running pip"
-        python -m pip install pip wheel mypy setuptools
+        python -m pip install --upgrade pip wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
-        python -m pip install -r partcad/requirements.txt
-        python -m pip install -r partcad/requirements-dev.in
-        python -m pip install -r partcad-ide-vscode/src/test/python_tests/requirements.txt
+        python -m pip install --upgrade -r partcad/requirements.txt
+        python -m pip install --upgrade -r partcad/requirements-dev.in
+        python -m pip install --upgrade -r partcad-ide-vscode/src/test/python_tests/requirements.txt
         mamba deactivate
 
         # echo "PC_INTERNAL_STATE_DIR=$(mktemp -d)" >> $GITHUB_ENV
