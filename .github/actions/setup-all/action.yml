@@ -89,7 +89,7 @@ runs:
       id: pip_cache
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('{partcad/requirements.txt,partcad/requirements-dev.in,partcad-ide-vscode/src/test/python_tests/requirements.txt}') }}
+        key: ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt' }}-${{ hashFiles('partcad/requirements-dev.in' }}-${{ hashFiles('partcad-ide-vscode/src/test/python_tests/requirements.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
@@ -134,7 +134,7 @@ runs:
       if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
       shell: bash -el {0}
       env:
-        ENV_PATH: ${{ format('$HOME/env-test-{0}-{1}', inputs.job, matrix.python-version) }}
+        ENV_PATH: ${{ format('${HOME}/env-test-{0}-{1}', inputs.job, matrix.python-version) }}
       run: |
         . ~/.bashrc
         . ~/.bash_profile
