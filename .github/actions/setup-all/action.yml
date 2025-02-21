@@ -101,9 +101,8 @@ runs:
         use-mamba: true
         channels: conda-forge,defaults
         python-version: ${{ matrix.python-version }}
-        # activate-environment: test
+        activate-environment: test
         auto-activate-base: false
-        # auto-update-conda: true
         use-only-tar-bz2: true
         pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
 
@@ -135,7 +134,7 @@ runs:
       if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
       shell: bash -el {0}
       env:
-        ENV_PATH: ~/${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}
+        ENV_PATH: ${{ format('{0}/env-test-{1}-{2}', env.HOME, inputs.job, matrix.python-version) }}
       run: |
         . ~/.bashrc
         . ~/.bash_profile
