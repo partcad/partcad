@@ -140,8 +140,8 @@ runs:
         . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        mamba create -y -p $ENV_PATH python=${{ matrix.python-version }}
-        mamba activate $ENV_PATH
+        mamba create -y -p ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
+        mamba activate ${{ env.ENV_PATH }}
         echo "Running ensurepip"
         python -m ensurepip --upgrade || echo "ensurepip failes on Windows sometimes"
         echo "Running pip"
