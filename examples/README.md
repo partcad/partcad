@@ -29,8 +29,10 @@ There are many ways to produce a PartCAD model that can be consumed by others.
 
 - Import parts defined using CAD Files:
   - [STEP files](./produce_part_step/)
+  - [BREP files](./produce_part_brep/)
   - [STL files](./produce_part_stl/)
   - [3MF files](./produce_part_3mf/)
+  - [OBJ files](./produce_part_obj/)
 
 ## Get (consume) existing models
 
