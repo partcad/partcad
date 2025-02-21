@@ -14,20 +14,31 @@ runs:
   steps:
     ############################################## OS PREREQUISITES ################################################
 
-    # TODO(clairbee): minimize these pre-requisites by moving the VSCode build job away from the test workflow (ci.yml)
-    - name: Install prerequisites
-      if: ${{ startsWith(matrix.os, 'ubuntu') }}
-      shell: bash -el {0}
-      run: |
-        sudo apt-get -q update || exit 1
-        sudo apt-get -q install -y \
-          nodejs npm \
-          libtiff5-dev libjpeg-dev libopenjp2-7-dev zlib1g-dev \
-          libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
-          python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev \
-          libxml2-dev libxslt-dev \
-          libcairo2-dev pkg-config python3-dev \
-            || exit 1
+    - uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: |
+          nodejs npm
+          libtiff5-dev libjpeg-dev libopenjp2-7-dev zlib1g-dev
+          libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev
+          python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev
+          libxml2-dev libxslt-dev
+          libcairo2-dev pkg-config python3-dev
+        version: 1.0
+
+    # # TODO(clairbee): minimize these pre-requisites by moving the VSCode build job away from the test workflow (ci.yml)
+    # - name: Install prerequisites
+    #   if: ${{ startsWith(matrix.os, 'ubuntu') }}
+    #   shell: bash -el {0}
+    #   run: |
+    #     sudo apt-get -q update || exit 1
+    #     sudo apt-get -q install -y \
+    #       nodejs npm \
+    #       libtiff5-dev libjpeg-dev libopenjp2-7-dev zlib1g-dev \
+    #       libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
+    #       python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev \
+    #       libxml2-dev libxslt-dev \
+    #       libcairo2-dev pkg-config python3-dev \
+    #         || exit 1
 
     - name: Install prerequisites
       if: ${{ startsWith(matrix.os, 'macos') }}
