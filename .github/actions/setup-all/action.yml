@@ -141,7 +141,7 @@ runs:
         . ~/.bash_profile
         # conda clean --all
         # conda clean -y -i
-        mamba create -y -p $ENV_PATH libffi-dev python=${{ matrix.python-version }}
+        mamba create -y -p $ENV_PATH libffi python=${{ matrix.python-version }}
         mamba activate $ENV_PATH
         # mamba install -y -p $ENV_PATH libffi-dev
         echo "Running ensurepip"
