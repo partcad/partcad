@@ -65,6 +65,7 @@ runs:
       shell: bash -el {0}
       run: |
         vcpkg.exe install zlib
+        vcpkg.exe install libffi
     #     vcpkg.exe install pkgconf
     #     vcpkg.exe install freetype
     #     vcpkg.exe install cairo

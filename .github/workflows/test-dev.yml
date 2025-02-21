@@ -53,6 +53,7 @@ jobs:
       - name: Build Dev Container
         uses: devcontainers/ci@v0.3
         with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.setup.outputs.IMAGE_TAG }}"
           imageName: ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}
           imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
           configFile: .devcontainer/devcontainer-build.json
@@ -87,9 +88,9 @@ jobs:
           path: |
             ~/.cache/pypoetry
             .venv
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            ${{ runner.os }}-poetry-
+            devcontainer-poetry-
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3

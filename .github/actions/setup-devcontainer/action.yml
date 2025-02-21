@@ -15,6 +15,9 @@ runs:
       run: |
         echo "BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
         echo "BRANCH_SANITIZED=$(echo -n ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} | sed s/\//_/g)" >> $GITHUB_OUTPUT
+        echo "ref=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}""
+        echo "BRANCH_NOT_SANITIZED=$(echo -n ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}})"
+        echo "BRANCH_SANITIZED=$(echo -n ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} | sed s/\//_/g)"
 
     - name: Check for changes that require the container to be rebuilt
       uses: dorny/paths-filter@v3
