@@ -134,7 +134,7 @@ runs:
       if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
       shell: bash -el {0}
       env:
-        ENV_PATH: "${{ format('{0}env-test-{1}-{2}', runner.os == 'Windows' ? 'C:\\Users\\runneradmin\\' : '~/',inputs.job, matrix.python-version) }}"
+        ENV_PATH: "${{ format('{0}env-test-{1}-{2}', runner.os == 'Windows' && 'C:\\Users\\runneradmin\\' || '~/',inputs.job, matrix.python-version) }}"
       run: |
         . ~/.bashrc
         . ~/.bash_profile
