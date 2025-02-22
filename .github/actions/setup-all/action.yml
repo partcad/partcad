@@ -86,18 +86,25 @@ runs:
 
     # TODO(clairbee): Cache the conda environment?
 
-    - uses: actions/cache@v4
-      id: pip_cache
+    - name: Cache Python Environment
+      uses: actions/cache@v4
+      id: python_cache
       with:
-        path: ~/.cache/pip
-        key: ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}-${{ hashFiles('partcad/requirements-dev.in') }}-${{ hashFiles('partcad-ide-vscode/src/test/python_tests/requirements.txt') }}
+        # path: ~/.cache/pip
+        path: |
+          ~/.cache/pypoetry
+          .venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/requirements.*') }}
         restore-keys: |
-          ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}-${{ hashFiles('partcad/requirements-dev.in') }}
-          ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}
-          ${{ matrix.os }}-pip-
+          ${{ runner.os }}-poetry-
+        # key: ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}-${{ hashFiles('partcad/requirements-dev.in') }}-${{ hashFiles('partcad-ide-vscode/src/test/python_tests/requirements.txt') }}
+        # restore-keys: |
+        #   ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}-${{ hashFiles('partcad/requirements-dev.in') }}
+        #   ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}
+        #   ${{ matrix.os }}-pip-
 
     - uses: conda-incubator/setup-miniconda@v3
-      if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
+      if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.python_cache.outputs.cache-hit != 'true' }}
       continue-on-error: true # Usually it fails while setting up the unwanted 'test' environment
       with:
         miniforge-version: 24.11.3-0
@@ -121,20 +128,19 @@ runs:
     #     post-cleanup: "all"
 
     - name: Init conda
-      if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
+      if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.python_cache.outputs.cache-hit != 'true' }}
       shell: bash -el {0}
       run: |
         [[ -f ~/.bashrc ]] || touch ~/.bashrc
         [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
         . ~/.bashrc
         . ~/.bash_profile
-        conda info --envs
         # Sometimes in GitHub workflows, the test environment is not created from the first attempt due to networking issues
         mamba init || (rm -rf ~/miniconda3/envs/test && mamba create -y -n test && mamba init)
 
     # Install dev dependencies
     - name: install dev dependencies
-      if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}
+      if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.python_cache.outputs.cache-hit != 'true' }}
       shell: bash -el {0}
       env:
         ENV_PATH: "${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}"
@@ -143,13 +149,14 @@ runs:
         . ~/.bash_profile
         mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
         mamba activate ${{ env.ENV_PATH }}
-        python -m ensurepip --upgrade
-        python -m pip install --upgrade pip
-        python -m pip install --upgrade wheel mypy setuptools
-        # Install all core and a subset of CLI dependencies, that are required for tests
-        python -m pip install --upgrade -r partcad/requirements.txt
-        python -m pip install --upgrade -r partcad/requirements-dev.in
-        python -m pip install --upgrade -r partcad-ide-vscode/src/test/python_tests/requirements.txt
+        poetry install
+        # python -m ensurepip --upgrade
+        # python -m pip install --upgrade pip
+        # python -m pip install --upgrade wheel mypy setuptools
+        # # Install all core and a subset of CLI dependencies, that are required for tests
+        # python -m pip install --upgrade -r partcad/requirements.txt
+        # python -m pip install --upgrade -r partcad/requirements-dev.in
+        # python -m pip install --upgrade -r partcad-ide-vscode/src/test/python_tests/requirements.txt
         mamba deactivate
 
         # echo "PC_INTERNAL_STATE_DIR=$(mktemp -d)" >> $GITHUB_ENV
