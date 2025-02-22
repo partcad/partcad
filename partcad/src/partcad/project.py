@@ -40,6 +40,7 @@ from .part_factory_sweep import PartFactorySweep
 from . import part_factory_scad as pfscad
 from . import part_factory_step as pfs
 from . import part_factory_stl as pfstl
+from . import part_factory_obj as pfo
 from . import part_factory_3mf as pf3
 from .part_factory_ai_cadquery import PartFactoryAiCadquery
 from .part_factory_ai_build123d import PartFactoryAiBuild123d
@@ -568,6 +569,8 @@ class Project(project_config.Configuration):
             pfstl.PartFactoryStl(self.ctx, source_project, self, config)
         elif config["type"] == "3mf":
             pf3.PartFactory3mf(self.ctx, source_project, self, config)
+        elif config["type"] == "obj":
+            pfo.PartFactoryObj(self.ctx, source_project, self, config)
         elif config["type"] == "scad":
             pfscad.PartFactoryScad(self.ctx, source_project, self, config)
         elif config["type"] == "extrude":

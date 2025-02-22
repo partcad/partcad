@@ -90,6 +90,26 @@ def test_part_get_3mf():
     wrapped = asyncio.run(part.get_wrapped(ctx))
     assert wrapped is not None
 
+def test_part_get_obj_1():
+    """Load a OBJ part from a project by the part name"""
+    ctx = pc.Context("examples/produce_part_obj")
+    repo1 = ctx.get_project(".")
+    assert repo1 is not None
+    box = repo1.get_part("cube")
+    assert box is not None
+    wrapped = asyncio.run(box.get_wrapped(ctx))
+    assert wrapped is not None
+
+
+def test_part_get_obj_2():
+    """Load a OBJ part from the context by the project and part names"""
+    ctx = pc.Context("examples/produce_part_obj")
+    box = ctx.get_part(":cube")
+    assert box is not None
+
+    wrapped = asyncio.run(box.get_wrapped(ctx))
+    assert wrapped is not None
+
 
 def test_part_get_scad():
     """Load an OpenSCAD part"""

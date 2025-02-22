@@ -328,3 +328,58 @@ Feature: `pc add part` command
           type: scad
       assemblies:
       """
+
+@obj
+Scenario: Add OBJ Part from "model.obj" file
+  Given a file named "model.obj" with content:
+    """
+    v 0.0 0.0 0.0
+    v 1.0 0.0 0.0
+    v 0.0 1.0 0.0
+    f 1 2 3
+    """
+  When I run "pc add part obj model.obj"
+  Then the command should exit with a status code of "0"
+  And a file named "partcad.yaml" should have YAML content:
+    """
+    private: true
+    pythonVersion: ">=\\d+\\.\\d+"
+    partcad: ">=\\d+\\.\\d+\\.\\d+"
+    dependencies:
+    sketches:
+    parts:
+      model:
+        type: obj
+    assemblies:
+    """
+
+@wip @obj @error
+Scenario: Reject invalid OBJ syntax
+  Given a file named "invalid.obj" with content:
+    """
+    v 0.0 0.0 0.0
+    v 1.0 0.0 0.0
+    f 1 2  # Missing third vertex
+    """
+  When I run "pc add part obj invalid.obj"
+  Then the command should exit with a status code of "1"
+  And STDERR should contain "Invalid OBJ syntax"
+
+@wip @obj @error
+Scenario: Reject non-existent OBJ file
+  When I run "pc add part obj nonexistent.obj"
+  Then the command should exit with a status code of "1"
+  And STDERR should contain "does not exist."
+
+@wip @obj @error
+Scenario: Reject corrupted OBJ file
+  Given a file named "corrupt.obj" with content:
+    """
+    v 0.0 0.0 0.0
+    v 1.0 0.0 0.0
+    v x y z  # Invalid vertex
+    f 1 2 3
+    """
+  When I run "pc add part obj corrupt.obj"
+  Then the command should exit with a status code of "1"
+  And STDERR should contain "Invalid OBJ file"

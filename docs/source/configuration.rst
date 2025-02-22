@@ -659,7 +659,7 @@ Define parts with CAD files using the following syntax:
 
   parts:
     <part name>:
-      type: <step|brep|stl|3mf>
+      type: <step|brep|stl|3mf|obj>
       binary: <(stl only) use the binary format>
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
@@ -671,7 +671,9 @@ Define parts with CAD files using the following syntax:
 || or `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_ in ``screw.3mf``) |     screw:                |                                                                                                                         |
 |                                                                                      |       type: step          |                                                                                                                         |
 |                                                                                      |       # type: stl         |                                                                                                                         |
+|                                                                                      |       # type: brep        |                                                                                                                         |
 |                                                                                      |       # type: 3mf         |                                                                                                                         |
+|                                                                                      |       # type: obj         |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
 .. _extrude:

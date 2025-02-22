@@ -68,6 +68,7 @@ PartCAD has an evergrowing list of ways to define the part model:
   - `BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_
   - `STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_
   - `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_
+  - `OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_
 
 - Scripts
 
