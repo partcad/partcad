@@ -146,9 +146,9 @@ jobs:
             ~/.cache/pypoetry
             .venv
           # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            ${{ runner.os }}-poetry-
+            devcontainer-poetry-
 
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
@@ -274,9 +274,9 @@ jobs:
           path: |
             ~/.cache/pypoetry
             .venv
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            ${{ runner.os }}-poetry-
+            devcontainer-poetry-
 
       # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
       - name: Set SSH Agent Service to Manual
@@ -455,9 +455,9 @@ jobs:
             ~/.cache/pypoetry
             .venv
           # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            ${{ runner.os }}-poetry-
+            devcontainer-poetry-
 
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
@@ -518,9 +518,9 @@ jobs:
             ~/.cache/pypoetry
             .venv
           # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
-          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            ${{ runner.os }}-poetry-
+            devcontainer-poetry-
 
       - name: Deploy Developer's Handbook
         uses: devcontainers/ci@v0.3

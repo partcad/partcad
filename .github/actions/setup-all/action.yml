@@ -90,13 +90,13 @@ runs:
       uses: actions/cache@v4
       id: python_cache
       with:
-        # path: ~/.cache/pip
-        path: |
-          ~/.cache/pypoetry
-          .venv
-        key: ${{ runner.os }}-poetry-${{ hashFiles('**/requirements.*') }}
+        path: ~/.cache/pip
+        # path: |
+        #   ~/.cache/pypoetry
+        #   .venv
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.*') }}
         restore-keys: |
-          ${{ runner.os }}-poetry-
+          ${{ runner.os }}-pip-
         # key: ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}-${{ hashFiles('partcad/requirements-dev.in') }}-${{ hashFiles('partcad-ide-vscode/src/test/python_tests/requirements.txt') }}
         # restore-keys: |
         #   ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}-${{ hashFiles('partcad/requirements-dev.in') }}
@@ -149,15 +149,15 @@ runs:
         . ~/.bash_profile
         mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }} poetry
         mamba activate ${{ env.ENV_PATH }}
-        poetry install
-        poetry install --only test
-        # python -m ensurepip --upgrade
-        # python -m pip install --upgrade pip
-        # python -m pip install --upgrade wheel mypy setuptools
-        # # Install all core and a subset of CLI dependencies, that are required for tests
-        # python -m pip install --upgrade -r partcad/requirements.txt
-        # python -m pip install --upgrade -r partcad/requirements-dev.in
-        # python -m pip install --upgrade -r partcad-ide-vscode/src/test/python_tests/requirements.txt
+        # poetry install
+        # poetry install --only test
+        python -m ensurepip --upgrade
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade wheel mypy setuptools
+        # Install all core and a subset of CLI dependencies, that are required for tests
+        python -m pip install --upgrade -r partcad/requirements.txt
+        python -m pip install --upgrade -r partcad/requirements-dev.in
+        python -m pip install --upgrade -r partcad-ide-vscode/src/test/python_tests/requirements.txt
         mamba deactivate
 
         # echo "PC_INTERNAL_STATE_DIR=$(mktemp -d)" >> $GITHUB_ENV
