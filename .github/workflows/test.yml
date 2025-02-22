@@ -74,7 +74,7 @@ jobs:
       - name: Set matrix
         id: set-matrix
         run: |
-          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": [{"os": "windows-latest", "python-version": "3.12"}]}' >> $GITHUB_OUTPUT
+          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": [{"os": "windows-latest", "python-version": "3.12"},{"os": "windows-latest-l", "python-version": "3.12"}]}' >> $GITHUB_OUTPUT
           # echo 'matrix={"ospy": ${{ env.OSPY }} }' >> $GITHUB_OUTPUT
 
   cache-preheat:
