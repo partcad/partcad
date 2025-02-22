@@ -74,8 +74,15 @@ jobs:
       - name: Set matrix
         id: set-matrix
         run: |
-          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }} }' >> $GITHUB_OUTPUT
+          echo 'matrix={
+                  "os": ${{ env.OSES }},
+                  "python-version": ${{ env.PYTHONS }}
+          }' >> $GITHUB_OUTPUT
           # echo 'matrix={"ospy": ${{ env.OSPY }} }' >> $GITHUB_OUTPUT
+                  # ,
+                  # "exclude": [
+                  #   {"os": "windows-latest", "python-version": "3.12"}
+                  # ]
 
   conda-preheat:
     name: "Update conda caches"

@@ -124,7 +124,6 @@ runs:
         [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
         . ~/.bashrc
         . ~/.bash_profile
-        # conda clean --all
         conda info --envs
         # Sometimes in GitHub workflows, the test environment is not created from the first attempt due to networking issues
         mamba init || (rm -rf ~/miniconda3/envs/test && mamba create -y -n test && mamba init)
@@ -138,16 +137,10 @@ runs:
       run: |
         . ~/.bashrc
         . ~/.bash_profile
-        # conda clean --all
-        # conda clean -y -i
-        # ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.12' && 'reg delete /f HKEY_LOCAL_MACHINE\\SOFTWARE\\Python\\PythonCore\\3.12\\PythonPath' || ''}}
         mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
         mamba activate ${{ env.ENV_PATH }}
-        echo "Running ensurepip"
-        # ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.12' && 'mamba install python-devtools libffi' || 'python -m ensurepip --upgrade' }}
-        python -m ensurepip --upgrade || echo "ensurepip failes on Windows sometimes"
-        echo "Running pip"
-        python -m pip install --upgrade pip || echo "pip upgrade failes on Windows sometimes"
+        python -m ensurepip --upgrade
+        python -m pip install --upgrade pip
         python -m pip install --upgrade wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
         python -m pip install --upgrade -r partcad/requirements.txt
