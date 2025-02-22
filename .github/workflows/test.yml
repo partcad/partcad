@@ -77,8 +77,8 @@ jobs:
           echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": [{"os": "windows-latest", "python-version": "3.12"}]}' >> $GITHUB_OUTPUT
           # echo 'matrix={"ospy": ${{ env.OSPY }} }' >> $GITHUB_OUTPUT
 
-  conda-preheat:
-    name: "Update conda caches"
+  cache-preheat:
+    name: "Update caches"
     needs: set-matrix
     strategy:
       fail-fast: false
@@ -88,12 +88,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-all
         with:
-          job: conda-preheat
+          job: cache-preheat
           preheat_only: "true"
 
   test-pytest:
     name: "Pytest"
-    needs: conda-preheat
+    needs: cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -138,7 +138,7 @@ jobs:
 
   test-pytest-ide-vscode:
     name: "Pytest (VS Code extension)"
-    needs: conda-preheat
+    needs: cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -193,7 +193,7 @@ jobs:
 
   test-behave:
     name: "Behave"
-    needs: conda-preheat
+    needs: cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -268,7 +268,7 @@ jobs:
 
   # test-examples-partcad:
   #   name: "Examples (PartCAD)"
-  #   needs: conda-preheat
+  #   needs: cache-preheat
   #   strategy:
   #     fail-fast: false
   #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -320,7 +320,7 @@ jobs:
 
   test-examples-all:
     name: "Examples (All)"
-    needs: conda-preheat
+    needs: cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -371,7 +371,7 @@ jobs:
   test-pub-repo:
     name: "Repo //pub"
     # Note: preheat is using another set of machines
-    needs: conda-preheat
+    needs: cache-preheat
     strategy:
       fail-fast: false
       matrix:

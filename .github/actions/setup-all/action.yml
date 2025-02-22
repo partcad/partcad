@@ -80,7 +80,8 @@ runs:
         CACHE_NUMBER: 5
       with:
         enableCrossOsArchive: true
-        path: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+        path: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+        # path: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
         key: ${{ matrix.os }}-partcad-conda-${{ env.CACHE_NUMBER }}
 
     # TODO(clairbee): Cache the conda environment?
@@ -104,7 +105,8 @@ runs:
         activate-environment: test
         auto-activate-base: false
         use-only-tar-bz2: true
-        pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+        pkgs-dirs: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
+        # pkgs-dirs: ${{ runner.os == 'Windows' && format('D:\conda_pkgs_dir_{0}', matrix.python-version) || format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
 
     # - uses: mamba-org/setup-micromamba@v2
     #   with:
