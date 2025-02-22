@@ -92,7 +92,9 @@ runs:
         path: ~/.cache/pip
         key: ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}-${{ hashFiles('partcad/requirements-dev.in') }}-${{ hashFiles('partcad-ide-vscode/src/test/python_tests/requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-pip-
+          ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}-${{ hashFiles('partcad/requirements-dev.in') }}
+          ${{ matrix.os }}-pip-${{ hashFiles('partcad/requirements.txt') }}
+          ${{ matrix.os }}-pip-
 
     - uses: conda-incubator/setup-miniconda@v3
       if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.pip_cache.outputs.cache-hit != 'true' }}

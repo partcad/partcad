@@ -93,7 +93,9 @@ jobs:
 
   test-pytest:
     name: "Pytest"
-    needs: cache-preheat
+    needs:
+      - set-matrix
+      - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -138,7 +140,9 @@ jobs:
 
   test-pytest-ide-vscode:
     name: "Pytest (VS Code extension)"
-    needs: cache-preheat
+    needs:
+      - set-matrix
+      - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -193,7 +197,9 @@ jobs:
 
   test-behave:
     name: "Behave"
-    needs: cache-preheat
+    needs:
+      - set-matrix
+      - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -268,7 +274,9 @@ jobs:
 
   # test-examples-partcad:
   #   name: "Examples (PartCAD)"
-  #   needs: cache-preheat
+  #   needs:
+  #     - set-matrix
+  #     - cache-preheat
   #   strategy:
   #     fail-fast: false
   #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -320,7 +328,9 @@ jobs:
 
   test-examples-all:
     name: "Examples (All)"
-    needs: cache-preheat
+    needs:
+      - set-matrix
+      - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
