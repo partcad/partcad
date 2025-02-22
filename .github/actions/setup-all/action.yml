@@ -147,9 +147,10 @@ runs:
       run: |
         . ~/.bashrc
         . ~/.bash_profile
-        mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }}
+        mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }} poetry
         mamba activate ${{ env.ENV_PATH }}
         poetry install
+        poetry install --only test
         # python -m ensurepip --upgrade
         # python -m pip install --upgrade pip
         # python -m pip install --upgrade wheel mypy setuptools
