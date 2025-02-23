@@ -1,0 +1,10 @@
+desc: Example of KiCad integration using Arduino Nano from KiCad Templates
+url: https://gitlab.com/kicad/libraries/kicad-templates/-/tree/master/Projects/Arduino_Nano
+
+parts:
+  Arduino_Nano:
+   type: kicad
+
+render:
+  svg:
+  readme:

@@ -29,57 +29,57 @@ SHELL ["/bin/bash", "-c"]
 # Install app APT packages here
 # hadolint ignore=DL3004
 RUN apt-get update \
-    && apt-get install -y \
-      # Python 3.10 requirements
-      libgdbm-compat-dev \
-      # PartCAD VSCode Extension requirements
-      nodejs npm \
-      # PartCAD VSCode Extension: bundled Python wheels: pillow
-      libtiff5-dev libjpeg62-turbo-dev libopenjp2-7-dev zlib1g-dev \
-      libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
-      python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev \
-      # PartCAD VSCode Extension: testing
-      libatk1.0-0 libatk-bridge2.0-0 libgtk3.0-cil-dev \
-      # PartCAD mandatory requirements
-      pkg-config \
-      libcairo2-dev \
-      python3-dev \
-      # PartCAD optional requirements
-      openscad \
-      pypy3 \
-      pypy3-dev \
-      # Development tools
-      file xxd \
-      bash-completion \
-      cmake \
-      graphviz \
-      libsm6 \
-      libxext6 \
-      shellcheck \
-      time \
-      moreutils \
-      # xvfb requirements
-      libnss3 \
-      libatk1.0-0 \
-      libatk-bridge2.0-0 \
-      libcups2 \
-      libdrm2 \
-      libgtk-3-0 \
-      libgbm1 \
-      libasound2 \
-      # xvfb requirements
-      xvfb \
-      # xvfb related, but possible excessive
-      libxext6 \
-      libx11-xcb1 \
-      libxcb-icccm4 \
-      libxcb-image0 \
-      libxcb-keysyms1 \
-      libxcb-randr0 \
-      libxcb-render-util0 \
-      libxcb-xinerama0 \
-      libxcb-xkb1 \
-    && rm -rf /var/lib/apt/lists/*
+  && apt-get install -y \
+  # Python 3.10 requirements
+  libgdbm-compat-dev \
+  # PartCAD VSCode Extension requirements
+  nodejs npm \
+  # PartCAD VSCode Extension: bundled Python wheels: pillow
+  libtiff5-dev libjpeg62-turbo-dev libopenjp2-7-dev zlib1g-dev \
+  libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
+  python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev \
+  # PartCAD VSCode Extension: testing
+  libatk1.0-0 libatk-bridge2.0-0 libgtk3.0-cil-dev \
+  # PartCAD mandatory requirements
+  pkg-config \
+  libcairo2-dev \
+  python3-dev \
+  # PartCAD optional requirements
+  openscad \
+  pypy3 \
+  pypy3-dev \
+  # Development tools
+  file xxd \
+  bash-completion \
+  cmake \
+  graphviz \
+  libsm6 \
+  libxext6 \
+  shellcheck \
+  time \
+  moreutils \
+  # xvfb requirements
+  libnss3 \
+  libatk1.0-0 \
+  libatk-bridge2.0-0 \
+  libcups2 \
+  libdrm2 \
+  libgtk-3-0 \
+  libgbm1 \
+  libasound2 \
+  # xvfb requirements
+  xvfb \
+  # xvfb related, but possible excessive
+  libxext6 \
+  libx11-xcb1 \
+  libxcb-icccm4 \
+  libxcb-image0 \
+  libxcb-keysyms1 \
+  libxcb-randr0 \
+  libxcb-render-util0 \
+  libxcb-xinerama0 \
+  libxcb-xkb1 \
+  && rm -rf /var/lib/apt/lists/*
 
 # TODO(clairbee): install Miniforge securely
 # TODO(clairbee): install nvm securely
@@ -102,6 +102,12 @@ RUN \
 # RUN \
 #   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 #   && apt-get install -y nodejs
+
+ENV DOCKERVERSION=18.03.1-ce
+RUN curl -fsSLO https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKERVERSION}.tgz \
+  && tar xzvf docker-${DOCKERVERSION}.tgz --strip 1 \
+  -C /usr/local/bin docker/docker \
+  && rm docker-${DOCKERVERSION}.tgz
 
 # TODO(clairbee): fix the scripts that led to the wrong permissions instead of chmod
 # hadolint ignore=DL3004

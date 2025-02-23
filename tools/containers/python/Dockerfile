@@ -1,4 +1,4 @@
-FROM kicad/kicad:8.0
+FROM ghcr.io/partcad/partcad-devcontainer:0.7.118
 
 RUN mkdir -p /dot-partcad
 ENV PC_INTERNAL_STATE_DIR=/dot-partcad
@@ -6,12 +6,6 @@ ENV PC_INTERNAL_STATE_DIR=/dot-partcad
 RUN mkdir -p /pc
 WORKDIR /pc
 COPY _common/* ./
-
-RUN \
-  apt-get update \
-  && apt-get install --yes --no-install-recommends \
-  curl=7.88.1-10 \
-  && rm -rf /var/lib/apt/lists/*
 
 RUN \
   curl -L "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh" -o /tmp/miniforge3.sh \

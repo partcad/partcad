@@ -50,6 +50,7 @@ from . import part_factory_build123d as pfb
 from . import part_factory_alias as pfa
 from . import part_factory_enrich as pfe
 from . import part_factory_brep as pfbr
+from . import part_factory_kicad as pfkicad
 from . import assembly
 from . import assembly_config
 from . import provider
@@ -573,6 +574,8 @@ class Project(project_config.Configuration):
             pfo.PartFactoryObj(self.ctx, source_project, self, config)
         elif config["type"] == "scad":
             pfscad.PartFactoryScad(self.ctx, source_project, self, config)
+        elif config["type"] == "kicad":
+            pfkicad.PartFactoryKicad(self.ctx, source_project, self, config)
         elif config["type"] == "extrude":
             PartFactoryExtrude(self.ctx, source_project, self, config)
         elif config["type"] == "sweep":

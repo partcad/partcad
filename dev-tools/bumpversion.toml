@@ -80,3 +80,8 @@ replace = "devcontainer:{new_version}"
 filename = ".devcontainer/Dockerfile"
 search = "IMAGE_VERSION={current_version}"
 replace = "IMAGE_VERSION={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "tools/containers/python/Dockerfile"
+search = "partcad-devcontainer:{current_version}"
+replace = "partcad-devcontainer:{new_version}"

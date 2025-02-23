@@ -123,6 +123,12 @@ class UserConfig(vyper.Vyper):
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
 
+        self.set_default("sentry.shutdown_timeout", 5)
+        self.set_default("sentry.traces_sample_rate", 1.0)
+
+        self.set_default("useDockerPython", False)
+        self.set_default("useDockerKicad", True)
+
         self.set_env_prefix("pc")
 
         # option: threadsMax
@@ -269,5 +275,18 @@ class UserConfig(vyper.Vyper):
         # default: False
         self.offline = False
         self.bind_env("offline", "PC_OFFLINE")
+
+        # option: useDockerPython
+        # description: use a Docker container for running Python scripts
+        # values: [True | False]
+        # default: False
+        self.use_docker_python = self.get_bool("useDockerPython")
+
+        # option: useDockerKicad
+        # description: use a Docker container for KiCad
+        # values: [True | False]
+        # default: True
+        self.use_docker_kicad = self.get_bool("useDockerKicad")
+
 
 user_config = UserConfig()

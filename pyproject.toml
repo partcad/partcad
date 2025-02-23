@@ -138,6 +138,7 @@ pillow = "^11.0.0"
 openai = "^1.63.2"
 ollama = "^0.4.1"
 async-lru = "^2.0.4"
+docker = "^7.1.0"
 
 [tool.poetry.group.cli.dependencies]
 setuptools = "^75.5.0"

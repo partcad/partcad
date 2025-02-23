@@ -12,9 +12,13 @@
     "Start D-Bus": "sudo service dbus start && (until systemctl is-active --quiet dbus; do sleep 1; done)"
   },
   "postStartCommand": {
-    "pre-commit": "pre-commit install --config dev-tools/pre-commit-config.yaml"
+    "pre-commit": "pre-commit install --config dev-tools/pre-commit-config.yaml",
+    "docker-permission": "sudo chown $(whoami):$(whoami) /var/run/docker.sock"
   },
+  "runArgs": ["--privileged"],
   "mounts": [
+    // Docker socket inside the container to run docker runtimes
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     // TODO: For some reason this leads to tests hanging in the CI.
     // "source=partcad-partcad,target=/home/vscode/.partcad,type=volume",
     "source=partcad-cache,target=/home/vscode/.cache,type=volume",

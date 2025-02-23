@@ -3,6 +3,8 @@ import subprocess
 import base64
 import json
 
+print("Starting the PartCAD Container JSON-RPC Server...")
+
 app = Flask(__name__)
 
 
@@ -25,7 +27,7 @@ def handle_json_rpc_error(error):
 
 # Define allowed commands
 ALLOWED_COMMANDS = {
-    "echo": "/usr/bin/echo",
+    "kicad-cli": "/usr/bin/kicad-cli",
     "cat": "/usr/bin/cat",
     "ls": "/usr/bin/ls",
     # Add more allowed commands with their full paths
@@ -121,4 +123,4 @@ def json_rpc():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000)
+    app.run(host="0.0.0.0", port=5000)
