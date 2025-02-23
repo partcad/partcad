@@ -29,6 +29,10 @@ jobs:
           - "3.11"
           - "3.12"
           # - "3.13"
+        exclude:
+          # TODO(clairbee): Remove this when the ensurepip issue is fixed
+          - os: "windows-latest"
+            python-version: "3.12"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
