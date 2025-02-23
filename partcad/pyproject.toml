@@ -30,6 +30,3 @@ dependencies = {file = ["requirements.txt"]}
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"
 Issues = "https://github.com/partcad/partcad/issues"
-
-[tool.cibuildwheel]
-before-all = "uname -a"

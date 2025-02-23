@@ -25,7 +25,6 @@ env:
   OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
   # OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest", ["self-hosted", "macos-15-large"]]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]' }}
   PYTHONS: '["3.10", "3.11", "3.12"]'
-  # PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
   # OSPY: >-
   #   ${{
   #     github.repository == 'partcad/partcad'
@@ -77,25 +76,25 @@ jobs:
           echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": [{"os": "windows-latest", "python-version": "3.12"}]}' >> $GITHUB_OUTPUT
           # echo 'matrix={"ospy": ${{ env.OSPY }} }' >> $GITHUB_OUTPUT
 
-  cache-preheat:
-    name: "Update caches"
-    needs: set-matrix
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-        with:
-          job: cache-preheat
-          preheat_only: "true"
+  # cache-preheat:
+  #   name: "Update caches"
+  #   needs: set-matrix
+  #   strategy:
+  #     fail-fast: false
+  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+  #   runs-on: ${{ matrix.os }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: cache-preheat
+  #         preheat_only: "true"
 
   test-pytest:
     name: "Pytest"
     needs:
       - set-matrix
-      - cache-preheat
+      # - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -142,7 +141,7 @@ jobs:
     name: "Pytest (VS Code extension)"
     needs:
       - set-matrix
-      - cache-preheat
+      # - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -199,7 +198,7 @@ jobs:
     name: "Behave"
     needs:
       - set-matrix
-      - cache-preheat
+      # - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -234,10 +233,6 @@ jobs:
           mkdir -pv behave-test-results
 
           mamba activate ${{ format('env-test-behave-{0}', matrix.python-version) }}
-          # if ! python -m pip install -U ./partcad ./partcad-cli; then
-          #   echo "Failed to install packages"
-          #   exit 1
-          # fi
 
           export PYTHONUTF8=1
           export PYTHONIOENCODING=utf-8
@@ -301,7 +296,6 @@ jobs:
   #         mkdir -pv examples-partcad-test-results
 
   #         mamba activate ${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
-  #         # python -m pip install -U ./partcad ./partcad-cli
 
   #         # BEGIN PARTCAD EXAMPLES
   #         cd ./examples
@@ -354,7 +348,6 @@ jobs:
           mkdir -pv examples-all-test-results
 
           mamba activate ${{ format('env-test-examples-all-{0}', matrix.python-version) }}
-          # python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
           cd ./examples
@@ -381,7 +374,7 @@ jobs:
   test-pub-repo:
     name: "Repo //pub"
     # Note: preheat is using another set of machines
-    needs: cache-preheat
+    # needs: cache-preheat
     strategy:
       fail-fast: false
       matrix:
@@ -411,7 +404,6 @@ jobs:
           mkdir -pv pub-repo-test-results
 
           mamba activate ${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
-          # python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO
           cd examples

@@ -25,28 +25,13 @@ runs:
           libcairo2-dev pkg-config python3-dev
         version: 1.0
 
-    # # TODO(clairbee): minimize these pre-requisites by moving the VSCode build job away from the test workflow (ci.yml)
-    # - name: Install prerequisites
-    #   if: ${{ startsWith(matrix.os, 'ubuntu') }}
-    #   shell: bash -el {0}
-    #   run: |
-    #     sudo apt-get -q update || exit 1
-    #     sudo apt-get -q install -y \
-    #       nodejs npm \
-    #       libtiff5-dev libjpeg-dev libopenjp2-7-dev zlib1g-dev \
-    #       libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
-    #       python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev \
-    #       libxml2-dev libxslt-dev \
-    #       libcairo2-dev pkg-config python3-dev \
-    #         || exit 1
-
     - name: Install prerequisites
       if: ${{ startsWith(matrix.os, 'macos') }}
       shell: bash -el {0}
       run: |
         HOMEBREW_NO_AUTO_UPDATE=1 brew install jpeg
 
-    # Cache for vspkg
+    # Cache for vcpkg
     - name: Export GitHub Actions cache environment variables
       uses: actions/github-script@v7
       with:
@@ -91,10 +76,7 @@ runs:
       id: python_cache
       with:
         path: ~/.cache/pip
-        # path: |
-        #   ~/.cache/pypoetry
-        #   .venv
-        key: ${{ runner.os }}-pip-1-${{ hashFiles('**/requirements.*') }}
+        key: ${{ runner.os }}-pip-1-${{ hashFiles('**/requirements*') }}
         restore-keys: |
           ${{ runner.os }}-pip-1-
           ${{ runner.os }}-pip-
@@ -145,8 +127,6 @@ runs:
         . ~/.bash_profile
         mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }} poetry
         mamba activate ${{ env.ENV_PATH }}
-        # poetry install
-        # poetry install --only test
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip
         python -m pip install --upgrade wheel mypy setuptools
