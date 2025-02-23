@@ -11,10 +11,13 @@ runs:
   steps:
     - name: Extract branch name
       id: extract_branch
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
         echo "BRANCH=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-        echo "BRANCH_SANITIZED=$(echo -n ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} | sed s/\//_/g)" >> $GITHUB_OUTPUT
+        echo "BRANCH_SANITIZED=$(echo -n ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} | sed 's|/|_|g')" >> $GITHUB_OUTPUT
+        echo "ref=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+        echo "BRANCH_NOT_SANITIZED=$(echo -n ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}})"
+        echo "BRANCH_SANITIZED=$(echo -n ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} | sed 's|/|_|g')"
 
     - name: Check for changes that require the container to be rebuilt
       uses: dorny/paths-filter@v3
@@ -26,11 +29,12 @@ runs:
 
     - name: The devcontainer needs to be rebuilt
       id: tag
-      shell: bash -l {0}
+      shell: bash -el {0}
       env:
         BRANCH: ${{ steps.extract_branch.outputs.BRANCH }}
+        BRANCH_SANITIZED: ${{ steps.extract_branch.outputs.BRANCH_SANITIZED }}
       run: |
-        if [[ "X${{ github.event.head_commit.message }}" == "Version updated"* ]]; then
+        if [[ "X${{ github.event.head_commit.message }}" == "XVersion updated"* ]]; then
           # Do not add the branch name to the tag if the commit is created by "bumpversion"
           export IMAGE_TAG="${{ env.VERSION }}"
         else
@@ -56,7 +60,7 @@ runs:
         fi
 
     - name: Prepare the container config
-      shell: bash -l {0}
+      shell: bash -el {0}
       env:
         IMAGE_TAG: ${{ steps.tag.outputs.IMAGE_TAG }}
       run: |

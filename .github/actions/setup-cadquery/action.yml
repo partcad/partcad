@@ -10,25 +10,29 @@ runs:
   using: "composite"
   steps:
     - name: Set CadQuery version
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
         echo "OS=$(uname)" >> $GITHUB_ENV
         echo "ARCH=$(uname -m)" >> $GITHUB_ENV
 
     - name: install macos dev dependencies
       if: startsWith(${{matrix.os}}, 'macos')
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
         for env in ${{ github.event.inputs.envs }}; do
-          conda activate $env
+          mamba activate $env
           pip install swig
-          conda deactivate
+          mamba deactivate
         done
 
     - name: install cadquery-ocp on macOS
       if: ${{ startsWith(matrix.os, 'macos') && env.ARCH == 'arm64' }}
-      shell: bash -l {0}
+      shell: bash -el {0}
       run: |
+        . ~/.bashrc
+        . ~/.bash_profile
         VERSION="7.7.2"
         PY_VERSION="${{ matrix.python-version }}"
         PY_VERSION_NO_DOT="${PY_VERSION//./}"
@@ -39,7 +43,7 @@ runs:
         curl -L -o "$WHEEL_FILE" "$WHEEL_URL"
 
         for env in ${{ github.event.inputs.envs }}; do
-          conda activate $env
+          mamba activate $env
           pip install "$WHEEL_FILE"
-          conda deactivate
+          mamba deactivate
         done

@@ -34,9 +34,9 @@ jobs:
         id: cache
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.*') }}
+          key: ${{ runner.os }}-build-pip-${{ hashFiles('**/requirements.*') }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-build-pip-
       - name: Prepare environments
         run: |
           python -m pip install --upgrade pip build

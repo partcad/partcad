@@ -24,7 +24,7 @@ env:
   # If this is the original copy of PartCAD, then use the org's self-hosted runners
   OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
   # OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest", ["self-hosted", "macos-15-large"]]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]' }}
-  PYTHONS: ${{ github.ref == 'refs/heads/devel' && '["3.10", "3.11", "3.12"]' || '["3.10", "3.12"]' }}
+  PYTHONS: '["3.10", "3.11", "3.12"]'
   # OSPY: >-
   #   ${{
   #     github.repository == 'partcad/partcad'
@@ -73,12 +73,28 @@ jobs:
       - name: Set matrix
         id: set-matrix
         run: |
-          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }} }' >> $GITHUB_OUTPUT
+          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": [{"os": "windows-latest", "python-version": "3.12"}]}' >> $GITHUB_OUTPUT
           # echo 'matrix={"ospy": ${{ env.OSPY }} }' >> $GITHUB_OUTPUT
+
+  # cache-preheat:
+  #   name: "Update caches"
+  #   needs: set-matrix
+  #   strategy:
+  #     fail-fast: false
+  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+  #   runs-on: ${{ matrix.os }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: cache-preheat
+  #         preheat_only: "true"
 
   test-pytest:
     name: "Pytest"
-    needs: set-matrix
+    needs:
+      - set-matrix
+      # - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -97,16 +113,18 @@ jobs:
       - name: Test with pytest
         # env:
         #   PYTHONWARNINGS: ignore
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
-          conda activate ~/${{ format('env-test-pytest-{0}', matrix.python-version) }}
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-pytest-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-test-results
           pytest \
             partcad partcad-cli \
             -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -121,7 +139,9 @@ jobs:
 
   test-pytest-ide-vscode:
     name: "Pytest (VS Code extension)"
-    needs: set-matrix
+    needs:
+      - set-matrix
+      # - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -139,25 +159,29 @@ jobs:
 
       # TODO(clairbee): Move this step to the build jobs. Merge build.yml and test.yml to form a ci.yml, where this test job may 'needs' that build job
       - name: Build the VS Code extension
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
-          conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
           (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
-          conda deactivate
+          mamba deactivate
 
       - name: Test VS Code extension with pytest
         env:
           PYTHONWARNINGS: ignore
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
-          conda activate ~/${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
 
           mkdir -pv pytest-vscode-test-results
           pytest \
             partcad-ide-vscode \
             -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-vscode-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -172,7 +196,9 @@ jobs:
 
   test-behave:
     name: "Behave"
-    needs: set-matrix
+    needs:
+      - set-matrix
+      # - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -200,15 +226,13 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
 
       - name: Test with behave
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mkdir -pv behave-test-results
 
-          conda activate ~/${{ format('env-test-behave-{0}', matrix.python-version) }}
-          if ! python -m pip install -U ./partcad ./partcad-cli; then
-            echo "Failed to install packages"
-            exit 1
-          fi
+          mamba activate ${{ format('env-test-behave-{0}', matrix.python-version) }}
 
           export PYTHONUTF8=1
           export PYTHONIOENCODING=utf-8
@@ -230,7 +254,7 @@ jobs:
 
           coverage combine
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -245,7 +269,9 @@ jobs:
 
   # test-examples-partcad:
   #   name: "Examples (PartCAD)"
-  #   needs: set-matrix
+  #   needs:
+  #     - set-matrix
+  #     - cache-preheat
   #   strategy:
   #     fail-fast: false
   #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -263,14 +289,13 @@ jobs:
   #         job: examples-partcad
 
   #     - name: Basic integration test for CLI (PartCAD examples)
-  #       shell: bash -l {0}
+  #       shell: bash -el {0}
   #       env:
   #         PC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
   #       run: |
   #         mkdir -pv examples-partcad-test-results
 
-  #         conda activate ~/${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
-  #         python -m pip install -U ./partcad ./partcad-cli
+  #         mamba activate ${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
 
   #         # BEGIN PARTCAD EXAMPLES
   #         cd ./examples
@@ -282,7 +307,7 @@ jobs:
   #         # END PARTCAD EXAMPLES
 
   #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml || true
-  #         conda deactivate
+  #         mamba deactivate
 
   #     - name: Upload test results & coverage reports to github and codecov
   #       uses: ./.github/actions/upload-test-results
@@ -297,7 +322,9 @@ jobs:
 
   test-examples-all:
     name: "Examples (All)"
-    needs: set-matrix
+    needs:
+      - set-matrix
+      # - cache-preheat
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
@@ -314,12 +341,13 @@ jobs:
           job: examples-all
 
       - name: Basic integration test for CLI (all examples)
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mkdir -pv examples-all-test-results
 
-          conda activate ~/${{ format('env-test-examples-all-{0}', matrix.python-version) }}
-          python -m pip install -U ./partcad ./partcad-cli
+          mamba activate ${{ format('env-test-examples-all-{0}', matrix.python-version) }}
 
           # BEGIN ALL EXAMPLES
           cd ./examples
@@ -330,7 +358,7 @@ jobs:
           # END ALL EXAMPLES
 
           coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
@@ -345,12 +373,16 @@ jobs:
 
   test-pub-repo:
     name: "Repo //pub"
+    # Note: preheat is using another set of machines
+    # needs: cache-preheat
     strategy:
       fail-fast: false
       matrix:
-        # TODO(clairbee): Move this to the environment variables too
         os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
+        # TODO(clairbee): Move this to the environment variables too
+        # os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
         python-version: ["3.10", "3.12"]
+        exclude: [{"os": "windows-latest-l", "python-version": "3.12"}]
     runs-on: ${{ matrix.os }}
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 15
@@ -365,12 +397,13 @@ jobs:
           job: pub-repo
 
       - name: Test the entire repository
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
+          . ~/.bashrc
+          . ~/.bash_profile
           mkdir -pv pub-repo-test-results
 
-          conda activate ~/${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
-          python -m pip install -U ./partcad ./partcad-cli
+          mamba activate ${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
 
           # BEGIN PUBLIC REPO
           cd examples
@@ -381,7 +414,7 @@ jobs:
           coverage combine
 
           coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
-          conda deactivate
+          mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
