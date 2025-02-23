@@ -9,30 +9,45 @@ docs:
     ```
 
 parts:
+  # cube:
+  #   type: ai-cadquery
+  #   provider: google
+  #   desc: A cube
+  #   requirements:
+  #     properties:
+  #       length: 10
+
   cube:
-    type: ai-cadquery
-    provider: google
+    type: cadquery
+    fileFrom: ai
     desc: A cube
-    requirements:
-      properties:
-        length: 10
-  prism:
-    type: ai-cadquery
-    provider: ollama
-    model: llama3.1:70b
-    desc: A hexagonal prism
-    requirements:
-      properties:
-        length: 10
-  tetrahedron:
-    type: ai-cadquery
-    provider: openai
-    tokens: 4000
-    top_p: 0.9
-    desc: A tetrahedron
-    requirements:
-      properties:
-        length: 10
+    ai:
+      # provider: google
+      model: google
+      # parameters:
+      #   tokens: 16000
+      #   temperature: 0.5
+      #   top_p: 0.9
+    # requirements:
+    #   - 3D cube with a length of 10mm
+
+  # prism:
+  #   type: ai-cadquery
+  #   provider: ollama
+  #   model: llama3.1:70b
+  #   desc: A hexagonal prism
+  #   requirements:
+  #     properties:
+  #       length: 10
+  # tetrahedron:
+  #   type: ai-cadquery
+  #   provider: openai
+  #   tokens: 4000
+  #   top_p: 0.9
+  #   desc: A tetrahedron
+  #   requirements:
+  #     properties:
+  #       length: 10
 
 render:
   readme:

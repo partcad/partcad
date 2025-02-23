@@ -26,8 +26,9 @@ class ShapeFactory(factory.Factory):
         if "manufacturable" not in config:
             config["manufacturable"] = project.is_manufacturable
 
-        if "fileFrom" in config:
-            self.fileFactory = factory.instantiate("file", config["fileFrom"], ctx, project, project, config)
+        file_from = config.get("fileFrom")
+        if file_from and file_from != "ai":
+            self.fileFactory = factory.instantiate("file", file_from, ctx, project, project, config)
         else:
             self.fileFactory = None
 

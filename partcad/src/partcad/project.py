@@ -42,7 +42,9 @@ from . import part_factory_step as pfs
 from . import part_factory_stl as pfstl
 from . import part_factory_obj as pfo
 from . import part_factory_3mf as pf3
-from .part_factory_ai import PartFactoryAi
+from .part_factory_ai_cadquery import PartFactoryAiCadquery
+from .part_factory_ai_build123d import PartFactoryAiBuild123d
+from .part_factory_ai_openscad import PartFactoryAiScad
 from . import part_factory_cadquery as pfc
 from . import part_factory_build123d as pfb
 from . import part_factory_alias as pfa
@@ -569,8 +571,14 @@ class Project(project_config.Configuration):
             "enrich": pfe.PartFactoryEnrich,
         }
 
+        ai_factory_mapping = {
+            "cadquery": PartFactoryAiCadquery,
+            "build123d": PartFactoryAiBuild123d,
+            "openscad": PartFactoryAiScad,
+        }
+
         # Use PartFactoryAi for AI-generated parts
-        factory = PartFactoryAi if is_ai_generated else factory_mapping.get(part_type)
+        factory = ai_factory_mapping.get(part_type) if is_ai_generated else factory_mapping.get(part_type)
 
         if factory:
             factory(self.ctx, source_project, self, config)

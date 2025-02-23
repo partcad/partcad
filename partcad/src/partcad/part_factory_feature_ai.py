@@ -8,14 +8,13 @@
 #
 
 import asyncio
-
 import copy
 import os
 import tempfile
 import threading
 import yaml
-from git import Git
 from datetime import datetime
+from git import Git
 
 from .ai import Ai
 from . import logging as pc_logging
@@ -44,29 +43,34 @@ class PartFactoryFeatureAi(Ai):
             raise Exception(error)
 
         self.ai_config = copy.deepcopy(config)
+        # Retrieve the 'ai' block from the part config (if present)
+        ai_block = config.get("ai", {})
 
-        # Load model configuration dynamically
-        model_name = self.ai_config.get("model", "default")  # Default model if not specified
-        self.model_config = self._load_model_config(model_name)
+        # Load model configuration based on the ai block.
+        # If the ai block includes 'provider' or 'parameters', use them directly;
+        # otherwise, lookup the model by name in the user config.
+        self.model_config = self._load_model_config(ai_block)
 
-        # Validate model configuration
         if "provider" not in self.model_config or "model" not in self.model_config:
             raise Exception(f"Invalid model configuration: {self.model_config}")
 
-        # Extract model parameters
         self.provider = self.model_config["provider"]
         self.model = self.model_config["model"]
         self.parameters = self.model_config.get("parameters", {})
 
-        # Default AI parameters
-        self.num_geometric_modeling = self.ai_config.get("numGeometricModeling", DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING)
-        self.num_model_generation = self.ai_config.get("numModelGeneration", DEFAULT_ALTERNATIVES_MODEL_GENERATION)
-        self.num_script_correction = self.ai_config.get("numScriptCorrection", DEFAULT_INCREMENTAL_SCRIPT_CORRECTION)
-
-        # Normalize max values from user config
-        self.num_geometric_modeling = min(self.num_geometric_modeling, user_config.max_geometric_modeling or self.num_geometric_modeling)
-        self.num_model_generation = min(self.num_model_generation, user_config.max_model_generation or self.num_model_generation)
-        self.num_script_correction = min(self.num_script_correction, user_config.max_script_correction or self.num_script_correction)
+        # Set default AI alternatives (normalized against user limits)
+        self.num_geometric_modeling = min(
+            self.ai_config.get("numGeometricModeling", DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING),
+            user_config.max_geometric_modeling or DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING,
+        )
+        self.num_model_generation = min(
+            self.ai_config.get("numModelGeneration", DEFAULT_ALTERNATIVES_MODEL_GENERATION),
+            user_config.max_model_generation or DEFAULT_ALTERNATIVES_MODEL_GENERATION,
+        )
+        self.num_script_correction = min(
+            self.ai_config.get("numScriptCorrection", DEFAULT_INCREMENTAL_SCRIPT_CORRECTION),
+            user_config.max_script_correction or DEFAULT_INCREMENTAL_SCRIPT_CORRECTION,
+        )
 
         # Normalize AI parameters
         self.parameters.setdefault("tokens", 2048)
@@ -76,18 +80,42 @@ class PartFactoryFeatureAi(Ai):
         pc_logging.debug(f"AI configuration: {self.ai_config}")
         pc_logging.debug(f"Model configuration: {self.model_config}")
 
-    def _load_model_config(self, model_name):
-        """Load model configuration from external package or use defaults."""
-        model_packages = user_config.get("models", {})  # Models are stored in user config
-        return model_packages.get(model_name, {
-            "provider": "openai",
-            "model": "gpt-4o",
-            "parameters": {
-                "tokens": 16000,
-                "temperature": 0.5,
-                "top_p": 0.9,
-            },
-        })
+    def _load_model_config(self, ai_block: dict) -> dict:
+        """
+        Load the model configuration based on the 'ai' block from the part configuration.
+        - If the ai block includes keys like 'provider' or 'parameters', then those values
+          are used directly.
+        - Otherwise, if only a model name is specified, the configuration is looked up in
+          the user config under the 'models' section.
+        - If no matching model is found, a warning is issued and a default configuration is used.
+        """
+        if "provider" in ai_block or "parameters" in ai_block:
+            return {
+                "provider": ai_block.get("provider", "openai"),
+                "model": ai_block.get("model", "default"),
+                "parameters": ai_block.get("parameters", {
+                    "tokens": 16000,
+                    "temperature": 0.5,
+                    "top_p": 0.9,
+                }),
+            }
+        else:
+            model_name = ai_block.get("model", "default")
+            model_packages = user_config.get("models") or {}
+            if model_name in model_packages:
+                return model_packages[model_name]
+            else:
+                pc_logging.warning(f"Model '{model_name}' not found in user config, using default.")
+                return model_packages.get("default", {
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "parameters": {
+                        "tokens": 16000,
+                        "temperature": 0.5,
+                        "top_p": 0.9,
+                    },
+                })
+
     def post_create(self) -> None:
         self.part.hash.add_dict(self.ai_config)
         super().post_create()
@@ -124,7 +152,7 @@ class PartFactoryFeatureAi(Ai):
 {comment_syntax}  Filename:           {self.config['path']}
 {comment_syntax}  Description:        {self.config['desc']}
 {comment_syntax}  Author:             {author}
-{comment_syntax}  LLM:                {self.config['provider']}/{self.model}
+{comment_syntax}  LLM:                {self.model_config.get("provider")}/{self.model_config.get("model")}
 {comment_syntax}  Date Created:       {date_string}
 {comment_syntax}  PartCAD Version:    v{__version__}
 {comment_syntax} ***************************************************************
@@ -368,7 +396,6 @@ Use milimeters for dimensions and degrees for angles.
             self.project.name,
             self.name,
             prompt,
-            config,
             self.num_geometric_modeling,
         )
         return options
@@ -414,17 +441,10 @@ IMPORTANT: Output the %s itself and do not add any text or comments before or af
         #     config["temperature"] += 0.4
         # if config["top_p"] < 0.4:
         #     config["top_p"] += 0.2
-        scripts = self.generate(
-            "Script",
-            self.project.name,
-            self.name,
-            prompt,
-            config,
-        )
 
+        scripts = self.generate("Script", self.project.name, self.name, prompt)
         # Sanitize the output to remove the decorations
         scripts = list(map(lambda s: self._sanitize_script(s), scripts))
-
         return scripts
 
     def _change_script(self, csg_instructions, script, rendered_image, change=None):
@@ -440,11 +460,11 @@ The given description follows (until DESCRIPTION END):
 DESCRIPTION END
 """ % (
             self.script_type,
-            " and images" if len(config["images"]) > 0 else "",
+            " and images" if len(config.get("images", [])) > 0 else "",
             config["desc"],
         )
 
-        image_filenames = config["images"]
+        image_filenames = config.get("images", [])
         if len(image_filenames) > 0:
             prompt += """
 
@@ -502,23 +522,19 @@ Do not generate exactly the same script
             self.prompt_suffix,
         )
 
+        config = copy.deepcopy(self.ai_config)
+
+        config["temperature"] = config.get("temperature", self.parameters.get("temperature", 0.2))
+        config["top_p"] = config.get("top_p", self.parameters.get("top_p", 0.1))
+
         if config["temperature"] < 0.8:
             config["temperature"] += 0.8
         if config["top_p"] < 0.4:
             config["top_p"] += 0.4
 
-        scripts = self.generate(
-            "Change",
-            self.project.name,
-            self.name,
-            prompt,
-            config,
-            self.num_script_correction,  # TODO(clairbee): add a separate user config param and loop around this until the needed number is produced
-        )
-
-        # Sanitize the output to remove the decorations
+        # TODO(clairbee): add a separate user config param and loop around this until the needed number is produced
+        scripts = self.generate("Change", self.project.name, self.name, prompt, self.num_script_correction)
         scripts = list(map(lambda s: self._sanitize_script(s), scripts))
-
         return scripts
 
     def _sanitize_script(self, script: str):
@@ -642,7 +658,6 @@ Very important not to produce exactly the same script: at least something has to
             self.project.name,
             self.name,
             prompt,
-            self.ai_config,
             self.num_script_correction,
         )
         return options
@@ -779,16 +794,20 @@ Just the number.
         # Ask AI to compare the images
         pc_logging.info("Attempting to select the best script by comparing images")
         config = copy.deepcopy(self.ai_config)
+
+        config["temperature"] = config.get("temperature", self.parameters.get("temperature", 0.2))
+        config["top_p"] = config.get("top_p", self.parameters.get("top_p", 0.1))
+
         if config["temperature"] > 0.1:
             config["temperature"] = 0.05
         if config["top_p"] > 0.1:
             config["top_p"] = 0.05
+
         responses = self.generate(
             "Compare",
             self.project.name,
             self.name,
             prompt,
-            config,
             1,
         )
 
