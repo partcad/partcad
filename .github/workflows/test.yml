@@ -234,15 +234,15 @@ jobs:
           mkdir -pv behave-test-results
 
           mamba activate ${{ format('env-test-behave-{0}', matrix.python-version) }}
-          if ! python -m pip install -U ./partcad ./partcad-cli; then
-            echo "Failed to install packages"
-            exit 1
-          fi
+          # if ! python -m pip install -U ./partcad ./partcad-cli; then
+          #   echo "Failed to install packages"
+          #   exit 1
+          # fi
 
           export PYTHONUTF8=1
           export PYTHONIOENCODING=utf-8
 
-          BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behavex"
+          BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             BEHAVE_CMD="$BEHAVE_CMD --tags=-skip-windows"
           fi
@@ -252,7 +252,7 @@ jobs:
             exit 1
           fi
 
-          # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behavex; then
+          # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
           #   echo "Behave tests failed"
           #   exit 1
           # fi
@@ -301,7 +301,7 @@ jobs:
   #         mkdir -pv examples-partcad-test-results
 
   #         mamba activate ${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
-  #         python -m pip install -U ./partcad ./partcad-cli
+  #         # python -m pip install -U ./partcad ./partcad-cli
 
   #         # BEGIN PARTCAD EXAMPLES
   #         cd ./examples
@@ -354,7 +354,7 @@ jobs:
           mkdir -pv examples-all-test-results
 
           mamba activate ${{ format('env-test-examples-all-{0}', matrix.python-version) }}
-          python -m pip install -U ./partcad ./partcad-cli
+          # python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN ALL EXAMPLES
           cd ./examples
@@ -411,7 +411,7 @@ jobs:
           mkdir -pv pub-repo-test-results
 
           mamba activate ${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
-          python -m pip install -U ./partcad ./partcad-cli
+          # python -m pip install -U ./partcad ./partcad-cli
 
           # BEGIN PUBLIC REPO
           cd examples
