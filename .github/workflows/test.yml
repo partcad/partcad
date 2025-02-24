@@ -108,9 +108,6 @@ jobs:
         #   PYTHONWARNINGS: ignore
         shell: bash -el {0}
         run: |
-          # Prepare to pull public images from ghcr.io
-          docker logout ghcr.io
-
           . ~/.bashrc
           . ~/.bash_profile
           mamba activate ${{ format('env-test-pytest-{0}', matrix.python-version) }}

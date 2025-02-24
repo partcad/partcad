@@ -79,15 +79,15 @@ class Runtime:
                 # Since .run() fails to pull the image on some platforms, we do it manually
                 image_found = False
                 try:
-                    image = docker_client.images.get(image_name)
-                    if image:
+                    images = docker_client.api.images(image_name)
+                    if images:
                         image_found = True
                 except docker.errors.ImageNotFound:
                     pass
                 if not image_found:
                     pc_logging.debug("Image not found: %s" % image_name)
                     try:
-                        docker_client.images.pull(image_name)
+                        docker_client.api.pull(image_name)
                     except docker.errors.ImageNotFound:
                         pc_logging.error("Failed to pull the image: %s" % image_name)
                         pass
