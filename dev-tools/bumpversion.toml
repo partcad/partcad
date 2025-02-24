@@ -67,6 +67,11 @@ search = "(\">={current_version}\")"
 replace = "(\">={new_version}\")"
 
 [[tool.bumpversion.files]]
+filename = ".github/workflows/test.yml"
+search = "VERSION: {current_version}"
+replace = "VERSION: {new_version}"
+
+[[tool.bumpversion.files]]
 filename = ".github/workflows/test-dev.yml"
 search = "VERSION: {current_version}"
 replace = "VERSION: {new_version}"

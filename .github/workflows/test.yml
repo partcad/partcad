@@ -21,48 +21,40 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # If this is the original copy of PartCAD, then use the org's self-hosted runners
   OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
-  # OSES: ${{ github.repository == 'partcad/partcad' && '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest", ["self-hosted", "macos-15-large"]]' || '["ubuntu-latest", "windows-latest", "macos-15-large", "macos-15-xlarge"]' }}
   PYTHONS: '["3.10", "3.11", "3.12"]'
-  # OSPY: >-
-  #   ${{
-  #     github.repository == 'partcad/partcad'
-  #     &&
-  #     '[
-  #       ["ubuntu-latest", "3.10"],
-  #       ["ubuntu-latest", "3.11"],
-  #       ["ubuntu-latest", "3.12"],
-  #       ["windows-latest", "3.10"],
-  #       ["windows-latest", "3.11"],
-  #       ["windows-latest", "3.12"],
-  #       ["macos-13", "3.10"],
-  #       ["macos-13", "3.11"],
-  #       ["macos-13", "3.12"],
-  #       ["macos-latest", "3.10"],
-  #       ["macos-latest", "3.11"],
-  #       ["macos-latest", "3.12"],
-  #       [["self-hosted", "macos-15-large"], "3.10"],
-  #       [["self-hosted", "macos-15-xlarge"], "3.12"]
-  #     ]'
-  #     ||
-  #     '[
-  #       ["ubuntu-latest", "3.10"],
-  #       ["ubuntu-latest", "3.11"],
-  #       ["ubuntu-latest", "3.12"],
-  #       ["windows-latest", "3.10"],
-  #       ["windows-latest", "3.11"],
-  #       ["windows-latest", "3.12"],
-  #       ["macos-15-large", "3.10"],
-  #       ["macos-15-large", "3.11"],
-  #       ["macos-15-large", "3.12"],
-  #       ["macos-15-xlarge", "3.10"],
-  #       ["macos-15-xlarge", "3.11"],
-  #       ["macos-15-xlarge", "3.12"]
-  #     ]'
-  #   }}
+  VERSION: 0.7.118
+  CONTAINER_REGISTRY: ghcr.io
 
 jobs:
+  build-containers:
+    name: "Build Docker Containers"
+    runs-on: ubuntu-24.04
+    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    steps:
+      - name: Checkout (GitHub)
+        uses: actions/checkout@v4
+      - name: Setup Dev Container
+        id: setup
+        uses: ./.github/actions/setup-devcontainer
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Container for Kicad
+        uses: devcontainers/ci@v0.3
+        with:
+          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad:${{ steps.setup.outputs.IMAGE_TAG }}"
+          imageName: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad
+          imageTag: 0.7.118
+          # imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
+          configFile: tools/containers/devcontainer-kicad.json
+          push: always
+
   set-matrix:
     name: "Set matrix"
     runs-on: ubuntu-latest
@@ -74,7 +66,6 @@ jobs:
         id: set-matrix
         run: |
           echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": [{"os": "windows-latest", "python-version": "3.12"}]}' >> $GITHUB_OUTPUT
-          # echo 'matrix={"ospy": ${{ env.OSPY }} }' >> $GITHUB_OUTPUT
 
   # cache-preheat:
   #   name: "Update caches"
@@ -94,6 +85,7 @@ jobs:
     name: "Pytest"
     needs:
       - set-matrix
+      - build-containers
       # - cache-preheat
     strategy:
       fail-fast: false

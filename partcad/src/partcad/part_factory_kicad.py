@@ -20,6 +20,7 @@ import build123d as b3d
 from .part_factory_step import PartFactoryStep
 from . import logging as pc_logging
 from . import runtime
+from . import __version__
 from .user_config import user_config
 
 kicad_runtime_lock = threading.Lock()
@@ -33,7 +34,13 @@ async def get_runtime(ctx):
         kicad_runtime = runtime.Runtime(ctx, "shell")
         kicad_runtime_uses_docker = user_config.use_docker_kicad
         if kicad_runtime_uses_docker:
-            await kicad_runtime.use_docker("partcad-integration-kicad", "integration-kicad", 5000, "localhost")
+            await kicad_runtime.use_docker(
+                # TODO(clairbee): detect that this a build from a branch and prepend the branch name to the image tag
+                "ghcr.io/partcad/partcad-container-kicad:" + __version__,
+                "integration-kicad",
+                5000,
+                "localhost",
+            )
         return kicad_runtime, kicad_runtime_uses_docker
 
 
@@ -85,8 +92,8 @@ class PartFactoryKicad(PartFactoryStep):
                     part.path,
                     kicad_pcb_path,
                 ],
-                input_files = [kicad_pcb_path],
-                output_files = [part.path],
+                input_files=[kicad_pcb_path],
+                output_files=[part.path],
             )
 
             if not os.path.exists(part.path) or os.path.getsize(part.path) == 0:

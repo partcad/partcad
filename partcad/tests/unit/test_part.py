@@ -90,6 +90,7 @@ def test_part_get_3mf():
     wrapped = asyncio.run(part.get_wrapped(ctx))
     assert wrapped is not None
 
+
 def test_part_get_obj_1():
     """Load a OBJ part from a project by the part name"""
     ctx = pc.Context("examples/produce_part_obj")
@@ -205,4 +206,14 @@ def test_part_example_build123d_primitive():
     assert cube is not None
 
     wrapped = ctx.get_part_shape("//produce_part_build123d_primitive:cube")
+    assert wrapped is not None
+
+
+def test_part_example_kicad():
+    """Instantiate all parts from the example: part_kicad"""
+    ctx = pc.init("examples")
+    nano = ctx.get_part("//produce_part_kicad:Arduino_Nano")
+    assert nano is not None
+
+    wrapped = ctx.get_part_shape("//produce_part_kicad:Arduino_Nano")
     assert wrapped is not None

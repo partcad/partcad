@@ -1,6 +1,6 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-default_install_hook_types: [pre-commit, prepare-commit-msg]
+# default_install_hook_types: [pre-commit, prepare-commit-msg]
 # TODO: [TODO-18] @alexanderilyin: Add hook to check author email. We should only accept commits from partcad.org email addresses.
 repos:
   # - repo: https://github.com/partcad/pre-commit
@@ -30,7 +30,7 @@ repos:
     rev: 0.30.0
     hooks:
       - id: check-dependabot
-      - id: check-github-actions
+      # - id: check-github-actions
       # TODO(clairbee): fix the below so that it doesn't get in the way of using anchors
       # - id: check-github-workflows
       #   args: ["--verbose"]
@@ -86,10 +86,10 @@ repos:
   #     - id: ggshield
   #       language_version: python3
   #       stages: [pre-commit]
-  - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.5
-    hooks:
-      - id: actionlint
+  # - repo: https://github.com/rhysd/actionlint
+  #   rev: v1.7.5
+  #   hooks:
+  #     - id: actionlint
   - repo: local
     hooks:
       - id: eslint

@@ -1,0 +1,12 @@
+{
+  "name": "PartCAD Container for Kicad",
+  "build": {
+    "dockerfile": "./kicad/Dockerfile",
+    "cacheFrom": [
+      "ghcr.io/partcad/partcad-container-kicad:latest"
+    ],
+    "options": [
+      "--add-host=host.docker.internal:host-gateway"
+    ]
+  }
+}
