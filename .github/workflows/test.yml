@@ -52,8 +52,7 @@ jobs:
         with:
           cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad:${{ steps.setup.outputs.IMAGE_TAG }}"
           imageName: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad
-          imageTag: 0.7.118
-          # imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
+          imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
           configFile: tools/containers/devcontainer-kicad.json
           push: always
 

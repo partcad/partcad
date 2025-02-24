@@ -7,20 +7,15 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import asyncio
 import os
 import platform
 import shutil
-import subprocess
-import tempfile
+import sys
 import threading
-
-import build123d as b3d
 
 from .part_factory_step import PartFactoryStep
 from . import logging as pc_logging
 from . import runtime
-from . import __version__
 from .user_config import user_config
 
 kicad_runtime_lock = threading.Lock()
@@ -36,7 +31,7 @@ async def get_runtime(ctx):
         if kicad_runtime_uses_docker:
             await kicad_runtime.use_docker(
                 # TODO(clairbee): detect that this a build from a branch and prepend the branch name to the image tag
-                "ghcr.io/partcad/partcad-container-kicad:" + __version__,
+                "ghcr.io/partcad/partcad-container-kicad:" + sys.modules["partcad"].__version__,
                 "integration-kicad",
                 5000,
                 "localhost",
