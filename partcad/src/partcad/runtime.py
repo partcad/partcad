@@ -75,6 +75,23 @@ class Runtime:
                 container = docker_client.containers.get(container_name)
             except docker.errors.NotFound:
                 pc_logging.debug("Starting a docker container")
+
+                # Since .run() fails to pull the image on some platforms, we do it manually
+                image_found = False
+                try:
+                    image = docker_client.images.get(image_name)
+                    if image:
+                        image_found = True
+                except docker.errors.ImageNotFound:
+                    pass
+                if not image_found:
+                    pc_logging.debug("Image not found: %s" % image_name)
+                    try:
+                        docker_client.images.pull(image_name)
+                    except docker.errors.ImageNotFound:
+                        pc_logging.error("Failed to pull the image: %s" % image_name)
+                        pass
+
                 container = docker_client.containers.run(
                     image_name,
                     name=container_name,
