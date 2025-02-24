@@ -1,8 +1,11 @@
-# /pub/examples/partcad/produce_part_kicad
+# //pub/examples/partcad/produce_part_kicad
 
 Example of KiCad integration using Arduino Nano from KiCad Templates
 
 ## Parts
+
+### Arduino_Nano
+<a href="Arduino_Nano.kicad"><img src="././Arduino_Nano.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
 
 <br/><br/>
 
