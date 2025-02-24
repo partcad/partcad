@@ -235,7 +235,7 @@ class PythonRuntime(runtime.Runtime):
         cmd = [python_path, *self.python_flags, *cmd]
         pc_logging.debug("Running: %s", cmd)
         # pc_logging.debug("stdin: %s", stdin)
-        stdout, stderr = supera().run(cmd, stdin=stdin, cwd=cwd)
+        stdout, stderr = super().run(cmd, stdin=stdin, cwd=cwd)
 
         return stdout, stderr
 

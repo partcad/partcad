@@ -18,6 +18,7 @@ from .user_config import user_config
 from .runtime_json_rpc import RuntimeJsonRpcClient
 from . import logging as pc_logging
 
+
 async def wait_for_port(host, port, timeout=30):
     """
     Asynchronously waits for a port to become open on the specified host.
@@ -41,6 +42,7 @@ async def wait_for_port(host, port, timeout=30):
             if asyncio.get_event_loop().time() - start_time > timeout:
                 return False
             await asyncio.sleep(1)
+
 
 class Runtime:
     @staticmethod
@@ -103,7 +105,7 @@ class Runtime:
                     return
                 else:
                     pc_logging.debug("Container is starting...")
-                    time.sleep(1)
+                    await asyncio.sleep(1)
 
             pc_logging.debug("Container properties are: %s" % container.attrs)
             host = container.attrs["NetworkSettings"]["Networks"]["bridge"]["IPAddress"]
@@ -113,10 +115,32 @@ class Runtime:
 
         self.rpc_client = RuntimeJsonRpcClient(host, port)
 
-    def run(self, cmd, stdin=None, cwd=None, input_files=[], output_files=[]):
+    def run(
+        self,
+        cmd: list[str],
+        stdin: str = None,
+        cwd: str = None,
+        input_files: list[str] = None,
+        output_files: list[str] = None,
+    ):
+        if input_files is None:
+            input_files = []
+        if output_files is None:
+            output_files = []
+
         if self.rpc_client:
-            file_contents = dict(map(lambda x: (x, base64.b64encode(open(x, "rb").read()).decode("utf-8")), input_files))
-            response = self.rpc_client.execute(cmd, {"stdin": stdin, "cwd": cwd, "input_files": file_contents, "output_files": output_files,},)
+            file_contents = dict(
+                map(lambda x: (x, base64.b64encode(open(x, "rb").read()).decode("utf-8")), input_files)
+            )
+            response = self.rpc_client.execute(
+                cmd,
+                {
+                    "stdin": stdin,
+                    "cwd": cwd,
+                    "input_files": file_contents,
+                    "output_files": output_files,
+                },
+            )
             if not response:
                 return None, None
             stdout = response["result"]["stdout"]
@@ -125,11 +149,11 @@ class Runtime:
             stderr = base64.b64decode(stderr).decode("utf-8") if stderr else None
             if response["result"]["output_files"]:
                 for file_name, file_contents in response["result"]["output_files"].items():
-                  if file_name in output_files:
-                    with open(file_name, "wb") as f:
-                        f.write(base64.b64decode(file_contents))
-                  else:
-                    pc_logging.error(f"Unsolicited output file: {file_name}")
+                    if file_name in output_files:
+                        with open(file_name, "wb") as f:
+                            f.write(base64.b64decode(file_contents))
+                    else:
+                        pc_logging.error(f"Unsolicited output file: {file_name}")
         else:
             p = subprocess.Popen(
                 cmd,
@@ -161,11 +185,33 @@ class Runtime:
 
         return stdout, stderr
 
-    async def run_async(self, cmd, stdin=None, cwd=None, input_files=[], output_files=[]):
+    async def run_async(
+        self,
+        cmd: list[str],
+        stdin: str = None,
+        cwd: str = None,
+        input_files: list[str] = None,
+        output_files: list[str] = None,
+    ):
+        if input_files is None:
+            input_files = []
+        if output_files is None:
+            output_files = []
+
         if self.rpc_client:
             # Load the contents of the given files
-            file_contents = dict(map(lambda x: (x, base64.b64encode(open(x, "rb").read()).decode("utf-8")), input_files))
-            response = await self.rpc_client.execute_async(cmd, {"stdin": stdin, "cwd": cwd, "input_files": file_contents, "output_files": output_files,},)
+            file_contents = dict(
+                map(lambda x: (x, base64.b64encode(open(x, "rb").read()).decode("utf-8")), input_files)
+            )
+            response = await self.rpc_client.execute_async(
+                cmd,
+                {
+                    "stdin": stdin,
+                    "cwd": cwd,
+                    "input_files": file_contents,
+                    "output_files": output_files,
+                },
+            )
             if not response:
                 return None, None
             stdout = response["result"]["stdout"]
@@ -174,11 +220,11 @@ class Runtime:
             stderr = base64.b64decode(stderr).decode("utf-8") if stderr else None
             if response["result"]["output_files"]:
                 for file_name, file_contents in response["result"]["output_files"].items():
-                  if file_name in output_files:
-                    with open(file_name, "wb") as f:
-                        f.write(base64.b64decode(file_contents))
-                  else:
-                    pc_logging.error(f"Unsolicited output file: {file_name}")
+                    if file_name in output_files:
+                        with open(file_name, "wb") as f:
+                            f.write(base64.b64decode(file_contents))
+                    else:
+                        pc_logging.error(f"Unsolicited output file: {file_name}")
         else:
             p = await asyncio.create_subprocess_exec(
                 *cmd,

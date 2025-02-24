@@ -14,6 +14,7 @@ logging.info("Starting the PartCAD Container JSON-RPC Server...")
 app = Flask(__name__)
 jsonrpc = JSONRPC(app, "/jsonrpc", enable_web_browsable_api=True)
 
+
 class PartcadJsonRpcException(Exception):
     def __init__(self, code: int, message: str):
         self.code = code
@@ -22,7 +23,7 @@ class PartcadJsonRpcException(Exception):
 
 @app.errorhandler(PartcadJsonRpcException)
 def handle_partcad_exception(ex: PartcadJsonRpcException):
-    response = jsonify({'code': ex.code, 'message': ex.message})
+    response = jsonify({"code": ex.code, "message": ex.message})
     response.status_code = 400  # Bad Request
     return response
 
@@ -37,12 +38,17 @@ ALLOWED_COMMANDS = {
 
 
 @jsonrpc.method("execute")
-def handle_execute_command(command: t.List[str],
-                           stdin: str = None,
-                           cwd: str = None,
-                           input_files: t.Dict[str, str] = {},
-                           output_files: t.List[str] = [],
-                           ) -> t.Dict[str, t.Union[int, str, t.Dict[str, str]]]:
+def handle_execute_command(
+    command: t.List[str],
+    stdin: t.Optional[str] = None,
+    cwd: t.Optional[str] = None,
+    input_files: t.Optional[t.Dict[str, str]] = None,
+    output_files: t.Optional[t.List[str]] = None,
+) -> t.Dict[str, t.Union[int, str, t.Dict[str, str]]]:
+    if input_files is None:
+        input_files = {}
+    if output_files is None:
+        output_files = []
     if not command:
         raise PartcadJsonRpcException(-32602, "Command parameter is required")
 
@@ -65,9 +71,9 @@ def handle_execute_command(command: t.List[str],
         if not isinstance(command[i], str):
             raise PartcadJsonRpcException(-32602, f"Command parameter at index {i} is not a string")
         if command[i] in output_files:
-          temp_output_file = tempfile.NamedTemporaryFile(delete=True, suffix=os.path.splitext(command[i])[1])
-          temp_output_files[command[i]] = temp_output_file
-          command[i] = temp_output_file.name
+            temp_output_file = tempfile.NamedTemporaryFile(delete=True, suffix=os.path.splitext(command[i])[1])
+            temp_output_files[command[i]] = temp_output_file
+            command[i] = temp_output_file.name
 
     # Check if command is in allowlist
     if command[0] not in ALLOWED_COMMANDS:
@@ -98,11 +104,12 @@ def handle_execute_command(command: t.List[str],
             "exit_code": process.returncode,
             "stdout": base64.b64encode(stdout).decode("utf-8"),
             "stderr": base64.b64encode(stderr).decode("utf-8"),
-            "output_files": {k: base64.b64encode(open(v.name, "rb").read()).decode("utf-8") for k, v in temp_output_files.items()},
+            "output_files": {
+                k: base64.b64encode(open(v.name, "rb").read()).decode("utf-8") for k, v in temp_output_files.items()
+            },
         }
     except Exception as e:
         raise PartcadJsonRpcException(-32000, f"Execution error: {str(e)}")
-
 
 
 if __name__ == "__main__":
