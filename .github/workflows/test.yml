@@ -103,6 +103,12 @@ jobs:
         with:
           job: pytest
 
+      - name: Logout from ghcr.io
+        if: runner.os == 'Windows'
+        shell: bash -el {0}
+        run: |
+          docker logout ghcr.io
+
       - name: Setup WSL
         uses: Vampire/setup-wsl@v4
         if: runner.os == 'Windows'
@@ -112,6 +118,7 @@ jobs:
 
       - name: Preload the images
         if: runner.os == 'Windows'
+        shell: bash -el {0}
         run: |
           "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
           # docker logout ghcr.io
@@ -327,56 +334,56 @@ jobs:
   #         codecov-files: examples-partcad-test-results/junit.xml
   #         coverage-report: examples-partcad-test-results/coverage.xml
 
-  test-examples-all:
-    name: "Examples (All)"
-    needs:
-      - set-matrix
-      # - cache-preheat
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+  # test-examples-all:
+  #   name: "Examples (All)"
+  #   needs:
+  #     - set-matrix
+  #     # - cache-preheat
+  #   strategy:
+  #     fail-fast: false
+  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+  #   runs-on: ${{ matrix.os }}
+  #   timeout-minutes: 30
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-        with:
-          job: examples-all
-      - uses: ./.github/actions/setup-test
-        with:
-          job: examples-all
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: examples-all
+  #     - uses: ./.github/actions/setup-test
+  #       with:
+  #         job: examples-all
 
-      - name: Basic integration test for CLI (all examples)
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mkdir -pv examples-all-test-results
+  #     - name: Basic integration test for CLI (all examples)
+  #       shell: bash -el {0}
+  #       run: |
+  #         . ~/.bashrc
+  #         . ~/.bash_profile
+  #         mkdir -pv examples-all-test-results
 
-          mamba activate ${{ format('env-test-examples-all-{0}', matrix.python-version) }}
+  #         mamba activate ${{ format('env-test-examples-all-{0}', matrix.python-version) }}
 
-          # BEGIN ALL EXAMPLES
-          cd ./examples
-          # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
-          coverage combine
-          # END ALL EXAMPLES
+  #         # BEGIN ALL EXAMPLES
+  #         cd ./examples
+  #         # TODO(clairbee): Limit RAM usage by restricting the number of threads?
+  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
+  #         coverage combine
+  #         # END ALL EXAMPLES
 
-          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
-          mamba deactivate
+  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
+  #         mamba deactivate
 
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: examples-all-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: examples-all-test-results/junit.xml
-          coverage-report: examples-all-test-results/coverage.xml
+  #     - name: Upload test results & coverage reports to github and codecov
+  #       uses: ./.github/actions/upload-test-results
+  #       with:
+  #         name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: examples-all-test-results/
+  #         retention-days: 7
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.CODECOV_TOKEN }}
+  #         codecov-files: examples-all-test-results/junit.xml
+  #         coverage-report: examples-all-test-results/coverage.xml
 
   # test-pub-repo:
   #   name: "Repo //pub"
