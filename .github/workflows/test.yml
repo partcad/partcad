@@ -31,6 +31,8 @@ jobs:
     name: "Build Docker Containers"
     runs-on: ubuntu-24.04
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    permissions:
+      packages: write
     steps:
       - name: Checkout (GitHub)
         uses: actions/checkout@v4
