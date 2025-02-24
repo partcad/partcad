@@ -9,9 +9,11 @@
 
 import asyncio
 import json
-import socket
+import requests
 import threading
 from typing import Any, Dict, Union
+
+from . import logging as pc_logging
 
 """
 PartCAD Runtime JSON RPC Client Module.
@@ -33,8 +35,6 @@ class RuntimeJsonRpcClient:
         self.host = host
         self.port = port
         self.request_id = 0
-        self.socket = None
-        self._connected = False
 
         self.lock = threading.RLock()
         self.tls = threading.local()
@@ -47,25 +47,20 @@ class RuntimeJsonRpcClient:
             self.tls.async_rpc_locks[self_id] = asyncio.Lock()
         return self.tls.async_rpc_locks[self_id]
 
-    def _connect(self):
-        """Establish connection if not already connected."""
-        with self.lock:
-            if not self._connected:
-                self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.socket.connect((self.host, self.port))
-                self._connected = True
+    def get_request_id_locked(self):
+        self.request_id += 1
+        return self.request_id
 
-    async def _connect_async(self):
-        """Establish connection if not already connected."""
+    def get_request_id(self):
+        with self.lock:
+            return self.get_request_id_locked()
+
+    async def get_request_id_async(self):
         with self.lock:
             async with self.get_async_lock():
-                if not self._connected:
-                    # TODO(clairbee): use asyncio to connect
-                    self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    self.socket.connect((self.host, self.port))
-                    self._connected = True
+                return self.get_request_id_locked()
 
-    def execute(self, command: str, params: Dict[str, Any] = None) -> Union[Dict, None]:
+    def execute(self, command: list[str], params: Dict[str, Any] = None) -> Union[Dict, None]:
         """Execute a command on the server using JSON-RPC.
 
         Args:
@@ -75,26 +70,23 @@ class RuntimeJsonRpcClient:
         Returns:
           The server's response as a dictionary, or None if there's an error
         """
-        self._connect()
 
-        self.request_id += 1
         request = {
             "jsonrpc": "2.0",
             "method": "execute",
             "params": {"command": command, **(params or {})},
-            "id": self.request_id,
+            "id": self.get_request_id(),
         }
 
-        try:
-            # Send the request
-            self.socket.sendall(json.dumps(request).encode() + b"\n")
+        request_string = json.dumps(request)
+        pc_logging.debug(f"Sending request: {request_string}")
 
-            # Receive the response
-            response = self.socket.recv(4096).decode()
-            return json.loads(response)
-        except (socket.error, json.JSONDecodeError) as e:
-            print(f"Error during RPC call: {e}")
-            self._connected = False  # Reset connection state on error
+        try:
+            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request)
+            pc_logging.debug(f"Received response: {response.content}")
+            return json.loads(response.content)
+        except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
+            pc_logging.error(f"Error during RPC call: {e}")
             return None
 
     async def execute_async(self, command: str, params: Dict[str, Any] = None) -> Union[Dict, None]:
@@ -107,32 +99,21 @@ class RuntimeJsonRpcClient:
         Returns:
           The server's response as a dictionary, or None if there's an error
         """
-        await self._connect_async()
 
-        self.request_id += 1
         request = {
             "jsonrpc": "2.0",
             "method": "execute",
             "params": {"command": command, **(params or {})},
-            "id": self.request_id,
+            "id": await self.get_request_id_async(),
         }
 
+        request_string = json.dumps(request)
+        pc_logging.debug(f"Sending request: {request_string}")
+
         try:
-            # Send the request
-            self.socket.sendall(json.dumps(request).encode() + b"\n")
-
-            # Receive the response
-            response = self.socket.recv(4096).decode()
-            return json.loads(response)
-        except (socket.error, json.JSONDecodeError) as e:
-            print(f"Error during RPC call: {e}")
-            self._connected = False  # Reset connection state on error
+            response = requests.post(f"http://{self.host}:{self.port}/jsonrpc", json=request)
+            pc_logging.debug(f"Received response: {response.content}")
+            return json.loads(response.content)
+        except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
+            pc_logging.error(f"Error during RPC call: {e}")
             return None
-
-    def __del__(self):
-        """Clean up the socket connection when the object is destroyed."""
-        if self.socket:
-            try:
-                self.socket.close()
-            except:
-                pass

@@ -19,22 +19,22 @@ import build123d as b3d
 
 from .part_factory_step import PartFactoryStep
 from . import logging as pc_logging
-from . import runtime_python_none
+from . import runtime
 from .user_config import user_config
 
-runtime_lock = threading.Lock()
-runtime = None
-runtime_uses_docker = False
+kicad_runtime_lock = threading.Lock()
+kicad_runtime = None
+kicad_runtime_uses_docker = False
 
 
-def get_runtime(ctx):
-    global runtime, runtime_uses_docker, runtime_lock
-    with runtime_lock:
-        runtime = runtime_python_none.NonePythonRuntime(ctx, ctx.python_version)
-        runtime_uses_docker = user_config.use_docker_kicad
-        if runtime_uses_docker:
-            runtime.use_docker("partcad-integration-kicad", "integration-kicad", 5000, "localhost")
-        return runtime, runtime_uses_docker
+async def get_runtime(ctx):
+    global kicad_runtime, kicad_runtime_uses_docker, kicad_runtime_lock
+    with kicad_runtime_lock:
+        kicad_runtime = runtime.Runtime(ctx, "shell")
+        kicad_runtime_uses_docker = user_config.use_docker_kicad
+        if kicad_runtime_uses_docker:
+            await kicad_runtime.use_docker("partcad-integration-kicad", "integration-kicad", 5000, "localhost")
+        return kicad_runtime, kicad_runtime_uses_docker
 
 
 class PartFactoryKicad(PartFactoryStep):
@@ -49,11 +49,8 @@ class PartFactoryKicad(PartFactoryStep):
             )
             # Complement the config object here if necessary
 
-            # Take over the instantiate method from the Step factory
-            # self.step_instantiate = self.part.instantiate
+            # Take over the instantiate method from the STEP factory
             self.part.instantiate = self.instantiate
-
-            self.runtime_kicad = None
 
     async def instantiate(self, part):
 
@@ -64,9 +61,9 @@ class PartFactoryKicad(PartFactoryStep):
                 pc_logging.error("KiCad PCB file is empty or does not exist: %s" % kicad_pcb_path)
                 return None
 
-            runtime, runtime_uses_docker = get_runtime(self.ctx)
+            kicad_runtime, runtime_uses_docker = await get_runtime(self.ctx)
             pc_logging.debug(
-                "Got a KiCad sandbox: %s (%s)" % (runtime.name, "docker" if runtime_uses_docker else "native")
+                "Got a KiCad sandbox: %s (%s)" % (kicad_runtime.name, "docker" if runtime_uses_docker else "native")
             )
             if runtime_uses_docker:
                 kicad_cli_path = "kicad-cli"
@@ -77,19 +74,19 @@ class PartFactoryKicad(PartFactoryStep):
                 if kicad_cli_path is None:
                     raise Exception("KiCad executable is not found. Please, install KiCad first.")
 
-            # TODO(clairbee): Add file upload to and download from the RPC server
             pc_logging.debug("Executing KiCad...")
-            stdout, stderr = await runtime.run_async(
+            stdout, stderr = await kicad_runtime.run_async(
                 [
                     kicad_cli_path,
                     "pcb",
                     "export",
                     "step",
-                    "--no-virtual",
                     "-o",
                     part.path,
                     kicad_pcb_path,
                 ],
+                input_files = [kicad_pcb_path],
+                output_files = [part.path],
             )
 
             if not os.path.exists(part.path) or os.path.getsize(part.path) == 0:
@@ -97,5 +94,4 @@ class PartFactoryKicad(PartFactoryStep):
                 return None
             pc_logging.debug("Finished executing KiCad")
 
-            await super().instantiate(part)
-            # return await self.step_instantiate(part)
+            return await super().instantiate(part)

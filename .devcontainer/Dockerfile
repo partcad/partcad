@@ -19,7 +19,7 @@ ENV DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
 
 # COPY file here
 COPY --from=ghcr.io/hadolint/hadolint:v2.12.1-beta-debian /bin/hadolint /usr/local/bin/hadolint
-# hadolint ignore=DL3007
+# hadolint ignore=DL3007,DL3008,DL3015
 COPY --from=ghcr.io/ankitpokhrel/jira-cli:latest /bin/jira /usr/local/bin/jira
 
 SHELL ["/bin/bash", "-c"]
@@ -27,9 +27,9 @@ SHELL ["/bin/bash", "-c"]
 # TODO(clairbee): merge RUN commands even more? any way to reliably cache docker layes in CI?
 
 # Install app APT packages here
-# hadolint ignore=DL3004
-RUN apt-get update \
-  && apt-get install -y \
+# hadolint ignore=DL3004,DL3008
+RUN apt-get update -y \
+  && apt-get install --no-install-recommends -y \
   # Python 3.10 requirements
   libgdbm-compat-dev \
   # PartCAD VSCode Extension requirements
@@ -48,6 +48,8 @@ RUN apt-get update \
   openscad \
   pypy3 \
   pypy3-dev \
+  # Docker troubleshooting tools
+  docker.io inetutils-telnet inetutils-ping \
   # Development tools
   file xxd \
   bash-completion \
@@ -85,10 +87,9 @@ RUN apt-get update \
 # TODO(clairbee): install nvm securely
 # TODO: @alexanderilyin: error libmamba Could not open lockfile '/home/vscode/miniforge3/pkgs/cache/cache.lock' \
 # TODO: @alexanderilyin: Run `mamba init`
-# hadolint ignore=DL3004,DL4006,SC1091
 
-RUN \
-  curl -L -O "https://github.com/conda-forge/miniforge/releases/download/24.11.3-0/Miniforge3-$(uname)-$(uname -m).sh" \
+# hadolint ignore=DL3004,DL4006,SC1091
+RUN curl -L -O "https://github.com/conda-forge/miniforge/releases/download/24.11.3-0/Miniforge3-$(uname)-$(uname -m).sh" \
   && sudo -u vscode bash "Miniforge3-$(uname)-$(uname -m).sh" -b -p /home/vscode/miniforge3 \
   && sudo -u vscode /home/vscode/miniforge3/condabin/conda init \
   && sudo -u vscode /home/vscode/miniforge3/condabin/conda install -y python=3.10.16 \
@@ -111,8 +112,7 @@ RUN curl -fsSLO https://download.docker.com/linux/static/stable/x86_64/docker-${
 
 # TODO(clairbee): fix the scripts that led to the wrong permissions instead of chmod
 # hadolint ignore=DL3004
-RUN \
-  --mount=type=bind,source=./docker-build-bootstrap.sh,target=/tmp/docker-build-bootstrap.sh \
+RUN --mount=type=bind,source=./docker-build-bootstrap.sh,target=/tmp/docker-build-bootstrap.sh \
   --mount=type=bind,source=./docker-build-dbus.sh,target=/tmp/docker-build-dbus.sh \
   /tmp/docker-build-bootstrap.sh \
   && /tmp/docker-build-dbus.sh

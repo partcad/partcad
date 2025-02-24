@@ -96,7 +96,7 @@ class PartFactoryStep(PartFactoryFile):
                 response_serialized, errors = await self.runtime.run_async(
                     [
                         wrapper_path,
-                        os.path.abspath(self.path),
+                        os.path.abspath(part.path),
                         os.path.abspath(self.project.config_dir),
                     ],
                     request_serialized,
@@ -141,7 +141,7 @@ class PartFactoryStep(PartFactoryFile):
 
                 reader = STEPControl_Reader()
 
-                readStatus = reader.ReadFile(self.path)
+                readStatus = reader.ReadFile(part.path)
                 if readStatus != OCP.IFSelect.IFSelect_RetDone:
                     raise ValueError("STEP File could not be loaded")
                 for i in range(reader.NbRootsForTransfer()):

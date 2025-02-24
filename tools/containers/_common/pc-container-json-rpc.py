@@ -1,28 +1,30 @@
 from flask import Flask, request, jsonify
+from flask_jsonrpc import JSONRPC
 import subprocess
 import base64
-import json
+import logging
+import typing as t
+import tempfile
+import os
 
-print("Starting the PartCAD Container JSON-RPC Server...")
+logging.basicConfig(level=logging.DEBUG)
+
+logging.info("Starting the PartCAD Container JSON-RPC Server...")
 
 app = Flask(__name__)
+jsonrpc = JSONRPC(app, "/jsonrpc", enable_web_browsable_api=True)
 
-
-class JsonRpcError(Exception):
-    def __init__(self, code, message, data=None):
+class PartcadJsonRpcException(Exception):
+    def __init__(self, code: int, message: str):
         self.code = code
         self.message = message
-        self.data = data
 
 
-@app.errorhandler(JsonRpcError)
-def handle_json_rpc_error(error):
-    response = {
-        "jsonrpc": "2.0",
-        "error": {"code": error.code, "message": error.message, "data": error.data},
-        "id": None,  # Will be updated with actual request ID
-    }
-    return jsonify(response), 400
+@app.errorhandler(PartcadJsonRpcException)
+def handle_partcad_exception(ex: PartcadJsonRpcException):
+    response = jsonify({'code': ex.code, 'message': ex.message})
+    response.status_code = 400  # Bad Request
+    return response
 
 
 # Define allowed commands
@@ -34,36 +36,59 @@ ALLOWED_COMMANDS = {
 }
 
 
-def handle_execute_command(params):
-    if not isinstance(params, dict):
-        raise JsonRpcError(-32602, "Invalid params")
-
-    command = params.get("command")
-    args = params.get("args", [])
-    stdin_data = params.get("stdin_base64", "")
-
+@jsonrpc.method("execute")
+def handle_execute_command(command: t.List[str],
+                           stdin: str = None,
+                           cwd: str = None,
+                           input_files: t.Dict[str, str] = {},
+                           output_files: t.List[str] = [],
+                           ) -> t.Dict[str, t.Union[int, str, t.Dict[str, str]]]:
     if not command:
-        raise JsonRpcError(-32602, "Command parameter is required")
+        raise PartcadJsonRpcException(-32602, "Command parameter is required")
+
+    # TODO(clairbee): input data validation for output files
+
+    # Replace the file names with temporary files
+    temp_files = []
+    for i in range(1, len(command)):
+        if not isinstance(command[i], str):
+            raise PartcadJsonRpcException(-32602, f"Command parameter at index {i} is not a string")
+        if command[i] in input_files:
+            temp_file = tempfile.NamedTemporaryFile(delete=True, suffix=os.path.splitext(command[i])[1])
+            temp_files.append(temp_file)
+            with open(temp_file.name, "wb") as f:
+                f.write(base64.b64decode(input_files[command[i]]))
+            command[i] = temp_file.name
+
+    temp_output_files = {}
+    for i in range(1, len(command)):
+        if not isinstance(command[i], str):
+            raise PartcadJsonRpcException(-32602, f"Command parameter at index {i} is not a string")
+        if command[i] in output_files:
+          temp_output_file = tempfile.NamedTemporaryFile(delete=True, suffix=os.path.splitext(command[i])[1])
+          temp_output_files[command[i]] = temp_output_file
+          command[i] = temp_output_file.name
 
     # Check if command is in allowlist
-    if command not in ALLOWED_COMMANDS:
-        raise JsonRpcError(
-            -32602, f"Command '{command}' is not allowed. Allowed commands: {', '.join(ALLOWED_COMMANDS.keys())}"
+    if command[0] not in ALLOWED_COMMANDS:
+        raise PartcadJsonRpcException(
+            -32602, f"Command '{command[0]}' is not allowed. Allowed commands: {', '.join(ALLOWED_COMMANDS.keys())}"
         )
 
     try:
         # Use full path from allowlist
-        command_path = ALLOWED_COMMANDS[command]
+        command_path = ALLOWED_COMMANDS[command[0]]
 
         # Decode base64 input if provided
-        stdin_bytes = base64.b64decode(stdin_data) if stdin_data else None
+        stdin_bytes = base64.b64decode(stdin) if stdin else None
 
         # Execute the command using full path
         process = subprocess.Popen(
-            [command_path] + args,
+            [command_path] + command[1:],
             stdin=subprocess.PIPE if stdin_bytes else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            cwd=cwd,
         )
 
         # Send input data if provided
@@ -71,56 +96,14 @@ def handle_execute_command(params):
 
         return {
             "exit_code": process.returncode,
-            "stdout_base64": base64.b64encode(stdout).decode("utf-8"),
-            "stderr_base64": base64.b64encode(stderr).decode("utf-8"),
+            "stdout": base64.b64encode(stdout).decode("utf-8"),
+            "stderr": base64.b64encode(stderr).decode("utf-8"),
+            "output_files": {k: base64.b64encode(open(v.name, "rb").read()).decode("utf-8") for k, v in temp_output_files.items()},
         }
     except Exception as e:
-        raise JsonRpcError(-32000, f"Execution error: {str(e)}")
+        raise PartcadJsonRpcException(-32000, f"Execution error: {str(e)}")
 
-
-@app.route("/jsonrpc", methods=["POST"])
-def json_rpc():
-    try:
-        request_data = request.get_json()
-
-        if not request_data:
-            raise JsonRpcError(-32700, "Parse error")
-
-        # Validate JSON-RPC request
-        if request_data.get("jsonrpc") != "2.0":
-            raise JsonRpcError(-32600, "Invalid Request")
-
-        method = request_data.get("method")
-        params = request_data.get("params", {})
-        request_id = request_data.get("id")
-
-        # Handle methods
-        if method == "execute":
-            result = handle_execute_command(params)
-        else:
-            raise JsonRpcError(-32601, f"Method '{method}' not found")
-
-        # Prepare successful response
-        response = {"jsonrpc": "2.0", "result": result, "id": request_id}
-
-        return jsonify(response)
-
-    except JsonRpcError as e:
-        response = {
-            "jsonrpc": "2.0",
-            "error": {"code": e.code, "message": e.message, "data": e.data},
-            "id": request_data.get("id") if request_data else None,
-        }
-        return jsonify(response), 400
-
-    except Exception as e:
-        response = {
-            "jsonrpc": "2.0",
-            "error": {"code": -32603, "message": "Internal error", "data": str(e)},
-            "id": request_data.get("id") if request_data else None,
-        }
-        return jsonify(response), 500
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
