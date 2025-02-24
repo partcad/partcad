@@ -103,6 +103,10 @@ jobs:
         with:
           job: pytest
 
+      - name: Setup WSL
+        uses: Vampire/setup-wsl@v4
+        if: runner.os == 'Windows'
+
       - name: Preload the images
         if: runner.os == 'Windows'
         run: |
