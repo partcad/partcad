@@ -11,6 +11,7 @@
 import asyncio
 import pytest
 import shutil
+import sys
 
 import partcad as pc
 
@@ -211,6 +212,9 @@ def test_part_example_build123d_primitive():
 
 def test_part_example_kicad():
     """Instantiate all parts from the example: part_kicad"""
+    # Skip this test on macOS
+    if sys.platform == "darwin":
+        pytest.skip("Docker is missing on macOS")
     ctx = pc.init("examples")
     nano = ctx.get_part("//produce_part_kicad:Arduino_Nano")
     assert nano is not None

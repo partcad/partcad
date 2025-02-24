@@ -23,7 +23,6 @@ runs:
           python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev
           libxml2-dev libxslt-dev
           libcairo2-dev pkg-config python3-dev
-          docker.io
         version: 1.0
 
     - name: Install prerequisites
