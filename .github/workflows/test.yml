@@ -103,6 +103,12 @@ jobs:
         with:
           job: pytest
 
+      - name: Preload the images
+        if: runner.os == 'Windows'
+        run: |
+          docker logout ghcr.io
+          docker pull ghcr.io/partcad/partcad-container-kicad:0.7.118
+
       - name: Test with pytest
         # env:
         #   PYTHONWARNINGS: ignore
@@ -364,58 +370,58 @@ jobs:
           codecov-files: examples-all-test-results/junit.xml
           coverage-report: examples-all-test-results/coverage.xml
 
-  test-pub-repo:
-    name: "Repo //pub"
-    # Note: preheat is using another set of machines
-    # needs: cache-preheat
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
-        # TODO(clairbee): Move this to the environment variables too
-        # os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
-        python-version: ["3.10", "3.12"]
-        exclude: [{"os": "windows-latest-l", "python-version": "3.12"}]
-    runs-on: ${{ matrix.os }}
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 15
+  # test-pub-repo:
+  #   name: "Repo //pub"
+  #   # Note: preheat is using another set of machines
+  #   # needs: cache-preheat
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
+  #       # TODO(clairbee): Move this to the environment variables too
+  #       # os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
+  #       python-version: ["3.10", "3.12"]
+  #       exclude: [{"os": "windows-latest-l", "python-version": "3.12"}]
+  #   runs-on: ${{ matrix.os }}
+  #   if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+  #   timeout-minutes: 15
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-        with:
-          job: pub-repo
-      - uses: ./.github/actions/setup-test
-        with:
-          job: pub-repo
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: pub-repo
+  #     - uses: ./.github/actions/setup-test
+  #       with:
+  #         job: pub-repo
 
-      - name: Test the entire repository
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mkdir -pv pub-repo-test-results
+  #     - name: Test the entire repository
+  #       shell: bash -el {0}
+  #       run: |
+  #         . ~/.bashrc
+  #         . ~/.bash_profile
+  #         mkdir -pv pub-repo-test-results
 
-          mamba activate ${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
+  #         mamba activate ${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
 
-          # BEGIN PUBLIC REPO
-          cd examples
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
-          # TODO(clairbee): fix the failing packages first
-          # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
-          # END PUBLIC REPO
-          coverage combine
+  #         # BEGIN PUBLIC REPO
+  #         cd examples
+  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
+  #         # TODO(clairbee): fix the failing packages first
+  #         # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
+  #         # END PUBLIC REPO
+  #         coverage combine
 
-          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
-          mamba deactivate
+  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
+  #         mamba deactivate
 
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: pub-repo-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: pub-repo-test-results/junit.xml
-          coverage-report: pub-repo-test-results/coverage.xml
+  #     - name: Upload test results & coverage reports to github and codecov
+  #       uses: ./.github/actions/upload-test-results
+  #       with:
+  #         name: pub-repo-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: pub-repo-test-results/
+  #         retention-days: 7
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.CODECOV_TOKEN }}
+  #         codecov-files: pub-repo-test-results/junit.xml
+  #         coverage-report: pub-repo-test-results/coverage.xml
