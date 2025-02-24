@@ -107,13 +107,14 @@ jobs:
         uses: Vampire/setup-wsl@v4
         if: runner.os == 'Windows'
 
-      - name: Set up Docker
-        uses: docker/setup-docker-action@v4
+      # - name: Set up Docker
+      #   uses: docker/setup-docker-action@v4
 
       - name: Preload the images
         if: runner.os == 'Windows'
         run: |
-          docker logout ghcr.io
+          "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
+          # docker logout ghcr.io
           docker pull ghcr.io/partcad/partcad-container-kicad:0.7.118
 
       - name: Test with pytest
