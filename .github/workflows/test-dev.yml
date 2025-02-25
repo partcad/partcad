@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 env:
-  VERSION: 0.7.118
+  VERSION: 0.7.119
   CONTAINER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}-devcontainer
   TOTAL_TIMEOUT: 900
