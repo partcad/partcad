@@ -33,15 +33,18 @@ async def wait_for_port(host, port, timeout=30):
     """
     start_time = asyncio.get_event_loop().time()
     while True:
+        writer = None
         try:
             _, writer = await asyncio.open_connection(host, port)
-            writer.close()
-            await writer.wait_closed()
             return True
         except (ConnectionRefusedError, TimeoutError):
             if asyncio.get_event_loop().time() - start_time > timeout:
                 return False
             await asyncio.sleep(1)
+        finally:
+            if writer:
+                writer.close()
+                await writer.wait_closed()
 
 
 class Runtime:
@@ -146,9 +149,11 @@ class Runtime:
             output_files = []
 
         if self.rpc_client:
-            file_contents = dict(
-                map(lambda x: (x, base64.b64encode(open(x, "rb").read()).decode("utf-8")), input_files)
-            )
+            file_contents = {}
+            for file_path in input_files:
+                with open(file_path, "rb") as f:
+                    file_contents[file_path] = base64.b64encode(f.read()).decode("utf-8")
+
             response = self.rpc_client.execute(
                 cmd,
                 {

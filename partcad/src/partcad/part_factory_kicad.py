@@ -71,6 +71,8 @@ class PartFactoryKicad(PartFactoryStep):
                 kicad_cli_path = "kicad-cli"
             elif platform.system() == "Darwin":
                 kicad_cli_path = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
+                if not os.path.exists(kicad_cli_path):
+                    raise Exception("KiCad executable is not found. Please, install KiCad first.")
             else:
                 kicad_cli_path = shutil.which("kicad-cli")
                 if kicad_cli_path is None:
