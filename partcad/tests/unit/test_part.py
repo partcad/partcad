@@ -12,6 +12,7 @@ import asyncio
 import pytest
 import shutil
 import sys
+import os
 
 import partcad as pc
 
@@ -213,8 +214,12 @@ def test_part_example_build123d_primitive():
 def test_part_example_kicad():
     """Instantiate all parts from the example: part_kicad"""
     # Skip this test on macOS
-    if sys.platform == "darwin":
-        pytest.skip("Docker is missing on macOS")
+    if os.environ.get("ACTIONS_RUNTIME_TOKEN") is not None:
+        # This is a GitHub Actions environment
+        if sys.platform == "darwin":
+            pytest.skip("Docker CE is missing on macOS in GitHub Actions")
+        if sys.platform == "win32":
+            pytest.skip("Docker does not support nested virtualization on Windows in GitHub Actions")
     ctx = pc.init("examples")
     nano = ctx.get_part("//produce_part_kicad:Arduino_Nano")
     assert nano is not None
