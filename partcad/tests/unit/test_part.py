@@ -11,6 +11,8 @@
 import asyncio
 import pytest
 import shutil
+import sys
+import os
 
 import partcad as pc
 
@@ -89,6 +91,7 @@ def test_part_get_3mf():
 
     wrapped = asyncio.run(part.get_wrapped(ctx))
     assert wrapped is not None
+
 
 def test_part_get_obj_1():
     """Load a OBJ part from a project by the part name"""
@@ -205,4 +208,21 @@ def test_part_example_build123d_primitive():
     assert cube is not None
 
     wrapped = ctx.get_part_shape("//produce_part_build123d_primitive:cube")
+    assert wrapped is not None
+
+
+def test_part_example_kicad():
+    """Instantiate all parts from the example: part_kicad"""
+    # Skip this test on macOS
+    if os.environ.get("ACTIONS_RUNTIME_TOKEN") is not None:
+        # This is a GitHub Actions environment
+        if sys.platform == "darwin":
+            pytest.skip("Docker CE is missing on macOS in GitHub Actions")
+        if sys.platform == "win32":
+            pytest.skip("Docker does not support nested virtualization on Windows in GitHub Actions")
+    ctx = pc.init("examples")
+    nano = ctx.get_part("//produce_part_kicad:Arduino_Nano")
+    assert nano is not None
+
+    wrapped = ctx.get_part_shape("//produce_part_kicad:Arduino_Nano")
     assert wrapped is not None

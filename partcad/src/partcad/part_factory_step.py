@@ -46,7 +46,7 @@ class PartFactoryStep(PartFactoryFile):
     count_inflight_simple = 0
     count_inflight_subprocess = 0
 
-    def __init__(self, ctx, source_project, target_project, config):
+    def __init__(self, ctx, source_project, target_project, config, can_create=False):
         with pc_logging.Action("InitSTEP", target_project.name, config["name"]):
             super().__init__(
                 ctx,
@@ -54,6 +54,7 @@ class PartFactoryStep(PartFactoryFile):
                 target_project,
                 config,
                 extension=".step",
+                can_create=can_create,
             )
             # Complement the config object here if necessary
             self._create(config)
@@ -66,7 +67,8 @@ class PartFactoryStep(PartFactoryFile):
         with pc_logging.Action("STEP", part.project_name, part.name):
             do_subprocess = False
 
-            file_size = os.path.getsize(self.path)
+            pc_logging.debug("STEP path: %s" % part.path)
+            file_size = os.path.getsize(part.path)
 
             with PartFactoryStep.lock:
                 if (
@@ -94,7 +96,7 @@ class PartFactoryStep(PartFactoryFile):
                 response_serialized, errors = await self.runtime.run_async(
                     [
                         wrapper_path,
-                        os.path.abspath(self.path),
+                        os.path.abspath(part.path),
                         os.path.abspath(self.project.config_dir),
                     ],
                     request_serialized,
@@ -139,7 +141,7 @@ class PartFactoryStep(PartFactoryFile):
 
                 reader = STEPControl_Reader()
 
-                readStatus = reader.ReadFile(self.path)
+                readStatus = reader.ReadFile(part.path)
                 if readStatus != OCP.IFSelect.IFSelect_RetDone:
                     raise ValueError("STEP File could not be loaded")
                 for i in range(reader.NbRootsForTransfer()):

@@ -67,6 +67,11 @@ search = "(\">={current_version}\")"
 replace = "(\">={new_version}\")"
 
 [[tool.bumpversion.files]]
+filename = ".github/workflows/test.yml"
+search = "VERSION: {current_version}"
+replace = "VERSION: {new_version}"
+
+[[tool.bumpversion.files]]
 filename = ".github/workflows/test-dev.yml"
 search = "VERSION: {current_version}"
 replace = "VERSION: {new_version}"
@@ -80,3 +85,8 @@ replace = "devcontainer:{new_version}"
 filename = ".devcontainer/Dockerfile"
 search = "IMAGE_VERSION={current_version}"
 replace = "IMAGE_VERSION={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "tools/containers/python/Dockerfile"
+search = "partcad-devcontainer:{current_version}"
+replace = "partcad-devcontainer:{new_version}"

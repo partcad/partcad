@@ -31,9 +31,8 @@ repos:
     hooks:
       - id: check-dependabot
       - id: check-github-actions
-      # TODO(clairbee): fix the below so that it doesn't get in the way of using anchors
-      # - id: check-github-workflows
-      #   args: ["--verbose"]
+      - id: check-github-workflows
+        args: ["--verbose"]
   - repo: https://github.com/python-poetry/poetry
     rev: 1.8.0
     hooks:
@@ -86,10 +85,13 @@ repos:
   #     - id: ggshield
   #       language_version: python3
   #       stages: [pre-commit]
-  - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.5
-    hooks:
-      - id: actionlint
+
+  # TODO(clairbee): Add this back in when it handles self-hosted runners
+  # - repo: https://github.com/rhysd/actionlint
+  #   rev: v1.7.5
+  #   hooks:
+  #     - id: actionlint
+
   - repo: local
     hooks:
       - id: eslint

@@ -852,6 +852,7 @@ class Context(project_config.Configuration):
         project = self.get_project(project_path)
         project.render(format=format, output_dir=output_dir)
 
+    # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})
     def get_python_runtime(self, version=None, python_runtime=None):
         with self.runtimes_python_lock:
             if version is None:

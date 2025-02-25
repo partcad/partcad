@@ -235,36 +235,7 @@ class PythonRuntime(runtime.Runtime):
         cmd = [python_path, *self.python_flags, *cmd]
         pc_logging.debug("Running: %s", cmd)
         # pc_logging.debug("stdin: %s", stdin)
-        p = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=False,
-            encoding="utf-8",
-            # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-            cwd=cwd,
-        )
-        stdout, stderr = p.communicate(
-            input=stdin.encode(),
-            # TODO(clairbee): add timeout
-        )
-
-        stdout = stdout.decode()
-        stderr = stderr.decode()
-
-        # if stdout:
-        #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
-        if stderr:
-            pc_logging.debug("Error in %s: %s" % (cmd, stderr))
-
-        # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
-        # f = open("/tmp/log", "w")
-        # f.write("Completed: %s\n" % cmd)
-        # f.write(" stdin: %s\n" % stdin)
-        # f.write(" stderr: %s\n" % stderr)
-        # f.write(" stdout: %s\n" % stdout)
-        # f.close()
+        stdout, stderr = super().run(cmd, stdin=stdin, cwd=cwd)
 
         return stdout, stderr
 
@@ -350,36 +321,7 @@ class PythonRuntime(runtime.Runtime):
         python_path = self.get_venv_python_path(session, path)
         cmd = [python_path, *self.python_flags, *cmd]
         pc_logging.debug("Running: %s", cmd)
-        # pc_logging.debug("stdin: %s", stdin)
-        p = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=False,
-            # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-            cwd=cwd,
-        )
-        stdout, stderr = await p.communicate(
-            input=stdin.encode(),
-            # TODO(clairbee): add timeout
-        )
-
-        stdout = stdout.decode()
-        stderr = stderr.decode()
-
-        # if stdout:
-        #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
-        if stderr:
-            pc_logging.error("Error in %s: %s" % (cmd, stderr))
-
-        # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
-        # f = open("/tmp/log", "w")
-        # f.write("Completed: %s\n" % cmd)
-        # f.write(" stdin: %s\n" % stdin)
-        # f.write(" stderr: %s\n" % stderr)
-        # f.write(" stdout: %s\n" % stdout)
-        # f.close()
+        stdout, stderr = await super().run_async(cmd, stdin=stdin, cwd=cwd)
 
         return stdout, stderr
 

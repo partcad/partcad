@@ -41,8 +41,8 @@ development process.**
 
 - Or any other product related metadata
 
-Such packages are **modular and reusable**, allowing one to build not only on top of the CAD files of previous products, but
-to **build on top of their manufacturing processes** as well.
+Such packages are **modular and reusable**, allowing one to build not only on top of the CAD files of previous products,
+but to **build on top of their manufacturing processes** as well.
 
 ## PartCAD outputs
 
@@ -51,7 +51,7 @@ necessary, collected and managed using PartCAD tools:
 
 - **Product documentation** (markdown, html or PDF)
 - Design validation results
-- Product **bill of materials** (mechanical, electrical, software)
+- Product **bill of materials** (mechanical, electronics, software)
 - Sourcing information **for all components**
 - Manufacturing **process specification** (including required equipment if any)
 - Manufacturing **instructions** (sufficiently documented to be reproduced by anyone without inquiring any additional
@@ -67,11 +67,13 @@ Once product information is packaged, it can be versioned and used for iterative
 outputs either by human or AI actors. To achieve that, PartCAD integrates with third-party tools. Below are just some
 examples of what third-party integrations can be used for:
 
-- AI tools can be used to **update the mechanical design and implementation automatically** based on the current state of the requirements
+- AI tools can be used to **update the mechanical design and implementation automatically** based on the current state
+  of the requirements
 - A legacy CAD tool can be used manually to update the implementation
 - AI tools can be used to validate the design and implementation to identify product requirement or best practices (e.g.
   to reduce manufacturing complexity) violations
-- **A web interface of an online store or an API of an additive manufacturer** can be used to source and manufacture parts
+- **A web interface of an online store or an API of an additive manufacturer** can be used to source and manufacture
+  parts
 - Simulation tools (potentially in conjunction with AI tools) can be used to validate that the product design matches
   the product requirements
 - AI tools can be used to review the product implementation for correctness, safety or compliance
@@ -100,10 +102,10 @@ By letting the user easily switch between third-party engineering tools or manuf
 product data, PartCAD creates a competitive environment for service providers to **drive the costs down**.
 
 Whenever you select third-party tools (if any) to use in your workflows, you ultimately decide (and make it transparent
-or auditable) **how secure your supply chain is and how exposed your product information is**. If you opt for on-prem tools
-only, all your product information remains on-prem too. It makes PartCAD an ultimate solution for achieving data
-sovereignty for those willing to keep their product data private. **In the age of cloud data harvesting (especially for AI
-training), it makes PartCAD a better alternative to any cloud-based PDM, PLM or BOM solution**.
+or auditable) **how secure your supply chain is and how exposed your product information is**. If you opt for on-prem
+tools only, all your product information remains on-prem too. It makes PartCAD an ultimate solution for achieving data
+sovereignty for those willing to keep their product data private. **In the age of cloud data harvesting (especially for
+AI training), it makes PartCAD a better alternative to any cloud-based PDM, PLM or BOM solution**.
 
 ## Join us!
 
@@ -126,8 +128,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [ ] Cloud _(in progress)_
 - Collaboration on designs
   - [x] Versioning of CAD designs using `Git` _(like it's 2025 for real)_
-    - [x] Mechanics
-    - [ ] Electronics _(in progress)_
+    - [x] Mechanical
+    - [x] Electronics
     - [ ] Software _(in progress)_
   - [x] Automated generation of `Markdown` documentation
   - [x] Parametric (hardware and software) bill of materials
@@ -152,6 +154,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `STL`
     - [x] `3MF`
     - [x] `OBJ`
+  - Using file formats of third-party tools
+    - [x] `KiCad EDA` (PCB)
   - Generating with LLM/GenAI
     - [x] Google AI (`Gemini`)
     - [x] OpenAI (`ChatGPT`)
@@ -235,4 +239,5 @@ Give us a star for our hard work!
 [STEP]: https://en.wikipedia.org/wiki/ISO_10303
 [BREP]: https://en.wikipedia.org/wiki/Boundary_representation
 [OpenCASCADE]: https://www.opencascade.com/
+[KiCad EDA]: https://www.kicad.org/
 [Quick Start]: https://partcad.github.io/partcad/development/quick-start/

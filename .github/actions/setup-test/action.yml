@@ -20,10 +20,9 @@ runs:
 
     - name: Install OpenSCAD (Linux)
       if: runner.os == 'Linux'
-      shell: bash -el {0}
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y openscad
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: openscad
 
     - name: Install OpenSCAD (macOS)
       if: runner.os == 'macOS'
