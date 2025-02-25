@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  OSES: '["ubuntu-latest", "windows-latest-l", "macos-13", "macos-latest"]'
+  OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
   PYTHONS: '["3.10", "3.11", "3.12"]'
   VERSION: 0.7.118
   CONTAINER_REGISTRY: ghcr.io
