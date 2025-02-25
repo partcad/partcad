@@ -119,14 +119,14 @@ jobs:
       - name: Reload the daemon
         if: runner.os == 'Windows'
         run: |
-          & $Env:ProgramFiles\Docker\Docker\DockerCli.exe -SwitchDaemon
+          & '.\Docker Desktop.exe' -SwitchLinuxEngine
 
       - name: Preload the images
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && always()
         shell: bash -el {0}
         run: |
-          C:\\Program\ Files\\Docker\\Docker\\DockerCli.exe -SwitchLinuxEngine || true
-          'C:\Program Files\Docker\Docker\DockerCli.exe' -SwitchLinuxEngine || true
+          C:\\Program\ Files\\Docker\\Docker\\Docker\ Desktop.exe -SwitchLinuxEngine || true
+          'C:\Program Files\Docker\Docker\Docker\ Desktop.exe' -SwitchLinuxEngine || true
           # docker logout ghcr.io
           docker pull ghcr.io/partcad/partcad-container-kicad:0.7.118
 
