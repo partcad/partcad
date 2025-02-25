@@ -108,25 +108,27 @@ jobs:
         shell: bash -el {0}
         run: |
           docker logout ghcr.io
+          docker context ls
+          docker context use desktop-linux
 
-      - name: Setup WSL
-        uses: Vampire/setup-wsl@v4
-        if: runner.os == 'Windows'
+      # - name: Setup WSL
+      #   uses: Vampire/setup-wsl@v4
+      #   if: runner.os == 'Windows'
 
-      - name: Set up Docker
-        uses: docker/setup-docker-action@v4
+      # - name: Set up Docker
+      #   uses: docker/setup-docker-action@v4
 
-      - name: Reload the daemon
-        if: runner.os == 'Windows'
-        run: |
-          & '.\Docker Desktop.exe' -SwitchLinuxEngine
+      # - name: Reload the daemon
+      #   if: runner.os == 'Windows'
+      #   run: |
+      #     & '.\Docker Desktop.exe' -SwitchLinuxEngine
 
       - name: Preload the images
-        if: runner.os == 'Windows' && always()
+        if: runner.os == 'Windows'
         shell: bash -el {0}
         run: |
-          C:\\Program\ Files\\Docker\\Docker\\Docker\ Desktop.exe -SwitchLinuxEngine || true
-          'C:\Program Files\Docker\Docker\Docker\ Desktop.exe' -SwitchLinuxEngine || true
+          # C:\\Program\ Files\\Docker\\Docker\\Docker\ Desktop.exe -SwitchLinuxEngine || true
+          # 'C:\Program Files\Docker\Docker\Docker\ Desktop.exe' -SwitchLinuxEngine || true
           # docker logout ghcr.io
           docker pull ghcr.io/partcad/partcad-container-kicad:0.7.118
 
