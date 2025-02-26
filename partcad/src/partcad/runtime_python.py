@@ -16,6 +16,7 @@ import subprocess
 import sys
 import threading
 from filelock import FileLock
+from pathlib import Path
 
 from . import runtime
 from . import logging as pc_logging
@@ -197,10 +198,13 @@ class PythonRuntime(runtime.Runtime):
             stdout = stdout.decode()
             stderr = stderr.decode()
 
-            # if stdout:
-            #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
             if stderr:
-                pc_logging.debug("Error in %s: %s" % (cmd, stderr))
+                pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+                if p.returncode == 0:
+                    pc_logging.debug("%s produced stderr: %s" % (cmd, stderr))
+                    stderr = ""
+                else:
+                    pc_logging.debug("Error in %s: %s" % (cmd, stderr))
 
             # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
             # f = open("/tmp/log", "w")
@@ -284,10 +288,13 @@ class PythonRuntime(runtime.Runtime):
             stdout = stdout.decode()
             stderr = stderr.decode()
 
-            # if stdout:
-            #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
             if stderr:
-                pc_logging.error("Error in %s: %s" % (cmd, stderr))
+                pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+                if p.returncode == 0:
+                    pc_logging.debug("%s produced stderr: %s" % (cmd, stderr))
+                    stderr = ""
+                else:
+                    pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
             # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
             # f = open("/tmp/log", "w")
@@ -348,6 +355,8 @@ class PythonRuntime(runtime.Runtime):
                         item = python_package
                         if not path is None:
                             item += " in " + path
+                        if python_package == "partcad":
+                            python_package = os.path.normpath(os.path.join(os.getcwd(), "..", "partcad"))
                         with pc_logging.Action("PipInst", self.version, item):
                             self.run_onced_locked(
                                 ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
@@ -372,6 +381,8 @@ class PythonRuntime(runtime.Runtime):
                 item = python_package
                 if not path is None:
                     item += " in " + path
+                if python_package == "partcad":
+                    python_package = os.path.normpath(os.path.join(os.getcwd(), "..", "partcad"))
                 with pc_logging.Action("PipInst", self.version, item):
                     self.run_onced_locked(
                         ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
@@ -403,6 +414,8 @@ class PythonRuntime(runtime.Runtime):
                         item = python_package
                         if not path is None:
                             item += " in " + path
+                        if python_package == "partcad":
+                            python_package = os.path.normpath(os.path.join(os.getcwd(), "..", "partcad"))
                         with pc_logging.Action("PipInst", self.version, item):
                             await self.run_async_onced_locked(
                                 ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
@@ -429,6 +442,8 @@ class PythonRuntime(runtime.Runtime):
                 item = python_package
                 if not path is None:
                     item += " in " + path
+                if python_package == "partcad":
+                    python_package = os.path.normpath(os.path.join(os.getcwd(), "..", "partcad"))
                 with pc_logging.Action("PipInst", self.version, item):
                     await self.run_async_onced_locked(
                         ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
