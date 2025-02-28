@@ -260,58 +260,57 @@ jobs:
           codecov-files: behave-test-results/junit.xml
           coverage-report: behave-test-results/coverage.xml
 
-  # test-examples-partcad:
-  #   name: "Examples (PartCAD)"
-  #   needs:
-  #     - set-matrix
-  #     - cache-preheat
-  #   strategy:
-  #     fail-fast: false
-  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-  #   runs-on: ${{ matrix.os }}
-  #   if: ${{ !startsWith(github.event.head_commit.message, 'Version updated') }}
-  #   timeout-minutes: 15
+  test-examples-partcad:
+    name: "Examples (PartCAD)"
+    needs:
+      - set-matrix
+      # - cache-preheat
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: ./.github/actions/setup-all
-  #       with:
-  #         job: examples-partcad
-  #     - uses: ./.github/actions/setup-test
-  #       with:
-  #         job: examples-partcad
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-all
+        with:
+          job: examples-partcad
+      - uses: ./.github/actions/setup-test
+        with:
+          job: examples-partcad
 
-  #     - name: Basic integration test for CLI (PartCAD examples)
-  #       shell: bash -el {0}
-  #       env:
-  #         PC_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-  #       run: |
-  #         mkdir -pv examples-partcad-test-results
+      - name: Basic integration test for CLI (PartCAD examples)
+        shell: bash -el {0}
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mkdir -pv examples-partcad-test-results
 
-  #         mamba activate ${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
+          mamba activate ${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
 
-  #         # BEGIN PARTCAD EXAMPLES
-  #         cd ./examples
-  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r
-  #         # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 2 test -r --package //pub/examples/partcad
-  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi -v --threads-max 2 render -r --package //pub/examples/partcad
-  #         coverage combine || true
-  #         # END PARTCAD EXAMPLES
+          # BEGIN PARTCAD EXAMPLES
+          cd ./examples
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples/partcad
+          # TODO(clairbee): Limit RAM usage by restricting the number of threads?
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 4 test -r --package //pub/examples/partcad
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max 4 render -r --package //pub/examples/partcad
+          coverage combine
+          # END PARTCAD EXAMPLES
 
-  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml || true
-  #         mamba deactivate
+          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml
+          mamba deactivate
 
-  #     - name: Upload test results & coverage reports to github and codecov
-  #       uses: ./.github/actions/upload-test-results
-  #       with:
-  #         name: examples-partcad-test-results-${{matrix.os}}-${{matrix.python-version}}
-  #         path: examples-partcad-test-results/
-  #         retention-days: 7
-  #         status: ${{ job.status }}
-  #         token: ${{ secrets.CODECOV_TOKEN }}
-  #         codecov-files: examples-partcad-test-results/junit.xml
-  #         coverage-report: examples-partcad-test-results/coverage.xml
+      - name: Upload test results & coverage reports to github and codecov
+        uses: ./.github/actions/upload-test-results
+        with:
+          name: examples-partcad-test-results-${{matrix.os}}-${{matrix.python-version}}
+          path: examples-partcad-test-results/
+          retention-days: 7
+          status: ${{ job.status }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov-files: examples-partcad-test-results/junit.xml
+          coverage-report: examples-partcad-test-results/coverage.xml
 
   test-examples-all:
     name: "Examples (All)"
