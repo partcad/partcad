@@ -1,34 +1,68 @@
+import os
 import math
 from pathlib import Path
 import yaml
 
-from OCP.STEPControl import STEPControl_Reader, STEPControl_Writer, STEPControl_AsIs
-from OCP.TopExp import TopExp_Explorer
-from OCP.TopAbs import TopAbs_SOLID
-from OCP.TopoDS import TopoDS_Shape
-from OCP.gp import gp_Trsf
-from OCP.Bnd import Bnd_Box
-from OCP.BRepBndLib import BRepBndLib
-
-from OCP.STEPCAFControl import STEPCAFControl_Reader
 from OCP.XCAFApp import XCAFApp_Application
 from OCP.XCAFDoc import XCAFDoc_DocumentTool
-from OCP.TDF import TDF_LabelSequence
+from OCP.STEPCAFControl import STEPCAFControl_Reader
+from OCP.IFSelect import IFSelect_RetDone
+from OCP.TDF import TDF_LabelSequence, TDF_Label, TDF_AttributeIterator
+from OCP.TDataStd import TDataStd_Name
 from OCP.TCollection import TCollection_ExtendedString
 from OCP.TDocStd import TDocStd_Document
+from OCP.Standard import Standard_GUID
 
-from partcad.actions.part_actions import import_part_action
+from OCP.TopoDS import TopoDS_Shape
+from OCP.gp import gp_Trsf
+from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
+
+from OCP.Bnd import Bnd_Box
+from OCP.BRepBndLib import BRepBndLib
+from OCP.GProp import GProp_GProps
+from OCP.BRepGProp import BRepGProp
+
+from OCP.TopExp import TopExp_Explorer
+from OCP.TopAbs import TopAbs_SOLID
+
 import partcad.logging as pc_logging
+from partcad.actions.part_actions import import_part_action
 from partcad.project import Project
 
+g_shape_map = {}
+
+def get_label_name(label: TDF_Label, default="Unnamed") -> str:
+    """Get the TDataStd_Name attribute from a label."""
+    if label.IsNull():
+        return default
+    it = TDF_AttributeIterator(label)
+    while it.More():
+        attr = it.Value()
+        if Standard_GUID.IsEqual_s(attr.ID(), TDataStd_Name.GetID_s()):
+            pc_logging.debug(f"[DEBUG] Found name: {attr.Get().ToExtString()}")
+            return attr.Get().ToExtString()
+        it.Next()
+    return default
+
+def clone_trsf(src: gp_Trsf) -> gp_Trsf:
+    """Clone a gp_Trsf matrix."""
+    new_trsf = gp_Trsf()
+    new_trsf.SetValues(
+        src.Value(1,1), src.Value(1,2), src.Value(1,3), src.Value(1,4),
+        src.Value(2,1), src.Value(2,2), src.Value(2,3), src.Value(2,4),
+        src.Value(3,1), src.Value(3,2), src.Value(3,3), src.Value(3,4)
+    )
+    return new_trsf
+
+def invert_trsf(src: gp_Trsf) -> gp_Trsf:
+    """Invert a gp_Trsf matrix."""
+    new_t = clone_trsf(src)
+    new_t.Invert()
+    return new_t
 
 def _convert_location(trsf: gp_Trsf):
-    """
-    Convert a gp_Trsf into the format [translation, rotation_axis, rotation_angle].
-    translation: [tx, ty, tz]
-    rotation_axis: [rx, ry, rz]
-    rotation_angle: angle in radians
-    """
+    """Convert gp_Trsf to [translation, axis, angle]."""
     translation = [
         trsf.TranslationPart().X(),
         trsf.TranslationPart().Y(),
@@ -45,256 +79,277 @@ def _convert_location(trsf: gp_Trsf):
         rotation_axis = [x / sin_half_angle, y / sin_half_angle, z / sin_half_angle]
     return [translation, rotation_axis, rotation_angle]
 
-
-def _save_shape_to_step(shape: TopoDS_Shape, filename: str):
-    """
-    Save the given shape (with its Location) to a STEP file.
-    Logs info on success; raises ValueError if transfer or write fails.
-    """
+def save_shape_to_step(shape: TopoDS_Shape, filename: Path):
+    """Save a TopoDS_Shape to a STEP file."""
+    pc_logging.debug(f"Saving shape to {filename}")
     writer = STEPControl_Writer()
     status = writer.Transfer(shape, STEPControl_AsIs)
     if status != 1:
-        raise ValueError(f"Failed to transfer shape to STEP file: {filename}")
-    status = writer.Write(filename)
+        raise ValueError(f"Transfer error for {filename}")
+    status = writer.Write(str(filename))
     if status != 1:
-        raise ValueError(f"Failed to save STEP file: {filename}")
-    pc_logging.info(f"Saved shape to STEP file: {filename}")
+        raise ValueError(f"Write error for {filename}")
 
+def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_folder: Path, config: dict) -> str:
+    """Save shape as STEP, add part to project, return path without extension."""
+    step_file = parent_folder / f"{part_name}.step"
+    pc_logging.debug(f"Importing part '{part_name}' => {step_file}")
+    save_shape_to_step(shape, step_file)
+    import_part_action(
+        project,
+        "step",
+        part_name,
+        str(step_file),
+        config,
+        target_dir=str(parent_folder)
+    )
+    return str(step_file.with_suffix(""))
 
-def get_bbox_key(shape: TopoDS_Shape):
+def shape_signature(shape: TopoDS_Shape) -> tuple:
+    """Compute a bounding box + volume signature for dedup."""
+    bnd = Bnd_Box()
+    BRepBndLib.Add_s(shape, bnd)
+    xmin, ymin, zmin, xmax, ymax, zmax = bnd.Get()
+
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, props)
+    vol = props.Mass()
+
+    def r(x):
+        return round(x, 5)
+    return (
+        r(xmin), r(ymin), r(zmin),
+        r(xmax), r(ymax), r(zmax),
+        r(vol)
+    )
+
+def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited):
     """
-    Compute the bounding box of the shape and return a tuple of rounded coordinates.
-    Used for duplicate filtering.
-    """
-    box = Bnd_Box()
-    try:
-        # Use optimized Add_s if available
-        BRepBndLib.Add_s(shape, box)
-    except AttributeError:
-        BRepBndLib.Add(shape, box)
-    return tuple(round(v, 3) for v in box.Get())
-
-
-def filter_unique_parts(parts):
-    """
-    Filters duplicates based on unique TShape and transformation.
-    A composite key is formed as:
-       (tshape_id, translation, rotation_axis, rotation_angle)
-    Duplicate entries (with matching key) are discarded.
-    """
-    unique = {}
-    for shape, trsf in parts:
-        try:
-            tshape_id = shape.TShape().__long__()
-        except Exception:
-            tshape_id = id(shape)
-        trans = _convert_location(trsf)
-        trans_key = tuple(round(v, 3) for v in trans[0])
-        rot_key = tuple(round(v, 3) for v in trans[1])
-        angle_key = round(trans[2], 3)
-        key = (tshape_id, trans_key, rot_key, angle_key)
-        if key not in unique:
-            unique[key] = (shape, trsf)
-    return list(unique.values())
-
-
-def parse_step_file(file_path: str):
-    """
-    Read a STEP file via XDE using free shapes only.
-    If only one free shape is found, check its content:
-      - If it contains >1 SOLID, split it into separate parts.
-      - Otherwise, return as is.
-    """
-    pc_logging.info(f"=== Trying XDE approach for file: {file_path} ===")
-    xde_parts = read_xde_assembly_top_level(file_path)
-    if xde_parts:
-        unique_parts = filter_unique_parts(xde_parts)
-        if len(unique_parts) == 1:
-            shape, trsf = unique_parts[0]
-            explorer = TopExp_Explorer(shape, TopAbs_SOLID)
-            parts_list = []
-            while explorer.More():
-                solid = explorer.Current()
-                parts_list.append((solid, trsf))
-                explorer.Next()
-            if len(parts_list) > 1:
-                is_assembly = True
-                unique_parts = parts_list
-            else:
-                is_assembly = False
-        else:
-            is_assembly = (len(unique_parts) > 1)
-        pc_logging.info(f"XDE approach found {len(unique_parts)} unique part(s).")
-        return (is_assembly, unique_parts)
-    else:
-        pc_logging.info("XDE approach returned no parts. Falling back to direct STEP parse.")
-        return parse_step_file_fallback(file_path)
-
-
-def parse_step_file_fallback(file_path: str):
-    """
-    Classic approach using TransferRoots() and OneShape().
-    Extracts SOLIDs and their Locations from the STEP file.
-    """
-    reader = STEPControl_Reader()
-    status = reader.ReadFile(file_path)
-    if status != 1:
-        raise ValueError(f"Invalid STEP file: {file_path}")
-
-    reader.TransferRoots()
-    shape = reader.OneShape()
-    pc_logging.info(f"=== parse_step_file_fallback ===\nSTEP file: {file_path}")
-
-    parts = []
-    explorer = TopExp_Explorer(shape, TopAbs_SOLID)
-    while explorer.More():
-        solid = explorer.Current()
-        trsf = solid.Location().Transformation()
-        parts.append((solid, trsf))
-        explorer.Next()
-
-    is_assembly = (len(parts) > 1)
-    return (is_assembly, parts)
-
-
-def read_xde_assembly_top_level(file_path: str):
-    """
-    Read a STEP file via XDE, retrieving only the free shapes (top-level).
-    No recursive traversal of sub-components.
-    Returns a list of (TopoDS_Shape, gp_Trsf).
-    """
-    app = XCAFApp_Application.GetApplication_s()
-    doc = TDocStd_Document(TCollection_ExtendedString("XmlXCAF"))
-    app.NewDocument(TCollection_ExtendedString("XmlXCAF"), doc)
-
-    reader = STEPCAFControl_Reader()
-    if reader.ReadFile(file_path) != 1:
-        return []
-
-    # Transfer STEP data into the XDE document
-    reader.Transfer(doc)
-
-    # Get the ShapeTool and free shapes from the document
-    shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
-    free_labels = TDF_LabelSequence()
-    shape_tool.GetFreeShapes(free_labels)
-
-    result = []
-    for i in range(free_labels.Length()):
-        lbl = free_labels.Value(i + 1)
-        loc = shape_tool.GetLocation_s(lbl)  # Returns TopLoc_Location
-        shape = shape_tool.GetShape_s(lbl)
-        if not shape.IsNull():
-            result.append((shape, loc.Transformation()))
-    return result
-
-
-def explore_xde_label(label, shape_tool, parent_trsf: gp_Trsf, visited, results):
-    """
-    Recursively traverse the XDE tree using GetComponents_s.
-    For each label:
-      - Get the local transformation.
-      - Compute combined_trsf = parent_trsf * current_trsf.
-      - If the label contains a shape, add (shape, combined_trsf) to results.
-      - Recursively traverse child components.
+    Recursively parse a label. If it's an assembly, explore children.
+    If it's a simple shape, return a part node.
+    Otherwise, fallback for compounds with multiple SOLIDs.
     """
     if label in visited:
-        return
+        return None
     visited.add(label)
 
     loc = shape_tool.GetLocation_s(label)
-    current_trsf = loc.Transformation()
+    local_trsf = loc.Transformation()
     combined_trsf = gp_Trsf()
     combined_trsf.Multiply(parent_trsf)
-    combined_trsf.Multiply(current_trsf)
+    combined_trsf.Multiply(local_trsf)
 
+    name = get_label_name(label, default="Unnamed")
+
+    # Check if assembly
+    if shape_tool.IsAssembly_s(label):
+        pc_logging.debug(f" Assembly label: {name}")
+        node = {
+            "type": "assembly",
+            "name": name,
+            "trsf": combined_trsf,
+            "children": []
+        }
+        child_seq = TDF_LabelSequence()
+        shape_tool.GetComponents_s(label, child_seq)
+        for i in range(child_seq.Length()):
+            child_lbl = child_seq.Value(i + 1)
+            sub_node = parse_label_recursive(child_lbl, shape_tool, combined_trsf, visited)
+            if sub_node:
+                node["children"].append(sub_node)
+        return node
+
+    # Check if simple shape
+    if shape_tool.IsSimpleShape_s(label):
+        shape = shape_tool.GetShape_s(label)
+        if not shape.IsNull():
+            pc_logging.debug(f"Simple part label: {name}")
+            return {
+                "type": "part",
+                "name": name,
+                "shape": shape,
+                "trsf": combined_trsf
+            }
+
+    # Fallback: possibly a compound with multiple SOLIDs
     shape = shape_tool.GetShape_s(label)
     if not shape.IsNull():
-        results.append((shape, combined_trsf))
+        explorer = TopExp_Explorer(shape, TopAbs_SOLID)
+        solids = []
+        while explorer.More():
+            solids.append(explorer.Current())
+            explorer.Next()
 
-    from OCP.TDF import TDF_LabelSequence
-    children = TDF_LabelSequence()
-    shape_tool.GetComponents_s(label, children)
-    for i in range(children.Length()):
-        child_lbl = children.Value(i + 1)
-        explore_xde_label(child_lbl, shape_tool, combined_trsf, visited, results)
+        if len(solids) > 1:
+            pc_logging.debug(f"Compound with {len(solids)} SOLIDs: {name}")
+            children_nodes = []
+            idx = 1
+            for s in solids:
+                local_t = clone_trsf(s.Location().Transformation())
+                solid_trsf = gp_Trsf()
+                solid_trsf.Multiply(combined_trsf)
+                solid_trsf.Multiply(local_t)
 
+                part_node = {
+                    "type": "part",
+                    "name": f"{name}_solid{idx}",
+                    "shape": s,
+                    "trsf": solid_trsf
+                }
+                children_nodes.append(part_node)
+                idx += 1
 
-def parse_assembly_file(file_type: str, file_path: str):
+            return {
+                "type": "assembly",
+                "name": name,
+                "trsf": combined_trsf,
+                "children": children_nodes
+            }
+        else:
+            pc_logging.debug(f"Single solid fallback: {name}")
+            return {
+                "type": "part",
+                "name": name,
+                "shape": shape,
+                "trsf": combined_trsf
+            }
+    return None
+
+def read_step_as_tree(step_file: str):
+    """Read a STEP file via XDE and build a recursive node tree."""
+    if not os.path.isfile(step_file):
+        raise FileNotFoundError(step_file)
+
+    app = XCAFApp_Application.GetApplication_s()
+    doc = TDocStd_Document(TCollection_ExtendedString("XDE-doc"))
+    app.NewDocument(TCollection_ExtendedString("XmlXCAF"), doc)
+    shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+
+    reader = STEPCAFControl_Reader()
+    status = reader.ReadFile(step_file)
+    if status != IFSelect_RetDone:
+        raise ValueError(f"Cannot read STEP: {step_file}")
+    reader.Transfer(doc)
+
+    free_labels = TDF_LabelSequence()
+    shape_tool.GetFreeShapes(free_labels)
+
+    visited = set()
+    roots = []
+    identity = gp_Trsf()
+
+    for i in range(free_labels.Length()):
+        lbl = free_labels.Value(i + 1)
+        node = parse_label_recursive(lbl, shape_tool, identity, visited)
+        if node:
+            roots.append(node)
+
+    pc_logging.info(f"Found {len(roots)} top-level nodes.")
+    return roots
+
+def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: dict):
     """
-    Parse an assembly file based on its type.
-    Currently supports only STEP files.
+    Flatten a recursive node tree into a single assembly structure.
+    Deduplicate shapes and save parts.
     """
-    if file_type.lower() == "step":
-        return parse_step_file(file_path)
+    node_type = node["type"]
+    node_name = node["name"]
+    global_trsf = node["trsf"]
+
+    if node_type == "assembly":
+        child_links = []
+        for ch in node.get("children", []):
+            child_links.append(flatten_assembly_tree(ch, parent_folder, project, config))
+        return {
+            "type": "assembly",
+            "name": node_name,
+            "links": child_links,
+            "location": [[0, 0, 0], [1, 0, 0], 0]
+        }
     else:
-        raise ValueError(f"Unsupported assembly file type: {file_type}")
+        shape = node["shape"]
+        # Zero the geometry for dedup
+        inv_trsf = invert_trsf(global_trsf)
+        zeroed_shape = BRepBuilderAPI_Transform(shape, inv_trsf, True).Shape()
 
+        sig = shape_signature(zeroed_shape)
+        if sig in g_shape_map:
+            reused_part_name, reused_part_path = g_shape_map[sig]
+            pc_logging.debug(f"Reusing part '{reused_part_name}' for '{node_name}'")
+            return {
+                "type": "part",
+                "name": node_name,
+                "part": reused_part_path,
+                "location": _convert_location(global_trsf)
+            }
+        else:
+            pc_logging.debug(f"New unique shape => {node_name}")
+            part_path_noext = import_part(project, zeroed_shape, node_name, parent_folder, config)
+            g_shape_map[sig] = (node_name, part_path_noext)
+            return {
+                "type": "part",
+                "name": node_name,
+                "part": part_path_noext,
+                "location": _convert_location(global_trsf)
+            }
 
-def import_assy_action(project: Project, file_type: str, assembly_file: str, config: dict):
+def import_assy_action(
+    project: Project,
+    file_type: str,
+    assembly_file: str,
+    config: dict
+):
     """
-    Main function for importing an assembly:
-      - Read the STEP file (via XDE or fallback).
-      - Save each SOLID with its applied transformation as a separate STEP file.
-      - Write assembly data (part names and locations) into a YAML file.
+    Main function to import a STEP assembly:
+    1) Build a node tree from XDE.
+    2) Flatten to a single .assy with dedup.
+    3) Add assembly to project.
     """
+    g_shape_map.clear()
+
+    pc_logging.info(f"[INFO] Importing assembly from STEP file: {assembly_file}")
+    roots = read_step_as_tree(assembly_file)
+    if not roots:
+        raise ValueError(f"No shapes found in {assembly_file}")
+
     name = Path(assembly_file).stem
-    is_assembly, parts_data = parse_assembly_file(file_type, assembly_file)
-    if not is_assembly:
-        pc_logging.error(f"File '{assembly_file}' does not contain an assembly.")
-        raise ValueError(f"File '{assembly_file}' does not contain an assembly.")
+    out_folder = Path(assembly_file).parent / name
+    out_folder.mkdir(parents=True, exist_ok=True)
 
-    pc_logging.info(f"Detected an assembly with {len(parts_data)} parts.")
-    assy_folder_path = Path(assembly_file).parent / name
-    assy_folder_path.mkdir(parents=True, exist_ok=True)
-    pc_logging.info(f"Saving parts in folder: {assy_folder_path}")
+    # If multiple root nodes, create a top-level assembly
+    if len(roots) > 1:
+        from OCP.gp import gp_Trsf
+        pc_logging.debug(f"Creating a top-level assembly for {len(roots)} root nodes")
+        top_node = {
+            "type": "assembly",
+            "name": f"{name}_top",
+            "trsf": gp_Trsf(),
+            "children": roots
+        }
+        final_tree = top_node
+    else:
+        final_tree = roots[0]
 
-    part_names = []
-    part_files = []
-    part_locations = []
+    top_data = flatten_assembly_tree(final_tree, out_folder, project, config)
+    assy_name = top_data["name"]
+    assy_file = out_folder / f"{assy_name}.assy"
 
-    for i, (moved_solid, trsf) in enumerate(parts_data, start=1):
-        part_name = f"{name}_part{i}"
-        part_file = assy_folder_path / f"{part_name}.step"
-        part_file_without_ext = assy_folder_path / f"{part_name}"
+    if top_data["type"] == "assembly":
+        data = {
+            "name": top_data["name"],
+            "description": config.get("desc", ""),
+            "links": top_data.get("links", [])
+        }
+    else:
+        data = {
+            "name": top_data["name"],
+            "description": config.get("desc", ""),
+            "links": []
+        }
 
-        _save_shape_to_step(moved_solid, str(part_file))
-        import_part_action(
-            project,
-            file_type,
-            part_name,
-            str(part_file),
-            config,
-            target_dir=str(assy_folder_path)
-        )
-        part_names.append(part_name)
-        part_files.append(part_file_without_ext)
+    with open(assy_file, "w") as f:
+        yaml.dump(data, f, default_flow_style=False)
 
-        location_data = _convert_location(trsf)
-        part_locations.append(location_data)
-
-        pc_logging.info(f"Imported part: {part_name} → {part_file}")
-        pc_logging.info(f"  Location: {location_data}")
-
-    assy_name = f"{name}_assy"
-    assy_file_path = assy_folder_path / f"{assy_name}.assy"
-
-    assy_data = {
-        "name": assy_name,
-        "description": config.get("desc", ""),
-        "links": [
-            {"part": str(part_name), "location": loc}
-            for part_name, loc in zip(part_files, part_locations)
-        ],
-    }
-
-    with open(assy_file_path, "w") as assy_file:
-        yaml.dump(assy_data, assy_file, default_flow_style=False)
-
-    success = project.add_assembly("assy", str(assy_file_path), config)
-    if not success:
-        pc_logging.error(f"Failed to add assembly '{assy_name}'.")
-        raise ValueError(f"Failed to add assembly '{assy_name}'.")
-
-    pc_logging.info(f"Assembly '{assy_name}' successfully added with {len(part_names)} parts.")
-    return assy_name
+    project.add_assembly("assy", str(assy_file), config)
+    pc_logging.info(f"Created single .assy => {assy_file}")
+    return data["name"]
