@@ -127,6 +127,9 @@ def perform_conversion(project: Project, part_name, original_type: str,
                 target_format=target_format, output_dir=str(output_path)
             )
 
+    if not output_path.exists():
+        raise RuntimeError(f"Conversion failed: output file '{output_path}' was not created.")
+
     return output_path
 
 def copy_dependencies(source_project: Project, part_config: dict, output_dir: Optional[str]):
@@ -146,7 +149,7 @@ def copy_dependencies(source_project: Project, part_config: dict, output_dir: Op
             pc_logging.warning(f"Dependency '{dep}' not found in project '{source_project.name}'. Skipping.")
             continue
 
-        dep_target_path = (output_dir / "test" / Path(dep).name).resolve()
+        dep_target_path = (output_dir / Path(dep).name).resolve()
 
         try:
             _ = dep_target_path.relative_to(output_dir)
@@ -167,7 +170,7 @@ def copy_dependencies(source_project: Project, part_config: dict, output_dir: Op
         except Exception as e:
             pc_logging.error(f"Failed to copy dependency '{dep_source_path}': {e}")
 
-    return copied_files
+    return [dep.relative_to(source_project.path) for dep in copied_files]
 
 
 def convert_part_action(project: Project, object_name: str, target_format: Optional[str] = None,
@@ -202,7 +205,6 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         return
 
     copied_dependencies = copy_dependencies(source_project, part_config, output_dir)
-
     converted_path = source_path
     if part_type != conversion_target:
         converted_path = perform_conversion(project, part_name, part_type, part_config,
@@ -214,7 +216,6 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         config_path = Path("/") / converted_path.relative_to(output_dir)
 
     updated_config = deep_merge(part_config, {"type": conversion_target, "path": str(config_path)})
-
     updated_config = update_parameters_with_defaults(updated_config)
 
     updated_config.pop("package", None)
@@ -222,18 +223,28 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     updated_config.pop("with", None)
 
     if copied_dependencies:
-        updated_config["dependencies"] = [str(Path("/") / dep.relative_to(output_dir)) for dep in copied_dependencies]
+        updated_config["dependencies"] = [str(dep) for dep in copied_dependencies]
 
     project.set_part_config(part_name, updated_config)
     pc_logging.debug(f"Updated configuration for '{part_name}': {config_path}")
 
     if target_format and target_format != conversion_target:
-        final_path = perform_conversion(project, part_name, conversion_target, updated_config,
-                                        converted_path, target_format, output_dir)
-        try:
-            final_config_path = final_path.relative_to(output_dir)
-        except ValueError:
+        final_path = perform_conversion(
+            project, part_name, conversion_target, updated_config,
+            converted_path, target_format, output_dir
+        )
+
+        if final_path is None or not final_path.exists():
+            raise ValueError(f"Conversion failed: no output file generated for '{part_name}'.")
+
+        if output_dir:
+            try:
+                final_config_path = final_path.relative_to(output_dir)
+            except ValueError:
+                final_config_path = final_path.name
+        else:
             final_config_path = final_path.name
+
         project.update_part_config(part_name, {"type": target_format, "path": str(final_config_path)})
         pc_logging.debug(f"Final updated configuration for '{part_name}': {final_config_path}")
 
