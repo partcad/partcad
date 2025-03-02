@@ -112,6 +112,31 @@ Feature: `pc convert` command
 
   @enrich @convert
   Scenario: Resolving and converting an enrich part
+    Given I am in "/tmp/sandbox/behave" directory
+    And I have temporary $HOME in "/tmp/sandbox/home"
+    And I copy file "examples/feature_convert/stl/cube.stl" to "cube.stl" inside test workspace
+    And a file named "partcad.yaml" with content
+      """
+      parts:
+        cube:
+          type: stl
+          path: cube.stl
+          parameters:
+            width:
+              type: int
+              default: 2
+              name: width
+            height:
+              type: int
+              default: 2
+              name: height
+        cube_enrich:
+          type: enrich
+          source: ":cube"
+          with:
+            height: 4
+            width: 4
+      """
     When I run "pc convert :cube_enrich -t brep"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting 'cube_enrich': enrich to stl"
@@ -175,6 +200,28 @@ Feature: `pc convert` command
 
   @alias @convert
   Scenario: Resolving and converting an alias part
+    Given I am in "/tmp/sandbox/behave" directory
+    And I have temporary $HOME in "/tmp/sandbox/home"
+    And I copy file "examples/feature_convert/stl/cube.stl" to "cube.stl" inside test workspace
+    And a file named "partcad.yaml" with content
+      """
+      parts:
+        cube:
+          type: stl
+          path: cube.stl
+          parameters:
+            width:
+              type: int
+              default: 2
+              name: width
+            height:
+              type: int
+              default: 2
+              name: height
+        cube_alias:
+          type: alias
+          source: ":cube;width=10,height=10"
+      """
     When I run "pc convert :cube_alias -t brep"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting 'cube_alias': alias to stl"
