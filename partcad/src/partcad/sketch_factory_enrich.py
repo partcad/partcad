@@ -85,12 +85,13 @@ class SketchFactoryEnrich(pf.SketchFactory):
                 )
                 return
 
+            object_name = f"{self.project.name}:{self.name}"
             augmented_config = copy.deepcopy(augmented_config)
             # TODO(clairbee): ideally whatever we pull from the project is already normalized
             augmented_config = sketch_config.SketchConfiguration.normalize(
                 self.source_sketch_name,
                 augmented_config,
-                self.source_sketch_name # TODO: @azhar - send object_name instead of self.source_sketch_name
+                object_name
             )
 
             # Drop fields we don't want to be inherited by enriched clones
