@@ -214,6 +214,14 @@ help_config.dump_to_globals()
     show_envvar=True,
     help="Traces sample rate for Sentry in percent",
 )
+@click.option(
+    "--extra-param",
+    type=str,
+    multiple=True,
+    default=(),
+    show_envvar=True,
+    help="parameter(s) for configuration. Example: --extra-param key1=value1 --extra-param key2=value2",
+)
 @click.option("--level", "format", flag_value="level", default=True, help="Use log level as log prefix")
 @click.option("--time", "format", flag_value="time", help="Use time with milliseconds as log prefix")
 @click.option("--path", "format", flag_value="path", help="Use source file path and line number as log prefix")
@@ -310,6 +318,14 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
                 user_config.set(attrib, value)
             else:
                 setattr(user_config, attrib, value)
+
+    # parse extra parameters and add them to the user_config
+    for params in kwargs["extra_param"]:
+        param, value = params.split("=")
+        object_id, key = param.split(".")
+        if not user_config.parameter_config[object_id]:
+            user_config.parameter_config[object_id] = {}
+        user_config.parameter_config[object_id][key] = value
 
     if ctx.invoked_subcommand in commands_with_forced_update:
         user_config.force_update = True        

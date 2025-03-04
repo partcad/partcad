@@ -72,6 +72,7 @@ class Configuration:
                 "INCHES": 25.4,
                 "FOOT": 304.8,
                 "FEET": 304.8,
+                "get_from_config": lambda: None
             }
         )
 

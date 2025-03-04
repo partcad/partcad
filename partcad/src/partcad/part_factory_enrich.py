@@ -90,6 +90,7 @@ class PartFactoryEnrich(pf.PartFactory):
             augmented_config = part_config.PartConfiguration.normalize(
                 self.source_part_name,
                 augmented_config,
+                self.source_part_name # TODO: @azhar - send object_name instead of self.source_part_name
             )
 
             # Drop fields we don't want to be inherited by enriched clones

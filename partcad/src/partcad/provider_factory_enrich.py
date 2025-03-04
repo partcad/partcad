@@ -65,11 +65,26 @@ class ProviderFactoryEnrich(pf.ProviderFactory):
                 pc_logging.error("Failed to find the provider to enrich: %s" % self.source_provider_name)
                 return
 
+            target_provider_name = f"{self.target_project.name}:{self.name}"
+
             augmented_config = copy.deepcopy(augmented_config)
             # TODO(clairbee): ideally whatever we pull from the project is already normalized
             augmented_config = provider_config.ProviderConfiguration.normalize(
                 self.source_provider_name,
                 augmented_config,
+                target_provider_name
+            )
+
+            # Fill in the parameter values using the simplified "with" option
+            if "with" in config:
+                for param in config["with"]:
+                    augmented_config["parameters"][param]["default"] = config["with"][param]
+
+            # TODO: (azhar) - discuss about the same function call at line 72
+            augmented_config = provider_config.ProviderConfiguration.normalize(
+                self.source_provider_name,
+                augmented_config,
+                target_provider_name
             )
 
             # Drop fields we don't want to be inherited by enriched clones
@@ -91,10 +106,6 @@ class ProviderFactoryEnrich(pf.ProviderFactory):
                     continue
                 augmented_config[prop_to_copy] = config[prop_to_copy]
 
-            # Fill in the parameter values using the simplified "with" option
-            if "with" in config:
-                for param in config["with"]:
-                    augmented_config["parameters"][param]["default"] = config["with"][param]
             orig_source_project.init_provider_by_config(
                 augmented_config,
                 source_project,
