@@ -9,6 +9,9 @@ The command line interface is
 the most basic (though not the most convenient) way to troubleshoot PartCAD
 configuration, model declarations and definitions.
 
+Status
+------
+
 The status of PartCAD context can be evaluated using the ``status`` command.
 
   .. code-block:: shell
@@ -18,6 +21,26 @@ The status of PartCAD context can be evaluated using the ``status`` command.
 Pay attention to any exception or error message produced by the
 ``status`` command.
 
+Health Check
+------------
+
+The ``healthcheck`` command can also be used to verify if the PartCAD environment
+on your workstation is setup correctly.
+
+  .. code-block:: shell
+
+    pc healthcheck
+
+Please, follow the instructions provided by the ``healthcheck`` command to fix
+any issues it may detect. For example, the Python version is not supported, it
+will be reported by the ``healthcheck`` command.
+
+The ``healthcheck`` command also can take a ``--fix`` option to automatically
+fix the issues it detects if possible.
+
+  .. code-block:: shell
+
+    pc healthcheck --fix
 
 ========================
 PartCAD VSCode Extension
