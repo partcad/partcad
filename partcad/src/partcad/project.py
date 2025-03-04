@@ -357,11 +357,12 @@ class Project(project_config.Configuration):
             return
 
         for sketch_name in self.sketch_configs:
+            object_name = f"{self.name}:{sketch_name}"
             config = self.get_sketch_config(sketch_name)
             config = sketch_config.SketchConfiguration.normalize(
                 sketch_name,
                 config,
-                sketch_name # TODO: @azhar - send object_name instead of sketch_name
+                object_name
             )
             self.init_sketch_by_config(config)
 
@@ -402,10 +403,11 @@ class Project(project_config.Configuration):
                     "name": alias,
                     "source": ":" + sketch_name,
                 }
+                object_name = f"{self.name}:{alias}"
                 alias_sketch_config = sketch_config.SketchConfiguration.normalize(
                     alias,
                     alias_sketch_config,
-                    alias # TODO: @azhar - send object_name instead of alias
+                    object_name
                 )
                 pfa.SketchFactoryAlias(self.ctx, source_project, self, alias_sketch_config)
 
@@ -457,12 +459,13 @@ class Project(project_config.Configuration):
                     # We don't know anything about such a sketch
                     pc_logging.error("Sketch '%s' not found in '%s'", sketch_name, self.name)
                     return None
+                object_name = f"{self.name}:{sketch_name}"
                 # This is not yet created (invalidated?)
                 config = self.get_sketch_config(sketch_name)
                 config = sketch_config.SketchConfiguration.normalize(
                     sketch_name,
                     config,
-                    sketch_name # TODO: @azhar - send object_name instead of alias
+                    object_name
                 )
                 self.init_sketch_by_config(config)
 
@@ -499,12 +502,12 @@ class Project(project_config.Configuration):
                     str(config),
                 )
                 return None
-
+            object_name = f"{self.name}:{result_name}"
             # Expand the config object so that the parameter values can be set
             config = sketch_config.SketchConfiguration.normalize(
                 result_name,
                 config,
-                result_name # TODO: @azhar - send object_name instead of result_name
+                object_name
             )
             config["orig_name"] = base_sketch_name
 
@@ -565,11 +568,12 @@ class Project(project_config.Configuration):
             return
 
         for part_name in self.part_configs:
+            object_name = f"{self.name}:{part_name}"
             config = self.get_part_config(part_name)
             config = part_config.PartConfiguration.normalize(
                 part_name,
                 config,
-                part_name # TODO: @azhar - send object_name instead of part_name
+                object_name
             )
             self.init_part_by_config(config)
 
@@ -628,10 +632,11 @@ class Project(project_config.Configuration):
                     "name": alias,
                     "source": ":" + part_name,
                 }
+                object_name = f"{self.name}:{alias}"
                 alias_part_config = part_config.PartConfiguration.normalize(
                     alias,
                     alias_part_config,
-                    alias # TODO: @azhar - send object_name instead of alias
+                    object_name
                 )
                 pfa.PartFactoryAlias(self.ctx, source_project, self, alias_part_config)
 
@@ -684,12 +689,13 @@ class Project(project_config.Configuration):
                     if not quiet:
                         pc_logging.error("Part '%s' not found in '%s'", part_name, self.name)
                     return None
+                object_name = f"{self.name}:{part_name}"
                 # This is not yet created (invalidated?)
                 config = self.get_part_config(part_name)
                 config = part_config.PartConfiguration.normalize(
                     part_name,
                     config,
-                    part_name # TODO: @azhar - send object_name instead of part_name
+                    object_name
                 )
                 self.init_part_by_config(config)
 
@@ -727,11 +733,12 @@ class Project(project_config.Configuration):
                 )
                 return None
 
+            object_name = f"{self.name}:{result_name}"
             # Expand the config object so that the parameter values can be set
             config = part_config.PartConfiguration.normalize(
                 result_name,
                 config,
-                result_name # TODO: @azhar - send object_name instead of result_name
+                object_name
             )
             config["orig_name"] = base_part_name
 

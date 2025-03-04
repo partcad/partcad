@@ -80,7 +80,7 @@ class ProviderFactoryEnrich(pf.ProviderFactory):
                 for param in config["with"]:
                     augmented_config["parameters"][param]["default"] = config["with"][param]
 
-            # TODO: (azhar) - discuss about the same function call at line 72
+            # TODO: @azhar - discuss about the same function call at line 72
             augmented_config = provider_config.ProviderConfiguration.normalize(
                 self.source_provider_name,
                 augmented_config,
