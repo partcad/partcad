@@ -1,3 +1,6 @@
+import pkgutil
+import importlib
+from pathlib import Path
 from abc import ABC, abstractmethod
 
 import partcad.logging as pc_logging
@@ -26,8 +29,8 @@ class HealthCheckTest(ABC):
       self.name: str = name
       self.findings: list[str] = []
 
-    @staticmethod
-    def is_applicable():
+    @abstractmethod
+    def is_applicable(self):
         # Return false since the base class is not applicable
         # directly because it has an abstract method, hence this method
         # must be overridden by subclasses
@@ -40,3 +43,22 @@ class HealthCheckTest(ABC):
     def fix(self) -> bool:
         # Cannot auto-fix the issue
         return False
+
+
+def discover_tests() -> list[HealthCheckTest]:
+    """Dynamically load all health check test modules and return instances"""
+    test_instances = []
+    package_path = Path(__file__).parent
+
+    for _, module_name, _ in pkgutil.iter_modules([str(package_path)]):
+        module = importlib.import_module(f"partcad.healthcheck.{module_name}")
+        for Test in vars(module).values():
+            if isinstance(Test, type) and issubclass(Test, HealthCheckTest) and Test != HealthCheckTest:
+                obj = Test()
+                if obj.is_applicable():
+                    test_instances.append(obj)
+
+    if not test_instances:
+        pc_logging.info("No applicable health check tests found")
+
+    return test_instances
