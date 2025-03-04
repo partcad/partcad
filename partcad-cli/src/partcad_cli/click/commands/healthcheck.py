@@ -16,7 +16,7 @@ def cli(fix) -> None:
         report = test.test()
         if report.findings:
             report.warning(test.findings)
-            if fix:
+            if fix and test.auto_fixable():
                 report.debug("Attempting to fix issues...")
                 report.fixed = test.fix()
                 if report.fixed:
