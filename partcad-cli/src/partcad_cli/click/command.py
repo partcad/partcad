@@ -323,7 +323,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     for params in kwargs["extra_param"]:
         param, value = params.split("=")
         object_id, key = param.split(".")
-        if not user_config.parameter_config[object_id]:
+        if object_id not in user_config.parameter_config:
             user_config.parameter_config[object_id] = {}
         user_config.parameter_config[object_id][key] = value
 
