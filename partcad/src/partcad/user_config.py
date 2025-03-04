@@ -15,6 +15,81 @@ import vyper
 from . import logging as pc_logging
 
 
+class BaseConfig(dict):
+    def __init__(self, v: vyper.Vyper, path: str):
+        self._v = v
+        self._path = path
+
+    @property
+    def _config(self):
+        return self._v.get(self._path) or {}
+
+    def __getitem__(self, key):
+        return self._config.get(key)
+
+    def __setitem__(self, key, value):
+        config = self._config
+        config[key] = value
+        self._v.set(self._path, config)
+
+    def __delitem__(self, key):
+        config = self._config
+        if key in config:
+            del config[key]
+            self._v.set(self._path, config)
+
+    def __iter__(self):
+        return iter(self._config)
+
+    def __len__(self):
+        return len(self._config)
+
+    def __getattr__(self, key):
+        return self._config.get(key)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self._config})"
+
+    def to_dict(self):
+        return self._config.copy()
+
+
+class GitConfig(BaseConfig):
+    def __init__(self, v):
+        super().__init__(v, "git.config")
+
+
+class ApiKeyConfig(BaseConfig):
+    def __init__(self, v):
+        super().__init__(v, "apiKey")
+
+
+class PIIConfig(BaseConfig):
+    def __init__(self, v):
+        super().__init__(v, "user")
+        self.__populate_addresses()
+
+    def __populate_addresses(self):
+        data = self._config
+        child_fields = ["shippingAddress", "billingAddress"]
+        parent_fields = [field for field in data.keys() if field not in child_fields]
+
+        for address_type in child_fields:
+            if address_type in data:
+                for field in parent_fields:
+                    if field not in data[address_type]:
+                        data[address_type][field] = data.get(field)
+            else:
+                data[address_type] = {field: data.get(field) for field in parent_fields}
+
+        self._v.set(self._path, data)
+
+
+class ParametersConfig(BaseConfig):
+    def __init__(self, v):
+        super().__init__(v, "parameters")
+
+
 class SentryConfig:
     def __init__(self, v):
         self.v: vyper.Vyper = v
@@ -48,33 +123,6 @@ class SentryConfig:
             if isinstance(val, property):
                 properties.append((name, val.__get__(self, SentryConfig)))
         return str({k: v for k, v in properties if v is not None})
-
-
-class GitConfig(dict):
-    def __init__(self, v):
-        self._v: vyper.Vyper = v
-
-    @property
-    def _config(self):
-        config = self._v.get("git.config")
-        if config is None:
-            config = {}
-        return config
-
-    def __getattr__(self, item):
-        return self._config.get(item)
-
-    def __getitem__(self, item):
-        return self._config.get(item)
-
-    def __iter__(self):
-        return iter(self._config)
-
-    def __len__(self):
-        return len(self._config)
-
-    def __repr__(self):
-        return str(self._config)
 
 
 class UserConfig(vyper.Vyper):
@@ -268,6 +316,24 @@ class UserConfig(vyper.Vyper):
         # values: <dict>
         # default: {}
         self.git_config = GitConfig(self)
+
+        # option: Provider Key
+        # description: Provider Key configuration
+        # values: <dict>
+        # default: {}
+        self.api_key = ApiKeyConfig(self)
+
+        # option: Personally identifiable information
+        # description: Personally identifiable information configuration
+        # values: <dict>
+        # default: {}
+        self.pii_config = PIIConfig(self)
+
+        # option: Parameters
+        # description: Object parameters configuration
+        # values: <dict>
+        # default: {}
+        self.parameter_config = ParametersConfig(self)
 
         # option: offline
         # description: offline mode
