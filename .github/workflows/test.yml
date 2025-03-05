@@ -23,7 +23,7 @@ concurrency:
 env:
   OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
   PYTHONS: '["3.10", "3.11", "3.12"]'
-  VERSION: 0.7.119
+  VERSION: 0.7.120
   CONTAINER_REGISTRY: ghcr.io
 
 jobs:
