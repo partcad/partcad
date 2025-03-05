@@ -328,7 +328,9 @@ Example:
         <parameter name>: <parameter value>
 
 
-`Object IDs <http://localhost:8002/design.html#object-ids>`_ are used to reference different types of objects within a package, such as sketches, parts, assemblies, scenes, interfaces, and providers.
+:ref:`Object IDs <object-ids>` are used to reference different
+types of objects within a package, such as sketches, parts,
+assemblies, scenes, interfaces, and providers.
 
 
 Accessing Parameters in Providers
