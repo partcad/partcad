@@ -13,6 +13,7 @@ from partcad import logging as logging
 import asyncio
 
 from partcad.test.all import tests as all_tests
+from partcad.user_config import user_config
 
 
 async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assembly, scene, object):
@@ -21,7 +22,7 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
     """
     tasks = []
 
-    tests_to_run = all_tests()
+    tests_to_run = all_tests(user_config.threads_max)
     if filter_prefix:
         tests_to_run = list(filter(lambda t: t.name.startswith(filter_prefix), tests_to_run))
         logging.debug(f"Running tests with prefix {filter_prefix}")
@@ -41,6 +42,8 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
             shape = prj.get_interface(object)
             if shape is None:
                 logging.error(f"{object} is not found")
+            elif not shape.finalized:
+                logging.warning(f"{object} is not finalized")
             else:
                 tasks.append(shape.test_async())
         else:
@@ -54,6 +57,8 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
 
             if shape is None:
                 logging.error(f"{object} is not found")
+            elif not shape.finalized:
+                logging.warning(f"{object} is not finalized")
             else:
                 tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape) for t in tests_to_run])
 

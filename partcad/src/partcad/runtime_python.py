@@ -90,9 +90,11 @@ class PythonRuntime(runtime.Runtime):
         if not hasattr(self.tls, "async_locks"):
             self.tls.async_locks = {}
         self_id = id(self)
-        if self_id not in self.tls.async_locks:
-            self.tls.async_locks[self_id] = asyncio.Lock()
-        return self.tls.async_locks[self_id]
+        loop = asyncio.get_event_loop()
+        loop_id = id(loop)
+        if self_id not in self.tls.async_locks or self.tls.async_locks[self_id][1] != loop_id:
+            self.tls.async_locks[self_id] = (asyncio.Lock(), loop_id)
+        return self.tls.async_locks[self_id][0]
 
     @contextlib.contextmanager
     def sync_lock(self, session=None):

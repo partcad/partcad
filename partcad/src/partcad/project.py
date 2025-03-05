@@ -1276,23 +1276,33 @@ class Project(project_config.Configuration):
                     yaml.dump(config, fp)
                     fp.close()
 
-    async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False) -> list[asyncio.Task]:
+    async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False) -> bool:
         tasks = []
         test_method = "test_log_wrapper" if use_wrapper else "test_cached"
-        for name in self.interface_configs.keys():
-            obj = self.get_interface(name)
-            tasks.append(asyncio.create_task(obj.test_async()))
-        for name in self.sketch_configs.keys():
-            obj = self.get_sketch(name)
-            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, obj)) for t in tests)
-        for name in self.part_configs.keys():
-            obj = self.get_part(name)
-            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, obj)) for t in tests)
-        for name in self.assembly_configs.keys():
-            obj = self.get_assembly(name)
-            tasks.extend(asyncio.create_task(getattr(t, test_method)(tests, ctx, obj)) for t in tests)
-        results = await asyncio.gather(*tasks)
-        return False not in results
+  
+        def get_objects(config_dict, getter):
+            for name in config_dict:
+                obj = getter(name)
+                # skip testing objects that are not finalized
+                if obj and (not hasattr(obj, "finalized") or obj.finalized):
+                    yield obj
+
+        tasks.extend(
+            asyncio.create_task(obj.test_async()) for obj in get_objects(self.interface_configs, self.get_interface)
+        )
+
+        for config_dict, getter in [
+            (self.sketch_configs, self.get_sketch),
+            (self.part_configs, self.get_part),
+            (self.assembly_configs, self.get_assembly),
+        ]:
+            tasks.extend(
+                asyncio.create_task(getattr(t, test_method)(tests, ctx, obj))
+                for obj in get_objects(config_dict, getter)
+                for t in tests
+            )
+
+        return all(await asyncio.gather(*tasks))
 
     async def test_async(self, ctx, tests=[]) -> bool:
         return await self._run_test_async(ctx, tests, use_wrapper=False)
@@ -1412,8 +1422,10 @@ class Project(project_config.Configuration):
                 for format_name, render_func_name in render_formats.items():
                     if _should_render_format(format_name, shape_render, format, shape.kind):
                         if hasattr(shape, render_func_name):
-                            render_func = getattr(shape, render_func_name)
-                            tasks.append(render_func(self.ctx, self))
+                            # skip rendering objects that are not finalized
+                            if not hasattr(shape, "finalized") or shape.finalized:
+                                render_func = getattr(shape, render_func_name)
+                                tasks.append(render_func(self.ctx, self))
                         else:
                             pc_logging.warn(f"Shape {shape.kind} does not support {format_name} rendering")
 

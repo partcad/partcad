@@ -58,6 +58,8 @@ class Shape(ShapeConfiguration):
         self.desc = config.get("desc", None)
         self.desc = self.desc.strip() if self.desc is not None else None
         self.requirements = config.get("requirements", None)
+        finalized_default = config.get("type", None) != "kicad"
+        self.finalized = config.get("finalized", finalized_default)
 
         # Cache behavior
         self.cacheable = config.get("cache", True)

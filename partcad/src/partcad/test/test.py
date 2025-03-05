@@ -9,19 +9,31 @@
 
 from abc import ABC, abstractmethod
 import copy
+import asyncio
 
 from .. import logging as pc_logging
 
+def semaphore_wrapper(f):
+    async def wrapper(*args, **kwargs):
+        if Test.semaphore is None:
+            Test.semaphore = asyncio.Semaphore(Test.MAX_CONCURRENT_TESTS)
+        async with Test.semaphore:
+            return await f(*args, **kwargs)
+    return wrapper
 
 class Test(ABC):
     # TODO(clairbee): move the constants to the global scope
     # TODO(clairbee): add the concept of a "skipped" test (introduce the enum type TestResult or find existing python types)
     TEST_FAILED = False
     TEST_PASSED = True
+    MAX_CONCURRENT_TESTS = None
+
+    semaphore = None
 
     def __init__(self, name: str) -> None:
         self.name = name
 
+    @semaphore_wrapper
     async def test_cached(self, tests_to_run: list["Test"], ctx, shape, test_ctx: dict = {}) -> bool:
         is_cacheable = shape.get_cacheable()
         if is_cacheable:
