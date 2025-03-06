@@ -1,6 +1,22 @@
 desc: PartCAD example project to demonstrate parts defined using STL files.
 
 parts:
-  cube:
-    type: stl
-    desc: A cube defined in STL
+  AeroAssembly_assy_example/AeroFrameAssembly_solid1:
+    type: step
+  AeroAssembly_assy_example/AeroFrameAssembly_solid2:
+    type: step
+  AeroAssembly_assy_example/AeroFrameAssembly_solid3:
+    type: step
+  AeroAssembly_assy_example/AeroFrame_Plate:
+    type: step
+  AeroAssembly_assy_example/AeroFrame_Cap:
+    type: step
+  AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1:
+    type: step
+  AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2:
+    type: step
+  AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3:
+    type: step
+assemblies:
+  AeroAssembly_assy_example/AeroAssembly:
+    type: assy
