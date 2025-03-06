@@ -183,18 +183,8 @@ Feature: `pc convert` command
           type: stl
           path: cube_alias.stl
           parameters:
-            width:
-              type: int
-              default: 10
-              name: width
-              min: 2
-              max: 2
-            height:
-              type: int
-              default: 10
-              name: height
-              min: 2
-              max: 2
+            width: 10
+            height: 10
           manufacturable: True
       """
 
