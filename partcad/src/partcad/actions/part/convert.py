@@ -1,4 +1,3 @@
-from contextlib import suppress
 from pathlib import Path
 import shutil
 from typing import Optional
@@ -20,6 +19,9 @@ EXTENSION_MAPPING = {
     "scad": "scad",
 }
 
+SHALLOW_COPY_SUFFICIENT_TYPES = ["alias", "enrich"]
+
+
 def deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge two dictionaries; override values take precedence."""
     result = base.copy()
@@ -30,49 +32,79 @@ def deep_merge(base: dict, override: dict) -> dict:
             result[key] = value
     return result
 
-def get_base_part_config(project: Project, part_config: dict, part_name: str):
-    """Retrieve the base part configuration if the part is an 'enrich' or 'alias' and extract parameters from name."""
-    if "source" not in part_config and "source_resolved" not in part_config:
-        return part_config, project, part_name
 
-    source_key = "source_resolved" if "source_resolved" in part_config else "source"
-    source_value = part_config[source_key]
-
-    if ";" in source_value:
-        base_source, params_suffix = source_value.split(";", 1)
-        extra_params = dict(param.split("=") for param in params_suffix.split(","))
+def get_source_path(project: Project, config: dict, part_name: str) -> Path:
+    """Get the physical path of the final base part file."""
+    if "path" in config:
+        source_path = (Path(project.path) / config["path"]).resolve()
     else:
-        base_source = source_value
-        extra_params = {}
+        part_type = config.get("type")
+        ext = EXTENSION_MAPPING.get(part_type, part_type)
+        source_path = Path(project.config_dir) / f"{part_name}.{ext}"
 
-    base_package, base_part_name = resolve_resource_path(project.name, base_source)
-    base_project = project.ctx.get_project(base_package)
-    if not base_project:
-        raise ValueError(f"Base project '{base_package}' not found for part '{part_name}'.")
+    pc_logging.debug(f"Checking source path for '{part_name}': {source_path}")
 
-    base_part_config = base_project.get_part_config(base_part_name)
-    if not base_part_config:
-        raise ValueError(f"Base part '{base_part_name}' not found in project '{base_project.name}'.")
+    if not source_path.exists():
+        raise FileNotFoundError(f"Source file '{source_path}' does not exist for conversion.")
 
-    merged_config = deep_merge(base_part_config, part_config)
-    merged_config["type"] = base_part_config.get("type", part_config["type"])
-    merged_config.pop(source_key, None)
+    return source_path
 
-    if extra_params:
-        merged_config.setdefault("with", {}).update(extra_params)
 
-    if "path" not in merged_config and "path" in base_part_config:
-        merged_config["path"] = base_part_config["path"]
+def get_final_base_part_config(project: Project, part_config: dict, part_name: str):
+    """Recursively resolve 'alias' and 'enrich' to find the original base part."""
+    visited_sources = set()
+    final_params = {}
 
-    return merged_config, base_project, base_part_name
+    while part_config.get("type") in SHALLOW_COPY_SUFFICIENT_TYPES:
+        source_key = "source_resolved" if "source_resolved" in part_config else "source"
 
-def update_parameters_with_defaults(part_config: dict):
-    """Update parameters' default values using 'with' overrides."""
+        if source_key not in part_config:
+            pc_logging.debug(f"Reached base part: '{part_name}', stopping resolution.")
+            break
+
+        source_value = part_config[source_key]
+
+        if source_value in visited_sources:
+            raise ValueError(f"Circular reference detected in part '{part_name}' (source: '{source_value}')")
+
+        visited_sources.add(source_value)
+
+        if "with" in part_config:
+            final_params.update(part_config["with"])
+
+        base_package, base_part_name = resolve_resource_path(project.name, source_value)
+        base_project = project.ctx.get_project(base_package)
+
+        if not base_project:
+            raise ValueError(f"Base project '{base_package}' not found for part '{part_name}'.")
+
+        base_part_config = base_project.get_part_config(base_part_name)
+
+        if not base_part_config:
+            raise ValueError(f"Base part '{base_part_name}' not found in project '{base_project.name}'.")
+
+        pc_logging.debug(f"Resolving '{part_name}' → '{base_part_name}' (source: '{source_value}')")
+
+        part_config = base_part_config
+        project = base_project
+        part_name = base_part_name
+
+    if final_params:
+        part_config.setdefault("with", {}).update(final_params)
+
+    return part_config, project, part_name
+
+
+def update_parameters_with_defaults(part_config: dict) -> dict:
+    """Update parameters' default values using 'with' overrides, only for original parts."""
+    if part_config.get("type") in SHALLOW_COPY_SUFFICIENT_TYPES:
+        return part_config  # No need to update parameters for alias or enrich parts
+
     if "with" not in part_config or "parameters" not in part_config:
         return part_config
 
-    with_values = part_config["with"]
     parameters = part_config["parameters"]
+    with_values = part_config["with"]
 
     for param_name, new_value in with_values.items():
         if param_name in parameters:
@@ -92,15 +124,10 @@ def update_parameters_with_defaults(part_config: dict):
 
     return part_config
 
-def get_source_path(project: Project, config: dict, part_name: str):
-    """Determine the source file location based on part configuration."""
-    if "path" in config:
-        return (Path(project.path) / config["path"]).resolve()
-    part_type = config.get("type")
-    return Path(project.config_dir) / f"{part_name}.{EXTENSION_MAPPING.get(part_type, part_type)}"
 
-def perform_conversion(project: Project, part_name, original_type: str,
-                       part_config: dict, source_path: Path, target_format: str, output_dir: Optional[str]):
+def perform_conversion(project: Project, part_name: str, original_type: str,
+                       part_config: dict, source_path: Path, target_format: str,
+                       output_dir: Optional[str], dependencies_list: list = []) -> Path:
     """Handles file conversion and updates project configuration."""
     new_ext = EXTENSION_MAPPING.get(target_format, target_format)
     if output_dir:
@@ -119,8 +146,9 @@ def perform_conversion(project: Project, part_name, original_type: str,
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with pc_logging.Process("Convert", part_name):
-        if original_type in ["enrich", "alias"]:
+        if original_type in SHALLOW_COPY_SUFFICIENT_TYPES:
             shutil.copy2(source_path, output_path)
+            dependencies_list += copy_dependencies(project, part_config, output_dir)
         else:
             project.convert(
                 sketches=[], interfaces=[], parts=[part_name], assemblies=[],
@@ -132,45 +160,36 @@ def perform_conversion(project: Project, part_name, original_type: str,
 
     return output_path
 
+
 def copy_dependencies(source_project: Project, part_config: dict, output_dir: Optional[str]):
     """Copy dependencies (additional files) associated with a part."""
     dependencies = part_config.get("dependencies", [])
     copied_files = []
 
     if not dependencies:
-        return copied_files
+        return copied_files  # Ensure dependencies are present in config even if not copied
 
-    cwd = Path.cwd().resolve()
-    output_dir = (cwd / output_dir).resolve() if output_dir else Path(source_project.path).resolve()
+    if output_dir:
+        output_dir = output_dir.resolve()
 
     for dep in dependencies:
         dep_source_path = (Path(source_project.path) / dep).resolve()
+        dep_target_path = (output_dir / Path(dep).name).resolve() if output_dir else dep_source_path
+
         if not dep_source_path.exists():
             pc_logging.warning(f"Dependency '{dep}' not found in project '{source_project.name}'. Skipping.")
             continue
 
-        dep_target_path = (output_dir / Path(dep).name).resolve()
+        if output_dir:
+            dep_target_path.parent.mkdir(parents=True, exist_ok=True)
+            if not dep_target_path.exists():
+                shutil.copy2(dep_source_path, dep_target_path)
+                pc_logging.debug(f"Copied dependency: {dep_source_path} -> {dep_target_path}")
+            copied_files.append(str(dep_target_path.relative_to(output_dir)))  # Update dependency path
+        else:
+            copied_files.append(dep)  # Keep original path if not copied
 
-        try:
-            _ = dep_target_path.relative_to(output_dir)
-        except ValueError:
-            pc_logging.warning(f"Skipping dependency '{dep}' due to path resolution issue.")
-            continue
-
-        if dep_source_path == dep_target_path:
-            pc_logging.info(f"Skipping dependency '{dep}' as it is already in the correct location.")
-            continue
-
-        dep_target_path.parent.mkdir(parents=True, exist_ok=True)
-
-        try:
-            shutil.copy2(dep_source_path, dep_target_path)
-            copied_files.append(dep_target_path)
-            pc_logging.info(f"Copied dependency: {dep_source_path} -> {dep_target_path}")
-        except Exception as e:
-            pc_logging.error(f"Failed to copy dependency '{dep_source_path}': {e}")
-
-    return [dep.relative_to(source_project.path) for dep in copied_files]
+    return copied_files
 
 
 def convert_part_action(project: Project, object_name: str, target_format: Optional[str] = None,
@@ -196,7 +215,7 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     if "source" not in part_config and "package" not in part_config and not target_format:
         raise ValueError(f"Part '{part_name}' requires '-t' (target format) to be specified.")
 
-    part_config, source_project, source_part_name = get_base_part_config(project, part_config, part_name)
+    part_config, source_project, source_part_name = get_final_base_part_config(project, part_config, part_name)
     source_path = get_source_path(source_project, part_config, source_part_name)
     conversion_target = part_config.get("type")
 
@@ -204,11 +223,12 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         pc_logging.info(f"[Dry Run] No changes made for '{part_name}'.")
         return
 
-    copied_dependencies = copy_dependencies(source_project, part_config, output_dir)
+    copied_dependencies = []
     converted_path = source_path
     if part_type != conversion_target:
         converted_path = perform_conversion(project, part_name, part_type, part_config,
-                                            source_path, conversion_target, output_dir)
+                                            source_path, conversion_target,
+                                            output_dir, copied_dependencies)
 
     try:
         config_path = converted_path.relative_to(project.path)
@@ -231,7 +251,7 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     if target_format and target_format != conversion_target:
         final_path = perform_conversion(
             project, part_name, conversion_target, updated_config,
-            converted_path, target_format, output_dir
+            converted_path, target_format, output_dir,
         )
 
         if final_path is None or not final_path.exists():
