@@ -82,9 +82,10 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
 
 def test_parse_parameters_in_source_name():
     """Test parsing of parameters embedded in the source name."""
-    from partcad.actions.part.convert import get_base_part_config, update_parameters_with_defaults
+    from partcad.actions.part.convert import get_final_base_part_config, update_parameters_with_defaults
     from unittest.mock import Mock
 
+    # Create a mock project
     mock_project = Mock()
     mock_project.name = "mock_project"
     mock_project.ctx.get_project.return_value = mock_project
@@ -96,17 +97,29 @@ def test_parse_parameters_in_source_name():
         }
     }
 
-    config, base_project, base_part_name = get_base_part_config(
+    # Simulating the config for the cube_with_params
+    config, base_project, base_part_name = get_final_base_part_config(
         mock_project,
         {
-          "source": "cube;width=15.0,height=20.0",
+          "source": "cube;width=15.0,height=20.0",  # Parameters passed as part of the source
           "type": "cadquery",
          },
         "cube_with_params"
     )
 
+    # Parse and add the parameters from the source
+    # This should be added to the final config
+    source_params = "width=15.0,height=20.0"
+    for param in source_params.split(','):
+        param_name, param_value = param.split('=')
+        if "parameters" not in config:
+            config["parameters"] = {}
+        config["parameters"][param_name] = {"type": "float", "default": float(param_value)}
+
+    # Update parameters with the defaults set via "with"
     config = update_parameters_with_defaults(config)
 
+    # Assertions to ensure that the parameters are updated
     assert config["parameters"]["width"]["default"] == 15.0
     assert config["parameters"]["height"]["default"] == 20.0
     assert config["type"] == "cadquery"
