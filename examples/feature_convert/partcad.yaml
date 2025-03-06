@@ -1,3 +1,21 @@
+desc: PartCAD example project for testing the conversion of various part types, including CadQuery, SCAD, STEP, BREP, STL, 3MF, Build123d, and more. This project demonstrates the use of alias and enrich mechanisms for part conversion.
+
+docs:
+  usage: |
+    ```shell
+    pc convert cube -t step
+    pc convert cube_enrich
+    pc convert cube_alias_params --target brep
+    pc convert cube_enrich_scad --target 3mf
+    pc convert cube_enrich_enrich --target stl
+    pc convert cube_alias_alias --target step
+    pc convert cube_enrich_alias --target scad
+    ```
+
+# ---------------------------- #
+# Parts with BREP, 3MF, Build123d, CadQuery, SCAD, and STEP types
+# ---------------------------- #
+
 parts:
   box_brep:
     type: brep
@@ -6,14 +24,66 @@ parts:
   cube_3mf:
     type: 3mf
     path: 3mf/cube.3mf
+    parameters:
+      width:
+        type: int
+        default: 20
+      height:
+        type: int
+        default: 15
+      length:
+        type: float
+        default: 12.5
 
   cube_build123d:
     type: build123d
     path: build123d/cube.py
+    parameters:
+      width:
+        type: int
+        default: 15
+      height:
+        type: int
+        default: 12
+      length:
+        type: float
+        default: 10.5
 
   cube_cadquery:
     type: cadquery
     path: cadquery/cube.py
+    parameters:
+      width:
+        type: int
+        default: 10
+      height:
+        type: int
+        default: 15
+      length:
+        type: float
+        default: 20.0
+
+  prism_scad:
+    type: scad
+    path: scad/prism.scad
+    parameters:
+      width:
+        type: int
+        default: 30
+      height:
+        type: int
+        default: 25
+      length:
+        type: float
+        default: 20.0
+
+  bolt_step:
+    type: step
+    path: step/bolt.step
+
+  cube_stl:
+    type: stl
+    path: stl/cube.stl
     parameters:
       width:
         type: int
@@ -25,26 +95,101 @@ parts:
         type: float
         default: 10
 
-  prism_scad:
-    type: scad
-    path: scad/prism.scad
 
-  bolt_step:
-    type: step
-    path: step/bolt.step
-
-  cube_stl:
-    type: stl
-    path: stl/cube.stl
+# ---------------------------- #
+# Enrich parts
+# ---------------------------- #
 
   cube_enrich:
     type: enrich
     source: :cube_cadquery
     with:
-      height: 2
-      width: 5
-  
+      height: 10
+      width: 20
+    parameters:
+      width:
+        type: int
+        default: 5
+      height:
+        type: int
+        default: 5
+      length:
+        type: float
+        default: 100
+
+  cube_enrich_3mf:
+    type: enrich
+    source: :cube_3mf
+    with:
+      height: 25
+      width: 35
+
+  cube_enrich_scad:
+    type: enrich
+    source: :prism_scad
+    with:
+      height: 20
+      width: 40
+
+  cube_enrich_build123d:
+    type: enrich
+    source: :cube_build123d
+    with:
+      length: 15
+      width: 20
+
+  cube_enrich_stl:
+    type: enrich
+    source: :cube_stl
+    with:
+      length: 20
+      width: 30
+
+  cube_enrich_enrich:
+    type: enrich
+    source: :cube_enrich
+    with:
+      length: 25
+      width: 50
+
+  cube_enrich_alias_enrich:
+    type: enrich
+    source: :cube_alias_enrich
+
+  cube_enrich_alias:
+    type: enrich
+    source: :cube_alias
+
+
+# ---------------------------- #
+# Alias parts
+# ---------------------------- #
+
   cube_alias:
     desc: This is an example of an alias to a part
     type: alias
     source: :cube_cadquery
+
+  cube_alias_step:
+    type: alias
+    source: :bolt_step
+
+  cube_alias_brep:
+    type: alias
+    source: :box_brep
+
+  cube_alias_cadquery:
+    type: alias
+    source: :cube_cadquery
+
+  cube_alias_alias:
+    type: alias
+    source: :cube_alias
+
+  cube_alias_enrich:
+    type: alias
+    source: :cube_enrich
+
+  cube_alias_enrich_alias:
+    type: alias
+    source: :cube_enrich_alias
