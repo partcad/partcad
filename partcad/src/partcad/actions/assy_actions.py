@@ -30,193 +30,174 @@ import partcad.logging as pc_logging
 from partcad.actions.part_actions import import_part_action
 from partcad.project import Project
 
-g_shape_map = {}
+shape_cache = {}
+
 
 def get_label_name(label: TDF_Label, default="Unnamed") -> str:
-    """Get the TDataStd_Name attribute from a label."""
+    """Extracts the name from a label if available, otherwise returns the default name."""
     if label.IsNull():
         return default
-    it = TDF_AttributeIterator(label)
-    while it.More():
-        attr = it.Value()
+    iterator = TDF_AttributeIterator(label)
+    while iterator.More():
+        attr = iterator.Value()
         if Standard_GUID.IsEqual_s(attr.ID(), TDataStd_Name.GetID_s()):
-            pc_logging.debug(f"[DEBUG] Found name: {attr.Get().ToExtString()}")
             return attr.Get().ToExtString()
-        it.Next()
+        iterator.Next()
     return default
 
-def clone_trsf(src: gp_Trsf) -> gp_Trsf:
-    """Clone a gp_Trsf matrix."""
+
+def clone_transformation(src: gp_Trsf) -> gp_Trsf:
+    """Creates a deep copy of a gp_Trsf transformation matrix."""
     new_trsf = gp_Trsf()
     new_trsf.SetValues(
-        src.Value(1,1), src.Value(1,2), src.Value(1,3), src.Value(1,4),
-        src.Value(2,1), src.Value(2,2), src.Value(2,3), src.Value(2,4),
-        src.Value(3,1), src.Value(3,2), src.Value(3,3), src.Value(3,4)
+        src.Value(1, 1), src.Value(1, 2), src.Value(1, 3), src.Value(1, 4),
+        src.Value(2, 1), src.Value(2, 2), src.Value(2, 3), src.Value(2, 4),
+        src.Value(3, 1), src.Value(3, 2), src.Value(3, 3), src.Value(3, 4)
     )
     return new_trsf
 
-def invert_trsf(src: gp_Trsf) -> gp_Trsf:
-    """Invert a gp_Trsf matrix."""
-    new_t = clone_trsf(src)
-    new_t.Invert()
-    return new_t
 
-def _convert_location(trsf: gp_Trsf):
-    """Convert gp_Trsf to [translation, axis, angle]."""
-    translation = [
-        trsf.TranslationPart().X(),
-        trsf.TranslationPart().Y(),
-        trsf.TranslationPart().Z()
-    ]
+def invert_transformation(src: gp_Trsf) -> gp_Trsf:
+    """Returns the inverse of a transformation matrix."""
+    inverted_trsf = clone_transformation(src)
+    inverted_trsf.Invert()
+    return inverted_trsf
+
+
+def transformation_difference(t1: gp_Trsf, t2: gp_Trsf) -> float:
+    """Computes the maximum absolute difference between corresponding matrix elements."""
+    return max(
+        abs(t1.Value(row, col) - t2.Value(row, col))
+        for row in range(1, 4)
+        for col in range(1, 5)
+    )
+
+
+def combine_transformations(parent: gp_Trsf, local: gp_Trsf, tolerance=1e-7) -> gp_Trsf:
+    """
+    Computes the resulting transformation by applying parent * local.
+    If the difference between (parent * local) and local is below the tolerance,
+    returns local, assuming it already includes the parent transformation.
+    """
+    combined_trsf = gp_Trsf()
+    combined_trsf.Multiply(parent)
+    combined_trsf.Multiply(local)
+
+    return clone_transformation(local if transformation_difference(combined_trsf, local) < tolerance else combined_trsf)
+
+
+def convert_location(trsf: gp_Trsf):
+    """
+    Converts a transformation into a format: [[tx, ty, tz], [ax, ay, az], angle].
+    """
+    translation = [trsf.TranslationPart().X(), trsf.TranslationPart().Y(), trsf.TranslationPart().Z()]
+
     quaternion = trsf.GetRotation()
     w, x, y, z = quaternion.W(), quaternion.X(), quaternion.Y(), quaternion.Z()
-    rotation_angle = 2.0 * math.acos(w)
-    sin_half_angle = math.sqrt(max(0.0, 1.0 - w * w))
-    if sin_half_angle < 1e-6:
-        rotation_axis = [1.0, 0.0, 0.0]
-        rotation_angle = 0.0
-    else:
-        rotation_axis = [x / sin_half_angle, y / sin_half_angle, z / sin_half_angle]
-    return [translation, rotation_axis, rotation_angle]
+    rotation_angle = 2.0 * math.atan2(math.sqrt(x**2 + y**2 + z**2), w)
+    rotation_angle_deg = math.degrees(rotation_angle)
+
+    sin_half_angle = math.sin(rotation_angle / 2.0)
+    rotation_axis = [1.0, 0.0, 0.0] if abs(sin_half_angle) < 1e-6 else [x / sin_half_angle, y / sin_half_angle, z / sin_half_angle]
+
+    return [translation, rotation_axis, rotation_angle_deg]
+
 
 def save_shape_to_step(shape: TopoDS_Shape, filename: Path):
-    """Save a TopoDS_Shape to a STEP file."""
-    pc_logging.debug(f"Saving shape to {filename}")
+    """Saves a TopoDS_Shape to a STEP file."""
     writer = STEPControl_Writer()
-    status = writer.Transfer(shape, STEPControl_AsIs)
-    if status != 1:
-        raise ValueError(f"Transfer error for {filename}")
-    status = writer.Write(str(filename))
-    if status != 1:
-        raise ValueError(f"Write error for {filename}")
+    if writer.Transfer(shape, STEPControl_AsIs) != 1 or writer.Write(str(filename)) != 1:
+        raise ValueError(f"Failed to write STEP file: {filename}")
+
 
 def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_folder: Path, config: dict) -> str:
-    """Save shape as STEP, add part to project, return path without extension."""
+    """Saves shape as STEP and imports it into the project."""
     step_file = parent_folder / f"{part_name}.step"
-    pc_logging.debug(f"Importing part '{part_name}' => {step_file}")
     save_shape_to_step(shape, step_file)
-    import_part_action(
-        project,
-        "step",
-        part_name,
-        str(step_file),
-        config,
-        target_dir=str(parent_folder)
-    )
+    import_part_action(project, "step", part_name, str(step_file), config, target_dir=str(parent_folder))
     return str(step_file.with_suffix(""))
 
+
 def shape_signature(shape: TopoDS_Shape) -> tuple:
-    """Compute a bounding box + volume signature for dedup."""
-    bnd = Bnd_Box()
-    BRepBndLib.Add_s(shape, bnd)
-    xmin, ymin, zmin, xmax, ymax, zmax = bnd.Get()
+    """Computes a unique signature for a shape based on its bounding box and volume."""
+    bbox = Bnd_Box()
+    BRepBndLib.Add_s(shape, bbox)
+    xmin, ymin, zmin, xmax, ymax, zmax = bbox.Get()
 
     props = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape, props)
-    vol = props.Mass()
+    volume = props.Mass()
 
-    def r(x):
-        return round(x, 5)
-    return (
-        r(xmin), r(ymin), r(zmin),
-        r(xmax), r(ymax), r(zmax),
-        r(vol)
-    )
+    return tuple(round(v, 5) for v in (xmin, ymin, zmin, xmax, ymax, zmax, volume))
 
 def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited):
     """
-    Recursively parse a label. If it's an assembly, explore children.
-    If it's a simple shape, return a part node.
-    Otherwise, fallback for compounds with multiple SOLIDs.
+    Recursively traverses the XDE tree:
+      - If it's an Assembly, processes child components.
+      - If it's a simple shape or a compound with a single solid, creates a part.
+      - If it's a compound with multiple solids, splits it into a sub-assembly.
     """
     if label in visited:
         return None
     visited.add(label)
 
-    loc = shape_tool.GetLocation_s(label)
-    local_trsf = loc.Transformation()
-    combined_trsf = gp_Trsf()
-    combined_trsf.Multiply(parent_trsf)
-    combined_trsf.Multiply(local_trsf)
+    # Compute transformation
+    local_trsf = shape_tool.GetLocation_s(label).Transformation()
+    combined_trsf = combine_transformations(parent_trsf, local_trsf, tolerance=1e-7)
 
     name = get_label_name(label, default="Unnamed")
 
-    # Check if assembly
+    # Handle Assembly
     if shape_tool.IsAssembly_s(label):
-        pc_logging.debug(f" Assembly label: {name}")
-        node = {
-            "type": "assembly",
-            "name": name,
-            "trsf": combined_trsf,
-            "children": []
-        }
-        child_seq = TDF_LabelSequence()
-        shape_tool.GetComponents_s(label, child_seq)
-        for i in range(child_seq.Length()):
-            child_lbl = child_seq.Value(i + 1)
-            sub_node = parse_label_recursive(child_lbl, shape_tool, combined_trsf, visited)
-            if sub_node:
-                node["children"].append(sub_node)
+        pc_logging.info(f"Processing assembly: {name}")
+        node = {"type": "assembly", "name": name, "trsf": combined_trsf, "children": []}
+
+        child_labels = TDF_LabelSequence()
+        shape_tool.GetComponents_s(label, child_labels)
+
+        for i in range(child_labels.Length()):
+            child_label = child_labels.Value(i + 1)
+            child_node = parse_label_recursive(child_label, shape_tool, combined_trsf, visited)
+            if child_node:
+                node["children"].append(child_node)
+
         return node
 
-    # Check if simple shape
-    if shape_tool.IsSimpleShape_s(label):
-        shape = shape_tool.GetShape_s(label)
-        if not shape.IsNull():
-            pc_logging.debug(f"Simple part label: {name}")
-            return {
-                "type": "part",
-                "name": name,
-                "shape": shape,
-                "trsf": combined_trsf
-            }
-
-    # Fallback: possibly a compound with multiple SOLIDs
+    # Handle Simple Shape
     shape = shape_tool.GetShape_s(label)
+    if shape_tool.IsSimpleShape_s(label) and not shape.IsNull():
+        pc_logging.info(f"Processing simple part: {name}")
+        return {"type": "part", "name": name, "shape": shape, "trsf": combined_trsf}
+
+    # Handle Compound (multi-solid)
     if not shape.IsNull():
-        explorer = TopExp_Explorer(shape, TopAbs_SOLID)
         solids = []
+        explorer = TopExp_Explorer(shape, TopAbs_SOLID)
         while explorer.More():
             solids.append(explorer.Current())
             explorer.Next()
 
+        pc_logging.info(f"[parse_label_recursive] Compound label '{name}': {len(solids)} solid(s) found.")
+
         if len(solids) > 1:
-            pc_logging.debug(f"Compound with {len(solids)} SOLIDs: {name}")
-            children_nodes = []
-            idx = 1
-            for s in solids:
-                local_t = clone_trsf(s.Location().Transformation())
-                solid_trsf = gp_Trsf()
-                solid_trsf.Multiply(combined_trsf)
-                solid_trsf.Multiply(local_t)
+            pc_logging.info(f"Creating sub-assembly for compound: {name}")
+            child_nodes = []
 
-                part_node = {
-                    "type": "part",
-                    "name": f"{name}_solid{idx}",
-                    "shape": s,
-                    "trsf": solid_trsf
-                }
-                children_nodes.append(part_node)
-                idx += 1
+            for idx, solid in enumerate(solids, start=1):
+                solid_trsf = combine_transformations(combined_trsf, solid.Location().Transformation(), tolerance=1e-7)
+                child_nodes.append({"type": "part", "name": f"{name}_solid{idx}", "shape": solid, "trsf": solid_trsf})
 
-            return {
-                "type": "assembly",
-                "name": name,
-                "trsf": combined_trsf,
-                "children": children_nodes
-            }
+            return {"type": "assembly", "name": name, "trsf": combined_trsf, "children": child_nodes}
+
         else:
-            pc_logging.debug(f"Single solid fallback: {name}")
-            return {
-                "type": "part",
-                "name": name,
-                "shape": shape,
-                "trsf": combined_trsf
-            }
+            pc_logging.info(f"Single solid fallback for: {name}")
+            return {"type": "part", "name": name, "shape": shape, "trsf": combined_trsf}
+
     return None
 
-def read_step_as_tree(step_file: str):
-    """Read a STEP file via XDE and build a recursive node tree."""
+
+def parse_step_tree(step_file: str):
+    """Reads a STEP file and returns a hierarchical structure of its components."""
     if not os.path.isfile(step_file):
         raise FileNotFoundError(step_file)
 
@@ -226,72 +207,61 @@ def read_step_as_tree(step_file: str):
     shape_tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
 
     reader = STEPCAFControl_Reader()
-    status = reader.ReadFile(step_file)
-    if status != IFSelect_RetDone:
-        raise ValueError(f"Cannot read STEP: {step_file}")
-    reader.Transfer(doc)
+    if reader.ReadFile(step_file) != IFSelect_RetDone or reader.Transfer(doc) != 1:
+        raise ValueError(f"Failed to read STEP file: {step_file}")
 
-    free_labels = TDF_LabelSequence()
-    shape_tool.GetFreeShapes(free_labels)
+    root_nodes = []
+    free_shapes = TDF_LabelSequence()
+    shape_tool.GetFreeShapes(free_shapes)
+    identity_trsf = gp_Trsf()
 
-    visited = set()
-    roots = []
-    identity = gp_Trsf()
+    for i in range(free_shapes.Length()):
+        label = free_shapes.Value(i + 1)
+        root_nodes.append(parse_label_recursive(label, shape_tool, identity_trsf, set()))
 
-    for i in range(free_labels.Length()):
-        lbl = free_labels.Value(i + 1)
-        node = parse_label_recursive(lbl, shape_tool, identity, visited)
-        if node:
-            roots.append(node)
+    return root_nodes
 
-    pc_logging.info(f"Found {len(roots)} top-level nodes.")
-    return roots
 
 def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: dict):
-    """
-    Flatten a recursive node tree into a single assembly structure.
-    Deduplicate shapes and save parts.
-    """
+    """Converts a hierarchical assembly tree into a flat structure with STEP files."""
     node_type = node["type"]
     node_name = node["name"]
     global_trsf = node["trsf"]
 
     if node_type == "assembly":
-        child_links = []
-        for ch in node.get("children", []):
-            child_links.append(flatten_assembly_tree(ch, parent_folder, project, config))
-        return {
-            "type": "assembly",
-            "name": node_name,
-            "links": child_links,
-            "location": [[0, 0, 0], [1, 0, 0], 0]
-        }
-    else:
-        shape = node["shape"]
-        # Zero the geometry for dedup
-        inv_trsf = invert_trsf(global_trsf)
-        zeroed_shape = BRepBuilderAPI_Transform(shape, inv_trsf, True).Shape()
+        return {"type": "assembly", "name": node_name, "links": [flatten_assembly_tree(ch, parent_folder, project, config) for ch in node.get("children", [])]}
 
-        sig = shape_signature(zeroed_shape)
-        if sig in g_shape_map:
-            reused_part_name, reused_part_path = g_shape_map[sig]
-            pc_logging.debug(f"Reusing part '{reused_part_name}' for '{node_name}'")
-            return {
-                "type": "part",
-                "name": node_name,
-                "part": reused_part_path,
-                "location": _convert_location(global_trsf)
-            }
-        else:
-            pc_logging.debug(f"New unique shape => {node_name}")
-            part_path_noext = import_part(project, zeroed_shape, node_name, parent_folder, config)
-            g_shape_map[sig] = (node_name, part_path_noext)
-            return {
-                "type": "part",
-                "name": node_name,
-                "part": part_path_noext,
-                "location": _convert_location(global_trsf)
-            }
+    shape = node["shape"]
+    zeroed_shape = BRepBuilderAPI_Transform(shape, invert_transformation(global_trsf), True).Shape()
+    signature = shape_signature(zeroed_shape)
+
+    if signature in shape_cache:
+        return {"type": "part", "name": node_name, "part": shape_cache[signature], "location": convert_location(global_trsf)}
+
+    part_path = import_part(project, zeroed_shape, node_name, parent_folder, config)
+    shape_cache[signature] = part_path
+
+    return {"type": "part", "name": node_name, "part": part_path, "location": convert_location(global_trsf)}
+
+
+def parse_assembly_tree(assembly_file: str, file_type: str):
+  """
+  Parses an assembly file into a hierarchical structure based on its format.
+
+  Supported file types:
+    - "step": Uses STEP reader (`parse_step_tree`)
+
+  Returns:
+      List of root nodes in the parsed assembly tree.
+  """
+  file_type = file_type.lower()
+
+  if file_type in ["step", "stp"]:
+      return parse_step_tree(assembly_file)
+  else:
+      raise ValueError(f"Unsupported assembly file type: {file_type}")
+
+
 
 def import_assy_action(
     project: Project,
@@ -300,56 +270,59 @@ def import_assy_action(
     config: dict
 ):
     """
-    Main function to import a STEP assembly:
-    1) Build a node tree from XDE.
-    2) Flatten to a single .assy with dedup.
-    3) Add assembly to project.
-    """
-    g_shape_map.clear()
+    Imports an assembly into the project, supporting multiple file formats.
 
-    pc_logging.info(f"[INFO] Importing assembly from STEP file: {assembly_file}")
-    roots = read_step_as_tree(assembly_file)
-    if not roots:
+    Steps:
+      1) Parses the assembly file into a hierarchical structure based on its format.
+      2) Flattens the hierarchy into a single .assy structure, avoiding duplicates.
+      3) Saves the .assy file and adds the assembly to the project.
+
+    Supported formats:
+      - STEP (.step, .stp)
+    """
+    shape_cache.clear()
+    pc_logging.info(f"[INFO] Starting import of assembly: {assembly_file} (Type: {file_type})")
+
+    # Parse the assembly file based on its type
+    root_nodes = parse_assembly_tree(assembly_file, file_type)
+    if not root_nodes:
         raise ValueError(f"No shapes found in {assembly_file}")
 
-    name = Path(assembly_file).stem
-    out_folder = Path(assembly_file).parent / name
-    out_folder.mkdir(parents=True, exist_ok=True)
+    assembly_name = Path(assembly_file).stem
+    output_folder = Path(assembly_file).parent / assembly_name
+    output_folder.mkdir(parents=True, exist_ok=True)
 
-    # If multiple root nodes, create a top-level assembly
-    if len(roots) > 1:
-        from OCP.gp import gp_Trsf
-        pc_logging.debug(f"Creating a top-level assembly for {len(roots)} root nodes")
+    # If multiple root nodes exist, create a top-level assembly
+    if len(root_nodes) > 1:
+        pc_logging.info(f"Creating a top-level assembly for {len(root_nodes)} root nodes")
         top_node = {
             "type": "assembly",
-            "name": f"{name}_top",
+            "name": f"{assembly_name}_top",
             "trsf": gp_Trsf(),
-            "children": roots
+            "children": root_nodes
         }
-        final_tree = top_node
+        final_structure = top_node
     else:
-        final_tree = roots[0]
+        final_structure = root_nodes[0]
 
-    top_data = flatten_assembly_tree(final_tree, out_folder, project, config)
+    # Flatten the hierarchical structure into a single .assy file
+    top_data = flatten_assembly_tree(final_structure, output_folder, project, config)
     assy_name = top_data["name"]
-    assy_file = out_folder / f"{assy_name}.assy"
+    assy_file_path = output_folder / f"{assy_name}.assy"
 
-    if top_data["type"] == "assembly":
-        data = {
-            "name": top_data["name"],
-            "description": config.get("desc", ""),
-            "links": top_data.get("links", [])
-        }
-    else:
-        data = {
-            "name": top_data["name"],
-            "description": config.get("desc", ""),
-            "links": []
-        }
+    # Prepare .assy file data
+    assembly_data = {
+        "name": top_data["name"],
+        "description": config.get("desc", ""),
+        "links": top_data.get("links", []) if top_data["type"] == "assembly" else []
+    }
 
-    with open(assy_file, "w") as f:
-        yaml.dump(data, f, default_flow_style=False)
+    # Save assembly data to YAML format
+    with open(assy_file_path, "w") as file:
+        yaml.dump(assembly_data, file, default_flow_style=False)
 
-    project.add_assembly("assy", str(assy_file), config)
-    pc_logging.info(f"Created single .assy => {assy_file}")
-    return data["name"]
+    # Add assembly to the project
+    project.add_assembly("assy", str(assy_file_path), config)
+    pc_logging.info(f"Successfully created assembly file: {assy_file_path}")
+
+    return assembly_data["name"]
