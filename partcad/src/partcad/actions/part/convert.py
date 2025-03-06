@@ -50,6 +50,18 @@ def get_source_path(project: Project, config: dict, part_name: str) -> Path:
     return source_path
 
 
+def parse_parameters_from_source(source_value: str) -> dict:
+    """Extract parameters from the source name string."""
+    if ';' in source_value:
+        base_source, params_str = source_value.split(';', 1)
+        parameters = {}
+        for param in params_str.split(','):
+            key, value = param.split('=')
+            parameters[key] = float(value) if '.' in value else int(value)
+        return base_source, parameters
+    return source_value, {}
+
+
 def get_final_base_part_config(project: Project, part_config: dict, part_name: str):
     """Recursively resolve 'alias' and 'enrich' to find the original base part."""
     visited_sources = set()
@@ -63,16 +75,17 @@ def get_final_base_part_config(project: Project, part_config: dict, part_name: s
             break
 
         source_value = part_config[source_key]
+        base_source, params = parse_parameters_from_source(source_value)  # Parsing parameters here
 
-        if source_value in visited_sources:
-            raise ValueError(f"Circular reference detected in part '{part_name}' (source: '{source_value}')")
+        if base_source in visited_sources:
+            raise ValueError(f"Circular reference detected in part '{part_name}' (source: '{base_source}')")
 
-        visited_sources.add(source_value)
+        visited_sources.add(base_source)
 
         if "with" in part_config:
             final_params.update(part_config["with"])
 
-        base_package, base_part_name = resolve_resource_path(project.name, source_value)
+        base_package, base_part_name = resolve_resource_path(project.name, base_source)
         base_project = project.ctx.get_project(base_package)
 
         if not base_project:
@@ -83,11 +96,15 @@ def get_final_base_part_config(project: Project, part_config: dict, part_name: s
         if not base_part_config:
             raise ValueError(f"Base part '{base_part_name}' not found in project '{base_project.name}'.")
 
-        pc_logging.debug(f"Resolving '{part_name}' → '{base_part_name}' (source: '{source_value}')")
+        pc_logging.debug(f"Resolving '{part_name}' -> '{base_part_name}' (source: '{base_source}')")
 
         part_config = base_part_config
         project = base_project
         part_name = base_part_name
+
+        # Merge parameters from the source with the existing parameters
+        if params:
+            part_config["parameters"] = {**part_config.get("parameters", {}), **params}
 
     if final_params:
         part_config.setdefault("with", {}).update(final_params)
