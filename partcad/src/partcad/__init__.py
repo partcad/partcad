@@ -30,6 +30,13 @@ from . import logging
 from . import utils
 from . import exception
 
+# TODO: remove partcad old version usage from vscode extension
+# /home/vscode/.vscode-server/extensions/openvmp.partcad-0.7.15/bundled/tool/lsp_server.py:690:        partcad.plugins.export_png = partcad.PluginExportPngReportlab()
+class PluginExportPngReportlab:
+  pass
+
+plugins = PluginExportPngReportlab()
+
 __all__ = [
     "config",
     "context",
@@ -49,7 +56,9 @@ __all__ = [
     "assembly_factory",
     "assembly_factory_python",
     "scene",
+    "plugins",
     "exception",
+    "PluginExportPngReportlab"
 ]
 
 __version__: str = "0.7.120"
