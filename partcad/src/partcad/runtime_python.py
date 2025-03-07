@@ -19,7 +19,6 @@ from filelock import FileLock
 
 from . import runtime
 from . import logging as pc_logging
-from .user_config import user_config
 
 
 class VenvLock:
@@ -37,7 +36,7 @@ class VenvLock:
             venv_lock_name = f".{runtime.sandbox_dir}.{venv}.lock"
         if venv not in runtime.venv_locks:
             runtime.venv_locks[venv] = FileLock(
-                os.path.join(user_config.internal_state_dir, venv_lock_name), thread_local=False
+                os.path.join(runtime.ctx.user_config.internal_state_dir, venv_lock_name), thread_local=False
             )
         self.lock = runtime.venv_locks[venv]
         runtime.venv_locks_lock.release()

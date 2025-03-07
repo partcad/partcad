@@ -143,6 +143,8 @@ Feature: `pc render` command
 
   @docs-installation
   Scenario: Installation: Command line tools
+    When I run "pc init"
+    Then the command should exit with a status code of "0"
     When I run "pc --help"
     Then the command should exit with a status code of "0"
     When I run "pc status"

@@ -16,7 +16,6 @@ import json
 
 from . import runtime_python
 from . import logging as pc_logging
-from .user_config import user_config
 
 # Global lock for conda that can be shared across threads
 
@@ -31,7 +30,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
             self.variant_packages = [f"{variant}"]
         super().__init__(ctx, sandbox_type_name, version)
 
-        self.global_conda_lock = FileLock(os.path.join(user_config.internal_state_dir, ".conda.lock"))
+        self.global_conda_lock = FileLock(os.path.join(ctx.user_config.internal_state_dir, ".conda.lock"))
         self.conda_initialized = self.initialized
 
         self.conda_path = shutil.which("mamba")

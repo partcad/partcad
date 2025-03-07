@@ -4,6 +4,13 @@ Feature: `pc` command
   Background:
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
+    And a file named "partcad.yaml" with content:
+      """
+      dependencies:
+      sketches:
+      parts:
+      assemblies:
+      """
 
   @pc-help
   Scenario: Show CLI help

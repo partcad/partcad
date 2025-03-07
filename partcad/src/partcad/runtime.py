@@ -13,7 +13,6 @@ import subprocess
 import time
 import base64
 
-from .user_config import user_config
 
 from .runtime_json_rpc import RuntimeJsonRpcClient
 from . import logging as pc_logging
@@ -49,9 +48,9 @@ async def wait_for_port(host, port, timeout=30):
 
 class Runtime:
     @staticmethod
-    def get_internal_state_dir():
+    def get_internal_state_dir(internal_state_dir):
         return os.path.join(
-            user_config.internal_state_dir,
+            internal_state_dir,
             "sandbox",
         )
 
@@ -60,7 +59,7 @@ class Runtime:
         self.name = name
         self.sandbox_dir = "pc-" + name  # Leave "pc-" for UX (e.g. in VS Code)
         self.path = os.path.join(
-            Runtime.get_internal_state_dir(),
+            Runtime.get_internal_state_dir(self.ctx.user_config.internal_state_dir),
             self.sandbox_dir,
         )
         self.initialized = os.path.exists(self.path)

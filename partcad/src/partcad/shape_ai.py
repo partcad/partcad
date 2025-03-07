@@ -66,8 +66,8 @@ Produce text which is ready to be narrated as is.
 """
 
         config = {
-            "model": ("gpt-4o" if user_config.openai_api_key is not None else "gemini-1.5-pro"),
-            "provider": ("openai" if user_config.openai_api_key is not None else "google"),
+            "model": ("gpt-4o" if project.ctx.user_config.openai_api_key is not None else "gemini-1.5-pro"),
+            "provider": ("openai" if project.ctx.user_config.openai_api_key is not None else "google"),
         }
         summary = self.generate(
             "Desc",

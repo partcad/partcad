@@ -12,7 +12,6 @@ import pickle
 from .cache import Cache
 from .cache_hash import CacheHash
 from .shape import Shape
-from .user_config import user_config
 from .utils import total_size
 
 SERIALIZATION_PICKLE = 1
@@ -20,13 +19,13 @@ SERIALIZATION_BREP = 2
 
 
 class ShapeCache(Cache):
-    def __init__(self, serialization: int = SERIALIZATION_PICKLE) -> None:
-        super().__init__("shapes")
+    def __init__(self, serialization: int = SERIALIZATION_PICKLE, user_config=None) -> None:
+        super().__init__("shapes", user_config)
         self.serialization = serialization
 
     async def write_async(self, hash: CacheHash, items: dict[str, object]) -> dict[str, bool]:
         results = {}
-        if user_config.cache:
+        if self.user_config.cache:
             serialized_items = {}
             for key, value in items.items():
                 # TODO(clairbee): if we know this is a valid solid, then we should use faster BREP
@@ -45,22 +44,22 @@ class ShapeCache(Cache):
             cached_in_files = await self.write_data_async(hash, serialized_items)
 
         for key, value in items.items():
-            if user_config.cache:
+            if self.user_config.cache:
                 key_is_cached_in_files = cached_in_files.get(key, False)
                 data_len = total_size(value)
             else:
                 key_is_cached_in_files = False
-                if user_config.cache_memory_max_entry_size > 0:
+                if self.user_config.cache_memory_max_entry_size > 0:
                     # Need to know the object size to check the max limit
                     data_len = total_size(value)
 
-            if user_config.cache_memory_max_entry_size > 0 and data_len > user_config.cache_memory_max_entry_size:
+            if self.user_config.cache_memory_max_entry_size > 0 and data_len > self.user_config.cache_memory_max_entry_size:
                 # If the object is too big, we can free the memory
                 results[key] = False
             elif (
                 key_is_cached_in_files
-                and user_config.cache_memory_double_cache_max_entry_size > 0
-                and data_len > user_config.cache_memory_double_cache_max_entry_size
+                and self.user_config.cache_memory_double_cache_max_entry_size > 0
+                and data_len > self.user_config.cache_memory_double_cache_max_entry_size
             ):
                 # The object is bigger than what we want to store in both caches
                 results[key] = False
@@ -70,7 +69,7 @@ class ShapeCache(Cache):
         return results
 
     async def read_async(self, hash: CacheHash, keys: list[str]) -> tuple[dict[str, object], dict[str, bool]]:
-        if not user_config.cache:
+        if not self.user_config.cache:
             # Caching is disabled
             return {}, {}
 
@@ -114,12 +113,12 @@ class ShapeCache(Cache):
 
             data_len = len(data)
 
-            if user_config.cache_memory_max_entry_size > 0 and data_len > user_config.cache_memory_max_entry_size:
+            if self.user_config.cache_memory_max_entry_size > 0 and data_len > self.user_config.cache_memory_max_entry_size:
                 # If the object is too big, we can free the memory
                 in_memory[key] = False
             elif (
-                user_config.cache_memory_double_cache_max_entry_size > 0
-                and data_len > user_config.cache_memory_double_cache_max_entry_size
+                self.user_config.cache_memory_double_cache_max_entry_size > 0
+                and data_len > self.user_config.cache_memory_double_cache_max_entry_size
             ):
                 # The object is bigger than what we want to store in both caches
                 in_memory[key] = False
