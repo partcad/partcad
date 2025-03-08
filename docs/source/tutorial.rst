@@ -323,7 +323,7 @@ Here is an example of how to use the newly added solid:
 Import an Assembly
 ------------------
 
-The ``pc import assy`` command allows you to import an assembly from a STEP file.
+The ``pc import assembly`` command allows you to import an assembly from a STEP file.
 This command automatically parses the STEP file, extracts individual parts,
 and creates an assembly YAML file that records each part along with its transformation data.
 
@@ -333,7 +333,7 @@ Usage
 .. code-block:: shell
 
    # Import an assembly from a STEP file with an optional description
-   pc import assy step my_assembly.step --desc "Optional assembly description"
+   pc import assembly step my_assembly.step --desc "Optional assembly description"
 
 Functionality
 ^^^^^^^^^^^^^
