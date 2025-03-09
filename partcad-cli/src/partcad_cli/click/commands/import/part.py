@@ -43,14 +43,16 @@ def cli(ctx: Context, existing_part: str, target_format: str, desc: str):
         raise click.UsageError(f"File '{existing_part}' not found.")
 
     detected_ext = file_path.suffix.lstrip(".").lower()
+    part_type = None
     for supported_type in SUPPORTED_IMPORT_FORMATS_WITH_EXT.keys():
         if detected_ext in SUPPORTED_IMPORT_FORMATS_WITH_EXT[supported_type]:
             part_type = supported_type if detected_ext != "py" else __detect_script_type(file_path)
-        else:
-            raise click.ClickException(
-                f"Cannot determine file type for '{existing_part}'. "
-                f"Supported part types: {', '.join(set(SUPPORTED_IMPORT_FORMATS_WITH_EXT.keys()))}. "
-            )
+
+    if not part_type:
+        raise click.ClickException(
+                    f"Cannot determine file type for '{existing_part}'. "
+                    f"Supported part types: {', '.join(set(SUPPORTED_IMPORT_FORMATS_WITH_EXT.keys()))}. "
+                )
 
     pc_logging.info(f"Importing part: {existing_part} ({part_type})")
 

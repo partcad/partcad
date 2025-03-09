@@ -105,6 +105,8 @@ def convert_location(trsf: gp_Trsf):
 
 def save_shape_to_step(shape: TopoDS_Shape, filename: Path):
     """Saves a TopoDS_Shape to a STEP file."""
+    filename = filename.resolve(strict=False)
+
     writer = STEPControl_Writer()
     if writer.Transfer(shape, STEPControl_AsIs) != 1 or writer.Write(str(filename)) != 1:
         raise ValueError(f"Failed to write STEP file: {filename}")
@@ -112,8 +114,16 @@ def save_shape_to_step(shape: TopoDS_Shape, filename: Path):
 
 def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_folder: Path, config: dict) -> str:
     """Saves shape as STEP and imports it into the project."""
+
+    project_root = Path.cwd().resolve()
+    parent_folder = (project_root / parent_folder).resolve(strict=False)
+    parent_folder.mkdir(parents=True, exist_ok=True)
+
+    parent_folder.mkdir(parents=True, exist_ok=True)
     step_file = parent_folder / f"{part_name}.step"
+
     save_shape_to_step(shape, step_file)
+
     import_part_action(project, "step", part_name, str(step_file), config, target_dir=str(parent_folder))
     return str(step_file.with_suffix(""))
 
@@ -177,7 +187,7 @@ def parse_label_recursive(label, shape_tool, parent_trsf: gp_Trsf, visited):
             solids.append(explorer.Current())
             explorer.Next()
 
-        pc_logging.info(f"[parse_label_recursive] Compound label '{name}': {len(solids)} solid(s) found.")
+        pc_logging.info(f"Compound label '{name}': {len(solids)} solid(s) found.")
 
         if len(solids) > 1:
             pc_logging.info(f"Creating sub-assembly for compound: {name}")
@@ -268,7 +278,7 @@ def import_assy_action(
     file_type: str,
     assembly_file: str,
     config: dict
-):
+) -> str:
     """
     Imports an assembly into the project, supporting multiple file formats.
 
@@ -280,8 +290,14 @@ def import_assy_action(
     Supported formats:
       - STEP (.step, .stp)
     """
+
+    file_path = Path(assembly_file)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"File '{assembly_file}' not found.")
+
     shape_cache.clear()
-    pc_logging.info(f"[INFO] Starting import of assembly: {assembly_file} (Type: {file_type})")
+    pc_logging.info(f"Starting import of assembly: {assembly_file} (Type: {file_type})")
 
     # Parse the assembly file based on its type
     root_nodes = parse_assembly_tree(assembly_file, file_type)
@@ -289,7 +305,7 @@ def import_assy_action(
         raise ValueError(f"No shapes found in {assembly_file}")
 
     assembly_name = Path(assembly_file).stem
-    output_folder = Path(assembly_file).parent / assembly_name
+    output_folder = Path(project.config_dir).resolve() / assembly_name
     output_folder.mkdir(parents=True, exist_ok=True)
 
     # If multiple root nodes exist, create a top-level assembly
