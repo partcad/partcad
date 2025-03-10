@@ -4,7 +4,7 @@ from partcad.context import Context
 import partcad.logging as pc_logging
 
 @click.command(help="Convert parts to another format.")
-@click.argument("part_name", type=str, required=True)
+@click.argument("object_name", type=str, required=True)
 @click.option(
     "-t", "--target-format",
     help="Target conversion format.",
