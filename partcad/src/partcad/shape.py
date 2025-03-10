@@ -15,6 +15,10 @@ import shutil
 import sys
 import tempfile
 import threading
+from typing import Optional
+
+from partcad.context import Context
+from partcad.project import Project
 
 from .cache_hash import CacheHash
 from .render import *
@@ -406,6 +410,49 @@ class Shape(ShapeConfiguration):
         pc_logging.debug("Rendering: %s" % filepath)
 
         return opts, filepath
+
+    async def render(
+        self,
+        ctx: Context,
+        format_name: str,
+        project: Optional[Project] = None,
+        filepath=None,
+        **kwargs):
+        """
+        Centralized method to render shape via external wrapper.
+        Args:
+            ctx: Execution context.
+            format_name: Render format (e.g., "png", "svg").
+            project: Optional project object.
+            filepath: Target file path for output.
+            kwargs: Additional options (width, height, etc.).
+        """
+        wrapper_path = wrapper.get(f"render_{format_name}.py")
+
+        obj = await self.get_wrapped(ctx)
+        if obj is not None:
+            project.ctx.ensure_dirs_for_file(filepath)
+
+        request = {"wrapped": obj, **kwargs}
+        picklestring = pickle.dumps(request)
+        request_serialized = base64.b64encode(picklestring).decode()
+
+        # Run wrapper (subprocess)
+        response_serialized, errors = await ctx.run_wrapper(wrapper_path, filepath, request_serialized)
+
+        if errors:
+            pc_logging.error(f"Render {format_name} errors for shape '{self.name}':\n{errors}")
+
+        # Handle response
+        response = base64.b64decode(response_serialized)
+        result = pickle.loads(response)
+
+        if not result.get("success", False):
+            pc_logging.error(
+                f"Render {format_name.upper()} failed for {self.project_name}:{self.name}: {result.get('exception', 'Unknown error')}"
+            )
+        if "exception" in result and result["exception"]:
+            pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
 
     async def render_svg_async(
         self,
