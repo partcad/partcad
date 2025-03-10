@@ -119,10 +119,10 @@ def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_fo
     parent_folder = (project_root / parent_folder).resolve(strict=False)
     parent_folder.mkdir(parents=True, exist_ok=True)
 
-    step_file = (parent_folder / f"{part_name}.step").as_posix()
+    step_file = parent_folder / f"{part_name}.step"
     save_shape_to_step(shape, step_file)
 
-    import_part_action(project, "step", part_name, str(step_file), config, target_dir=str(parent_folder))
+    import_part_action(project, "step", part_name, step_file.as_posix(), config, target_dir=str(parent_folder))
     return str(step_file)
 
 
