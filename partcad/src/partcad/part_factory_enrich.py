@@ -157,6 +157,13 @@ class PartFactoryEnrich(pf.PartFactory):
             part.cache_dependencies = copy.copy(source.cache_dependencies)
             part.cache_dependencies_broken = source.cache_dependencies_broken
 
+            # Recalling normalize to normalize data after replacing target parameters from with key.
+            part.config = part_config.PartConfiguration.normalize(
+                self.name,
+                part.config,
+                object_name
+            )
+
             _wrapped = source._wrapped
             if _wrapped:
                 part._wrapped = _wrapped
