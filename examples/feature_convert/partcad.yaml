@@ -106,16 +106,6 @@ parts:
     with:
       height: 10
       width: 20
-    parameters:
-      width:
-        type: int
-        default: 5
-      height:
-        type: int
-        default: 5
-      length:
-        type: float
-        default: 100
 
   cube_enrich_3mf:
     type: enrich
