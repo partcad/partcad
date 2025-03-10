@@ -84,6 +84,7 @@ def cli(ctx, package, interface, assembly, sketch, scene, object, params):  # , 
         else:
             logging.error(f"Object {object} not found in package {package}")
     else:
+        # TODO: call normalize config method for updating the parameters
         logging.info(f"CONFIGURATION: {pformat(obj.config)}")
         info = obj.info()
         for k, v in info.items():

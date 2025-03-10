@@ -112,6 +112,11 @@ class InterfaceParameter:
 
     @staticmethod
     def config_normalize(config):
+        """
+        TODO: This logic should be part of the part normalization process to maintain
+        consistency. Performing it separately doesn't make sense and may lead to
+        inconsistencies.
+        """
         if isinstance(config, (int, float)):
             config = {
                 "min": config,
