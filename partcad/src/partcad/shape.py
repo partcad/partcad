@@ -20,6 +20,9 @@ import tempfile
 import threading
 from typing import Optional
 
+from partcad.context import Context
+from partcad.project import Project
+
 from .cache_hash import CacheHash
 from .render import *
 from .shape_config import ShapeConfiguration
