@@ -4,10 +4,10 @@ import shutil
 from pathlib import Path
 from partcad.context import Context
 from partcad.actions.assy_actions import import_assy_action
-from partcad import logging as pc_logging
 
 
-EXAMPLES_DIR = Path("/workspaces/partcad/examples/feature_import")
+ROOT_DIR = Path(__file__).resolve().parents[3]
+EXAMPLES_DIR = ROOT_DIR / "examples/feature_import"
 REFERENCE_DIR = EXAMPLES_DIR / "AeroAssembly_assy_example"
 ASSEMBLY_FILE = EXAMPLES_DIR / "AeroAssembly.step"
 
