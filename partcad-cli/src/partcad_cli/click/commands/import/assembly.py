@@ -24,12 +24,14 @@ def cli(ctx: Context, assembly_file: str, desc: str):
     if not file_path.exists():
         raise click.UsageError(f"File '{assembly_file}' not found.")
 
+    assembly_type = None
     detected_ext = file_path.suffix.lstrip(".").lower()
     for supported_type in SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT.keys():
         if detected_ext in SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT[supported_type]:
             assembly_type = supported_type
-        else:
-            raise click.ClickException(
+
+    if not assembly_type:
+        raise click.ClickException(
                 f"Cannot determine file type for '{assembly_file}'. "
                 f"Supported assembly types: {', '.join(set(SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT.keys()))}. "
             )
