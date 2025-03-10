@@ -138,9 +138,7 @@ parts:
   cube_enrich_enrich:
     type: enrich
     source: :cube_enrich
-    with:
-      length: 25
-      width: 50
+
 
   cube_enrich_alias_enrich:
     type: enrich
