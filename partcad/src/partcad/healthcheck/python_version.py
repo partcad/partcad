@@ -7,7 +7,11 @@ class PythonVersionCheck(HealthCheckTest):
     latest_version: tuple[int, int] = (3, 12, float("inf"))
 
     def __init__(self):
-        super().__init__("PythonVersion")
+        super().__init__(
+          name="PythonVersion",
+          tags=["python"],
+          description="Check PartCAD's compatibility with the system's Python version"
+        )
 
     def auto_fixable(self) -> bool:
         return False

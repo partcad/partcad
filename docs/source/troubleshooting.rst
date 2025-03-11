@@ -32,8 +32,13 @@ on your workstation is setup correctly.
     pc healthcheck
 
 Please, follow the instructions provided by the ``healthcheck`` command to fix
-any issues it may detect. For example, the Python version is not supported, it
-will be reported by the ``healthcheck`` command.
+any issues it detects.
+
+Use ``--dry-run`` option to see what healthcheck tests can be executed.
+
+  .. code-block:: shell
+
+    pc healthcheck --dry-run
 
 The ``healthcheck`` command also can take a ``--fix`` option to automatically
 fix the issues it detects if possible.
@@ -41,6 +46,13 @@ fix the issues it detects if possible.
   .. code-block:: shell
 
     pc healthcheck --fix
+
+In order to selectively execute only a subset of the healthchecks tests, the ``healthcheck`` command can be used with the ``--filters`` option that accepts a comma-separated list of test tags.
+
+  .. code-block:: shell
+
+    pc healthcheck --filters python,windows
+
 
 ========================
 PartCAD VSCode Extension

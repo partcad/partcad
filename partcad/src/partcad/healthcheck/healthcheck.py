@@ -25,9 +25,11 @@ class HealthCheckReport:
         pc_logging.info(self.log_header.format(self.test, message))
 
 class HealthCheckTest(ABC):
-    def __init__(self, name: str):
+    def __init__(self, name: str, tags: list[str], description: str):
       self.name: str = name
       self.findings: list[str] = []
+      self.tags: list[str] = tags
+      self.description: str = description
 
     @abstractmethod
     def auto_fixable(self) -> bool:
@@ -64,6 +66,6 @@ def discover_tests() -> list[HealthCheckTest]:
                     test_instances.append(obj)
 
     if not test_instances:
-        pc_logging.info("No applicable health check tests found")
+        pc_logging.info("No applicable healthcheck tests found")
 
     return test_instances
