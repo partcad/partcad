@@ -17,6 +17,8 @@ import yaml
 from git import Git
 from datetime import datetime
 
+from partcad.part import Part
+
 from .ai import Ai
 from . import logging as pc_logging
 from .utils import total_size
@@ -684,7 +686,7 @@ Very important not to produce exactly the same script: at least something has to
         part.path = source_path  # Set the path to the temporary script file
         pc_logging.debug("Part created: %.2f KB" % (total_size(part) / 1024.0))
 
-        def render(part):
+        def render(part: Part):
             nonlocal exception_text
             try:
                 coro = part.get_wrapped(self.ctx)
