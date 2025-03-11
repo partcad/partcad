@@ -37,6 +37,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
 
+
+
 EXTENSION_MAPPING = {
     "step": "step",
     "brep": "brep",
@@ -431,8 +433,12 @@ class Shape(ShapeConfiguration):
         return opts, filepath
 
     async def render_async(
-        self, ctx: Context, format_name: str, project: Optional[Project] = None, filepath=None, **kwargs
-    ) -> None:
+        self,
+        ctx: Context,
+        format_name: str,
+        project: Optional[Project] = None,
+        filepath=None,
+        **kwargs) -> None:
         """
         Centralized method to render shape via external wrapper.
         Args:
