@@ -29,6 +29,7 @@ import traceback
 from typing import Any, Optional, Sequence
 
 from lsp_server_pipe import *
+from partcad.part import Part
 
 
 # **********************************************************
@@ -346,12 +347,14 @@ def export_part(params: lsp.ExecuteCommandParams = None):
     def export_part_internal(package_name, part_name, params):
         global partcad, partcad_ctx
         with partcad.logging.Process("Export", package_name, part_name):
-            part = partcad_ctx.get_part(package_name + ":" + part_name, params)
+            part: Part = partcad_ctx.get_part(package_name + ":" + part_name, params)
             if part:
                 if exportType == "svg":
                     part.render_svg(filepath=path)
                 if exportType == "png":
-                    part.render_png(filepath=path)
+                    # part.render_png(filepath=path)
+                    part.render(partcad_ctx, "png", filepath=path)
+
                 if exportType == "step":
                     part.render_step(filepath=path)
                 if exportType == "stl":
@@ -394,7 +397,8 @@ def export_assembly(params: lsp.ExecuteCommandParams = None):
                 if exportType == "svg":
                     assembly.render_svg(filepath=path)
                 if exportType == "png":
-                    assembly.render_png(filepath=path)
+                    # assembly.render_png(filepath=path)
+                    assembly.render(partcad_ctx, "png", filepath=path)
                 if exportType == "step":
                     assembly.render_step(filepath=path)
                 if exportType == "stl":

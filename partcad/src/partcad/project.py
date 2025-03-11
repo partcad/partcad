@@ -22,7 +22,6 @@ import typing
 
 from typing import Optional, List
 
-from partcad.context import Context
 from partcad.shape import Shape
 
 from . import consts
@@ -1357,13 +1356,12 @@ class Project(project_config.Configuration):
 
                 for format_name in render_formats:
                     if self._should_render_format(format_name, shape_render, format, shape.kind):
-                        if not hasattr(shape, "finalized") or shape.finalized:
-                            tasks.append(shape.render(
-                                ctx=self.ctx,
-                                format_name=format_name,
-                                project=self,
-                                filepath=None,
-                            ))
+                        tasks.append(shape.render_async(
+                            ctx=self.ctx,
+                            format_name=format_name,
+                            project=self,
+                            filepath=None,
+                        ))
 
             await asyncio.gather(*tasks)
 
@@ -1390,7 +1388,7 @@ class Project(project_config.Configuration):
 
 
     def _should_render_format(
-                format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str
+      self, format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str
             ) -> bool:
                 """Helper function to determine if a format should be rendered"""
                 plural_shape_kind = {

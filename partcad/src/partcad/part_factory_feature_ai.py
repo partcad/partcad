@@ -698,7 +698,8 @@ Very important not to produce exactly the same script: at least something has to
                         part.show(self.ctx)
                     except Exception as e:
                         pass
-                    part.render_png(self.ctx, None, output_path)
+                    # part.render_png(self.ctx, None, output_path)
+                    part.render(self.ctx, "png", self.project, output_path)
             except Exception as e:
                 part.error("Failed to render the image: %s" % e)
                 exception_text += f"Exception:\n{str(e)}\n"
