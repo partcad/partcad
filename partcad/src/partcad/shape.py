@@ -6,6 +6,9 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import asyncio
 import base64
 import copy
@@ -17,9 +20,6 @@ import tempfile
 import threading
 from typing import Optional
 
-from partcad.context import Context
-from partcad.project import Project
-
 from .cache_hash import CacheHash
 from .render import *
 from .shape_config import ShapeConfiguration
@@ -29,13 +29,20 @@ from . import logging as pc_logging
 from .sync_threads import threadpool_manager
 from . import wrapper
 
+if TYPE_CHECKING:
+    from partcad.context import Context
+    from partcad.project import Project
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
+
+
 
 
 class Shape(ShapeConfiguration):
     name: str
     desc: str
+    kind: str
     requirements: dict | list | str
     svg_path: str
     svg_url: str
@@ -411,13 +418,13 @@ class Shape(ShapeConfiguration):
 
         return opts, filepath
 
-    async def render(
+    async def render_async(
         self,
         ctx: Context,
         format_name: str,
         project: Optional[Project] = None,
         filepath=None,
-        **kwargs):
+        **kwargs) -> None:
         """
         Centralized method to render shape via external wrapper.
         Args:
@@ -427,148 +434,98 @@ class Shape(ShapeConfiguration):
             filepath: Target file path for output.
             kwargs: Additional options (width, height, etc.).
         """
-        wrapper_path = wrapper.get(f"render_{format_name}.py")
+        WRAPPER_FORMATS = {
+            "svg": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0"
+                ],
+            "png": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+                "svglib==1.5.1",
+                "reportlab",
+                "rlpycairo==0.3.0"
+                ],
+        }
 
-        obj = await self.get_wrapped(ctx)
-        if obj is not None:
-            project.ctx.ensure_dirs_for_file(filepath)
+        with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
+            wrapper_path = wrapper.get(f"render_{format_name}.py")
 
-        request = {"wrapped": obj, **kwargs}
-        picklestring = pickle.dumps(request)
-        request_serialized = base64.b64encode(picklestring).decode()
+            render_opts, filepath = self.render_getopts(format_name, f".{format_name}", project, filepath)
+            filepath = os.path.abspath(filepath)
 
-        # Run wrapper (subprocess)
-        response_serialized, errors = await ctx.run_wrapper(wrapper_path, filepath, request_serialized)
-
-        if errors:
-            pc_logging.error(f"Render {format_name} errors for shape '{self.name}':\n{errors}")
-
-        # Handle response
-        response = base64.b64decode(response_serialized)
-        result = pickle.loads(response)
-
-        if not result.get("success", False):
-            pc_logging.error(
-                f"Render {format_name.upper()} failed for {self.project_name}:{self.name}: {result.get('exception', 'Unknown error')}"
-            )
-        if "exception" in result and result["exception"]:
-            pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
-
-    async def render_svg_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-    ) -> None:
-        with pc_logging.Action("RenderSVG", self.project_name, self.name):
-            _, filepath = self.render_getopts("svg", ".svg", project, filepath)
-
-            # This creates a temporary file, but it allows to reuse the file
-            # with other consumers of self._get_svg_path()
-            svg_path = await self._get_svg_path(ctx=ctx, project=project)
-            if not svg_path is None and svg_path != filepath:
-                if os.path.exists(svg_path):
-                    shutil.copyfile(svg_path, filepath)
-                else:
-                    pc_logging.error("SVG file was not created by the wrapper")
-
-    def render_svg(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-    ) -> None:
-        asyncio.run(self.render_svg_async(ctx, project, filepath))
-
-    async def render_png_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        width=None,
-        height=None,
-        line_weight=None,
-        viewport_origin=None,
-    ) -> None:
-        with pc_logging.Action("RenderPNG", self.project_name, self.name):
             obj = await self.get_wrapped(ctx)
             if obj is None:
-                # pc_logging.error("The shape failed to instantiate")
-                self.svg_path = None
+                pc_logging.error(f"Cannot render '{self.name}': shape is empty")
                 return
 
-            png_opts, filepath = self.render_getopts("png", ".png", project, filepath)
-
-            if width is None:
-                if "width" in png_opts and not png_opts["width"] is None:
-                    width = png_opts["width"]
-                else:
-                    width = DEFAULT_RENDER_WIDTH
-            if height is None:
-                if "height" in png_opts and not png_opts["height"] is None:
-                    height = png_opts["height"]
-                else:
-                    height = DEFAULT_RENDER_HEIGHT
-            if line_weight is None:
-                if "lineWeight" in png_opts and not png_opts["lineWeight"] is None:
-                    line_weight = png_opts["lineWeight"]
-                else:
-                    line_weight = 1.0
-            if viewport_origin is None:
-                if "viewportOrigin" in png_opts and not png_opts["viewportOrigin"] is None:
-                    viewport_origin = png_opts["viewportOrigin"]
-                else:
-                    viewport_origin = [100, -100, 100]
-
-            if not project is None:
+            if project is not None:
                 project.ctx.ensure_dirs_for_file(filepath)
 
-            wrapper_path = wrapper.get("render_png.py")
-            request = {
-                "wrapped": obj,
-                "width": width,
-                "height": height,
-                "line_weight": line_weight,
-                "viewport_origin": viewport_origin,
-            }
-            register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            if format_name in WRAPPER_FORMATS.keys():
+                request = {"wrapped": obj}
 
-            # We don't care about customer preferences much here
-            # as this is expected to be hermetic.
-            # Stick to the version where CadQuery and build123d are known to work.
-            runtime = ctx.get_python_runtime(version="3.11")
-            await runtime.ensure_async("svglib==1.5.1")
-            await runtime.ensure_async("reportlab")
-            await runtime.ensure_async("rlpycairo==0.3.0")
-            response_serialized, errors = await runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(filepath),
-                ],
-                request_serialized,
-            )
-            sys.stderr.write(errors)
+                if format_name in ["svg", "png"]:
+                    request.setdefault("viewport_origin", kwargs.get("viewport_origin", [100, -100, 100]))
+                    request.setdefault("line_weight", kwargs.get("line_weight", 1.0))
+                if format_name == "png":
+                    request.setdefault("width", kwargs.get("width", render_opts.get("width", 512)))
+                    request.setdefault("height", kwargs.get("height", render_opts.get("height", 512)))
 
-            response = base64.b64decode(response_serialized)
-            result = pickle.loads(response)
-            if not result["success"]:
-                pc_logging.error("RenderPNG failed: %s:%s: %s" % (self.project_name, self.name, result["exception"]))
-            if "exception" in result and not result["exception"] is None:
-                pc_logging.exception("RenderPNG exception: %s" % result["exception"])
+                request.update(render_opts)
+                request.update(kwargs)
 
-    def render_png(
+                picklestring = pickle.dumps(request)
+                request_serialized = base64.b64encode(picklestring).decode()
+
+                runtime = ctx.get_python_runtime(version="3.11")
+                for dependency in WRAPPER_FORMATS[format_name]:
+                    await runtime.ensure_async(dependency)
+
+                # Run wrapper
+                response_serialized, errors = await runtime.run_async(
+                    [
+                        wrapper_path,
+                        os.path.abspath(filepath),
+                    ],
+                    request_serialized,
+                )
+                sys.stderr.write(errors)
+
+                if errors:
+                    pc_logging.error(f"Wrapper {format_name} stderr:\n{errors}")
+
+                # Handle response
+                response = base64.b64decode(response_serialized)
+                result = pickle.loads(response)
+
+                if not result.get("success", False):
+                    pc_logging.error(
+                        f"Render {format_name.upper()} failed for {self.project_name}:{self.name}: {result.get('exception', 'Unknown error')}"
+                    )
+                if "exception" in result and result["exception"]:
+                    pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
+
+            else:
+                render_func_name = f"render_{format_name}_async"
+                render_func = getattr(self, render_func_name, None)
+                if callable(render_func):
+                    await render_func(ctx=ctx, project=project, filepath=filepath, **kwargs)
+                else:
+                     pc_logging.error(
+                        f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
+                    )
+
+    def render(
         self,
-        ctx,
-        project=None,
+        ctx: Context,
+        format_name: str,
+        project: Optional[Project] = None,
         filepath=None,
-        width=None,
-        height=None,
-        line_weight=None,
-        viewport_origin=None,
     ) -> None:
-        asyncio.run(self.render_png_async(ctx, project, filepath, width, height, line_weight, viewport_origin))
+        asyncio.run(self.render_async(ctx, format_name, project, filepath))
 
     async def render_step_async(
         self,

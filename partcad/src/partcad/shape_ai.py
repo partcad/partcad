@@ -29,7 +29,8 @@ class ShapeWithAi(Shape, Ai):
             return configured_summary
 
         image_filename = tempfile.mktemp(".png")
-        await self.render_png_async(project.ctx, project, image_filename)
+        # await self.render_png_async(project.ctx, project, image_filename)
+        await self.render_async(project.ctx, "png", project, image_filename)
 
         prompt = """The attached image is a single-color (the color doesn't
 matter) line drawing of a mechanical design.
