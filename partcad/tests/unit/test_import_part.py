@@ -6,7 +6,7 @@ import yaml
 from pathlib import Path
 from partcad.context import Context
 from partcad import Project
-from partcad.actions.part_actions import import_part_action
+from partcad.actions.part import import_part_action
 
 # Mapping file extensions to formats
 EXTENSION_MAPPING = {
@@ -14,7 +14,7 @@ EXTENSION_MAPPING = {
     "brep": "brep",
     "stl": "stl",
     "3mf": "3mf",
-    "threejs": "json",  # ThreeJS exports as .json
+    "threejs": "json",
     "obj": "obj",
     "gltf": "gltf",
 }

@@ -6,6 +6,9 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import asyncio
 import copy
 import os
@@ -33,7 +36,7 @@ from .sketch_factory_dxf import SketchFactoryDxf
 from .sketch_factory_svg import SketchFactorySvg
 from .sketch_factory_build123d import SketchFactoryBuild123d
 from .sketch_factory_cadquery import SketchFactoryCadquery
-from . import part
+from .part import Part
 from . import part_config
 from .part_factory_extrude import PartFactoryExtrude
 from .part_factory_sweep import PartFactorySweep
@@ -58,6 +61,8 @@ from . import provider_config
 from .render import render_cfg_merge
 from .utils import resolve_resource_path, normalize_resource_path
 
+if TYPE_CHECKING:
+    from partcad.context import Context
 
 class Project(project_config.Configuration):
 
@@ -133,7 +138,7 @@ class Project(project_config.Configuration):
 
     def __init__(
         self,
-        ctx,
+        ctx: Context,
         name: str,
         path: str,
         include_paths: list[str] = [],
@@ -544,7 +549,7 @@ class Project(project_config.Configuration):
             config = part_config.PartConfiguration.normalize(part_name, config)
             self.init_part_by_config(config)
 
-    def init_part_by_config(self, config, source_project=None):
+    def init_part_by_config(self, config: dict, source_project: "Project" = None):
         if source_project is None:
             source_project = self
 
@@ -602,7 +607,7 @@ class Project(project_config.Configuration):
                 alias_part_config = part_config.PartConfiguration.normalize(alias, alias_part_config)
                 pfa.PartFactoryAlias(self.ctx, source_project, self, alias_part_config)
 
-    def get_part(self, part_name, func_params=None, quiet=False) -> part.Part:
+    def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
         if func_params is None or not func_params:
             has_func_params = False
         else:
@@ -636,9 +641,9 @@ class Project(project_config.Configuration):
 
         # See if it's already available
         if result_name in self.parts and not self.parts[result_name] is None:
-            p = self.parts[result_name]
+            part = self.parts[result_name]
             self.lock.release()
-            return p
+            return part
 
         with Project.PartLock(self, result_name):
             # Release the project lock, and continue with holding the part lock only
@@ -1236,6 +1241,10 @@ class Project(project_config.Configuration):
             del part_config["name"]
         if "orig_name" in part_config:
             del part_config["orig_name"]
+
+        if "offset" in part_config and isinstance(part_config["offset"], list):
+            part_config["offset"] = ruamel.yaml.comments.CommentedSeq(part_config["offset"])
+            part_config["offset"].fa.set_flow_style()
 
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
