@@ -13,7 +13,7 @@ SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gl
     "-t", "--target-format",
     help="Target conversion format.",
     type=click.Choice(SUPPORTED_CONVERT_FORMATS),
-    required=True
+    required=False
 )
 @click.option(
     "-O", "--output-dir",

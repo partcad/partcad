@@ -230,26 +230,45 @@ def parse_step_tree(step_file: str):
     return root_nodes
 
 
-def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: dict):
+def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: dict, assembly_name: str):
     """Converts a hierarchical assembly tree into a flat structure with STEP files."""
     node_type = node["type"]
     node_name = node["name"]
     global_trsf = node["trsf"]
 
+    full_node_name = f"{assembly_name}/{node_name}".replace("\\", "/")
+
     if node_type == "assembly":
-        return {"type": "assembly", "name": node_name, "links": [flatten_assembly_tree(ch, parent_folder, project, config) for ch in node.get("children", [])]}
+        return {
+            "type": "assembly",
+            "name": full_node_name,
+            "links": [
+                flatten_assembly_tree(ch, parent_folder, project, config, assembly_name)
+                for ch in node.get("children", [])
+            ],
+        }
 
     shape = node["shape"]
     zeroed_shape = BRepBuilderAPI_Transform(shape, invert_transformation(global_trsf), True).Shape()
     signature = shape_signature(zeroed_shape)
 
     if signature in shape_cache:
-        return {"type": "part", "name": node_name, "part": shape_cache[signature], "location": convert_location(global_trsf)}
+        return {
+            "type": "part",
+            "name": full_node_name,
+            "part": shape_cache[signature].replace("\\", "/"),
+            "location": convert_location(global_trsf),
+        }
 
-    part_path = import_part(project, zeroed_shape, node_name, parent_folder, config)
+    part_path = import_part(project, zeroed_shape, full_node_name, parent_folder, config)
     shape_cache[signature] = part_path
 
-    return {"type": "part", "name": node_name, "part": part_path, "location": convert_location(global_trsf)}
+    return {
+        "type": "part",
+        "name": full_node_name,
+        "part": part_path.replace("\\", "/"),
+        "location": convert_location(global_trsf),
+    }
 
 
 def parse_assembly_tree(assembly_file: str, file_type: str):
