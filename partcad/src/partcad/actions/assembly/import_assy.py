@@ -339,7 +339,7 @@ def import_assy_action(
         final_structure = root_nodes[0]
 
     # Flatten the hierarchical structure into a single .assy file
-    top_data = flatten_assembly_tree(final_structure, output_folder, project, config)
+    top_data = flatten_assembly_tree(final_structure, output_folder, project, config, assembly_name)
     assy_name = top_data["name"]
     assy_file_path = output_folder / f"{assy_name}.assy"
 
