@@ -27,7 +27,7 @@ from OCP.TopExp import TopExp_Explorer
 from OCP.TopAbs import TopAbs_SOLID
 
 import partcad.logging as pc_logging
-from partcad.actions.part_actions import import_part_action
+from partcad.actions.part import import_part_action
 from partcad.project import Project
 
 shape_cache = {}
@@ -122,7 +122,7 @@ def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_fo
     step_file = parent_folder / f"{part_name}.step"
     save_shape_to_step(shape, step_file)
 
-    import_part_action(project, "step", part_name.replace("\\", "/"), step_file.as_posix(), config, target_dir=str(parent_folder))
+    import_part_action(project, "step", part_name.replace("\\", "/"), step_file.as_posix(), config)
     return str(step_file)
 
 

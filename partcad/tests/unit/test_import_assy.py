@@ -1,9 +1,8 @@
 import pytest
 import yaml
-import shutil
 from pathlib import Path
 from partcad.context import Context
-from partcad.actions.assy_actions import import_assy_action
+from partcad.actions.assembly import import_assy_action
 
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
