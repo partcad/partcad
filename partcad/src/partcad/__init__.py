@@ -61,5 +61,5 @@ __all__ = [
     "PluginExportPngReportlab"
 ]
 
-__version__: str = "0.7.123"
+__version__: str = "0.7.124"
 init_sentry(__version__)

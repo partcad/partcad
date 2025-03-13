@@ -76,7 +76,7 @@ It will create virtual environment in `.venv/` directory and download about 1.5 
 are downloaded Poetry will also install current package in editable mode, and you will see the following:
 
 ```text
-Installing the current project: partcad-dev (0.7.123)
+Installing the current project: partcad-dev (0.7.124)
 ```
 
 ## Activate Environment

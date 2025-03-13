@@ -1,5 +1,5 @@
 click
 coloredlogs==15.0.1
 ocp_vscode
-partcad==0.7.123
+partcad==0.7.124
 rich-click==1.8.5
