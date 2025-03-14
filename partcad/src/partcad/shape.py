@@ -439,7 +439,7 @@ class Shape(ShapeConfiguration):
                 "cadquery-ocp==7.7.2",
                 "ocpsvg==0.3.4",
                 "build123d==0.8.0"
-                ],
+            ],
             "png": [
                 "cadquery-ocp==7.7.2",
                 "ocpsvg==0.3.4",
@@ -447,10 +447,28 @@ class Shape(ShapeConfiguration):
                 "svglib==1.5.1",
                 "reportlab",
                 "rlpycairo==0.3.0"
-                ],
+            ],
+            "brep": [
+                "cadquery-ocp==7.7.2"
+            ],
+            "step": [
+                "cadquery-ocp==7.7.2",
+                "OCP"
+            ],
+            "obj": [
+                "cadquery-ocp==7.7.2"
+            ],
+            "gltf": [
+                "cadquery-ocp==7.7.2"
+            ]
         }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
+            if filepath and os.path.isdir(filepath):
+                self.config_obj.setdefault("render", {})["output_dir"] = filepath
+
+            render_cfg = self.config_obj.get("render", {})
+
             wrapper_path = wrapper.get(f"render_{format_name}.py")
 
             render_opts, filepath = self.render_getopts(format_name, f".{format_name}", project, filepath)
@@ -509,14 +527,17 @@ class Shape(ShapeConfiguration):
                     pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
 
             else:
-                render_func_name = f"render_{format_name}_async"
-                render_func = getattr(self, render_func_name, None)
-                if callable(render_func):
-                    await render_func(ctx=ctx, project=project, filepath=filepath, **kwargs)
-                else:
-                     pc_logging.error(
-                        f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
-                    )
+                # render_func_name = f"render_{format_name}_async"
+                # render_func = getattr(self, render_func_name, None)
+                # if callable(render_func):
+                #     await render_func(ctx=ctx, project=project, filepath=filepath, **kwargs)
+                # else:
+                #      pc_logging.error(
+                #         f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
+                #     )
+                pc_logging.error(
+                    f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
+                )
 
     def render(
         self,
@@ -576,6 +597,7 @@ class Shape(ShapeConfiguration):
         filepath=None,
     ):
         with pc_logging.Action("RenderBREP", self.project_name, self.name):
+            pc_logging.info("render_brep_async")
             brep_opts, filepath = self.render_getopts("brep", ".brep", project, filepath)
 
             obj = await self.get_wrapped(ctx)
