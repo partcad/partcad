@@ -4,10 +4,13 @@ from .healthcheck import HealthCheckReport, HealthCheckTest
 
 class PythonVersionCheck(HealthCheckTest):
     min_version: tuple[int, int] = (3, 10)
-    latest_version: tuple[int, int] = (3, 12)
+    latest_version: tuple[int, int] = (3, 12, float("inf"))
 
     def __init__(self):
         super().__init__("PythonVersion")
+
+    def auto_fixable(self) -> bool:
+        return False
 
     def is_applicable(self) -> bool:
         return True
@@ -18,3 +21,6 @@ class PythonVersionCheck(HealthCheckTest):
                 f"Python version {sys.version_info.major}.{sys.version_info.minor} is not supported. Please make sure your system python version is >={self.min_version[0]}.{self.min_version[1]}, <={self.latest_version[0]}.{self.latest_version[1]}"
             )
         return HealthCheckReport(self.name, self.findings, False)
+
+    def fix(self) -> bool:
+        return False
