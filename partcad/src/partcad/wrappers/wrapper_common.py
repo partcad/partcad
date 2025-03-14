@@ -61,19 +61,32 @@ def handle_exception(exc, cqscript=None):
     sys.stderr.write("Error: [")
     sys.stderr.write(str(exc).strip())
     sys.stderr.write("] on the line: [")
-    tb = exc.__traceback__
-    # Switch to the traceback object that contains the script line number
-    tb = tb.tb_next
-    # Get the filename
-    fname = tb.tb_frame.f_code.co_filename
-    if cqscript is not None and fname == "<cqscript>":
-        fname = cqscript
 
-    # Get the line contents
-    with open(fname, "r") as fp:
-        lines = fp.read().split("\n")
-        if tb.tb_lineno - 1 < len(lines):
-            line = lines[tb.tb_lineno - 1]
-            sys.stderr.write(line.strip())
+    tb = exc.__traceback__
+    if tb is None:
+        sys.stderr.write("No traceback available")
+    else:
+        # Try to move one level down if available
+        if tb.tb_next is not None:
+            tb = tb.tb_next
+        # Check if tb is still valid
+        try:
+            fname = tb.tb_frame.f_code.co_filename
+            if cqscript is not None and fname == "<cqscript>":
+                fname = cqscript
+
+            # Attempt to read the file and print the specific line
+            try:
+                with open(fname, "r") as fp:
+                    lines = fp.read().split("\n")
+                    if tb.tb_lineno - 1 < len(lines):
+                        line = lines[tb.tb_lineno - 1]
+                        sys.stderr.write(line.strip())
+                    else:
+                        sys.stderr.write("Line number out of range")
+            except Exception as read_err:
+                sys.stderr.write(f"Failed to read file {fname}: {read_err}")
+        except AttributeError:
+            sys.stderr.write("No traceback details available")
     sys.stderr.write("]\n")
     sys.stderr.flush()

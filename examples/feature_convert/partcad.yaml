@@ -1,4 +1,6 @@
-desc: PartCAD example project for testing the conversion of various part types, including CadQuery, SCAD, STEP, BREP, STL, 3MF, Build123d, and more. This project demonstrates the use of alias and enrich mechanisms for part conversion.
+desc: PartCAD example project for testing the conversion of various part types, including
+  CadQuery, SCAD, STEP, BREP, STL, 3MF, Build123d, and more. This project demonstrates
+  the use of alias and enrich mechanisms for part conversion.
 
 docs:
   usage: |
@@ -181,3 +183,7 @@ parts:
   cube_alias_enrich_alias:
     type: alias
     source: :cube_enrich_alias
+
+render:
+  png: .
+  svg: .

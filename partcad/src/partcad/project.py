@@ -1356,9 +1356,9 @@ class Project(project_config.Configuration):
 
             for shape in shapes:
                 shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
-
                 for format_name in render_formats:
                     if self._should_render_format(format_name, shape_render, format, shape.kind):
+                        pc_logging.info(f"{format_name=}")
                         tasks.append(shape.render_async(
                             ctx=self.ctx,
                             format_name=format_name,
@@ -1439,29 +1439,26 @@ class Project(project_config.Configuration):
         with pc_logging.Action("Convert", self.name):
             shapes = []
             if sketches:
-                shapes.extend(self.get_sketch(name) for name in sketches)
+                shapes.extend([self.get_sketch(name) for name in sketches])
             if interfaces:
-                shapes.extend(self.get_interface(name) for name in interfaces)
+                shapes.extend([self.get_interface(name) for name in interfaces])
             if parts:
-                shapes.extend(self.get_part(name) for name in parts)
+                shapes.extend([self.get_part(name) for name in parts])
             if assemblies:
-                shapes.extend(self.get_assembly(name) for name in assemblies)
+                shapes.extend([self.get_assembly(name) for name in assemblies])
 
             pc_logging.info(f"Converting {len(shapes)} object(s) to '{target_format}'.")
 
-            # Prepare async tasks for rendering
             tasks = []
+            import os
             for shape in shapes:
-                render_method = f"render_{target_format}_async"
-                if hasattr(shape, render_method):
-                    tasks.append(getattr(shape, render_method)(self.ctx, self, output_dir))
-                else:
-                    pc_logging.warn(f"Skipping '{shape.name}': {target_format} format not supported")
+                file_path_arg = output_dir if output_dir and os.path.isdir(output_dir) else None
+
+                tasks.append(shape.render_async(self.ctx, target_format, self, file_path_arg))
 
             try:
                 await asyncio.gather(*tasks)
             except Exception as e:
-                # Raise a RuntimeError with additional info if any rendering task fails
                 raise RuntimeError(f"Failed to convert to {target_format}: {str(e)}") from e
 
 
