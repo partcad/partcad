@@ -162,7 +162,7 @@ def perform_conversion(project: Project, part_name: str, original_type: str,
         else:
             project.render(
                 sketches=[], interfaces=[], parts=[part_name], assemblies=[],
-                format=target_format, output_dir=str(output_dir) if output_dir else None
+                format=target_format, output_dir=str(out_dir)
             )
             return output_path
 
