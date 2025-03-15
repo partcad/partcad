@@ -455,8 +455,15 @@ class Shape(ShapeConfiguration):
                 "cadquery-ocp==7.7.2",
                 "OCP"
             ],
+            "stl": [
+                "cadquery-ocp==7.7.2"
+                ],
             "obj": [
                 "cadquery-ocp==7.7.2"
+            ],
+            "3mf": [
+                "cadquery-ocp==7.7.2",
+                "cadquery==2.5.2"
             ],
             "gltf": [
                 "cadquery-ocp==7.7.2"
@@ -467,13 +474,6 @@ class Shape(ShapeConfiguration):
             if filepath and os.path.isdir(filepath):
                 self.config_obj.setdefault("render", {})["output_dir"] = filepath
 
-            render_cfg = self.config_obj.get("render", {})
-
-            wrapper_path = wrapper.get(f"render_{format_name}.py")
-
-            render_opts, filepath = self.render_getopts(format_name, f".{format_name}", project, filepath)
-            filepath = os.path.abspath(filepath)
-
             obj = await self.get_wrapped(ctx)
             if obj is None:
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
@@ -482,18 +482,36 @@ class Shape(ShapeConfiguration):
             if project is not None:
                 project.ctx.ensure_dirs_for_file(filepath)
 
-            if format_name in WRAPPER_FORMATS.keys():
+            formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
+
+            for format in formats_to_render:
+                render_opts, final_filepath = self.render_getopts(format, f".{format}", project, filepath)
+                final_filepath = os.path.abspath(final_filepath)
+                pc_logging.debug(f"Rendering: {filepath} for format '{format}'")
+
+                wrapper_path = wrapper.get(f"render_{format}.py")
+
                 request = {"wrapped": obj}
 
-                if format_name in ["svg", "png"]:
-                    request.setdefault("viewport_origin", kwargs.get("viewport_origin", [100, -100, 100]))
-                    request.setdefault("line_weight", kwargs.get("line_weight", 1.0))
-                if format_name == "png":
-                    request.setdefault("width", kwargs.get("width", render_opts.get("width", 512)))
-                    request.setdefault("height", kwargs.get("height", render_opts.get("height", 512)))
+                if format in ["svg", "png"]:
+                    request["viewport_origin"] = kwargs.get("viewport_origin", [100, -100, 100])
+                    request["line_weight"] = kwargs.get("line_weight", 1.0)
+                    if format == "png":
+                        request["width"] = kwargs.get("width", 512)
+                        request["height"] = kwargs.get("height", 512)
 
-                request.update(render_opts)
-                request.update(kwargs)
+                elif format in ["3mf", "obj", "gltf", "stl"]:
+                    request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
+                    request["angularTolerance"] = kwargs.get("angularTolerance", render_opts.get("angularTolerance", 0.1))
+
+                    if format == "stl":
+                        request["ascii"] = kwargs.get("ascii", render_opts.get("ascii", False))
+
+                elif format == "step":
+                    request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
+                    request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
+
+                register_ocp_helper()
 
                 picklestring = pickle.dumps(request)
                 request_serialized = base64.b64encode(picklestring).decode()
@@ -506,7 +524,7 @@ class Shape(ShapeConfiguration):
                 response_serialized, errors = await runtime.run_async(
                     [
                         wrapper_path,
-                        os.path.abspath(filepath),
+                        final_filepath,
                     ],
                     request_serialized,
                 )
@@ -515,9 +533,20 @@ class Shape(ShapeConfiguration):
                 if errors:
                     pc_logging.error(f"Wrapper {format_name} stderr:\n{errors}")
 
+                response_lines = response_serialized.strip().splitlines()
+                if not response_lines:
+                    pc_logging.error(f"Empty response from wrapper: {wrapper_path}")
+                    return
+
+                cleaned_response = response_lines[-1].strip()
+
                 # Handle response
-                response = base64.b64decode(response_serialized)
-                result = pickle.loads(response)
+                result = {}
+                try:
+                    response_bytes = base64.b64decode(cleaned_response)
+                    result = pickle.loads(response_bytes)
+                except Exception as e:
+                    pc_logging.error(f"Failed to deserialize response: {e}")
 
                 if not result.get("success", False):
                     pc_logging.error(
@@ -526,18 +555,18 @@ class Shape(ShapeConfiguration):
                 if "exception" in result and result["exception"]:
                     pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
 
-            else:
-                # render_func_name = f"render_{format_name}_async"
-                # render_func = getattr(self, render_func_name, None)
-                # if callable(render_func):
-                #     await render_func(ctx=ctx, project=project, filepath=filepath, **kwargs)
-                # else:
-                #      pc_logging.error(
-                #         f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
-                #     )
-                pc_logging.error(
-                    f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
-                )
+            # else:
+            #     # render_func_name = f"render_{format_name}_async"
+            #     # render_func = getattr(self, render_func_name, None)
+            #     # if callable(render_func):
+            #     #     await render_func(ctx=ctx, project=project, filepath=filepath, **kwargs)
+            #     # else:
+            #     #      pc_logging.error(
+            #     #         f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
+            #     #     )
+            #     pc_logging.error(
+            #         f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
+            #     )
 
     def render(
         self,
