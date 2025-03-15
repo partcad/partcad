@@ -147,13 +147,18 @@ def perform_conversion(project: Project, part_name: str, original_type: str,
                        output_dir: Optional[str], dependencies_list: list = []) -> Path:
     """Handles file conversion and updates project configuration."""
     new_ext = EXTENSION_MAPPING.get(target_format, target_format)
+
     if output_dir:
-        output_path = Path(output_dir) / f"{part_name}.{new_ext}"
+        out_dir = Path(output_dir).resolve()
     elif "path" in part_config:
-        existing_path = Path(project.path) / part_config["path"]
-        output_path = existing_path.with_name(f"{part_name}.{new_ext}")
+        out_dir = (Path(project.path) / Path(part_config["path"])).parent
     else:
-        output_path = Path(project.path) / f"{part_name}.{new_ext}"
+        out_dir = Path(project.path)
+
+    if not output_dir and "path" in part_config and target_format == original_type:
+        output_path = (Path(project.path) / Path(part_config["path"])).resolve()
+    else:
+        output_path = out_dir / f"{part_name}.{new_ext}"
 
     if output_path.exists() and source_path.samefile(output_path):
         pc_logging.warning(f"Skipping conversion: source and target paths are identical ({source_path}).")
@@ -173,8 +178,9 @@ def perform_conversion(project: Project, part_name: str, original_type: str,
             # )
             project.render(
                 sketches=[], interfaces=[], parts=[part_name], assemblies=[],
-                format=target_format, output_dir=str(output_dir) if output_dir else None
+                format=target_format, output_dir=str(out_dir)
             )
+            return output_path
 
     if not output_path.exists():
         raise RuntimeError(f"Conversion failed: output file '{output_path}' was not created.")
@@ -280,11 +286,14 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
 
         if output_dir:
             try:
-                final_config_path = final_path.relative_to(output_dir)
+                final_config_path = final_path.relative_to(Path(output_dir))
             except ValueError:
                 final_config_path = final_path.name
         else:
-            final_config_path = final_path.name
+            try:
+                final_config_path = final_path.relative_to(project.path)
+            except ValueError:
+                final_config_path = final_path.name
 
         project.update_part_config(part_name, {"type": target_format, "path": str(final_config_path)})
         pc_logging.debug(f"Final updated configuration for '{part_name}': {final_config_path}")
