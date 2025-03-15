@@ -497,10 +497,9 @@ class Shape(ShapeConfiguration):
             formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
 
             for format in formats_to_render:
-                file_extension = EXTENSION_MAPPING.get(format, format)
-                render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
+                render_opts, final_filepath = self.render_getopts(format, f".{format}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
-                pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
+                pc_logging.debug(f"Rendering: {filepath} for format '{format}'")
 
                 wrapper_path = wrapper.get(f"render_{format}.py")
 
