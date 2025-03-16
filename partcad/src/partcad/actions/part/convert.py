@@ -5,19 +5,7 @@ import partcad.logging as pc_logging
 from partcad.project import Project
 from partcad.utils import resolve_resource_path
 
-
-EXTENSION_MAPPING = {
-    "step": "step",
-    "brep": "brep",
-    "stl": "stl",
-    "3mf": "3mf",
-    "threejs": "json",
-    "obj": "obj",
-    "gltf": "gltf",
-    "cadquery": "py",
-    "build123d": "py",
-    "scad": "scad",
-}
+from partcad.shape import EXTENSION_MAPPING
 
 SHALLOW_COPY_SUFFICIENT_TYPES = ["alias", "enrich"]
 
@@ -176,6 +164,7 @@ def perform_conversion(project: Project, part_name: str, original_type: str,
             #     sketches=[], interfaces=[], parts=[part_name], assemblies=[],
             #     target_format=target_format, output_dir=str(output_path)
             # )
+            pc_logging.info(target_format)
             project.render(
                 sketches=[], interfaces=[], parts=[part_name], assemblies=[],
                 format=target_format, output_dir=str(out_dir)
