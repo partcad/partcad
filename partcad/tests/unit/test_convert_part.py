@@ -7,19 +7,7 @@ from partcad.actions.part import convert_part_action
 import yaml
 from unittest.mock import patch, Mock
 
-
-EXTENSION_MAPPING = {
-    "step": "step",
-    "brep": "brep",
-    "stl": "stl",
-    "3mf": "3mf",
-    "threejs": "json",
-    "obj": "obj",
-    "gltf": "gltf",
-    "cadquery": "py",
-    "build123d": "py",
-    "scad": "scad",
-}
+from partcad.shape import EXTENSION_MAPPING
 
 ALLOWED_TARGET_FORMATS = {"step", "brep", "stl", "3mf", "threejs", "obj", "gltf"}
 

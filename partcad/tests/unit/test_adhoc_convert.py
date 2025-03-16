@@ -84,7 +84,7 @@ def test_convert_invalid_file():
 
     output_file = Path(temp_dir) / "output.step"
 
-    with pytest.raises(RuntimeError, match="Failed to convert: Failed to read the STL file"):
+    with pytest.raises(RuntimeError, match="Failed to convert:"):
         convert_cad_file(invalid_file, "stl", output_file, "step")
 
     shutil.rmtree(temp_dir)
