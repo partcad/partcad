@@ -47,8 +47,9 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
         if part.errors:
             raise RuntimeError(f"Failed to load the input part: {part.errors}")
 
-        # Export the part to the desired output format
-        export_part(part, output_filename, output_type, ctx)
+        # Render the part to the desired output format
+        part.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
+
     except Exception as e:
         raise RuntimeError(f"Failed to convert: {e.with_traceback(None)}")
     finally:
