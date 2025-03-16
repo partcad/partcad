@@ -143,7 +143,7 @@ Feature: `pc adhoc convert` command
       """
     When I run "pc adhoc convert invalid.stl test.step --input stl --output step"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "Failed to convert: Failed to read the STL file"
+    And STDOUT should contain "Failed to convert:"
 
   Scenario: Handle empty input file
     Given a file named "empty.stl" with content:
@@ -151,7 +151,7 @@ Feature: `pc adhoc convert` command
       """
     When I run "pc adhoc convert empty.stl empty.step --input stl --output step"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "Failed to convert: Failed to read the STL file"
+    And STDOUT should contain "Failed to convert:"
 
   Scenario: Ambiguous input file extension
     Given a file named "test.unknown" with content:

@@ -9,15 +9,7 @@ from partcad import Project
 from partcad.actions.part import import_part_action
 
 # Mapping file extensions to formats
-EXTENSION_MAPPING = {
-    "step": "step",
-    "brep": "brep",
-    "stl": "stl",
-    "3mf": "3mf",
-    "threejs": "json",
-    "obj": "obj",
-    "gltf": "gltf",
-}
+from partcad.shape import EXTENSION_MAPPING
 
 # Supported formats
 SUPPORTED_FORMATS = list(EXTENSION_MAPPING.keys())
