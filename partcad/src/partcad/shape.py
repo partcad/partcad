@@ -37,6 +37,18 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
 
+EXTENSION_MAPPING = {
+    "step": "step",
+    "brep": "brep",
+    "stl": "stl",
+    "3mf": "3mf",
+    "threejs": "json",
+    "obj": "obj",
+    "gltf": "json",
+    "cadquery": "py",
+    "build123d": "py",
+    "scad": "scad",
+}
 
 
 class Shape(ShapeConfiguration):
@@ -435,46 +447,37 @@ class Shape(ShapeConfiguration):
             kwargs: Additional options (width, height, etc.).
         """
         WRAPPER_FORMATS = {
-            "svg": [
-                "cadquery-ocp==7.7.2",
-                "ocpsvg==0.3.4",
-                "build123d==0.8.0"
-            ],
-            "png": [
-                "cadquery-ocp==7.7.2",
-                "ocpsvg==0.3.4",
-                "build123d==0.8.0",
-                "svglib==1.5.1",
-                "reportlab",
-                "rlpycairo==0.3.0"
-            ],
-            "brep": [
-                "cadquery-ocp==7.7.2"
-            ],
-            "step": [
-                "cadquery-ocp==7.7.2",
-                "OCP"
-            ],
-            "stl": [
-                "cadquery-ocp==7.7.2"
-                ],
-            "obj": [
-                "cadquery-ocp==7.7.2"
-            ],
-            "3mf": [
-                "cadquery-ocp==7.7.2",
-                "cadquery==2.5.2"
-            ],
-            "gltf": [
-                "cadquery-ocp==7.7.2"
-            ]
-        }
+        "svg": [
+            "cadquery-ocp==7.7.2",
+            "ocpsvg==0.3.4",
+            "build123d==0.8.0"
+        ],
+        "png": [
+            "cadquery-ocp==7.7.2",
+            "ocpsvg==0.3.4",
+            "build123d==0.8.0",
+            "svglib==1.5.1",
+            "reportlab",
+            "rlpycairo==0.3.0"
+        ],
+        "brep": ["cadquery-ocp==7.7.2"],
+        "step": ["cadquery-ocp==7.7.2"],
+        "stl": ["cadquery-ocp==7.7.2"],
+        "obj": ["cadquery-ocp==7.7.2"],
+        "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
+        "gltf": ["cadquery-ocp==7.7.2"],
+        "threejs": ["cadquery-ocp==7.7.2"]
+    }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
             if filepath and os.path.isdir(filepath):
                 self.config_obj.setdefault("render", {})["output_dir"] = filepath
 
-            obj = await self.get_wrapped(ctx)
+            if format_name == "gltf":
+                obj = await self.get_build123d(ctx)
+            else:
+                obj = await self.get_wrapped(ctx)
+
             if obj is None:
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
                 return
@@ -485,7 +488,8 @@ class Shape(ShapeConfiguration):
             formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
 
             for format in formats_to_render:
-                render_opts, final_filepath = self.render_getopts(format, f".{format}", project, filepath)
+                file_extension = EXTENSION_MAPPING.get(format, format)
+                render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
                 pc_logging.debug(f"Rendering: {filepath} for format '{format}'")
 
@@ -500,12 +504,13 @@ class Shape(ShapeConfiguration):
                         request["width"] = kwargs.get("width", 512)
                         request["height"] = kwargs.get("height", 512)
 
-                elif format in ["3mf", "obj", "gltf", "stl"]:
+                elif format in ["3mf", "obj", "gltf", "stl", "threejs"]:
                     request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
                     request["angularTolerance"] = kwargs.get("angularTolerance", render_opts.get("angularTolerance", 0.1))
-
                     if format == "stl":
                         request["ascii"] = kwargs.get("ascii", render_opts.get("ascii", False))
+                    elif format == "gltf":
+                        request["binary"] = kwargs.get("binary", render_opts.get("binary", False))
 
                 elif format == "step":
                     request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
@@ -555,18 +560,6 @@ class Shape(ShapeConfiguration):
                 if "exception" in result and result["exception"]:
                     pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
 
-            # else:
-            #     # render_func_name = f"render_{format_name}_async"
-            #     # render_func = getattr(self, render_func_name, None)
-            #     # if callable(render_func):
-            #     #     await render_func(ctx=ctx, project=project, filepath=filepath, **kwargs)
-            #     # else:
-            #     #      pc_logging.error(
-            #     #         f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
-            #     #     )
-            #     pc_logging.error(
-            #         f"Render for format '{format_name}' is not supported for {self.project_name}:{self.name}"
-            #     )
 
     def render(
         self,
