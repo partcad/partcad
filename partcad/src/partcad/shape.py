@@ -37,8 +37,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
 
-
-
 EXTENSION_MAPPING = {
     "step": "step",
     "brep": "brep",
@@ -497,7 +495,8 @@ class Shape(ShapeConfiguration):
             formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
 
             for format in formats_to_render:
-                render_opts, final_filepath = self.render_getopts(format, f".{format}", project, filepath)
+                file_extension = EXTENSION_MAPPING.get(format, format)
+                render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
                 pc_logging.debug(f"Rendering: {filepath} for format '{format}'")
 
