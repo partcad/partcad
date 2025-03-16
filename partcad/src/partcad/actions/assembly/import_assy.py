@@ -126,7 +126,7 @@ def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_fo
 
     import_part_action(project, "step", part_name.replace("\\", "/"), step_file.as_posix(), config)
 
-    return str(step_file)
+    return step_file.as_posix()
 
 
 def shape_signature(shape: TopoDS_Shape) -> tuple:
@@ -259,7 +259,7 @@ def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: d
         return {
             "type": "part",
             "name": full_node_name,
-            "part": shape_cache[signature].replace("\\", "/"),
+            "part": shape_cache[signature],
             "location": convert_location(global_trsf),
         }
 
@@ -269,7 +269,7 @@ def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: d
     return {
         "type": "part",
         "name": full_node_name,
-        "part": part_path.replace("\\", "/"),
+        "part": part_path,
         "location": convert_location(global_trsf),
     }
 
@@ -354,7 +354,7 @@ def import_assy_action(
     }
 
     # Save assembly data to YAML format
-    with open(assy_file_path, "w") as file:
+    with open(assy_file_path, "w", encoding="utf-8") as file:
         yaml.dump(assembly_data, file, default_flow_style=False)
 
     # Add assembly to the project
