@@ -119,10 +119,13 @@ def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_fo
     parent_folder = (project_root / parent_folder).resolve(strict=False)
     parent_folder.mkdir(parents=True, exist_ok=True)
 
-    step_file = parent_folder / f"{part_name}.step"
+    file_safe_name = Path(part_name).name
+    step_file = parent_folder / f"{file_safe_name}.step"
+
     save_shape_to_step(shape, step_file)
 
     import_part_action(project, "step", part_name.replace("\\", "/"), step_file.as_posix(), config)
+
     return str(step_file)
 
 
@@ -340,7 +343,7 @@ def import_assy_action(
 
     # Flatten the hierarchical structure into a single .assy file
     top_data = flatten_assembly_tree(final_structure, output_folder, project, config, assembly_name)
-    assy_name = top_data["name"]
+    assy_name = Path(top_data["name"]).name
     assy_file_path = output_folder / f"{assy_name}.assy"
 
     # Prepare .assy file data
