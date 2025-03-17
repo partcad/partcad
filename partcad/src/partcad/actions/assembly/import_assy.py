@@ -115,18 +115,21 @@ def save_shape_to_step(shape: TopoDS_Shape, filename: Path):
 def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_folder: Path, config: dict) -> str:
     """Saves shape as STEP and imports it into the project."""
 
-    project_root = Path.cwd().resolve()
-    parent_folder = (project_root / parent_folder).resolve(strict=False)
-    parent_folder.mkdir(parents=True, exist_ok=True)
+    step_folder = parent_folder
+    step_folder.mkdir(parents=True, exist_ok=True)
 
     file_safe_name = Path(part_name).name
-    step_file = parent_folder / f"{file_safe_name}.step"
+    step_file = step_folder / f"{file_safe_name}.step"
 
     save_shape_to_step(shape, step_file)
 
-    import_part_action(project, "step", part_name.replace("\\", "/"), step_file.as_posix(), config)
+    part_name_posix = (step_folder / file_safe_name).as_posix()
+    step_file_posix = step_file.as_posix()
 
-    return step_file.as_posix()
+    import_part_action(project, "step", part_name_posix, step_file_posix, config)
+
+    return step_file_posix
+
 
 
 def shape_signature(shape: TopoDS_Shape) -> tuple:
@@ -233,20 +236,20 @@ def parse_step_tree(step_file: str):
     return root_nodes
 
 
-def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: dict, assembly_name: str):
+def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: dict, parent_name: str = ""):
     """Converts a hierarchical assembly tree into a flat structure with STEP files."""
     node_type = node["type"]
     node_name = node["name"]
     global_trsf = node["trsf"]
 
-    full_node_name = f"{assembly_name}/{node_name}".replace("\\", "/")
+    full_node_name = f"{parent_name}/{node_name}".strip("/").replace("\\", "/") if parent_name else node_name
 
     if node_type == "assembly":
         return {
             "type": "assembly",
             "name": full_node_name,
             "links": [
-                flatten_assembly_tree(ch, parent_folder, project, config, assembly_name)
+                flatten_assembly_tree(ch, parent_folder, project, config, full_node_name)
                 for ch in node.get("children", [])
             ],
         }
@@ -263,7 +266,7 @@ def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: d
             "location": convert_location(global_trsf),
         }
 
-    part_path = import_part(project, zeroed_shape, full_node_name, parent_folder, config)
+    part_path = import_part(project, zeroed_shape, node_name, parent_folder, config)
     shape_cache[signature] = part_path
 
     return {
@@ -342,7 +345,7 @@ def import_assy_action(
         final_structure = root_nodes[0]
 
     # Flatten the hierarchical structure into a single .assy file
-    top_data = flatten_assembly_tree(final_structure, output_folder, project, config, assembly_name)
+    top_data = flatten_assembly_tree(final_structure, output_folder, project, config)
     assy_name = Path(top_data["name"]).name
     assy_file_path = output_folder / f"{assy_name}.assy"
 
@@ -358,7 +361,7 @@ def import_assy_action(
         yaml.dump(assembly_data, file, default_flow_style=False)
 
     # Add assembly to the project
-    project.add_assembly("assy", str(assy_file_path), config)
+    project.add_assembly("assy", assy_file_path.as_posix(), config)
     pc_logging.info(f"Successfully created assembly file: {assy_file_path}")
 
     return assembly_data["name"]
