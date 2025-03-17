@@ -4,7 +4,7 @@ USER root
 RUN \
   apt-get update \
   && apt-get install --yes --no-install-recommends \
-  curl=7.88.1-10+deb12u8 \
+  curl=7.88.1-10+deb12u12 \
   && rm -rf /var/lib/apt/lists/*
 
 USER kicad
