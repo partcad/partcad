@@ -115,6 +115,7 @@ def save_shape_to_step(shape: TopoDS_Shape, filename: Path):
 def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_folder: Path, config: dict) -> str:
     """Saves shape as STEP and imports it into the project."""
 
+    project_root = Path(project.config_dir).resolve()
     step_folder = parent_folder
     step_folder.mkdir(parents=True, exist_ok=True)
 
@@ -123,12 +124,15 @@ def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_fo
 
     save_shape_to_step(shape, step_file)
 
-    part_name_posix = (step_folder / file_safe_name).as_posix()
-    step_file_posix = step_file.as_posix()
+    part_name_without_ext = step_file.with_suffix('').relative_to(project_root).as_posix()
 
-    import_part_action(project, "step", part_name_posix, step_file_posix, config)
+    step_file_rel_to_config = step_file.relative_to(project_root).as_posix()
 
-    return step_file_posix
+    step_file_abs = step_file.resolve().as_posix()
+
+    import_part_action(project, "step", part_name_without_ext, step_file_abs, config)
+
+    return step_file_rel_to_config
 
 
 
@@ -242,9 +246,8 @@ def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: d
     node_name = node["name"]
     global_trsf = node["trsf"]
 
-    full_node_name = f"{parent_name}/{node_name}".strip("/").replace("\\", "/") if parent_name else node_name
-
     if node_type == "assembly":
+        full_node_name = f"{parent_name}/{node_name}".strip("/").replace("\\", "/") if parent_name else node_name
         return {
             "type": "assembly",
             "name": full_node_name,
@@ -253,6 +256,8 @@ def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: d
                 for ch in node.get("children", [])
             ],
         }
+
+    full_node_name = f"{parent_folder.name}/{node_name}".replace("\\", "/")
 
     shape = node["shape"]
     zeroed_shape = BRepBuilderAPI_Transform(shape, invert_transformation(global_trsf), True).Shape()
