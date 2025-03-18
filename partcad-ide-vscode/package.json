@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.7.126",
+  "version": "0.7.127",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -571,7 +571,7 @@
       },
       {
         "view": "partcadExplorer",
-        "contents": "PartCAD Python module v0.7.126 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD Python module](command:partcad.startInstall)",
+        "contents": "PartCAD Python module v0.7.127 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD Python module](command:partcad.startInstall)",
         "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled"
       },
       {
