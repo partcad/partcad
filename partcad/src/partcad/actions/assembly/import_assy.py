@@ -124,12 +124,12 @@ def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_fo
 
     save_shape_to_step(shape, step_file)
 
-    part_name_without_ext = step_file.with_suffix("").relative_to(project_root).as_posix()
+    part_name_without_ext = step_file.with_suffix("").relative_to(project_root).as_posix().replace("\\", "/")
 
     try:
-        step_file_rel_to_config = step_file.relative_to(project_root).as_posix()
+        step_file_rel_to_config = step_file.relative_to(project_root).as_posix().replace("\\", "/")
     except ValueError:
-        step_file_rel_to_config = step_file.name
+        step_file_rel_to_config = step_file.name.replace("\\", "/")
 
     step_file_abs = step_file.resolve().as_posix()
 
@@ -356,7 +356,7 @@ def import_assy_action(
 
     # Prepare .assy file data
     assembly_data = {
-        "name": top_data["name"],
+        "name": top_data["name"].replace("\\", "/"),
         "description": config.get("desc", ""),
         "links": top_data.get("links", []) if top_data["type"] == "assembly" else []
     }
