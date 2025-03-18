@@ -138,8 +138,6 @@ def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_fo
     return step_file_rel_to_config
 
 
-
-
 def shape_signature(shape: TopoDS_Shape) -> tuple:
     """Computes a unique signature for a shape based on its bounding box and volume."""
     bbox = Bnd_Box()
@@ -303,7 +301,6 @@ def parse_assembly_tree(assembly_file: str, file_type: str):
       raise ValueError(f"Unsupported assembly file type: {file_type}")
 
 
-
 def import_assy_action(
     project: Project,
     file_type: str,
@@ -369,7 +366,9 @@ def import_assy_action(
         yaml.dump(assembly_data, file, default_flow_style=False)
 
     # Add assembly to the project
-    project.add_assembly("assy", assy_file_path.as_posix(), config)
+    assy_file_rel = assy_file_path.relative_to(Path(project.config_dir)).as_posix()
+    project.add_assembly("assy", assy_file_rel, config)
+
     pc_logging.info(f"Successfully created assembly file: {assy_file_path}")
 
     return assembly_data["name"]
