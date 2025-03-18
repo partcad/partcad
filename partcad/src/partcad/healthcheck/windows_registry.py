@@ -14,7 +14,11 @@ class WindowsRegistryCheck(HealthCheckTest):
     value_type: int | None = None
 
     def __init__(self, name: str):
-        super().__init__(f"WindowsRegistry: {name}")
+        super().__init__(
+          name = name,
+          tags = ["windows", "registry"],
+          description = f"Check whether the windows registry key '{name}' is {'enabled' if self.expected_value == 1 else 'disabled'}"
+        )
 
     def auto_fixable(self) -> bool:
         return True

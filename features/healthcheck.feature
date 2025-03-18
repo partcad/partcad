@@ -26,6 +26,25 @@ Feature: 'pc healthcheck' command
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "Python version 3.13 is not supported"
 
+  @success @python-version @filters
+  Scenario: Run healthcheck command with dry run and filter
+    When I run partcad healthcheck with options "--dry-run --filters=python"
+    Then the command should exit with a status code of "0"
+    Then STDOUT should contain "Applicable healthcheck tests:"
+    Then STDOUT should contain "PythonVersion - "
+    Then STDOUT should not contain "LongPathsEnabledCheck - "
+    Then STDOUT should not contain "NoDefaultCurrentDirectoryCheck - "
+
+  @success @windows-registry @filters
+  Scenario: Run healthcheck command with dry run and filter
+    Given the system is running on Windows
+    When I run partcad healthcheck with options "--dry-run --filters=windows"
+    Then the command should exit with a status code of "0"
+    Then STDOUT should contain "Applicable healthcheck tests:"
+    Then STDOUT should contain "LongPathsEnabledCheck - "
+    Then STDOUT should contain "NoDefaultCurrentDirectoryCheck - "
+    Then STDOUT should not contain "PythonVersion - "
+
   @success @windows-registry
   Scenario: Running health check with all registry checks passing
     Given the system is running on Windows
@@ -87,7 +106,7 @@ Feature: 'pc healthcheck' command
     Given the system is running on Windows
     And "LongPathsEnabled" registry key is set to "0"
     And "NoDefaultCurrentDirectoryInExePath" registry key is set to "0"
-    When I run partcad healthcheck fix
+    When I run partcad healthcheck with options "--fix"
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "LongPathsEnabled is not set to 1"
     Then STDOUT should contain "Auto fix successful"
@@ -97,7 +116,7 @@ Feature: 'pc healthcheck' command
     Given the system is running on Windows
     And "LongPathsEnabled" registry key is set to "1"
     And "NoDefaultCurrentDirectoryInExePath" registry key is set to "1"
-    When I run partcad healthcheck fix
+    When I run partcad healthcheck with options "--fix"
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "NoDefaultCurrentDirectoryInExePath is not set to 0"
     Then STDOUT should contain "Auto fix successful"
