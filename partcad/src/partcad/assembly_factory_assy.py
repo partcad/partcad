@@ -177,7 +177,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         # Check if this node is for an assembly
         if "links" in node and not node["links"] is None:
             item = Assembly(
-                assembly.project_name, {"name": f"{self.name}:{name}", "child": True}
+                assembly.project_name,
+                {
+                    "name": f"{self.name}:{name}",
+                    "child": True,
+                    "cache": self.ctx.user_config.cache,
+                    "cache_dependencies_ignore": self.ctx.user_config.cache_dependencies_ignore,
+                }
             )  # TODO(clairbee): revisit why node["links"]) was used there
             item.cacheable = False  # Keep it uncacheable before parts info is in the hashing context
             item.instantiate = lambda x: True

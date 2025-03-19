@@ -16,7 +16,6 @@ import threading
 from .part_factory_step import PartFactoryStep
 from . import logging as pc_logging
 from . import runtime
-from .user_config import user_config
 
 kicad_runtime_lock = threading.Lock()
 kicad_runtime = None
@@ -27,7 +26,7 @@ async def get_runtime(ctx):
     global kicad_runtime, kicad_runtime_uses_docker, kicad_runtime_lock
     with kicad_runtime_lock:
         kicad_runtime = runtime.Runtime(ctx, "shell")
-        kicad_runtime_uses_docker = user_config.use_docker_kicad
+        kicad_runtime_uses_docker = ctx.user_config.use_docker_kicad
         if kicad_runtime_uses_docker:
             await kicad_runtime.use_docker(
                 # TODO(clairbee): detect that this a build from a branch and prepend the branch name to the image tag

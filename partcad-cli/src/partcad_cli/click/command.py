@@ -8,6 +8,7 @@ import platform
 
 from partcad.logging_ansi_terminal import init as logging_ansi_terminal_init  # 1s
 from partcad_cli.click.loader import Loader
+from partcad.user_config import UserConfig
 
 locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
 
@@ -304,14 +305,14 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
     for env_var, attrib in user_config_options:
         value = kwargs.get(attrib, None)
         if value is not None and user_config._get_env(env_var) is None:
-            if "sentry" in attrib:
-                attrib = attrib.replace("sentry_", "sentry.")
+            if 'sentry' in attrib:
+                attrib = attrib.replace('sentry_', 'sentry.')
                 user_config.set(attrib, value)
             else:
                 setattr(user_config, attrib, value)
 
     if ctx.invoked_subcommand in commands_with_forced_update:
-        user_config.force_update = True
+        user_config.force_update = True        
 
     # TODO-88: @alexanderilyin: try to get this list dynamically
     commands_with_context = [
@@ -334,7 +335,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
         from partcad.globals import init
 
         try:
-            ctx.obj = init(package)
+            ctx.obj = init(package, user_config=user_config)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
             exc = click.BadParameter("Invalid configuration file", ctx=ctx, param=package, param_hint=None)
             exc.exit_code = 2

@@ -65,6 +65,12 @@ repos:
         language: system
         types: [python]
         description: Run Behave tests in parallel using behavex
+      - id: pytest
+        name: "Poetry: pytest"
+        entry: .devcontainer/pytest_hook.sh
+        language: system
+        types: [python]
+        description: Run pytest tests in parallel using xdist
   - repo: https://github.com/hadolint/hadolint
     rev: v2.13.1-beta
     hooks:

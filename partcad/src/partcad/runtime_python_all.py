@@ -6,8 +6,6 @@
 #
 # Licensed under Apache License, Version 2.0.
 
-from .user_config import user_config
-
 from . import runtime_python_none
 from . import runtime_python_pypy
 from . import runtime_python_conda
@@ -15,7 +13,7 @@ from . import runtime_python_conda
 
 def create(ctx, version, python_runtime=None):
     if python_runtime is None:
-        python_runtime = user_config.sandbox_runtime
+        python_runtime = ctx.user_config.python_sandbox
     if python_runtime == "none":
         return runtime_python_none.NonePythonRuntime(ctx, version)
     elif python_runtime == "pypy":

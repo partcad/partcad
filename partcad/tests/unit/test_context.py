@@ -76,9 +76,9 @@ def test_ctx_fini():
 def test_offline_mode(variation):
     offline, force_update = variation
 
-    ctx = pc.Context()
     with patch.object(pc.user_config, "offline", offline), \
         patch.object(pc.user_config, "force_update", force_update):
+        ctx = pc.Context(user_config=pc.user_config)
         checks = [
             (0, True, True),          # At time 0, should check connectivity with result of True
             (20, False, True),        # At time 20, should not check connectivity and saved state must return True

@@ -11,14 +11,14 @@ import asyncio
 from pathlib import Path
 
 from .cache_hash import CacheHash
-from .user_config import user_config
 import aiofiles
 
 
 class Cache:
-    def __init__(self, data_type: str) -> None:
+    def __init__(self, data_type: str, user_config) -> None:
         """Initialize cache for specific data type."""
         self.data_type = data_type
+        self.user_config = user_config
         self.cache_dir = Path(user_config.internal_state_dir) / "cache" / data_type
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -32,10 +32,10 @@ class Cache:
     def _needs_write_data(self, data_len: int) -> bool:
         """Check if object needs to be written to cache."""
         # Make an exception for 1 byte objects to cache test results
-        if data_len >= 2 and data_len < user_config.cache_min_entry_size:
+        if data_len >= 2 and data_len < self.user_config.cache_min_entry_size:
             # This object is too small to cache
             return False
-        if data_len > user_config.cache_max_entry_size:
+        if data_len > self.user_config.cache_max_entry_size:
             # This object is too big to cache
             return False
 
@@ -48,7 +48,7 @@ class Cache:
 
     async def write_data_async(self, hash: CacheHash, items: dict[str, bytes]) -> dict[str, bool]:
         """Write object to cache and return its hash."""
-        if not user_config.cache:
+        if not self.user_config.cache:
             # Caching is disabled
             return {}
 
@@ -78,7 +78,7 @@ class Cache:
 
     async def read_data_async(self, hash: CacheHash, keys: list[str]) -> dict[str, bytes]:
         """Read object from cache using its hash."""
-        if not user_config.cache:
+        if not self.user_config.cache:
             # Caching is disabled
             return {}
 

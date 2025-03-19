@@ -1,6 +1,6 @@
+import sentry_sdk
 from build123d import Location
 
-from .sentry import init_sentry
 from .globals import (
     init,
     fini,
@@ -13,6 +13,8 @@ from .globals import (
     get_assembly_build123d,
     _partcad_context,
     render,
+    init_sentry,
+    __version__
 )
 from .ai import supported_models
 from .consts import *
@@ -61,5 +63,5 @@ __all__ = [
     "PluginExportPngReportlab"
 ]
 
-__version__: str = "0.7.127"
-init_sentry(__version__)
+if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
+    init_sentry(user_config.sentry_config)

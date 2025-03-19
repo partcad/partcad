@@ -12,15 +12,14 @@ import os
 import struct
 
 from . import logging as pc_logging
-from .user_config import user_config
 
 
 class CacheHash:
-    def __init__(self, name: str, algo="md5", hasher=None):
+    def __init__(self, name: str, algo="md5", hasher=None, cache=False):
         self.name = name
         self.is_empty = True
         self.is_used = False
-        if not user_config.cache:
+        if not cache:
             # Caching is disabled, no initialization needed
             self.hasher = None
             return

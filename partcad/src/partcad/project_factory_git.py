@@ -16,7 +16,6 @@ import threading
 
 from . import project_factory as pf
 from . import logging as pc_logging
-from .user_config import user_config
 from shlex import quote
 
 global_cache_lock = threading.Lock()
@@ -69,7 +68,7 @@ class GitImportConfiguration:
 
     def _apply_import_overrides(self):
         # applying url overrides
-        url_override = user_config.get("dependencies.overrides.url")
+        url_override = self.ctx.user_config.get("dependencies.overrides.url")
         if url_override:
             for key, value in url_override.items():
                 if value in self.import_config_url:
@@ -77,7 +76,7 @@ class GitImportConfiguration:
 
     def _git_config_options(self) -> list[str]:
         params = []
-        for key, value in user_config.git_config.items():
+        for key, value in self.ctx.user_config.git_config.items():
             if key.find("url") != -1 and key.find("insteadOf") != -1:
                 continue
 
@@ -114,7 +113,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         """
 
         if cache_dir is None:
-            cache_dir = os.path.join(user_config.internal_state_dir, "git")
+            cache_dir = os.path.join(self.ctx.user_config.internal_state_dir, "git")
 
         # Generate a unique identifier for the repository based on its URL.
         repo_hash = hashlib.sha256(repo_url.encode()).hexdigest()[:16]
@@ -135,8 +134,8 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
         with cache_lock:
             attempt = 0
-            max_retries = user_config.get_int("git.clone.retry.max")
-            patience = user_config.get_float("git.clone.retry.patience")
+            max_retries = self.ctx.user_config.get_int('git.clone.retry.max')
+            patience = self.ctx.user_config.get_float('git.clone.retry.patience')
             while attempt <= max_retries and self.ctx.is_connected():
                 # Check if the repository is already cached.
                 if os.path.exists(cache_path):
@@ -148,7 +147,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                         # Try to open the existing repository and update it.
                         if self.import_revision is None:
                             # Import the default branch
-                            if user_config.force_update or (now - os.path.getmtime(guard_path) > 24 * 3600):
+                            if self.ctx.user_config.force_update or (now - os.path.getmtime(guard_path) > 24 * 3600):
                                 repo = Repo(cache_path)
                                 origin = repo.remote("origin")
                                 before = repo.active_branch.commit
@@ -164,7 +163,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 os.utime(guard_path, (now, now))
                         else:
                             # Import a specific revision
-                            if user_config.force_update:
+                            if self.ctx.user_config.force_update:
                                 # Ensure "before" doesn't match the desired revision
                                 before = ""
                             else:
@@ -191,7 +190,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             after = repo.active_branch.commit
                             if before != after:
                                 pc_logging.info("Updated the GIT repo: %s" % self.import_config_url)
-                            if before != after or user_config.force_update:
+                            if before != after or self.ctx.user_config.force_update:
                                 with open(guard_path, "w") as f:
                                     if self.import_revision is None:
                                         f.write(str(after))

@@ -26,8 +26,8 @@ from . import runtime_python_all
 from . import project_factory_local as rfl
 from . import project_factory_git as rfg
 from . import project_factory_tar as rft
-from . import sync_threads
-from .user_config import user_config
+from .sync_threads import threadpool_manager
+from .user_config import UserConfig
 from .utils import *
 from .provider_request_quote import ProviderRequestQuote
 from .provider_data_cart import *
@@ -86,12 +86,12 @@ class Context(project_config.Configuration):
             return False
 
     def is_connected(self):
-        if user_config.offline:
+        if self.user_config.offline:
             return False
 
         now = time.time()
         # Use cached state if available and force_update is not set
-        if not user_config.force_update and self.connection_status:
+        if not self.user_config.force_update and self.connection_status:
             # Set the expected time-to-live(ttl) to 60s for online(connected) and 300s for offline(disconnected)
             ttl = 60 if self.connection_status["is_connected"] else 300
 
@@ -106,7 +106,7 @@ class Context(project_config.Configuration):
 
         return connected
 
-    def __init__(self, root_path=None, search_root=True):
+    def __init__(self, root_path=None, search_root=True, user_config=UserConfig()):
         """Initializes the context and loads the root project."""
         root_file = ""
         if root_path is None:
@@ -137,9 +137,6 @@ class Context(project_config.Configuration):
         ):
             self.current_project_path = self.name
 
-        self.cache_shapes = ShapeCache()
-        self.cache_tests = Cache("tests")
-
         # Protect the critical sections from access in different threads
         self.lock = threading.RLock()
 
@@ -168,6 +165,11 @@ class Context(project_config.Configuration):
         self.project_locks = {}
         self.project_locks_lock = threading.Lock()
         self._projects_being_loaded = {}
+        self.user_config = user_config
+
+        self.cache_shapes = ShapeCache(user_config=self.user_config)
+        self.cache_tests = Cache("tests", user_config=self.user_config)
+
         self.connection_status = {}
 
         with pc_logging.Process("InitCtx", self.config_dir):
@@ -423,7 +425,7 @@ class Context(project_config.Configuration):
                     prj_conf["orig_name"] = prj_conf["name"]
                 prj_conf["name"] = next_project_path
 
-                tasks.append(asyncio.create_task(sync_threads.run(self.import_project, project, prj_conf)))
+                tasks.append(asyncio.create_task(threadpool_manager.run(self.import_project, project, prj_conf)))
 
         # Second, iterate over all subfolder and check for packages
         subfolders = [f.name for f in os.scandir(project.config_dir) if f.is_dir()]
@@ -451,7 +453,7 @@ class Context(project_config.Configuration):
                     "path": subdir,
                 }
 
-                tasks.append(asyncio.create_task(sync_threads.run(self.import_project, project, prj_conf)))
+                tasks.append(asyncio.create_task(threadpool_manager.run(self.import_project, project, prj_conf)))
 
         return tasks
 
@@ -865,7 +867,7 @@ class Context(project_config.Configuration):
                     sys.version_info.minor,
                 )
             if python_runtime is None:
-                python_runtime = user_config.python_sandbox
+                python_runtime = self.user_config.python_sandbox
             runtime_name = python_runtime + "-" + version
             if not runtime_name in self.runtimes_python:
                 self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)
