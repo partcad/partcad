@@ -1,7 +1,7 @@
 import os
 import math
 from pathlib import Path
-import yaml
+import ruamel
 
 from OCP.XCAFApp import XCAFApp_Application
 from OCP.XCAFDoc import XCAFDoc_DocumentTool
@@ -86,19 +86,31 @@ def combine_transformations(parent: gp_Trsf, local: gp_Trsf, tolerance=1e-7) -> 
     return clone_transformation(local if transformation_difference(combined_trsf, local) < tolerance else combined_trsf)
 
 
-def convert_location(trsf: gp_Trsf):
+def convert_location(trsf: gp_Trsf, precision=5):
     """
-    Converts a transformation into a format: [[tx, ty, tz], [ax, ay, az], angle].
+    Converts a transformation into a format: [[tx, ty, tz], [ax, ay, az], angle],
+    with rounded values to the specified precision.
     """
-    translation = [trsf.TranslationPart().X(), trsf.TranslationPart().Y(), trsf.TranslationPart().Z()]
+    translation = [
+        round(trsf.TranslationPart().X(), precision),
+        round(trsf.TranslationPart().Y(), precision),
+        round(trsf.TranslationPart().Z(), precision)
+    ]
 
     quaternion = trsf.GetRotation()
     w, x, y, z = quaternion.W(), quaternion.X(), quaternion.Y(), quaternion.Z()
     rotation_angle = 2.0 * math.atan2(math.sqrt(x**2 + y**2 + z**2), w)
-    rotation_angle_deg = math.degrees(rotation_angle)
+    rotation_angle_deg = round(math.degrees(rotation_angle), precision)
 
     sin_half_angle = math.sin(rotation_angle / 2.0)
-    rotation_axis = [1.0, 0.0, 0.0] if abs(sin_half_angle) < 1e-6 else [x / sin_half_angle, y / sin_half_angle, z / sin_half_angle]
+    if abs(sin_half_angle) < 1e-6:
+        rotation_axis = [1.0, 0.0, 0.0]
+    else:
+        rotation_axis = [
+            round(x / sin_half_angle, precision),
+            round(y / sin_half_angle, precision),
+            round(z / sin_half_angle, precision)
+        ]
 
     return [translation, rotation_axis, rotation_angle_deg]
 
@@ -258,21 +270,25 @@ def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: d
     signature = shape_signature(zeroed_shape)
 
     if signature in shape_cache:
+        location = ruamel.yaml.comments.CommentedSeq(convert_location(global_trsf))
+        location.fa.set_flow_style()
         return {
             "type": "part",
             "name": full_node_name,
             "part": shape_cache[signature],
-            "location": convert_location(global_trsf),
+            "location": location,
         }
 
     part_path = import_part(project, zeroed_shape, node_name, parent_folder, config)
     shape_cache[signature] = part_path
 
+    location = ruamel.yaml.comments.CommentedSeq(convert_location(global_trsf))
+    location.fa.set_flow_style()
     return {
         "type": "part",
         "name": full_node_name,
         "part": part_path,
-        "location": convert_location(global_trsf),
+        "location": location,
     }
 
 
@@ -355,8 +371,10 @@ def import_assy_action(
     }
 
     # Save assembly data to YAML format
+    yaml = ruamel.yaml.YAML()
+    yaml.indent(mapping=2, sequence=4, offset=2)
     with open(assy_file_path, "w", encoding="utf-8") as file:
-        yaml.dump(assembly_data, file, default_flow_style=False)
+        yaml.dump(assembly_data, file)
 
     # Add assembly to the project
     assy_file_rel = assy_file_path.relative_to(Path(project.config_dir)).as_posix()

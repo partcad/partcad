@@ -1,97 +1,43 @@
+name: AeroAssembly
 description: ''
 links:
-- links:
-  - location:
-    - - -69.13422686984399
-      - -87.080855661874
-      - 82.881290119571
-    - - 1.0
-      - 0.0
-      - 0.0
-    - 0.0
-    name: AeroFrameAssembly_solid1
-    part: AeroAssembly_assy_example/AeroFrameAssembly_solid1
-    type: part
-  - location:
-    - - -69.13422686984399
-      - -87.080855661874
-      - 82.881290119571
-    - - 1.0
-      - 0.0
-      - 0.0
-    - 0.0
-    name: AeroFrameAssembly_solid2
-    part: AeroAssembly_assy_example/AeroFrameAssembly_solid2
-    type: part
-  - location:
-    - - -128.617172447944
-      - 53.052923677092
-      - 75.225092331764
-    - - 0.129428307995796
-      - -0.129428307995796
-      - -0.9831056027602992
-    - 90.97620040160432
-    name: AeroFrameAssembly_solid3
-    part: AeroAssembly_assy_example/AeroFrameAssembly_solid3
-    type: part
-  name: AeroFrameAssembly
-  type: assembly
-- location:
-  - - -76.86294015592
-    - -86.19998835248
-    - 80.297688179203
-  - - 1.0
-    - 0.0
-    - 0.0
-  - 0.0
-  name: AeroFrame_Plate
-  part: AeroAssembly_assy_example/AeroFrame_Plate
-  type: part
-- location:
-  - - -76.86294015592
-    - -86.19998835248
-    - 80.297688179203
-  - - 1.0
-    - 0.0
-    - 0.0
-  - 0.0
-  name: AeroFrame_Cap
-  part: AeroAssembly_assy_example/AeroFrame_Cap
-  type: part
-- links:
-  - location:
-    - - -84.591653442
-      - -85.31912104309
-      - -77.71408623883
-    - - 1.0
-      - 0.0
-      - 0.0
-    - 0.0
-    name: MirrorAeroFrameAssembly_solid1
-    part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1
-    type: part
-  - location:
-    - - -84.591653442
-      - -85.31912104309
-      - -77.71408623883
-    - - 1.0
-      - 0.0
-      - 0.0
-    - 0.0
-    name: MirrorAeroFrameAssembly_solid2
-    part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2
-    type: part
-  - location:
-    - - -144.0745990201
-      - 54.814658295876
-      - -70.05788845103
-    - - -0.129428307995796
-      - 0.129428307995796
-      - -0.9831056027602992
-    - 90.97620040160432
-    name: MirrorAeroFrameAssembly_solid3
-    part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3
-    type: part
-  name: MirrorAeroFrameAssembly
-  type: assembly
-name: AeroAssembly
+  - type: assembly
+    name: AeroFrameAssembly
+    links:
+      - type: part
+        name: AeroFrameAssembly_solid1
+        part: AeroAssembly_assy_example/AeroFrameAssembly_solid1
+        location: [[-69.13423, -87.08086, 82.88129], [1.0, 0.0, 0.0], 0.0]
+      - type: part
+        name: AeroFrameAssembly_solid2
+        part: AeroAssembly_assy_example/AeroFrameAssembly_solid2
+        location: [[-69.13423, -87.08086, 82.88129], [1.0, 0.0, 0.0], 0.0]
+      - type: part
+        name: AeroFrameAssembly_solid3
+        part: AeroAssembly_assy_example/AeroFrameAssembly_solid3
+        location: [[-128.61717, 53.05292, 75.22509], [0.12943, -0.12943, -0.98311],
+          90.9762]
+  - type: part
+    name: AeroFrame_Plate
+    part: AeroAssembly_assy_example/AeroFrame_Plate
+    location: [[-76.86294, -86.19999, 80.29769], [1.0, 0.0, 0.0], 0.0]
+  - type: part
+    name: AeroFrame_Cap
+    part: AeroAssembly_assy_example/AeroFrame_Cap
+    location: [[-76.86294, -86.19999, 80.29769], [1.0, 0.0, 0.0], 0.0]
+  - type: assembly
+    name: MirrorAeroFrameAssembly
+    links:
+      - type: part
+        name: MirrorAeroFrameAssembly_solid1
+        part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid1
+        location: [[-84.59165, -85.31912, -77.71409], [1.0, 0.0, 0.0], 0.0]
+      - type: part
+        name: MirrorAeroFrameAssembly_solid2
+        part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid2
+        location: [[-84.59165, -85.31912, -77.71409], [1.0, 0.0, 0.0], 0.0]
+      - type: part
+        name: MirrorAeroFrameAssembly_solid3
+        part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3
+        location: [[-144.0746, 54.81466, -70.05789], [-0.12943, 0.12943, -0.98311],
+          90.9762]
