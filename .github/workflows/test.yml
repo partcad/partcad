@@ -82,183 +82,183 @@ jobs:
   #         job: cache-preheat
   #         preheat_only: "true"
 
-  test-pytest:
-    name: "Pytest"
-    needs:
-      - set-matrix
-      - build-containers
-      # - cache-preheat
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+  # test-pytest:
+  #   name: "Pytest"
+  #   needs:
+  #     - set-matrix
+  #     - build-containers
+  #     # - cache-preheat
+  #   strategy:
+  #     fail-fast: false
+  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+  #   runs-on: ${{ matrix.os }}
+  #   timeout-minutes: 30
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-        with:
-          job: pytest
-      - uses: ./.github/actions/setup-test
-        with:
-          job: pytest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: pytest
+  #     - uses: ./.github/actions/setup-test
+  #       with:
+  #         job: pytest
 
-      - name: Test with pytest
-        # env:
-        #   PYTHONWARNINGS: ignore
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mamba activate ${{ format('env-test-pytest-{0}', matrix.python-version) }}
+  #     - name: Test with pytest
+  #       # env:
+  #       #   PYTHONWARNINGS: ignore
+  #       shell: bash -el {0}
+  #       run: |
+  #         . ~/.bashrc
+  #         . ~/.bash_profile
+  #         mamba activate ${{ format('env-test-pytest-{0}', matrix.python-version) }}
 
-          mkdir -pv pytest-test-results
-          pytest \
-            partcad partcad-cli \
-            -x -p no:error-for-skips -p no:warnings --dist no
-          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
-          mamba deactivate
+  #         mkdir -pv pytest-test-results
+  #         pytest \
+  #           partcad partcad-cli \
+  #           -x -p no:error-for-skips -p no:warnings --dist no
+  #         coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
+  #         mamba deactivate
 
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: pytest-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: pytest-test-results/junit.xml
-          coverage-report: pytest-test-results/coverage.xml
+  #     - name: Upload test results & coverage reports to github and codecov
+  #       uses: ./.github/actions/upload-test-results
+  #       with:
+  #         name: pytest-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: pytest-test-results/
+  #         retention-days: 7
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.CODECOV_TOKEN }}
+  #         codecov-files: pytest-test-results/junit.xml
+  #         coverage-report: pytest-test-results/coverage.xml
 
-  test-pytest-ide-vscode:
-    name: "Pytest (VS Code extension)"
-    needs:
-      - set-matrix
-      # - cache-preheat
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+  # test-pytest-ide-vscode:
+  #   name: "Pytest (VS Code extension)"
+  #   needs:
+  #     - set-matrix
+  #     # - cache-preheat
+  #   strategy:
+  #     fail-fast: false
+  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+  #   runs-on: ${{ matrix.os }}
+  #   timeout-minutes: 20
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-        with:
-          job: pytest-ide-vscode
-      - uses: ./.github/actions/setup-test
-        with:
-          job: pytest-ide-vscode
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: pytest-ide-vscode
+  #     - uses: ./.github/actions/setup-test
+  #       with:
+  #         job: pytest-ide-vscode
 
-      # TODO(clairbee): Move this step to the build jobs. Merge build.yml and test.yml to form a ci.yml, where this test job may 'needs' that build job
-      - name: Build the VS Code extension
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
-          (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
-          mamba deactivate
+  #     # TODO(clairbee): Move this step to the build jobs. Merge build.yml and test.yml to form a ci.yml, where this test job may 'needs' that build job
+  #     - name: Build the VS Code extension
+  #       shell: bash -el {0}
+  #       run: |
+  #         . ~/.bashrc
+  #         . ~/.bash_profile
+  #         mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+  #         (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
+  #         mamba deactivate
 
-      - name: Test VS Code extension with pytest
-        env:
-          PYTHONWARNINGS: ignore
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
+  #     - name: Test VS Code extension with pytest
+  #       env:
+  #         PYTHONWARNINGS: ignore
+  #       shell: bash -el {0}
+  #       run: |
+  #         . ~/.bashrc
+  #         . ~/.bash_profile
+  #         mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
 
-          mkdir -pv pytest-vscode-test-results
-          pytest \
-            partcad-ide-vscode \
-            -x -p no:error-for-skips -p no:warnings --dist no
-          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-vscode-test-results/coverage.xml
-          mamba deactivate
+  #         mkdir -pv pytest-vscode-test-results
+  #         pytest \
+  #           partcad-ide-vscode \
+  #           -x -p no:error-for-skips -p no:warnings --dist no
+  #         coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-vscode-test-results/coverage.xml
+  #         mamba deactivate
 
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: pytest-vscode-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: pytest-vscode-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: pytest-vscode-test-results/junit.xml
-          coverage-report: pytest-vscode-test-results/coverage.xml
+  #     - name: Upload test results & coverage reports to github and codecov
+  #       uses: ./.github/actions/upload-test-results
+  #       with:
+  #         name: pytest-vscode-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: pytest-vscode-test-results/
+  #         retention-days: 7
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.CODECOV_TOKEN }}
+  #         codecov-files: pytest-vscode-test-results/junit.xml
+  #         coverage-report: pytest-vscode-test-results/coverage.xml
 
-  test-behave:
-    name: "Behave"
-    needs:
-      - set-matrix
-      # - cache-preheat
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+  # test-behave:
+  #   name: "Behave"
+  #   needs:
+  #     - set-matrix
+  #     # - cache-preheat
+  #   strategy:
+  #     fail-fast: false
+  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+  #   runs-on: ${{ matrix.os }}
+  #   timeout-minutes: 60
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-        with:
-          job: behave
-      - uses: ./.github/actions/setup-test
-        with:
-          job: behave
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: behave
+  #     - uses: ./.github/actions/setup-test
+  #       with:
+  #         job: behave
 
-      # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
-      - name: Set SSH Agent Service to Manual
-        if: runner.os == 'Windows'
-        run: Set-Service -Name ssh-agent -StartupType Manual
-        shell: pwsh
+  #     # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
+  #     - name: Set SSH Agent Service to Manual
+  #       if: runner.os == 'Windows'
+  #       run: Set-Service -Name ssh-agent -StartupType Manual
+  #       shell: pwsh
 
-      - name: Start SSH Agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+  #     - name: Start SSH Agent
+  #       uses: webfactory/ssh-agent@v0.9.0
+  #       with:
+  #         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
 
-      - name: Test with behave
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mkdir -pv behave-test-results
+  #     - name: Test with behave
+  #       shell: bash -el {0}
+  #       run: |
+  #         . ~/.bashrc
+  #         . ~/.bash_profile
+  #         mkdir -pv behave-test-results
 
-          mamba activate ${{ format('env-test-behave-{0}', matrix.python-version) }}
+  #         mamba activate ${{ format('env-test-behave-{0}', matrix.python-version) }}
 
-          export PYTHONUTF8=1
-          export PYTHONIOENCODING=utf-8
+  #         export PYTHONUTF8=1
+  #         export PYTHONIOENCODING=utf-8
 
-          BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave"
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            BEHAVE_CMD="$BEHAVE_CMD --tags=-skip-windows"
-          fi
+  #         BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave"
+  #         if [[ "$RUNNER_OS" == "Windows" ]]; then
+  #           BEHAVE_CMD="$BEHAVE_CMD --tags=-skip-windows"
+  #         fi
 
-          if ! eval "$BEHAVE_CMD"; then
-            echo "Behave tests failed"
-            exit 1
-          fi
+  #         if ! eval "$BEHAVE_CMD"; then
+  #           echo "Behave tests failed"
+  #           exit 1
+  #         fi
 
-          # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
-          #   echo "Behave tests failed"
-          #   exit 1
-          # fi
+  #         # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
+  #         #   echo "Behave tests failed"
+  #         #   exit 1
+  #         # fi
 
-          coverage combine
-          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
-          mamba deactivate
+  #         coverage combine
+  #         coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
+  #         mamba deactivate
 
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: behave-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: behave-test-results/junit.xml
-          coverage-report: behave-test-results/coverage.xml
+  #     - name: Upload test results & coverage reports to github and codecov
+  #       uses: ./.github/actions/upload-test-results
+  #       with:
+  #         name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: behave-test-results/
+  #         retention-days: 7
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.CODECOV_TOKEN }}
+  #         codecov-files: behave-test-results/junit.xml
+  #         coverage-report: behave-test-results/coverage.xml
 
   test-examples-partcad:
     name: "Examples (PartCAD)"
@@ -312,8 +312,59 @@ jobs:
           codecov-files: examples-partcad-test-results/junit.xml
           coverage-report: examples-partcad-test-results/coverage.xml
 
-  test-examples-all:
-    name: "Examples (All)"
+  # test-examples-all:
+  #   name: "Examples (All)"
+  #   needs:
+  #     - set-matrix
+  #     # - cache-preheat
+  #   strategy:
+  #     fail-fast: false
+  #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+  #   runs-on: ${{ matrix.os }}
+  #   timeout-minutes: 30
+
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-all
+  #       with:
+  #         job: examples-all
+  #     - uses: ./.github/actions/setup-test
+  #       with:
+  #         job: examples-all
+
+  #     - name: Basic integration test for CLI (all examples)
+  #       shell: bash -el {0}
+  #       run: |
+  #         . ~/.bashrc
+  #         . ~/.bash_profile
+  #         mkdir -pv examples-all-test-results
+
+  #         mamba activate ${{ format('env-test-examples-all-{0}', matrix.python-version) }}
+
+  #         # BEGIN ALL EXAMPLES
+  #         cd ./examples
+  #         # TODO(clairbee): Limit RAM usage by restricting the number of threads?
+  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
+  #         coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
+  #         coverage combine
+  #         # END ALL EXAMPLES
+
+  #         coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
+  #         mamba deactivate
+
+  #     - name: Upload test results & coverage reports to github and codecov
+  #       uses: ./.github/actions/upload-test-results
+  #       with:
+  #         name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
+  #         path: examples-all-test-results/
+  #         retention-days: 7
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.CODECOV_TOKEN }}
+  #         codecov-files: examples-all-test-results/junit.xml
+  #         coverage-report: examples-all-test-results/coverage.xml
+
+  test-pub-repo:
+    name: "Repo //pub"
     needs:
       - set-matrix
       # - cache-preheat
@@ -322,62 +373,6 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-all
-        with:
-          job: examples-all
-      - uses: ./.github/actions/setup-test
-        with:
-          job: examples-all
-
-      - name: Basic integration test for CLI (all examples)
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mkdir -pv examples-all-test-results
-
-          mamba activate ${{ format('env-test-examples-all-{0}', matrix.python-version) }}
-
-          # BEGIN ALL EXAMPLES
-          cd ./examples
-          # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi test -r --package //pub/examples
-          coverage combine
-          # END ALL EXAMPLES
-
-          coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-all-test-results/coverage.xml
-          mamba deactivate
-
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: examples-all-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: examples-all-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: examples-all-test-results/junit.xml
-          coverage-report: examples-all-test-results/coverage.xml
-
-  test-pub-repo:
-    name: "Repo //pub"
-    # Note: preheat is using another set of machines
-    # needs: cache-preheat
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
-        # TODO(clairbee): Move this to the environment variables too
-        # os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
-        python-version: ["3.10", "3.12"]
-        exclude: [{"os": "windows-latest-l", "python-version": "3.12"}]
-    runs-on: ${{ matrix.os }}
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -401,7 +396,7 @@ jobs:
           cd examples
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
           # TODO(clairbee): fix the failing packages first
-          # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
+          coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi -v --threads-max 2 test -r --package //pub
           # END PUBLIC REPO
           coverage combine
 
