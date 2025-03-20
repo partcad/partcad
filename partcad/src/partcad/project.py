@@ -1358,7 +1358,6 @@ class Project(project_config.Configuration):
                 shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
                 for format_name in render_formats:
                     if self._should_render_format(format_name, shape_render, format, shape.kind):
-                        pc_logging.info(f"{format_name=}")
                         tasks.append(shape.render_async(
                             ctx=self.ctx,
                             format_name=format_name,
