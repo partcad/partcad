@@ -37,7 +37,6 @@ class PartFactoryStep(PartFactoryFile):
 
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         with pc_logging.Action("InitSTEP", target_project.name, config["name"]):
-            pc_logging.info("debug1")
             super().__init__(ctx, source_project, target_project, config, extension=".step", can_create=can_create)
             self._create(config)
 
@@ -46,7 +45,6 @@ class PartFactoryStep(PartFactoryFile):
     async def instantiate(self, part):
         await super().instantiate(part)
         with pc_logging.Action("STEP", part.project_name, part.name):
-            pc_logging.info("debug2")
             wrapper_path = wrapper.get("step.py")
             request = {"build_parameters": {}}
             register_ocp_helper()

@@ -522,8 +522,9 @@ class Shape(ShapeConfiguration):
                 request_serialized = base64.b64encode(picklestring).decode()
 
                 runtime = ctx.get_python_runtime(version="3.11")
-                for dependency in WRAPPER_FORMATS[format_name]:
-                    await runtime.ensure_async(dependency)
+
+                dependencies = WRAPPER_FORMATS[format_name]
+                await asyncio.gather(*(runtime.ensure_async(dep) for dep in dependencies))
 
                 # Run wrapper
                 response_serialized, errors = await runtime.run_async(
