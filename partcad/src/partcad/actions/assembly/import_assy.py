@@ -99,6 +99,11 @@ def convert_location(trsf: gp_Trsf, precision=5):
 
     quaternion = trsf.GetRotation()
     w, x, y, z = quaternion.W(), quaternion.X(), quaternion.Y(), quaternion.Z()
+
+    norm = math.sqrt(w*w + x*x + y*y + z*z)
+    if norm < 1e-6:
+        return [translation, [1.0, 0.0, 0.0], 0.0]
+
     rotation_angle = 2.0 * math.atan2(math.sqrt(x**2 + y**2 + z**2), w)
     rotation_angle_deg = round(math.degrees(rotation_angle), precision)
 
