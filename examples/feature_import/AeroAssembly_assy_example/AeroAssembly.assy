@@ -34,14 +34,6 @@ links:
     name: AeroFrameAssembly_solid3
     part: AeroAssembly_assy_example/AeroFrameAssembly_solid3
     type: part
-  location:
-  - - 0
-    - 0
-    - 0
-  - - 1
-    - 0
-    - 0
-  - 0
   name: AeroFrameAssembly
   type: assembly
 - location:
@@ -100,14 +92,6 @@ links:
     name: MirrorAeroFrameAssembly_solid3
     part: AeroAssembly_assy_example/MirrorAeroFrameAssembly_solid3
     type: part
-  location:
-  - - 0
-    - 0
-    - 0
-  - - 1
-    - 0
-    - 0
-  - 0
   name: MirrorAeroFrameAssembly
   type: assembly
 name: AeroAssembly
