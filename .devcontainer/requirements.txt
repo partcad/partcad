@@ -2480,9 +2480,6 @@ regex==2024.11.6 ; python_version >= "3.10" and python_version < "3.13" \
     --hash=sha256:ff590880083d60acc0433f9c3f713c51f7ac6ebb9adf889c79a261ecf541aa91
 renderlab==0.1.20230421184216 ; python_version >= "3.10" and python_version < "3.13" \
     --hash=sha256:8a5880b75dd026a534eee47c17b18cd82f0cab6c04355f705f93f7e124bd2028
-reportlab==4.2.5 ; python_version >= "3.10" and python_version < "3.13" \
-    --hash=sha256:5cf35b8fd609b68080ac7bbb0ae1e376104f7d5f7b2d3914c7adc63f2593941f \
-    --hash=sha256:eb2745525a982d9880babb991619e97ac3f661fae30571b7d50387026ca765ee
 requests-toolbelt==1.0.0 ; python_version >= "3.10" and python_version < "3.13" \
     --hash=sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6 \
     --hash=sha256:cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06
@@ -2672,8 +2669,6 @@ strip-ansi==0.1.1 ; python_version >= "3.10" and python_version < "3.13" \
 svgelements==1.9.6 ; python_version >= "3.10" and python_version < "3.13" \
     --hash=sha256:7c02ad6404cd3d1771fd50e40fbfc0550b0893933466f86a6eb815f3ba3f37f7 \
     --hash=sha256:8a5cf2cc066d98e713d5b875b1d6e5eeb9b92e855e835ebd7caab2713ae1dcad
-svglib==1.5.1 ; python_version >= "3.10" and python_version < "3.13" \
-    --hash=sha256:3ae765d3a9409ee60c0fb4d24c2deb6a80617aa927054f5bcd7fc98f0695e587
 svgpathtools==1.6.1 ; python_version >= "3.10" and python_version < "3.13" \
     --hash=sha256:39967f9a817b8a12cc6dd1646fc162d522fca6c3fd5f8c94913c15ee4cb3a906 \
     --hash=sha256:7054e6de1953e295bf565d535d585695453b09f8db4a2f7c4853348732097a3e
