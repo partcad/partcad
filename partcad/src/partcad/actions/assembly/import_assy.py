@@ -126,16 +126,9 @@ def import_part(project: Project, shape: TopoDS_Shape, part_name: str, parent_fo
 
     part_name_without_ext = step_file.with_suffix("").relative_to(project_root).as_posix().replace("\\", "/")
 
-    try:
-        step_file_rel_to_config = step_file.relative_to(project_root).as_posix().replace("\\", "/")
-    except ValueError:
-        step_file_rel_to_config = step_file.name.replace("\\", "/")
+    import_part_action(project, "step", part_name_without_ext, step_file.resolve().as_posix(), config)
 
-    step_file_abs = step_file.resolve().as_posix()
-
-    import_part_action(project, "step", part_name_without_ext, step_file_abs, config)
-
-    return step_file_rel_to_config
+    return part_name_without_ext
 
 
 def shape_signature(shape: TopoDS_Shape) -> tuple:
@@ -248,7 +241,7 @@ def flatten_assembly_tree(node, parent_folder: Path, project: Project, config: d
     node_name = node["name"]
     global_trsf = node["trsf"]
 
-    full_node_name = f"{parent_name}/{node_name}".strip("/").replace("\\", "/") if parent_name else node_name
+    full_node_name = node_name
 
     if node_type == "assembly":
         return {
