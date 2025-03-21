@@ -1,7 +1,9 @@
 import rich_click as click
+from partcad.context import Context
 import partcad.logging as logging
 import partcad.utils as pc_utils
 
+EXPORT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gltf", "openscad", "cadquery", "build123d"]
 
 @click.command(help="Export 3D view of parts, assemblies, or scenes in the package")
 @click.option(
@@ -20,17 +22,7 @@ import partcad.utils as pc_utils
     "-t",
     "--format",
     help="The type of file to export",
-    type=click.Choice(
-        [
-            "step",
-            "brep",
-            "stl",
-            "3mf",
-            "threejs",
-            "obj",
-            "gltf",
-        ]
-    ),
+    type=click.Choice(EXPORT_FORMATS),
 )
 @click.option(
     "-P",
@@ -70,7 +62,7 @@ import partcad.utils as pc_utils
 )
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
-def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
+def cli(ctx: Context, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
     with logging.Process("Export", "this"):
         ctx.option_create_dirs = create_dirs
         package = package if package is not None else ""

@@ -8,6 +8,7 @@
 #
 
 import rich_click as click
+from partcad.context import Context
 import partcad.utils as pc_utils
 import partcad.logging as logging
 
@@ -79,7 +80,7 @@ import partcad.logging as logging
 )
 @click.argument("object", type=str, required=False)  # Part (default), assembly or scene to test
 @click.pass_obj
-def cli(ctx, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
+def cli(ctx: Context, create_dirs, output_dir, format, package, recursive, sketch, interface, assembly, scene, object):
     with logging.Process("Render", "this"):
         ctx.option_create_dirs = create_dirs
         package = package if package is not None else "."

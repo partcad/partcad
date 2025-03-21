@@ -4,16 +4,21 @@ import partcad.logging as pc_logging
 from partcad.actions.part import import_part_action
 from partcad.context import Context
 
+PART_TYPES_TO_IMPORT = ["stl", "step", "brep", "3mf", "obj", "gltf", "threejs"]
+TARGET_FORMATS_TO_CONVERT = ["step", "brep", "stl", "3mf", "threejs",
+                             "obj", "gltf", "openscad", "cadquery", "build123d"]
+
+
 @click.command(help="Import an existing part and optionally convert its format.")
 @click.argument(
     "part_type",
-    type=click.Choice(["stl", "step", "brep", "3mf", "obj", "gltf", "threejs"]),
+    type=click.Choice(PART_TYPES_TO_IMPORT),
     required=True
 )
 @click.argument("existing_part", type=str, required=True)
 @click.option(
     "-t", "--target-format",
-    type=click.Choice(["step", "brep", "stl", "3mf", "threejs", "obj", "gltf"]),
+    type=click.Choice(TARGET_FORMATS_TO_CONVERT),
     help="Convert the imported part to the specified format."
 )
 @click.option(
