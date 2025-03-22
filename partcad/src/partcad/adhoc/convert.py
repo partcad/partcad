@@ -74,37 +74,3 @@ parts:
     """
     with open(config_path, "w", encoding="utf-8") as config_file:
         config_file.write(config_content)
-
-
-def export_part(part: Part, output_filename: str | Path, output_type: str, ctx: Context) -> None:
-    """
-    Export a part to the desired format.
-
-    Args:
-        part (Part): The part to export.
-        output_filename (Path | str): Path to save the exported file.
-        output_type (str): Format of the exported file.
-        ctx (Context): The context required for export methods.
-    """
-    export_methods: dict[str, str] = {
-        "step": "render_step",
-        "brep": "render_brep",
-        "stl": "render_stl",
-        "3mf": "render_3mf",
-        "threejs": "render_threejs",
-        "obj": "render_obj",
-        "gltf": "render_gltf",
-    }
-
-    export_method = export_methods.get(output_type)
-    if not export_method:
-        raise ValueError(f"Unsupported export format: {output_type}")
-
-    if not hasattr(part, export_method):
-        raise RuntimeError(f"Part does not support export to '{output_type}'.")
-
-    # Ensure output filename is a string
-    output_filename = str(output_filename)
-
-    # Call the appropriate export method, passing the required context and filepath
-    getattr(part, export_method)(ctx=ctx, filepath=output_filename)
