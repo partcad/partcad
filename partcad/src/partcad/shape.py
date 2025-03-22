@@ -475,7 +475,10 @@ class Shape(ShapeConfiguration):
             if filepath and os.path.isdir(filepath):
                 self.config_obj.setdefault("render", {})["output_dir"] = filepath
 
-            obj = await self.get_wrapped(ctx)
+            if format_name == "gltf":
+                obj = await self.get_build123d(ctx)
+            else:
+                obj = await self.get_wrapped(ctx)
 
             if obj is None:
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
