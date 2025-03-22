@@ -1422,57 +1422,6 @@ class Project(project_config.Configuration):
     ):
         asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
 
-    async def async_convert(
-        self,
-        sketches: Optional[List[str]] = None,
-        interfaces: Optional[List[str]] = None,
-        parts: Optional[List[str]] = None,
-        assemblies: Optional[List[str]] = None,
-        target_format: Optional[str] = None,
-        output_dir: Optional[str] = None,
-    ) -> None:
-        """Asynchronously convert specified objects to a target format."""
-        if not target_format:
-            raise ValueError("Target format must be specified for conversion.")
-
-        with pc_logging.Action("Convert", self.name):
-            shapes = []
-            if sketches:
-                shapes.extend([self.get_sketch(name) for name in sketches])
-            if interfaces:
-                shapes.extend([self.get_interface(name) for name in interfaces])
-            if parts:
-                shapes.extend([self.get_part(name) for name in parts])
-            if assemblies:
-                shapes.extend([self.get_assembly(name) for name in assemblies])
-
-            pc_logging.info(f"Converting {len(shapes)} object(s) to '{target_format}'.")
-
-            tasks = []
-            import os
-            for shape in shapes:
-                file_path_arg = output_dir if output_dir and os.path.isdir(output_dir) else None
-
-                tasks.append(shape.render_async(self.ctx, target_format, self, file_path_arg))
-
-            try:
-                await asyncio.gather(*tasks)
-            except Exception as e:
-                raise RuntimeError(f"Failed to convert to {target_format}: {str(e)}") from e
-
-
-    def convert(
-        self,
-        sketches: Optional[List[str]] = None,
-        interfaces: Optional[List[str]] = None,
-        parts: Optional[List[str]] = None,
-        assemblies: Optional[List[str]] = None,
-        target_format: Optional[str] = None,
-        output_dir: Optional[str] = None,
-    ) -> None:
-        """Synchronous wrapper for async_convert."""
-        asyncio.run(self.async_convert(sketches, interfaces, parts, assemblies, target_format, output_dir))
-
 
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:
