@@ -39,6 +39,7 @@ from .sketch_factory_dxf import SketchFactoryDxf
 from .sketch_factory_svg import SketchFactorySvg
 from .sketch_factory_build123d import SketchFactoryBuild123d
 from .sketch_factory_cadquery import SketchFactoryCadquery
+from .sketch_factory_step import SketchFactoryStep
 from .part import Part
 from . import part_config
 from .part_factory_extrude import PartFactoryExtrude
@@ -374,6 +375,8 @@ class Project(project_config.Configuration):
             SketchFactoryCadquery(self.ctx, source_project, self, config)
         elif config["type"] == "dxf":
             SketchFactoryDxf(self.ctx, source_project, self, config)
+        elif config["type"] == "step":
+            SketchFactoryStep(self.ctx, source_project, self, config)
         elif config["type"] == "svg":
             SketchFactorySvg(self.ctx, source_project, self, config)
         elif config["type"] == "basic":
