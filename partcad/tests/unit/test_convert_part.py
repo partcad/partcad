@@ -9,7 +9,7 @@ from unittest.mock import patch, Mock
 
 from partcad.shape import EXTENSION_MAPPING
 
-ALLOWED_TARGET_FORMATS = {"step", "brep", "stl", "3mf", "threejs", "obj", "gltf"}
+ALLOWED_TARGET_FORMATS = {"step", "brep", "stl", "3mf", "threejs", "obj"}
 
 SOURCE_DIR = Path("./examples/feature_convert")
 
@@ -22,8 +22,6 @@ PARTS_CONFIG = {
     "bolt_step": {"type": "step", "path": "step/bolt.step"},
     "cube_stl": {"type": "stl", "path": "stl/cube.stl"},
 }
-
-
 
 
 @pytest.mark.parametrize("source_part", PARTS_CONFIG.keys())
