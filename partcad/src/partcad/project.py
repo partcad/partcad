@@ -22,8 +22,6 @@ import typing
 
 from typing import Optional, List
 
-from partcad.context import Context
-
 from . import consts
 from . import factory
 from . import logging as pc_logging
@@ -66,6 +64,7 @@ from .utils import resolve_resource_path, normalize_resource_path
 
 if TYPE_CHECKING:
     from partcad.context import Context
+    from partcad.shape import Shape
 
 
 class Project(project_config.Configuration):
@@ -1358,7 +1357,7 @@ class Project(project_config.Configuration):
                 for format_name in render_formats:
                     if self._should_render_format(format_name, shape_render, format, shape.kind):
                         if not hasattr(shape, "finalized") or shape.finalized:
-                            tasks.append(shape.render(
+                            tasks.append(shape.render_async(
                                 ctx=self.ctx,
                                 format_name=format_name,
                                 project=self,
