@@ -18,4 +18,6 @@ render:
   threejs: ./
   brep: ./
   obj: ./
+  gltf: ./
+  iges: ./
   markdown: README.md
