@@ -431,12 +431,8 @@ class Shape(ShapeConfiguration):
         return opts, filepath
 
     async def render_async(
-        self,
-        ctx: Context,
-        format_name: str,
-        project: Optional[Project] = None,
-        filepath=None,
-        **kwargs) -> None:
+        self, ctx: Context, format_name: str, project: Optional[Project] = None, filepath=None, **kwargs
+    ) -> None:
         """
         Centralized method to render shape via external wrapper.
         Args:
@@ -500,7 +496,7 @@ class Shape(ShapeConfiguration):
                 file_extension = EXTENSION_MAPPING.get(format, format)
                 render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
-                pc_logging.debug(f"Rendering: {filepath} for format '{format}'")
+                pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
 
                 wrapper_path = wrapper.get(f"render_{format}.py")
 
