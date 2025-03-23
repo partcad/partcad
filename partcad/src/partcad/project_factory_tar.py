@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2023
 #
 # Author: Roman Kuzmenko
@@ -14,6 +15,7 @@ import requests
 import tarfile
 
 from . import project_factory as pf
+from . import telemetry
 
 
 class TarImportConfiguration:
@@ -28,6 +30,7 @@ class TarImportConfiguration:
             self.auth_pass = None
 
 
+@telemetry.instrument()
 class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
     def __init__(self, ctx, parent, config):
         pf.ProjectFactory.__init__(self, ctx, parent, config)

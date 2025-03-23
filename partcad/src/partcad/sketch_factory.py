@@ -11,8 +11,10 @@ import typing
 
 from .sketch import Sketch
 from .shape_factory import ShapeFactory
+from . import telemetry
 
 
+@telemetry.instrument()
 class SketchFactory(ShapeFactory):
     # TODO(clairbee): Make the next line work for part_factory_file only
     path: typing.Optional[str] = None

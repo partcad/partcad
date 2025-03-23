@@ -1,12 +1,19 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
 import rich_click as click
 from click.testing import CliRunner
 
-from partcad_cli.click.commands.list.assemblies import cli as list_assemblies
-from partcad_cli.click.commands.list.interfaces import cli as list_interfaces
-from partcad_cli.click.commands.list.mates import cli as list_mates
-from partcad_cli.click.commands.list.packages import cli as list_packages
-from partcad_cli.click.commands.list.parts import cli as list_parts
-from partcad_cli.click.commands.list.sketches import cli as list_sketches
+from ...cli_context import CliContext
+from .assemblies import cli as list_assemblies
+from .interfaces import cli as list_interfaces
+from .mates import cli as list_mates
+from .packages import cli as list_packages
+from .parts import cli as list_parts
+from .sketches import cli as list_sketches
 
 
 @click.option(
@@ -24,10 +31,10 @@ from partcad_cli.click.commands.list.sketches import cli as list_sketches
     help="Recursively process all imported packages",
     show_envvar=True,
 )
-@click.argument("package", type=str, required=False, default=".")
 @click.command(help="List all available parts, assemblies and scenes")
+@click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-def cli(ctx, used_by, recursive, package) -> None:
+def cli(cli_ctx: CliContext, used_by, recursive: bool, package: str) -> None:
     """List all available parts, assemblies and scenes recursively."""
     runner = CliRunner()
     options = []
@@ -41,10 +48,10 @@ def cli(ctx, used_by, recursive, package) -> None:
 
     catch_exceptions = False
 
-    runner.invoke(list_packages, catch_exceptions=catch_exceptions, obj=ctx)
-    runner.invoke(list_sketches, options, catch_exceptions=catch_exceptions, obj=ctx)
-    runner.invoke(list_interfaces, options, catch_exceptions=catch_exceptions, obj=ctx)
-    runner.invoke(list_parts, options, catch_exceptions=catch_exceptions, obj=ctx)
-    runner.invoke(list_assemblies, options, catch_exceptions=catch_exceptions, obj=ctx)
+    runner.invoke(list_packages, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(list_sketches, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(list_interfaces, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(list_parts, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
+    runner.invoke(list_assemblies, options, catch_exceptions=catch_exceptions, obj=cli_ctx)
     # TODO: @alexanderilyin: TypeError: startswith first arg must be str or a tuple of str, not Project
     # runner.invoke(list_mates, options, catch_exceptions=catch_exceptions, obj=ctx)

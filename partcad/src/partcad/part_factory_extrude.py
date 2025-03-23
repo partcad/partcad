@@ -19,7 +19,10 @@ from .sketch import Sketch
 from . import logging as pc_logging
 from .utils import resolve_resource_path
 
+from . import telemetry
 
+
+@telemetry.instrument()
 class PartFactoryExtrude(PartFactory):
     depth: float
     source_project_name: str

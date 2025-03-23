@@ -10,8 +10,10 @@ import os
 import shutil
 
 from . import runtime_python
+from . import telemetry
 
 
+@telemetry.instrument()
 class NonePythonRuntime(runtime_python.PythonRuntime):
     exec_name: str
 

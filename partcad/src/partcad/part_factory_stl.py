@@ -15,8 +15,10 @@ import sys
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 from . import wrapper
+from . import telemetry
 
 
+@telemetry.instrument()
 class PartFactoryStl(PartFactoryFile):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitSTL", target_project.name, config["name"]):

@@ -10,11 +10,13 @@
 import copy
 import typing
 
+from . import telemetry
 from . import assembly_factory as pf
 from . import logging as pc_logging
 from .utils import resolve_resource_path, get_child_project_path
 
 
+@telemetry.instrument()
 class AssemblyFactoryAlias(pf.AssemblyFactory):
     source_assembly_name: str
     source_project_name: typing.Optional[str]

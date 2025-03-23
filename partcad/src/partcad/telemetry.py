@@ -1,9 +1,30 @@
-import inspect
-from opentelemetry import trace
-from contextlib import asynccontextmanager
-from opentelemetry import trace
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
 
-tracer = trace.get_tracer("PartCAD")
+from contextlib import asynccontextmanager, contextmanager
+import inspect
+from opentelemetry import trace, context
+from opentelemetry.trace import Tracer
+import os
+
+from . import telemetry_none
+from . import telemetry_sentry
+
+tracer: Tracer | None  # To be initialized in telemetry_init()
+
+
+def init(version: str):
+    global tracer
+
+    if not os.getenv("PYTEST_VERSION"):
+        # TODO(clairbee): add suport for alternate telemetry backends
+        tracer = telemetry_sentry.init_sentry(version)
+    else:
+        tracer = telemetry_none.init_none()
+
 
 @asynccontextmanager
 async def start_as_current_span_async(name, **kwargs):
@@ -11,14 +32,31 @@ async def start_as_current_span_async(name, **kwargs):
         yield span
 
 
-def start_span_as(name, category: str = ""):
-    def decorator(func):
+@contextmanager
+def start_as_current_span(name: str, **kwargs):
+    with tracer.start_as_current_span(name, **kwargs) as span:
+        yield span
+
+
+@contextmanager
+def set_context(ctx):
+    token = context.attach(ctx)
+    yield token
+    context.detach(token)
+
+
+def instrument_span(name, category: str = ""):
+    global tracer
+
+    def decorator(func, attr_getter):
         def wrapper(*args, **kwargs):
             parent = trace.get_current_span()
             tag = name if not category else f"{category}.{name}"
             if getattr(parent, "tag", "") == tag:
                 return func(*args, **kwargs)
             with tracer.start_as_current_span(tag) as span:
+                for k, v in attr_getter(*args, **kwargs).items():
+                    span.set_attribute(k, v)
                 setattr(span, "tag", tag)
                 for arg in args:
                     if isinstance(arg, (str, int, float, bool)):
@@ -37,14 +75,17 @@ def start_span_as(name, category: str = ""):
     return decorator
 
 
-def start_span_as_async(name, category: str = ""):
-    def decorator(func):
+def instrument_span_async(name, category: str = ""):
+    def decorator(func, attr_getter):
         async def wrapper(*args, **kwargs):
             parent = trace.get_current_span()
             tag = name if not category else f"{category}.{name}"
             if getattr(parent, "tag", "") == tag:
                 return await func(*args, **kwargs)
+            # TODO(clairbee): what's the benefit of using "async with" here?
             async with start_as_current_span_async(tag) as span:
+                for k, v in attr_getter(*args, **kwargs).items():
+                    span.set_attribute(k, v)
                 setattr(span, "tag", tag)
                 for arg in args:
                     if isinstance(arg, (str, int, float, bool)):
@@ -63,14 +104,22 @@ def start_span_as_async(name, category: str = ""):
     return decorator
 
 
-def instrument(exclude: list = []):
+def instrument(exclude: list = [], attr_getters=lambda attr_value: lambda *args, **kwargs: {}):
     def decorator(cls):
         for attr_name, attr_value in vars(cls).items():
             if callable(attr_value) and not inspect.isclass(attr_value) and attr_name not in exclude:
                 if inspect.iscoroutinefunction(attr_value):
-                    setattr(cls, attr_name, start_span_as_async(attr_name, cls.__name__)(attr_value))
+                    setattr(
+                        cls,
+                        attr_name,
+                        instrument_span_async(attr_name, cls.__name__)(attr_value, attr_getters(attr_name)),
+                    )
                 else:
-                    setattr(cls, attr_name, start_span_as(attr_name, cls.__name__)(attr_value))
+                    setattr(
+                        cls,
+                        attr_name,
+                        instrument_span(attr_name, cls.__name__)(attr_value, attr_getters(attr_name)),
+                    )
         return cls
 
     return decorator

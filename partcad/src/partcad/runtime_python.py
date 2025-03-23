@@ -8,6 +8,7 @@
 
 import asyncio
 import contextlib
+import copy
 import hashlib
 import os
 import pathlib
@@ -19,6 +20,7 @@ from filelock import FileLock
 
 from . import runtime
 from . import logging as pc_logging
+from . import telemetry
 
 
 class VenvLock:
@@ -48,6 +50,7 @@ class VenvLock:
         self.lock.release()
 
 
+@telemetry.instrument()
 class PythonRuntime(runtime.Runtime):
     def __init__(self, ctx, sandbox, version=None):
         self.venv_locks = {}
@@ -180,20 +183,25 @@ class PythonRuntime(runtime.Runtime):
             cmd = [python_path, *self.python_flags, *cmd]
             pc_logging.debug("Running: %s", cmd)
             # pc_logging.debug("stdin: %s", stdin)
-            p = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=False,
-                encoding="utf-8",
-                # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                cwd=cwd,
-            )
-            stdout, stderr = p.communicate(
-                input=stdin.encode(),
-                # TODO(clairbee): add timeout
-            )
+            with telemetry.tracer.start_as_current_span("PythonRuntime.run_onced.*{subprocess.Popen}") as span:
+                # Strip user home directory from the path, if any
+                sanitized_cmd = copy.copy(cmd)
+                sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
+                span.set_attribute("cmd", " ".join(sanitized_cmd))
+                p = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                    encoding="utf-8",
+                    # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                    cwd=cwd,
+                )
+                stdout, stderr = p.communicate(
+                    input=stdin.encode(),
+                    # TODO(clairbee): add timeout
+                )
 
             stdout = stdout.decode()
             stderr = stderr.decode()
@@ -268,19 +276,24 @@ class PythonRuntime(runtime.Runtime):
             cmd = [python_path, *self.python_flags, *cmd]
             pc_logging.debug("Running: %s", cmd)
             # pc_logging.debug("stdin: %s", stdin)
-            p = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=False,
-                # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                cwd=cwd,
-            )
-            stdout, stderr = await p.communicate(
-                input=stdin.encode(),
-                # TODO(clairbee): add timeout
-            )
+            with telemetry.tracer.start_as_current_span("PythonRuntime.run_async_onced.*{subprocess.Popen}") as span:
+                # Strip user home directory from the path, if any
+                sanitized_cmd = copy.copy(cmd)
+                sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
+                span.set_attribute("cmd", " ".join(sanitized_cmd))
+                p = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                    # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                    cwd=cwd,
+                )
+                stdout, stderr = await p.communicate(
+                    input=stdin.encode(),
+                    # TODO(clairbee): add timeout
+                )
 
             stdout = stdout.decode()
             stderr = stderr.decode()

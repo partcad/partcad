@@ -7,31 +7,22 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from OCP.TopoDS import (
-    TopoDS_Builder,
-    TopoDS_Compound,
-)
-import OCP.IFSelect
-from OCP.STEPControl import STEPControl_Reader
-
 import base64
 import os
 import pickle
 import sys
 import threading
-import time
 
 from . import logging as pc_logging
 from . import wrapper
 from .part_factory_file import PartFactoryFile
+from . import telemetry
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
-# TODO(clairbee): revisit whether it still provides any performance benefits
-#                 in Python 3.13+ (is GIL still a problem?)
 
-
+@telemetry.instrument()
 class PartFactoryStep(PartFactoryFile):
     lock = threading.Lock()
 
@@ -48,17 +39,21 @@ class PartFactoryStep(PartFactoryFile):
             wrapper_path = wrapper.get("step.py")
             request = {"build_parameters": {}}
             register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            with telemetry.tracer.start_as_current_span("*PartFactoryStep.instantiate.{pickle.dumps}"):
+                picklestring = pickle.dumps(request)
+                request_serialized = base64.b64encode(picklestring).decode()
 
-            response_serialized, errors = await self.runtime.run_async(
-                [wrapper_path, os.path.abspath(part.path), os.path.abspath(self.project.config_dir)],
-                request_serialized,
-            )
-            sys.stderr.write(errors)
-            response = base64.b64decode(response_serialized)
-            register_ocp_helper()
-            result = pickle.loads(response)
+            with telemetry.tracer.start_as_current_span("*PartFactoryStep.instantiate.{runtime.run_async}"):
+                response_serialized, errors = await self.runtime.run_async(
+                    [wrapper_path, os.path.abspath(part.path), os.path.abspath(self.project.config_dir)],
+                    request_serialized,
+                )
+                sys.stderr.write(errors)
+
+            with telemetry.tracer.start_as_current_span("*PartFactoryStep.instantiate.{pickle.loads}"):
+                response = base64.b64decode(response_serialized)
+                register_ocp_helper()
+                result = pickle.loads(response)
             if not result["success"]:
                 pc_logging.error(result["exception"])
                 raise Exception(result["exception"])

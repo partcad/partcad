@@ -13,11 +13,13 @@ from .cache import Cache
 from .cache_hash import CacheHash
 from .shape import Shape
 from .utils import total_size
+from . import telemetry
 
 SERIALIZATION_PICKLE = 1
 SERIALIZATION_BREP = 2
 
 
+@telemetry.instrument()
 class ShapeCache(Cache):
     def __init__(self, serialization: int = SERIALIZATION_PICKLE, user_config=None) -> None:
         super().__init__("shapes", user_config)

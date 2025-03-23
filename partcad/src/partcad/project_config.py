@@ -17,10 +17,12 @@ import math
 from . import consts
 from . import logging as pc_logging
 from . import exception as pc_exception
+from . import telemetry
 
 DEFAULT_CONFIG_FILENAME = "partcad.yaml"
 
 
+@telemetry.instrument()
 class Configuration:
     name: str
 

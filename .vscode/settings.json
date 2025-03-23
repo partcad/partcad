@@ -59,6 +59,7 @@
     "eamodio",
     "ensurepip",
     "gcode",
+    "gethostname",
     "ggshield",
     "Gruntfuggly",
     "hadolint",

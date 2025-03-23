@@ -9,6 +9,7 @@
 
 import os
 from . import project_factory as pf
+from . import telemetry
 
 
 class LocalImportConfiguration:
@@ -17,6 +18,7 @@ class LocalImportConfiguration:
         self.can_be_empty = self.config_obj.get("canBeEmpty", False)
 
 
+@telemetry.instrument()
 class ProjectFactoryLocal(pf.ProjectFactory, LocalImportConfiguration):
     def __init__(self, ctx, parent, config):
         pf.ProjectFactory.__init__(self, ctx, parent, config)

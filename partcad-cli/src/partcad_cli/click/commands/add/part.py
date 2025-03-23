@@ -1,7 +1,15 @@
-import rich_click as click  # import click
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import rich_click as click
+from pathlib import Path
+
 import partcad as pc
 from partcad.actions.part import add_part_action
-from pathlib import Path
+from ...cli_context import CliContext
 
 
 @click.command(help="Add a part")
@@ -46,24 +54,33 @@ from pathlib import Path
     # help="Type of the part",
 )
 @click.argument("path", type=str)  # help="Path to the file"
-@click.pass_obj
-def cli(ctx, desc, kind, provider, path):
+@click.pass_context
+def cli(click_ctx: click.Context, desc: str | None, kind: str, provider: str | None, path: str):
     """
     CLI command to add a part to the project without copying.
     """
-    project = ctx.get_project(pc.ROOT)
-    if not project:
-        raise click.UsageError("Failed to retrieve the project.")
+    package = click_ctx.parent.params["package"]
+    cli_ctx: CliContext = click_ctx.obj
 
-    file_path = Path(path)
-    if not file_path.exists():
-        raise click.UsageError(f"ERROR: The part file '{file_path}' does not exist.")
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        ctx: pc.Context = cli_ctx.get_partcad_context()
 
-    config = {}
-    if desc:
-        config["desc"] = desc
-    if provider:
-        config["provider"] = provider
+        package_obj: pc.Project = ctx.get_project(package)
+        if not package_obj:
+            pc.logging.error(f"Package {package} is not found")
+            return
+        package = package_obj.name
 
-    add_part_action(project, kind, path, config)
-    click.echo(f"Part '{Path(path).stem}' added to the project.")
+        file_path = Path(path)
+        if not file_path.exists():
+            raise click.UsageError(f"ERROR: The part file '{file_path}' does not exist.")
+
+        config = {}
+        if desc:
+            config["desc"] = desc
+        if provider:
+            config["provider"] = provider
+
+        # pc.logging.Process() is done inside "add_part_action"
+        add_part_action(package_obj, kind, path, config)
+        click.echo(f"Part '{Path(path).stem}' added to the project.")

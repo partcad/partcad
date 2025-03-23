@@ -29,7 +29,10 @@ from . import logging as pc_logging
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
+from . import telemetry
 
+
+@telemetry.instrument()
 class SketchFactoryCadquery(SketchFactoryPython):
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         python_version = source_project.python_version

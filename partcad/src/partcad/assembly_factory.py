@@ -9,10 +9,12 @@
 
 import typing
 
+from . import telemetry
 from .assembly import Assembly
 from .shape_factory import ShapeFactory
 
 
+@telemetry.instrument()
 class AssemblyFactory(ShapeFactory):
     # TODO(clairbee): Make the next line work for assembly_factory_file only
     path: typing.Optional[str] = None

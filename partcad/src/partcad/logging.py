@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2024
 #
 # Author: Roman Kuzmenko
@@ -10,10 +11,12 @@ import logging
 from logging import DEBUG, INFO, WARN, WARNING, ERROR, CRITICAL
 import threading
 import time
-import sentry_sdk
-from opentelemetry import trace
 
-tracer = trace.get_tracer("PartCAD")
+import sentry_sdk
+
+from opentelemetry import trace
+from . import telemetry
+
 
 # Track if any errors occurred during the execution for test purposes and for
 # the main program to know if it should exit with an error code.
@@ -46,26 +49,27 @@ def reset_errors():
     had_errors = False
 
 
+# TODO(clairbee): replace this with some kind of a hook, so that it can be handled differently in CLI and IDE, and ignored in backend jobs
 def _track_error(args):
     global had_errors
     if args and len(args) > 1:
         if "conda run pythonw" in args[0]:
             return
-        if isinstance(args[0], Exception):
-            sentry_sdk.capture_exception(args[0])
-        elif isinstance(args[0], str):
-            sentry_sdk.capture_message(args[0])
     had_errors = True
 
 
 def error(*args, **kwargs):
     _track_error(args)
     logging.getLogger("partcad").error(*args, **kwargs)
+    sentry_sdk.capture_message(str(args) + str(kwargs), level="error")
+    current_span = trace.get_current_span()
+    if current_span:
+        current_span.set_status(trace.Status(trace.StatusCode.ERROR, str(args)))
 
 
 def critical(*args, **kwargs):
-    _track_error(args)
     logging.getLogger("partcad").critical(*args, **kwargs)
+    sentry_sdk.capture_message(str(args) + str(kwargs), level="debug")
 
 
 # Some pytest versions/configurations/plugins mess with the exception method
@@ -75,6 +79,7 @@ def exception(
 ):
     _track_error(args)
     logging.getLogger("partcad").exception(*args)
+    sentry_sdk.capture_exception(args[0])
 
 
 # Create 'ops' that are used for dependency injection of the logic to control
@@ -118,28 +123,46 @@ ops = Ops()
 # Only one 'process' at a time, no recursion
 process_lock = threading.Lock()
 
+process_transaction = None
+process_span = None
+
 
 # Classes to be used with "with()" to alter the logging context.
 class Process(object):
-    def __init__(self, op: str, package: str, item: str = None):
+    def __init__(
+        self,
+        op: str,
+        package: str,
+        item: str = None,
+    ):
         self.op = op
         self.package = package
         self.item = item
         self.succeeded = False
         self.start = 0.0
+        self.span_ctx_mgr = None
 
     async def __aenter__(self):
         self.__enter__()
 
     def __enter__(self):
         global process_lock
+        global process_transaction
+        global process_span
 
         if process_lock.acquire():
             self.start = time.time()
-            self.span = tracer.start_span(f"Process: {self.op}")
-            self.span.set_attribute("package", self.package)
+            attributes = {
+                "package": self.package,
+            }
             if self.item:
-                self.span.set_attribute("item", self.item)
+                attributes["item"] = self.item
+
+            self.span_ctx_mgr = telemetry.tracer.start_as_current_span(
+                f"Process: {self.op}",
+                attributes=attributes,
+            )
+            self.span_ctx_mgr.__enter__()
             ops.process_start(self.op, self.package, self.item)
             self.succeeded = True
         else:
@@ -156,7 +179,7 @@ class Process(object):
         if self.succeeded:
             process_lock.release()
             ops.process_end(self.op, self.package, self.item)
-            self.span.end()
+            self.span_ctx_mgr.__exit__(*_args)
             delta = time.time() - self.start
             if self.item is None:
                 info("DONE: %s: %s: %.2fs" % (self.op, self.package, delta))
@@ -165,9 +188,17 @@ class Process(object):
 
 
 class Action(object):
-    def __init__(self, op: str, package: str, item: str = None, extra: str = None):
+    def __init__(
+        self,
+        op: str,
+        package: str,
+        item: str = None,
+        extra: str = None,
+    ):
         self.op = op
         self.package = package
+        self.span_ctx_mgr = None
+
         if extra:
             self.item = item + " : " + extra
         else:
@@ -177,15 +208,22 @@ class Action(object):
         self.__enter__()
 
     def __enter__(self):
-        self.span = tracer.start_span(f"Action: {self.op}")
-        self.span.set_attribute("package", self.package)
+        attributes = {
+            "package": self.package,
+        }
         if self.item:
-            self.span.set_attribute("item", self.item)
+            attributes["item"] = self.item
+
+        self.span_ctx_mgr = telemetry.tracer.start_as_current_span(
+            f"Action: {self.op}",
+            attributes=attributes,
+        )
+        self.span_ctx_mgr.__enter__()
         ops.action_start(self.op, self.package, self.item)
 
     async def __aexit__(self, *args):
         self.__exit__(*args)
 
-    def __exit__(self, *_args):
-        self.span.end()
+    def __exit__(self, *args):
         ops.action_end(self.op, self.package, self.item)
+        self.span_ctx_mgr.__exit__(*args)

@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2023-2024
 #
 # Author: Aleksandr Ilin (ailin@partcad.org)
@@ -8,10 +9,9 @@
 #
 
 import rich_click as click
-import partcad.utils as pc_utils
-from partcad import logging as logging
 import asyncio
 
+import partcad as pc
 from partcad.test.all import tests as all_tests
 from partcad.user_config import user_config
 
@@ -25,13 +25,13 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
     tests_to_run = all_tests(user_config.threads_max)
     if filter_prefix:
         tests_to_run = list(filter(lambda t: t.name.startswith(filter_prefix), tests_to_run))
-        logging.debug(f"Running tests with prefix {filter_prefix}")
+        pc.logging.debug(f"Running tests with prefix {filter_prefix}")
 
     for package in packages:
         if object:
             if ":" not in object:
                 object = ":" + object
-            package, object = pc_utils.resolve_resource_path(ctx.get_current_project_path(), object)
+            package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object)
 
         prj = ctx.get_project(package)
         if not object:
@@ -41,9 +41,9 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
             # Test the requested interface
             shape = prj.get_interface(object)
             if shape is None:
-                logging.error(f"{object} is not found")
+                pc.logging.error(f"{object} is not found")
             elif not shape.finalized:
-                logging.warning(f"{object} is not finalized")
+                pc.logging.warning(f"{object} is not finalized")
             else:
                 tasks.append(shape.test_async())
         else:
@@ -56,9 +56,9 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
                 shape = prj.get_part(object)
 
             if shape is None:
-                logging.error(f"{object} is not found")
+                pc.logging.error(f"{object} is not found")
             elif not shape.finalized:
-                logging.warning(f"{object} is not finalized")
+                pc.logging.warning(f"{object} is not finalized")
             else:
                 tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape) for t in tests_to_run])
 
@@ -119,31 +119,35 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
 )
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_obj
-def cli(ctx, package, recursive, filter, sketch, interface, assembly, scene, object):
-    package_obj = ctx.get_project(package)
-    if not package_obj:
-        logging.error(f"Package {package} is not found")
-        return
-    package = package_obj.name
-    with logging.Process("Test", package):
-        if recursive:
-            start_package = ctx.get_project_abs_path(package)
-            all_packages = ctx.get_all_packages(start_package)
-            if ctx.stats_git_ops:
-                logging.info(f"Git operations: {ctx.stats_git_ops}")
-            packages = [p["name"] for p in all_packages]
-        else:
-            packages = [package]
+def cli(cli_ctx, package, recursive, filter, sketch, interface, assembly, scene, object):
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        ctx: pc.Context = cli_ctx.get_partcad_context()
 
-        asyncio.run(
-            cli_test_async(
-                ctx,
-                packages,
-                filter_prefix=filter,
-                sketch=sketch,
-                interface=interface,
-                assembly=assembly,
-                scene=scene,
-                object=object,
+        package_obj = ctx.get_project(package)
+        if not package_obj:
+            pc.logging.error(f"Package {package} is not found")
+            return
+        package = package_obj.name
+
+        with pc.logging.Process("Test", package):
+            if recursive:
+                start_package = ctx.get_project_abs_path(package)
+                all_packages = ctx.get_all_packages(start_package)
+                if ctx.stats_git_ops:
+                    pc.logging.info(f"Git operations: {ctx.stats_git_ops}")
+                packages = [p["name"] for p in all_packages]
+            else:
+                packages = [package]
+
+            asyncio.run(
+                cli_test_async(
+                    ctx,
+                    packages,
+                    filter_prefix=filter,
+                    sketch=sketch,
+                    interface=interface,
+                    assembly=assembly,
+                    scene=scene,
+                    object=object,
+                )
             )
-        )

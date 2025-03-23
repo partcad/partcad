@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 
 import contextlib
+import copy
 from filelock import FileLock
 import importlib
 import os
@@ -16,10 +17,12 @@ import json
 
 from . import runtime_python
 from . import logging as pc_logging
+from . import telemetry
 
 # Global lock for conda that can be shared across threads
 
 
+@telemetry.instrument()
 class CondaPythonRuntime(runtime_python.PythonRuntime):
     def __init__(self, ctx, version=None, variant=None):
         if variant is None:
@@ -139,9 +142,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
             try:
                 attempts = 0
                 while attempts < 3:
-                    # Install new conda environment with the preferred Python version
-                    p = subprocess.Popen(
-                        [
+                    with telemetry.tracer.start_as_current_span(
+                        "CondaPythonRuntime.once_conda_locked.*{subprocess.Popen.conda.create}"
+                    ) as span:
+                        args = [
                             self.conda_path,
                             "create",
                             "-y",
@@ -151,13 +155,23 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             self.path,
                             *self.variant_packages,
                             "python==%s" % self.version if self.is_mamba else "python=%s" % self.version,
-                        ],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        shell=False,
-                        encoding="utf-8",
-                    )
-                    _, stderr = p.communicate()
+                        ]
+                        # Strip user home directory from the path, if any
+                        sanitized_args = copy.copy(args)
+                        sanitized_args[0] = os.path.join("...", os.path.basename(sanitized_args[0]))
+                        sanitized_args[6] = os.path.join("...", os.path.basename(sanitized_args[6]))
+                        span.set_attribute("cmd", " ".join(sanitized_args))
+
+                        # Install new conda environment with the preferred Python version
+                        p = subprocess.Popen(
+                            args,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            shell=False,
+                            encoding="utf-8",
+                        )
+                        _, stderr = p.communicate()
+
                     if not stderr is None and stderr.strip() != "":
                         # Handle most common sporadic conda/mamba failures
                         if "Found incorrect download" in stderr:
@@ -175,9 +189,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         pc_logging.error("conda env install error: %s" % stderr)
                     break
 
-                # Install pip into the newly created conda environment
-                p = subprocess.Popen(
-                    [
+                with telemetry.tracer.start_as_current_span(
+                    "CondaPythonRuntime.once_conda_locked.*{subprocess.Popen.install.pip}"
+                ) as span:
+                    args = [
                         self.conda_path,
                         "install",
                         "-y",
@@ -186,14 +201,23 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         "-p",
                         self.path,
                         "pip",
-                    ],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=False,
-                    encoding="utf-8",
-                )
-                _, stderr = p.communicate()
-                p.returncode
+                    ]
+                    # Strip user home directory from the path, if any
+                    sanitized_args = copy.copy(args)
+                    sanitized_args[0] = os.path.join("...", os.path.basename(sanitized_args[0]))
+                    sanitized_args[6] = os.path.join("...", os.path.basename(sanitized_args[6]))
+                    span.set_attribute("cmd", " ".join(sanitized_args))
+
+                    # Install pip into the newly created conda environment
+                    p = subprocess.Popen(
+                        args,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        shell=False,
+                        encoding="utf-8",
+                    )
+                    _, stderr = p.communicate()
+
                 if not stderr is None and stderr.strip() != "":
                     pc_logging.warning("conda pip install error: %s" % stderr)
                 if p.returncode != 0:

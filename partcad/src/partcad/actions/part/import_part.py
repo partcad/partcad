@@ -2,13 +2,21 @@ from pathlib import Path
 import shutil
 import tempfile
 from typing import Optional
-import partcad.logging as pc_logging
-from partcad.project import Project
-from partcad.adhoc.convert import convert_cad_file
+
+from ... import logging as pc_logging
+from ...project import Project
+from ...adhoc.convert import convert_cad_file
 from .add import add_part_action
 
-def import_part_action(project: Project, kind: str, name: str, source_path: str,
-                       config: Optional[dict] = None, target_format: Optional[str] = None):
+
+def import_part_action(
+    project: Project,
+    kind: str,
+    name: str,
+    source_path: str,
+    config: Optional[dict] = None,
+    target_format: Optional[str] = None,
+):
     """Import an existing part into the project, optionally converting it first using ad-hoc conversion."""
     config = config or {}
     source_path = Path(source_path).resolve()
@@ -19,7 +27,7 @@ def import_part_action(project: Project, kind: str, name: str, source_path: str,
     if not source_path.exists():
         raise ValueError(f"Source file '{source_path}' not found.")
 
-    # Ad-hoc conversion
+    # If a target format is specified, perform ad-hoc conversion before adding to project
     if target_format and target_format != kind:
         temp_dir = Path(tempfile.mkdtemp())
         converted_path = temp_dir / f"{name}.{target_format}"
@@ -33,7 +41,6 @@ def import_part_action(project: Project, kind: str, name: str, source_path: str,
         kind, source_path = target_format, converted_path
         pc_logging.info(f"Ad-hoc conversion successful: {converted_path}")
 
-    # Copy file into project
     target_path = (Path(project.path) / f"{name}.{kind}").resolve()
     if not target_path.exists() or not source_path.samefile(target_path):
         try:
@@ -44,6 +51,10 @@ def import_part_action(project: Project, kind: str, name: str, source_path: str,
     add_part_action(project, kind, str(target_path), config)
     pc_logging.info(f"Part '{name}' imported successfully.")
 
-    # Cleanup temporary files
+    # Cleanup temporary files if ad-hoc conversion was performed
     if source_path != original_source:
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        try:
+            shutil.rmtree(temp_dir)
+            pc_logging.info(f"Cleaned up temporary conversion directory: {temp_dir}")
+        except Exception as e:
+            pc_logging.warning(f"Failed to remove temp directory '{temp_dir}': {e}")

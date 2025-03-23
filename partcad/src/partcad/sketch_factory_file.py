@@ -11,10 +11,12 @@ import os
 
 from .sketch_factory import SketchFactory
 from . import logging as pc_logging
+from . import telemetry
 
 
 # TODO(clairbee): create ShapeFactoryFile to be reused
 #                 by corresponding Sketch, Part and Assembly factories
+@telemetry.instrument()
 class SketchFactoryFile(SketchFactory):
     extension: str
 

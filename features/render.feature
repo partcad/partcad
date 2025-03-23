@@ -11,7 +11,7 @@ Feature: `pc render` command
     Then the command should exit with a status code of "0"
     Then a file named "<filename>" should be created
     Given a file named "partcad.yaml" does not exist
-    Then STDERR should contain "DONE: Render: this:"
+    Then STDERR should contain "DONE: Render: //pub/examples/partcad/produce_assembly_assy:"
     Then STDERR should not contain "WARN:"
 
   # TODO-63: @alexanderilyin: consider extracting `-t readme` as `pc generate readme` command
@@ -49,4 +49,4 @@ Feature: `pc render` command
 # WARN: Skipping rendering of partcad_logo: no image found at ./logo.svg
 # WARN: Skipping rendering of partcad_logo_short: no image found at ./logo.svg
 # WARN: Skipping rendering of primitive: no image found at ./primitive.svg
-# INFO:  DONE: Render: this: 0.02s
+# INFO:  DONE: Render: //pub/examples/partcad/produce_assembly_assy: 0.02s

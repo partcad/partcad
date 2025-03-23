@@ -12,6 +12,7 @@ import typing
 
 import build123d as b3d
 
+from . import telemetry
 from .shape import Shape
 from .shape_ai import ShapeWithAi
 from .sync_threads import threadpool_manager
@@ -25,6 +26,7 @@ class AssemblyChild:
         self.location = location
 
 
+@telemetry.instrument()
 class Assembly(ShapeWithAi):
     path: typing.Optional[str] = None
 
@@ -66,6 +68,7 @@ class Assembly(ShapeWithAi):
     async def _get_shape_real(self, ctx):
         child_shapes = []
 
+        @telemetry.start_as_current_span_async("Assembly._get_shape_real.per_child")
         async def per_child(child):
             # TODO(clairbee): use topods objects here
             item = await child.item.get_build123d(ctx)

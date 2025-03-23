@@ -13,8 +13,10 @@ import typing
 from . import part_factory as pf
 from . import logging as pc_logging
 from .utils import resolve_resource_path, get_child_project_path
+from . import telemetry
 
 
+@telemetry.instrument()
 class PartFactoryAlias(pf.PartFactory):
     source_part_name: str
     source_project_name: typing.Optional[str]

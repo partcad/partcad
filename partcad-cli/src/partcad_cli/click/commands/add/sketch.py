@@ -1,6 +1,14 @@
-import rich_click as click  # import click
-import partcad as pc
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import rich_click as click
 from pathlib import Path
+
+import partcad as pc
+from ...cli_context import CliContext
 
 
 @click.command(help="Add a sketch")
@@ -42,22 +50,33 @@ from pathlib import Path
     # help="Type of the sketch",
 )
 @click.argument("path", type=str)  # help="Path to the file"
-@click.pass_obj
-def cli(ctx, desc, kind, provider, path):
-    prj = ctx.get_project(pc.ROOT)
-    with pc.logging.Process("AddSketch", prj.name):
-        config = {}
-        if desc:
-            config["desc"] = desc
-        if provider:
-            config["provider"] = provider
-            kind_ext = {
-                "ai-cadquery": "py",
-                "ai-openscad": "scad",
-            }
-            if path.lower().endswith((".%s" % kind_ext[kind]).lower()):
-                path = path.rsplit('.', 1)[0] + '.gen.' + kind_ext[kind]
-            else:
-                path += '.gen'
-        if prj.add_sketch(kind, path, config):
-            Path(path).touch()
+@click.pass_context
+def cli(click_ctx: click.Context, desc: str | None, kind: str, provider: str | None, path: str):
+    package = click_ctx.parent.params["package"]
+    cli_ctx: CliContext = click_ctx.obj
+
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        ctx: pc.Context = cli_ctx.get_partcad_context()
+
+        package_obj: pc.Project = ctx.get_project(package)
+        if not package_obj:
+            pc.logging.error(f"Package {package} is not found")
+            return
+        package = package_obj.name
+
+        with pc.logging.Process("AddSketch", package):
+            config = {}
+            if desc:
+                config["desc"] = desc
+            if provider:
+                config["provider"] = provider
+                kind_ext = {
+                    "ai-cadquery": "py",
+                    "ai-openscad": "scad",
+                }
+                if path.lower().endswith((".%s" % kind_ext[kind]).lower()):
+                    path = path.rsplit(".", 1)[0] + ".gen." + kind_ext[kind]
+                else:
+                    path += ".gen"
+            if package_obj.add_sketch(kind, path, config):
+                Path(path).touch()

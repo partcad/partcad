@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2023
 #
 # Author: Roman Kuzmenko
@@ -7,11 +8,8 @@
 # Licensed under Apache License, Version 2.0.
 
 import os
-import shutil
 import threading
 import ruamel.yaml as ruamel
-import sentry_sdk
-from sentry_sdk.integrations.logging import LoggingIntegration
 
 from .context import Context
 from .assembly import Assembly
@@ -24,7 +22,7 @@ from .provider_factory_store import ProviderFactoryStore
 from .part import Part
 from . import consts
 from . import factory
-from .user_config import UserConfig, SentryConfig
+from .user_config import UserConfig
 from . import logging as pc_logging
 
 __version__: str = "0.7.127"
@@ -58,46 +56,6 @@ def init(config_path=None, search_root=True, user_config=UserConfig()) -> Contex
 
     return Context(config_path, search_root=search_root, user_config=user_config)
 
-def init_sentry(sentry_config: SentryConfig):
-    critical_to_ignore = [
-        "action_start: ",
-        "action_end: ",
-    ]
-    debug_to_ignore = [
-        "Starting action",
-        "Finished action",
-    ]
-
-    def before_send(event, hint):
-        # Reduce noise in logs (drop events from "with logging.Process():")
-        if event.get("level") == "critical":
-            # from logging_ansi_terminal.py
-            message = event.get("logentry", {}).get("message")
-            if message and any(message.startswith(prefix) for prefix in critical_to_ignore):
-                return None
-        elif event.get("level") == "debug":
-            # from logging.py
-            message = event.get("logentry", {}).get("message")
-            if message and any(message.startswith(prefix) for prefix in debug_to_ignore):
-                return None
-
-        return event
-
-    sentry_sdk.init(
-        dsn=sentry_config.dsn,
-        release=__version__,
-        debug=sentry_config.debug,
-        shutdown_timeout=sentry_config.shutdown_timeout,
-        enable_tracing=True,
-        attach_stacktrace=False,
-        traces_sample_rate=sentry_config.traces_sample_rate,
-        integrations=[
-            LoggingIntegration(
-                level=pc_logging.ERROR,
-            ),
-        ],
-        before_send=before_send,
-    )
 
 def fini():
     global _partcad_context
@@ -155,7 +113,7 @@ def create_package(dst_path=consts.DEFAULT_PACKAGE_CONFIG, config_options={"priv
     with open(src_path) as f:
         config = yaml.load(f)
     for key, value in config_options.items():
-        key = ''.join(x.capitalize() if i != 0 else x for i, x in enumerate(key.split('_')))
+        key = "".join(x.capitalize() if i != 0 else x for i, x in enumerate(key.split("_")))
         if value and value != "empty":
             config.insert(0, key, value)
 

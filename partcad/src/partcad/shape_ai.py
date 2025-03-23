@@ -15,8 +15,10 @@ from .ai import Ai
 from . import logging as pc_logging
 from .shape import Shape
 from .user_config import user_config
+from . import telemetry
 
 
+@telemetry.instrument()
 class ShapeWithAi(Shape, Ai):
 
     def __init__(self, project_name: str, config):

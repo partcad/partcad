@@ -25,6 +25,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}-devcontainer
   TOTAL_TIMEOUT: 900
   INSTALL_TIMEOUT: 300
+  PC_TELEMETRY_ENVIRONMENT: test
 
 jobs:
   devcontainer:

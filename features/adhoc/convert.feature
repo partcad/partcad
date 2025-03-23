@@ -109,17 +109,17 @@ Feature: `pc adhoc convert` command
   Scenario: Missing input file
     When I run "pc adhoc convert nonexistent.stl test.step"
     Then the command should exit with a status code of "2"
-    And STDOUT should contain "Path 'nonexistent.stl' does not exist."
+    And STDERR should contain "Path 'nonexistent.stl' does not exist."
 
   Scenario: Unsupported output type
     When I run "pc adhoc convert test.stl --input stl --output unknown"
     Then the command should exit with a status code of "2"
-    And STDOUT should contain "Invalid value for '--output': 'unknown'"
+    And STDERR should contain "Invalid value for '--output': 'unknown'"
 
   Scenario: Invalid input type
     When I run "pc adhoc convert test.stl test.step --input unknown --output step"
     Then the command should exit with a status code of "2"
-    And STDOUT should contain "Invalid value for '--input': 'unknown'"
+    And STDERR should contain "Invalid value for '--input': 'unknown'"
 
   Scenario: Convert STL to STEP without specifying output filename
     When I run "pc adhoc convert test.stl --output step"

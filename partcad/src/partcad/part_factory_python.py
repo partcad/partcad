@@ -11,8 +11,10 @@ import os
 
 from .part_factory_file import PartFactoryFile
 from .runtime_python import PythonRuntime
+from . import telemetry
 
 
+@telemetry.instrument()
 class PartFactoryPython(PartFactoryFile):
     runtime: PythonRuntime
     cwd: str

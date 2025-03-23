@@ -11,10 +11,7 @@ import os
 import time
 import socket
 import threading
-from typing import Optional
-
-from partcad.part import Part
-from partcad.project import Project
+from typing import Optional, Any
 
 from .cache import Cache
 from .cache_shape import ShapeCache
@@ -29,11 +26,25 @@ from . import project_factory_tar as rft
 from .sync_threads import threadpool_manager
 from .user_config import UserConfig
 from .utils import *
+from .part import Part
+from .project import Project
 from .provider_request_quote import ProviderRequestQuote
 from .provider_data_cart import *
+from . import telemetry
+
+
+def param_getters(attr_name: str):
+    if attr_name == "import_project":
+
+        def import_project_attr_getter(*args, **_kwargs):
+            return {"package_name": args[2]["name"]}
+
+        return import_project_attr_getter
+    return lambda *_args, **_kwargs: {}
 
 
 # Context
+@telemetry.instrument(attr_getters=param_getters)
 class Context(project_config.Configuration):
     """Stores and caches all imported objects."""
 
@@ -62,6 +73,8 @@ class Context(project_config.Configuration):
     # current_project_path is the package path (not a filesystem path) of the current package
     # It is expected to match 'self.name' of the current package's object
     current_project_path: str
+
+    mates: dict[str, dict[str, Mating]]
 
     class PackageLock(object):
         def __init__(self, ctx, package_name: str):
@@ -497,7 +510,7 @@ class Context(project_config.Configuration):
         self,
         source_interface,
         target_interface,
-        mate_target_config: dict,
+        mate_target_config: dict[str, Any],
         reverse: bool,
     ):
         source_interface_name = source_interface.full_name
@@ -512,7 +525,7 @@ class Context(project_config.Configuration):
         mate = Mating(source_interface, target_interface, mate_target_config, reverse)
         self.mates[source_interface_name][target_interface_name] = mate
 
-    def get_mate(self, source_interface_name, target_interface_name):
+    def get_mate(self, source_interface_name, target_interface_name) -> Mating | None:
         if not source_interface_name in self.mates:
             return None
         if not target_interface_name in self.mates[source_interface_name]:

@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2023
 #
 # Author: Roman Kuzmenko, Aleksandr Ilin
@@ -6,14 +7,13 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
+
 import rich_click as click
 import os, sys
 from packaging.specifiers import SpecifierSet, InvalidSpecifier
 
-import partcad.logging as logging
-from partcad.globals import create_package
-from partcad.consts import ROOT
-from partcad import __version__ as pc_version
+import partcad as pc
+from ..cli_context import CliContext
 
 
 class DynamicPromptOption(click.Option):
@@ -23,15 +23,16 @@ class DynamicPromptOption(click.Option):
             return self.default
         if self.type is click.STRING:
             suffix = f" [default: {self.default if self.default else 'empty'}] : "
-            user_ipt = input(self.prompt+suffix)
+            user_ipt = input(self.prompt + suffix)
             if user_ipt:
                 return user_ipt
         elif self.type is click.BOOL:
             suffix = f" (y/N) [default: {'n/N' if not self.default else 'y/Y'}] : "
-            user_ipt = input(self.prompt+suffix)
+            user_ipt = input(self.prompt + suffix)
             if user_ipt:
                 return user_ipt.lower() in ["y", "yes"]
         return self.default
+
 
 @click.command(help="Create a new PartCAD package in the current directory")
 @click.option(
@@ -92,7 +93,7 @@ class DynamicPromptOption(click.Option):
     "-pv",
     "--partcad",
     type=str,
-    default=f">={pc_version}",
+    default=f">={pc.__version__}",
     cls=DynamicPromptOption,
     help="Required PartCAD version spec string",
     prompt="Enter the required PartCAD version spec string",
@@ -119,36 +120,40 @@ class DynamicPromptOption(click.Option):
     show_envvar=True,
 )
 @click.pass_context
-def cli(ctx: click.rich_context.RichContext, **kwargs):
-    if not ctx.parent.params.get("package") is None:
-        if os.path.isdir(ctx.parent.params.get("package")):
-            dst_path = os.path.join(ctx.parent.params.get("package"), "partcad.yaml")
+@click.pass_obj
+def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs):
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        # ctx: pc.Context = cli_ctx.get_partcad_context()
+
+        if not click_ctx.parent.params.get("package") is None:
+            if os.path.isdir(click_ctx.parent.params.get("package")):
+                dst_path = os.path.join(click_ctx.parent.params.get("package"), "partcad.yaml")
+            else:
+                dst_path = click_ctx.parent.params.get("package")
         else:
-            dst_path = ctx.parent.params.get("package")
-    else:
-        dst_path = "partcad.yaml"
+            dst_path = "partcad.yaml"
 
-    if kwargs.get("interactive"):
-        logging.info("Validating package configuration...")
-        for key in kwargs:
-            if isinstance(kwargs[key], str) and "default: " in kwargs[key]:
-                kwargs[key] = kwargs[key].replace("default: ", "")
-            value = kwargs[key]
-            if value is not None and key.endswith("version"):
-                try:
-                    SpecifierSet(value)
-                except InvalidSpecifier:
-                    logging.error(f"'{value}' is not a valid version string")
-            if key == "name" and value is not None and not value.startswith(ROOT):
-                kwargs[key] = f"{ROOT}{value}"
+        if kwargs.get("interactive"):
+            pc.logging.info("Validating package configuration...")
+            for key in kwargs:
+                if isinstance(kwargs[key], str) and "default: " in kwargs[key]:
+                    kwargs[key] = kwargs[key].replace("default: ", "")
+                value = kwargs[key]
+                if value is not None and key.endswith("version"):
+                    try:
+                        SpecifierSet(value)
+                    except InvalidSpecifier:
+                        pc.logging.error(f"'{value}' is not a valid version string")
+                if key == "name" and value is not None and not value.startswith(pc.ROOT):
+                    kwargs[key] = f"{pc.ROOT}{value}"
 
-        if logging.had_errors:
-            logging.error(f"Failed creating '{dst_path}'!")
-            return
+            if pc.logging.had_errors:
+                pc.logging.error(f"Failed creating '{dst_path}'!")
+                return
 
-    logging.info(f"Creating package configuration at '{dst_path}'...")
-    config_options = {key: value for key, value in kwargs.items() if key != "interactive"}
-    if create_package(dst_path, config_options):
-        logging.info(f"Successfully created package at '{dst_path}'")
-    else:
-        logging.error(f"Failed creating '{dst_path}'!")
+        pc.logging.info(f"Creating package configuration at '{dst_path}'...")
+        config_options = {key: value for key, value in kwargs.items() if key != "interactive"}
+        if pc.create_package(dst_path, config_options):
+            pc.logging.info(f"Successfully created package at '{dst_path}'")
+        else:
+            pc.logging.error(f"Failed creating '{dst_path}'!")
