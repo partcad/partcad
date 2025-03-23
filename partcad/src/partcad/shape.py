@@ -431,12 +431,8 @@ class Shape(ShapeConfiguration):
         return opts, filepath
 
     async def render_async(
-        self,
-        ctx: Context,
-        format_name: str,
-        project: Optional[Project] = None,
-        filepath=None,
-        **kwargs) -> None:
+        self, ctx: Context, format_name: str, project: Optional[Project] = None, filepath=None, **kwargs
+    ) -> None:
         """
         Centralized method to render shape via external wrapper.
         Args:
@@ -447,30 +443,25 @@ class Shape(ShapeConfiguration):
             kwargs: Additional options (width, height, etc.).
         """
         WRAPPER_FORMATS = {
-        "svg": [
-            "cadquery-ocp==7.7.2",
-            "ocpsvg==0.3.4",
-            "build123d==0.8.0"
-        ],
-        "png": [
-            "cadquery-ocp==7.7.2",
-            "ocpsvg==0.3.4",
-            "build123d==0.8.0",
-            "svglib==1.5.1",
-            "reportlab",
-            "rlpycairo==0.3.0"
-        ],
-        "brep": ["cadquery-ocp==7.7.2"],
-        "step": ["cadquery-ocp==7.7.2"],
-        "stl": ["cadquery-ocp==7.7.2"],
-        "obj": ["cadquery-ocp==7.7.2"],
-        "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
-        "gltf": ["cadquery-ocp==7.7.2"],
-        "threejs": ["cadquery-ocp==7.7.2"]
-    }
+            "svg": ["cadquery-ocp==7.7.2", "ocpsvg==0.3.4", "build123d==0.8.0"],
+            "png": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+                "svglib==1.5.1",
+                "reportlab",
+                "rlpycairo==0.3.0",
+            ],
+            "brep": ["cadquery-ocp==7.7.2"],
+            "step": ["cadquery-ocp==7.7.2"],
+            "stl": ["cadquery-ocp==7.7.2"],
+            "obj": ["cadquery-ocp==7.7.2"],
+            "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
+            "gltf": ["cadquery-ocp==7.7.2"],
+            "threejs": ["cadquery-ocp==7.7.2"],
+        }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
-            pc_logging.info(f"{self.project_name}: {self.name} to {format_name.upper()}")
 
             if filepath and os.path.isdir(filepath):
                 self.config_obj.setdefault("render", {})["output_dir"] = filepath
@@ -493,7 +484,7 @@ class Shape(ShapeConfiguration):
                 file_extension = EXTENSION_MAPPING.get(format, format)
                 render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
-                pc_logging.debug(f"Rendering: {filepath} for format '{format}'")
+                pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
 
                 wrapper_path = wrapper.get(f"render_{format}.py")
 
@@ -508,7 +499,9 @@ class Shape(ShapeConfiguration):
 
                 elif format in ["3mf", "obj", "gltf", "stl", "threejs"]:
                     request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
-                    request["angularTolerance"] = kwargs.get("angularTolerance", render_opts.get("angularTolerance", 0.1))
+                    request["angularTolerance"] = kwargs.get(
+                        "angularTolerance", render_opts.get("angularTolerance", 0.1)
+                    )
                     if format == "stl":
                         request["ascii"] = kwargs.get("ascii", render_opts.get("ascii", False))
                     elif format == "gltf":
@@ -562,7 +555,6 @@ class Shape(ShapeConfiguration):
                     )
                 if "exception" in result and result["exception"]:
                     pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
-
 
     def render(
         self,
