@@ -3,12 +3,17 @@ from partcad.actions.part import convert_part_action
 from partcad.context import Context
 import partcad.logging as pc_logging
 
-@click.command(help="Convert parts to another format.")
+
+SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gltf"]
+
+
+@click.command(help="Convert parts, assemblies, or scenes to another format and update their type.")
 @click.argument("object_name", type=str, required=True)
 @click.option(
     "-t", "--target-format",
     help="Target conversion format.",
-    type=click.Choice(["step", "brep", "stl", "3mf", "threejs", "obj", "gltf"]),
+    type=click.Choice(SUPPORTED_CONVERT_FORMATS),
+    required=False
 )
 @click.option(
     "-O", "--output-dir",

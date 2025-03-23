@@ -1,36 +1,16 @@
-import os
 import shutil
 from unittest.mock import patch
 import pytest
 import yaml
 from pathlib import Path
 from partcad.context import Context
-from partcad import Project
 from partcad.actions.part import import_part_action
 
-# Mapping file extensions to formats
-EXTENSION_MAPPING = {
-    "step": "step",
-    "brep": "brep",
-    "stl": "stl",
-    "3mf": "3mf",
-    "threejs": "json",
-    "obj": "obj",
-    "gltf": "gltf",
-}
 
-# Supported formats
-SUPPORTED_FORMATS = list(EXTENSION_MAPPING.keys())
+SOURCE_DIR = Path("/workspaces/partcad/examples/feature_import")
 
-# Source directory with real test files
-SOURCE_DIR = Path("/workspaces/partcad/examples/feature_convert")
-
-# Test parts (real files must exist in SOURCE_DIR)
 PARTS_CONFIG = {
-    "box_brep": {"type": "brep", "path": "brep/box.brep"},
-    "cube_3mf": {"type": "3mf", "path": "3mf/cube.3mf"},
-    "cube_stl": {"type": "stl", "path": "stl/cube.stl"},
-    "bolt_step": {"type": "step", "path": "step/bolt.step"},
+    "cube": {"type": "stl"},
 }
 
 
@@ -41,7 +21,7 @@ def test_import_real_part(source_part: str, tmp_path: Path):
     """
     source_config = PARTS_CONFIG[source_part]
     part_type = source_config["type"]
-    source_file = Path(source_config["path"])
+    source_file = Path(source_config["path"]) if source_config.get("path") else Path(f"{source_part}.{part_type}")
 
     real_source_path = SOURCE_DIR / source_file
     if not real_source_path.exists():
@@ -50,9 +30,6 @@ def test_import_real_part(source_part: str, tmp_path: Path):
     # Set up test project
     project_dir = tmp_path / "test_project"
     project_dir.mkdir()
-    source_path = project_dir / source_file
-    source_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(real_source_path, source_path)
 
     # Create empty configuration
     config_data = {"parts": {}}
@@ -64,7 +41,7 @@ def test_import_real_part(source_part: str, tmp_path: Path):
     project = ctx.get_project("")
 
     # Import part
-    import_part_action(project, part_type, source_part, str(source_path))
+    import_part_action(project, part_type, source_part, str(real_source_path))
 
     # Reload config after import
     ctx = Context(str(project_dir))

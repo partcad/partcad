@@ -320,6 +320,58 @@ Here is an example of how to use the newly added solid:
     # Before "show_object"
     ...
 
+Import an Assembly
+------------------
+
+The ``pc import assembly`` command allows you to import an assembly from a STEP file.
+This command automatically parses the STEP file, extracts individual parts,
+and creates an assembly YAML file that records each part along with its transformation data.
+
+Usage
+^^^^^
+
+.. code-block:: shell
+
+   # Import an assembly from a STEP file with an optional description
+   pc import assembly step my_assembly.step --desc "Optional assembly description"
+
+Functionality
+^^^^^^^^^^^^^
+
+- **File Parsing:**
+  The command first attempts to parse the STEP file using an XDE-based approach.
+  If no parts are found via XDE, it falls back to a classic STEP parsing method.
+
+- **Duplicate Filtering:**
+  Unique parts are identified by comparing the geometric data and applied transformations.
+  Duplicate entries are discarded based on a composite key of shape identifier and transformation.
+
+- **Part Extraction:**
+  Each unique SOLID is saved as a separate STEP file in a dedicated subfolder.
+  The transformation (translation and rotation) of each part is recorded and later used in the assembly.
+
+- **Assembly Creation:**
+  An assembly YAML file is generated, linking the parts (by file name) with their transformation data.
+  This YAML file is then added to the project, finalizing the assembly import.
+
+Example Log Output
+^^^^^^^^^^^^^^^^^^
+
+.. code-block:: text
+
+   INFO: Detected an assembly with 5 parts.
+   INFO: Saving parts in folder: ./my_assembly
+   INFO: Imported part: my_assembly_part1 → my_assembly/my_assembly_part1.step
+   INFO:   Location: [[tx, ty, tz], [rx, ry, rz], rotation_angle]
+   INFO: Assembly 'my_assembly_assy' successfully added with 5 parts.
+
+Notes
+^^^^^
+
+- The STEP file must contain more than one SOLID to be considered an assembly.
+- If the file does not represent an assembly (i.e. only a single SOLID is found), the command will raise an error.
+- The transformation data is recorded as a combination of translation and rotation (axis and angle),
+  enabling precise placement of each part within the assembly.
 
 Create an assembly
 ------------------

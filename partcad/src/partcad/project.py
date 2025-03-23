@@ -1130,10 +1130,7 @@ class Project(project_config.Configuration):
             pc_logging.error("Can't add files outside of the package")
             return False, None, None
 
-        path = path[len(root) :]
-        if path[0] == os.path.sep:
-            path = path[1:]
-
+        path = os.path.relpath(path, root).replace("\\", "/")
         name = path
         if name.lower().endswith((".%s" % extension).lower()):
             name = name[: -len(extension) - 1]
@@ -1288,7 +1285,7 @@ class Project(project_config.Configuration):
     async def _run_test_async(self, ctx, tests: list, use_wrapper: bool = False) -> bool:
         tasks = []
         test_method = "test_log_wrapper" if use_wrapper else "test_cached"
-  
+
         def get_objects(config_dict, getter):
             for name in config_dict:
                 obj = getter(name)
