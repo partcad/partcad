@@ -34,7 +34,7 @@ def cli(cli_ctx: CliContext, provider):
             for provider_spec in provider:
                 p = ctx.get_provider(provider_spec)
                 if not p:
-                    pc.logging.error(f"Provider {p} not found.")
+                    pc.logging.error(f"Provider {provider_spec} not found.")
                     return
                 req = pc.provider_request_caps.ProviderRequestCaps()
                 caps = asyncio.run(p.query_caps(req))

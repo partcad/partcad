@@ -476,8 +476,6 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 traceback.print_exc()
                 raise click.Abort from e
 
-            return None
-
         ctx.obj.get_partcad_context = get_partcad_context
 
 

@@ -36,12 +36,12 @@ class PartFactoryStl(PartFactoryFile):
             request_serialized = base64.b64encode(picklestring).decode()
 
             runtime = self.ctx.get_python_runtime("3.11")
-            response_serialized, errors = await runtime.run_async(
-                [wrapper_path, os.path.abspath(self.path)],
-                request_serialized,
-            )
-
-            sys.stderr.write(errors)
+            with telemetry.tracer.start_as_current_span("*PartFactoryStl.instantiate.{runtime.run_async}"):
+                response_serialized, errors = await runtime.run_async(
+                    [wrapper_path, os.path.abspath(self.path)],
+                    request_serialized,
+                )
+                sys.stderr.write(errors)
 
             try:
                 response = base64.b64decode(response_serialized)

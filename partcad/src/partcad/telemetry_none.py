@@ -12,12 +12,6 @@ class NoneSpan(Span):
     def __init__(self):
         pass
 
-    def set_attribute(self, key, value):
-        pass
-
-    def set_status(self, status):
-        pass
-
     def end(self):
         pass
 
@@ -46,7 +40,7 @@ class NoneSpan(Span):
         pass
 
     def __enter__(self):
-        pass
+        return self
 
     def __exit__(self, *args):
         pass
