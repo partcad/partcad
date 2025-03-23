@@ -312,7 +312,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
                 setattr(user_config, attrib, value)
 
     if ctx.invoked_subcommand in commands_with_forced_update:
-        user_config.force_update = True        
+        user_config.force_update = True
 
     # TODO-88: @alexanderilyin: try to get this list dynamically
     commands_with_context = [
@@ -329,6 +329,7 @@ def cli(ctx, verbose, quiet, no_ansi, package, format, **kwargs):
         "supply",  # Actually context is needed for "quote" but for now it it is what it is
         "test",
         "update",
+        "search"
     ]
 
     if ctx.invoked_subcommand in commands_with_context:
