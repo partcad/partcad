@@ -136,8 +136,7 @@ The `pc adhoc convert` command allows you to quickly convert a CAD file from one
 Supported formats:
 ------------------
 - **Input:** STL, STEP, BREP, 3MF, SCAD, CadQuery, Build123d
-- **Output:** STL, STEP, BREP, 3MF, ThreeJS, OBJ, GLTF
-
+- **Output:** STL, STEP, BREP, 3MF, ThreeJS, OBJ, GLTF, IGES
 Examples:
 ---------
 
@@ -208,6 +207,7 @@ Supported formats:
 - Three.js (JSON)
 - OBJ
 - glTF (JSON)
+- IGES
 
 .. note::
     - The object must exist in the `partcad.yaml` file and be defined as a part.

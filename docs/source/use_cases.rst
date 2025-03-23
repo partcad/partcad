@@ -119,6 +119,8 @@ model file formats, including:
   - `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_
   - `ThreeJS <https://en.wikipedia.org/wiki/Three.js>`_
   - `OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_
+  - `GLTF <https://en.wikipedia.org/wiki/GlTF>`_
+  - `IGES <https://en.wikipedia.org/wiki/IGES>`_
 
 Expect more output formats to be added to the list of supported export formats
 in the future.
