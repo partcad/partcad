@@ -49,7 +49,7 @@ from . import interactive
 from . import provider_request_caps
 
 from .user_config import UserConfig
-
+from . import actions
 
 # TODO: remove partcad old version usage from vscode extension
 # /home/vscode/.vscode-server/extensions/openvmp.partcad-0.7.15/bundled/tool/lsp_server.py:690:        partcad.plugins.export_png = partcad.PluginExportPngReportlab()
@@ -94,4 +94,5 @@ __all__ = [
     "telemetry",
     "user_config",
     "utils",
+    "actions",
 ]

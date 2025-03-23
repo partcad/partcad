@@ -249,6 +249,15 @@ class Project(project_config.Configuration):
     #             self.path + "/" + self.config_obj["cover"]["package"]
     #         ).get_cover()
 
+    def matches(self, keyword: str) -> bool:
+        if not keyword:
+            return False
+        keyword = keyword.lower()
+
+        if keyword in str(self.config_obj).lower() or keyword in self.name.lower():
+            return True
+        return False
+
     def get_child_project_names(self, absolute: bool = True):
         if self.broken:
             pc_logging.info("Ignoring the broken package: %s" % self.name)

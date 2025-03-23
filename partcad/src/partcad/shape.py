@@ -113,6 +113,22 @@ class Shape(ShapeConfiguration):
                     cad_config[key] = self.config[key]
             self.hash.add_dict(cad_config)
 
+    def matches(self, keyword: str) -> bool:
+        if not keyword:
+            return False
+        keyword = keyword.lower()
+
+        # Check for a match in its configuration
+        if keyword in str(self.config).lower() or keyword in self.name.lower():
+            return True
+
+        # Check for a match in other files associated with this shape
+        if self.path and os.path.exists(self.path):
+            with open(self.path, errors='replace') as f:
+                if keyword and keyword.lower() in f.read().lower():
+                    return True
+        return False
+
     def get_cache_dependencies_broken(self) -> bool:
         if self.cache_dependencies_ignore:
             return False
