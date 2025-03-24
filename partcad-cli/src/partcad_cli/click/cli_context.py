@@ -8,6 +8,6 @@ from opentelemetry import context
 
 
 class CliContext:
-    def __init__(self, otel_context: context.Context):
+    def __init__(self, otel_context: context.Context, get_partcad_context):
         self.otel_context = otel_context
-        self.get_partcad_context = lambda: None
+        self.get_partcad_context = get_partcad_context

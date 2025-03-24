@@ -104,7 +104,12 @@ def instrument_span_async(name, category: str = ""):
     return decorator
 
 
-def instrument(exclude: list = [], attr_getters=lambda attr_value: lambda *args, **kwargs: {}):
+def instrument(exclude: list | None = None, attr_getters=None):
+    if exclude is None:
+        exclude = []
+    if attr_getters is None:
+        attr_getters = lambda attr_value: lambda *args, **kwargs: {}
+
     def decorator(cls):
         for attr_name, attr_value in vars(cls).items():
             if callable(attr_value) and not inspect.isclass(attr_value) and attr_name not in exclude:

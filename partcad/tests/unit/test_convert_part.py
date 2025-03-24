@@ -5,7 +5,6 @@ import partcad.logging as pc_logging
 from partcad.context import Context
 from partcad.actions.part import convert_part_action
 import yaml
-from unittest.mock import patch, Mock
 
 from partcad.shape import EXTENSION_MAPPING
 
@@ -85,7 +84,7 @@ def test_enrich_conversion(source_part: str, target_format: str, tmp_path: Path)
     config_data = {
         "parts": {
             "cube": {"type": "cadquery", "path": "cube.py"},
-            source_part: {"type": "enrich", "source": ":cube", "with": {"width": 15, "height": 20}}
+            source_part: {"type": "enrich", "source": ":cube", "with": {"width": 15, "height": 20}},
         }
     }
 
@@ -119,10 +118,7 @@ def test_alias_conversion(source_part: str, target_format: str, tmp_path: Path):
 
     yaml_path = project_dir / "partcad.yaml"
     config_data = {
-        "parts": {
-            "cube": {"type": "cadquery", "path": "cube.py"},
-            source_part: {"type": "alias", "source": ":cube"}
-        }
+        "parts": {"cube": {"type": "cadquery", "path": "cube.py"}, source_part: {"type": "alias", "source": ":cube"}}
     }
 
     with open(yaml_path, "w", encoding="utf-8") as f:
@@ -141,7 +137,6 @@ def test_alias_conversion(source_part: str, target_format: str, tmp_path: Path):
     assert expected_file.exists(), f"Alias conversion failed, expected file not found: {expected_file}"
 
 
-
 def test_parse_parameters_in_source_name():
     """Test parsing of parameters embedded in the source name."""
     from partcad.actions.part.convert import get_final_base_part_config, update_parameters_with_defaults
@@ -152,10 +147,7 @@ def test_parse_parameters_in_source_name():
     mock_project.ctx.get_project.return_value = mock_project
     mock_project.get_part_config.return_value = {
         "type": "cadquery",
-        "parameters": {
-            "width": {"type": "float", "default": 10.0},
-            "height": {"type": "float", "default": 5.0}
-        }
+        "parameters": {"width": {"type": "float", "default": 10.0}, "height": {"type": "float", "default": 5.0}},
     }
 
     config, base_project, base_part_name = get_final_base_part_config(
@@ -164,12 +156,12 @@ def test_parse_parameters_in_source_name():
             "source": "cube;width=15.0,height=20.0",
             "type": "cadquery",
         },
-        "cube_with_params"
+        "cube_with_params",
     )
 
     source_params = "width=15.0,height=20.0"
-    for param in source_params.split(','):
-        param_name, param_value = param.split('=')
+    for param in source_params.split(","):
+        param_name, param_value = param.split("=")
         if "parameters" not in config:
             config["parameters"] = {}
         config["parameters"][param_name] = {"type": "float", "default": float(param_value)}
@@ -191,10 +183,7 @@ def test_alias_conversion(tmp_path: Path):
 
     yaml_path = project_dir / "partcad.yaml"
     config_data = {
-        "parts": {
-            "cube": {"type": "cadquery", "path": "cube.py"},
-            "cube_alias": {"type": "alias", "source": ":cube"}
-        }
+        "parts": {"cube": {"type": "cadquery", "path": "cube.py"}, "cube_alias": {"type": "alias", "source": ":cube"}}
     }
     with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config_data, f)
@@ -223,7 +212,7 @@ def test_enrich_conversion(tmp_path: Path):
     config_data = {
         "parts": {
             "cube": {"type": "cadquery", "path": "cube.py"},
-            "cube_enrich": {"type": "enrich", "source": "cube", "with": {"width": 15.0, "height": 20.0}}
+            "cube_enrich": {"type": "enrich", "source": "cube", "with": {"width": 15.0, "height": 20.0}},
         }
     }
     with open(yaml_path, "w", encoding="utf-8") as f:

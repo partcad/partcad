@@ -381,7 +381,6 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
     with pc.telemetry.tracer.start_as_current_span("cli", attributes=flat_params, end_on_exit=False) as span:
         global cli_span
         cli_span = span
-        ctx.obj = CliContext(otel_context=pc.telemetry.context.get_current())
 
         def telemetry_atexit():
             pc.logging.debug("Flushing Sentry SDK events")
@@ -476,7 +475,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 traceback.print_exc()
                 raise click.Abort from e
 
-        ctx.obj.get_partcad_context = get_partcad_context
+        ctx.obj = CliContext(otel_context=pc.telemetry.context.get_current(), get_partcad_context=get_partcad_context)
 
 
 cli.context_settings = {

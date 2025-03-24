@@ -37,14 +37,15 @@ def init_sentry(version: str) -> None:
 
     # TODO(clairbee): use an on/off switch in the user_config
     if not sentry_sdk.is_initialized() and user_config.telemetry_config.sentry_dsn:
-        critical_to_ignore = [
+        # The following must be tuples for startswith() to work
+        critical_to_ignore = (
             "action_start: ",
             "action_end: ",
-        ]
-        debug_to_ignore = [
+        )
+        debug_to_ignore = (
             "Starting action",
             "Finished action",
-        ]
+        )
 
         def before_send(event: sentry_sdk.types.Event, hint):
             # Reduce noise in logs (drop events from "with logging.Process():")

@@ -11,7 +11,6 @@ from partcad.actions.part import convert_part_action
 from ..cli_context import CliContext
 
 
-
 SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gltf", "iges"]
 
 
@@ -22,7 +21,7 @@ SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gl
     "--target-format",
     help="Target conversion format.",
     type=click.Choice(SUPPORTED_CONVERT_FORMATS),
-    required=False
+    required=False,
 )
 @click.option(
     "-P",
@@ -55,14 +54,10 @@ def cli(cli_ctx: CliContext, object_name: str, target_format: str, package: str,
         package_obj = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
-            return
+            raise click.UsageError("Failed to retrieve the project.")
         package = package_obj.name
 
         pc.logging.info(f"Starting conversion: '{object_name}' -> '{target_format}', dry_run={dry_run}")
-
-        if not package_obj:
-            pc.logging.error("Project retrieval failed. Ensure you are inside a valid PartCAD project.")
-            raise click.UsageError("Failed to retrieve the project.")
 
         try:
             # pc.logging.Process() is done inside "convert_part_action"
