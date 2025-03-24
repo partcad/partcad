@@ -9,7 +9,7 @@ from unittest.mock import patch, Mock
 
 from partcad.shape import EXTENSION_MAPPING
 
-ALLOWED_TARGET_FORMATS = {"step", "brep", "stl", "3mf", "threejs", "obj"}
+ALLOWED_TARGET_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gltf"]
 
 SOURCE_DIR = Path("./examples/feature_convert")
 
@@ -24,7 +24,7 @@ PARTS_CONFIG = {
 }
 
 
-@pytest.mark.parametrize("source_part", PARTS_CONFIG.keys())
+@pytest.mark.parametrize("source_part", sorted(PARTS_CONFIG.keys()))
 @pytest.mark.parametrize("target_format", ALLOWED_TARGET_FORMATS)
 def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: Path):
     """Test converting every supported input format to allowed output formats."""
