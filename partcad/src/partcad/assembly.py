@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
+import copy
 import typing
 
 import build123d as b3d
@@ -68,10 +69,12 @@ class Assembly(ShapeWithAi):
         async def per_child(child):
             # TODO(clairbee): use topods objects here
             item = await child.item.get_build123d(ctx)
-            if child.name is not None:
-                item.label = child.name
-            if child.location is not None:
-                item.locate(child.location)
+            if child.name is not None or child.location is not None:
+                item = copy.copy(item)
+                if child.name is not None:
+                    item.label = child.name
+                if child.location is not None:
+                    item.locate(child.location)
             return item
 
         if len(self.children) == 0:

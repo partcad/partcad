@@ -59,6 +59,8 @@ class CacheHash:
                 for k in sorted(val.keys()):
                     self.hasher.update(str(k).encode())
                     recurse(val[k])
+            elif isinstance(val, str):
+                self.hasher.update(val.encode())
             elif isinstance(val, (list, tuple, set)):
                 for item in sorted(val) if not isinstance(val, list) else val:
                     recurse(item)
