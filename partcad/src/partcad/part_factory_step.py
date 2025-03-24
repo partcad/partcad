@@ -33,134 +33,36 @@ from ocp_serialize import register as register_ocp_helper
 
 
 class PartFactoryStep(PartFactoryFile):
-    # How many STEP files should be loaded directly simultaneously (without
-    # launching a subprocess), no matter the file size.
-    MIN_SIMPLE_INFLIGHT = 1
-
-    # How big of a STEP file is needed to consider launching a sub-process.
-    MIN_SUBPROCESS_FILE_SIZE = 64 * 1024
-
-    # lock is used to protect changes to the static class members
     lock = threading.Lock()
-    # How many of the current instances are in which mode?
-    count_inflight_simple = 0
-    count_inflight_subprocess = 0
 
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         with pc_logging.Action("InitSTEP", target_project.name, config["name"]):
-            super().__init__(
-                ctx,
-                source_project,
-                target_project,
-                config,
-                extension=".step",
-                can_create=can_create,
-            )
-            # Complement the config object here if necessary
+            super().__init__(ctx, source_project, target_project, config, extension=".step", can_create=can_create)
             self._create(config)
 
-            self.runtime = None
+            self.runtime = self.ctx.get_python_runtime("3.11")
 
     async def instantiate(self, part):
         await super().instantiate(part)
-
         with pc_logging.Action("STEP", part.project_name, part.name):
-            do_subprocess = False
+            wrapper_path = wrapper.get("step.py")
+            request = {"build_parameters": {}}
+            register_ocp_helper()
+            picklestring = pickle.dumps(request)
+            request_serialized = base64.b64encode(picklestring).decode()
 
-            pc_logging.debug("STEP path: %s" % part.path)
-            file_size = os.path.getsize(part.path)
-
-            with PartFactoryStep.lock:
-                if (
-                    PartFactoryStep.count_inflight_simple < PartFactoryStep.MIN_SIMPLE_INFLIGHT
-                    or file_size < PartFactoryStep.MIN_SUBPROCESS_FILE_SIZE
-                ):
-                    PartFactoryStep.count_inflight_simple += 1
-                else:
-                    do_subprocess = True
-                    PartFactoryStep.count_inflight_subprocess += 1
-                    if self.runtime == None:
-                        # We don't care about customer preferences much here
-                        # as this is expected to be hermetic.
-                        # Stick to the version where CadQuery is known to work.
-                        self.runtime = self.ctx.get_python_runtime("3.11")
-
-            if do_subprocess:
-                wrapper_path = wrapper.get("step.py")
-
-                request = {"build_parameters": {}}
-                register_ocp_helper()
-                picklestring = pickle.dumps(request)
-                request_serialized = base64.b64encode(picklestring).decode()
-
-                response_serialized, errors = await self.runtime.run_async(
-                    [
-                        wrapper_path,
-                        os.path.abspath(part.path),
-                        os.path.abspath(self.project.config_dir),
-                    ],
-                    request_serialized,
-                )
-                sys.stderr.write(errors)
-
-                response = base64.b64decode(response_serialized)
-                register_ocp_helper()
-                result = pickle.loads(response)
-
-                if not result["success"]:
-                    pc_logging.error(result["exception"])
-                    raise Exception(result["exception"])
-                shape = result["shape"]
-            else:
-                # Thanks for OCP deficiencies in handling of GIL,
-                # as soon as 'importStep()' is called, all of other Python
-                # threads are going to be frozen, so we need to give other
-                # threads an opportunity to spawn processes to stay busy during
-                # the 'importStep()' call.
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                time.sleep(0.0001)
-                # TODO(clairbee): remove sleep calls when GIL is fixed in CQ
-
-                reader = STEPControl_Reader()
-
-                readStatus = reader.ReadFile(part.path)
-                if readStatus != OCP.IFSelect.IFSelect_RetDone:
-                    raise ValueError("STEP File could not be loaded")
-                for i in range(reader.NbRootsForTransfer()):
-                    reader.TransferRoot(i + 1)
-
-                builder = TopoDS_Builder()
-                compound = TopoDS_Compound()
-                builder.MakeCompound(compound)
-                for i in range(reader.NbShapes()):
-                    occ_shape = reader.Shape(i + 1)
-                    builder.Add(compound, occ_shape)
-                shape = compound
-
-            with PartFactoryStep.lock:
-                if do_subprocess:
-                    PartFactoryStep.count_inflight_subprocess -= 1
-                else:
-                    PartFactoryStep.count_inflight_simple -= 1
+            response_serialized, errors = await self.runtime.run_async(
+                [wrapper_path, os.path.abspath(part.path), os.path.abspath(self.project.config_dir)],
+                request_serialized,
+            )
+            sys.stderr.write(errors)
+            response = base64.b64decode(response_serialized)
+            register_ocp_helper()
+            result = pickle.loads(response)
+            if not result["success"]:
+                pc_logging.error(result["exception"])
+                raise Exception(result["exception"])
+            shape = result["shape"]
 
             self.ctx.stats_parts_instantiated += 1
-
             return shape

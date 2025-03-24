@@ -29,6 +29,7 @@ import traceback
 from typing import Any, Optional, Sequence
 
 from lsp_server_pipe import *
+from partcad.part import Part
 
 
 # **********************************************************
@@ -346,22 +347,9 @@ def export_part(params: lsp.ExecuteCommandParams = None):
     def export_part_internal(package_name, part_name, params):
         global partcad, partcad_ctx
         with partcad.logging.Process("Export", package_name, part_name):
-            part = partcad_ctx.get_part(package_name + ":" + part_name, params)
+            part: Part = partcad_ctx.get_part(package_name + ":" + part_name, params)
             if part:
-                if exportType == "svg":
-                    part.render_svg(filepath=path)
-                if exportType == "png":
-                    part.render_png(filepath=path)
-                if exportType == "step":
-                    part.render_step(filepath=path)
-                if exportType == "stl":
-                    part.render_stl(filepath=path)
-                if exportType == "3mf":
-                    part.render_3mf(filepath=path)
-                if exportType == "threejs":
-                    part.render_threejs(filepath=path)
-                if exportType == "obj":
-                    part.render_obj(filepath=path)
+                part.render(partcad_ctx, exportType, filepath=path)
 
     th = threading.Thread(
         target=export_part_internal,
@@ -391,20 +379,7 @@ def export_assembly(params: lsp.ExecuteCommandParams = None):
         with partcad.logging.Process("Export", package_name, assembly_name):
             assembly = partcad_ctx.get_assembly(package_name + ":" + assembly_name, params)
             if assembly:
-                if exportType == "svg":
-                    assembly.render_svg(filepath=path)
-                if exportType == "png":
-                    assembly.render_png(filepath=path)
-                if exportType == "step":
-                    assembly.render_step(filepath=path)
-                if exportType == "stl":
-                    assembly.render_stl(filepath=path)
-                if exportType == "3mf":
-                    assembly.render_3mf(filepath=path)
-                if exportType == "threejs":
-                    assembly.render_threejs(filepath=path)
-                if exportType == "obj":
-                    assembly.render_obj(filepath=path)
+                assembly.render(partcad_ctx, exportType, filepath=path)
 
     th = threading.Thread(
         target=export_assembly_internal,

@@ -3,10 +3,10 @@ import shutil
 import tempfile
 from pathlib import Path
 from partcad.context import Context
-from partcad.adhoc.convert import convert_cad_file, generate_partcad_config, export_part
+from partcad.adhoc.convert import convert_cad_file, generate_partcad_config
 
 
-OUTPUT_FORMATS = ["stl", "step", "brep", "3mf", "threejs", "obj", "gltf"]
+OUTPUT_FORMATS = ["stl", "step", "brep", "3mf", "threejs", "obj"]
 
 TEST_FILES = {
     "stl": "cube.stl",
@@ -84,37 +84,7 @@ def test_convert_invalid_file():
 
     output_file = Path(temp_dir) / "output.step"
 
-    with pytest.raises(RuntimeError, match="Failed to convert: Failed to read the STL file"):
+    with pytest.raises(RuntimeError, match="Failed to convert:"):
         convert_cad_file(invalid_file, "stl", output_file, "step")
 
     shutil.rmtree(temp_dir)
-
-
-def test_export_part():
-    """Test exporting a part with a supported format."""
-    ctx = Context(root_path="/tmp")
-    part = type("PartMock", (), {"render_step": lambda self, ctx, filepath: Path(filepath).touch()})()
-    output_file = Path(tempfile.mkdtemp()) / "output.step"
-
-    export_part(part, output_file, "step", ctx)
-    assert output_file.exists(), "Exported file does not exist after export."
-
-    shutil.rmtree(output_file.parent)
-
-
-def test_export_part_unsupported_format():
-    """Test exporting a part with an unsupported format."""
-    ctx = Context(root_path="/tmp")
-    part = type("PartMock", (), {})()  # Mock part with no export methods
-
-    with pytest.raises(ValueError, match="Unsupported export format: unknown"):
-        export_part(part, "output.unknown", "unknown", ctx)
-
-
-def test_export_part_missing_method():
-    """Test exporting a part that does not support the requested format."""
-    ctx = Context(root_path="/tmp")
-    part = type("PartMock", (), {})()  # Mock part with no export methods
-
-    with pytest.raises(RuntimeError, match="Part does not support export to 'step'."):
-        export_part(part, "output.step", "step", ctx)

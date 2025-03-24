@@ -15,11 +15,14 @@ import os
 import re
 
 # from pprint import pformat
+from rich_click import Path
 import ruamel.yaml
 import threading
 import typing
 
 from typing import Optional, List
+
+from partcad.shape import Shape
 
 from . import consts
 from . import factory
@@ -63,6 +66,7 @@ from .utils import resolve_resource_path, normalize_resource_path
 
 if TYPE_CHECKING:
     from partcad.context import Context
+
 
 class Project(project_config.Configuration):
 
@@ -1324,187 +1328,106 @@ class Project(project_config.Configuration):
 
     async def render_async(
         self,
-        sketches=None,
-        interfaces=None,
-        parts=None,
-        assemblies=None,
-        format=None,
-        output_dir=None,
+        sketches: Optional[List] = None,
+        interfaces: Optional[List] = None,
+        parts: Optional[List] = None,
+        assemblies: Optional[List] = None,
+        format: Optional[str] = None,
+        output_dir: Optional[Path] = None,
     ):
         with pc_logging.Action("RenderPkg", self.name):
             # Override the default output_dir.
             # TODO(clairbee): pass the preference downstream without making a
             # persistent change.
-            if not output_dir is None:
-                if not "render" in self.config_obj or self.config_obj["render"] is None:
-                    self.config_obj["render"] = {}
-                self.config_obj["render"]["output_dir"] = output_dir
+
+            if output_dir:
+                self.config_obj.setdefault("render", {})["output_dir"] = output_dir
 
             render = self.config_obj.get("render", {})
-            if render is None:
-                render = {}
-
-            # Enumerating all parts and assemblies
-            if sketches is None:
-                sketches = []
-                if "sketches" in self.config_obj and not self.config_obj["sketches"] is None:
-                    sketches = self.config_obj["sketches"].keys()
-            if interfaces is None:
-                interfaces = []
-                if "interfaces" in self.config_obj and not self.config_obj["interfaces"] is None:
-                    interfaces = self.config_obj["interfaces"].keys()
-            if parts is None:
-                parts = []
-                if "parts" in self.config_obj and not self.config_obj["parts"] is None:
-                    parts = self.config_obj["parts"].keys()
-            if assemblies is None:
-                assemblies = []
-                if "assemblies" in self.config_obj and not self.config_obj["assemblies"] is None:
-                    assemblies = self.config_obj["assemblies"].keys()
-
-            # Enumerate
-            shapes = []
-            for name in sketches:
-                shape = self.get_sketch(name)
-                shapes.append(shape)
-            for name in interfaces:
-                shape = self.get_interface(name)
-                # TODO(clairbee): interfaces are not yet renderable.
-                # shapes.append(shape)
-            for name in parts:
-                shape = self.get_part(name)
-                shapes.append(shape)
-            for name in assemblies:
-                shape = self.get_assembly(name)
-                shapes.append(shape)
-
-            # Render
-            tasks = []
-
-            def _should_render_format(
-                format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str
-            ) -> bool:
-                """Helper function to determine if a format should be rendered"""
-                plural_shape_kind = {
-                    "part": "parts",
-                    "assembly": "assemblies",
-                    "sketch": "sketches",
-                    "interface": "interfaces",
-                    "providers": "providers",
-                }
-                if (
-                    format_name in shape_render
-                    and shape_render[format_name] is not None
-                    and not isinstance(shape_render[format_name], str)
-                    and plural_shape_kind.get(shape_kind, None) in shape_render.get(format_name, {}).get("exclude", [])
-                ):
-                    return False
-                return (current_format is None and format_name in shape_render) or (
-                    current_format is not None and current_format == format_name
-                )
-
-            # Map of format names to their corresponding async render functions
-            render_formats = {
-                "svg": "render_svg_async",
-                "png": "render_png_async",
-                "step": "render_step_async",
-                "stl": "render_stl_async",
-                "3mf": "render_3mf_async",
-                "threejs": "render_threejs_async",
-                "obj": "render_obj_async",
-                "gltf": "render_gltf_async",
-                "brep": "render_brep_async",
-            }
+            shapes: List[Shape] = self._enumerate_shapes(sketches, interfaces, parts, assemblies)
 
             if None in shapes:
                 raise EmptyShapesError
 
-            for shape in shapes:
-                shape_render = copy.copy(render)
-                if "render" in shape.config and shape.config["render"] is not None:
-                    shape_render = render_cfg_merge(shape_render, shape.config["render"])
+            tasks = []
+            render_formats = ["svg", "png", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep"]
 
-                # Dynamically check and add tasks for each render format
-                for format_name, render_func_name in render_formats.items():
-                    if _should_render_format(format_name, shape_render, format, shape.kind):
-                        if hasattr(shape, render_func_name):
-                            # skip rendering objects that are not finalized
-                            if not hasattr(shape, "finalized") or shape.finalized:
-                                render_func = getattr(shape, render_func_name)
-                                tasks.append(render_func(self.ctx, self))
-                        else:
-                            pc_logging.warn(f"Shape {shape.kind} does not support {format_name} rendering")
+            for shape in shapes:
+
+                if not shape.finalized:
+                    pc_logging.warning(f"{shape.name} is not finalized")
+                    continue
+
+                shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
+                for format_name in render_formats:
+                    if self._should_render_format(format_name, shape_render, format, shape.kind):
+                        tasks.append(
+                            shape.render_async(
+                                ctx=self.ctx,
+                                format_name=format_name,
+                                project=self,
+                                filepath=None,
+                            )
+                        )
 
             await asyncio.gather(*tasks)
 
             if format == "readme" or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
 
+    def _enumerate_shapes(self, sketches, interfaces, parts, assemblies):
+        def get_keys(name):
+            return list(self.config_obj.get(name, {}).keys()) if name in self.config_obj else []
+
+        sketches = sketches or get_keys("sketches")
+        # interfaces = sketches or get_keys("interfaces")
+        parts = parts or get_keys("parts")
+        assemblies = assemblies or get_keys("assemblies")
+
+        shapes = []
+        for name in sketches:
+            shapes.append(self.get_sketch(name))
+        for name in parts:
+            shapes.append(self.get_part(name))
+        for name in assemblies:
+            shapes.append(self.get_assembly(name))
+        # TODO(clairbee): interfaces are not yet renderable.
+        # for name in interfaces: shapes.append(self.get_interface(name))
+
+        return shapes
+
+    def _should_render_format(
+        self, format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str
+    ) -> bool:
+        """Helper function to determine if a format should be rendered"""
+        plural_shape_kind = {
+            "part": "parts",
+            "assembly": "assemblies",
+            "sketch": "sketches",
+            "interface": "interfaces",
+            "providers": "providers",
+        }
+        if (
+            format_name in shape_render
+            and shape_render[format_name] is not None
+            and not isinstance(shape_render[format_name], str)
+            and plural_shape_kind.get(shape_kind, None) in shape_render.get(format_name, {}).get("exclude", [])
+        ):
+            return False
+        return (current_format is None and format_name in shape_render) or (
+            current_format is not None and current_format == format_name
+        )
+
     def render(
         self,
-        sketches=None,
-        interfaces=None,
-        parts=None,
-        assemblies=None,
-        format=None,
-        output_dir=None,
+        sketches: Optional[list] = None,
+        interfaces: Optional[list] = None,
+        parts: Optional[list] = None,
+        assemblies: Optional[list] = None,
+        format: Optional[str] = None,
+        output_dir: Optional[Path] = None,
     ):
         asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
-
-    async def async_convert(
-        self,
-        sketches: Optional[List[str]] = None,
-        interfaces: Optional[List[str]] = None,
-        parts: Optional[List[str]] = None,
-        assemblies: Optional[List[str]] = None,
-        target_format: Optional[str] = None,
-        output_dir: Optional[str] = None,
-    ) -> None:
-        """Asynchronously convert specified objects to a target format."""
-        if not target_format:
-            raise ValueError("Target format must be specified for conversion.")
-
-        with pc_logging.Action("Convert", self.name):
-            shapes = []
-            if sketches:
-                shapes.extend(self.get_sketch(name) for name in sketches)
-            if interfaces:
-                shapes.extend(self.get_interface(name) for name in interfaces)
-            if parts:
-                shapes.extend(self.get_part(name) for name in parts)
-            if assemblies:
-                shapes.extend(self.get_assembly(name) for name in assemblies)
-
-            pc_logging.info(f"Converting {len(shapes)} object(s) to '{target_format}'.")
-
-            # Prepare async tasks for rendering
-            tasks = []
-            for shape in shapes:
-                render_method = f"render_{target_format}_async"
-                if hasattr(shape, render_method):
-                    tasks.append(getattr(shape, render_method)(self.ctx, self, output_dir))
-                else:
-                    pc_logging.warn(f"Skipping '{shape.name}': {target_format} format not supported")
-
-            try:
-                await asyncio.gather(*tasks)
-            except Exception as e:
-                # Raise a RuntimeError with additional info if any rendering task fails
-                raise RuntimeError(f"Failed to convert to {target_format}: {str(e)}") from e
-
-
-    def convert(
-        self,
-        sketches: Optional[List[str]] = None,
-        interfaces: Optional[List[str]] = None,
-        parts: Optional[List[str]] = None,
-        assemblies: Optional[List[str]] = None,
-        target_format: Optional[str] = None,
-        output_dir: Optional[str] = None,
-    ) -> None:
-        """Synchronous wrapper for async_convert."""
-        asyncio.run(self.async_convert(sketches, interfaces, parts, assemblies, target_format, output_dir))
-
 
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:

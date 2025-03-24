@@ -9,6 +9,8 @@
 
 import tempfile
 
+from partcad.part import Part
+
 from .provider_request_caps import ProviderRequestCaps
 from .provider_request_order import ProviderRequestOrder
 from .provider_request_quote import ProviderRequestQuote
@@ -74,9 +76,9 @@ class ProviderFactoryManufacturer(ProviderFactoryPython):
         caps = await self.provider.get_caps()
         # TODO(clairbee): Make the below more generic
         if "formats" in caps and "step" in caps["formats"]:
-            part = self.ctx.get_part(cart_item.name)
+            part: Part = self.ctx.get_part(cart_item.name)
             filepath = tempfile.mktemp(".step")
-            await part.render_step_async(self.ctx, filepath=filepath)
+            await part.render_async(self.ctx, format_name="step", filepath=filepath)
             with open(filepath, "rb") as f:
                 step = f.read()
             cart_item.add_binary("step", step)

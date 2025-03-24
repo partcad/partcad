@@ -6,6 +6,9 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 import asyncio
 import base64
 import copy
@@ -15,6 +18,7 @@ import shutil
 import sys
 import tempfile
 import threading
+from typing import Optional
 
 from .cache_hash import CacheHash
 from .render import *
@@ -25,13 +29,32 @@ from . import logging as pc_logging
 from .sync_threads import threadpool_manager
 from . import wrapper
 
+if TYPE_CHECKING:
+    from partcad.context import Context
+    from partcad.project import Project
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
+
+
+EXTENSION_MAPPING = {
+    "step": "step",
+    "brep": "brep",
+    "stl": "stl",
+    "3mf": "3mf",
+    "threejs": "json",
+    "obj": "obj",
+    "gltf": "json",
+    "cadquery": "py",
+    "build123d": "py",
+    "scad": "scad",
+}
 
 
 class Shape(ShapeConfiguration):
     name: str
     desc: str
+    kind: str
     requirements: dict | list | str
     svg_path: str
     svg_url: str
@@ -407,526 +430,137 @@ class Shape(ShapeConfiguration):
 
         return opts, filepath
 
-    async def render_svg_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
+    async def render_async(
+        self, ctx: Context, format_name: str, project: Optional[Project] = None, filepath=None, **kwargs
     ) -> None:
-        with pc_logging.Action("RenderSVG", self.project_name, self.name):
-            _, filepath = self.render_getopts("svg", ".svg", project, filepath)
+        """
+        Centralized method to render shape via external wrapper.
+        Args:
+            ctx: Execution context.
+            format_name: Render format (e.g., "png", "svg").
+            project: Optional project object.
+            filepath: Target file path for output.
+            kwargs: Additional options (width, height, etc.).
+        """
+        WRAPPER_FORMATS = {
+            "svg": ["cadquery-ocp==7.7.2", "ocpsvg==0.3.4", "build123d==0.8.0"],
+            "png": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+                "svglib==1.5.1",
+                "reportlab",
+                "rlpycairo==0.3.0",
+            ],
+            "brep": ["cadquery-ocp==7.7.2"],
+            "step": ["cadquery-ocp==7.7.2"],
+            "stl": ["cadquery-ocp==7.7.2"],
+            "obj": ["cadquery-ocp==7.7.2"],
+            "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
+            "gltf": ["cadquery-ocp==7.7.2"],
+            "threejs": ["cadquery-ocp==7.7.2"],
+        }
 
-            # This creates a temporary file, but it allows to reuse the file
-            # with other consumers of self._get_svg_path()
-            svg_path = await self._get_svg_path(ctx=ctx, project=project)
-            if not svg_path is None and svg_path != filepath:
-                if os.path.exists(svg_path):
-                    shutil.copyfile(svg_path, filepath)
-                else:
-                    pc_logging.error("SVG file was not created by the wrapper")
+        with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
 
-    def render_svg(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-    ) -> None:
-        asyncio.run(self.render_svg_async(ctx, project, filepath))
+            if filepath and os.path.isdir(filepath):
+                self.config_obj.setdefault("render", {})["output_dir"] = filepath
 
-    async def render_png_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        width=None,
-        height=None,
-        line_weight=None,
-        viewport_origin=None,
-    ) -> None:
-        with pc_logging.Action("RenderPNG", self.project_name, self.name):
-            obj = await self.get_wrapped(ctx)
+            if format_name == "gltf":
+                obj = await self.get_build123d(ctx)
+            else:
+                obj = await self.get_wrapped(ctx)
+
             if obj is None:
-                # pc_logging.error("The shape failed to instantiate")
-                self.svg_path = None
+                pc_logging.error(f"Cannot render '{self.name}': shape is empty")
                 return
 
-            png_opts, filepath = self.render_getopts("png", ".png", project, filepath)
-
-            if width is None:
-                if "width" in png_opts and not png_opts["width"] is None:
-                    width = png_opts["width"]
-                else:
-                    width = DEFAULT_RENDER_WIDTH
-            if height is None:
-                if "height" in png_opts and not png_opts["height"] is None:
-                    height = png_opts["height"]
-                else:
-                    height = DEFAULT_RENDER_HEIGHT
-            if line_weight is None:
-                if "lineWeight" in png_opts and not png_opts["lineWeight"] is None:
-                    line_weight = png_opts["lineWeight"]
-                else:
-                    line_weight = 1.0
-            if viewport_origin is None:
-                if "viewportOrigin" in png_opts and not png_opts["viewportOrigin"] is None:
-                    viewport_origin = png_opts["viewportOrigin"]
-                else:
-                    viewport_origin = [100, -100, 100]
-
-            if not project is None:
+            if project is not None:
                 project.ctx.ensure_dirs_for_file(filepath)
 
-            wrapper_path = wrapper.get("render_png.py")
-            request = {
-                "wrapped": obj,
-                "width": width,
-                "height": height,
-                "line_weight": line_weight,
-                "viewport_origin": viewport_origin,
-            }
-            register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
 
-            # We don't care about customer preferences much here
-            # as this is expected to be hermetic.
-            # Stick to the version where CadQuery and build123d are known to work.
-            runtime = ctx.get_python_runtime(version="3.11")
-            await runtime.ensure_async("svglib==1.5.1")
-            await runtime.ensure_async("reportlab")
-            await runtime.ensure_async("rlpycairo==0.3.0")
-            response_serialized, errors = await runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(filepath),
-                ],
-                request_serialized,
-            )
-            sys.stderr.write(errors)
+            for format in formats_to_render:
+                file_extension = EXTENSION_MAPPING.get(format, format)
+                render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
+                final_filepath = os.path.abspath(final_filepath)
+                pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
 
-            response = base64.b64decode(response_serialized)
-            result = pickle.loads(response)
-            if not result["success"]:
-                pc_logging.error("RenderPNG failed: %s:%s: %s" % (self.project_name, self.name, result["exception"]))
-            if "exception" in result and not result["exception"] is None:
-                pc_logging.exception("RenderPNG exception: %s" % result["exception"])
+                wrapper_path = wrapper.get(f"render_{format}.py")
 
-    def render_png(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        width=None,
-        height=None,
-        line_weight=None,
-        viewport_origin=None,
-    ) -> None:
-        asyncio.run(self.render_png_async(ctx, project, filepath, width, height, line_weight, viewport_origin))
+                request = {"wrapped": obj}
 
-    async def render_step_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-    ) -> None:
-        with pc_logging.Action("RenderSTEP", self.project_name, self.name):
-            step_opts, filepath = self.render_getopts("step", ".step", project, filepath)
+                if format in ["svg", "png"]:
+                    request["viewport_origin"] = kwargs.get("viewport_origin", [100, -100, 100])
+                    request["line_weight"] = kwargs.get("line_weight", 1.0)
+                    if format == "png":
+                        request["width"] = kwargs.get("width", 512)
+                        request["height"] = kwargs.get("height", 512)
 
-            obj = await self.get_wrapped(ctx)
-            if obj is None:
-                raise exception.PartIsEmptyOrFailed(self.name)
+                elif format in ["3mf", "obj", "gltf", "stl", "threejs"]:
+                    request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
+                    request["angularTolerance"] = kwargs.get(
+                        "angularTolerance", render_opts.get("angularTolerance", 0.1)
+                    )
+                    if format == "stl":
+                        request["ascii"] = kwargs.get("ascii", render_opts.get("ascii", False))
+                    elif format == "gltf":
+                        request["binary"] = kwargs.get("binary", render_opts.get("binary", False))
 
-            def do_render_step() -> None:
-                nonlocal project, filepath, obj
-                from OCP.STEPControl import STEPControl_Writer, STEPControl_AsIs
-                from OCP.Interface import Interface_Static
+                elif format == "step":
+                    request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
+                    request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
 
-                if not project is None:
-                    project.ctx.ensure_dirs_for_file(filepath)
+                register_ocp_helper()
 
-                pcurves = 1
-                if "write_pcurves" in step_opts and not step_opts["write_pcurves"]:
-                    pcurves = 0
-                precision_mode = step_opts.get("precision_mode", 0)
+                picklestring = pickle.dumps(request)
+                request_serialized = base64.b64encode(picklestring).decode()
 
-                writer = STEPControl_Writer()
-                Interface_Static.SetIVal_s("write.surfacecurve.mode", pcurves)
-                Interface_Static.SetIVal_s("write.precision.mode", precision_mode)
-                writer.Transfer(obj, STEPControl_AsIs)
-                writer.Write(filepath)
+                runtime = ctx.get_python_runtime(version="3.11")
 
-            await threadpool_manager.run(do_render_step)
+                dependencies = WRAPPER_FORMATS[format_name]
+                await asyncio.gather(*(runtime.ensure_async(dep) for dep in dependencies))
 
-    def render_step(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-    ) -> None:
-        asyncio.run(self.render_step_async(ctx, project, filepath))
-
-    async def render_brep_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-    ):
-        with pc_logging.Action("RenderBREP", self.project_name, self.name):
-            brep_opts, filepath = self.render_getopts("brep", ".brep", project, filepath)
-
-            obj = await self.get_wrapped(ctx)
-
-            def do_render_brep() -> None:
-                nonlocal project, filepath, obj
-                from OCP.BRepTools import BRepTools
-
-                if not project is None:
-                    project.ctx.ensure_dirs_for_file(filepath)
-
-                brep_writer = BRepTools()
-                with open(filepath, "wb") as brep_file:
-                    brep_writer.Write_s(obj, brep_file)
-
-            await threadpool_manager.run(do_render_brep)
-
-    def render_brep(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-    ) -> None:
-        asyncio.run(self.render_brep_async(ctx, project, filepath))
-
-    async def render_stl_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        tolerance=None,
-        angularTolerance=None,
-        ascii=None,
-    ) -> None:
-        with pc_logging.Action("RenderSTL", self.project_name, self.name):
-            stl_opts, filepath = self.render_getopts("stl", ".stl", project, filepath)
-
-            if tolerance is None:
-                if "tolerance" in stl_opts and not stl_opts["tolerance"] is None:
-                    tolerance = float(stl_opts["tolerance"])
-                else:
-                    tolerance = 0.1
-
-            if angularTolerance is None:
-                if "angularTolerance" in stl_opts and not stl_opts["angularTolerance"] is None:
-                    angularTolerance = float(stl_opts["angularTolerance"])
-                else:
-                    angularTolerance = 0.1
-
-            if ascii is None:
-                if "ascii" in stl_opts and not stl_opts["ascii"] is None:
-                    ascii = bool(stl_opts["ascii"])
-                else:
-                    ascii = False
-
-            obj = await self.get_wrapped(ctx)
-
-            def do_render_stl() -> None:
-                nonlocal obj, project, filepath, tolerance, angularTolerance, ascii
-                from OCP.BRepMesh import BRepMesh_IncrementalMesh
-                from OCP.StlAPI import StlAPI_Writer
-
-                if not project is None:
-                    project.ctx.ensure_dirs_for_file(filepath)
-
-                BRepMesh_IncrementalMesh(
-                    obj,
-                    theLinDeflection=tolerance,
-                    isRelative=True,
-                    theAngDeflection=angularTolerance,
-                    isInParallel=True,
+                # Run wrapper
+                response_serialized, errors = await runtime.run_async(
+                    [
+                        wrapper_path,
+                        final_filepath,
+                    ],
+                    request_serialized,
                 )
+                sys.stderr.write(errors)
 
-                writer = StlAPI_Writer()
-                writer.ASCIIMode = ascii
-                writer.Write(obj, filepath)
+                if errors:
+                    pc_logging.error(f"Wrapper {format_name} stderr:\n{errors}")
 
-            await threadpool_manager.run(do_render_stl)
+                response_lines = response_serialized.strip().splitlines()
+                if not response_lines:
+                    pc_logging.error(f"Empty response from wrapper: {wrapper_path}")
+                    return
 
-    def render_stl(
+                cleaned_response = response_lines[-1].strip()
+
+                # Handle response
+                result = {}
+                try:
+                    response_bytes = base64.b64decode(cleaned_response)
+                    result = pickle.loads(response_bytes)
+                except Exception as e:
+                    pc_logging.error(f"Failed to deserialize response: {e}")
+
+                if not result.get("success", False):
+                    pc_logging.error(
+                        f"Render {format_name.upper()} failed for {self.project_name}:{self.name}: {result.get('exception', 'Unknown error')}"
+                    )
+                if "exception" in result and result["exception"]:
+                    pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
+
+    def render(
         self,
-        ctx,
-        project=None,
+        ctx: Context,
+        format_name: str,
+        project: Optional[Project] = None,
         filepath=None,
-        tolerance=None,
-        angularTolerance=None,
     ) -> None:
-        asyncio.run(self.render_stl_async(ctx, project, filepath, tolerance, angularTolerance))
-
-    async def render_3mf_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        tolerance=None,
-        angularTolerance=None,
-    ) -> None:
-        with pc_logging.Action("Render3MF", self.project_name, self.name):
-            threemf_opts, filepath = self.render_getopts("3mf", ".3mf", project, filepath)
-
-            if tolerance is None:
-                if "tolerance" in threemf_opts and not threemf_opts["tolerance"] is None:
-                    tolerance = threemf_opts["tolerance"]
-                else:
-                    tolerance = 0.1
-
-            if angularTolerance is None:
-                if "angularTolerance" in threemf_opts and not threemf_opts["angularTolerance"] is None:
-                    angularTolerance = threemf_opts["angularTolerance"]
-                else:
-                    angularTolerance = 0.1
-
-            obj = await self.get_wrapped(ctx)
-
-            if not project is None:
-                project.ctx.ensure_dirs_for_file(filepath)
-
-            wrapper_path = wrapper.get("render_3mf.py")
-            request = {
-                "wrapped": obj,
-                "tolerance": tolerance,
-                "angularTolerance": angularTolerance,
-            }
-            register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
-
-            # We don't care about customer preferences much here
-            # as this is expected to be hermetic.
-            # Stick to the version where CadQuery and build123d are known to work.
-            runtime = ctx.get_python_runtime(version="3.11")
-            await runtime.ensure_async("cadquery-ocp==7.7.2")
-            await runtime.ensure_async("cadquery==2.5.2")
-            response_serialized, errors = await runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(filepath),
-                ],
-                request_serialized,
-            )
-            sys.stderr.write(errors)
-
-            response = base64.b64decode(response_serialized)
-            result = pickle.loads(response)
-
-            if not result["success"]:
-                pc_logging.error("Render3MF failed: %s: %s" % (self.name, result["exception"]))
-            if "exception" in result and not result["exception"] is None:
-                pc_logging.exception(result["exception"])
-
-    def render_3mf(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        tolerance=None,
-        angularTolerance=None,
-    ) -> None:
-        asyncio.run(self.render_3mf_async(ctx, project, filepath, tolerance, angularTolerance))
-
-    async def render_threejs_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        tolerance=None,
-        angularTolerance=None,
-    ) -> None:
-        with pc_logging.Action("RenderThreeJS", self.project_name, self.name):
-            threejs_opts, filepath = self.render_getopts("threejs", ".json", project, filepath)
-
-            if tolerance is None:
-                if "tolerance" in threejs_opts and not threejs_opts["tolerance"] is None:
-                    tolerance = threejs_opts["tolerance"]
-                else:
-                    tolerance = 0.1
-
-            if angularTolerance is None:
-                if "angularTolerance" in threejs_opts and not threejs_opts["angularTolerance"] is None:
-                    angularTolerance = threejs_opts["angularTolerance"]
-                else:
-                    angularTolerance = 0.1
-
-            obj = await self.get_wrapped(ctx)
-            wrapper_path = wrapper.get("render_threejs.py")
-            request = {
-                "wrapped": obj,
-                "tolerance": tolerance,
-                "angularTolerance": angularTolerance,
-            }
-            register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
-
-            # We don't care about customer preferences much here
-            # as this is expected to be hermetic.
-            # Stick to the version where CadQuery and build123d are known to work.
-            runtime = ctx.get_python_runtime(version="3.11")
-            await runtime.ensure_async("cadquery-ocp==7.7.2")
-            response_serialized, errors = await runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(filepath),
-                ],
-                request_serialized,
-            )
-            sys.stderr.write(errors)
-
-            response = base64.b64decode(response_serialized)
-            result = pickle.loads(response)
-
-            if not result["success"]:
-                pc_logging.error("RenderThreeJS failed: %s: %s" % (self.name, result["exception"]))
-            if "exception" in result and not result["exception"] is None:
-                pc_logging.exception(result["exception"])
-
-    def render_threejs(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        tolerance=None,
-        angularTolerance=None,
-    ) -> None:
-        asyncio.run(self.render_threejs_async(ctx, project, filepath, tolerance, angularTolerance))
-
-    async def render_obj_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        tolerance=None,
-        angularTolerance=None,
-    ) -> None:
-        with pc_logging.Action("RenderOBJ", self.project_name, self.name):
-            obj_opts, filepath = self.render_getopts("obj", ".obj", project, filepath)
-
-            if tolerance is None:
-                if "tolerance" in obj_opts and not obj_opts["tolerance"] is None:
-                    tolerance = obj_opts["tolerance"]
-                else:
-                    tolerance = 0.1
-
-            if angularTolerance is None:
-                if "angularTolerance" in obj_opts and not obj_opts["angularTolerance"] is None:
-                    angularTolerance = obj_opts["angularTolerance"]
-                else:
-                    angularTolerance = 0.1
-
-            obj = await self.get_wrapped(ctx)
-            wrapper_path = wrapper.get("render_obj.py")
-            request = {
-                "wrapped": obj,
-                "tolerance": tolerance,
-                "angularTolerance": angularTolerance,
-            }
-            register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
-
-            # We don't care about customer preferences much here
-            # as this is expected to be hermetic.
-            # Stick to the version where CadQuery and build123d are known to work.
-            runtime = ctx.get_python_runtime(version="3.11")
-            await runtime.ensure_async("cadquery-ocp==7.7.2")
-            response_serialized, errors = await runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(filepath),
-                ],
-                request_serialized,
-            )
-            sys.stderr.write(errors)
-
-            response = base64.b64decode(response_serialized)
-            result = pickle.loads(response)
-
-            if not result["success"]:
-                pc_logging.error("RenderOBJ failed: %s: %s" % (self.name, result["exception"]))
-            if "exception" in result and not result["exception"] is None:
-                pc_logging.exception(result["exception"])
-
-    def render_obj(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        tolerance=None,
-        angularTolerance=None,
-    ) -> None:
-        asyncio.run(self.render_obj_async(ctx, project, filepath, tolerance, angularTolerance))
-
-    async def render_gltf_async(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        binary=None,
-        tolerance=None,
-        angularTolerance=None,
-    ) -> None:
-        with pc_logging.Action("RenderGLTF", self.project_name, self.name):
-            gltf_opts, filepath = self.render_getopts("gltf", ".json", project, filepath)
-
-            if tolerance is None:
-                if "tolerance" in gltf_opts and not gltf_opts["tolerance"] is None:
-                    tolerance = gltf_opts["tolerance"]
-                else:
-                    tolerance = 0.1
-
-            if angularTolerance is None:
-                if "angularTolerance" in gltf_opts and not gltf_opts["angularTolerance"] is None:
-                    angularTolerance = gltf_opts["angularTolerance"]
-                else:
-                    angularTolerance = 0.1
-
-            if binary is None:
-                if "binary" in gltf_opts and not gltf_opts["binary"] is None:
-                    binary = gltf_opts["binary"]
-                else:
-                    binary = False
-
-            b3d_obj = await self.get_build123d(ctx)
-
-            def do_render_gltf() -> None:
-                nonlocal b3d_obj, project, filepath, tolerance, angularTolerance
-                import build123d as b3d
-
-                b3d.export_gltf(
-                    b3d_obj,
-                    filepath,
-                    binary=binary,
-                    linear_deflection=tolerance,
-                    angular_deflection=angularTolerance,
-                )
-
-            await threadpool_manager.run(do_render_gltf)
-
-    def render_gltf(
-        self,
-        ctx,
-        project=None,
-        filepath=None,
-        tolerance=None,
-        angularTolerance=None,
-    ) -> None:
-        asyncio.run(self.render_gltf_async(ctx, project, filepath, tolerance, angularTolerance))
-
-    def render_markdown(self, ctx, project=None, filepath=None) -> None:
-        asyncio.run(self.render_markdown_async(ctx, project, filepath))
-
-    async def get_summary_async(self, project=None):
-        if "summary" in self.config and not self.config["summary"] is None:
-            return self.config["summary"]
-        return None
-
-    def get_summary(self, project=None):
-        return asyncio.run(self.get_summary_async(project))
+        asyncio.run(self.render_async(ctx, format_name, project, filepath))
