@@ -328,7 +328,7 @@ Example:
         <parameter name>: <parameter value>
 
 
-:ref:`Object IDs <object-ids>` are used to reference different
+Object IDs are used to reference different
 types of objects within a package, such as sketches, parts,
 assemblies, scenes, interfaces, and providers.
 
