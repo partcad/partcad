@@ -144,7 +144,6 @@ Some PartCAD commands and interfaces allow referencing multiple packages at once
 ``"<package-path>/..."`` is a reference to ``"<package-path>"`` and to all of its
 sub-packages.
 
-.. _object-ids:
 Object IDs
 ==========
 
