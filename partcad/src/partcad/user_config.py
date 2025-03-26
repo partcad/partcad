@@ -101,7 +101,7 @@ class ParametersConfig(BaseConfig):
 
 
 # TODO(clairbee): moake TelemetryConfig a subclass of BaseConfig
-class TelemetryConfig:
+class TelemetryConfig(dict):
     def __init__(self, v):
         self.v: vyper.Vyper = v
 
