@@ -41,6 +41,8 @@ def init_sentry(version: str) -> None:
         critical_to_ignore = (
             "action_start: ",
             "action_end: ",
+            "process_start: ",
+            "process_end: ",
         )
         debug_to_ignore = (
             "Starting action",
