@@ -225,6 +225,7 @@ Give us a star for our hard work!
 [PartCAD]: https://partcad.org/
 [our website]: https://partcad.org/
 [our documentation]: https://partcad.readthedocs.io/en/latest/?badge=latest
+[Quick Start]: https://partcad.github.io/partcad/development/quick-start/
 [LinkedIn]: https://linkedin.com/company/partcad
 [YouTube]: https://youtube.com/@PartCAD
 [TikTok]: https://tiktok.com/@partcad
@@ -240,4 +241,3 @@ Give us a star for our hard work!
 [BREP]: https://en.wikipedia.org/wiki/Boundary_representation
 [OpenCASCADE]: https://www.opencascade.com/
 [KiCad EDA]: https://www.kicad.org/
-[Quick Start]: https://partcad.github.io/partcad/development/quick-start/
