@@ -139,13 +139,6 @@ class SketchFactoryEnrich(pf.SketchFactory):
                     desired_type = type(augmented_config["parameters"][param]["default"])
                     augmented_config["parameters"][param]["default"] = desired_type(sketch.config["with"][param])
 
-            # Recalling normalize to normalize data after replacing target parameters from with key.
-            augmented_config = sketch_config.SketchConfiguration.normalize(
-                self.source_sketch_name,
-                augmented_config,
-                object_name
-            )
-
             self.source_project.init_sketch_by_config(augmented_config)
 
             source = self.source_project.get_sketch(sketch.name)
