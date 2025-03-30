@@ -468,14 +468,6 @@ class Shape(ShapeConfiguration):
     }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
-            pc_logging.info(f"{self.project_name}: {self.name} to {format_name.upper()}")
-
-            if filepath and os.path.isdir(filepath):
-                self.config_obj.setdefault("render", {})["output_dir"] = filepath
-
-            render_cfg = self.config_obj.get("render", {})
-
-            wrapper_path = wrapper.get(f"render_{format_name}.py")
 
             if filepath and os.path.isdir(filepath):
                 self.config_obj.setdefault("render", {})["output_dir"] = filepath
