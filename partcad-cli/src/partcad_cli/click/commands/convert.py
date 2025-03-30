@@ -4,7 +4,7 @@ from partcad.context import Context
 import partcad.logging as pc_logging
 
 
-SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gltf"]
+SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gltf", "iges"]
 
 
 @click.command(help="Convert parts, assemblies, or scenes to another format and update their type.")

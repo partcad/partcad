@@ -40,6 +40,7 @@ Feature: `pc render` command
 # pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t threejs -a :logo_embedded
 # pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t obj -a :logo_embedded
 # pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t gltf -a :logo_embedded
+# pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t iges -a :logo_embedded
 
 # ⬢ [Docker] ❯ pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t readme -O $PWD -a :logo_embedded
 # INFO:  DONE: InitCtx: $PARTCAD_ROOT/examples: 0.01s

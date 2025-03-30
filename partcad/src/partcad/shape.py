@@ -44,6 +44,7 @@ EXTENSION_MAPPING = {
     "3mf": "3mf",
     "threejs": "json",
     "obj": "obj",
+    "iges": "iges",
     "gltf": "json",
     "cadquery": "py",
     "build123d": "py",
@@ -443,23 +444,28 @@ class Shape(ShapeConfiguration):
             kwargs: Additional options (width, height, etc.).
         """
         WRAPPER_FORMATS = {
-            "svg": ["cadquery-ocp==7.7.2", "ocpsvg==0.3.4", "build123d==0.8.0"],
-            "png": [
-                "cadquery-ocp==7.7.2",
-                "ocpsvg==0.3.4",
-                "build123d==0.8.0",
-                "svglib==1.5.1",
-                "reportlab",
-                "rlpycairo==0.3.0",
-            ],
-            "brep": ["cadquery-ocp==7.7.2"],
-            "step": ["cadquery-ocp==7.7.2"],
-            "stl": ["cadquery-ocp==7.7.2"],
-            "obj": ["cadquery-ocp==7.7.2"],
-            "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
-            "gltf": ["cadquery-ocp==7.7.2"],
-            "threejs": ["cadquery-ocp==7.7.2"],
-        }
+        "svg": [
+            "cadquery-ocp==7.7.2",
+            "ocpsvg==0.3.4",
+            "build123d==0.8.0"
+        ],
+        "png": [
+            "cadquery-ocp==7.7.2",
+            "ocpsvg==0.3.4",
+            "build123d==0.8.0",
+            "svglib==1.5.1",
+            "reportlab",
+            "rlpycairo==0.3.0"
+        ],
+        "brep": ["cadquery-ocp==7.7.2"],
+        "step": ["cadquery-ocp==7.7.2"],
+        "stl": ["cadquery-ocp==7.7.2"],
+        "obj": ["cadquery-ocp==7.7.2"],
+        "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
+        "gltf": ["cadquery-ocp==7.7.2"],
+        "iges": ["cadquery-ocp==7.7.2"],
+        "threejs": ["cadquery-ocp==7.7.2"]
+    }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
 
@@ -507,7 +513,7 @@ class Shape(ShapeConfiguration):
                     elif format == "gltf":
                         request["binary"] = kwargs.get("binary", render_opts.get("binary", False))
 
-                elif format == "step":
+                elif format in ["step", "iges"]:
                     request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
                     request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
 

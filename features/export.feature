@@ -43,3 +43,8 @@ Feature: `pc export` command
   Examples: Media Type: .json (glTF)
     |    type | filename              |
     |    gltf | logo_embedded.json    |
+
+  @type-object
+  Examples: Media Type: .iges
+    |    type | filename              |
+    |    iges | logo_embedded.iges    |

@@ -22,8 +22,6 @@ import typing
 
 from typing import Optional, List
 
-from partcad.shape import Shape
-
 from . import consts
 from . import factory
 from . import logging as pc_logging
@@ -66,6 +64,7 @@ from .utils import resolve_resource_path, normalize_resource_path
 
 if TYPE_CHECKING:
     from partcad.context import Context
+    from partcad.shape import Shape
 
 
 class Project(project_config.Configuration):
@@ -1350,25 +1349,20 @@ class Project(project_config.Configuration):
                 raise EmptyShapesError
 
             tasks = []
-            render_formats = ["svg", "png", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep"]
+            render_formats = ["svg", "png", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
 
             for shape in shapes:
-
-                if not shape.finalized:
-                    pc_logging.warning(f"{shape.name} is not finalized")
-                    continue
-
                 shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
+
                 for format_name in render_formats:
                     if self._should_render_format(format_name, shape_render, format, shape.kind):
-                        tasks.append(
-                            shape.render_async(
+                        if not hasattr(shape, "finalized") or shape.finalized:
+                            tasks.append(shape.render_async(
                                 ctx=self.ctx,
                                 format_name=format_name,
                                 project=self,
                                 filepath=None,
-                            )
-                        )
+                            ))
 
             await asyncio.gather(*tasks)
 
@@ -1385,16 +1379,14 @@ class Project(project_config.Configuration):
         assemblies = assemblies or get_keys("assemblies")
 
         shapes = []
-        for name in sketches:
-            shapes.append(self.get_sketch(name))
-        for name in parts:
-            shapes.append(self.get_part(name))
-        for name in assemblies:
-            shapes.append(self.get_assembly(name))
+        for name in sketches: shapes.append(self.get_sketch(name))
+        for name in parts: shapes.append(self.get_part(name))
+        for name in assemblies: shapes.append(self.get_assembly(name))
         # TODO(clairbee): interfaces are not yet renderable.
         # for name in interfaces: shapes.append(self.get_interface(name))
 
         return shapes
+
 
     def _should_render_format(
         self, format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str
