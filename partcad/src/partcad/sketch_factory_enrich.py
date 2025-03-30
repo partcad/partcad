@@ -141,7 +141,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
 
             # Recalling normalize to normalize data after replacing target parameters from with key.
             augmented_config = sketch_config.SketchConfiguration.normalize(
-                sketch.config["name"],
+                self.source_sketch_name,
                 augmented_config,
                 object_name
             )
