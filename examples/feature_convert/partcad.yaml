@@ -64,6 +64,17 @@ parts:
       length:
         type: float
         default: 20.0
+  
+  box_sdf:
+    desc: This is a cube defined using SDF.
+    type: sdf
+    parameters:
+      width:
+        default: 1.0
+      length:
+        default: 1.0
+      height:
+        default: 1.0
 
   prism_scad:
     type: scad
