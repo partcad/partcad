@@ -532,7 +532,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|brep|stl|3mf|extrude|sweep>
+      type: <openscad|cadquery|build123d|sdf|ai-openscad|ai-cadquery|ai-build123d|step|brep|stl|3mf|extrude|sweep>
       desc: <(optional) textual description, also used by AI>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       # ... type-specific options ...
@@ -565,7 +565,7 @@ Define parts with CodeCAD scripts using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d>
+      type: <openscad|cadquery|build123d|sdf>
       cwd: <alternative current working directory>
       showObject: <(optional) the name of the object to show using "show_object(...)">
       patch:
@@ -581,22 +581,24 @@ Define parts with CodeCAD scripts using the following syntax:
           enum: <(optional) list of possible values>
           default: <default value>
 
-+--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
-| Example                                                                              | Configuration             | Result                                                                                                                  |
-+======================================================================================+===========================+=========================================================================================================================+
-|                                                                                      | .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_cadquery_primitive/cylinder.svg?raw=true  |
-|| `CadQuery <https://github.com/CadQuery/cadquery>`_ or                               |                           |   :width: 128                                                                                                           |
-|| `build123d <https://github.com/gumyr/build123d>`_ script                            |   parts:                  |                                                                                                                         |
-|| in ``src/cylinder.py``                                                              |     src/cylinder:         |                                                                                                                         |
-|                                                                                      |       type: cadquery      |                                                                                                                         |
-|                                                                                      |       # type: build123d   |                                                                                                                         |
-+--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
-|| `OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_ script                         | .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_openscad/cube.svg?raw=true                |
-|| in ``cube.scad``                                                                    |                           |   :width: 128                                                                                                           |
-|                                                                                      |   parts:                  |                                                                                                                         |
-|                                                                                      |     cube:                 |                                                                                                                         |
-|                                                                                      |       type: scad          |                                                                                                                         |
-+--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
++--------------------------------------------------------------+-----------------------+-------------------------------------------------------------------------------------------------------------------------+
+| Example                                                      | Configuration         | Result                                                                                                                  |
++==============================================================+=======================+=========================================================================================================================+
+||                                                             || .. code-block:: yaml || .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_cadquery_primitive/cylinder.svg?raw=true |
+|| `CadQuery <https://github.com/CadQuery/cadquery>`_ or       ||                      || :width: 128                                                                                                            |
+|| `build123d <https://github.com/gumyr/build123d>`_ or        ||                      ||                                                                                                                        |
+|| `sdf <https://github.com/fogleman/sdf>`_ script             || parts:               ||                                                                                                                        |
+|| in ``src/cylinder.py``                                      || src/cylinder:        ||                                                                                                                        |
+||                                                             || type: cadquery       ||                                                                                                                        |
+||                                                             || # type: build123d    ||                                                                                                                        |
+||                                                             || # type: sdf          ||                                                                                                                        |
++--------------------------------------------------------------+-----------------------+-------------------------------------------------------------------------------------------------------------------------+
+|| `OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_ script || .. code-block:: yaml || .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_openscad/cube.svg?raw=true               |
+|| in ``cube.scad``                                            ||                      || :width: 128                                                                                                            |
+||                                                             || parts:               ||                                                                                                                        |
+||                                                             || cube:                ||                                                                                                                        |
+||                                                             || type: scad           ||                                                                                                                        |
++--------------------------------------------------------------+-----------------------+-------------------------------------------------------------------------------------------------------------------------+
 
 AI Generated CAD Scripts
 ------------------------

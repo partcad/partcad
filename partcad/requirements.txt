@@ -25,3 +25,5 @@ openai
 
 # Locally hosted AI
 ollama
+
+sdf @ git+https://github.com/fogleman/sdf.git#egg=sdf

@@ -84,7 +84,7 @@ Then add part declarations to the package.
 
 If CAD files already exist for these parts, then you should probably start by
 using those CAD files first. You can always migrate to Code-CAD technologies
-(such as OpenSCAD, CadQuery or build123d) later. However you might want to host
+(such as OpenSCAD, CadQuery, build123d or sdf) later. However you might want to host
 the CAD files separately from the package's git repository
 (and have PartCAD fetch them using `fileFrom: url`,
 even if they are hosted in another git repository)
