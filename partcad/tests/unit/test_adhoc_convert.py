@@ -2,17 +2,20 @@ import pytest
 import shutil
 import tempfile
 from pathlib import Path
-from partcad.context import Context
 from partcad.adhoc.convert import convert_cad_file, generate_partcad_config
+from partcad.part_types import PartTypes
 
+ROOT = Path(__file__).resolve().parents[3]
+EXAMPLES_DIR = ROOT / "examples" / "feature_convert"
 
-OUTPUT_FORMATS = ["stl", "step", "brep", "3mf", "threejs", "obj"]
+OUTPUT_FORMATS = PartTypes.convert_output.types()
 
 TEST_FILES = {
     "stl": "cube.stl",
     "step": "bolt.step",
     "brep": "box.brep",
     "3mf": "cube.3mf",
+    "obj": "cube.obj",
     "scad": "prism.scad",
     "cadquery": "cube.py",
     "build123d": "cube.py",
@@ -26,7 +29,8 @@ def temp_cad_file(tmp_path, request):
     This simulates different input formats for conversion.
     """
     input_format = request.param
-    source_file = Path(f"examples/feature_convert/{input_format}/{TEST_FILES[input_format]}")
+    source_file = EXAMPLES_DIR / input_format / TEST_FILES[input_format]
+
     test_file = tmp_path / TEST_FILES[input_format]
 
     if not source_file.exists():

@@ -23,11 +23,12 @@ from typing import Optional
 from .cache_hash import CacheHash
 from .render import *
 from .shape_config import ShapeConfiguration
-from .utils import total_size
+from .utils import deserialize_response, serialize_request, total_size
 from . import exception
 from . import logging as pc_logging
 from .sync_threads import threadpool_manager
 from . import wrapper
+from .part_types import Format, PartTypes
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -35,20 +36,6 @@ if TYPE_CHECKING:
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
-
-
-EXTENSION_MAPPING = {
-    "step": "step",
-    "brep": "brep",
-    "stl": "stl",
-    "3mf": "3mf",
-    "threejs": "json",
-    "obj": "obj",
-    "gltf": "json",
-    "cadquery": "py",
-    "build123d": "py",
-    "scad": "scad",
-}
 
 
 class Shape(ShapeConfiguration):
@@ -97,6 +84,7 @@ class Shape(ShapeConfiguration):
         self.hash.set_dependencies(self.cache_dependencies)
 
         if self.cacheable:
+            return
             cad_config = {}
             for key in ["parameters", "offset", "scale"]:
                 if key in self.config:
@@ -329,15 +317,13 @@ class Shape(ShapeConfiguration):
             else:
                 viewport_origin = [100, -100, 100]
 
-        wrapper_path = wrapper.get("render_svg.py")
+        wrapper_path = wrapper.get_render("svg.py")
         request = {
             "wrapped": obj,
             "line_weight": line_weight,
             "viewport_origin": viewport_origin,
         }
         register_ocp_helper()
-        picklestring = pickle.dumps(request)
-        request_serialized = base64.b64encode(picklestring).decode()
 
         # We don't care about customer preferences much here
         # as this is expected to be hermetic.
@@ -351,7 +337,7 @@ class Shape(ShapeConfiguration):
                 wrapper_path,
                 os.path.abspath(filepath),
             ],
-            request_serialized,
+            serialize_request(request),
         )
         sys.stderr.write(errors)
 
@@ -430,6 +416,68 @@ class Shape(ShapeConfiguration):
 
         return opts, filepath
 
+    @staticmethod
+    async def _ensure_dependencies(runtime, fmt: Format):
+        deps = wrapper.TYPE_DEPENDENCIES.get(fmt, [])
+        if not deps:
+            pc_logging.warn(f"No dependencies for {fmt.value}")
+        await asyncio.gather(*(runtime.ensure_async(dep) for dep in deps))
+
+    def _build_render_request(self, fmt: Format, obj, kwargs: dict, opts: dict) -> dict:
+        args = {
+            "wrapped": obj,
+        }
+
+        if fmt in {PartTypes.SVG, PartTypes.PNG}:
+            args.update(
+                {
+                    "viewport_origin": kwargs.get("viewport_origin", [100, -100, 100]),
+                    "line_weight": kwargs.get("line_weight", 1.0),
+                }
+            )
+            if fmt == PartTypes.PNG:
+                args.update(
+                    {
+                        "width": kwargs.get("width", 512),
+                        "height": kwargs.get("height", 512),
+                    }
+                )
+
+        if fmt in {
+            PartTypes.STL,
+            PartTypes.OBJ,
+            PartTypes.THREEJS,
+            PartTypes.GLTF,
+            PartTypes.THREE_MF,
+        }:
+            args.update(
+                {
+                    "tolerance": kwargs.get("tolerance", opts.get("tolerance", 0.1)),
+                    "angularTolerance": kwargs.get("angularTolerance", opts.get("angularTolerance", 0.1)),
+                    "ascii": kwargs.get("ascii", opts.get("ascii", False)) if fmt == PartTypes.STL else False,
+                    "binary": (kwargs.get("binary", opts.get("binary", False)) if fmt == PartTypes.GLTF else False),
+                }
+            )
+
+        if fmt == PartTypes.STEP:
+            args.update(
+                {
+                    "write_pcurves": kwargs.get("write_pcurves", opts.get("write_pcurves", True)),
+                    "precision_mode": kwargs.get("precision_mode", opts.get("precision_mode", 0)),
+                }
+            )
+
+        return args
+
+    @staticmethod
+    def _resolve_format_enum(format_name: str) -> Format:
+        for enum_cls in PartTypes.export:
+            try:
+                return enum_cls(format_name)
+            except ValueError:
+                continue
+        raise ValueError(f"Unsupported format: {format_name}")
+
     async def render_async(
         self, ctx: Context, format_name: str, project: Optional[Project] = None, filepath=None, **kwargs
     ) -> None:
@@ -442,119 +490,73 @@ class Shape(ShapeConfiguration):
             filepath: Target file path for output.
             kwargs: Additional options (width, height, etc.).
         """
-        WRAPPER_FORMATS = {
-            "svg": ["cadquery-ocp==7.7.2", "ocpsvg==0.3.4", "build123d==0.8.0"],
-            "png": [
-                "cadquery-ocp==7.7.2",
-                "ocpsvg==0.3.4",
-                "build123d==0.8.0",
-                "svglib==1.5.1",
-                "reportlab",
-                "rlpycairo==0.3.0",
-            ],
-            "brep": ["cadquery-ocp==7.7.2"],
-            "step": ["cadquery-ocp==7.7.2"],
-            "stl": ["cadquery-ocp==7.7.2"],
-            "obj": ["cadquery-ocp==7.7.2"],
-            "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
-            "gltf": ["cadquery-ocp==7.7.2"],
-            "threejs": ["cadquery-ocp==7.7.2"],
-        }
+        pc_logging.info(f"[Render] Starting render for '{self.name}' as '{format_name}'")
 
-        with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
+        format = PartTypes.convert_output.get_format(format_name)
+        if not format:
+            pc_logging.error(f"Unsupported format: {format_name}")
+            return
 
-            if filepath and os.path.isdir(filepath):
-                self.config_obj.setdefault("render", {})["output_dir"] = filepath
+        if filepath and os.path.isdir(filepath):
+            self.config_obj.setdefault("render", {})["output_dir"] = filepath
+            pc_logging.info(f"[Render] Using output directory: {filepath}")
 
-            if format_name == "gltf":
-                obj = await self.get_build123d(ctx)
-            else:
-                obj = await self.get_wrapped(ctx)
+        with pc_logging.Action(f"Render{format.type.upper()}", self.project_name, self.name):
+            obj = await self.get_build123d(ctx) if format == PartTypes.GLTF else await self.get_wrapped(ctx)
 
             if obj is None:
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
                 return
 
+            pc_logging.info("[Render] Shape successfully retrieved.")
+
             if project is not None:
                 project.ctx.ensure_dirs_for_file(filepath)
 
-            formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
+            runtime = ctx.get_python_runtime(version="3.11")
+            pc_logging.info("[Render] Ensuring dependencies...")
+            await self._ensure_dependencies(runtime, format.type)
 
-            for format in formats_to_render:
-                file_extension = EXTENSION_MAPPING.get(format, format)
-                render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
-                final_filepath = os.path.abspath(final_filepath)
-                pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
+            wrapper_path = wrapper.get_render(f"{format.type}.py")
+            pc_logging.info(f"[Render] Wrapper path: {wrapper_path}")
 
-                wrapper_path = wrapper.get(f"render_{format}.py")
+            render_opts, final_filepath = self.render_getopts(format.type, f".{format.ext}", project, filepath)
+            pc_logging.info(f"[Render] Final output file: {final_filepath}")
 
-                request = {"wrapped": obj}
+            request = self._build_render_request(format, obj, kwargs, render_opts)
+            pc_logging.debug(f"[Render] Render request built: {request}")
 
-                if format in ["svg", "png"]:
-                    request["viewport_origin"] = kwargs.get("viewport_origin", [100, -100, 100])
-                    request["line_weight"] = kwargs.get("line_weight", 1.0)
-                    if format == "png":
-                        request["width"] = kwargs.get("width", 512)
-                        request["height"] = kwargs.get("height", 512)
+            register_ocp_helper()
+            pc_logging.info("[Render] Running external render subprocess...")
 
-                elif format in ["3mf", "obj", "gltf", "stl", "threejs"]:
-                    request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
-                    request["angularTolerance"] = kwargs.get(
-                        "angularTolerance", render_opts.get("angularTolerance", 0.1)
-                    )
-                    if format == "stl":
-                        request["ascii"] = kwargs.get("ascii", render_opts.get("ascii", False))
-                    elif format == "gltf":
-                        request["binary"] = kwargs.get("binary", render_opts.get("binary", False))
+            response_serialized, errors = await runtime.run_async(
+                [wrapper_path, os.path.abspath(final_filepath)],
+                serialize_request(request),
+            )
 
-                elif format == "step":
-                    request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
-                    request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
+            sys.stderr.write(errors)
+            if errors:
+                pc_logging.error(f"Wrapper {format.type.upper()} stderr:\n{errors}")
 
-                register_ocp_helper()
+            response_lines = response_serialized.strip().splitlines()
+            if not response_lines:
+                pc_logging.error(f"Empty response from wrapper: {wrapper_path}")
+                return
 
-                picklestring = pickle.dumps(request)
-                request_serialized = base64.b64encode(picklestring).decode()
+            cleaned_response = response_lines[-1].strip()
+            pc_logging.debug(f"[Render] Cleaned response: {cleaned_response[:80]}...")
 
-                runtime = ctx.get_python_runtime(version="3.11")
+            try:
+                result = deserialize_response(cleaned_response)
+                pc_logging.info(f"[Render] Deserialization successful: success={result.get('success')}")
+            except Exception as e:
+                pc_logging.error(f"Failed to deserialize response: {e}")
+                return
 
-                dependencies = WRAPPER_FORMATS[format_name]
-                await asyncio.gather(*(runtime.ensure_async(dep) for dep in dependencies))
-
-                # Run wrapper
-                response_serialized, errors = await runtime.run_async(
-                    [
-                        wrapper_path,
-                        final_filepath,
-                    ],
-                    request_serialized,
-                )
-                sys.stderr.write(errors)
-
-                if errors:
-                    pc_logging.error(f"Wrapper {format_name} stderr:\n{errors}")
-
-                response_lines = response_serialized.strip().splitlines()
-                if not response_lines:
-                    pc_logging.error(f"Empty response from wrapper: {wrapper_path}")
-                    return
-
-                cleaned_response = response_lines[-1].strip()
-
-                # Handle response
-                result = {}
-                try:
-                    response_bytes = base64.b64decode(cleaned_response)
-                    result = pickle.loads(response_bytes)
-                except Exception as e:
-                    pc_logging.error(f"Failed to deserialize response: {e}")
-
-                if not result.get("success", False):
-                    pc_logging.error(
-                        f"Render {format_name.upper()} failed for {self.project_name}:{self.name}: {result.get('exception', 'Unknown error')}"
-                    )
-                if "exception" in result and result["exception"]:
-                    pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
+            if not result.get("success", False):
+                pc_logging.error(f"Render {format.type.upper()} failed: {result.get('exception')}")
+            if result.get("exception"):
+                pc_logging.exception(f"Render exception: {result['exception']}")
 
     def render(
         self,

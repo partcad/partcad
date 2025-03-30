@@ -14,7 +14,7 @@ def import_part_action(project: Project, kind: str, name: str, source_path: str,
     source_path = Path(source_path).resolve()
     original_source = source_path
 
-    pc_logging.info(f"Importing '{name}' ({kind}) from '{source_path}'")
+    pc_logging.info(f"Importing part: '{name}' ({kind}) from '{source_path}'")
 
     if not source_path.exists():
         raise ValueError(f"Source file '{source_path}' not found.")
@@ -24,14 +24,12 @@ def import_part_action(project: Project, kind: str, name: str, source_path: str,
         temp_dir = Path(tempfile.mkdtemp())
         converted_path = temp_dir / f"{name}.{target_format}"
 
-        pc_logging.info(f"Performing ad-hoc conversion: {kind} -> {target_format}")
         convert_cad_file(str(source_path), kind, str(converted_path), target_format)
 
         if not converted_path.exists():
             raise RuntimeError(f"Ad-hoc conversion failed: {source_path} -> {converted_path}")
 
         kind, source_path = target_format, converted_path
-        pc_logging.info(f"Ad-hoc conversion successful: {converted_path}")
 
     # Copy file into project
     target_path = (Path(project.path) / f"{name}.{kind}").resolve()

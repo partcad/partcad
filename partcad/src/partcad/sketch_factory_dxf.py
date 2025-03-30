@@ -12,6 +12,8 @@ import os
 import pickle
 import sys
 
+from partcad.utils import serialize_request
+
 from . import wrapper
 from . import logging as pc_logging
 from .sketch_factory_python import SketchFactoryPython
@@ -75,8 +77,6 @@ class SketchFactoryDxf(SketchFactoryPython):
                     "exclude": self.exclude,
                 }
                 register_ocp_helper()
-                picklestring = pickle.dumps(request)
-                request_serialized = base64.b64encode(picklestring).decode()
 
                 await self.runtime.ensure_async("cadquery-ocp==7.7.2")
                 await self.runtime.ensure_async("cadquery==2.5.2")
@@ -86,7 +86,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                         os.path.abspath(self.path),
                         os.path.abspath(self.project.config_dir),
                     ],
-                    request_serialized,
+                    serialize_request(request),
                 )
                 sys.stderr.write(errors)
 

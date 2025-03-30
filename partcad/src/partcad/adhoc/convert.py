@@ -11,7 +11,6 @@ import tempfile
 
 from .. import logging as pc_logging
 from ..context import Context
-from ..part import Part
 
 
 def convert_cad_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
@@ -24,10 +23,9 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
         output_filename (str): Path to save the output file.
         output_type (str): Format of the output file.
     """
-    input_path = Path(input_filename).resolve()  # Use absolute path of the input file
+    input_path = Path(input_filename).resolve()
+    temp_dir = Path(tempfile.mkdtemp())
 
-    # Generate a temporary configuration file for PartCAD
-    temp_dir = Path(tempfile.mkdtemp())  # Create a temporary directory for PartCAD config
     try:
         generate_partcad_config(temp_dir, input_type, input_path)
 
@@ -38,22 +36,27 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
         if not part:
             raise RuntimeError("Failed to load the input part: no part returned")
 
+        pc_logging.info(
+            f"Ad-hoc converting '{input_filename}': {input_type.upper()} to {output_type.upper()} ({output_filename})"
+        )
+
         shape = asyncio.run(part.get_wrapped(ctx))
         if not shape:
             raise RuntimeError("Failed to load the input part: no shape returned")
-        pc_logging.info(f"Loaded input part: {input_path}")
-        pc_logging.info(f"Shape: {type(shape)}")
+        pc_logging.debug(f"Loaded input part: {input_path}")
+        pc_logging.debug(f"Shape: {type(shape)}")
 
         if part.errors:
             raise RuntimeError(f"Failed to load the input part: {part.errors}")
 
         # Render the part to the desired output format
         part.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
+        pc_logging.info(f"Ad-hoc conversion successful: {output_filename}")
 
     except Exception as e:
         raise RuntimeError(f"Failed to convert: {e.with_traceback(None)}")
     finally:
-        shutil.rmtree(temp_dir)  # Cleanup temporary files
+        shutil.rmtree(temp_dir)
 
 
 def generate_partcad_config(temp_dir: Path, input_type: str, temp_input_path: Path) -> None:

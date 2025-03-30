@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "PartCAD"
-copyright = "2024, PartCAD"
+copyright = "2025, PartCAD"
 author = "PartCAD"
 
 # -- General configuration ---------------------------------------------------

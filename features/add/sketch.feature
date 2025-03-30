@@ -223,6 +223,28 @@ Feature: `pc add sketch` command
       assemblies:
       """
 
+   
+  @svg
+  Scenario: Add SVG sketch from "design.svg" file
+    Given a file named "design.svg" with content:
+      """
+      -- SVG file content --
+      """
+    When I run "partcad add sketch design.svg"
+    Then the command should exit with a status code of "0"
+    And a file named "partcad.yaml" should have YAML content:
+      """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
+      dependencies:
+      sketches:
+        design:
+          type: svg
+      parts:
+      assemblies:
+      """
+
   # TODO(clairbee): add support for sketches from AI-generated scripts
   # @wip @ai-cadquery
   # Scenario: Add ai-cadquery Part using OpenAI

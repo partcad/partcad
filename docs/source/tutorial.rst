@@ -99,11 +99,10 @@ Example log output:
 .. code-block:: text
 
     pc import part step my_part.step -t stl
-    INFO: Importing part: my_part.step (step)
-    INFO: Performing ad-hoc conversion: step → stl
+    INFO: Importing part: 'my_part' (step) from '.../my_part.step'
+    INFO: Ad-hoc converting 'my_part.step': STEP to STL (my_part.stl)
     INFO: Ad-hoc conversion successful: my_part.stl
-    INFO: Successfully imported part: my_part
-
+    INFO: Part 'my_part' added successfully.
 .. note::
     - The imported part is added to the project directory.
     - If a target format is specified, the part is converted automatically.
@@ -188,14 +187,13 @@ This is useful for verifying which files would be affected before performing the
 .. code-block:: shell
 
     # Simulate converting "cube" to STEP format without modifying anything
-    pc convert cube -t step --dry-run
+    pc convert :cube -t step --dry-run
 
     # Example output:
-    # INFO: Starting conversion: 'cube' → 'step', dry_run=True
-    # INFO: Resolving package '', part 'cube'
-    # INFO: Using project '', located at '/workspaces/partcad/examples'
-    # INFO: Converting 'cube' (stl → step) → '/workspaces/partcad/examples/cube.step'
+    # INFO: Starting conversion: ':cube'
+    # INFO: Converting 'cube': from STL to STEP  (/workspaces/partcad/examples/cube.step)
     # INFO: [Dry Run] No changes made for 'cube'.
+    # INFO: Conversion of 'cube' completed.
 
 This option ensures that no files are created or modified, and only logs the expected conversion actions.
 

@@ -15,6 +15,7 @@ from typing import Optional
 
 from partcad.part import Part
 from partcad.project import Project
+from partcad.sketch import Sketch
 
 from .cache import Cache
 from .cache_shape import ShapeCache
@@ -615,7 +616,7 @@ class Context(project_config.Configuration):
         pc_logging.debug("Retrieving %s from %s" % (sketch_name, project_name))
         return prj.get_sketch(sketch_name, params)
 
-    def get_sketch(self, sketch_spec, params=None):
+    def get_sketch(self, sketch_spec, params=None) -> Sketch:
         return self._get_sketch(sketch_spec, params)
 
     def get_sketch_shape(self, sketch_spec, params=None):

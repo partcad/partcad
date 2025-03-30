@@ -22,6 +22,7 @@ import typing
 
 from typing import Optional, List
 
+from partcad.part_types import PartTypes
 from partcad.shape import Shape
 
 from . import consts
@@ -39,24 +40,9 @@ from .sketch_factory_dxf import SketchFactoryDxf
 from .sketch_factory_svg import SketchFactorySvg
 from .sketch_factory_build123d import SketchFactoryBuild123d
 from .sketch_factory_cadquery import SketchFactoryCadquery
+from .part_factory import get_factory
 from .part import Part
 from . import part_config
-from .part_factory_extrude import PartFactoryExtrude
-from .part_factory_sweep import PartFactorySweep
-from . import part_factory_scad as pfscad
-from . import part_factory_step as pfs
-from . import part_factory_stl as pfstl
-from . import part_factory_obj as pfo
-from . import part_factory_3mf as pf3
-from .part_factory_ai_cadquery import PartFactoryAiCadquery
-from .part_factory_ai_build123d import PartFactoryAiBuild123d
-from .part_factory_ai_openscad import PartFactoryAiScad
-from . import part_factory_cadquery as pfc
-from . import part_factory_build123d as pfb
-from . import part_factory_alias as pfa
-from . import part_factory_enrich as pfe
-from . import part_factory_brep as pfbr
-from . import part_factory_kicad as pfkicad
 from . import assembly
 from . import assembly_config
 from . import provider
@@ -558,44 +544,17 @@ class Project(project_config.Configuration):
             source_project = self
 
         part_name: str = config["name"]
+        part_type: str = config["type"]
 
-        if not "type" in config:
-            raise Exception("ERROR: Part type is not specified: %s: %s" % (part_name, config))
-        elif config["type"] == "ai-cadquery":
-            PartFactoryAiCadquery(self.ctx, source_project, self, config)
-        elif config["type"] == "ai-build123d":
-            PartFactoryAiBuild123d(self.ctx, source_project, self, config)
-        elif config["type"] == "ai-openscad":
-            PartFactoryAiScad(self.ctx, source_project, self, config)
-        elif config["type"] == "cadquery":
-            pfc.PartFactoryCadquery(self.ctx, source_project, self, config)
-        elif config["type"] == "build123d":
-            pfb.PartFactoryBuild123d(self.ctx, source_project, self, config)
-        elif config["type"] == "step":
-            pfs.PartFactoryStep(self.ctx, source_project, self, config)
-        elif config["type"] == "brep":
-            pfbr.PartFactoryBrep(self.ctx, source_project, self, config)
-        elif config["type"] == "stl":
-            pfstl.PartFactoryStl(self.ctx, source_project, self, config)
-        elif config["type"] == "3mf":
-            pf3.PartFactory3mf(self.ctx, source_project, self, config)
-        elif config["type"] == "obj":
-            pfo.PartFactoryObj(self.ctx, source_project, self, config)
-        elif config["type"] == "scad":
-            pfscad.PartFactoryScad(self.ctx, source_project, self, config)
-        elif config["type"] == "kicad":
-            pfkicad.PartFactoryKicad(self.ctx, source_project, self, config)
-        elif config["type"] == "extrude":
-            PartFactoryExtrude(self.ctx, source_project, self, config)
-        elif config["type"] == "sweep":
-            PartFactorySweep(self.ctx, source_project, self, config)
-        elif config["type"] == "alias":
-            pfa.PartFactoryAlias(self.ctx, source_project, self, config)
-        elif config["type"] == "enrich":
-            pfe.PartFactoryEnrich(self.ctx, source_project, self, config)
-        else:
-            pc_logging.error("Invalid part type encountered: %s: %s" % (part_name, config))
-            return None
+        if "type" not in config:
+            raise Exception(f"ERROR: Part type is not specified: {part_name}: {config}")
+
+        factory = get_factory(part_type)
+
+        if not factory:
+            raise ValueError(f"No factory found for type '{part_type}'")
+
+        factory(self.ctx, source_project or self, self, config)
 
         # Initialize aliases if they are declared implicitly
         if "aliases" in config and not config["aliases"] is None:
@@ -609,7 +568,8 @@ class Project(project_config.Configuration):
                     "source": ":" + part_name,
                 }
                 alias_part_config = part_config.PartConfiguration.normalize(alias, alias_part_config)
-                pfa.PartFactoryAlias(self.ctx, source_project, self, alias_part_config)
+                factory = get_factory("alias")
+                factory(self.ctx, source_project, self, alias_part_config)
 
     def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
         if func_params is None or not func_params:

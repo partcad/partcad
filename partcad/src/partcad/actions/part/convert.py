@@ -3,11 +3,14 @@ import shutil
 from typing import Optional
 import partcad.logging as pc_logging
 from partcad.project import Project
+from partcad.part_types import PartTypes
 from partcad.utils import resolve_resource_path
 
-from partcad.shape import EXTENSION_MAPPING
 
-SHALLOW_COPY_SUFFICIENT_TYPES = ["alias", "enrich"]
+SHALLOW_COPY_SUFFICIENT_TYPES = PartTypes.meta.types()
+
+OUTPUT_EXT_MAP = PartTypes.convert_output.as_dict()
+OUTPUT_EXT_MAP.update(PartTypes.script.as_dict())
 
 
 def deep_merge(base: dict, override: dict) -> dict:
@@ -27,7 +30,7 @@ def get_source_path(project: Project, config: dict, part_name: str) -> Path:
         source_path = (Path(project.path) / config["path"]).resolve()
     else:
         part_type = config.get("type")
-        ext = EXTENSION_MAPPING.get(part_type, part_type)
+        ext = OUTPUT_EXT_MAP.get(part_type, part_type)
         source_path = Path(project.config_dir) / f"{part_name}.{ext}"
 
     pc_logging.debug(f"Checking source path for '{part_name}': {source_path}")
@@ -40,12 +43,12 @@ def get_source_path(project: Project, config: dict, part_name: str) -> Path:
 
 def parse_parameters_from_source(source_value: str) -> dict:
     """Extract parameters from the source name string."""
-    if ';' in source_value:
-        base_source, params_str = source_value.split(';', 1)
+    if ";" in source_value:
+        base_source, params_str = source_value.split(";", 1)
         parameters = {}
-        for param in params_str.split(','):
-            key, value = param.split('=')
-            parameters[key] = float(value) if '.' in value else int(value)
+        for param in params_str.split(","):
+            key, value = param.split("=")
+            parameters[key] = float(value) if "." in value else int(value)
         return base_source, parameters
     return source_value, {}
 
@@ -130,11 +133,18 @@ def update_parameters_with_defaults(part_config: dict) -> dict:
     return part_config
 
 
-def perform_conversion(project: Project, part_name: str, original_type: str,
-                       part_config: dict, source_path: Path, target_format: str,
-                       output_dir: Optional[str], dependencies_list: list = []) -> Path:
+def perform_conversion(
+    project: Project,
+    part_name: str,
+    original_type: str,
+    part_config: dict,
+    source_path: Path,
+    target_format: str,
+    output_dir: Optional[str],
+    dependencies_list: list = [],
+) -> Path:
     """Handles file conversion and updates project configuration."""
-    new_ext = EXTENSION_MAPPING.get(target_format, target_format)
+    new_ext = OUTPUT_EXT_MAP.get(target_format, target_format)
 
     if output_dir:
         out_dir = Path(output_dir).resolve()
@@ -152,8 +162,11 @@ def perform_conversion(project: Project, part_name: str, original_type: str,
         pc_logging.warning(f"Skipping conversion: source and target paths are identical ({source_path}).")
         return output_path
 
-    pc_logging.info(f"Converting '{part_name}': {original_type} to {target_format} ({output_path})")
+    pc_logging.info(f"Converting '{part_name}': {original_type.upper()} to {target_format.upper()} ({output_path})")
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    pc_logging.info(OUTPUT_EXT_MAP)
+    pc_logging.info(output_path)
 
     with pc_logging.Process("Convert", part_name):
         if original_type in SHALLOW_COPY_SUFFICIENT_TYPES:
@@ -162,8 +175,12 @@ def perform_conversion(project: Project, part_name: str, original_type: str,
         else:
             pc_logging.info(target_format)
             project.render(
-                sketches=[], interfaces=[], parts=[part_name], assemblies=[],
-                format=target_format, output_dir=str(out_dir)
+                sketches=[],
+                interfaces=[],
+                parts=[part_name],
+                assemblies=[],
+                format=target_format,
+                output_dir=str(out_dir),
             )
             return output_path
 
@@ -204,8 +221,13 @@ def copy_dependencies(source_project: Project, part_config: dict, output_dir: Op
     return copied_files
 
 
-def convert_part_action(project: Project, object_name: str, target_format: Optional[str] = None,
-                        output_dir: Optional[str] = None, dry_run: bool = False):
+def convert_part_action(
+    project: Project,
+    object_name: str,
+    target_format: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    dry_run: bool = False,
+):
     """
     Convert a part to a new format and update its configuration.
     """
@@ -238,14 +260,16 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     copied_dependencies = []
     converted_path = source_path
     if part_type != conversion_target:
-        converted_path = perform_conversion(project, part_name, part_type, part_config,
-                                            source_path, conversion_target,
-                                            output_dir, copied_dependencies)
+        converted_path = perform_conversion(
+            project, part_name, part_type, part_config, source_path, conversion_target, output_dir, copied_dependencies
+        )
 
     try:
         config_path = converted_path.relative_to(project.path)
     except ValueError:
         config_path = Path("/") / converted_path.relative_to(output_dir)
+
+    pc_logging.info(converted_path)
 
     updated_config = deep_merge(part_config, {"type": conversion_target, "path": str(config_path)})
     updated_config = update_parameters_with_defaults(updated_config)
@@ -262,8 +286,13 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
 
     if target_format and target_format != conversion_target:
         final_path = perform_conversion(
-            project, part_name, conversion_target, updated_config,
-            converted_path, target_format, output_dir,
+            project,
+            part_name,
+            conversion_target,
+            updated_config,
+            converted_path,
+            target_format,
+            output_dir,
         )
 
         if final_path is None or not final_path.exists():

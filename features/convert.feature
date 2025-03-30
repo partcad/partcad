@@ -42,7 +42,7 @@ Feature: `pc convert` command
     Given a directory named "output" exists
     When I run "pc convert :cube -t step -O output"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Converting 'cube': stl to step"
+    And STDOUT should contain "Converting 'cube': STL to STEP"
     And a file named "output/cube.step" should exist
 
   @error
@@ -64,7 +64,7 @@ Feature: `pc convert` command
   Scenario: Resolving an enrich part
     When I run "pc convert :cube_enrich"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Converting 'cube_enrich': enrich to stl"
+    And STDOUT should contain "Converting 'cube_enrich': ENRICH to STL"
     And a file named "cube_enrich.stl" should exist
     And a file named "partcad.yaml" should have YAML content:
       """
@@ -139,8 +139,8 @@ Feature: `pc convert` command
       """
     When I run "pc convert :cube_enrich -t brep"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Converting 'cube_enrich': enrich to stl"
-    And STDOUT should contain "Converting 'cube_enrich': stl to brep"
+    And STDOUT should contain "Converting 'cube_enrich': ENRICH to STL"
+    And STDOUT should contain "Converting 'cube_enrich': STL to BREP"
     And a file named "cube_enrich.brep" should exist
 
   @enrich @output-dir
@@ -154,7 +154,7 @@ Feature: `pc convert` command
   Scenario: Resolving an alias part
     When I run "pc convert cube_alias"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Converting 'cube_alias': alias to stl"
+    And STDOUT should contain "Converting 'cube_alias': ALIAS to STL"
     And a file named "cube_alias.stl" should exist
     And a file named "partcad.yaml" should have YAML content:
       """
@@ -214,8 +214,8 @@ Feature: `pc convert` command
       """
     When I run "pc convert :cube_alias -t brep"
     Then the command should exit with a status code of "0"
-    And STDOUT should contain "Converting 'cube_alias': alias to stl"
-    And STDOUT should contain "Converting 'cube_alias': stl to brep"
+    And STDOUT should contain "Converting 'cube_alias': ALIAS to STL"
+    And STDOUT should contain "Converting 'cube_alias': STL to BREP"
     And a file named "cube_alias.brep" should exist
 
   @alias @output-dir

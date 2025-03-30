@@ -7,16 +7,23 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from . import factory
 
 from .file_factory import FileFactory
 from .port import WithPorts
 
+if TYPE_CHECKING:
+    from partcad.context import Context
+    from partcad.project import Project
+
 
 class ShapeFactory(factory.Factory):
     fileFactory: FileFactory
 
-    def __init__(self, ctx, project, config) -> None:
+    def __init__(self, ctx: Context, project: Project, config) -> None:
         super().__init__()
 
         self.ctx = ctx

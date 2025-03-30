@@ -12,6 +12,8 @@ import os
 import pickle
 import sys
 
+from partcad.utils import serialize_request
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
@@ -126,10 +128,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             #     patch.update(self.config["patch"])
             # request["patch"] = patch
 
-            # Serialize the request
             register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
 
             # TODO-199: Use a requirements.txt or pyproject.toml for version specifications
             # TODO-200: Create a version resolution mechanism that can handle dependency conflicts
@@ -167,7 +166,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
                     os.path.abspath(self.path),
                     os.path.abspath(cwd),
                 ],
-                request_serialized,
+                serialize_request(request),
                 session=self.session,
             )
             if len(errors) > 0:

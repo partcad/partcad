@@ -2,23 +2,23 @@ import rich_click as click
 from partcad.actions.part import convert_part_action
 from partcad.context import Context
 import partcad.logging as pc_logging
-
-
-SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gltf"]
+from partcad.part_types import PartTypes
 
 
 @click.command(help="Convert parts, assemblies, or scenes to another format and update their type.")
 @click.argument("object_name", type=str, required=True)
 @click.option(
-    "-t", "--target-format",
+    "-t",
+    "--target-format",
     help="Target conversion format.",
-    type=click.Choice(SUPPORTED_CONVERT_FORMATS),
-    required=False
+    type=click.Choice(PartTypes.convert_output.as_dict()),
+    required=False,
 )
 @click.option(
-    "-O", "--output-dir",
+    "-O",
+    "--output-dir",
     help="Output directory for converted files.",
-    type=click.Path(exists=True, file_okay=False, dir_okay=True)
+    type=click.Path(exists=True, file_okay=False, dir_okay=True),
 )
 @click.option("--dry-run", help="Simulate conversion without making any changes.", is_flag=True)
 @click.pass_obj

@@ -7,6 +7,9 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+from typing import Any
+from dataclasses import dataclass
+
 
 # Merge render configs (to override project's config with the part's config)
 def render_cfg_merge(a: dict, b: dict, path=[]):

@@ -1,13 +1,12 @@
 from pathlib import Path
 import rich_click as click
+from partcad.assembly_types import AssemblyTypes
 import partcad.logging as pc_logging
 from partcad.actions.assembly import import_assy_action
 from partcad.context import Context
 
-# assembly_type: [file_extensions]
-SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT = {
-    "step": ["step", "stp"],
-}
+
+SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT = AssemblyTypes.importable.as_dict()
 
 @click.command(help="Import an assembly from a file, creating parts and an ASSY (Assembly YAML).")
 @click.argument("assembly_file", type=str, required=True)

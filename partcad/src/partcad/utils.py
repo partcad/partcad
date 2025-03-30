@@ -6,6 +6,9 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+import base64
+from enum import Enum
+import pickle
 import re
 import sys
 from types import ModuleType, FunctionType
@@ -42,7 +45,7 @@ def resolve_resource_path(current_project_name, pattern: str):
     # For backward compatibility '/' -> '//'
     if re.match(r"^/[^/]", project_pattern):
         pc_logging.warning(f"{project_pattern}: using '/' as the root package path is deprecated. Use '//' instead.")
-        project_pattern = '/' + project_pattern
+        project_pattern = "/" + project_pattern
     project_pattern = project_pattern.replace("...", "*")
     if not project_pattern.startswith("//"):
         if current_project_name.endswith("/"):
@@ -79,3 +82,37 @@ def total_size(obj, verbose=False):
                 need_referents.append(obj)
         objects = get_referents(*need_referents)
     return size
+
+
+def serialize_request(obj: dict) -> str:
+    """
+    Serializes a Python dictionary to a base64-encoded pickle string.
+
+    Args:
+        obj (dict): The dictionary to serialize.
+
+    Returns:
+        str: A base64-encoded string representing the pickled object.
+    """
+    picklestring = pickle.dumps(obj)
+    obj_serialized = base64.b64encode(picklestring).decode()
+    return obj_serialized
+
+
+def deserialize_response(encoded: str) -> dict:
+    """
+    Deserializes a base64-encoded pickle string back into a Python dictionary.
+
+    Args:
+        encoded (str): The base64-encoded string to deserialize.
+
+    Returns:
+        dict: The original dictionary that was serialized.
+
+    Raises:
+        RuntimeError: If deserialization fails due to corrupt or invalid data.
+    """
+    try:
+        return pickle.loads(base64.b64decode(encoded.strip()))
+    except Exception as e:
+        raise RuntimeError(f"Deserialization failed: {e}")

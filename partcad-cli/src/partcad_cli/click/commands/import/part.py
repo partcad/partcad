@@ -3,35 +3,21 @@ from pathlib import Path
 import partcad.logging as pc_logging
 from partcad.actions.part import import_part_action
 from partcad.context import Context
-from partcad_cli.click.commands.convert import SUPPORTED_CONVERT_FORMATS
+from partcad.part_types import PartTypes
 
-# part_type: [file_extensions]
-SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
-    "step": ["step", "stp"],
-    "brep": ["brep"],
-    "stl": ["stl"],
-    "3mf": ["3mf"],
-    "threejs": ["json"],
-    "obj": ["obj"],
-    "gltf": ["gltf", "glb"],
-    "scad": ["scad"],
-    "cadquery": ["py"],
-    "build123d": ["py"],
-}
+
+CONVERT_EXT_MAP = PartTypes.convert_output.as_dict()
 
 
 @click.command(help="Import an existing part and optionally convert its format.")
 @click.argument("existing_part", type=str, required=True)
 @click.option(
-    "-t", "--target-format",
-    type=click.Choice(SUPPORTED_CONVERT_FORMATS),
-    help="Convert the imported part to the specified format."
+    "-t",
+    "--target-format",
+    type=click.Choice(PartTypes.convert_output.types()),
+    help="Convert the imported part to the specified format.",
 )
-@click.option(
-    "--desc",
-    type=str,
-    help="Optional description for the imported part."
-)
+@click.option("--desc", type=str, help="Optional description for the imported part.")
 @click.pass_obj
 def cli(ctx: Context, existing_part: str, target_format: str, desc: str):
     """
@@ -44,17 +30,15 @@ def cli(ctx: Context, existing_part: str, target_format: str, desc: str):
 
     detected_ext = file_path.suffix.lstrip(".").lower()
     part_type = None
-    for supported_type in SUPPORTED_IMPORT_FORMATS_WITH_EXT.keys():
-        if detected_ext in SUPPORTED_IMPORT_FORMATS_WITH_EXT[supported_type]:
+    for supported_type in CONVERT_EXT_MAP.keys():
+        if detected_ext in CONVERT_EXT_MAP[supported_type]:
             part_type = supported_type if detected_ext != "py" else __detect_script_type(file_path)
 
     if not part_type:
         raise click.ClickException(
-                    f"Cannot determine file type for '{existing_part}'. "
-                    f"Supported part types: {', '.join(set(SUPPORTED_IMPORT_FORMATS_WITH_EXT.keys()))}. "
-                )
-
-    pc_logging.info(f"Importing part: {existing_part} ({part_type})")
+            f"Cannot determine file type for '{existing_part}'. "
+            f"Supported part types: {', '.join(set(CONVERT_EXT_MAP.keys()))}. "
+        )
 
     project = ctx.get_project("")
     if not project:

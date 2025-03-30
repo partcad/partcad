@@ -31,6 +31,8 @@ from .logging_ansi_terminal import fini as logging_ansi_terminal_fini
 from . import logging
 from . import utils
 from . import exception
+from . import part_factory
+from .part_types import PartTypes
 
 # TODO: remove partcad old version usage from vscode extension
 # /home/vscode/.vscode-server/extensions/openvmp.partcad-0.7.15/bundled/tool/lsp_server.py:690:        partcad.plugins.export_png = partcad.PluginExportPngReportlab()
@@ -60,7 +62,8 @@ __all__ = [
     "scene",
     "plugins",
     "exception",
-    "PluginExportPngReportlab"
+    "PluginExportPngReportlab",
+    "PartTypes"
 ]
 
 if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):

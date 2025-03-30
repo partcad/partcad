@@ -3,6 +3,8 @@ import partcad as pc
 from partcad.actions.part import add_part_action
 from pathlib import Path
 
+from partcad.part_types import PartTypes
+
 
 @click.command(help="Add a part")
 @click.option(
@@ -29,20 +31,7 @@ from pathlib import Path
 # TODO-93: @alexanderilyin: Make this optional and detect the kind from the PATH
 @click.argument(
     "kind",
-    type=click.Choice(
-        [
-            "cadquery",
-            "build123d",
-            "scad",
-            "step",
-            "brep",
-            "stl",
-            "3mf",
-            "obj",
-            "ai-cadquery",
-            "ai-openscad",
-        ]
-    ),
+    type=click.Choice(PartTypes.importable.types()),
     # help="Type of the part",
 )
 @click.argument("path", type=str)  # help="Path to the file"

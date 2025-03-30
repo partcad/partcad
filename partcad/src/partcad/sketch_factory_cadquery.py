@@ -22,6 +22,8 @@ from OCP.TopoDS import (
 )
 from OCP.TopLoc import TopLoc_Location
 
+from partcad.utils import serialize_request
+
 from .sketch_factory_python import SketchFactoryPython
 from . import wrapper
 from . import logging as pc_logging
@@ -77,10 +79,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
                 patch.update(self.config["patch"])
             request["patch"] = patch
 
-            # Serialize the request
             register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
 
             await self.runtime.ensure_async(
                 "ocp-tessellate==3.0.9",
@@ -115,7 +114,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
                     os.path.abspath(sketch.path),
                     os.path.abspath(cwd),
                 ],
-                request_serialized,
+                serialize_request(request),
             )
             if len(errors) > 0:
                 error_lines = errors.split("\n")
