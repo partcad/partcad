@@ -41,6 +41,7 @@ from ...cli_context import CliContext
         [
             "cadquery",
             "build123d",
+            "sdf",
             "scad",
             "step",
             "brep",

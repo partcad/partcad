@@ -24,6 +24,7 @@ SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
     "scad": ["scad"],
     "cadquery": ["py"],
     "build123d": ["py"],
+    "sdf": ["py"],
 }
 
 
@@ -113,6 +114,8 @@ def __detect_script_type(file_path: Path, lines_check_range: int = 50) -> str | 
                     return "cadquery"
                 if "import build123d" in line or "from build123d" in line:
                     return "build123d"
+                if "import sdf" in line or "from sdf" in line:
+                    return "sdf"
 
     except Exception as e:
         pc.logging.warning(f"Could not read script file {file_path}: {e}")
