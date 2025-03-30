@@ -142,7 +142,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
             try:
                 attempts = 0
                 while attempts < 3:
-                    with telemetry.tracer.start_as_current_span(
+                    with telemetry.start_as_current_span(
                         "CondaPythonRuntime.once_conda_locked.*{subprocess.Popen.conda.create}"
                     ) as span:
                         args = [
@@ -189,7 +189,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         pc_logging.error("conda env install error: %s" % stderr)
                     break
 
-                with telemetry.tracer.start_as_current_span(
+                with telemetry.start_as_current_span(
                     "CondaPythonRuntime.once_conda_locked.*{subprocess.Popen.install.pip}"
                 ) as span:
                     args = [

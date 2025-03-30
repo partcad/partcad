@@ -52,7 +52,7 @@ class PartFactoryScad(PartFactoryFile):
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 
-            with telemetry.tracer.start_as_current_span(
+            with telemetry.start_as_current_span(
                 "PartFactoryScad.instantiate.*{asyncio.create_subprocess_exec}"
             ) as span:
                 stl_path = tempfile.mktemp(".stl")
@@ -81,7 +81,7 @@ class PartFactoryScad(PartFactoryFile):
             if not os.path.exists(stl_path) or os.path.getsize(stl_path) == 0:
                 part.error("OpenSCAD failed to generate the STL file. Please, check the script.")
                 return None
-            with telemetry.tracer.start_as_current_span("*PartFactoryScad.instantiate.{build123d.import_stl}"):
+            with telemetry.start_as_current_span("*PartFactoryScad.instantiate.{build123d.import_stl}"):
                 try:
                     shape = b3d.Mesher().read(stl_path)[0].wrapped
                 except:

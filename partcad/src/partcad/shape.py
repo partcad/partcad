@@ -337,7 +337,7 @@ class Shape(ShapeConfiguration):
             "viewport_origin": viewport_origin,
         }
         register_ocp_helper()
-        with telemetry.tracer.start_as_current_span("*Shape.render_svg_somewhere.{pickle.dumps}"):
+        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{pickle.dumps}"):
             picklestring = pickle.dumps(request)
             request_serialized = base64.b64encode(picklestring).decode()
 
@@ -529,7 +529,7 @@ class Shape(ShapeConfiguration):
                 await asyncio.gather(*(runtime.ensure_async(dep) for dep in dependencies))
 
                 # Run wrapper
-                with telemetry.tracer.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
+                with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
                     response_serialized, errors = await runtime.run_async(
                         [
                             wrapper_path,

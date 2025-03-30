@@ -370,16 +370,73 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
 
     """
 
+    # Pull the parameters from the environment before doing anything
+    user_config_options = [
+        ("PC_THREADS_MAX", "threads_max"),
+        ("PC_CACHE_FILES", "cache"),
+        ("PC_CACHE_FILES_MAX_ENTRY_SIZE", "cache_max_entry_size"),
+        ("PC_CACHE_FILES_MIN_ENTRY_SIZE", "cache_min_entry_size"),
+        ("PC_CACHE_MEMORY_MAX_ENTRY_SIZE", "cache_memory_max_entry_size"),
+        ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
+        ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
+        ("PC_PYTHON_SANDBOX", "python_sandbox"),
+        ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
+        ("PC_FORCE_UPDATE", "force_update"),
+        ("PC_OFFLINE", "offline"),
+        ("PC_GOOGLE_API_KEY", "google_api_key"),
+        ("PC_OPENAI_API_KEY", "openai_api_key"),
+        ("PC_OLLAMA_NUM_THREAD", "ollama_num_thread"),
+        ("PC_MAX_GEOMETRIC_MODELING", "max_geometric_modeling"),
+        ("PC_MAX_MODEL_GENERATION", "max_model_generation"),
+        ("PC_MAX_SCRIPT_CORRECTION", "max_script_correction"),
+        ("PC_TELEMETRY_TYPE", "telemetry_type"),
+        ("PC_TELEMETRY_ENV", "telemetry_env"),
+        ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),
+        ("PC_TELEMETRY_FAILURES", "telemetry_failures"),
+        ("PC_TELEMETRY_DEBUG", "telemetry_debug"),
+        ("PC_TELEMETRY_SENTRY_DSN", "telemetry_sentry_dsn"),
+        ("PC_TELEMETRY_SENTRY_SHUTDOWN_TIMEOUT", "telemetry_sentry_shutdown_timeout"),
+        ("PC_TELEMETRY_SENTRY_ATTACH_STACKTRACE", "telemetry_sentry_attach_stacktrace"),
+        ("PC_TELEMETRY_SENTRY_TRACES_SAMPLE_RATE", "telemetry_sentry_traces_sample_rate"),
+    ]
+
+    for _env_var, attrib in user_config_options:
+        value = kwargs.get(attrib, None)
+        if value is not None:
+            if "telemetry" in attrib:
+                attrib = attrib.replace("telemetry_", "telemetry.")
+                attrib = re.sub(r"_([a-z])", lambda x: x.group(1).upper(), attrib)
+                pc.user_config.set(attrib, value)
+            else:
+                setattr(pc.user_config, attrib, value)
+
+    # Initialize logging before using telemetry, as telemetry may use logging
+    if no_ansi:
+        logging.getLogger("partcad").propagate = True
+        logging.basicConfig()
+    else:
+        pc.logging_ansi_terminal.init()
+
+    if quiet:
+        pc.logging.setLevel(logging.CRITICAL + 1)
+    else:
+        if verbose:
+            pc.logging.setLevel(logging.DEBUG)
+        else:
+            pc.logging.setLevel(logging.INFO)
+
+    # Start telemetry as soon as the config and logging are initialized
     flat_params = {k: str(v) for k, v in ctx.params.items()}
     flat_params["args"] = str(ctx.args)
     flat_params["argv"] = str(sys.argv)
     flat_params["command"] = ctx.command.name
     flat_params["subcommand"] = ctx.invoked_subcommand
     flat_params["action"] = "cli " + " ".join(sys.argv[1:])
-    with pc.telemetry.tracer.start_as_current_span("cli", attributes=flat_params, end_on_exit=False) as span:
+    with pc.telemetry.start_as_current_span("cli", attributes=flat_params, end_on_exit=False) as span:
         global cli_span
         cli_span = span
 
+        # Finish the span on exit only, as the command handler are called outside of the current stack
         def telemetry_atexit():
             pc.logging.debug("Flushing Sentry SDK events")
             global cli_span
@@ -408,7 +465,6 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             else:
                 pc.logging.setLevel(logging.INFO)
 
-        # TODO(clairbee): revisit why envionment variables are not used
         user_config_options = [
             ("PC_THREADS_MAX", "threads_max"),
             ("PC_CACHE_FILES", "cache"),
@@ -438,6 +494,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_TELEMETRY_SENTRY_TRACES_SAMPLE_RATE", "telemetry_sentry_traces_sample_rate"),
         ]
 
+        # TODO(clairbee): revisit why envionment variables are not used
         for _env_var, attrib in user_config_options:
             value = kwargs.get(attrib, None)
             if value is not None:
@@ -456,6 +513,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 pc.user_config.parameter_config[object_id] = {}
             pc.user_config.parameter_config[object_id][key] = value
 
+        # Prepare the callboack to be used by command handlers should they need a PartCAD context object
         def get_partcad_context():
             nonlocal ctx, path
             from partcad.globals import init
@@ -473,6 +531,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 traceback.print_exc()
                 raise click.Abort from e
 
+        # Pass everything the commands might need through the context object
         ctx.obj = CliContext(otel_context=pc.telemetry.context.get_current(), get_partcad_context=get_partcad_context)
 
 

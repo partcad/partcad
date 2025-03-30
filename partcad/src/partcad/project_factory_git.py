@@ -136,8 +136,8 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
         with cache_lock:
             attempt = 0
-            max_retries = self.ctx.user_config.get_int('git.clone.retry.max')
-            patience = self.ctx.user_config.get_float('git.clone.retry.patience')
+            max_retries = self.ctx.user_config.get_int("git.clone.retry.max")
+            patience = self.ctx.user_config.get_float("git.clone.retry.patience")
             while attempt <= max_retries and self.ctx.is_connected():
                 # Check if the repository is already cached.
                 if os.path.exists(cache_path):
@@ -160,7 +160,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 branch_name = remote_head.reference.name
                                 short_branch_name = branch_name[branch_name.find("/") + 1 :]
                                 pc_logging.debug("Refreshing the GIT branch: %s" % short_branch_name)
-                                with telemetry.tracer.start_as_current_span(
+                                with telemetry.start_as_current_span(
                                     "*ProjectFactoryGit._clone_or_update_repo.{Repo.pull}"
                                 ):
                                     origin.pull(short_branch_name)
@@ -181,7 +181,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 before = repo.active_branch.commit
                                 origin = repo.remote("origin")
                                 # Need to check for updates
-                                with telemetry.tracer.start_as_current_span(
+                                with telemetry.start_as_current_span(
                                     "*ProjectFactoryGit._clone_or_update_repo.{Repo.pull}-{Repo.fetch}"
                                 ):
                                     origin.fetch()
@@ -227,7 +227,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     # Clone the repository if it's not cached yet.
                     try:
                         pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
-                        with telemetry.tracer.start_as_current_span(
+                        with telemetry.start_as_current_span(
                             "*ProjectFactoryGit._clone_or_update_repo.{Repo.clone_from}"
                         ):
                             repo = Repo.clone_from(

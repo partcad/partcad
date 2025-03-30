@@ -22,7 +22,7 @@ When no recursion in requested, it shows the current package if and only if it h
 @click.option("-r", "--recursive", is_flag=True, help="Recursively process all imported packages")
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-@pc.telemetry.tracer.start_as_current_span("list packages")
+@pc.telemetry.start_as_current_span("list packages")
 def cli(cli_ctx: CliContext, recursive: bool, package: str):
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()

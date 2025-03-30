@@ -183,7 +183,7 @@ class PythonRuntime(runtime.Runtime):
             cmd = [python_path, *self.python_flags, *cmd]
             pc_logging.debug("Running: %s", cmd)
             # pc_logging.debug("stdin: %s", stdin)
-            with telemetry.tracer.start_as_current_span("PythonRuntime.run_onced.*{subprocess.Popen}") as span:
+            with telemetry.start_as_current_span("PythonRuntime.run_onced.*{subprocess.Popen}") as span:
                 # Strip user home directory from the path, if any
                 sanitized_cmd = copy.copy(cmd)
                 sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
@@ -276,7 +276,7 @@ class PythonRuntime(runtime.Runtime):
             cmd = [python_path, *self.python_flags, *cmd]
             pc_logging.debug("Running: %s", cmd)
             # pc_logging.debug("stdin: %s", stdin)
-            with telemetry.tracer.start_as_current_span("PythonRuntime.run_async_onced.*{subprocess.Popen}") as span:
+            with telemetry.start_as_current_span("PythonRuntime.run_async_onced.*{subprocess.Popen}") as span:
                 # Strip user home directory from the path, if any
                 sanitized_cmd = copy.copy(cmd)
                 sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))

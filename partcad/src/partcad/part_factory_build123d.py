@@ -86,7 +86,7 @@ class PartFactoryBuild123d(PartFactoryPython):
 
             # Serialize the request
             register_ocp_helper()
-            with telemetry.tracer.start_as_current_span("*PartFactoryBuild123d.instantiate.{pickle.dumps}"):
+            with telemetry.start_as_current_span("*PartFactoryBuild123d.instantiate.{pickle.dumps}"):
                 pickle_string = pickle.dumps(request)
                 request_serialized = base64.b64encode(pickle_string).decode()
 
@@ -159,7 +159,7 @@ class PartFactoryBuild123d(PartFactoryPython):
             compound = TopoDS_Compound()
             builder.MakeCompound(compound)
 
-            @telemetry.tracer.start_as_current_span("PartFactoryBuild123d.instantiate.process")
+            @telemetry.start_as_current_span("PartFactoryBuild123d.instantiate.process")
             def process(shapes, components_list):
                 for shape in shapes:
                     # pc_logging.info("Returned: %s" % type(shape))

@@ -83,10 +83,9 @@ def init_sentry(version: str) -> None:
         default_integrations=False,
         profiles_sample_rate=1.0,
         integrations=[
-            # Disable logging integration to prevent Sentry from messing with the way Python logger is configured
-            # LoggingIntegration(
-            #     level=logging.ERROR,
-            # ),
+            LoggingIntegration(
+                level=logging.ERROR,
+            ),
         ],
         before_send=before_send,
         instrumenter="otel",

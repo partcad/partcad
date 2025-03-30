@@ -158,7 +158,7 @@ class Process(object):
             if self.item:
                 attributes["item"] = self.item
 
-            self.span_ctx_mgr = telemetry.tracer.start_as_current_span(
+            self.span_ctx_mgr = telemetry.start_as_current_span(
                 f"Process: {self.op}",
                 attributes=attributes,
             )
@@ -214,7 +214,7 @@ class Action(object):
         if self.item:
             attributes["item"] = self.item
 
-        self.span_ctx_mgr = telemetry.tracer.start_as_current_span(
+        self.span_ctx_mgr = telemetry.start_as_current_span(
             f"Action: {self.op}",
             attributes=attributes,
         )

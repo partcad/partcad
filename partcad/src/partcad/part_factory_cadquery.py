@@ -81,7 +81,7 @@ class PartFactoryCadquery(PartFactoryPython):
 
             # Serialize the request
             register_ocp_helper()
-            with telemetry.tracer.start_as_current_span("*PartFactoryCadquery.instantiate.{pickle.dumps}"):
+            with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{pickle.dumps}"):
                 picklestring = pickle.dumps(request)
                 request_serialized = base64.b64encode(picklestring).decode()
 
@@ -149,7 +149,7 @@ class PartFactoryCadquery(PartFactoryPython):
             if len(result["shapes"]) == 1:
                 return result["shapes"][0]
 
-            with telemetry.tracer.start_as_current_span("*PartFactoryCadquery.instantiate.{OCP.TopoDS.TopoDS_Builder}"):
+            with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{OCP.TopoDS.TopoDS_Builder}"):
                 builder = TopoDS_Builder()
                 compound = TopoDS_Compound()
                 builder.MakeCompound(compound)

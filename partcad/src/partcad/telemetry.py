@@ -13,28 +13,51 @@ import os
 from . import telemetry_none
 from . import telemetry_sentry
 
+partcad_version = None
 tracer: Tracer | None  # To be initialized in telemetry_init()
+tracer_onced = False
 
 
 def init(version: str):
+    global partcad_version
+    partcad_version = version
+
     global tracer
+    tracer = telemetry_none.init_none()
+
+
+def once():
+    global tracer_onced
+    if tracer_onced:
+        return
+    tracer_onced = True
+
+    global tracer, partcad_version
 
     if not os.getenv("PYTEST_VERSION"):
         # TODO(clairbee): add suport for alternate telemetry backends
-        tracer = telemetry_sentry.init_sentry(version)
+        tracer = telemetry_sentry.init_sentry(partcad_version)
     else:
         # Do not collect telemetry data for pytest as it's mostly short meaningless transactions
-        tracer = telemetry_none.init_none()
+        # It is already of type "none"
+        # tracer = telemetry_none.init_none()
+        pass
 
 
 @asynccontextmanager
 async def start_as_current_span_async(name, **kwargs):
+    once()
+
+    global tracer
     with tracer.start_as_current_span(name, **kwargs) as span:
         yield span
 
 
 @contextmanager
 def start_as_current_span(name: str, **kwargs):
+    once()
+
+    global tracer
     with tracer.start_as_current_span(name, **kwargs) as span:
         yield span
 
@@ -47,6 +70,8 @@ def set_context(ctx):
 
 
 def instrument_span(name, category: str = ""):
+    once()
+
     global tracer
 
     def decorator(func, attr_getter):
@@ -77,6 +102,8 @@ def instrument_span(name, category: str = ""):
 
 
 def instrument_span_async(name, category: str = ""):
+    once()
+
     def decorator(func, attr_getter):
         async def wrapper(*args, **kwargs):
             parent = trace.get_current_span()

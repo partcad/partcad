@@ -39,18 +39,18 @@ class PartFactoryStep(PartFactoryFile):
             wrapper_path = wrapper.get("step.py")
             request = {"build_parameters": {}}
             register_ocp_helper()
-            with telemetry.tracer.start_as_current_span("*PartFactoryStep.instantiate.{pickle.dumps}"):
+            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{pickle.dumps}"):
                 picklestring = pickle.dumps(request)
                 request_serialized = base64.b64encode(picklestring).decode()
 
-            with telemetry.tracer.start_as_current_span("*PartFactoryStep.instantiate.{runtime.run_async}"):
+            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{runtime.run_async}"):
                 response_serialized, errors = await self.runtime.run_async(
                     [wrapper_path, os.path.abspath(part.path), os.path.abspath(self.project.config_dir)],
                     request_serialized,
                 )
                 sys.stderr.write(errors)
 
-            with telemetry.tracer.start_as_current_span("*PartFactoryStep.instantiate.{pickle.loads}"):
+            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{pickle.loads}"):
                 response = base64.b64decode(response_serialized)
                 register_ocp_helper()
                 result = pickle.loads(response)
