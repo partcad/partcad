@@ -27,7 +27,7 @@ Internal geometry representation
 ================================
 
 PartCAD maintains parts as OpenCASCADE objects. Similar to ``wrapped`` objects found
-in ``CadQuery`` and ``build123d``.
+in ``CadQuery``, ``build123d`` and ``sdf``.
 
 ===========
 Parallelism

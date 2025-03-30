@@ -75,6 +75,7 @@ PartCAD has an evergrowing list of ways to define the part model:
   - `OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_
   - `CadQuery <https://github.com/CadQuery/cadquery>`_
   - `build123d <https://github.com/gumyr/build123d>`_
+  - `sdf <https://github.com/fogleman/sdf>`_
 
 - AI-generated scripts
 
