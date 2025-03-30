@@ -34,6 +34,7 @@ Feature: `pc config` command
       cacheDependenciesIgnore: false
       telemetry:
           type: none
+          env: test
           performance: false
           failures: false
           debug: true
@@ -163,6 +164,7 @@ Feature: `pc config` command
       cacheDependenciesIgnore: true
       telemetry:
           type: none
+          env: test
           performance: false
           failures: false
           debug: false

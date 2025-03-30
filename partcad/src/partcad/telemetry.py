@@ -23,6 +23,7 @@ def init(version: str):
         # TODO(clairbee): add suport for alternate telemetry backends
         tracer = telemetry_sentry.init_sentry(version)
     else:
+        # Do not collect telemetry data for pytest as it's mostly short meaningless transactions
         tracer = telemetry_none.init_none()
 
 

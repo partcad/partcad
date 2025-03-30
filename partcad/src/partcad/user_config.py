@@ -102,20 +102,38 @@ class ParametersConfig(BaseConfig):
 
 # TODO(clairbee): moake TelemetryConfig a subclass of BaseConfig
 class TelemetryConfig(dict):
-    def __init__(self, v):
-        self.v: vyper.Vyper = v
+    def __init__(self, v: vyper.Vyper):
+        self.v = v
+        self.v.bind_env("telemetry.type", "PC_TELEMETRY_TYPE")
+        self.v.bind_env("telemetry.env", "PC_TELEMETRY_ENV")
+        self.v.bind_env("telemetry.performance", "PC_TELEMETRY_PERFORMANCE")
+        self.v.bind_env("telemetry.failures", "PC_TELEMETRY_FAILURES")
+        self.v.bind_env("telemetry.debug", "PC_TELEMETRY_DEBUG")
+        self.v.bind_env("telemetry.sentryDsn", "PC_TELEMETRY_SENTRY_DSN")
+        self.v.bind_env("telemetry.sentryShutdownTimeout", "PC_TELEMETRY_SENTRY_SHUTDOWN_TIMEOUT")
+        self.v.bind_env("telemetry.sentryAttachStacktrace", "PC_TELEMETRY_SENTRY_ATTACH_STACKTRACE")
+        self.v.bind_env("telemetry.sentryTracesSampleRate", "PC_TELEMETRY_SENTRY_TRACES_SAMPLE_RATE")
+        self.v.register_alias("telemetry.environment", "telemetry.env")
 
     @property
     def type(self):
         if self.v.is_set("telemetry.type"):
-            return self.v.get("telemetry.type")
+            return self.v.get_string("telemetry.type")
+
         return "sentry"
 
     @property
-    def environment(self):
-        if self.v.is_set("telemetry.environment"):
-            return self.v.get("telemetry.environment")
-        return "prod"
+    def env(self):
+        if self.v.is_set("telemetry.env"):
+            return self.v.get_string("telemetry.env")
+
+        from . import __spec__
+
+        # If the module is loaded from a file, then we are in development mode
+        if __spec__.loader.__class__.__name__ == "SourceFileLoader":
+            return "dev"
+        else:
+            return "prod"
 
     @property
     def performance(self):
@@ -138,7 +156,11 @@ class TelemetryConfig(dict):
     @property
     def sentry_dsn(self):
         if self.v.is_set("telemetry.sentryDsn"):
-            return self.v.get("telemetry.sentryDsn")
+            return self.v.get_string("telemetry.sentryDsn")
+
+        # TODO(clairbee): create a load balancer for Sentry
+        # return "https://sentry.partcad.org"
+        return "https://3a80dc66ff544e5000cb4c50751f0eca@o4508651588485120.ingest.us.sentry.io/4508651601526784"
 
     @property
     def sentry_shutdown_timeout(self):
@@ -163,7 +185,7 @@ class TelemetryConfig(dict):
         for name, val in vars(TelemetryConfig).items():
             if isinstance(val, property):
                 properties.append((name, val.__get__(self, TelemetryConfig)))
-        return str({k: v for k, v in properties if v is not None})
+        return str({k: v for k, v in properties})
 
 
 class UserConfig(vyper.Vyper):
@@ -191,7 +213,7 @@ class UserConfig(vyper.Vyper):
                 with open(config_path, "r") as f:
                     self.read_config(f)
             except Exception as e:
-                pc_logging.error("ERROR: Failed to parse %s" % config_path)
+                pc_logging.error("ERROR: Failed to parse %s: %s" % (config_path, str(e)))
 
         # If the filesystem cache is enabled, then (by default):
         # - objects of 1 byte bytes are cached both in memory and on the filesystem (to cache test results)
@@ -217,29 +239,6 @@ class UserConfig(vyper.Vyper):
 
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
-
-        from . import __spec__
-
-        # If the module is loaded from a file, then we are in development mode
-        if __spec__.loader.__class__.__name__ == "SourceFileLoader":
-            environment = "dev"
-        else:
-            environment = "prod"
-        self.set_default("telemetry.type", "sentry")
-        self.set_default("telemetry.environment", environment)
-        self.set_default("telemetry.performance", True)
-        self.set_default("telemetry.failures", True)
-        self.set_default("telemetry.debug", False)
-        self.set_default("telemetry.sentryShutdownTimeout", 3.0)
-        self.set_default("telemetry.sentryAttachStacktrace", False)
-        self.set_default("telemetry.sentryTracesSampleRate", 1.0)
-
-        # TODO(clairbee): create a load balancer for Sentry
-        # self.set_default("telemetry.sentryDsn", "https://sentry.partcad.org")
-        self.set_default(
-            "telemetry.sentryDsn",
-            "https://3a80dc66ff544e5000cb4c50751f0eca@o4508651588485120.ingest.us.sentry.io/4508651601526784",
-        )
 
         self.set_default("useDockerPython", False)
         self.set_default("useDockerKicad", True)
@@ -383,15 +382,6 @@ class UserConfig(vyper.Vyper):
         #   "sentry_traces_sample_rate": "1.0",
         # }
         self.telemetry_config = TelemetryConfig(self)
-        self.bind_env("telemetry.type", "PC_TELEMETRY_TYPE")
-        self.bind_env("telemetry.environment", "PC_TELEMETRY_ENVIRONMENT")
-        self.bind_env("telemetry.performance", "PC_TELEMETRY_PERFORMANCE")
-        self.bind_env("telemetry.failures", "PC_TELEMETRY_FAILURES")
-        self.bind_env("telemetry.debug", "PC_TELEMETRY_DEBUG")
-        self.bind_env("telemetry.sentryDsn", "PC_TELEMETRY_SENTRY_DSN")
-        self.bind_env("telemetry.sentryShutdownTimeout", "PC_TELEMETRY_SENTRY_SHUTDOWN_TIMEOUT")
-        self.bind_env("telemetry.sentryAttachStacktrace", "PC_TELEMETRY_SENTRY_ATTACH_STACKTRACE")
-        self.bind_env("telemetry.sentryTracesSampleRate", "PC_TELEMETRY_SENTRY_TRACES_SAMPLE_RATE")
 
         # option: git
         # description: Git configuration

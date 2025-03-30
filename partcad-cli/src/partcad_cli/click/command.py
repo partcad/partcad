@@ -92,7 +92,7 @@ option_groups = [
         "name": "Telemetry options",
         "options": [
             "--telemetry-type",
-            "--telemetry-environment",
+            "--telemetry-env",
             "--telemetry-performance",
             "--telemetry-failures",
             "--telemetry-debug",
@@ -296,9 +296,8 @@ click.rich_click.COMMAND_GROUPS = {
     help="Telemetry type to use",
 )
 @click.option(
-    "--telemetry-environment",
+    "--telemetry-env",
     type=click.Choice(["dev", "test", "prod"]),
-    default=default_environment,
     show_envvar=True,
     help="Telemetry environment to use",
 )
@@ -326,7 +325,6 @@ click.rich_click.COMMAND_GROUPS = {
 @click.option(
     "--telemetry-sentry-dsn",
     type=str,
-    default=None,
     show_envvar=True,
     help="Sentry DSN for error reporting",
 )
@@ -430,7 +428,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_MAX_MODEL_GENERATION", "max_model_generation"),
             ("PC_MAX_SCRIPT_CORRECTION", "max_script_correction"),
             ("PC_TELEMETRY_TYPE", "telemetry_type"),
-            ("PC_TELEMETRY_ENVIRONMENT", "telemetry_environment"),
+            ("PC_TELEMETRY_ENV", "telemetry_env"),
             ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),
             ("PC_TELEMETRY_FAILURES", "telemetry_failures"),
             ("PC_TELEMETRY_DEBUG", "telemetry_debug"),
