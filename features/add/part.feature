@@ -144,6 +144,29 @@ Feature: `pc add part` command
       assemblies:
       """
 
+  @sdf
+  Scenario: Add sdf Part from "example.py" file
+    Given a file named "example.py" with content:
+      """
+      from sdf import *
+      f = box((1, 1, 1))
+      """
+    When I run "partcad add part sdf example.py"
+    Then the command should exit with a status code of "0"
+    And a file named "partcad.yaml" should have YAML content:
+      """
+      private: true
+      pythonVersion: ">=\\d+\\.\\d+"
+      partcad: ">=\\d+\\.\\d+\\.\\d+"
+      dependencies:
+      sketches:
+      parts:
+        example:
+          type: sdf
+          path: example.py
+      assemblies:
+      """
+
   @step
   Scenario: Add STEP Part from "part.step" file
     Given a file named "part.step" with content:

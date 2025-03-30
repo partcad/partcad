@@ -1234,6 +1234,7 @@ class Project(project_config.Configuration):
         ext_by_kind = {
             "cadquery": "py",
             "build123d": "py",
+            "sdf": "py",
             "ai-cadquery": "py",
             "ai-sdf": "py",
             "ai-openscad": "scad",
