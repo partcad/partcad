@@ -44,6 +44,7 @@ from .part_factory_sweep import PartFactorySweep
 from . import part_factory_scad as pfscad
 from . import part_factory_step as pfs
 from . import part_factory_stl as pfstl
+from . import part_factory_sdf as pfsdf
 from . import part_factory_obj as pfo
 from . import part_factory_3mf as pf3
 from .part_factory_ai_cadquery import PartFactoryAiCadquery
@@ -578,6 +579,8 @@ class Project(project_config.Configuration):
             pfc.PartFactoryCadquery(self.ctx, source_project, self, config)
         elif config["type"] == "build123d":
             pfb.PartFactoryBuild123d(self.ctx, source_project, self, config)
+        elif config["type"] == "sdf":
+            pfsdf.PartFactorySdf(self.ctx, source_project, self, config)
         elif config["type"] == "step":
             pfs.PartFactoryStep(self.ctx, source_project, self, config)
         elif config["type"] == "brep":
