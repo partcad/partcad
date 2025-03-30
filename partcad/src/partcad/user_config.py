@@ -376,7 +376,7 @@ class UserConfig(vyper.Vyper):
         #   "performance": "true",
         #   "failures": "true",
         #   "debug": "false",
-        #   "sentry_dsn": None,
+        #   "sentry_dsn": "<PartCAD's default DSN>",
         #   "sentry_shutdown_timeout": "3.0",
         #   "sentry_attach_stacktrace": "false",
         #   "sentry_traces_sample_rate": "1.0",
