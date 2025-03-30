@@ -47,4 +47,4 @@ Feature: `pc export` command
   @type-object
   Examples: Media Type: .iges
     |    type | filename              |
-    |    gltf | logo_embedded.iges    |
+    |    iges | logo_embedded.iges    |

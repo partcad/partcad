@@ -30,6 +30,7 @@ import partcad.utils as pc_utils
             "threejs",
             "obj",
             "gltf",
+            "iges"
         ]
     ),
 )
