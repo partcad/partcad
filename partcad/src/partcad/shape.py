@@ -214,7 +214,7 @@ class Shape(ShapeConfiguration):
         b3d_solid = b3d.Solid.make_box(1, 1, 1)
         b3d_solid.wrapped = await self.get_wrapped(ctx)
         return b3d_solid
-    
+
     # async def get_sdf(self, ctx=None):
     #     from sdf import box
 

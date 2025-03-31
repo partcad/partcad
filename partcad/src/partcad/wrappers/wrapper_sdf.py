@@ -27,7 +27,7 @@ def process(path, request):
     # Apply regex patches from the request
     for old, new in patch.items():
         script = re.sub(old, new, script, flags=re.MULTILINE)
-    
+
     if "import partcad" in script:
         script = "import logging\nlogging.basicConfig(level=60)\n" + script  # Disable PartCAD logging
 
@@ -43,7 +43,7 @@ def process(path, request):
             "import ocp_vscode",
             "import ocp_vscode\nocp_vscode.saved_show_object=show_object\n#",
         )
-    
+
     # Remove any existing assignments for our parameters in the script.
     for param in build_parameters.keys():
         pattern = r"^\s*" + re.escape(param) + r"\s*=.*$"
