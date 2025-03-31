@@ -50,6 +50,7 @@ from ...cli_context import CliContext
             "obj",
             "ai-cadquery",
             "ai-openscad",
+            "ai-sdf",
         ]
     ),
     # help="Type of the part",
