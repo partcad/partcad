@@ -20,6 +20,7 @@ from .globals import (
     get_part,
     get_part_cadquery,
     get_part_build123d,
+    # get_part_sdf,
     get_assembly,
     get_assembly_cadquery,
     get_assembly_build123d,

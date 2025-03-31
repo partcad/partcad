@@ -12,6 +12,7 @@ except ImportError as e:
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
+import custom_cqgi
 from ocp_serialize import sdf_triangles_to_topods
 
 
@@ -26,7 +27,23 @@ def process(path, request):
     # Apply regex patches from the request
     for old, new in patch.items():
         script = re.sub(old, new, script, flags=re.MULTILINE)
+    
+    if "import partcad" in script:
+        script = "import logging\nlogging.basicConfig(level=60)\n" + script  # Disable PartCAD logging
 
+    sys.modules["ocp_vscode"] = sys.modules["py_stubs.ocp_vscode"]
+    if "from ocp_vscode import " in script:
+        script = re.sub(
+            r"(from ocp_vscode import .*)\n",
+            "saved_show_object_early=show_object\n\\1\nimport ocp_vscode\nocp_vscode.saved_show_object=saved_show_object_early\n",
+            script,
+        )
+    if "import ocp_vscode" in script:
+        script = script.replace(
+            "import ocp_vscode",
+            "import ocp_vscode\nocp_vscode.saved_show_object=show_object\n#",
+        )
+    
     # Remove any existing assignments for our parameters in the script.
     for param in build_parameters.keys():
         pattern = r"^\s*" + re.escape(param) + r"\s*=.*$"
