@@ -413,9 +413,9 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
     # Initialize logging before using telemetry, as telemetry may use logging
     if no_ansi:
         logging.getLogger("partcad").propagate = True
+        logging.basicConfig()
     else:
         pc.logging_ansi_terminal.init()
-    logging.basicConfig()
 
     if quiet:
         pc.logging.setLevel(logging.CRITICAL + 1)
