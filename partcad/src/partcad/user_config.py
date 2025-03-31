@@ -24,6 +24,10 @@ from . import logging as pc_logging
 # 2) CLI pushes the default values to user_config unconditionally (if no user values are set)
 # 3) user_config is used outside of CLI, where CLI default values are not available
 
+pc_logging.logging.getLogger("vyper").propagate = False
+pc_logging.logging.getLogger("vyper").setLevel(pc_logging.logging.ERROR)
+pc_logging.logging.getLogger("vyper").addHandler(pc_logging.logging.NullHandler())
+
 
 class BaseConfig(dict):
     def __init__(self, v: vyper.Vyper, path: str):
