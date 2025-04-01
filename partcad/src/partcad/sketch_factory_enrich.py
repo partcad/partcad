@@ -87,31 +87,13 @@ class SketchFactoryEnrich(pf.SketchFactory):
 
             object_name = f"{self.project.name}:{self.name}"
             augmented_config = copy.deepcopy(augmented_config)
+
             # TODO(clairbee): ideally whatever we pull from the project is already normalized
             augmented_config = sketch_config.SketchConfiguration.normalize(
                 self.source_sketch_name,
                 augmented_config,
                 object_name
             )
-
-            # Drop fields we don't want to be inherited by enriched clones
-            # TODO(clairbee): keep aliases if they are a function of the orignal name
-            if "aliases" in augmented_config:
-                del augmented_config["aliases"]
-
-            # Fill in all non-enrich-specific properties from the enrich config into
-            # the original config
-            for prop_to_copy in sketch.config:
-                if (
-                    prop_to_copy == "type"
-                    or prop_to_copy == "path"
-                    or prop_to_copy == "orig_name"
-                    or prop_to_copy == "source"
-                    or prop_to_copy == "project"
-                    or prop_to_copy == "with"
-                ):
-                    continue
-                augmented_config[prop_to_copy] = sketch.config[prop_to_copy]
 
             # See if there are any extra "with" parameters deduced from the source name
             if len(self.extra_with):
@@ -138,6 +120,32 @@ class SketchFactoryEnrich(pf.SketchFactory):
                         )
                     desired_type = type(augmented_config["parameters"][param]["default"])
                     augmented_config["parameters"][param]["default"] = desired_type(sketch.config["with"][param])
+
+            # Recalling normalize to normalize data after replacing target parameters from with key.
+            augmented_config = sketch_config.SketchConfiguration.normalize(
+                augmented_config["name"],
+                augmented_config,
+                object_name
+            )
+
+            # Drop fields we don't want to be inherited by enriched clones
+            # TODO(clairbee): keep aliases if they are a function of the orignal name
+            if "aliases" in augmented_config:
+                del augmented_config["aliases"]
+
+            # Fill in all non-enrich-specific properties from the enrich config into
+            # the original config
+            for prop_to_copy in sketch.config:
+                if (
+                    prop_to_copy == "type"
+                    or prop_to_copy == "path"
+                    or prop_to_copy == "orig_name"
+                    or prop_to_copy == "source"
+                    or prop_to_copy == "project"
+                    or prop_to_copy == "with"
+                ):
+                    continue
+                augmented_config[prop_to_copy] = sketch.config[prop_to_copy]
 
             self.source_project.init_sketch_by_config(augmented_config)
 
