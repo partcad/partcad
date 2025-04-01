@@ -61,11 +61,11 @@ export class PartcadItem extends vscode.TreeItem {
                 light: path.join(__filename, '..', '..', 'resources', 'light', 'file-submodule.svg'),
                 dark: path.join(__filename, '..', '..', 'resources', 'dark', 'file-submodule.svg'),
             };
-            this.contextValue = 'package';
+            this.contextValue = itemPath === undefined ? 'package' : 'packageWithCode';
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectPackage',
-                arguments: [{ name, pkg, config }],
+                arguments: [{ name, pkg, config, itemPath }],
             };
         } else if (itemType === ITEM_TYPE_SKETCH) {
             this.iconPath = {

@@ -38,7 +38,11 @@
             if ('desc' in config) {
               html += `<tr><td>Description:</td><td>${config['desc']}</td></tr>`;
             }
-            html += `<tr><td>Type:</td><td>${config['type']}</td></tr></table>`;
+            html += `<tr><td>Type:</td><td>${config['type']}</td></tr>`;
+            if (config['type'] === 'git' && 'importUrl' in config) {
+              html += `<tr><td>Git:</td><td>${config['importUrl']}</td></tr>`;
+            }
+            html += `</table>`;
             contents.innerHTML = html;
           }
           break;

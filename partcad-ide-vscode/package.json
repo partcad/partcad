@@ -461,7 +461,7 @@
         {
           "command": "partcad.inspectSource",
           "group": "inline",
-          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode)"
+          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == packageWithCode)"
         },
         {
           "command": "partcad.changePart",
@@ -476,7 +476,7 @@
         {
           "command": "partcad.inspectSource",
           "group": "navigation",
-          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode)"
+          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == packageWithCode)"
         },
         {
           "submenu": "partcad.submenu.export",

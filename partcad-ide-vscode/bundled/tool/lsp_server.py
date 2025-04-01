@@ -657,7 +657,7 @@ def load_partcad():
             if settings["verbosity"] == "error":
                 logging.getLogger("partcad").setLevel(logging.ERROR)
         if partcad_log_w_stream is not None:
-            partcad.logging_ansi_terminal_init(stream=partcad_log_w_stream)
+            partcad.logging_ansi_terminal.init(stream=partcad_log_w_stream)
 
 
 @LSP_SERVER.command("partcad.activate")
@@ -862,10 +862,16 @@ def do_load_package_contents(args=list()) -> None:
             LSP_SERVER.send_notification("?/partcad/packageLoadFailed")
             return
 
+        def pkg_obj(pkg):
+            return {
+                **pkg.config_obj,
+                "item_path": pkg.config_path if hasattr(pkg, "config_path") else None,
+            }
+
         package_names = project.get_child_project_names()
         packages = list(
             map(
-                lambda package_name: partcad_ctx.get_project(package_name).config_obj,
+                lambda package_name: pkg_obj(partcad_ctx.get_project(package_name)),
                 package_names,
             )
         )
@@ -875,7 +881,7 @@ def do_load_package_contents(args=list()) -> None:
         map(
             lambda sketch: {
                 **sketch.config,
-                **{"item_path": (os.path.join(project.config_dir, sketch.path) if sketch.path else None)},
+                "item_path": (os.path.join(project.config_dir, sketch.path) if sketch.path else None),
             },
             project.sketches.values(),
         )
@@ -884,7 +890,7 @@ def do_load_package_contents(args=list()) -> None:
         map(
             lambda interface: {
                 **interface.config,
-                **{"item_path": None},
+                "item_path": None,
             },
             project.interfaces.values(),
         )
@@ -893,7 +899,7 @@ def do_load_package_contents(args=list()) -> None:
         map(
             lambda part: {
                 **part.config,
-                **{"item_path": (os.path.join(project.config_dir, part.path) if part.path else None)},
+                "item_path": (os.path.join(project.config_dir, part.path) if part.path else None),
             },
             project.parts.values(),
         )
@@ -902,7 +908,7 @@ def do_load_package_contents(args=list()) -> None:
         map(
             lambda assembly: {
                 **assembly.config,
-                **{"item_path": (os.path.join(project.config_dir, assembly.path) if assembly.path else None)},
+                "item_path": (os.path.join(project.config_dir, assembly.path) if assembly.path else None),
             },
             project.assemblies.values(),
         )

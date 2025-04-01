@@ -131,12 +131,10 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                 if (itemPath !== undefined && packageName === '/') {
                     return new Promise((resolve, reject) => {
                         return vscode.commands
-                            .executeCommand(
-                                'vscode.openWith',
-                                vscode.Uri.file(itemPath),
-                                'default',
-                                vscode.ViewColumn.One,
-                            )
+                            .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
+                                viewColumn: vscode.ViewColumn.One,
+                                preview: true,
+                            })
                             .then(() => {
                                 return new Promise((f) => setTimeout(f, 1700)).then(
                                     () => {
@@ -246,12 +244,10 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                 if (itemPath !== undefined && packageName === '/') {
                     return new Promise((resolve, reject) => {
                         return vscode.commands
-                            .executeCommand(
-                                'vscode.openWith',
-                                vscode.Uri.file(itemPath),
-                                'default',
-                                vscode.ViewColumn.One,
-                            )
+                            .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
+                                viewColumn: vscode.ViewColumn.One,
+                                preview: true,
+                            })
                             .then(() => {
                                 return new Promise((f) => setTimeout(f, 1700)).then(
                                     () => {
@@ -361,12 +357,10 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                 if (itemPath !== undefined && packageName === '/') {
                     return new Promise((resolve, reject) => {
                         return vscode.commands
-                            .executeCommand(
-                                'vscode.openWith',
-                                vscode.Uri.file(itemPath),
-                                'default',
-                                vscode.ViewColumn.One,
-                            )
+                            .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
+                                viewColumn: vscode.ViewColumn.One,
+                                preview: true,
+                            })
                             .then(() => {
                                 return new Promise((f) => setTimeout(f, 1700)).then(
                                     () => {
@@ -476,12 +470,10 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                 if (itemPath !== undefined && packageName === '/') {
                     return new Promise((resolve, reject) => {
                         return vscode.commands
-                            .executeCommand(
-                                'vscode.openWith',
-                                vscode.Uri.file(itemPath),
-                                'default',
-                                vscode.ViewColumn.One,
-                            )
+                            .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
+                                viewColumn: vscode.ViewColumn.One,
+                                preview: true,
+                            })
                             .then(() => {
                                 return new Promise((f) => setTimeout(f, 700)).then(
                                     () => {

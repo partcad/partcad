@@ -70,12 +70,10 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
     public async inspectSource(item: PartcadItem) {
         if (item.itemPath !== undefined) {
-            await vscode.commands.executeCommand(
-                'vscode.openWith',
-                vscode.Uri.file(item.itemPath),
-                'default',
-                vscode.ViewColumn.One,
-            );
+            await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(item.itemPath), 'default', {
+                viewColumn: vscode.ViewColumn.One,
+                preview: true,
+            });
             await vscode.commands.executeCommand('partcad.inspectFile', item.itemPath);
         }
     }
@@ -126,7 +124,11 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             return i1['name'].localeCompare(i2['name']);
         });
         for (const pkg of items.packages) {
-            elements.push(new PartcadItem(pkg.name, items.name, pkg, undefined, ITEM_TYPE_PACKAGE));
+            let filepath = undefined;
+            if (pkg.item_path !== undefined) {
+                filepath = pkg.item_path;
+            }
+            elements.push(new PartcadItem(pkg.name, items.name, pkg, filepath, ITEM_TYPE_PACKAGE));
         }
 
         items.assemblies = items.assemblies.sort((i1, i2) => {

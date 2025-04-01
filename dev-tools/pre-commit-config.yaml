@@ -104,7 +104,7 @@ repos:
         files: \.ts$
         name: eslint
         language: system
-        entry: npm run lint
+        entry: bash -c "cd partcad-ide-vscode && npm run lint"
       # TODO: Add this back in when `npm run x-test` is fast
       # - id: x-test
       #   files: \.ts$

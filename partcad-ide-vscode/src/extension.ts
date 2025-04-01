@@ -231,7 +231,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 }),
                 lsClient.onNotification('?/partcad/terminal', async (message) => {
                     terminalEmitter?.fire(atob(message.line));
-                    partcadTerminal?.show(true);
+                    // TODO(clairbee): add a configuration option to show the terminal on change
+                    // partcadTerminal?.show(true);
                 }),
                 lsClient.onNotification(`?/partcad/execute`, async ({ command, args }) => {
                     await vscode.commands.executeCommand(command, ...args);

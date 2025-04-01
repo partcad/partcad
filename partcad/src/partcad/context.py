@@ -519,7 +519,8 @@ class Context(project_config.Configuration):
         if not source_interface_name in self.mates:
             self.mates[source_interface_name] = {}
         if target_interface_name in self.mates[source_interface_name]:
-            pc_logging.error("Mate already exists: %s -> %s" % (source_interface_name, target_interface_name))
+            pc_logging.debug("Mate already exists: %s -> %s" % (source_interface_name, target_interface_name))
+            # TODO(clairbee): identify discrepancies in mate_taget_config
             return
 
         mate = Mating(source_interface, target_interface, mate_target_config, reverse)
