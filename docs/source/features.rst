@@ -239,3 +239,118 @@ to the ~/.partcad/config.yaml:
       overrides:
         url:
           "git@github.com:": "https://github.com/"
+
+===================================
+Personally Identifiable Information
+===================================
+
+The user section in ``~/.partcad/config.yaml`` defines the default personal
+and contact details used throughout the system. These details include
+the user's name, email, phone number, company, and address information.
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    user:
+        firstName: <...>
+        lastName: <...>
+        email: <...>
+        phone: <...>
+        company: <...>
+        line1: <...>
+        line2: <(optional)>
+        countryCode: US
+        stateCode: <...>
+        zipCode: <...>
+        city: <...>
+
+Address Configuration
+---------------------
+
+Users can override any details from the user section
+by specifying shippingAddress and billingAddress separately.
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    user: # Default user details (includes firstName, lastName, email, phone, company, address, etc.)
+
+    shippingAddress:  # Optional, overrides user details for shipping
+        firstName: <(optional)>
+        lastName: <(optional)>
+        phone: <(optional)>
+        company: <(optional)>
+        line1: <(optional)>
+        line2: <(optional)>
+        countryCode: <(optional)>
+        stateCode: <(optional)>
+        zipCode: <(optional)>
+        city: <(optional)>
+
+    billingAddress:  # Optional, overrides user details for billing
+        firstName: <(optional)>
+        lastName: <(optional)>
+        phone: <(optional)>
+        company: <(optional)>
+        line1: <(optional)>
+        line2: <(optional)>
+        countryCode: <(optional)>
+        stateCode: <(optional)>
+        zipCode: <(optional)>
+        city: <(optional)>
+
+**Override Behavior**
+
+- If shippingAddress is not specified, the system will use the user details for shipping.
+- If billingAddress is not specified, the system will use the user details for billing.
+- If shippingAddress or billingAddress is provided, it completely replaces the corresponding fields from user.
+
+This setup allows full customization of shipping and billing details,
+supporting scenarios where items need to be sent to different recipients or addresses.
+
+
+=======================
+Parameter Configuration
+=======================
+
+The configuration file (``~/.partcad/config.yaml``) allows users to define
+reusable parameters, which can be accessed dynamically within the provider configurations.
+
+In ``~/.partcad/config.yaml``, parameters are stored under a parameters section.
+
+Example:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    parameters:
+      object_id:
+        <parameter name>: <parameter value>
+
+
+Object IDs are used to reference different
+types of objects within a package, such as sketches, parts,
+assemblies, scenes, interfaces, and providers.
+
+
+Accessing Parameters in Providers
+---------------------------------
+
+In the providers section, parameters can be referenced dynamically
+using a function ``get_from_config()``, ensuring that sensitive
+or reusable values (e.g., API keys, URLs) do not need to be
+hardcoded multiple times.
+
+Example:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    providers:
+      <provider name>:
+        type: <store|manufacturer|enrich>
+        url: <...>
+        parameters:
+          url:
+            type: string
+            default: {{ get_from_config() }}

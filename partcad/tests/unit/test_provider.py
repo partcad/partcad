@@ -62,3 +62,12 @@ def test_provider_quote_store_csv_2():
     assert len(quotes.keys()) == 1
     assert FULL_PROVIDER_NAME in quotes
     assert quotes[FULL_PROVIDER_NAME].result["price"] == 0.01
+
+def test_provider_user_config_params_get():
+    """Load a CadQuery part using enrichment for provider and see if the parameters changed from user_config"""
+    import partcad as pc
+    ctx = pc.Context("examples/provider_store")
+    pc.user_config.parameter_config["//pub/examples/partcad/provider_store:myGarage"] = {"currency": "INR"}
+    provider = ctx.get_provider("myGarage")
+    assert provider is not None
+    assert provider.config["parameters"]["currency"]["default"] == "INR"

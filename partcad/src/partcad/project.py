@@ -356,8 +356,13 @@ class Project(project_config.Configuration):
             return
 
         for sketch_name in self.sketch_configs:
+            object_name = f"{self.name}:{sketch_name}"
             config = self.get_sketch_config(sketch_name)
-            config = sketch_config.SketchConfiguration.normalize(sketch_name, config)
+            config = sketch_config.SketchConfiguration.normalize(
+                sketch_name,
+                config,
+                object_name
+            )
             self.init_sketch_by_config(config)
 
     def init_sketch_by_config(self, config, source_project=None):
@@ -397,7 +402,12 @@ class Project(project_config.Configuration):
                     "name": alias,
                     "source": ":" + sketch_name,
                 }
-                alias_sketch_config = sketch_config.SketchConfiguration.normalize(alias, alias_sketch_config)
+                object_name = f"{self.name}:{alias}"
+                alias_sketch_config = sketch_config.SketchConfiguration.normalize(
+                    alias,
+                    alias_sketch_config,
+                    object_name
+                )
                 pfa.SketchFactoryAlias(self.ctx, source_project, self, alias_sketch_config)
 
     def get_sketch(self, sketch_name, func_params=None) -> sketch.Sketch:
@@ -448,9 +458,14 @@ class Project(project_config.Configuration):
                     # We don't know anything about such a sketch
                     pc_logging.error("Sketch '%s' not found in '%s'", sketch_name, self.name)
                     return None
+                object_name = f"{self.name}:{sketch_name}"
                 # This is not yet created (invalidated?)
                 config = self.get_sketch_config(sketch_name)
-                config = sketch_config.SketchConfiguration.normalize(sketch_name, config)
+                config = sketch_config.SketchConfiguration.normalize(
+                    sketch_name,
+                    config,
+                    object_name
+                )
                 self.init_sketch_by_config(config)
 
                 if not sketch_name in self.sketches or self.sketches[sketch_name] is None:
@@ -486,9 +501,13 @@ class Project(project_config.Configuration):
                     str(config),
                 )
                 return None
-
+            object_name = f"{self.name}:{result_name}"
             # Expand the config object so that the parameter values can be set
-            config = sketch_config.SketchConfiguration.normalize(result_name, config)
+            config = sketch_config.SketchConfiguration.normalize(
+                result_name,
+                config,
+                object_name
+            )
             config["orig_name"] = base_sketch_name
 
             # Fill in the parameter values
@@ -548,8 +567,13 @@ class Project(project_config.Configuration):
             return
 
         for part_name in self.part_configs:
+            object_name = f"{self.name}:{part_name}"
             config = self.get_part_config(part_name)
-            config = part_config.PartConfiguration.normalize(part_name, config)
+            config = part_config.PartConfiguration.normalize(
+                part_name,
+                config,
+                object_name
+            )
             self.init_part_by_config(config)
 
     def init_part_by_config(self, config: dict, source_project: "Project" = None):
@@ -607,7 +631,12 @@ class Project(project_config.Configuration):
                     "name": alias,
                     "source": ":" + part_name,
                 }
-                alias_part_config = part_config.PartConfiguration.normalize(alias, alias_part_config)
+                object_name = f"{self.name}:{alias}"
+                alias_part_config = part_config.PartConfiguration.normalize(
+                    alias,
+                    alias_part_config,
+                    object_name
+                )
                 pfa.PartFactoryAlias(self.ctx, source_project, self, alias_part_config)
 
     def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
@@ -659,9 +688,14 @@ class Project(project_config.Configuration):
                     if not quiet:
                         pc_logging.error("Part '%s' not found in '%s'", part_name, self.name)
                     return None
+                object_name = f"{self.name}:{part_name}"
                 # This is not yet created (invalidated?)
                 config = self.get_part_config(part_name)
-                config = part_config.PartConfiguration.normalize(part_name, config)
+                config = part_config.PartConfiguration.normalize(
+                    part_name,
+                    config,
+                    object_name
+                )
                 self.init_part_by_config(config)
 
                 if not part_name in self.parts or self.parts[part_name] is None:
@@ -698,8 +732,13 @@ class Project(project_config.Configuration):
                 )
                 return None
 
+            object_name = f"{self.name}:{result_name}"
             # Expand the config object so that the parameter values can be set
-            config = part_config.PartConfiguration.normalize(result_name, config)
+            config = part_config.PartConfiguration.normalize(
+                result_name,
+                config,
+                object_name
+            )
             config["orig_name"] = base_part_name
 
             # Fill in the parameter values
@@ -916,7 +955,8 @@ class Project(project_config.Configuration):
 
         for provider_name in self.provider_configs:
             config = self.get_provider_config(provider_name)
-            config = provider_config.ProviderConfiguration.normalize(provider_name, config)
+            object_name = f"{self.name}:{provider_name}"
+            config = provider_config.ProviderConfiguration.normalize(provider_name, config, object_name)
             factory.instantiate("provider", config["type"], self.ctx, self, self, config)
 
     # TODO(clairbee): either call init_*_by_config or call
@@ -983,7 +1023,8 @@ class Project(project_config.Configuration):
                     return None
                 # This is not yet created (invalidated?)
                 config = self.get_provider_config(provider_name)
-                config = provider_config.ProviderConfiguration.normalize(provider_name, config)
+                object_name = f"{self.name}:{provider_name}"
+                config = provider_config.ProviderConfiguration.normalize(provider_name, config, object_name)
                 factory.instantiate("provider", config["type"], self.ctx, self, self, config)
 
                 if not provider_name in self.providers or self.providers[provider_name] is None:
@@ -1021,7 +1062,8 @@ class Project(project_config.Configuration):
                 return None
 
             # Expand the config object so that the parameter values can be set
-            config = provider_config.ProviderConfiguration.normalize(result_name, config)
+            object_name = f"{self.name}:{result_name}"
+            config = provider_config.ProviderConfiguration.normalize(result_name, config, object_name)
             config["orig_name"] = base_provider_name
 
             # Fill in the parameter values

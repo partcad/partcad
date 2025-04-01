@@ -15,6 +15,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
+from .user_config import user_config
 from .provider_factory_file import ProviderFactoryFile
 from .runtime_python import PythonRuntime
 
@@ -113,6 +114,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             request["partcad_version"] = sys.modules["partcad"].__version__
             request["verbose"] = pc_logging.getLevel() <= pc_logging.DEBUG
             request["api"] = script_name
+            request["user"] = user_config.pii_config.to_dict()
             request["parameters"] = {}
             if "parameters" in self.config:
                 for param_name, param in self.config["parameters"].items():

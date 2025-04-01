@@ -86,30 +86,13 @@ class PartFactoryEnrich(pf.PartFactory):
                 return
 
             augmented_config = copy.deepcopy(augmented_config)
+            object_name = f"{self.project.name}:{self.name}"
             # TODO(clairbee): ideally whatever we pull from the project is already normalized
             augmented_config = part_config.PartConfiguration.normalize(
                 self.source_part_name,
                 augmented_config,
+                object_name
             )
-
-            # Drop fields we don't want to be inherited by enriched clones
-            # TODO(clairbee): keep aliases if they are a function of the orignal name
-            if "aliases" in augmented_config:
-                del augmented_config["aliases"]
-
-            # Fill in all non-enrich-specific properties from the enrich config into
-            # the original config
-            for prop_to_copy in part.config:
-                if (
-                    prop_to_copy == "type"
-                    or prop_to_copy == "path"
-                    or prop_to_copy == "orig_name"
-                    or prop_to_copy == "source"
-                    or prop_to_copy == "project"
-                    or prop_to_copy == "with"
-                ):
-                    continue
-                augmented_config[prop_to_copy] = part.config[prop_to_copy]
 
             # See if there are any extra "with" parameters deduced from the source name
             if len(self.extra_with):
@@ -137,8 +120,33 @@ class PartFactoryEnrich(pf.PartFactory):
                     desired_type = type(augmented_config["parameters"][param]["default"])
                     augmented_config["parameters"][param]["default"] = desired_type(part.config["with"][param])
 
-            self.source_project.init_part_by_config(augmented_config, self.source_project)
+            # Recalling normalize to normalize data after replacing target parameters from with key.
+            augmented_config = part_config.PartConfiguration.normalize(
+                self.source_part_name,
+                augmented_config,
+                object_name
+            )
 
+            # Drop fields we don't want to be inherited by enriched clones
+            # TODO(clairbee): keep aliases if they are a function of the orignal name
+            if "aliases" in augmented_config:
+                del augmented_config["aliases"]
+
+            # Fill in all non-enrich-specific properties from the enrich config into
+            # the original config
+            for prop_to_copy in part.config:
+                if (
+                    prop_to_copy == "type"
+                    or prop_to_copy == "path"
+                    or prop_to_copy == "orig_name"
+                    or prop_to_copy == "source"
+                    or prop_to_copy == "project"
+                    or prop_to_copy == "with"
+                ):
+                    continue
+                augmented_config[prop_to_copy] = part.config[prop_to_copy]
+
+            self.source_project.init_part_by_config(augmented_config, self.source_project)
             source = self.source_project.get_part(part.name)
             name = part.config["name"]
             part.config = copy.copy(source.config)
@@ -154,14 +162,12 @@ class PartFactoryEnrich(pf.PartFactory):
             part.cacheable = source.cacheable
             part.cache_dependencies = copy.copy(source.cache_dependencies)
             part.cache_dependencies_broken = source.cache_dependencies_broken
-
             _wrapped = source._wrapped
             if _wrapped:
                 part._wrapped = _wrapped
                 return _wrapped
 
             self.ctx.stats_parts_instantiated += 1
-
             return await source.instantiate(part)
 
     def get_cacheable(self) -> bool:
