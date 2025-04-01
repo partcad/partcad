@@ -17,14 +17,6 @@ from .sketches import cli as list_sketches
 
 
 @click.option(
-    "-u",
-    "--used_by",
-    help="Only process objects used by the given assembly or scene.",
-    type=str,
-    required=False,
-    show_envvar=True,
-)
-@click.option(
     "-r",
     "--recursive",
     is_flag=True,
@@ -34,15 +26,13 @@ from .sketches import cli as list_sketches
 @click.command(help="List all available parts, assemblies and scenes")
 @click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-def cli(cli_ctx: CliContext, used_by, recursive: bool, package: str) -> None:
+def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:
     """List all available parts, assemblies and scenes recursively."""
     runner = CliRunner()
     options = []
 
     if recursive:
         options.append("--recursive")
-    if used_by:
-        options.append("--used_by")
     if package:
         options.append(package)
 
