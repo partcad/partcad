@@ -406,8 +406,9 @@ def add_part(params: lsp.ExecuteCommandParams = None):
         config = params[0]["config"]
     LSP_SERVER.send_notification("?/partcad/info", "Adding %s using the file %s" % (kind, path))
 
-    prj = partcad_ctx.get_project(partcad.ROOT)  # TODO(clairbee):  (partcad.CURRENT)
-    prj.add_part(kind, path, config)
+    with partcad.logging.Process("AddPart", path):
+        prj = partcad_ctx.get_project(partcad.ROOT)  # TODO(clairbee):  (partcad.CURRENT)
+        prj.add_part(kind, path, config)
 
 
 @LSP_SERVER.command("partcad.addAssemblyReal")
@@ -421,87 +422,90 @@ def add_assembly(params: lsp.ExecuteCommandParams = None):
     path = params[0]["path"]
     LSP_SERVER.send_notification("?/partcad/info", "Adding assembly %s" % path)
 
-    prj = partcad_ctx.get_project(partcad.ROOT)  # TODO(clairbee):(partcad.CURRENT)
-    prj.add_assembly(kind, path)
+    with partcad.logging.Process("AddAssy", path):
+        prj = partcad_ctx.get_project(partcad.ROOT)  # TODO(clairbee):(partcad.CURRENT)
+        prj.add_assembly(kind, path)
 
 
 def do_inspect_file(path: str):
+    global partcad
     global partcad_ctx
 
-    found = False
+    with partcad.logging.Process("InspectFile", path):
+        found = False
 
-    for prj_name, prj in partcad_ctx.projects.items():
-        for name, assy in prj.assemblies.items():
-            if hasattr(assy, "orig_name") and assy.name != assy.orig_name:
-                # Skip parametrized clones
-                continue
+        for prj_name, prj in partcad_ctx.projects.items():
+            for name, assy in prj.assemblies.items():
+                if hasattr(assy, "orig_name") and assy.name != assy.orig_name:
+                    # Skip parametrized clones
+                    continue
 
-            if assy.path is not None and os.path.exists(assy.path) and os.path.samefile(assy.path, path):
-                paramed_names = list(filter(lambda n: n.startswith(name), prj.assemblies.keys()))
-                for paramed_name in paramed_names:
-                    del prj.assemblies[paramed_name]  # Invalidate all the paramterized variations
+                if assy.path is not None and os.path.exists(assy.path) and os.path.samefile(assy.path, path):
+                    paramed_names = list(filter(lambda n: n.startswith(name), prj.assemblies.keys()))
+                    for paramed_name in paramed_names:
+                        del prj.assemblies[paramed_name]  # Invalidate all the paramterized variations
 
-                LSP_SERVER.send_notification(
-                    "?/partcad/execute",
-                    {
-                        "command": "partcad.inspectAssembly",
-                        "args": [{"name": name, "pkg": prj_name}, {}, True],
-                    },
-                )
-                found = True
+                    LSP_SERVER.send_notification(
+                        "?/partcad/execute",
+                        {
+                            "command": "partcad.inspectAssembly",
+                            "args": [{"name": name, "pkg": prj_name}, {}, True],
+                        },
+                    )
+                    found = True
+                    break
+            if found:
                 break
-        if found:
-            break
 
-        for name, part in prj.parts.items():
-            if hasattr(part, "orig_name") and part.name != part.orig_name:
-                # Skip parametrized clones
-                continue
+            for name, part in prj.parts.items():
+                if hasattr(part, "orig_name") and part.name != part.orig_name:
+                    # Skip parametrized clones
+                    continue
 
-            if part.path is not None and os.path.exists(part.path) and os.path.samefile(part.path, path):
-                paramed_names = list(filter(lambda n: n.startswith(name), prj.parts.keys()))
-                for paramed_name in paramed_names:
-                    del prj.parts[paramed_name]  # Invalidate all the paramterized variations
+                if part.path is not None and os.path.exists(part.path) and os.path.samefile(part.path, path):
+                    paramed_names = list(filter(lambda n: n.startswith(name), prj.parts.keys()))
+                    for paramed_name in paramed_names:
+                        del prj.parts[paramed_name]  # Invalidate all the paramterized variations
 
-                LSP_SERVER.send_notification(
-                    "?/partcad/execute",
-                    {
-                        "command": "partcad.inspectPart",
-                        "args": [{"name": name, "pkg": prj_name}, {}, True],
-                    },
-                )
-                found = True
+                    LSP_SERVER.send_notification(
+                        "?/partcad/execute",
+                        {
+                            "command": "partcad.inspectPart",
+                            "args": [{"name": name, "pkg": prj_name}, {}, True],
+                        },
+                    )
+                    found = True
+                    break
+            if found:
                 break
-        if found:
-            break
 
-        for name, sketch in prj.sketches.items():
-            if hasattr(sketch, "orig_name") and sketch.name != sketch.orig_name:
-                # Skip parametrized clones
-                continue
+            for name, sketch in prj.sketches.items():
+                if hasattr(sketch, "orig_name") and sketch.name != sketch.orig_name:
+                    # Skip parametrized clones
+                    continue
 
-            if sketch.path is not None and os.path.exists(sketch.path) and os.path.samefile(sketch.path, path):
-                if name in prj.sketches:
-                    # Invalidate the model
-                    # TODO(clairbee): call invalidate()
-                    prj.sketches[name].shape = None
-                    prj.sketches[name].components = []
+                if sketch.path is not None and os.path.exists(sketch.path) and os.path.samefile(sketch.path, path):
+                    if name in prj.sketches:
+                        # Invalidate the model
+                        # TODO(clairbee): call invalidate()
+                        prj.sketches[name].shape = None
+                        prj.sketches[name].components = []
 
-                paramed_names = list(filter(lambda n: n.startswith(name + ":"), prj.sketches.keys()))
-                for paramed_name in paramed_names:
-                    del prj.sketches[paramed_name]  # Invalidate all the paramterized variations
+                    paramed_names = list(filter(lambda n: n.startswith(name + ":"), prj.sketches.keys()))
+                    for paramed_name in paramed_names:
+                        del prj.sketches[paramed_name]  # Invalidate all the paramterized variations
 
-                LSP_SERVER.send_notification(
-                    "?/partcad/execute",
-                    {
-                        "command": "partcad.inspectSketch",
-                        "args": [{"name": name, "pkg": prj_name}, {}, True],
-                    },
-                )
-                found = True
+                    LSP_SERVER.send_notification(
+                        "?/partcad/execute",
+                        {
+                            "command": "partcad.inspectSketch",
+                            "args": [{"name": name, "pkg": prj_name}, {}, True],
+                        },
+                    )
+                    found = True
+                    break
+            if found:
                 break
-        if found:
-            break
 
 
 # partcad.inspectFile is called after restart to inspect the part/assembly that was added
