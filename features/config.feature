@@ -172,7 +172,7 @@ Feature: `pc config` command
           sentryAttachStacktrace: true
           sentryTracesSampleRate: 0.43
       """
-    When I run "pc --threads-max=1111 --ollama-num-thread=2222 --max-script-correction=3333 --max-model-generation=4444 --max-geometric-modeling=5555 --openai-api-key=abcdef12345 --google-api-key=fedcba54321 --internal-state-dir=/tmp/sandbox/home/.partcad --python-sandbox=pypy --force-update --cache --cache-max-entry-size=102 --cache-min-entry-size=12 --cache-memory-max-entry-size=102 --cache-memory-double-cache-max-entry-size=102 --cache-dependencies-ignore --telemetry-debug --telemetry-sentry-traces-sample-rate=0.35 --telemetry-sentry-attach-stacktrace=no --telemetry-sentry-shutdown-timeout=44 config"
+    When I run "pc --threads-max=1111 --ollama-num-thread=2222 --max-script-correction=3333 --max-model-generation=4444 --max-geometric-modeling=5555 --openai-api-key=abcdef12345 --google-api-key=fedcba54321 --internal-state-dir=/tmp/sandbox/home/.partcad --python-sandbox=pypy --force-update --cache --cache-max-entry-size=102 --cache-min-entry-size=12 --cache-memory-max-entry-size=102 --cache-memory-double-cache-max-entry-size=102 --cache-dependencies-ignore --telemetry-type=sentry --telemetry-debug --telemetry-sentry-traces-sample-rate=0.35 --telemetry-sentry-attach-stacktrace=no --telemetry-sentry-shutdown-timeout=44 config"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "threads_max: 1111"
     And STDOUT should contain "ollama_num_thread: 2222"
