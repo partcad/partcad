@@ -26,11 +26,10 @@ def temp_cad_file(tmp_path, request):
     This simulates different input formats for conversion.
     """
     input_format = request.param
-    source_file = Path(f"examples/feature_convert/{input_format}/{TEST_FILES[input_format]}")
+    source_file = Path(f"examples/feature_convert_part/{input_format}/{TEST_FILES[input_format]}")
     test_file = tmp_path / TEST_FILES[input_format]
 
-    if not source_file.exists():
-        pytest.skip(f"Skipping: Test file {source_file} not found.")
+    assert source_file.exists(), f"Test file {source_file} not found."
 
     test_file.write_bytes(source_file.read_bytes())  # Copy the file for testing
     return test_file, input_format

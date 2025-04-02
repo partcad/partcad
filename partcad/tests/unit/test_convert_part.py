@@ -6,11 +6,11 @@ from partcad.context import Context
 from partcad.actions.part import convert_part_action
 import yaml
 
-from partcad.shape import EXTENSION_MAPPING
+from partcad.shape import PART_EXTENSION_MAPPING
 
 ALLOWED_TARGET_FORMATS = {"step", "brep", "stl", "3mf", "threejs", "obj", "gltf", "iges"}
 
-SOURCE_DIR = Path("./examples/feature_convert")
+SOURCE_DIR = Path("./examples/feature_convert_part")
 
 PARTS_CONFIG = {
     "box_brep": {"type": "brep", "path": "brep/box.brep"},
@@ -62,7 +62,7 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
 
     convert_part_action(project, source_part, target_format, output_dir=str(output_dir))
 
-    expected_ext = EXTENSION_MAPPING[target_format]
+    expected_ext = PART_EXTENSION_MAPPING[target_format]
     expected_files = list(output_dir.glob(f"*.{expected_ext}"))
 
     assert expected_files, f"No converted file found in {output_dir}"
@@ -98,7 +98,7 @@ def test_enrich_conversion(source_part: str, target_format: str, tmp_path: Path)
 
     convert_part_action(project, source_part, target_format, output_dir=output_dir)
 
-    expected_ext = EXTENSION_MAPPING[target_format]
+    expected_ext = PART_EXTENSION_MAPPING[target_format]
     expected_file = output_dir / f"{source_part}.{expected_ext}"
 
     assert expected_file.exists(), f"Enrich conversion failed: {expected_file} not found"
@@ -131,7 +131,7 @@ def test_alias_conversion(source_part: str, target_format: str, tmp_path: Path):
 
     convert_part_action(project, source_part, target_format, output_dir=output_dir)
 
-    expected_ext = EXTENSION_MAPPING[target_format]
+    expected_ext = PART_EXTENSION_MAPPING[target_format]
     expected_file = output_dir / f"{source_part}.{expected_ext}"
 
     assert expected_file.exists(), f"Alias conversion failed, expected file not found: {expected_file}"

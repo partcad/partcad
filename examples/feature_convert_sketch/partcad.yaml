@@ -1,0 +1,25 @@
+desc: PartCAD example project for testing the conversion of various sketch types, including
+  Basic, SVG, DXF. This project demonstrates the use of alias and enrich mechanisms for sketch conversion.
+
+docs:
+  usage: ""
+
+sketches:
+  circle_basic:
+    type: basic
+    desc: The shortest way to create a basic circle in PartCAD
+    circle: 5
+
+  t-slot_dxf:
+    type: dxf
+    path: dxf/t-slot.dxf
+    include: ["0"]
+  
+  cylinder_svg:
+    type: svg
+    path: svg/cylinder.svg
+
+
+render:
+  readme:
+  svg:
