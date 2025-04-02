@@ -36,7 +36,7 @@ from ocp_serialize import register as register_ocp_helper
 
 from . import telemetry
 
-EXTENSION_MAPPING = {
+PART_EXTENSION_MAPPING = {
     "step": "step",
     "brep": "brep",
     "stl": "stl",
@@ -49,6 +49,8 @@ EXTENSION_MAPPING = {
     "build123d": "py",
     "scad": "scad",
 }
+
+SKETCH_EXTENSION_MAPPING = {}
 
 previously_displayed_shape = None
 
@@ -493,7 +495,7 @@ class Shape(ShapeConfiguration):
             formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
 
             for format in formats_to_render:
-                file_extension = EXTENSION_MAPPING.get(format, format)
+                file_extension = PART_EXTENSION_MAPPING.get(format, format)
                 render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
                 pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
