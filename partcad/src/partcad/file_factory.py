@@ -9,7 +9,10 @@
 
 import typing
 
+from . import telemetry
 
+
+@telemetry.instrument()
 class FileFactory:
     path: typing.Optional[str] = None
 

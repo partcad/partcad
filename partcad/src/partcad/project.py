@@ -61,12 +61,14 @@ from . import provider
 from . import provider_config
 from .render import render_cfg_merge
 from .utils import resolve_resource_path, normalize_resource_path
+from . import telemetry
 
 if TYPE_CHECKING:
     from partcad.context import Context
     from partcad.shape import Shape
 
 
+@telemetry.instrument()
 class Project(project_config.Configuration):
 
     class InterfaceLock(object):

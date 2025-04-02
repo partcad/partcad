@@ -1,7 +1,14 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
 import pytest
 from click.testing import CliRunner, Result
 from typing import Iterator
-from partcad.logging import reset_errors
+
+import partcad as pc
 
 
 @pytest.fixture(autouse=True)
@@ -10,7 +17,7 @@ def setup_function() -> None:
     Automatically resets error states before each test.
     This fixture ensures a clean slate for testing.
     """
-    reset_errors()
+    pc.logging.reset_errors()
 
 
 @pytest.fixture

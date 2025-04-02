@@ -13,8 +13,10 @@ from .provider_factory import ProviderFactory
 from .file_factory import FileFactory
 from . import factory
 from . import logging as pc_logging
+from . import telemetry
 
 
+@telemetry.instrument()
 class ProviderFactoryFile(ProviderFactory):
     path: str = None
     extension: str

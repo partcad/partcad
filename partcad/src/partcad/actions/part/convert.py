@@ -1,3 +1,9 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
 from pathlib import Path
 import shutil
 from typing import Optional
@@ -40,12 +46,12 @@ def get_source_path(project: Project, config: dict, part_name: str) -> Path:
 
 def parse_parameters_from_source(source_value: str) -> dict:
     """Extract parameters from the source name string."""
-    if ';' in source_value:
-        base_source, params_str = source_value.split(';', 1)
+    if ";" in source_value:
+        base_source, params_str = source_value.split(";", 1)
         parameters = {}
-        for param in params_str.split(','):
-            key, value = param.split('=')
-            parameters[key] = float(value) if '.' in value else int(value)
+        for param in params_str.split(","):
+            key, value = param.split("=")
+            parameters[key] = float(value) if "." in value else int(value)
         return base_source, parameters
     return source_value, {}
 
@@ -130,9 +136,16 @@ def update_parameters_with_defaults(part_config: dict) -> dict:
     return part_config
 
 
-def perform_conversion(project: Project, part_name: str, original_type: str,
-                       part_config: dict, source_path: Path, target_format: str,
-                       output_dir: Optional[str], dependencies_list: list = []) -> Path:
+def perform_conversion(
+    project: Project,
+    part_name: str,
+    original_type: str,
+    part_config: dict,
+    source_path: Path,
+    target_format: str,
+    output_dir: Optional[str],
+    dependencies_list: list = [],
+) -> Path:
     """Handles file conversion and updates project configuration."""
     new_ext = EXTENSION_MAPPING.get(target_format, target_format)
 
@@ -161,8 +174,12 @@ def perform_conversion(project: Project, part_name: str, original_type: str,
             dependencies_list += copy_dependencies(project, part_config, output_dir)
         else:
             project.render(
-                sketches=[], interfaces=[], parts=[part_name], assemblies=[],
-                format=target_format, output_dir=str(out_dir)
+                sketches=[],
+                interfaces=[],
+                parts=[part_name],
+                assemblies=[],
+                format=target_format,
+                output_dir=str(out_dir),
             )
             return output_path
 
@@ -203,8 +220,13 @@ def copy_dependencies(source_project: Project, part_config: dict, output_dir: Op
     return copied_files
 
 
-def convert_part_action(project: Project, object_name: str, target_format: Optional[str] = None,
-                        output_dir: Optional[str] = None, dry_run: bool = False):
+def convert_part_action(
+    project: Project,
+    object_name: str,
+    target_format: Optional[str] = None,
+    output_dir: Optional[str] = None,
+    dry_run: bool = False,
+):
     """
     Convert a part to a new format and update its configuration.
     """
@@ -237,9 +259,9 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
     copied_dependencies = []
     converted_path = source_path
     if part_type != conversion_target:
-        converted_path = perform_conversion(project, part_name, part_type, part_config,
-                                            source_path, conversion_target,
-                                            output_dir, copied_dependencies)
+        converted_path = perform_conversion(
+            project, part_name, part_type, part_config, source_path, conversion_target, output_dir, copied_dependencies
+        )
 
     try:
         config_path = converted_path.relative_to(project.path)
@@ -261,8 +283,13 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
 
     if target_format and target_format != conversion_target:
         final_path = perform_conversion(
-            project, part_name, conversion_target, updated_config,
-            converted_path, target_format, output_dir,
+            project,
+            part_name,
+            conversion_target,
+            updated_config,
+            converted_path,
+            target_format,
+            output_dir,
         )
 
         if final_path is None or not final_path.exists():
@@ -282,5 +309,5 @@ def convert_part_action(project: Project, object_name: str, target_format: Optio
         project.update_part_config(part_name, {"type": target_format, "path": str(final_config_path)})
         pc_logging.debug(f"Final updated configuration for '{part_name}': {final_config_path}")
 
-    pc_logging.info(f"Conversion of '{part_name}' completed.")
+    pc_logging.info(f"Conversion of '{part_name}' is completed.")
     return converted_path, updated_config

@@ -15,8 +15,10 @@ import sys
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 from . import wrapper
+from . import telemetry
 
 
+@telemetry.instrument()
 class PartFactoryStl(PartFactoryFile):
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitSTL", target_project.name, config["name"]):
@@ -34,12 +36,12 @@ class PartFactoryStl(PartFactoryFile):
             request_serialized = base64.b64encode(picklestring).decode()
 
             runtime = self.ctx.get_python_runtime("3.11")
-            response_serialized, errors = await runtime.run_async(
-                [wrapper_path, os.path.abspath(self.path)],
-                request_serialized,
-            )
-
-            sys.stderr.write(errors)
+            with telemetry.start_as_current_span("*PartFactoryStl.instantiate.{runtime.run_async}"):
+                response_serialized, errors = await runtime.run_async(
+                    [wrapper_path, os.path.abspath(self.path)],
+                    request_serialized,
+                )
+                sys.stderr.write(errors)
 
             try:
                 response = base64.b64decode(response_serialized)

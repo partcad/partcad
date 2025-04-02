@@ -11,10 +11,12 @@ import aiofiles
 import aiohttp
 import os
 
+from . import telemetry
 from .file_factory import FileFactory
 from .logging import debug
 
 
+@telemetry.instrument()
 class FileFactoryUrl(FileFactory):
     url: str = None
 

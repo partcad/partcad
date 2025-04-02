@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2023
 #
 # Author: Roman Kuzmenko
@@ -6,6 +7,9 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+import importlib._bootstrap
+import importlib._bootstrap_external
+import importlib.machinery
 import importlib.util
 import os
 from pathlib import Path
@@ -13,6 +17,12 @@ import shutil
 import vyper
 
 from . import logging as pc_logging
+
+# IMPORTANT:
+# We need to maintain setting default values in both the CLI and the user_config, because of:
+# 1) CLI needs default values to show them to the user
+# 2) CLI pushes the default values to user_config unconditionally (if no user values are set)
+# 3) user_config is used outside of CLI, where CLI default values are not available
 
 
 class BaseConfig(dict):
@@ -90,39 +100,92 @@ class ParametersConfig(BaseConfig):
         super().__init__(v, "parameters")
 
 
-class SentryConfig:
-    def __init__(self, v):
-        self.v: vyper.Vyper = v
+# TODO(clairbee): moake TelemetryConfig a subclass of BaseConfig
+class TelemetryConfig(dict):
+    def __init__(self, v: vyper.Vyper):
+        self.v = v
+        self.v.bind_env("telemetry.type", "PC_TELEMETRY_TYPE")
+        self.v.bind_env("telemetry.env", "PC_TELEMETRY_ENV")
+        self.v.bind_env("telemetry.performance", "PC_TELEMETRY_PERFORMANCE")
+        self.v.bind_env("telemetry.failures", "PC_TELEMETRY_FAILURES")
+        self.v.bind_env("telemetry.debug", "PC_TELEMETRY_DEBUG")
+        self.v.bind_env("telemetry.sentryDsn", "PC_TELEMETRY_SENTRY_DSN")
+        self.v.bind_env("telemetry.sentryShutdownTimeout", "PC_TELEMETRY_SENTRY_SHUTDOWN_TIMEOUT")
+        self.v.bind_env("telemetry.sentryAttachStacktrace", "PC_TELEMETRY_SENTRY_ATTACH_STACKTRACE")
+        self.v.bind_env("telemetry.sentryTracesSampleRate", "PC_TELEMETRY_SENTRY_TRACES_SAMPLE_RATE")
+        self.v.register_alias("telemetry.environment", "telemetry.env")
 
     @property
-    def dsn(self):
-        if self.v.is_set("sentry.dsn"):
-            return self.v.get("sentry.dsn")
+    def type(self):
+        if self.v.is_set("telemetry.type"):
+            return self.v.get_string("telemetry.type")
+
+        return "sentry"
+
+    @property
+    def env(self):
+        if self.v.is_set("telemetry.env"):
+            return self.v.get_string("telemetry.env")
+
+        from . import __spec__
+
+        # If the module is loaded from a file, then we are in development mode
+        if __spec__.loader.__class__.__name__ == "SourceFileLoader":
+            return "dev"
+        else:
+            return "prod"
+
+    @property
+    def performance(self):
+        if self.v.is_set("telemetry.performance"):
+            return self.v.get_bool("telemetry.performance")
+        return True
+
+    @property
+    def failures(self):
+        if self.v.is_set("telemetry.failures"):
+            return self.v.get_bool("telemetry.failures")
+        return True
 
     @property
     def debug(self):
-        if self.v.is_set("sentry.debug"):
-            return self.v.get_bool("sentry.debug")
+        if self.v.is_set("telemetry.debug"):
+            return self.v.get_bool("telemetry.debug")
         return False
 
     @property
-    def shutdown_timeout(self):
-        if self.v.is_set("sentry.shutdown_timeout"):
-            return self.v.get_int("sentry.shutdown_timeout")
-        return 20
+    def sentry_dsn(self):
+        if self.v.is_set("telemetry.sentryDsn"):
+            return self.v.get_string("telemetry.sentryDsn")
+
+        # TODO(clairbee): create a load balancer for Sentry
+        # return "https://sentry.partcad.org"
+        return "https://3a80dc66ff544e5000cb4c50751f0eca@o4508651588485120.ingest.us.sentry.io/4508651601526784"
 
     @property
-    def traces_sample_rate(self):
-        if self.v.is_set("sentry.traces_sample_rate"):
-            return self.v.get_float("sentry.traces_sample_rate")
-        return 0.85
+    def sentry_shutdown_timeout(self):
+        if self.v.is_set("telemetry.sentryShutdownTimeout"):
+            return self.v.get_float("telemetry.sentryShutdownTimeout")
+        return 3.0
+
+    @property
+    def sentry_attach_stacktrace(self):
+        if self.v.is_set("telemetry.sentryAttachStacktrace"):
+            return self.v.get_bool("telemetry.sentryAttachStacktrace")
+        return False
+
+    @property
+    def sentry_traces_sample_rate(self):
+        if self.v.is_set("telemetry.sentryTracesSampleRate"):
+            return self.v.get_float("telemetry.sentryTracesSampleRate")
+        return 1.0
 
     def __repr__(self):
         properties = []
-        for name, val in vars(SentryConfig).items():
+        for name, val in vars(TelemetryConfig).items():
             if isinstance(val, property):
-                properties.append((name, val.__get__(self, SentryConfig)))
-        return str({k: v for k, v in properties if v is not None})
+                properties.append((name, val.__get__(self, TelemetryConfig)))
+        return str({k: v for k, v in properties})
 
 
 class UserConfig(vyper.Vyper):
@@ -131,12 +194,18 @@ class UserConfig(vyper.Vyper):
         home = os.environ.get("HOME", Path.home())
         return os.path.join(home, ".partcad")
 
+    @staticmethod
+    def get_cache_dir():
+        return os.path.join(Path.home(), ".cache", "partcad")
+
     def __init__(self):
         super().__init__()
         self.set_config_type("yaml")
 
+        cfg_dir = UserConfig.get_config_dir()
+        os.makedirs(cfg_dir, exist_ok=True)
         config_path = os.path.join(
-            UserConfig.get_config_dir(),
+            cfg_dir,
             "config.yaml",
         )
         if os.path.exists(config_path):
@@ -144,7 +213,7 @@ class UserConfig(vyper.Vyper):
                 with open(config_path, "r") as f:
                     self.read_config(f)
             except Exception as e:
-                pc_logging.error("ERROR: Failed to parse %s" % config_path)
+                pc_logging.error("ERROR: Failed to parse %s: %s" % (config_path, str(e)))
 
         # If the filesystem cache is enabled, then (by default):
         # - objects of 1 byte bytes are cached both in memory and on the filesystem (to cache test results)
@@ -170,9 +239,6 @@ class UserConfig(vyper.Vyper):
 
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
-
-        self.set_default("sentry.shutdown_timeout", 5)
-        self.set_default("sentry.traces_sample_rate", 1.0)
 
         self.set_default("useDockerPython", False)
         self.set_default("useDockerKicad", True)
@@ -301,15 +367,21 @@ class UserConfig(vyper.Vyper):
         if self.is_set("maxScriptCorrection"):
             self.max_script_correction = self.get_int("maxScriptCorrection")
 
-        # option: sentry
-        # description: Sentry configuration
+        # option: telemetry
+        # description: Telemetry configuration
         # values: <dict>
-        # default: {"debug": "false", "shutdown_timeout": "5", "traces_sample_rate": "1.0"}
-        self.sentry_config = SentryConfig(self)
-        self.bind_env("sentry.dsn", "PC_SENTRY_DSN")
-        self.bind_env("sentry.debug", "PC_SENTRY_DEBUG")
-        self.bind_env("sentry.shutdown_timeout", "PC_SENTRY_SHUTDOWN_TIMEOUT")
-        self.bind_env("sentry.traces_sample_rate", "PC_SENTRY_TRACES_SAMPLE_RATE")
+        # default: {
+        #   "type": "sentry",
+        #   "environment": "prod",
+        #   "performance": "true",
+        #   "failures": "true",
+        #   "debug": "false",
+        #   "sentry_dsn": "<PartCAD's default DSN>",
+        #   "sentry_shutdown_timeout": "3.0",
+        #   "sentry_attach_stacktrace": "false",
+        #   "sentry_traces_sample_rate": "1.0",
+        # }
+        self.telemetry_config = TelemetryConfig(self)
 
         # option: git
         # description: Git configuration

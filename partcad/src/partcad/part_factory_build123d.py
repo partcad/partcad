@@ -29,7 +29,10 @@ from . import logging as pc_logging
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
+from . import telemetry
 
+
+@telemetry.instrument()
 class PartFactoryBuild123d(PartFactoryPython):
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         python_version = source_project.python_version
@@ -83,8 +86,9 @@ class PartFactoryBuild123d(PartFactoryPython):
 
             # Serialize the request
             register_ocp_helper()
-            pickle_string = pickle.dumps(request)
-            request_serialized = base64.b64encode(pickle_string).decode()
+            with telemetry.start_as_current_span("*PartFactoryBuild123d.instantiate.{pickle.dumps}"):
+                pickle_string = pickle.dumps(request)
+                request_serialized = base64.b64encode(pickle_string).decode()
 
             # TODO: @alexanderilyin: those should be read from the package/part config?
             await self.runtime.ensure_async(
@@ -155,6 +159,7 @@ class PartFactoryBuild123d(PartFactoryPython):
             compound = TopoDS_Compound()
             builder.MakeCompound(compound)
 
+            @telemetry.start_as_current_span("PartFactoryBuild123d.instantiate.process")
             def process(shapes, components_list):
                 for shape in shapes:
                     # pc_logging.info("Returned: %s" % type(shape))

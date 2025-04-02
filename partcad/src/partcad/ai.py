@@ -10,6 +10,7 @@
 import fnmatch
 import time
 
+from . import telemetry
 from .ai_google import AiGoogle
 from .ai_openai import AiOpenAI
 from .ai_ollama import AiOllama
@@ -38,6 +39,7 @@ supported_models = [
 ]
 
 
+@telemetry.instrument()
 class Ai(AiGoogle, AiOpenAI, AiOllama):
     def generate(
         self,

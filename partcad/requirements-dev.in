@@ -3,7 +3,6 @@ allure-pytest==2.13.5
 behave==1.2.6
 behavex==4.0.8
 click
-coloredlogs
 coverage==7.6.8
 pyhamcrest==2.1.0
 pytest==8.3.4

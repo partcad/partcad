@@ -15,8 +15,10 @@ from .provider_request_order import ProviderRequestOrder
 from .provider_request_quote import ProviderRequestQuote
 from .provider_data_cart import *
 from . import logging as pc_logging
+from . import telemetry
 
 
+@telemetry.instrument()
 class Provider:
     name: str
     config: dict[str, typing.Any] = None

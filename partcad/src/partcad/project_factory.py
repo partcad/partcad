@@ -8,6 +8,7 @@
 #
 
 from . import project as p
+from . import telemetry
 
 
 class ImportConfiguration:
@@ -33,6 +34,7 @@ class ImportConfiguration:
             self.inherited_config = {"manufacturable": parent.is_manufacturable}
 
 
+@telemetry.instrument()
 class ProjectFactory(ImportConfiguration):
     def __init__(self, ctx, parent, import_config_obj):
         super().__init__(import_config_obj, parent)

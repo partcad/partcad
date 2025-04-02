@@ -11,7 +11,7 @@ Feature: `pc export` command
     Then the command should exit with a status code of "0"
     And a file named "<filename>" should be created
     And a file named "partcad.yaml" should not exist
-    And STDERR should contain "DONE: Export: this:"
+    And STDERR should contain "DONE: Export: //pub/examples/partcad/produce_assembly_assy:"
     And STDERR should not contain "WARN:"
 
   @type-object

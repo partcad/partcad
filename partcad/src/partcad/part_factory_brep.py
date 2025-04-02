@@ -11,10 +11,12 @@ from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 from . import wrapper
 from .exception import FileReadError, PartFactoryError
+from . import telemetry
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 
 
+@telemetry.instrument()
 class PartFactoryBrep(PartFactoryFile):
     # Constants
     MIN_SIMPLE_INFLIGHT = 1

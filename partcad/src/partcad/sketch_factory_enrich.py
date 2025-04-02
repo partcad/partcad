@@ -14,8 +14,10 @@ from . import sketch_config
 from . import sketch_factory as pf
 from . import logging as pc_logging
 from .utils import resolve_resource_path, get_child_project_path
+from . import telemetry
 
 
+@telemetry.instrument()
 class SketchFactoryEnrich(pf.SketchFactory):
     source_sketch_name: str
     source_project_name: typing.Optional[str]

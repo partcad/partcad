@@ -22,7 +22,6 @@ Feature: `pc` command
     And STDOUT should contain "Produce plain text logs"
     # TODO-61: Due to different terminal size in CI' (YAML file or directory with 'partcad.yaml')' is wrapped to the next line
     And STDOUT should contain "Specify the package path"
-    And STDOUT should contain "Set the log prefix format"
     And STDOUT should contain "Create a new PartCAD package in the current directory "
     And STDOUT should contain "Download and set up all imported packages "
     And STDOUT should contain "List components"
@@ -39,7 +38,7 @@ Feature: `pc` command
     And STDERR should contain "Git cache size:"
     And STDERR should contain "Sandbox environments size:"
     And STDERR should contain "Total internal data storage size:"
-    And STDERR should contain "DONE: Status: this:"
+    And STDERR should contain "DONE: Status: global:"
 
   @pc-quiet @pc-status
   Scenario: Do not show INFO messages with decreased verbosity
@@ -51,7 +50,7 @@ Feature: `pc` command
     And STDOUT should not contain "INFO:partcad:Git cache size:"
     And STDOUT should not contain "INFO:partcad:Sandbox environments size:"
     And STDOUT should not contain "INFO:partcad:Total internal data storage size:"
-    And STDOUT should not contain "INFO:partcad:DONE: Status: this:"
+    And STDOUT should not contain "INFO:partcad:DONE: Status: global:"
 
   @pc-no-ansi @pc-status
   Scenario: Do not show ANSI codes
@@ -63,7 +62,7 @@ Feature: `pc` command
     And STDERR should contain "INFO:partcad:Git cache size:"
     And STDERR should contain "INFO:partcad:Sandbox environments size:"
     And STDERR should contain "INFO:partcad:Total internal data storage size:"
-    And STDERR should contain "INFO:partcad:DONE: Status: this:"
+    And STDERR should contain "INFO:partcad:DONE: Status: global:"
 
   @pc-path @pc-version
   Scenario: Read package configuration from arbitrary location
@@ -113,7 +112,7 @@ Feature: `pc` command
       invalid:
         yaml: [
       """
-    When I run "pc -p partcad.yaml list"
+    When I run "pc -p partcad.yaml list parts"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Invalid configuration file"
 

@@ -1,10 +1,13 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2024
 #
 # Author: Roman Kuzmenko
 # Created: 2024-02-09
 #
 # Licensed under Apache License, Version 2.0.
+#
+
 import os
 from concurrent.futures import ThreadPoolExecutor
 from opentelemetry import context as otel_context
@@ -12,8 +15,9 @@ from opentelemetry.trace import Tracer
 from typing import Callable
 import asyncio
 
-from .sentry import tracer
+from .telemetry import tracer
 from .user_config import user_config
+
 
 class TracedThreadPoolExecutor(ThreadPoolExecutor):
     def __init__(self, tracer: Tracer, *args, **kwargs):
@@ -21,8 +25,10 @@ class TracedThreadPoolExecutor(ThreadPoolExecutor):
         super().__init__(*args, **kwargs)
 
     def with_otel_context(self, context: otel_context.Context, fn: Callable):
-        otel_context.attach(context)
-        return fn()
+        token = otel_context.attach(context)
+        result = fn()
+        otel_context.detach(token)
+        return result
 
     def submit(self, fn, *args, **kwargs):
         # get the current otel context
@@ -43,9 +49,12 @@ class ThreadPoolManager:
         else:
             cpu_count = os.cpu_count() or 1  # Handle None case
             if cpu_count < 8:
-                cpu_count = 7  # Workaround for small core counts
+                # This is a workaround for the fact that sometimes we waste threads and
+                # we should not dead lock ourselves on a machine with a small number of cores
+                cpu_count = 7
             else:
-                cpu_count -= 1  # Leave one core for system
+                # Leave one core for the asyncio event loop and stuff
+                cpu_count -= 1
 
         # Calculate thread counts
         constrained = cpu_count
@@ -57,37 +66,31 @@ class ThreadPoolManager:
             unconstrained = min(unconstrained, 61)
 
         # Create executors
-        self.constrained_executor = TracedThreadPoolExecutor(
-            tracer,
-            constrained, "partcad-executor-"
-        )
-        self.unconstrained_executor = TracedThreadPoolExecutor(
-            tracer,
-            unconstrained, "partcad-executor-others-"
-        )
+        self.constrained_executor = TracedThreadPoolExecutor(tracer, constrained, "partcad-executor-")
+        self.unconstrained_executor = TracedThreadPoolExecutor(tracer, unconstrained, "partcad-executor-others-")
 
     async def run(self, method, *args):
         """Run in constrained executor"""
-        return await asyncio.get_running_loop().run_in_executor(
-            self.constrained_executor, method, *args
-        )
+        return await asyncio.get_running_loop().run_in_executor(self.constrained_executor, method, *args)
 
     async def run_detached(self, method, *args):
         """Run in unconstrained executor"""
-        return await asyncio.get_running_loop().run_in_executor(
-            self.unconstrained_executor, method, *args
-        )
+        return await asyncio.get_running_loop().run_in_executor(self.unconstrained_executor, method, *args)
 
     async def run_async(self, coroutine, *args):
         """Run async coroutine in constrained executor"""
+
         def sync_wrapper():
             return asyncio.run(coroutine(*args))
+
         return await self.run(sync_wrapper)
 
     async def run_async_detached(self, coroutine, *args):
         """Run async coroutine in unconstrained executor"""
+
         def sync_wrapper():
             return asyncio.run(coroutine(*args))
+
         return await self.run_detached(sync_wrapper)
 
 

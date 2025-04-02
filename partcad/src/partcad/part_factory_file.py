@@ -11,8 +11,10 @@ import os
 
 from .part_factory import PartFactory
 from . import logging as pc_logging
+from . import telemetry
 
 
+@telemetry.instrument()
 class PartFactoryFile(PartFactory):
     extension: str
 

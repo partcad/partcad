@@ -15,7 +15,9 @@ class ProviderRequestQuote(ProviderRequest):
     cart: ProviderCart = None
     result: object = None
 
-    def __init__(self, cart: ProviderCart = ProviderCart()):
+    def __init__(self, cart: ProviderCart = None):
+        if cart is None:
+            cart = ProviderCart()
         self.cart = cart
         self.result = None
 

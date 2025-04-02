@@ -25,6 +25,7 @@ from OCP.ShapeFix import (
 
 from .sketch_factory import SketchFactory
 from . import logging as pc_logging
+from . import telemetry
 
 
 class Circle:
@@ -140,6 +141,7 @@ class Rect:
 
 # TODO(clairbee): distinguish between inner and outer wires?
 #                 see Face::_make_from_wires in build123d/topology.py
+@telemetry.instrument()
 class SketchFactoryBasic(SketchFactory):
     outer_circle: Circle = None
     outer_square: Square = None
@@ -149,47 +151,48 @@ class SketchFactoryBasic(SketchFactory):
     inner_rects: list[Rect] = []
 
     def __init__(self, ctx, source_project, target_project, config):
-        with pc_logging.Action("InitBasic", target_project.name, config["name"]):
-            super().__init__(
-                ctx,
-                source_project,
-                target_project,
-                config,
-            )
+        # TODO(clairbee): either optimize "Action" or stop using Action for any object initializations
+        # with pc_logging.Action("InitBasic", target_project.name, config["name"]):
+        super().__init__(
+            ctx,
+            source_project,
+            target_project,
+            config,
+        )
 
-            if "circle" in config:
-                self.outer_circle = Circle(config["circle"])
-            if "square" in config:
-                self.outer_square = Square(config["square"])
-            if "rectangle" in config:
-                self.outer_rect = Rect(config["rectangle"])
+        if "circle" in config:
+            self.outer_circle = Circle(config["circle"])
+        if "square" in config:
+            self.outer_square = Square(config["square"])
+        if "rectangle" in config:
+            self.outer_rect = Rect(config["rectangle"])
 
-            if "inner" in config:
-                inner = config["inner"]
-                if "circle" in inner:
-                    self.inner_circles = [Circle(inner["circle"])]
-                if "circles" in inner:
-                    self.inner_circles.extend([Circle(c) for c in inner["circles"]])
-                if "square" in inner:
-                    self.inner_squares = [Square(inner["square"])]
-                if "squares" in inner:
-                    self.inner_squares.extend([Square(s) for s in inner["squares"]])
-                if "rectangle" in inner:
-                    self.inner_rects = [Rect(inner["rectangle"])]
-                if "rectangles" in inner:
-                    self.inner_rects.extend([Rect(r) for r in inner["rectangles"]])
+        if "inner" in config:
+            inner = config["inner"]
+            if "circle" in inner:
+                self.inner_circles = [Circle(inner["circle"])]
+            if "circles" in inner:
+                self.inner_circles.extend([Circle(c) for c in inner["circles"]])
+            if "square" in inner:
+                self.inner_squares = [Square(inner["square"])]
+            if "squares" in inner:
+                self.inner_squares.extend([Square(s) for s in inner["squares"]])
+            if "rectangle" in inner:
+                self.inner_rects = [Rect(inner["rectangle"])]
+            if "rectangles" in inner:
+                self.inner_rects.extend([Rect(r) for r in inner["rectangles"]])
 
-            self._create(config)
-            basic_config = {}
-            if "circle" in config:
-                basic_config["circle"] = config["circle"]
-            if "square" in config:
-                basic_config["square"] = config["square"]
-            if "rectangle" in config:
-                basic_config["rectangle"] = config["rectangle"]
-            if "inner" in config:
-                basic_config["inner"] = config["inner"]
-            self.sketch.hash.add_dict(basic_config)
+        self._create(config)
+        basic_config = {}
+        if "circle" in config:
+            basic_config["circle"] = config["circle"]
+        if "square" in config:
+            basic_config["square"] = config["square"]
+        if "rectangle" in config:
+            basic_config["rectangle"] = config["rectangle"]
+        if "inner" in config:
+            basic_config["inner"] = config["inner"]
+        self.sketch.hash.add_dict(basic_config)
 
     async def instantiate(self, sketch):
         with pc_logging.Action("Basic", sketch.project_name, sketch.name):

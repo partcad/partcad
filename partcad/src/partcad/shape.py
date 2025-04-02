@@ -14,7 +14,6 @@ import base64
 import copy
 import os
 import pickle
-import shutil
 import sys
 import tempfile
 import threading
@@ -24,7 +23,6 @@ from .cache_hash import CacheHash
 from .render import *
 from .shape_config import ShapeConfiguration
 from .utils import total_size
-from . import exception
 from . import logging as pc_logging
 from .sync_threads import threadpool_manager
 from . import wrapper
@@ -36,6 +34,7 @@ if TYPE_CHECKING:
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
+from . import telemetry
 
 EXTENSION_MAPPING = {
     "step": "step",
@@ -52,6 +51,7 @@ EXTENSION_MAPPING = {
 }
 
 
+@telemetry.instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
     name: str
     desc: str
@@ -337,8 +337,9 @@ class Shape(ShapeConfiguration):
             "viewport_origin": viewport_origin,
         }
         register_ocp_helper()
-        picklestring = pickle.dumps(request)
-        request_serialized = base64.b64encode(picklestring).decode()
+        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{pickle.dumps}"):
+            picklestring = pickle.dumps(request)
+            request_serialized = base64.b64encode(picklestring).decode()
 
         # We don't care about customer preferences much here
         # as this is expected to be hermetic.
@@ -528,14 +529,15 @@ class Shape(ShapeConfiguration):
                 await asyncio.gather(*(runtime.ensure_async(dep) for dep in dependencies))
 
                 # Run wrapper
-                response_serialized, errors = await runtime.run_async(
-                    [
-                        wrapper_path,
-                        final_filepath,
-                    ],
-                    request_serialized,
-                )
-                sys.stderr.write(errors)
+                with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
+                    response_serialized, errors = await runtime.run_async(
+                        [
+                            wrapper_path,
+                            final_filepath,
+                        ],
+                        request_serialized,
+                    )
+                    sys.stderr.write(errors)
 
                 if errors:
                     pc_logging.error(f"Wrapper {format_name} stderr:\n{errors}")

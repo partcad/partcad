@@ -11,8 +11,10 @@ from . import factory
 
 from .file_factory import FileFactory
 from .port import WithPorts
+from . import telemetry
 
 
+@telemetry.instrument()
 class ShapeFactory(factory.Factory):
     fileFactory: FileFactory
 

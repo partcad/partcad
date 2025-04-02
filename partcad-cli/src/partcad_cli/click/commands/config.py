@@ -1,12 +1,22 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
 import rich_click as click
-from partcad.logging import info, debug
-from partcad.user_config import user_config
+
+import partcad as pc
+from ..cli_context import CliContext
 
 
 @click.command(help="Show the current user configuration")
 @click.pass_obj
-def cli(ctx) -> None:
-    for key, value in vars(user_config).items():
-        if not callable(value) and key[0] != "_":
-            info(f"{key}: {value}")
-    debug(f"File: {user_config.get_config_dir()}")
+def cli(cli_ctx: CliContext) -> None:
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        # ctx: pc.Context = cli_ctx.get_partcad_context()
+
+        for key, value in vars(pc.user_config).items():
+            if not callable(value) and key[0] != "_":
+                pc.logging.info(f"{key}: {value}")
+        pc.logging.debug(f"File: {pc.user_config.get_config_dir()}")

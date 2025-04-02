@@ -28,7 +28,7 @@ Feature: `pc status` command
     And STDOUT should match the regex "Git cache size: \d\.\d+[KMGT]B"
     And STDOUT should contain "Sandbox environments size:"
     And STDOUT should contain "Total internal data storage size:"
-    And STDOUT should contain "DONE: Status: this:"
+    And STDOUT should contain "DONE: Status: global:"
 
   @wip
   Scenario: Show status with corrupted cache

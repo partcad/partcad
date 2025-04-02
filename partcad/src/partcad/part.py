@@ -7,14 +7,15 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import math
 import typing
 
 from .shape_ai import ShapeWithAi
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
+from . import telemetry
 
 
+@telemetry.instrument(exclude=["ref_inc"])
 class Part(ShapeWithAi):
     path: typing.Optional[str] = None
     url: typing.Optional[str] = None

@@ -8,11 +8,12 @@
 
 import os
 import shutil
-import subprocess
 
 from . import runtime_python_conda
+from . import telemetry
 
 
+@telemetry.instrument()
 class PyPyPythonRuntime(runtime_python_conda.CondaPythonRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, version, variant="pypy")

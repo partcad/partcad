@@ -11,7 +11,6 @@ import tempfile
 
 from .. import logging as pc_logging
 from ..context import Context
-from ..part import Part
 
 
 def convert_cad_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
@@ -33,22 +32,23 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
 
         # Initialize PartCAD context and load the project
         ctx = Context(root_path=temp_dir, search_root=False)
-        project = ctx.get_project("/")
-        part = project.get_part("input_part")
-        if not part:
-            raise RuntimeError("Failed to load the input part: no part returned")
+        with pc_logging.Process("Convert", "adhoc"):
+            project = ctx.get_project("/")
+            part = project.get_part("input_part")
+            if not part:
+                raise RuntimeError("Failed to load the input part: no part returned")
 
-        shape = asyncio.run(part.get_wrapped(ctx))
-        if not shape:
-            raise RuntimeError("Failed to load the input part: no shape returned")
-        pc_logging.info(f"Loaded input part: {input_path}")
-        pc_logging.info(f"Shape: {type(shape)}")
+            shape = asyncio.run(part.get_wrapped(ctx))
+            if not shape:
+                raise RuntimeError("Failed to load the input part: no shape returned")
+            pc_logging.info(f"Loaded input part: {input_path}")
+            pc_logging.info(f"Shape: {type(shape)}")
 
-        if part.errors:
-            raise RuntimeError(f"Failed to load the input part: {part.errors}")
+            if part.errors:
+                raise RuntimeError(f"Failed to load the input part: {part.errors}")
 
-        # Render the part to the desired output format
-        part.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
+            # Render the part to the desired output format
+            part.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
 
     except Exception as e:
         raise RuntimeError(f"Failed to convert: {e.with_traceback(None)}")

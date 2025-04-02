@@ -11,7 +11,7 @@ import sys
 from types import ModuleType, FunctionType
 from gc import get_referents
 
-from . import consts
+from . import telemetry
 from . import logging as pc_logging
 
 # Custom objects know their class.
@@ -32,6 +32,7 @@ def get_child_project_path(parent_path, child_name):
     return result
 
 
+@telemetry.start_as_current_span("resolve_resource_path")
 def resolve_resource_path(current_project_name, pattern: str):
     if not ":" in pattern:
         pattern = ":" + pattern
@@ -42,7 +43,7 @@ def resolve_resource_path(current_project_name, pattern: str):
     # For backward compatibility '/' -> '//'
     if re.match(r"^/[^/]", project_pattern):
         pc_logging.warning(f"{project_pattern}: using '/' as the root package path is deprecated. Use '//' instead.")
-        project_pattern = '/' + project_pattern
+        project_pattern = "/" + project_pattern
     project_pattern = project_pattern.replace("...", "*")
     if not project_pattern.startswith("//"):
         if current_project_name.endswith("/"):
@@ -55,6 +56,7 @@ def resolve_resource_path(current_project_name, pattern: str):
     return project_pattern, item_pattern
 
 
+@telemetry.start_as_current_span("normalize_resource_path")
 def normalize_resource_path(current_project_name, pattern: str):
     project_pattern, item_pattern = resolve_resource_path(current_project_name, pattern)
     return f"{project_pattern}:{item_pattern}"

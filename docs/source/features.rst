@@ -172,6 +172,55 @@ in the future, PartCAD aims to achieve security isolation of the sandboxed
 environments. That will fundamentally change the security implications of using
 scripted models shared online.
 
+=========
+Telemetry
+=========
+
+Public Repositories
+-------------------
+
+By default PartCAD collects telemetry data to improve the user experience and to help
+understand how the tool is being used. The data collected includes the
+following:
+
+- What commands are being run?
+- How much time is consumed by each step?
+- What errors and exceptions are being raised?
+
+PartCAD uses `OpenTelemetry <https://opentelemetry.io/>`_ to collect telemetry data.
+You can disable telemetry by setting the following configuration:
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    telemetry:
+      type: none
+
+Alternatively, you can disable telemetry by setting the following environment variable:
+
+  .. code-block:: bash
+
+    PC_TELEMETRY_TYPE="none"
+
+Private Repositories
+--------------------
+
+If you are systemically using PartCAD in your organization then it makes sense
+to collect your own telemetry data to understand how the tool is being
+used in your organization, and to learn how to improve your organization performance.
+
+The only OpenTelemetry backend provider currently supported is `Sentry <https://sentry.io/>`_.
+Create an organization account on Sentry and obtain a DSN key.
+
+  .. code-block:: yaml
+
+    # ~/.partcad/config.yaml
+    telemetry:
+      type: sentry
+      sentryDsn: "<your-sentry-dsn>"
+
+Other OpenTelemetry backend providers can be supported on request.
+
 ==================
 Automation Support
 ==================

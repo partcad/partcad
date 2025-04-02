@@ -1,4 +1,16 @@
-import sentry_sdk
+#
+# PartCAD, 2025
+# OpenVMP, 2023
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+__version__: str = "0.7.127"
+
+from . import telemetry
+
+telemetry.init(__version__)
+
 from build123d import Location
 
 from .globals import (
@@ -13,8 +25,6 @@ from .globals import (
     get_assembly_build123d,
     _partcad_context,
     render,
-    init_sentry,
-    __version__
 )
 from .ai import supported_models
 from .consts import *
@@ -25,43 +35,59 @@ from .project import Project
 from .project_factory_local import ProjectFactoryLocal
 from .project_factory_git import ProjectFactoryGit
 from .project_factory_tar import ProjectFactoryTar
+from .provider_data_cart import ProviderCart
+from .provider_request_quote import ProviderRequestQuote
+from .shape import Shape
 from .user_config import user_config
 from .logging_ansi_terminal import init as logging_ansi_terminal_init
 from .logging_ansi_terminal import fini as logging_ansi_terminal_fini
 from . import logging
 from . import utils
 from . import exception
+from . import provider_request_caps
+
+from .user_config import UserConfig
+
 
 # TODO: remove partcad old version usage from vscode extension
 # /home/vscode/.vscode-server/extensions/openvmp.partcad-0.7.15/bundled/tool/lsp_server.py:690:        partcad.plugins.export_png = partcad.PluginExportPngReportlab()
 class PluginExportPngReportlab:
-  pass
+    pass
+
 
 plugins = PluginExportPngReportlab()
 
 __all__ = [
+    "Assembly",
+    "Context",
+    "Location",
+    "Part",
+    "Project",
+    "ProjectFactoryGit",
+    "ProjectFactoryLocal",
+    "ProjectFactoryTar",
+    "ProviderCart",
+    "ProviderRequestQuote",
+    "Shape",
+    "UserConfig",
     "config",
     "context",
-    "shape",
-    "geom",
-    "part",
-    "part_factory",
-    "part_factory_step",
-    "part_factory_brep",
-    "part_factory_cadquery",
-    "project",
-    "project_factory",
-    "project_factory_local",
-    "project_factory_git",
-    "project_factory_tar",
-    "assembly",
-    "assembly_factory",
-    "assembly_factory_python",
-    "scene",
-    "plugins",
+    "create_package",
     "exception",
-    "PluginExportPngReportlab"
+    "fini",
+    "get_assembly",
+    "get_assembly_cadquery",
+    "get_assembly_build123d",
+    "get_part",
+    "get_part_cadquery",
+    "get_part_build123d",
+    "init",
+    "logging",
+    "part",
+    "provider_request_caps",
+    "shape",
+    "scene",
+    "telemetry",
+    "user_config",
+    "utils",
 ]
-
-if not sentry_sdk.is_initialized() and user_config.get_string("sentry.dsn"):
-    init_sentry(user_config.sentry_config)

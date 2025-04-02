@@ -19,7 +19,10 @@ from .sketch_factory_python import SketchFactoryPython
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from ocp_serialize import register as register_ocp_helper
 
+from . import telemetry
 
+
+@telemetry.instrument()
 class SketchFactoryDxf(SketchFactoryPython):
     tolerance = 0.000001
     include = []

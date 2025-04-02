@@ -1,6 +1,13 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
 import rich_click as click
-from partcad import logging
-from partcad.logging import Process
+
+import partcad as pc
+from ...cli_context import CliContext
 
 
 @click.command(help="List available mating interfaces")
@@ -11,116 +18,76 @@ from partcad.logging import Process
     help="Recursively process all imported packages",
     show_envvar=True,
 )
-@click.option(
-    "-u",
-    "--used_by",
-    type=str,
-    required=False,
-    help="Only process objects used by the given assembly or scene.",
-    show_envvar=True,
-)
-@click.argument("package", type=str, required=False, default=".")  # help="Package to retrieve the object from"
+@click.argument("package", type=str, required=False, default=".")  # help='Package to retrieve the object from'
 @click.pass_obj
-def cli(ctx, recursive, used_by, package):
-    package_obj = ctx.get_project(package)
-    if not package_obj:
-        logging.error(f"Package {package} is not found")
-        return
-    package = package_obj.name
+def cli(cli_ctx: CliContext, recursive: bool, package: str):
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        ctx: pc.Context = cli_ctx.get_partcad_context()
 
-    with Process("ListMates", package):
-        mating_kinds = 0
+        package_obj = ctx.get_project(package)
+        if not package_obj:
+            pc.logging.error(f"Package {package} is not found")
+            return
+        package = package_obj.name
 
-        if used_by is not None:
-            logging.info(f"Instantiating {used_by}...")
-            ctx.get_assembly(used_by)
-        else:
-            ctx.get_all_packages()
+        with pc.logging.Process("ListMates", package):
+            mating_kinds = 0
 
-        # Instantiate all interfaces in the relevant packages to get the mating data
-        # finalized
-        for package_name in ctx.projects:
-            if not recursive and package_name != package:
-                continue
+            if recursive:
+                ctx.get_all_packages()
 
-            if recursive and not package_name.startswith(package):
-                continue
-
-            package = ctx.projects[package_name]
-            for interface_name in package.interfaces:
-                package.get_interface(interface_name)
-
-        output = "PartCAD mating interfaces:\n"
-        for source_interface_name in ctx.mates:
-            source_package_name = source_interface_name.split(":")[0]
-            # TODO-102: @alexanderilyin: Use interface short name
-            short_source_interface_name = source_interface_name.split(":")[1]
-
-            for target_interface_name in ctx.mates[source_interface_name]:
-                target_package_name = target_interface_name.split(":")[0]
-                short_target_interface_name = target_interface_name.split(":")[1]
-
-                mating = ctx.mates[source_interface_name][target_interface_name]
-
-                if (
-                    recursive
-                    and package is not None
-                    and not source_package_name.startswith(package)
-                    and not target_package_name.startswith(package)
-                ):
+            # Instantiate all interfaces in the relevant packages to get the mating data
+            # finalized
+            to_instansiate = ctx.projects.keys() if recursive else [package]
+            for package_name in to_instansiate:
+                if recursive and not package_name.startswith(package):
                     continue
 
-                if (
-                    recursive
-                    and package is None
-                    and not source_package_name.startswith(ctx.get_current_project_path())
-                    and not target_package_name.startswith(ctx.get_current_project_path())
-                ):
-                    continue
+                p = ctx.projects[package_name]
+                for interface_name in p.interfaces:
+                    intf = p.get_interface(interface_name)
+                    intf.instantiate()
 
-                if (
-                    not recursive
-                    and package is not None
-                    and source_package_name != package
-                    and target_package_name != package
-                ):
-                    continue
+            output = "PartCAD mating interfaces:\n"
+            for source_interface_name in ctx.mates:
+                source_package_name = source_interface_name.split(":")[0]
+                # TODO-102: @alexanderilyin: Use interface short name
+                display_source_interface_name = (
+                    source_interface_name if source_package_name != package else source_interface_name.split(":")[1]
+                )
 
-                if (
-                    not recursive
-                    and package is None
-                    and source_package_name != ctx.get_current_project_path()
-                    and target_package_name != ctx.get_current_project_path()
-                ):
-                    continue
+                for target_interface_name in ctx.mates[source_interface_name]:
+                    target_package_name = target_interface_name.split(":")[0]
+                    display_target_interface_name = (
+                        target_interface_name if target_package_name != package else target_interface_name.split(":")[1]
+                    )
 
-                # source_project = ctx.projects[source_package_name]
-                # target_project = ctx.projects[target_package_name]
+                    mating = ctx.mates[source_interface_name][target_interface_name]
 
-                # source_interface = source_project.get_interface(
-                #     short_source_interface_name
-                # )
-                # target_interface = target_project.get_interface(
-                #     short_target_interface_name
-                # )
+                    if (
+                        recursive
+                        and not source_package_name.startswith(package)
+                        and not target_package_name.startswith(package)
+                    ):
+                        continue
 
-                if used_by is not None and mating.count == 0:
-                    continue
+                    if not recursive and source_package_name != package and target_package_name != package:
+                        continue
 
-                line = "\t"
-                line += "%s" % source_interface_name
-                line += " " + " " * (35 - len(source_interface_name))
-                line += "%s" % target_interface_name
-                line += " " + " " * (35 - len(target_interface_name))
+                    line = "\t"
+                    line += "%s" % display_source_interface_name
+                    line += " " + " " * (35 - len(display_source_interface_name))
+                    line += "%s" % display_target_interface_name
+                    line += " " + " " * (35 - len(display_target_interface_name))
 
-                desc = mating.desc if mating.desc is not None else ""
-                desc = desc.replace("\n", "\n\t" + " " * 72)
-                line += "%s" % desc
-                output += line + "\n"
-                mating_kinds = mating_kinds + 1
+                    desc = mating.desc if mating.desc is not None else ""
+                    desc = desc.replace("\n", "\n\t" + " " * 72)
+                    line += "%s" % desc
+                    output += line + "\n"
+                    mating_kinds = mating_kinds + 1
 
-        if mating_kinds > 0:
-            output += "Total: %d mating interfaces\n" % (mating_kinds,)
-        else:
-            output += "\t<none>\n"
-        logging.info(output)
+            if mating_kinds > 0:
+                output += "Total: %d mating interfaces\n" % (mating_kinds,)
+            else:
+                output += "\t<none>\n"
+            pc.logging.info(output)
