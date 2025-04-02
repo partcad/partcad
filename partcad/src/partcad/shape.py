@@ -70,6 +70,7 @@ class Shape(ShapeConfiguration):
         self.lock = threading.RLock()
         self.tls = threading.local()
         self.components = []
+        self.names = []
         self.compound = None
         self.with_ports = None
 
@@ -122,19 +123,27 @@ class Shape(ShapeConfiguration):
 
     async def get_components(self, ctx):
         if len(self.components) == 0:
-            # Maybe it's empty, maybe it's not generated yet
             wrapped = await self.get_wrapped(ctx)
 
-            # If it's a compound, we can get the components
-            if len(self.components) == 0:
-                self.components = [wrapped]
+            self.components = [wrapped]
 
             if self.with_ports is not None:
-                ports_list = list(await self.with_ports.get_components(ctx))
-                if len(ports_list) != 0:
+                ports_list = await self.with_ports.get_components(ctx)
+                if ports_list:
                     self.components.append(ports_list)
 
         return self.components
+
+    async def get_names(self, ctx):
+        if len(self.names) == 0:
+            self.names = [self.name if self.name is not None else "Shape"]
+
+            if self.with_ports is not None:
+                ports_list = await self.with_ports.get_names(ctx)
+                if ports_list:
+                    self.names.append(ports_list)
+
+        return self.names
 
     async def get_wrapped(self, ctx):
         with self.lock:
@@ -213,6 +222,8 @@ class Shape(ShapeConfiguration):
 
         b3d_solid = b3d.Solid.make_box(1, 1, 1)
         b3d_solid.wrapped = await self.get_wrapped(ctx)
+        if self.name:
+            b3d_solid.label = self.name
         return b3d_solid
 
     def regenerate(self):
@@ -245,10 +256,14 @@ class Shape(ShapeConfiguration):
 
         with pc_logging.Action("Show", self.project_name, self.name):
             components = []
+            names = []
             # TODO(clairbee): consider removing this exception handler permanently
             # Comment out the below exception handler for easier troubleshooting in CLI
             try:
                 components = await self.get_components(ctx)
+                names = await self.get_names(ctx)
+                pc_logging.info(f"Components: {components}")
+                pc_logging.info(f"Names: {names}")
             except Exception as e:
                 pc_logging.exception(e)
 
@@ -265,6 +280,7 @@ class Shape(ShapeConfiguration):
                         # pc_logging.debug(self.shape)
                         ocp_vscode.show(
                             *components,
+                            # names=names,
                             progress=None,
                             # TODO(clairbee): make showing (and the connection
                             # to ocp_vscode) a part of the context, and memorize
@@ -273,6 +289,7 @@ class Shape(ShapeConfiguration):
                             # reset_camera=ocp_vscode.Camera.KEEP,
                         )
                     except Exception as e:
+                        # pc_logging.warning(e.with_traceback())
                         pc_logging.warning(e)
                         pc_logging.warning('No VS Code or "OCP CAD Viewer" extension detected.')
 
@@ -445,28 +462,24 @@ class Shape(ShapeConfiguration):
             kwargs: Additional options (width, height, etc.).
         """
         WRAPPER_FORMATS = {
-        "svg": [
-            "cadquery-ocp==7.7.2",
-            "ocpsvg==0.3.4",
-            "build123d==0.8.0"
-        ],
-        "png": [
-            "cadquery-ocp==7.7.2",
-            "ocpsvg==0.3.4",
-            "build123d==0.8.0",
-            "svglib==1.5.1",
-            "reportlab",
-            "rlpycairo==0.3.0"
-        ],
-        "brep": ["cadquery-ocp==7.7.2"],
-        "step": ["cadquery-ocp==7.7.2"],
-        "stl": ["cadquery-ocp==7.7.2"],
-        "obj": ["cadquery-ocp==7.7.2"],
-        "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
-        "gltf": ["cadquery-ocp==7.7.2"],
-        "iges": ["cadquery-ocp==7.7.2"],
-        "threejs": ["cadquery-ocp==7.7.2"]
-    }
+            "svg": ["cadquery-ocp==7.7.2", "ocpsvg==0.3.4", "build123d==0.8.0"],
+            "png": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+                "svglib==1.5.1",
+                "reportlab",
+                "rlpycairo==0.3.0",
+            ],
+            "brep": ["cadquery-ocp==7.7.2"],
+            "step": ["cadquery-ocp==7.7.2"],
+            "stl": ["cadquery-ocp==7.7.2"],
+            "obj": ["cadquery-ocp==7.7.2"],
+            "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
+            "gltf": ["cadquery-ocp==7.7.2"],
+            "iges": ["cadquery-ocp==7.7.2"],
+            "threejs": ["cadquery-ocp==7.7.2"],
+        }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
 

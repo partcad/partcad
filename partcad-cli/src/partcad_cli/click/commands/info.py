@@ -79,7 +79,12 @@ def cli(cli_ctx: CliContext, package, interface, assembly, sketch, scene, object
         if package is None:
             path = object if ":" in object else ":" + object
         else:
-            path = package + ":" + object
+            if object[0] == ":":
+                path = package + object
+            elif not ":" in object:
+                path = package + ":" + object
+            else:
+                path = object
 
         obj: pc.Shape
         if assembly:

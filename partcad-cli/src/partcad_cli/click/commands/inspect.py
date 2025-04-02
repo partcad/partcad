@@ -94,7 +94,12 @@ def cli(cli_ctx: CliContext, context, verbal, package, interface, assembly, sket
                 else:
                     path = ":" + object
             else:
-                path = package + ":" + object
+                if object[0] == ":":
+                    path = package + object
+                elif not ":" in object:
+                    path = package + ":" + object
+                else:
+                    path = object
 
             if assembly:
                 obj = ctx.get_assembly(path, params=param_dict)

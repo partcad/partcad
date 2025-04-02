@@ -28,6 +28,8 @@ from OCP.gp import (
     gp_Vec,
 )
 
+from OCP.TopoDS import TopoDS_Shape
+
 
 @telemetry.instrument()
 class InterfacePort:
@@ -487,12 +489,13 @@ class Interface:
             info["leadPort"] = self.lead_port
         return info
 
-    async def get_components(self, ctx):
+    async def get_components(self, ctx, subloc):
         components = []
         for port in self.get_ports().values():
+            port_subloc = subloc.Multiplied(port.location.wrapped)
             components.append(port.location)
             if port.sketch is not None:
-                sketch_components = list(await port.sketch.get_components(ctx))
+                sketch_components = await port.sketch.get_components(ctx, port_subloc)
 
                 def move_component(component, move_components):
                     nonlocal port
@@ -514,6 +517,37 @@ class Interface:
                 sketch_components = move_components(sketch_components)
                 components.append(sketch_components)
         return components
+
+    async def get_names(self, ctx):
+        names = []
+        for port in self.get_ports().values():
+            names.append(port.name)
+            if port.sketch is not None:
+                sketch_components = await port.sketch.get_components(ctx)
+
+                def component_names(component, components_names):
+                    nonlocal port
+                    if isinstance(component, list):
+                        names = components_names(component)
+                    else:
+                        if hasattr(component, "name"):
+                            names = component.name
+                        else:
+                            names = "Port"
+                    return names
+
+                def components_names(components):
+                    components = list(
+                        map(
+                            lambda x: component_names(x, components_names),
+                            components,
+                        )
+                    )
+                    return components
+
+                sketch_names = components_names(sketch_components)
+                names.append(sketch_names)
+        return names
 
     async def show_async(self, ctx=None):
         components = []
