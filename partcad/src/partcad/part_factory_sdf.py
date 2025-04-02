@@ -48,7 +48,7 @@ class PartFactorySdf(PartFactoryPython):
             cwd = os.path.join(self.project.config_dir, self.cwd) if self.cwd else self.project.config_dir
 
             await self.runtime.ensure_async(
-                "git+https://github.com/fogleman/sdf",
+                "git+https://github.com/sasuke13/sdf",
                 session=self.session,
             )
             await self.runtime.ensure_async(
