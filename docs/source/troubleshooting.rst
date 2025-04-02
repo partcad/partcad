@@ -12,11 +12,11 @@ configuration, model declarations and definitions.
 Status
 ------
 
-The status of PartCAD context can be evaluated using the ``status`` command.
+The status of PartCAD context can be evaluated using the ``system status`` command.
 
   .. code-block:: shell
 
-    pc status
+    pc system status
 
 Pay attention to any exception or error message produced by the
 ``status`` command.

@@ -223,7 +223,7 @@ PartCAD maintains an internal state to keep track of dependencies of a project. 
 
   .. code-block:: shell
 
-    pc reset
+    pc system reset
 
 =================
 VS Code Extension

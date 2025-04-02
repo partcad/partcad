@@ -202,6 +202,16 @@ Alternatively, you can disable telemetry by setting the following environment va
 
     PC_TELEMETRY_TYPE="none"
 
+You can also change telemetry settings using CLI:
+
+  .. code-block:: bash
+
+    pc system set telemetry type none
+    # or, if you want to collect data about PartCAD performance in your organization:
+    pc system set telemetry type sentry
+    pc system set telemetry env <you-org-name>
+    pc system set telemetry sentryDsn <your-sentry-dsn>
+
 Private Repositories
 --------------------
 

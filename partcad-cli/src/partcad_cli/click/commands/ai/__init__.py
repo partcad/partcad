@@ -15,6 +15,6 @@ class AiCommands(Loader):
     COMMANDS_PACKAGE_NAME = Loader.COMMANDS_PACKAGE_NAME + ".ai"
 
 
-@click.command(cls=AiCommands, help="AI-related commands")
+@click.command(cls=AiCommands, help="AI-powered workflows")
 def cli() -> None:
     pass

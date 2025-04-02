@@ -1,5 +1,5 @@
 @cli
-Feature: `pc status` command
+Feature: `pc system status` command
 
   Background: Initialize Private PartCAD project
     Given I am in "/tmp/sandbox/behave" directory

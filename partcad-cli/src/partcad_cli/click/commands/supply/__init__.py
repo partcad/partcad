@@ -15,6 +15,6 @@ class SupplyCommands(Loader):
     COMMANDS_PACKAGE_NAME = Loader.COMMANDS_PACKAGE_NAME + ".supply"
 
 
-@click.command(cls=SupplyCommands, help="Supply Chain commands")
+@click.command(cls=SupplyCommands, help="Manage the Supply Chain of the current project")
 def cli() -> None:
     pass

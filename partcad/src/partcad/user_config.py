@@ -17,6 +17,7 @@ import shutil
 import vyper
 
 from . import logging as pc_logging
+from .utils import is_editable_install
 
 # IMPORTANT:
 # We need to maintain setting default values in both the CLI and the user_config, because of:
@@ -127,10 +128,7 @@ class TelemetryConfig(dict):
         if self.v.is_set("telemetry.env"):
             return self.v.get_string("telemetry.env")
 
-        from . import __spec__
-
-        # If the module is loaded from a file, then we are in development mode
-        if __spec__.loader.__class__.__name__ == "SourceFileLoader":
+        if is_editable_install(pc_logging):
             return "dev"
         else:
             return "prod"

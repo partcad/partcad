@@ -147,7 +147,7 @@ Feature: `pc render` command
     Then the command should exit with a status code of "0"
     When I run "pc --help"
     Then the command should exit with a status code of "0"
-    When I run "pc status"
+    When I run "pc system status"
     Then the command should exit with a status code of "0"
 
   # TODO: Failure to pip install from GH repo
