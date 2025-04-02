@@ -7,7 +7,7 @@
   "compounds": [
     // {
     //   "name": "Debug: PartCAD Development",
-    //   "configurations": ["Debug: partcad status", "Debug: partcad init", "Debug: partcad add --help"]
+    //   "configurations": ["Debug: partcad system status", "Debug: partcad init", "Debug: partcad add --help"]
     // },
     // {
     //   "name": "Debug: PartCAD Testing",
@@ -19,7 +19,7 @@
     // },
     // {
     //   "name": "Debug: PartCAD Full Suite",
-    //   "configurations": ["Debug: partcad status", "Debug: partcad init"]
+    //   "configurations": ["Debug: partcad system status", "Debug: partcad init"]
     // },
     // {
     //   "name": "Debug: PartCAD Testing",
@@ -186,12 +186,12 @@
       }
     },
     {
-      "name": "Debug: partcad status",
+      "name": "Debug: partcad system status",
       "type": "debugpy",
       "request": "launch",
       "program": "partcad-cli/src/partcad_cli/click/command.py",
       "args": [
-        "status"
+        "system status"
       ],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
