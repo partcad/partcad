@@ -3,10 +3,43 @@ from typing import Optional
 
 import partcad.logging as pc_logging
 from partcad.project import Project
-from partcad.shape import PART_EXTENSION_MAPPING
+from partcad.shape import SKETCH_EXTENSION_MAPPING
 from partcad.utils import resolve_resource_path
 
+
 FILE_BASED_SKETCHES = ["dxf", "svg"]
+SHALLOW_COPY_SKETCH_TYPES = ["alias", "enrich"]
+
+
+def get_final_base_sketch_config(project: Project, sketch_config: dict, sketch_name: str):
+    visited = set()
+
+    while sketch_config.get("type") in SHALLOW_COPY_SKETCH_TYPES:
+        source_key = "source_resolved" if "source_resolved" in sketch_config else "source"
+        if source_key not in sketch_config:
+            break
+
+        source = sketch_config[source_key]
+        base_package, base_sketch_name = resolve_resource_path(project.name, source)
+
+        if base_sketch_name in visited:
+            raise ValueError(f"Circular reference detected in sketch '{sketch_name}'")
+
+        visited.add(base_sketch_name)
+
+        base_project = project.ctx.get_project(base_package)
+        if not base_project:
+            raise ValueError(f"Base project '{base_package}' not found for sketch '{sketch_name}'")
+
+        sketch_config = base_project.get_sketch_config(base_sketch_name)
+        if not sketch_config:
+            raise ValueError(f"Sketch config for '{base_sketch_name}' not found in '{base_project.name}'")
+
+        project = base_project
+        sketch_name = base_sketch_name
+
+    return sketch_config, project, sketch_name
+
 
 
 def convert_sketch_action(
@@ -32,7 +65,7 @@ def convert_sketch_action(
     if not sketch:
         raise ValueError(f"Sketch '{sketch_name}' not found in project '{project.name}'")
 
-    sketch_config = sketch.config
+    sketch_config, project, sketch_name = get_final_base_sketch_config(project, sketch.config, sketch_name)
     sketch_type = sketch_config.get("type")
 
     if not target_format:
@@ -42,8 +75,8 @@ def convert_sketch_action(
         pc_logging.info(f"[Dry Run] Would convert sketch '{sketch_name}' to '{target_format}'.")
         return
 
-    source_ext = PART_EXTENSION_MAPPING.get(sketch_type, sketch_type)
-    target_ext = PART_EXTENSION_MAPPING.get(target_format, target_format)
+    source_ext = SKETCH_EXTENSION_MAPPING.get(sketch_type, sketch_type)
+    target_ext = SKETCH_EXTENSION_MAPPING.get(target_format, target_format)
 
     if "path" in sketch_config:
         source_path = (Path(project.path) / sketch_config["path"]).resolve()
@@ -66,7 +99,6 @@ def convert_sketch_action(
     pc_logging.info(f"Converting sketch '{sketch_name}': {sketch_type} -> {target_format} ({output_path})")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
     with pc_logging.Process("Convert", sketch_name):
         project.render(
             sketches=[sketch_name],
@@ -76,12 +108,6 @@ def convert_sketch_action(
             format=target_format,
             output_dir=str(output_path.parent),
         )
-        # sketch.render(
-        #   ctx=project.ctx,
-        #   target_format=target_format,
-        #   project=project,
-        #   filepath=
-        #   )
 
     if not output_path.exists():
         raise RuntimeError(f"Conversion failed: output file '{output_path}' was not created.")

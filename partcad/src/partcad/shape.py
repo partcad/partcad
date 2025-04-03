@@ -50,7 +50,7 @@ PART_EXTENSION_MAPPING = {
     "scad": "scad",
 }
 
-SKETCH_EXTENSION_MAPPING = {}
+SKETCH_EXTENSION_MAPPING = {"svg": "svg", "dxf": "dxf"}
 
 previously_displayed_shape = None
 
@@ -446,7 +446,7 @@ class Shape(ShapeConfiguration):
         Centralized method to render shape via external wrapper.
         Args:
             ctx: Execution context.
-            format_name: Render format (e.g., "png", "svg").
+            format_name: Render format (e.g., "png", "svg", "dxf").
             project: Optional project object.
             filepath: Target file path for output.
             kwargs: Additional options (width, height, etc.).
@@ -464,6 +464,13 @@ class Shape(ShapeConfiguration):
                 "svglib==1.5.1",
                 "reportlab",
                 "rlpycairo==0.3.0",
+            ],
+            "dxf": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+                "svgpathtools==1.6.1",
+                "ezdxf==1.1.1",
             ],
             "brep": ["cadquery-ocp==7.7.2"],
             "step": ["cadquery-ocp==7.7.2"],
@@ -504,8 +511,8 @@ class Shape(ShapeConfiguration):
 
                 request = {"wrapped": obj}
 
-                if format in ["svg", "png"]:
-                    request["viewport_origin"] = kwargs.get("viewport_origin", [100, -100, 100])
+                if format in ["svg", "png", "dxf"]:
+                    request["viewport_origin"] = kwargs.get("viewport_origin", [0, 0, 100])
                     request["line_weight"] = kwargs.get("line_weight", 1.0)
                     if format == "png":
                         request["width"] = kwargs.get("width", 512)
@@ -538,10 +545,7 @@ class Shape(ShapeConfiguration):
                 # Run wrapper
                 with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
                     response_serialized, errors = await runtime.run_async(
-                        [
-                            wrapper_path,
-                            final_filepath,
-                        ],
+                        [wrapper_path, final_filepath],
                         request_serialized,
                     )
                     sys.stderr.write(errors)
