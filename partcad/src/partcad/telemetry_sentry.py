@@ -123,9 +123,11 @@ def init_sentry(version: str) -> None:
         sentry_sdk.set_measurement("memory.rss", memory_rss, "byte")
         sentry_sdk.set_measurement("cpu.user", cpu_user, "second")
 
-    provider = TracerProvider()
-    provider.add_span_processor(PartcadSentrySpanProcessor())
-    trace.set_tracer_provider(provider)
-    set_global_textmap(SentryPropagator())
+    if tc.performance:
+        # Collect spans to measure performance
+        provider = TracerProvider()
+        provider.add_span_processor(PartcadSentrySpanProcessor())
+        trace.set_tracer_provider(provider)
+        set_global_textmap(SentryPropagator())
 
     return trace.get_tracer("PartCAD")

@@ -121,7 +121,7 @@ class TelemetryConfig(dict):
         try:
             if self.v.is_set("telemetry.type"):
                 return self.v.get_string("telemetry.type")
-        except:
+        except:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.type" in self.v._override:
                 return self.v._override["telemetry.type"]
@@ -146,7 +146,7 @@ class TelemetryConfig(dict):
         try:
             if self.v.is_set("telemetry.performance"):
                 return self.v.get_bool("telemetry.performance")
-        except Exception:
+        except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.performance" in self.v._override:
                 return self.v._override["telemetry.performance"]
@@ -161,7 +161,7 @@ class TelemetryConfig(dict):
         try:
             if self.v.is_set("telemetry.failures"):
                 return self.v.get_bool("telemetry.failures")
-        except Exception:
+        except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.failures" in self.v._override:
                 return self.v._override["telemetry.failures"]
@@ -176,7 +176,7 @@ class TelemetryConfig(dict):
         try:
             if self.v.is_set("telemetry.debug"):
                 return self.v.get_bool("telemetry.debug")
-        except Exception:
+        except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.debug" in self.v._override:
                 return self.v._override["telemetry.debug"]
@@ -191,7 +191,7 @@ class TelemetryConfig(dict):
         try:
             if self.v.is_set("telemetry.sentryDsn"):
                 return self.v.get_string("telemetry.sentryDsn")
-        except Exception:
+        except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.sentryDsn" in self.v._override:
                 return self.v._override["telemetry.sentryDsn"]
@@ -208,7 +208,7 @@ class TelemetryConfig(dict):
         try:
             if self.v.is_set("telemetry.sentryShutdownTimeout"):
                 return self.v.get_float("telemetry.sentryShutdownTimeout")
-        except Exception:
+        except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.sentryShutdownTimeout" in self.v._override:
                 return self.v._override["telemetry.sentryShutdownTimeout"]
@@ -223,7 +223,7 @@ class TelemetryConfig(dict):
         try:
             if self.v.is_set("telemetry.sentryAttachStacktrace"):
                 return self.v.get_bool("telemetry.sentryAttachStacktrace")
-        except Exception:
+        except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.sentryAttachStacktrace" in self.v._override:
                 return self.v._override["telemetry.sentryAttachStacktrace"]
@@ -238,7 +238,7 @@ class TelemetryConfig(dict):
         try:
             if self.v.is_set("telemetry.sentryTracesSampleRate"):
                 return self.v.get_float("telemetry.sentryTracesSampleRate")
-        except Exception:
+        except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.sentryTracesSampleRate" in self.v._override:
                 return self.v._override["telemetry.sentryTracesSampleRate"]
