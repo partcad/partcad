@@ -389,11 +389,7 @@ class Project(project_config.Configuration):
         for sketch_name in self.sketch_configs:
             object_name = f"{self.name}:{sketch_name}"
             config = self.get_sketch_config(sketch_name)
-            config = sketch_config.SketchConfiguration.normalize(
-                sketch_name,
-                config,
-                object_name
-            )
+            config = sketch_config.SketchConfiguration.normalize(sketch_name, config, object_name)
             self.init_sketch_by_config(config)
 
     def init_sketch_by_config(self, config, source_project=None):
@@ -435,9 +431,7 @@ class Project(project_config.Configuration):
                 }
                 object_name = f"{self.name}:{alias}"
                 alias_sketch_config = sketch_config.SketchConfiguration.normalize(
-                    alias,
-                    alias_sketch_config,
-                    object_name
+                    alias, alias_sketch_config, object_name
                 )
                 pfa.SketchFactoryAlias(self.ctx, source_project, self, alias_sketch_config)
 
@@ -492,11 +486,7 @@ class Project(project_config.Configuration):
                 object_name = f"{self.name}:{sketch_name}"
                 # This is not yet created (invalidated?)
                 config = self.get_sketch_config(sketch_name)
-                config = sketch_config.SketchConfiguration.normalize(
-                    sketch_name,
-                    config,
-                    object_name
-                )
+                config = sketch_config.SketchConfiguration.normalize(sketch_name, config, object_name)
                 self.init_sketch_by_config(config)
 
                 if not sketch_name in self.sketches or self.sketches[sketch_name] is None:
@@ -534,11 +524,7 @@ class Project(project_config.Configuration):
                 return None
             object_name = f"{self.name}:{result_name}"
             # Expand the config object so that the parameter values can be set
-            config = sketch_config.SketchConfiguration.normalize(
-                result_name,
-                config,
-                object_name
-            )
+            config = sketch_config.SketchConfiguration.normalize(result_name, config, object_name)
             config["orig_name"] = base_sketch_name
 
             # Fill in the parameter values
@@ -600,11 +586,7 @@ class Project(project_config.Configuration):
         for part_name in self.part_configs:
             object_name = f"{self.name}:{part_name}"
             config = self.get_part_config(part_name)
-            config = part_config.PartConfiguration.normalize(
-                part_name,
-                config,
-                object_name
-            )
+            config = part_config.PartConfiguration.normalize(part_name, config, object_name)
             self.init_part_by_config(config)
 
     def init_part_by_config(self, config: dict, source_project: "Project" = None):
@@ -663,11 +645,7 @@ class Project(project_config.Configuration):
                     "source": ":" + part_name,
                 }
                 object_name = f"{self.name}:{alias}"
-                alias_part_config = part_config.PartConfiguration.normalize(
-                    alias,
-                    alias_part_config,
-                    object_name
-                )
+                alias_part_config = part_config.PartConfiguration.normalize(alias, alias_part_config, object_name)
                 pfa.PartFactoryAlias(self.ctx, source_project, self, alias_part_config)
 
     def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
@@ -722,11 +700,7 @@ class Project(project_config.Configuration):
                 object_name = f"{self.name}:{part_name}"
                 # This is not yet created (invalidated?)
                 config = self.get_part_config(part_name)
-                config = part_config.PartConfiguration.normalize(
-                    part_name,
-                    config,
-                    object_name
-                )
+                config = part_config.PartConfiguration.normalize(part_name, config, object_name)
                 self.init_part_by_config(config)
 
                 if not part_name in self.parts or self.parts[part_name] is None:
@@ -765,11 +739,7 @@ class Project(project_config.Configuration):
 
             object_name = f"{self.name}:{result_name}"
             # Expand the config object so that the parameter values can be set
-            config = part_config.PartConfiguration.normalize(
-                result_name,
-                config,
-                object_name
-            )
+            config = part_config.PartConfiguration.normalize(result_name, config, object_name)
             config["orig_name"] = base_part_name
 
             # Fill in the parameter values
@@ -1422,7 +1392,7 @@ class Project(project_config.Configuration):
                 raise EmptyShapesError
 
             tasks = []
-            render_formats = ["svg", "png", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
+            render_formats = ["svg", "png", "dxf", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
 
             for shape in shapes:
                 shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
@@ -1430,12 +1400,14 @@ class Project(project_config.Configuration):
                 for format_name in render_formats:
                     if self._should_render_format(format_name, shape_render, format, shape.kind):
                         if not hasattr(shape, "finalized") or shape.finalized:
-                            tasks.append(shape.render_async(
-                                ctx=self.ctx,
-                                format_name=format_name,
-                                project=self,
-                                filepath=None,
-                            ))
+                            tasks.append(
+                                shape.render_async(
+                                    ctx=self.ctx,
+                                    format_name=format_name,
+                                    project=self,
+                                    filepath=None,
+                                )
+                            )
 
             await asyncio.gather(*tasks)
 
@@ -1452,14 +1424,16 @@ class Project(project_config.Configuration):
         assemblies = assemblies or get_keys("assemblies")
 
         shapes = []
-        for name in sketches: shapes.append(self.get_sketch(name))
-        for name in parts: shapes.append(self.get_part(name))
-        for name in assemblies: shapes.append(self.get_assembly(name))
+        for name in sketches:
+            shapes.append(self.get_sketch(name))
+        for name in parts:
+            shapes.append(self.get_part(name))
+        for name in assemblies:
+            shapes.append(self.get_assembly(name))
         # TODO(clairbee): interfaces are not yet renderable.
         # for name in interfaces: shapes.append(self.get_interface(name))
 
         return shapes
-
 
     def _should_render_format(
         self, format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str

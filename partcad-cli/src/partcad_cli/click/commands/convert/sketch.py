@@ -11,7 +11,7 @@ from partcad.actions.sketch import convert_sketch_action
 from ...cli_context import CliContext
 
 
-SUPPORTED_SKETCH_FORMATS = ["svg", "dxf", "basic", "alias", "enrich"]
+SUPPORTED_SKETCH_FORMATS = ["svg", "dxf"]
 
 
 @click.command(help="Convert sketches to another format and update their type.")
