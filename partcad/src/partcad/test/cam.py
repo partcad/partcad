@@ -15,7 +15,7 @@ from ..part import Part
 from ..part_config import PartConfiguration
 from ..assembly import Assembly
 from ..assembly_config import AssemblyConfiguration
-from ..provider_data_cart import ProviderCartItem
+from ..plugin_provider_data_cart import ProviderCartItem
 
 
 class CamTest(Test):

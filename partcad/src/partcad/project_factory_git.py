@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2023
 #
 # Author: Roman Kuzmenko
@@ -14,6 +15,7 @@ import os
 import time
 import threading
 
+from .project_local import ProjectLocal
 from . import project_factory as pf
 from . import logging as pc_logging
 from shlex import quote
@@ -101,6 +103,15 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         # TODO(clairbee): actually fill in the self.project object here
 
         self._save()
+
+    def _create_project(self, config):
+        return ProjectLocal(
+            self.ctx,
+            self.name,
+            self.path,
+            include_paths=self.include_paths,
+            inherited_config=self.inherited_config,
+        )
 
     def _clone_or_update_repo(self, repo_url, cache_dir=None):
         """

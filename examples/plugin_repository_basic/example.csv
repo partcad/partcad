@@ -1,0 +1,3 @@
+name,desc,type,filename
+bolt,a bolt,step,../feature_export/bolt.step
+cube,a cube,stl,../feature_import/cube.stl

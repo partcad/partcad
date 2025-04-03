@@ -274,7 +274,6 @@
   "testing.automaticallyOpenTestResults": "neverOpen",
   "testing.followRunningTest": false,
   // "testing.openTesting": "neverOpen",
-  "workbench.colorTheme": "GitHub Dark",
   "yaml.customTags": [
     "tag:yaml.org,2002:python/name:material.extensions.emoji.to_svg",
     "tag:yaml.org,2002:python/name:material.extensions.emoji.twemoji"

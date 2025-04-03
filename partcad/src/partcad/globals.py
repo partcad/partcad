@@ -16,9 +16,39 @@ from .assembly import Assembly
 from .assembly_factory_assy import AssemblyFactoryAssy
 from .assembly_factory_alias import AssemblyFactoryAlias
 from .file_factory_url import FileFactoryUrl
-from .provider_factory_manufacturer import ProviderFactoryManufacturer
-from .provider_factory_enrich import ProviderFactoryEnrich
-from .provider_factory_store import ProviderFactoryStore
+from .plugin_factory_provider_manufacturer import PluginFactoryProviderManufacturer
+from .plugin_factory_provider_store import PluginFactoryProviderStore
+from .plugin_factory_provider_enrich import PluginFactoryProviderEnrich
+from .plugin_factory_repository import PluginFactoryRepository
+from .plugin_factory_repository_basic import PluginFactoryRepositoryBasic
+
+# from .plugin_factory_repository_tree import PluginFactoryRepositoryTree
+# from .plugin_factory_repository_full import PluginFactoryRepositoryFull
+from .plugin_factory_repository_enrich import PluginFactoryRepositoryEnrich
+from .part_factory_ai_cadquery import PartFactoryAiCadquery
+from .part_factory_ai_build123d import PartFactoryAiBuild123d
+from .part_factory_ai_openscad import PartFactoryAiScad
+from .part_factory_cadquery import PartFactoryCadquery
+from .part_factory_build123d import PartFactoryBuild123d
+from .part_factory_step import PartFactoryStep
+from .part_factory_brep import PartFactoryBrep
+from .part_factory_stl import PartFactoryStl
+from .part_factory_3mf import PartFactory3mf
+from .part_factory_obj import PartFactoryObj
+from .part_factory_scad import PartFactoryScad
+from .part_factory_kicad import PartFactoryKicad
+from .part_factory_extrude import PartFactoryExtrude
+from .part_factory_sweep import PartFactorySweep
+from .part_factory_alias import PartFactoryAlias
+from .part_factory_enrich import PartFactoryEnrich
+from .sketch_factory_basic import SketchFactoryBasic
+from .sketch_factory_cadquery import SketchFactoryCadquery
+from .sketch_factory_build123d import SketchFactoryBuild123d
+from .sketch_factory_dxf import SketchFactoryDxf
+from .sketch_factory_svg import SketchFactorySvg
+from .sketch_factory_alias import SketchFactoryAlias
+from .sketch_factory_enrich import SketchFactoryEnrich
+
 from .part import Part
 from . import consts
 from . import factory
@@ -31,12 +61,39 @@ global _partcad_context
 _partcad_context = None
 _partcad_context_lock = threading.Lock()
 
+factory.register("sketch", "basic", SketchFactoryBasic)
+factory.register("sketch", "cadquery", SketchFactoryCadquery)
+factory.register("sketch", "build123d", SketchFactoryBuild123d)
+factory.register("sketch", "dxf", SketchFactoryDxf)
+factory.register("sketch", "svg", SketchFactorySvg)
+factory.register("sketch", "alias", SketchFactoryAlias)
+factory.register("sketch", "enrich", SketchFactoryEnrich)
+factory.register("part", "ai-cadquery", PartFactoryAiCadquery)
+factory.register("part", "ai-build123d", PartFactoryAiBuild123d)
+factory.register("part", "ai-openscad", PartFactoryAiScad)
+factory.register("part", "cadquery", PartFactoryCadquery)
+factory.register("part", "build123d", PartFactoryBuild123d)
+factory.register("part", "step", PartFactoryStep)
+factory.register("part", "brep", PartFactoryBrep)
+factory.register("part", "stl", PartFactoryStl)
+factory.register("part", "3mf", PartFactory3mf)
+factory.register("part", "obj", PartFactoryObj)
+factory.register("part", "scad", PartFactoryScad)
+factory.register("part", "kicad", PartFactoryKicad)
+factory.register("part", "extrude", PartFactoryExtrude)
+factory.register("part", "sweep", PartFactorySweep)
+factory.register("part", "alias", PartFactoryAlias)
+factory.register("part", "enrich", PartFactoryEnrich)
 factory.register("assembly", "assy", AssemblyFactoryAssy)
 factory.register("assembly", "alias", AssemblyFactoryAlias)
 factory.register("file", "url", FileFactoryUrl)
-factory.register("provider", "manufacturer", ProviderFactoryManufacturer)
-factory.register("provider", "enrich", ProviderFactoryEnrich)
-factory.register("provider", "store", ProviderFactoryStore)
+factory.register("provider", "manufacturer", PluginFactoryProviderManufacturer)
+factory.register("provider", "enrich", PluginFactoryProviderEnrich)
+factory.register("provider", "store", PluginFactoryProviderStore)
+factory.register("repository", "basic", PluginFactoryRepositoryBasic)
+# factory.register("repository", "tree", PluginFactoryRepositoryTree)
+# factory.register("repository", "full", PluginFactoryRepositoryFull)
+factory.register("repository", "enrich", PluginFactoryRepositoryEnrich)
 
 
 def init(config_path=None, search_root=True, user_config=UserConfig()) -> Context:

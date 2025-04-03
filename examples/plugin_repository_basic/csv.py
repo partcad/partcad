@@ -1,21 +1,21 @@
 import csv
 from datetime import datetime, timedelta, timezone
-import sys
 
 NOW = datetime.now(timezone.utc)
 
-stock = {}
+repository = {}
 
 
 def load():
-    global stock, request
+    global repository, request
 
-    with open(request["parameters"]["file"], newline="\n") as csvfile:
-        reader = csv.DictReader(csvfile, lineterminator="\n")
+    with open(request["parameters"]["filename"], newline="\n") as csv_file:
+        reader = csv.DictReader(csv_file, lineterminator="\n")
         for row in reader:
-            stock[(row["vendor"], row["sku"])] = (
-                int(row["count"]),
-                float(row["price"]),
+            repository[(row["name"])] = (
+                str(row["desc"]),
+                str(row["type"]),
+                str(row["filename"]),
             )
 
 
@@ -28,7 +28,7 @@ if not "request" in globals():
 if __name__ == "caps":
     raise Exception("Not supported by stores")
 
-elif __name__ == "avail":
+elif __name__ == "list":
     load()
 
     vendor = request["vendor"]

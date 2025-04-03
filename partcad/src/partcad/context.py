@@ -23,13 +23,14 @@ from . import runtime_python_all
 from . import project_factory_local as rfl
 from . import project_factory_git as rfg
 from . import project_factory_tar as rft
+from . import project_factory_external as rfe
 from .sync_threads import threadpool_manager
 from .user_config import UserConfig
 from .utils import *
 from .part import Part
 from .project import Project
-from .provider_request_quote import ProviderRequestQuote
-from .provider_data_cart import *
+from .plugin_request_provider_quote import ProviderRequestQuote
+from .plugin_provider_data_cart import *
 from . import telemetry
 
 
@@ -58,8 +59,10 @@ class Context(project_config.Configuration):
     stats_parts_instantiated: int
     stats_assemblies: int
     stats_assemblies_instantiated: int
+    stats_plugins: int
+    stats_plugin_queries: int
     stats_providers: int
-    stats_provider_queries: int
+    stats_repositories: int
     stats_memory: int
     stats_git_ops: int
 
@@ -137,7 +140,8 @@ class Context(project_config.Configuration):
         if self.root_path == initial_root_path and root_file != "":
             self.root_path = os.path.join(self.root_path, root_file)
 
-        super().__init__(consts.ROOT, self.root_path)
+        self.path = os.path.abspath(root_path)
+        super().__init__(consts.ROOT)
         self.current_project_path = self.name
         if not self.current_project_path.endswith("/"):
             self.current_project_path += "/"
@@ -167,8 +171,10 @@ class Context(project_config.Configuration):
         self.stats_parts_instantiated = 0
         self.stats_assemblies = 0
         self.stats_assemblies_instantiated = 0
+        self.stats_plugins = 0
+        self.stats_plugin_queries = 0
         self.stats_providers = 0
-        self.stats_provider_queries = 0
+        self.stats_repositories = 0
         self.stats_memory = 0
         self.stats_git_ops = 0
 
@@ -191,7 +197,7 @@ class Context(project_config.Configuration):
                 {
                     "name": self.name,
                     "type": "local",
-                    "path": self.config_path,
+                    "path": self.root_path,
                     "canBeEmpty": True,
                     "isRoot": True,
                 },
@@ -207,6 +213,7 @@ class Context(project_config.Configuration):
         return p
 
     def import_project(self, parent, project_import_config):
+        pc_logging.debug("Importing project: %s" % project_import_config)
         if "name" not in project_import_config or "type" not in project_import_config:
             pc_logging.error("Invalid project configuration found: %s" % project_import_config)
             return None
@@ -233,6 +240,9 @@ class Context(project_config.Configuration):
                 elif project_import_config["type"] == "tar":
                     with pc_logging.Action("Tar", name):
                         rft.ProjectFactoryTar(self, parent, project_import_config)
+                elif project_import_config["type"] == "external":
+                    with pc_logging.Action("External", name):
+                        rfe.ProjectFactoryExternal(self, parent, project_import_config)
                 else:
                     pc_logging.error("Invalid project type found: %s." % name)
                     del self._projects_being_loaded[name]
@@ -447,6 +457,7 @@ class Context(project_config.Configuration):
         # background task.
         if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
             dependencies = project.config_obj["dependencies"]
+            pc_logging.debug("Checking the dependency: %s...(1)" % project.name)
             if not project.config_obj.get("isRoot", False):
                 filtered = filter(
                     lambda x: "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"],
@@ -456,6 +467,7 @@ class Context(project_config.Configuration):
 
             for prj_name in dependencies:
                 prj_conf = project.config_obj["dependencies"][prj_name]
+                pc_logging.debug("Checking the dependency: %s...." % prj_name)
 
                 if prj_conf.get("onlyInRoot", False):
                     next_project_path = "//" + prj_name
@@ -554,7 +566,7 @@ class Context(project_config.Configuration):
             self.mates[source_interface_name] = {}
         if target_interface_name in self.mates[source_interface_name]:
             pc_logging.debug("Mate already exists: %s -> %s" % (source_interface_name, target_interface_name))
-            # TODO(clairbee): identify discrepancies in mate_taget_config
+            # TODO(clairbee): identify discrepancies in mate_target_config
             return
 
         mate = Mating(source_interface, target_interface, mate_target_config, reverse)
@@ -583,7 +595,7 @@ class Context(project_config.Configuration):
 
         # real_source_interfaces is the map of source interfaces to the set of
         # interfaces they are compatible with (including themselves). It's
-        # called 'real', beacuase it allows to perform a lookup of
+        # called 'real', because it allows to perform a lookup of
         # the actual (real) source interface(s) which brought in the given
         # compatible interface.
         real_source_interfaces = {interface: set([interface]) for interface in source_interfaces}

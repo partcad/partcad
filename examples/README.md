@@ -49,18 +49,45 @@ Below are some examples of consuming existing modules:
 - Any other Python script:
   - [Import PartCAD parts in Python scripts](./consume_standalone/)
 
-## Get quotes for parts
-
-PartCAD uses `providers` to implement part orders.
-
-- [Provider of the type "store" to buy SKUs](./provider_store/)
-- [Provider of the type "manufacturer" to manufacture a model](./provider_manufacturer/)
-
-## Features
+## Misc Features
 
 These examples showcase particular PartCAD features:
 
 - [Export to file](./feature_export)
+- [Import from file](./feature_import)
+- [Convert objects](./feature_convert)
 - [Interfaces and mating](./feature_interface)
 - [Part enrichment](./feature_enrich)
 - [Mono-repo and Multi-repo](./feature_monorepo)
+
+## External integrations
+
+### Repositories with Existing Part Designs
+
+PartCAD uses `plugins` to integrate with external repositories of part designs.
+
+- [PartCAD parts from a CSV file](./plugin_repository_basic/)
+- [External repository with multiple packages](./plugin_repository_tree/)
+- [Fully featured external repository](./plugin_repository_full/)
+
+The integrations to external repositories can't be accessed explicitly. They can only be used implicitly when a
+reference to packages from this repository is used. Examples of such packages can be found in `//pub/ext`.
+
+```bash
+pc init
+pc list packages -r //pub/ext
+```
+
+### Supply Chain
+
+PartCAD uses `providers` to implement supply chain operations. Below are some examples of part providers:
+
+- [Buy off-the-shelf parts by SKU (provider of the type "store")](./provider_store/)
+- [Manufacture parts following given instructions (provider of the type "manufacturer")](./provider_manufacturer/)
+
+The existing providers in PartCAD's public repository can be listed using the following command:
+
+```bash
+pc init
+pc list providers -r //pub/svc/commerce
+```

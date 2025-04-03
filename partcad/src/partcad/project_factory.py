@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2023
 #
 # Author: Roman Kuzmenko
@@ -42,24 +43,19 @@ class ProjectFactory(ImportConfiguration):
         self.parent = parent
 
         if parent is None:
-            self.config_path = ctx.config_path
             self.config_dir = ctx.config_dir
         else:
-            self.config_path = parent.config_path
             self.config_dir = parent.config_dir
 
         # Continue initializing the config object here if necessary
 
+    def _create_project(self, config):
+        raise NotImplementedError("Subclasses must implement this method")
+
     def _create(self, config):
         # Finalize the config object here if necessary
 
-        self.project = p.Project(
-            self.ctx,
-            self.name,
-            self.path,
-            include_paths=self.include_paths,
-            inherited_config=self.inherited_config,
-        )
+        self.project = self._create_project(config)
         # Make the project config inherit some properties of the import config
         self.project.config_obj["type"] = self.import_config_type
         self.project.config_obj["isRoot"] = self.import_config_is_root

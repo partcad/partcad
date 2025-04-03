@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2024
 #
 # Author: Roman Kuzmenko
@@ -7,10 +8,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .provider_request import ProviderRequest
+from .plugin_request_provider import PluginRequestProvider
 
 
-class ProviderRequestAvail(ProviderRequest):
+class ProviderRequestAvail(PluginRequestProvider):
     name: str
     vendor: str
     sku: str
@@ -18,6 +19,7 @@ class ProviderRequestAvail(ProviderRequest):
     count: int
 
     def __init__(self, name: str, vendor: str, sku: str, count_per_sku: int, count: int):
+        super().__init__()
         self.name = name
         self.vendor = vendor
         self.sku = sku

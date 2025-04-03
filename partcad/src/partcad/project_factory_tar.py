@@ -15,6 +15,7 @@ import requests
 import tarfile
 
 from . import project_factory as pf
+from .project_local import ProjectLocal
 from . import telemetry
 
 
@@ -46,6 +47,15 @@ class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
 
         self._save()
 
+    def _create_project(self, config):
+        return ProjectLocal(
+            self.ctx,
+            self.name,
+            self.path,
+            include_paths=self.include_paths,
+            inherited_config=self.inherited_config,
+        )
+
     def _extract(self, tarball_url, cache_dir=None):
         """
         Extracts a tarball to a local directory.
@@ -76,9 +86,9 @@ class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
                     auth = (self.auth_user, self.auth_pass)
                 with (
                     requests.get(tarball_url, stream=True, auth=auth) as rx,
-                    tarfile.open(fileobj=rx.raw, mode="r:gz") as tarobj,
+                    tarfile.open(fileobj=rx.raw, mode="r:gz") as tar_obj,
                 ):
-                    args = inspect.getfullargspec(tarobj.extractall)
+                    args = inspect.getfullargspec(tar_obj.extractall)
 
                     if "filter" in args.args:
                         if not self.import_rel_path is None:
@@ -88,9 +98,9 @@ class ProjectFactoryTar(pf.ProjectFactory, TarImportConfiguration):
                         else:
                             filter = lambda member, _: member
 
-                        tarobj.extractall(cache_path, filter=filter)
+                        tar_obj.extractall(cache_path, filter=filter)
                     else:
-                        tarobj.extractall(cache_path)
+                        tar_obj.extractall(cache_path)
             except Exception as e:
                 raise RuntimeError(f"Failed to download the tarball: {e}")
 
