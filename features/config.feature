@@ -59,7 +59,7 @@ Feature: `pc config` command
     And environment variable "PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE" is set to "101"
     And environment variable "PC_CACHE_DEPENDENCIES_IGNORE" is set to "true"
     And environment variable "PC_TELEMETRY_TYPE" is set to "sentry"
-    And environment variable "PC_TELEMETRY_PERFORMANCE" is set to "true"
+    And environment variable "PC_TELEMETRY_PERFORMANCE" is set to "false"
     And environment variable "PC_TELEMETRY_FAILURES" is set to "true"
     And environment variable "PC_TELEMETRY_DEBUG" is set to "false"
     And environment variable "PC_TELEMETRY_SENTRY_SHUTDOWN_TIMEOUT" is set to "11"
@@ -84,7 +84,7 @@ Feature: `pc config` command
     And STDOUT should contain "cache_memory_double_cache_max_entry_size: 101"
     And STDOUT should contain "cache_dependencies_ignore: True"
     And STDOUT should contain "'type': 'sentry'"
-    And STDOUT should contain "'performance': True"
+    And STDOUT should contain "'performance': False"
     And STDOUT should contain "'failures': True"
     And STDOUT should contain "'debug': False"
     And STDOUT should contain "'sentry_shutdown_timeout': 11"
@@ -172,7 +172,7 @@ Feature: `pc config` command
           sentryAttachStacktrace: true
           sentryTracesSampleRate: 0.43
       """
-    When I run "pc --threads-max=1111 --ollama-num-thread=2222 --max-script-correction=3333 --max-model-generation=4444 --max-geometric-modeling=5555 --openai-api-key=abcdef12345 --google-api-key=fedcba54321 --internal-state-dir=/tmp/sandbox/home/.partcad --python-sandbox=pypy --force-update --cache --cache-max-entry-size=102 --cache-min-entry-size=12 --cache-memory-max-entry-size=102 --cache-memory-double-cache-max-entry-size=102 --cache-dependencies-ignore --telemetry-debug --telemetry-sentry-traces-sample-rate=0.35 --telemetry-sentry-attach-stacktrace=no --telemetry-sentry-shutdown-timeout=44 config"
+    When I run "pc --threads-max=1111 --ollama-num-thread=2222 --max-script-correction=3333 --max-model-generation=4444 --max-geometric-modeling=5555 --openai-api-key=abcdef12345 --google-api-key=fedcba54321 --internal-state-dir=/tmp/sandbox/home/.partcad --python-sandbox=pypy --force-update --cache --cache-max-entry-size=102 --cache-min-entry-size=12 --cache-memory-max-entry-size=102 --cache-memory-double-cache-max-entry-size=102 --cache-dependencies-ignore --telemetry-type=sentry --telemetry-debug --telemetry-sentry-traces-sample-rate=0.35 --telemetry-sentry-attach-stacktrace=no --telemetry-sentry-shutdown-timeout=44 config"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "threads_max: 1111"
     And STDOUT should contain "ollama_num_thread: 2222"

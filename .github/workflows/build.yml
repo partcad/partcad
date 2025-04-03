@@ -52,12 +52,12 @@ jobs:
           . ~/.bashrc
           . ~/.bash_profile
           mamba activate env-build
-          cp .github/LICENSE.txt .github/apache20.svg partcad
+          cp LICENSE.txt apache20.svg partcad
           (cd partcad && python -m build)
           mamba deactivate
 
           mamba activate env-build-cli
-          cp .github/LICENSE.txt .github/apache20.svg README.md partcad-cli
+          cp LICENSE.txt apache20.svg README.md partcad-cli
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
           (cd partcad-cli && python -m build)

@@ -6,6 +6,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 
+import os
 import re
 import sys
 from types import ModuleType, FunctionType
@@ -81,3 +82,37 @@ def total_size(obj, verbose=False):
                 need_referents.append(obj)
         objects = get_referents(*need_referents)
     return size
+
+
+def is_editable_install(module):
+    """
+    Checks if a Python module is loaded from an editable install.
+
+    Args:
+        module: The Python module object.
+
+    Returns:
+        True if the module is from an editable install, False otherwise.
+    """
+    if not hasattr(module, "__file__"):
+        return False  # Built-in or dynamically generated modules
+
+    module_file = getattr(module, "__file__")
+    if module_file is None:
+        return False  # e.g. from zip files without file system access
+
+    # Check for symlinks, which are common in editable installs.
+    if os.path.islink(module_file):
+        return True
+
+    # Check if the path is outside of the site-packages or similar directories.
+    site_packages_dirs = [p for p in sys.path if "site-packages" in p]
+
+    if not site_packages_dirs:
+        return True  # If site-packages is not in sys.path, it is likely editable.
+
+    for site_packages_dir in site_packages_dirs:
+        if os.path.abspath(module_file).startswith(os.path.abspath(site_packages_dir)):
+            return False  # Standard install
+
+    return True  # Editable install

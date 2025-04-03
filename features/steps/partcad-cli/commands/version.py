@@ -111,6 +111,11 @@ def step_impl(context, exit_code):
     assert context.result.returncode == int(exit_code)
 
 
+@then("the command should exit with a non-zero status code")
+def step_impl(context):
+    assert context.result.returncode != 0
+
+
 @then("CLI version matches package version")
 def step_impl(context: Context) -> None:
     import subprocess

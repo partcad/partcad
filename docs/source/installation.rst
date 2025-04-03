@@ -99,4 +99,4 @@ If necessary, PartCAD tools are automatically retrieving the contents of this
 repository and all other required repositories and packages. No manual action is needed is need to `install` it.
 
 However, if you suspect that something is wrong with locally cached files,
-use ``pc status`` to investigate and to determine the location of the cached files.
+use ``pc system status`` to investigate and to determine the location of the cached files.

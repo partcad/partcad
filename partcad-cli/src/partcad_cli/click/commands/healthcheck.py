@@ -5,7 +5,7 @@ import partcad.logging as pc_logging
 from partcad.healthcheck.healthcheck import discover_tests
 
 
-@click.command(help="Perform a health check, to get instructions on what needs to be fixed")
+@click.command(help="Perform a health check of the host system to identify known issues.")
 @click.option(
     "--filters",
     help="Run only tests with the specified tag(s), comma separated",
@@ -25,10 +25,7 @@ def cli(filters: str, fix: bool, dry_run: bool) -> None:
 
     if filters:
         for val in filters.split(","):
-            tests = filter(
-                lambda test: any(val.strip().lower() in tag.lower() for tag in test.tags),
-                tests
-            )
+            tests = filter(lambda test: any(val.strip().lower() in tag.lower() for tag in test.tags), tests)
 
     if dry_run:
         if tests:

@@ -17,6 +17,7 @@ import shutil
 import vyper
 
 from . import logging as pc_logging
+from .utils import is_editable_install
 
 # IMPORTANT:
 # We need to maintain setting default values in both the CLI and the user_config, because of:
@@ -100,7 +101,7 @@ class ParametersConfig(BaseConfig):
         super().__init__(v, "parameters")
 
 
-# TODO(clairbee): moake TelemetryConfig a subclass of BaseConfig
+# TODO(clairbee): make TelemetryConfig a subclass of BaseConfig
 class TelemetryConfig(dict):
     def __init__(self, v: vyper.Vyper):
         self.v = v
@@ -117,8 +118,16 @@ class TelemetryConfig(dict):
 
     @property
     def type(self):
-        if self.v.is_set("telemetry.type"):
-            return self.v.get_string("telemetry.type")
+        try:
+            if self.v.is_set("telemetry.type"):
+                return self.v.get_string("telemetry.type")
+        except:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.type" in self.v._override:
+                return self.v._override["telemetry.type"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "type" in telemetry:
+                return telemetry["type"]
 
         return "sentry"
 
@@ -127,36 +136,68 @@ class TelemetryConfig(dict):
         if self.v.is_set("telemetry.env"):
             return self.v.get_string("telemetry.env")
 
-        from . import __spec__
-
-        # If the module is loaded from a file, then we are in development mode
-        if __spec__.loader.__class__.__name__ == "SourceFileLoader":
+        if is_editable_install(pc_logging):
             return "dev"
         else:
             return "prod"
 
     @property
     def performance(self):
-        if self.v.is_set("telemetry.performance"):
-            return self.v.get_bool("telemetry.performance")
+        try:
+            if self.v.is_set("telemetry.performance"):
+                return self.v.get_bool("telemetry.performance")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.performance" in self.v._override:
+                return self.v._override["telemetry.performance"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "performance" in telemetry:
+                return telemetry["performance"]
+
         return True
 
     @property
     def failures(self):
-        if self.v.is_set("telemetry.failures"):
-            return self.v.get_bool("telemetry.failures")
+        try:
+            if self.v.is_set("telemetry.failures"):
+                return self.v.get_bool("telemetry.failures")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.failures" in self.v._override:
+                return self.v._override["telemetry.failures"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "failures" in telemetry:
+                return telemetry["failures"]
+
         return True
 
     @property
     def debug(self):
-        if self.v.is_set("telemetry.debug"):
-            return self.v.get_bool("telemetry.debug")
+        try:
+            if self.v.is_set("telemetry.debug"):
+                return self.v.get_bool("telemetry.debug")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.debug" in self.v._override:
+                return self.v._override["telemetry.debug"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "debug" in telemetry:
+                return telemetry["debug"]
+
         return False
 
     @property
     def sentry_dsn(self):
-        if self.v.is_set("telemetry.sentryDsn"):
-            return self.v.get_string("telemetry.sentryDsn")
+        try:
+            if self.v.is_set("telemetry.sentryDsn"):
+                return self.v.get_string("telemetry.sentryDsn")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.sentryDsn" in self.v._override:
+                return self.v._override["telemetry.sentryDsn"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "sentryDsn" in telemetry:
+                return telemetry["sentryDsn"]
 
         # TODO(clairbee): create a load balancer for Sentry
         # return "https://sentry.partcad.org"
@@ -164,20 +205,47 @@ class TelemetryConfig(dict):
 
     @property
     def sentry_shutdown_timeout(self):
-        if self.v.is_set("telemetry.sentryShutdownTimeout"):
-            return self.v.get_float("telemetry.sentryShutdownTimeout")
+        try:
+            if self.v.is_set("telemetry.sentryShutdownTimeout"):
+                return self.v.get_float("telemetry.sentryShutdownTimeout")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.sentryShutdownTimeout" in self.v._override:
+                return self.v._override["telemetry.sentryShutdownTimeout"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "sentryShutdownTimeout" in telemetry:
+                return telemetry["sentryShutdownTimeout"]
+
         return 3.0
 
     @property
     def sentry_attach_stacktrace(self):
-        if self.v.is_set("telemetry.sentryAttachStacktrace"):
-            return self.v.get_bool("telemetry.sentryAttachStacktrace")
+        try:
+            if self.v.is_set("telemetry.sentryAttachStacktrace"):
+                return self.v.get_bool("telemetry.sentryAttachStacktrace")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.sentryAttachStacktrace" in self.v._override:
+                return self.v._override["telemetry.sentryAttachStacktrace"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "sentryAttachStacktrace" in telemetry:
+                return telemetry["sentryAttachStacktrace"]
+
         return False
 
     @property
     def sentry_traces_sample_rate(self):
-        if self.v.is_set("telemetry.sentryTracesSampleRate"):
-            return self.v.get_float("telemetry.sentryTracesSampleRate")
+        try:
+            if self.v.is_set("telemetry.sentryTracesSampleRate"):
+                return self.v.get_float("telemetry.sentryTracesSampleRate")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.sentryTracesSampleRate" in self.v._override:
+                return self.v._override["telemetry.sentryTracesSampleRate"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "sentryTracesSampleRate" in telemetry:
+                return telemetry["sentryTracesSampleRate"]
+
         return 1.0
 
     def __repr__(self):

@@ -1,3 +1,9 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
 from pathlib import Path
 import shutil
 import tempfile

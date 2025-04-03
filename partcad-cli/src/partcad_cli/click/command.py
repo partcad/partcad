@@ -110,7 +110,7 @@ option_groups = [
 command_groups = [
     {
         "name": "Host commands",
-        "commands": ["version", "config", "status", "reset"],
+        "commands": ["version", "config", "system"],
     },
     {
         "name": "Package commands",
@@ -126,7 +126,7 @@ command_groups = [
     },
     {
         "name": "Other commands",
-        "commands": ["adhoc"],
+        "commands": ["adhoc", "healthcheck"],
     },
 ]
 click.rich_click.OPTION_GROUPS = {
@@ -291,7 +291,6 @@ click.rich_click.COMMAND_GROUPS = {
 @click.option(
     "--telemetry-type",
     type=click.Choice(["none", "sentry"]),
-    default="sentry",
     show_envvar=True,
     help="Telemetry type to use",
 )
