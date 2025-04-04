@@ -27,6 +27,7 @@ def cli(click_ctx: click.Context, alias: str, location: str):
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("AddDep", package):
             package_obj.add_import(alias, location)

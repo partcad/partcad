@@ -79,6 +79,7 @@ def cli(cli_ctx: CliContext, context, verbal, package, interface, assembly, sket
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("inspect", package):
             param_dict = {}

@@ -126,10 +126,11 @@ def cli(cli_ctx, package, recursive, filter, sketch, interface, assembly, scene,
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("Test", package):
             if recursive:
-                all_packages = ctx.get_all_packages(package)
+                all_packages = ctx.get_all_packages(parent_name=package)
                 if ctx.stats_git_ops:
                     pc.logging.info(f"Git operations: {ctx.stats_git_ops}")
                 packages = [p["name"] for p in all_packages]

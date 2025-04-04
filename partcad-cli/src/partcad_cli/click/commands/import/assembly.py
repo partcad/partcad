@@ -55,6 +55,7 @@ def cli(cli_ctx: CliContext, package: str, assembly_file: str, desc: str):
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
+        package = package_obj.name  # '//' may end up having a different name
 
         config = {"desc": desc} if desc else {}
 

@@ -55,6 +55,7 @@ def cli(cli_ctx: CliContext, object_name: str, target_format: str, package: str,
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             raise click.UsageError("Failed to retrieve the project.")
+        package = package_obj.name  # '//' may end up having a different name
 
         pc.logging.info(f"Starting conversion: '{object_name}' -> '{target_format}', dry_run={dry_run}")
 

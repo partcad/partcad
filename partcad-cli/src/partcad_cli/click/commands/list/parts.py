@@ -30,24 +30,19 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("ListParts", package):
             part_kinds = 0
 
             if recursive:
-                all_packages = ctx.get_all_packages()
+                all_packages = ctx.get_all_packages(parent_name=package, has_stuff=True)
                 packages = [p["name"] for p in all_packages]
             else:
                 packages = [package]
 
             output = "PartCAD parts:\n"
             for project_name in packages:
-                if not recursive and package != project_name:
-                    continue
-
-                if recursive and not project_name.startswith(package):
-                    continue
-
                 project = ctx.projects[project_name]
 
                 for part_name, part in project.parts.items():

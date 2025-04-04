@@ -78,6 +78,7 @@ def cli(cli_ctx: CliContext, package: str, existing_part: str, target_format: st
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
+        package = package_obj.name  # '//' may end up having a different name
 
         pc.logging.info(f"Importing part: {existing_part} ({part_type})")
         name = file_path.stem

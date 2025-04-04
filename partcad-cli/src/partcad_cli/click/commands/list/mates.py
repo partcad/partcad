@@ -29,12 +29,13 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str):
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("ListMates", package):
             mating_kinds = 0
 
             if recursive:
-                all_packages = ctx.get_all_packages()
+                all_packages = ctx.get_all_packages(parent_name=package)
                 packages = [p["name"] for p in all_packages]
             else:
                 packages = [package]
@@ -42,9 +43,6 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str):
             # Instantiate all interfaces in the relevant packages to get the mating data
             # finalized
             for package_name in packages:
-                if recursive and not package_name.startswith(package):
-                    continue
-
                 p = ctx.projects[package_name]
                 for interface_name in p.interfaces:
                     intf = p.get_interface(interface_name)

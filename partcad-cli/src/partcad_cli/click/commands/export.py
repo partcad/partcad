@@ -99,11 +99,12 @@ def cli(
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("Export", package):
             ctx.option_create_dirs = create_dirs
             if recursive:
-                all_packages = ctx.get_all_packages(package)
+                all_packages = ctx.get_all_packages(parent_name=package, has_stuff=True)
                 packages = [p["name"] for p in all_packages]
             else:
                 packages = [package]

@@ -63,6 +63,7 @@ def cli(click_ctx: click.Context, desc: str | None, kind: str, provider: str | N
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("AddSketch", package):
             config = {}
