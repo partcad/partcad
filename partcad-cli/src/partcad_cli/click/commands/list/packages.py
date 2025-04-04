@@ -48,6 +48,8 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str):
             for project_name in packages:
                 project = ctx.projects[project_name]
 
+                project = ctx.projects[project_name]
+
                 line = "\t%s" % project_name
                 padding_size = 60 - len(project_name)
                 if padding_size < 4:
