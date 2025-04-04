@@ -56,7 +56,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             # Stay one step ahead of the minimum required Python version
             python_version = "3.11"
         if python_version == "3.12" or python_version == "3.10":
-            pc_logging.debug("Downgrading Python version to 3.11 to minimize compatibility issues")
+            # Downgrading Python version to 3.11 to minimize compatibility issues
             python_version = "3.11"
 
         self.runtime = self.ctx.get_python_runtime(python_version)

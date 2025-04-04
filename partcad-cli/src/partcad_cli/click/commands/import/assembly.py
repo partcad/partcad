@@ -50,11 +50,11 @@ def cli(cli_ctx: CliContext, package: str, assembly_file: str, desc: str):
         pc.logging.info(f"Importing assembly from {assembly_type.upper()} file: {assembly_file}")
 
         # Get the target package
+        package = ctx.resolve_package_path(package)
         package_obj: pc.Project = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
-        package = package_obj.name
 
         config = {"desc": desc} if desc else {}
 

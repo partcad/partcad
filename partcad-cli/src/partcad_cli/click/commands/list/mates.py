@@ -24,22 +24,24 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str):
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
+        package = ctx.resolve_package_path(package)
         package_obj = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
-        package = package_obj.name
 
         with pc.logging.Process("ListMates", package):
             mating_kinds = 0
 
             if recursive:
-                ctx.get_all_packages()
+                all_packages = ctx.get_all_packages()
+                packages = [p["name"] for p in all_packages]
+            else:
+                packages = [package]
 
             # Instantiate all interfaces in the relevant packages to get the mating data
             # finalized
-            to_instansiate = ctx.projects.keys() if recursive else [package]
-            for package_name in to_instansiate:
+            for package_name in packages:
                 if recursive and not package_name.startswith(package):
                     continue
 

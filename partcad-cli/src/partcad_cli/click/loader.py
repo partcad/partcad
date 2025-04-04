@@ -36,7 +36,7 @@ class Loader(click.RichGroup):
 
     def get_command(self, _ctx, name: str) -> click.Command:
         if not name in self.list_commands(_ctx):
-            raise click.ClickException(f"Unknown command: {name}")
+            raise click.ClickException(f"Unknown command: '{name}'. Try `--help`.")
 
         if not name.isalnum():
             raise click.ClickException(f"Invalid command name: {name}")

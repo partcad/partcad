@@ -74,6 +74,20 @@ option_groups = [
         "options": ["--python-sandbox"],
     },
     {
+        "name": "Telemetry options",
+        "options": [
+            "--telemetry-type",
+            "--telemetry-env",
+            "--telemetry-performance",
+            "--telemetry-failures",
+            "--telemetry-debug",
+            "--telemetry-sentry-dsn",
+            "--telemetry-sentry-shutdown-timeout",
+            "--telemetry-sentry-attach-stacktrace",
+            "--telemetry-sentry-traces-sample-rate",
+        ],
+    },
+    {
         "name": "Performance options",
         "options": ["--threads-max"],
     },
@@ -86,20 +100,6 @@ option_groups = [
             "--cache-memory-max-entry-size",
             "--cache-memory-double-cache-max-entry-size",
             "--cache-dependencies-ignore",
-        ],
-    },
-    {
-        "name": "Telemetry options",
-        "options": [
-            "--telemetry-type",
-            "--telemetry-env",
-            "--telemetry-performance",
-            "--telemetry-failures",
-            "--telemetry-debug",
-            "--telemetry-sentry-dsn",
-            "--telemetry-sentry-shutdown-timeout",
-            "--telemetry-sentry-attach-stacktrace",
-            "--telemetry-sentry-traces-sample-rate",
         ],
     },
     {

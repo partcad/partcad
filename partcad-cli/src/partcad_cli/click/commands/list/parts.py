@@ -25,19 +25,23 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
+        package = ctx.resolve_package_path(package)
         package_obj = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
-        package = package_obj.name
 
         with pc.logging.Process("ListParts", package):
             part_kinds = 0
 
-            ctx.get_all_packages()
+            if recursive:
+                all_packages = ctx.get_all_packages()
+                packages = [p["name"] for p in all_packages]
+            else:
+                packages = [package]
 
             output = "PartCAD parts:\n"
-            for project_name in ctx.projects:
+            for project_name in packages:
                 if not recursive and package != project_name:
                     continue
 

@@ -27,37 +27,41 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str):
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
+        package = ctx.resolve_package_path(package)
         package_obj: pc.Project = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
-        package = package_obj.name
 
         with pc.logging.Process("ListPackages", package):
             # TODO-103: Show source (URL, PATH) of the package, probably use prettytable as well
             pkg_count = 0
 
-            projects = ctx.get_all_packages()
-            projects = sorted(projects, key=lambda p: p["name"])
+            if recursive:
+                # TODO(clairbee): pass `parent_name` into `get_all_packages()`
+                all_packages = ctx.get_all_packages(has_stuff=True)
+                packages = [p["name"] for p in all_packages]
+            else:
+                packages = [package]
 
             output = "PartCAD packages:\n"
-            for project in projects:
-                project_name = project["name"]
-
+            for project_name in packages:
                 if not recursive and package != project_name:
                     continue
 
                 if recursive and not project_name.startswith(package):
                     continue
 
+                project = ctx.projects[project_name]
+
                 line = "\t%s" % project_name
                 padding_size = 60 - len(project_name)
                 if padding_size < 4:
                     padding_size = 4
                 line += " " * padding_size
-                desc = project["desc"]
-                if project.get("url"):
-                    desc += f"\n{project['url']}"
+                desc = project.desc
+                if hasattr(project, "url"):
+                    desc += f"\n{project.url}"
                 desc = desc.replace("\n", "\n" + " " * 68)
                 line += "%s" % desc
                 output += line + "\n"

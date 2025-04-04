@@ -52,7 +52,7 @@ class PartFactoryEnrich(pf.PartFactory):
                 else:
                     source_project_name = source_project.name
 
-            pc_logging.debug(f"Initializing an enrich to {source_project_name}:{source_part_name}")
+            # pc_logging.debug(f"Initialized an enrich to {source_project_name}:{source_part_name}")
 
             super().__init__(ctx, source_project, target_project, config)
             self.source_project = source_project
@@ -92,9 +92,7 @@ class PartFactoryEnrich(pf.PartFactory):
             object_name = f"{self.project.name}:{self.name}"
             # TODO(clairbee): ideally whatever we pull from the project is already normalized
             augmented_config = part_config.PartConfiguration.normalize(
-                self.source_part_name,
-                augmented_config,
-                object_name
+                self.source_part_name, augmented_config, object_name
             )
 
             # See if there are any extra "with" parameters deduced from the source name
@@ -125,13 +123,11 @@ class PartFactoryEnrich(pf.PartFactory):
 
             # Recalling normalize to normalize data after replacing target parameters from with key.
             augmented_config = part_config.PartConfiguration.normalize(
-                self.source_part_name,
-                augmented_config,
-                object_name
+                self.source_part_name, augmented_config, object_name
             )
 
             # Drop fields we don't want to be inherited by enriched clones
-            # TODO(clairbee): keep aliases if they are a function of the orignal name
+            # TODO(clairbee): keep aliases if they are a function of the original name
             if "aliases" in augmented_config:
                 del augmented_config["aliases"]
 

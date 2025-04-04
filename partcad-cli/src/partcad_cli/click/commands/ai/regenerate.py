@@ -64,8 +64,6 @@ def cli(cli_ctx: CliContext, sketch, interface, assembly, scene, package, object
             )
             return
 
-        if not ":" in object:
-            object = ":" + object
         package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object)
 
         with pc.logging.Process("Regenerate", package):

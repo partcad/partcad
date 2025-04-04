@@ -201,7 +201,10 @@ class Context(project_config.Configuration):
         self.stats_memory = total_size(self, verbose)
 
     def get_current_project_path(self):
-        return self.current_project_path
+        p = self.current_project_path
+        while len(p) > 1 and not (len(p) == 2 and p == "//") and p.endswith("/"):
+            p = p[:-1]
+        return p
 
     def import_project(self, parent, project_import_config):
         if "name" not in project_import_config or "type" not in project_import_config:
@@ -254,6 +257,36 @@ class Context(project_config.Configuration):
 
                 del self._projects_being_loaded[name]
                 return imported_project
+
+    def resolve_package_path(self, package: str):
+        """ "
+        Get the absolute path to the package.
+        """
+        if package is None:
+            return self.get_current_project_path()
+
+        # Remove trailing slashes, except the initial two
+        while len(package) > 1 and not (len(package) == 2 and package == "") and package.endswith("/"):
+            package = package[:-1]
+
+        # If package is the root package, return the root package path (can be a longer absolute path)
+        if package == "/":
+            return self.name
+
+        # If package is empty or the explicit reference to the current package, return current package
+        if package == "" or package == ".":
+            return self.get_current_project_path()
+
+        # Make it absolute
+        if not package.startswith("/"):
+            package = self.get_current_project_path() + "/" + package
+
+        # For backward compatibility '/' -> '//'
+        if package.startswith("/") and not package.startswith("//"):
+            pc_logging.warning(f"{package}: using '/' as the root package path is deprecated. Use '//' instead.")
+            package = "/" + package
+
+        return package
 
     def get_project_abs_path(self, rel_project_path: str):
         """
@@ -453,11 +486,9 @@ class Context(project_config.Configuration):
                 # TODO(clairbee): check if this subdir is already imported
                 next_project_path = get_child_project_path(project.name, subdir)
 
-                if next_project_path in self.projects:
-                    # This project is already imported (e.g. the current one)
-                    # TODO(clairbee): is this worth a warning?
-                    pc_logging.debug("Skipping already imported: %s" % subdir)
-                    continue
+                # Here, we do not jump over the projects that are already imported,
+                # because we want to import all sub-folders, even if their parent
+                # is already imported.
 
                 pc_logging.debug("Importing a subfolder (import all): %s..." % next_project_path)
                 prj_conf = {
@@ -470,24 +501,27 @@ class Context(project_config.Configuration):
 
         return tasks
 
-    def get_all_packages(self, parent_name=None):
+    def get_all_packages(self, parent_name=None, has_stuff: bool = True):
         # TODO(clairbee): leverage root_project.get_child_project_names()
         self.import_all(parent_name)
-        return self.get_packages(parent_name)
+        return self.get_packages(parent_name=parent_name, has_stuff=has_stuff)
 
-    def get_packages(self, parent_name: str = None) -> list[dict[str, str]]:
+    def get_packages(self, parent_name: str = None, has_stuff: bool = True) -> list[dict[str, str]]:
         projects = self.projects.values()
         if parent_name is not None:
             projects = filter(lambda x: x.name.startswith(parent_name), projects)
+
+        if has_stuff:
+            # Filter out projects that don't contain anything the user might be interested in.
+            # TODO(clairbee): Add interfaces and providers to this list when the UIs are ready to display them
+            projects = filter(
+                lambda x: len(x.sketches) + len(x.parts) + len(x.assemblies) > 0,
+                projects,
+            )
         return list(
             map(
                 lambda pkg: {"name": pkg.name, "desc": pkg.desc},
-                filter(
-                    # FIXME(clairbee): parameterize interfaces before displaying them
-                    # lambda x: len(x.interfaces) + len(x.sketches) + len(x.parts) + len(x.assemblies)
-                    lambda x: len(x.sketches) + len(x.parts) + len(x.assemblies) > 0,
-                    projects,
-                ),
+                projects,
             )
         )
 

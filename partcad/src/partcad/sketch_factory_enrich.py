@@ -51,7 +51,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
                 else:
                     source_project_name = source_project.name
 
-            pc_logging.debug(f"Initializing an enrich to {source_project_name}:{source_sketch_name}")
+            # pc_logging.debug(f"Initialized an enrich to {source_project_name}:{source_sketch_name}")
 
             super().__init__(ctx, source_project, target_project, config)
             self.source_project = source_project
@@ -92,9 +92,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
 
             # TODO(clairbee): ideally whatever we pull from the project is already normalized
             augmented_config = sketch_config.SketchConfiguration.normalize(
-                self.source_sketch_name,
-                augmented_config,
-                object_name
+                self.source_sketch_name, augmented_config, object_name
             )
 
             # See if there are any extra "with" parameters deduced from the source name
@@ -125,9 +123,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
 
             # Recalling normalize to normalize data after replacing target parameters from with key.
             augmented_config = sketch_config.SketchConfiguration.normalize(
-                augmented_config["name"],
-                augmented_config,
-                object_name
+                augmented_config["name"], augmented_config, object_name
             )
 
             # Drop fields we don't want to be inherited by enriched clones

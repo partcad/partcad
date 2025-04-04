@@ -65,11 +65,11 @@ def cli(click_ctx: click.Context, desc: str | None, kind: str, provider: str | N
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
+        package = ctx.resolve_package_path(package)
         package_obj: pc.Project = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
-        package = package_obj.name
 
         file_path = Path(path)
         if not file_path.exists():

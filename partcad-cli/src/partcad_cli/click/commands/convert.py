@@ -50,12 +50,11 @@ def cli(cli_ctx: CliContext, object_name: str, target_format: str, package: str,
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
-        package = package if package is not None else "."
+        package = ctx.resolve_package_path(package)
         package_obj = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             raise click.UsageError("Failed to retrieve the project.")
-        package = package_obj.name
 
         pc.logging.info(f"Starting conversion: '{object_name}' -> '{target_format}', dry_run={dry_run}")
 

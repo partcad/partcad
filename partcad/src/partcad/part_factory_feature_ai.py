@@ -83,7 +83,7 @@ class PartFactoryFeatureAi(Ai):
             self.num_script_correction = user_config.max_script_correction
 
         # Normalize the input configuration
-        pc_logging.debug("AI configuration: %s" % self.ai_config)
+        # pc_logging.debug("AI configuration: %s" % self.ai_config)
 
         if (
             not "tokens" in self.ai_config
@@ -91,7 +91,6 @@ class PartFactoryFeatureAi(Ai):
             or self.ai_config["tokens"] == 0
         ):
             self.ai_config["tokens"] = 2048
-            pc_logging.debug("Setting the default number of tokens: 2048")
         if not "images" in self.ai_config:
             self.ai_config["images"] = []
         # Use `temperature` and `top_p` values recommended for code generation

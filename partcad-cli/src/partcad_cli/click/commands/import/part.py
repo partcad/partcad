@@ -73,11 +73,11 @@ def cli(cli_ctx: CliContext, package: str, existing_part: str, target_format: st
             )
 
         # Get the target package
+        package = ctx.resolve_package_path(package)
         package_obj: pc.Project = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
-        package = package_obj.name
 
         pc.logging.info(f"Importing part: {existing_part} ({part_type})")
         name = file_path.stem
