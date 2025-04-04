@@ -266,7 +266,7 @@ class Context(project_config.Configuration):
             return self.get_current_project_path()
 
         # Remove trailing slashes, except the initial two
-        while len(package) > 1 and not (len(package) == 2 and package == "") and package.endswith("/"):
+        while len(package) > 1 and not package == "//" and package.endswith("/"):
             package = package[:-1]
 
         # If package is the root package, return the root package path (can be a longer absolute path)

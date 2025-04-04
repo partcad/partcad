@@ -27,7 +27,18 @@ from ..cli_context import CliContext
     "-t",
     "--format",
     help="The type of file to export",
-    type=click.Choice(["step", "brep", "stl", "3mf", "threejs", "obj", "gltf", "iges"]),
+    type=click.Choice(
+        [
+            "step",
+            "brep",
+            "stl",
+            "3mf",
+            "threejs",
+            "obj",
+            "gltf",
+            "iges",
+        ]
+    ),
 )
 @click.option(
     "-P",
