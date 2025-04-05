@@ -127,77 +127,37 @@ Now the part can be exported:
 
     pc export -t stl :test
 
-==================
-Convert a CAD File
-==================
-
-The `pc adhoc convert` command allows you to quickly convert a CAD file from one format to another without requiring a full project setup or configuration.
-
-Supported formats:
-------------------
-- **Input:** STL, STEP, BREP, 3MF, SCAD, CadQuery, Build123d
-- **Output:** STL, STEP, BREP, 3MF, ThreeJS, OBJ, GLTF, IGES
-
-Examples:
----------
-
-.. code-block:: shell
-
-    # Type inference from extensions
-    pc adhoc convert part.stl model.step  # STL to STEP
-
-    # Explicit type specification
-    pc adhoc convert input output.stl --input scad --output stl
-
-    # Default output filename
-    pc adhoc convert input.stl --output step  # Creates input.step
-
-.. note::
-    If the conversion fails, the command will display an error message and exit with a non-zero status code.
-
 ===================================
-Convert a Part
+Convert a Part in a Project Package
 ===================================
 
-The `pc convert` command allows you to convert parts, assemblies, or sketches to a different format.
-It supports optional output directory specification and a dry-run mode for simulation.
+The `pc convert part` command converts a part or assembly within a package into another format.
+It updates the type of the part if the format changes.
 
 Usage:
----------
-
-To convert a part from STL to STEP format:
+------
 
 .. code-block:: shell
 
-    # Convert the part "cube" to STEP format
-    pc convert cube -t step
+    # Convert part "cube" to STEP format
+    pc convert part cube -t step
 
-To specify an output directory for the converted files:
+    # Convert an enrich-type part using its original format (no -t needed)
+    pc convert part enriched_part
 
-.. code-block:: shell
+    # Save output in a specific directory
+    pc convert part cube -t step -O ./output
 
-    # Convert the part "cube" to STEP format and save it in the specified directory
-    pc convert cube -t step -O ./output
+    # Dry-run to preview changes
+    pc convert part cube -t step --dry-run
 
-Simulate conversion without modifying files
--------------------------------------------
+Options:
+--------
 
-The `--dry-run` option allows you to simulate the conversion process without making any changes.
-This is useful for verifying which files would be affected before performing the actual conversion.
-
-.. code-block:: shell
-
-    # Simulate converting "cube" to STEP format without modifying anything
-    pc convert cube -t step --dry-run
-
-    # Example output:
-    # INFO: Starting conversion: 'cube' → 'step', dry_run=True
-    # INFO: Resolving package '', part 'cube'
-    # INFO: Using project '', located at '/workspaces/partcad/examples'
-    # INFO: Converting 'cube' (stl → step) → '/workspaces/partcad/examples/cube.step'
-    # INFO: [Dry Run] No changes made for 'cube'.
-
-This option ensures that no files are created or modified, and only logs the expected conversion actions.
+- ``-t``, ``--target-format``: Output format (e.g., step, stl, obj, etc.)
+- ``-P``, ``--package``: Package name (default is current directory)
+- ``-O``, ``--output-dir``: Directory to save output files
+- ``--dry-run``: Simulate the conversion process without modifying any files
 
 Supported formats:
 ------------------
@@ -205,16 +165,77 @@ Supported formats:
 - BREP
 - STL
 - 3MF
-- Three.js (JSON)
+- ThreeJS (JSON)
 - OBJ
 - glTF (JSON)
 - IGES
 
+Special behavior:
+-----------------
+
+If the part is of type **`enrich`** or **`alias`**, the `-t` option is optional.
+In this case, the system automatically resolves the original format and converts to it:
+
+.. code-block:: shell
+
+    # "alias_part" refers to a BREP-based part, so no format needed
+    pc convert part alias_part
+
 .. note::
-    - The object must exist in the `partcad.yaml` file and be defined as a part.
-    - If the target format is not supported by the object, an error will be displayed, and the conversion will be aborted.
-    - The `--dry-run` option only simulates the conversion process without making actual changes.
-    - The converted file will be saved in the same directory as the original unless an output directory is specified.
+    The part must be declared in the `partcad.yaml` file.
+    If the output format is not supported or missing for non-`enrich`/`alias`, the command will fail.
+
+=====================================
+Convert a Sketch in a Project Package
+=====================================
+
+The `pc convert sketch` command converts a sketch (e.g., SVG or DXF) to another supported format.
+This command updates the sketch type in the project if applicable.
+
+Usage:
+------
+
+.. code-block:: shell
+
+    # Convert sketch "circle_svg" to DXF format
+    pc convert sketch circle_svg -t dxf
+
+    # Convert an enrich-type sketch to its original format (no -t needed)
+    pc convert sketch enriched_sketch
+
+    # Save output in a specific directory
+    pc convert sketch circle_svg -t dxf -O ./output
+
+    # Simulate the conversion without writing files
+    pc convert sketch circle_svg -t dxf --dry-run
+
+Options:
+--------
+
+- ``-t``, ``--target-format``: Output format (`svg` or `dxf`)
+- ``-P``, ``--package``: Package name (default is current directory)
+- ``-O``, ``--output-dir``: Output folder for the converted sketch
+- ``--dry-run``: Perform a dry-run (no files are created or modified)
+
+Supported formats:
+------------------
+- SVG
+- DXF
+
+Special behavior:
+-----------------
+
+If the sketch is of type **`enrich`** or **`alias`**, the `-t` argument is optional.
+The system will convert it to the original underlying format automatically:
+
+.. code-block:: shell
+
+    # "alias_sketch" refers to an SVG sketch
+    pc convert sketch alias_sketch
+
+.. note::
+    The sketch must be listed in `partcad.yaml` and marked as a sketch.
+    If the format is not supported or the resolution fails, the command will return an error.
 
 Reset partcad
 ---------------------
