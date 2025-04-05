@@ -60,7 +60,7 @@ jobs:
           cp LICENSE.txt apache20.svg README.md partcad-cli
           python -m pip install -r partcad/requirements.txt
           python -m pip install setuptools --upgrade
-          python -m pip install --no-index --find-links=partcad/dist partcad
+          python -m pip install --no-index --find-links=partcad/dist --no-build-isolation partcad
           (cd partcad-cli && python -m build)
           mamba deactivate
 

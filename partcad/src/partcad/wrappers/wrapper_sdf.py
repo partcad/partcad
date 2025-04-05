@@ -31,7 +31,6 @@ def process(path, request):
     if "import partcad" in script:
         script = "import logging\nlogging.basicConfig(level=60)\n" + script  # Disable PartCAD logging
 
-    sys.modules["ocp_vscode"] = sys.modules["py_stubs.ocp_vscode"]
     if "from ocp_vscode import " in script:
         script = re.sub(
             r"(from ocp_vscode import .*)\n",
