@@ -82,7 +82,7 @@ Feature: `pc adhoc convert sketch` command
       """
     When I run "pc adhoc convert sketch unknown_format.unknown sketch.dxf"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "Cannot infer input sketch type. Please specify --input explicitly."
+    And STDERR should contain "Cannot infer input sketch type. Please specify --input explicitly."
 
   Scenario: Overwrite existing sketch output file
     Given a file named "circle.dxf" with content:
