@@ -58,5 +58,6 @@ def cli(cli_ctx: CliContext, input_type, output_type, input_filename, output_fil
             convert_sketch_file(str(input_path), input_type, str(output_path), output_type)
             pc.logging.info(f"Conversion complete: {output_path}")
         except Exception as e:
-            pc.logging.error(f"Error during sketch conversion: {e}")
+            pc.logging.error("Failed to convert: %s", e)
+            click.echo("Failed to convert: %s" % e, err=True)
             raise click.Abort()

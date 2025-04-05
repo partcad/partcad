@@ -50,7 +50,12 @@ PART_EXTENSION_MAPPING = {
     "scad": "scad",
 }
 
-SKETCH_EXTENSION_MAPPING = {"svg": "svg", "dxf": "dxf"}
+SKETCH_EXTENSION_MAPPING = {
+    "svg": "svg",
+    "dxf": "dxf",
+    "cadquery": "py",
+    "build123d": "py",
+}
 
 previously_displayed_shape = None
 
@@ -510,13 +515,17 @@ class Shape(ShapeConfiguration):
                 wrapper_path = wrapper.get(f"render_{format}.py")
 
                 request = {"wrapped": obj}
-
-                if format in ["svg", "png", "dxf"]:
-                    request["viewport_origin"] = kwargs.get("viewport_origin", [0, 0, 100])
+                if format in ["svg", "png"]:
+                    request["viewport_origin"] = kwargs.get("viewport_origin", [100, -100, 100])
                     request["line_weight"] = kwargs.get("line_weight", 1.0)
                     if format == "png":
                         request["width"] = kwargs.get("width", 512)
                         request["height"] = kwargs.get("height", 512)
+
+                elif format in ["dxf"]:
+                    request["line_weight"] = kwargs.get("line_weight", 1.0)
+                    request["viewport_origin"] = kwargs.get("viewport_origin", [0, 0, -100])
+                    request["viewport_up"] = kwargs.get("viewport_up", [0, -1, 0])
 
                 elif format in ["3mf", "obj", "gltf", "stl", "threejs"]:
                     request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))

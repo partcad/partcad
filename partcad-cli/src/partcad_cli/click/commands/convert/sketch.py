@@ -60,7 +60,6 @@ def cli(cli_ctx: CliContext, object_name: str, target_format: str, package: str,
         pc.logging.info(f"Starting sketch conversion: '{object_name}' -> '{target_format}', dry_run={dry_run}")
 
         try:
-            # Actual conversion logic for sketches
             convert_sketch_action(package_obj, object_name, target_format, output_dir=output_dir, dry_run=dry_run)
         except ValueError as e:
             raise click.UsageError(str(e))

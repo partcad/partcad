@@ -13,6 +13,29 @@ from .. import logging as pc_logging
 from ..context import Context
 
 
+def generate_partcad_config(temp_dir: Path, input_type: str, temp_input_path: Path, kind: str = "part") -> None:
+    """
+    Generate a temporary partcad.yaml configuration for processing.
+
+    Args:
+        temp_dir (Path): Temporary directory path.
+        input_type (str): Input file format type.
+        temp_input_path (Path): Path to the copied input file.
+        kind (str): Either "part" or "sketch" (default is "part")
+    """
+    section = "parts" if kind == "part" else "sketches"
+    name = "input_part" if kind == "part" else "input_sketch"
+
+    config = f"""
+{section}:
+  {name}:
+    type: {input_type}
+    path: '{temp_input_path}'
+    """
+    config_path = temp_dir / "partcad.yaml"
+    config_path.write_text(config.strip() + "\n", encoding="utf-8")
+
+
 def convert_cad_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
     """
     Convert a CAD file from one format to another.
@@ -24,12 +47,11 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
         output_type (str): Format of the output file.
     """
     input_path = Path(input_filename).resolve()
-
     temp_dir = Path(tempfile.mkdtemp())
-    try:
-        generate_partcad_config(temp_dir, input_type, input_path)
 
-        # Initialize PartCAD context and load the project
+    try:
+        generate_partcad_config(temp_dir, input_type, input_path, kind="part")
+
         ctx = Context(root_path=temp_dir, search_root=False)
         with pc_logging.Process("Convert", "adhoc"):
             project = ctx.get_project("//")
@@ -40,39 +62,19 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
             shape = asyncio.run(part.get_wrapped(ctx))
             if not shape:
                 raise RuntimeError("Failed to load the input part: no shape returned")
+
             pc_logging.info(f"Loaded input part: {input_path}")
             pc_logging.info(f"Shape: {type(shape)}")
 
             if part.errors:
                 raise RuntimeError(f"Failed to load the input part: {part.errors}")
 
-            # Render the part to the desired output format
             part.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
 
     except Exception as e:
-        raise RuntimeError(f"Failed to convert: {e.with_traceback(None)}")
+        raise RuntimeError(f"Failed to convert: {e}")
     finally:
-        shutil.rmtree(temp_dir)  # Cleanup temporary files
-
-
-def generate_partcad_config(temp_dir: Path, input_type: str, temp_input_path: Path) -> None:
-    """
-    Generate a temporary partcad.yaml configuration for processing.
-
-    Args:
-        temp_dir (Path): Temporary directory path.
-        input_type (str): Input file format type.
-        temp_input_path (Path): Path to the copied input file.
-    """
-    config_path = temp_dir / "partcad.yaml"
-    config_content = f"""
-parts:
-  input_part:
-    type: {input_type}
-    path: '{temp_input_path}'
-    """
-    with open(config_path, "w", encoding="utf-8") as config_file:
-        config_file.write(config_content)
+        shutil.rmtree(temp_dir)
 
 
 def convert_sketch_file(input_filename: str, input_type: str, output_filename: str, output_type: str) -> None:
@@ -89,7 +91,7 @@ def convert_sketch_file(input_filename: str, input_type: str, output_filename: s
     temp_dir = Path(tempfile.mkdtemp())
 
     try:
-        generate_sketch_partcad_config(temp_dir, input_type, input_path)
+        generate_partcad_config(temp_dir, input_type, input_path, kind="sketch")
 
         ctx = Context(root_path=temp_dir, search_root=False)
         with pc_logging.Process("Convert", "adhoc-sketch"):
@@ -101,8 +103,8 @@ def convert_sketch_file(input_filename: str, input_type: str, output_filename: s
             shape = asyncio.run(sketch.get_wrapped(ctx))
             if not shape:
                 raise RuntimeError("Failed to load the input sketch: no shape returned")
-            pc_logging.info(f"Loaded input sketch: {input_path}")
-            pc_logging.info(f"Shape: {type(shape)}")
+
+            pc_logging.debug(f"Loaded input sketch: {input_path}")
 
             if sketch.errors:
                 raise RuntimeError(f"Failed to load the input sketch: {sketch.errors}")
@@ -110,26 +112,6 @@ def convert_sketch_file(input_filename: str, input_type: str, output_filename: s
             sketch.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
 
     except Exception as e:
-        raise RuntimeError(f"Failed to convert sketch: {e.with_traceback(None)}")
+        raise RuntimeError("Failed to convert sketch") from e
     finally:
         shutil.rmtree(temp_dir)
-
-
-def generate_sketch_partcad_config(temp_dir: Path, input_type: str, temp_input_path: Path) -> None:
-    """
-    Generate a temporary partcad.yaml config for sketch conversion.
-
-    Args:
-        temp_dir (Path): Temporary directory path.
-        input_type (str): Sketch file format type.
-        temp_input_path (Path): Path to the input sketch file.
-    """
-    config_path = temp_dir / "partcad.yaml"
-    config_content = f"""
-sketches:
-  input_sketch:
-    type: {input_type}
-    path: '{temp_input_path}'
-    """
-    with open(config_path, "w", encoding="utf-8") as config_file:
-        config_file.write(config_content)

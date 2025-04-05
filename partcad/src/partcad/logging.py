@@ -53,7 +53,7 @@ def reset_errors():
 def _track_error(args):
     global had_errors
     if args and len(args) > 1:
-        if "conda run pythonw" in args[0]:
+        if "conda run pythonw" in str(args[0]):
             return
     had_errors = True
 
