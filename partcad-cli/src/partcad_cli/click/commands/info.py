@@ -76,10 +76,8 @@ def cli(cli_ctx: CliContext, package, interface, assembly, sketch, scene, object
                 k, v = kv.split("=")
                 param_dict[k] = v
 
-        if package is None:
-            path = object if ":" in object else ":" + object
-        else:
-            path = package + ":" + object
+        package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object)
+        path = f"{package}:{object}"
 
         obj: pc.Shape
         if assembly:
@@ -92,10 +90,7 @@ def cli(cli_ctx: CliContext, package, interface, assembly, sketch, scene, object
             obj = ctx.get_part(path, params=params)
 
         if obj is None:
-            if package is None:
-                pc.logging.error(f"Object {object} not found")
-            else:
-                pc.logging.error(f"Object {object} not found in package {package}")
+            pc.logging.error(f"Object {path} not found")
         else:
             # TODO: call normalize config method for updating the parameters
             pc.logging.info(f"CONFIGURATION: {pformat(obj.config)}")

@@ -74,12 +74,12 @@ def cli(cli_ctx: CliContext, context, verbal, package, interface, assembly, sket
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
-        package = package if package is not None else "."
+        package = ctx.resolve_package_path(package)
         package_obj: pc.Project = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
-        package = package_obj.name
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("inspect", package):
             param_dict = {}
@@ -88,13 +88,8 @@ def cli(cli_ctx: CliContext, context, verbal, package, interface, assembly, sket
                     k, v = kv.split("=")
                     param_dict[k] = v
 
-            if package is None:
-                if ":" in object:
-                    path = object
-                else:
-                    path = ":" + object
-            else:
-                path = package + ":" + object
+            package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object)
+            path = f"{package}:{object}"
 
             if assembly:
                 obj = ctx.get_assembly(path, params=param_dict)
@@ -106,10 +101,7 @@ def cli(cli_ctx: CliContext, context, verbal, package, interface, assembly, sket
                 obj = ctx.get_part(path, params=param_dict)
 
             if obj is None:
-                if package is None:
-                    pc.logging.error("Object %s not found" % object)
-                else:
-                    pc.logging.error("Object %s not found in package %s" % (object, package))
+                pc.logging.error(f"Object {path} is not found")
             else:
                 if verbal:
                     summary = obj.get_summary(package_obj)

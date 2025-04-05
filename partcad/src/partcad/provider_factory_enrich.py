@@ -49,7 +49,7 @@ class ProviderFactoryEnrich(pf.ProviderFactory):
                     self.source_project_name = source_project.name
             self.source = self.source_project_name + ":" + self.source_provider_name
 
-            pc_logging.debug("Initializing an enrich to %s" % self.source)
+            # pc_logging.debug("Initialized an enrich to %s" % self.source)
 
             # TODO(clairbee): Delay de-referencing until provider's initialization
 
@@ -72,9 +72,7 @@ class ProviderFactoryEnrich(pf.ProviderFactory):
             augmented_config = copy.deepcopy(augmented_config)
             # TODO(clairbee): ideally whatever we pull from the project is already normalized
             augmented_config = provider_config.ProviderConfiguration.normalize(
-                self.source_provider_name,
-                augmented_config,
-                target_provider_name
+                self.source_provider_name, augmented_config, target_provider_name
             )
 
             # Fill in the parameter values using the simplified "with" option
@@ -84,9 +82,7 @@ class ProviderFactoryEnrich(pf.ProviderFactory):
 
             # Recalling normalize to normalize data after replacing target parameters from with key.
             augmented_config = provider_config.ProviderConfiguration.normalize(
-                self.source_provider_name,
-                augmented_config,
-                target_provider_name
+                self.source_provider_name, augmented_config, target_provider_name
             )
 
             # Drop fields we don't want to be inherited by enriched clones

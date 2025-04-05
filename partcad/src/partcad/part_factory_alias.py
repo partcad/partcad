@@ -67,7 +67,7 @@ class PartFactoryAlias(pf.PartFactory):
                     self.source_project_name,
                 )
 
-            pc_logging.debug("Initializing an alias to %s" % self.source)
+            # pc_logging.debug("Initialized an alias to %s" % self.source)
 
     async def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_part_name}"):

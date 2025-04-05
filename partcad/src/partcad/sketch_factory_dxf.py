@@ -35,7 +35,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                 # Stay one step ahead of the minimum required Python version
                 python_version = "3.11"
             if python_version == "3.12" or python_version == "3.10":
-                pc_logging.debug("Switching Python version to 3.11 to avoid compatibility issues with CadQuery")
+                # Switching Python version to 3.11 to avoid compatibility issues with CadQuery
                 python_version = "3.11"
             super().__init__(
                 ctx,

@@ -29,8 +29,6 @@ async def cli_test_async(ctx, packages, filter_prefix, sketch, interface, assemb
 
     for package in packages:
         if object:
-            if ":" not in object:
-                object = ":" + object
             package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object)
 
         prj = ctx.get_project(package)
@@ -123,16 +121,16 @@ def cli(cli_ctx, package, recursive, filter, sketch, interface, assembly, scene,
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
+        package = ctx.resolve_package_path(package)
         package_obj = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
-        package = package_obj.name
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("Test", package):
             if recursive:
-                start_package = ctx.get_project_abs_path(package)
-                all_packages = ctx.get_all_packages(start_package)
+                all_packages = ctx.get_all_packages(parent_name=package)
                 if ctx.stats_git_ops:
                     pc.logging.info(f"Git operations: {ctx.stats_git_ops}")
                 packages = [p["name"] for p in all_packages]

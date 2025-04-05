@@ -22,11 +22,12 @@ def cli(click_ctx: click.Context, kind: str, path: str):
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
+        package = ctx.resolve_package_path(package)
         package_obj: pc.Project = ctx.get_project(package)
         if not package_obj:
             pc.logging.error(f"Package {package} is not found")
             return
-        package = package_obj.name
+        package = package_obj.name  # '//' may end up having a different name
 
         with pc.logging.Process("AddAssy", package):
             if package_obj.add_assembly(kind, path):

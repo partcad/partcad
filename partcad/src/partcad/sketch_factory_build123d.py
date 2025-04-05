@@ -40,7 +40,7 @@ class SketchFactoryBuild123d(SketchFactoryPython):
             # Stay one step ahead of the minimum required Python version
             python_version = "3.11"
         if python_version == "3.12" or python_version == "3.10":
-            pc_logging.debug("Switching Python version to 3.11 to avoid compatibility issues with build123d")
+            # Switching Python version to 3.11 to avoid compatibility issues with build123d
             python_version = "3.11"
         with pc_logging.Action("InitBuild123d", target_project.name, config["name"]):
             super().__init__(
