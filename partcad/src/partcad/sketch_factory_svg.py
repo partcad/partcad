@@ -104,7 +104,7 @@ class SketchFactorySvg(SketchFactoryFile):
                     # TODO(clairbee): verify this branch
                     shapes = TopTools_ListOfShape()
                     for face in faces:
-                        shapes.Append(face)
+                        shapes.Append(face.wrapped if hasattr(face, "wrapped") else face)
                     face_fuser = BRepAlgoAPI_Fuse()
                     face_fuser.SetArguments(shapes)
                     face_fuser.SetOperation(BOPAlgo_Operation.BOPAlgo_FUSE)
