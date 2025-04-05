@@ -59,5 +59,4 @@ def cli(cli_ctx: CliContext, input_type, output_type, input_filename, output_fil
             pc.logging.info(f"Conversion complete: {output_path}")
         except Exception as e:
             pc.logging.error("Failed to convert: %s", e)
-            click.echo("Failed to convert: %s" % e, err=True)
             raise click.Abort()
