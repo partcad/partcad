@@ -5,13 +5,13 @@ desc: PartCAD example project for testing the conversion of various part types, 
 docs:
   usage: |
     ```shell
-    pc convert cube -t step
-    pc convert cube_enrich
-    pc convert cube_alias_params --target brep
-    pc convert cube_enrich_scad --target 3mf
-    pc convert cube_enrich_enrich --target stl
-    pc convert cube_alias_alias --target step
-    pc convert cube_enrich_alias --target scad
+    pc convert part cube -t step
+    pc convert part cube_enrich
+    pc convert part cube_alias_params --target brep
+    pc convert part cube_enrich_scad --target 3mf
+    pc convert part cube_enrich_enrich --target stl
+    pc convert part cube_alias_alias --target step
+    pc convert part cube_enrich_alias --target scad
     ```
 
 # ---------------------------- #
