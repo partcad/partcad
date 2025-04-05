@@ -47,6 +47,7 @@ EXTENSION_MAPPING = {
     "gltf": "json",
     "cadquery": "py",
     "build123d": "py",
+    "sdf": "py",
     "scad": "scad",
 }
 

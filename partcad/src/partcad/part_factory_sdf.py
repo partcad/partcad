@@ -6,6 +6,7 @@ from . import logging as pc_logging
 from . import wrapper
 from OCP.TopoDS import TopoDS_Builder, TopoDS_Compound
 
+
 class PartFactorySdf(PartFactoryPython):
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         super().__init__(
@@ -55,6 +56,10 @@ class PartFactorySdf(PartFactoryPython):
                 "cadquery-ocp==7.7.2",
                 session=self.session,
             )
+            await self.runtime.ensure_async(
+                "ocp-tessellate==3.0.9",
+                session=self.session,
+            )
 
             response_serialized, errors = await self.runtime.run_async(
                 [wrapper_path, os.path.abspath(part.path)],
@@ -70,6 +75,7 @@ class PartFactorySdf(PartFactoryPython):
                 response = pickle.loads(base64.b64decode(response_serialized))
             except Exception as e:
                 part.error(f"Deserialization error: {e}")
+                pc_logging.exception(e)
                 return None
 
             if not response["success"]:
@@ -85,6 +91,8 @@ class PartFactorySdf(PartFactoryPython):
             builder = TopoDS_Builder()
             compound = TopoDS_Compound()
             builder.MakeCompound(compound)
+
             for s in shapes:
                 builder.Add(compound, s)
+
             return compound
