@@ -4,6 +4,16 @@ description: "Prepare the runner to build"
 runs:
   using: "composite"
   steps:
+
+    - name: Preinstall sdf (to avoid build isolation issues)
+      shell: bash -el {0}
+      run: |
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba activate env-build-cli
+        python -m pip install --no-build-isolation "sdf @ git+https://github.com/sasuke13/sdf.git"
+        mamba deactivate
+
     ###################################################  PYTHON  ###################################################
 
     - name: Install prerequisites
