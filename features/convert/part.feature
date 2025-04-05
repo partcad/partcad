@@ -1,10 +1,10 @@
-@cli @convert
-Feature: `pc convert` command
+@cli @convert @part
+Feature: `pc convert part` command
 
   Background: Initialize PartCAD project
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
-    And I copy file "examples/feature_convert/stl/cube.stl" to "cube.stl" inside test workspace
+    And I copy file "examples/feature_convert_part/stl/cube.stl" to "cube.stl" inside test workspace
     And a file named "partcad.yaml" with content:
       """
       parts:
@@ -33,36 +33,36 @@ Feature: `pc convert` command
 
   @stl @dry-run
   Scenario: Dry-run conversion for part `cube`
-    When I run "pc convert :cube -t step --dry-run"
+    When I run "pc convert part :cube -t step --dry-run"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "[Dry Run] No changes made for 'cube'."
 
   @step @directory
   Scenario: Conversion with specified output directory for part `cube`
     Given a directory named "output" exists
-    When I run "pc convert :cube -t step -O output"
+    When I run "pc convert part :cube -t step -O output"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting 'cube': stl to step"
     And a file named "output/cube.step" should exist
 
   @error
   Scenario: Failure due to missing object argument
-    When I run "pc convert -t step"
+    When I run "pc convert part -t step"
     Then the command should exit with a status code of "2"
 
   @error
   Scenario: Failure due to non-existent object
-    When I run "pc convert :nonexistent -t brep"
+    When I run "pc convert part :nonexistent -t brep"
     Then the command should exit with a status code of "2"
 
   @error
   Scenario: Conversion failure due to unsupported conversion
-    When I run "pc convert :cube_build123d -t step"
+    When I run "pc convert part :cube_build123d -t step"
     Then the command should exit with a status code of "2"
 
   @enrich @resolve
   Scenario: Resolving an enrich part
-    When I run "pc convert :cube_enrich"
+    When I run "pc convert part :cube_enrich"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting 'cube_enrich': enrich to stl"
     And a file named "cube_enrich.stl" should exist
@@ -107,14 +107,14 @@ Feature: `pc convert` command
 
   @enrich @error
   Scenario: Resolving a non-existent enrich part
-    When I run "pc convert :nonexistent_enrich"
+    When I run "pc convert part :nonexistent_enrich"
     Then the command should exit with a status code of "2"
 
   @enrich @convert
   Scenario: Resolving and converting an enrich part
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
-    And I copy file "examples/feature_convert/stl/cube.stl" to "cube.stl" inside test workspace
+    And I copy file "examples/feature_convert_part/stl/cube.stl" to "cube.stl" inside test workspace
     And a file named "partcad.yaml" with content
       """
       parts:
@@ -137,7 +137,7 @@ Feature: `pc convert` command
             height: 4
             width: 4
       """
-    When I run "pc convert :cube_enrich -t brep"
+    When I run "pc convert part :cube_enrich -t brep"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting 'cube_enrich': enrich to stl"
     And STDOUT should contain "Converting 'cube_enrich': stl to brep"
@@ -146,13 +146,13 @@ Feature: `pc convert` command
   @enrich @output-dir
   Scenario: Resolving an enrich part with a specified output directory
     Given a directory named "output" exists
-    When I run "pc convert :cube_enrich -t step -O output"
+    When I run "pc convert part :cube_enrich -t step -O output"
     Then the command should exit with a status code of "0"
     And a file named "output/cube_enrich.step" should exist
 
   @alias @resolve
   Scenario: Resolving an alias part
-    When I run "pc convert cube_alias"
+    When I run "pc convert part cube_alias"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting 'cube_alias': alias to stl"
     And a file named "cube_alias.stl" should exist
@@ -192,7 +192,7 @@ Feature: `pc convert` command
   Scenario: Resolving and converting an alias part
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
-    And I copy file "examples/feature_convert/stl/cube.stl" to "cube.stl" inside test workspace
+    And I copy file "examples/feature_convert_part/stl/cube.stl" to "cube.stl" inside test workspace
     And a file named "partcad.yaml" with content
       """
       parts:
@@ -212,7 +212,7 @@ Feature: `pc convert` command
           type: alias
           source: ":cube;width=10,height=10"
       """
-    When I run "pc convert :cube_alias -t brep"
+    When I run "pc convert part :cube_alias -t brep"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Converting 'cube_alias': alias to stl"
     And STDOUT should contain "Converting 'cube_alias': stl to brep"
@@ -221,11 +221,11 @@ Feature: `pc convert` command
   @alias @output-dir
   Scenario: Resolving an alias part with a specified output directory
     Given a directory named "output" exists
-    When I run "pc convert :cube_alias -t step -O output"
+    When I run "pc convert part :cube_alias -t step -O output"
     Then the command should exit with a status code of "0"
     And a file named "output/cube_alias.step" should exist
 
   @alias @error
   Scenario: Resolving a non-existent alias part
-    When I run "pc convert :nonexistent_alias"
+    When I run "pc convert part :nonexistent_alias"
     Then the command should exit with a status code of "2"

@@ -8,13 +8,13 @@ import rich_click as click
 
 import partcad as pc
 from partcad.actions.part import convert_part_action
-from ..cli_context import CliContext
+from ...cli_context import CliContext
 
 
 SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gltf", "iges"]
 
 
-@click.command(help="Convert parts, assemblies, or scenes to another format and update their type.")
+@click.command(help="Convert parts to another format and update their type.")
 @click.argument("object_name", type=str, required=True)
 @click.option(
     "-t",
@@ -26,7 +26,7 @@ SUPPORTED_CONVERT_FORMATS = ["step", "brep", "stl", "3mf", "threejs", "obj", "gl
 @click.option(
     "-P",
     "--package",
-    help="Package to retrieve the object from",
+    help="Package to retrieve the part from",
     type=str,
 )
 @click.option(
@@ -41,7 +41,7 @@ def cli(cli_ctx: CliContext, object_name: str, target_format: str, package: str,
     """
     CLI command to convert a part to a new format.
 
-    :param ctx: PartCAD context
+    :param cli_ctx: PartCAD context
     :param object_name: Name of the object to convert
     :param target_format: Desired target format
     :param output_dir: (Optional) Output directory for the converted file

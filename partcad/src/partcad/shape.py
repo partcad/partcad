@@ -36,7 +36,7 @@ from ocp_serialize import register as register_ocp_helper
 
 from . import telemetry
 
-EXTENSION_MAPPING = {
+PART_EXTENSION_MAPPING = {
     "step": "step",
     "brep": "brep",
     "stl": "stl",
@@ -48,6 +48,13 @@ EXTENSION_MAPPING = {
     "cadquery": "py",
     "build123d": "py",
     "scad": "scad",
+}
+
+SKETCH_EXTENSION_MAPPING = {
+    "svg": "svg",
+    "dxf": "dxf",
+    "cadquery": "py",
+    "build123d": "py",
 }
 
 
@@ -439,34 +446,37 @@ class Shape(ShapeConfiguration):
         Centralized method to render shape via external wrapper.
         Args:
             ctx: Execution context.
-            format_name: Render format (e.g., "png", "svg").
+            format_name: Render format (e.g., "png", "svg", "dxf").
             project: Optional project object.
             filepath: Target file path for output.
             kwargs: Additional options (width, height, etc.).
         """
         WRAPPER_FORMATS = {
-        "svg": [
-            "cadquery-ocp==7.7.2",
-            "ocpsvg==0.3.4",
-            "build123d==0.8.0"
-        ],
-        "png": [
-            "cadquery-ocp==7.7.2",
-            "ocpsvg==0.3.4",
-            "build123d==0.8.0",
-            "svglib==1.5.1",
-            "reportlab",
-            "rlpycairo==0.3.0"
-        ],
-        "brep": ["cadquery-ocp==7.7.2"],
-        "step": ["cadquery-ocp==7.7.2"],
-        "stl": ["cadquery-ocp==7.7.2"],
-        "obj": ["cadquery-ocp==7.7.2"],
-        "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
-        "gltf": ["cadquery-ocp==7.7.2"],
-        "iges": ["cadquery-ocp==7.7.2"],
-        "threejs": ["cadquery-ocp==7.7.2"]
-    }
+            "svg": ["cadquery-ocp==7.7.2", "ocpsvg==0.3.4", "build123d==0.8.0"],
+            "png": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+                "svglib==1.5.1",
+                "reportlab",
+                "rlpycairo==0.3.0",
+            ],
+            "dxf": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+                "svgpathtools==1.6.1",
+                "ezdxf==1.1.1",
+            ],
+            "brep": ["cadquery-ocp==7.7.2"],
+            "step": ["cadquery-ocp==7.7.2"],
+            "stl": ["cadquery-ocp==7.7.2"],
+            "obj": ["cadquery-ocp==7.7.2"],
+            "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
+            "gltf": ["cadquery-ocp==7.7.2"],
+            "iges": ["cadquery-ocp==7.7.2"],
+            "threejs": ["cadquery-ocp==7.7.2"],
+        }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
 
@@ -488,7 +498,7 @@ class Shape(ShapeConfiguration):
             formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
 
             for format in formats_to_render:
-                file_extension = EXTENSION_MAPPING.get(format, format)
+                file_extension = PART_EXTENSION_MAPPING.get(format, format)
                 render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
                 pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
@@ -496,13 +506,17 @@ class Shape(ShapeConfiguration):
                 wrapper_path = wrapper.get(f"render_{format}.py")
 
                 request = {"wrapped": obj}
-
                 if format in ["svg", "png"]:
                     request["viewport_origin"] = kwargs.get("viewport_origin", [100, -100, 100])
                     request["line_weight"] = kwargs.get("line_weight", 1.0)
                     if format == "png":
                         request["width"] = kwargs.get("width", 512)
                         request["height"] = kwargs.get("height", 512)
+
+                elif format in ["dxf"]:
+                    request["line_weight"] = kwargs.get("line_weight", 1.0)
+                    request["viewport_origin"] = kwargs.get("viewport_origin", [0, 0, -100])
+                    request["viewport_up"] = kwargs.get("viewport_up", [0, -1, 0])
 
                 elif format in ["3mf", "obj", "gltf", "stl", "threejs"]:
                     request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
@@ -531,10 +545,7 @@ class Shape(ShapeConfiguration):
                 # Run wrapper
                 with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
                     response_serialized, errors = await runtime.run_async(
-                        [
-                            wrapper_path,
-                            final_filepath,
-                        ],
+                        [wrapper_path, final_filepath],
                         request_serialized,
                     )
                     sys.stderr.write(errors)

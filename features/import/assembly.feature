@@ -53,6 +53,6 @@ Feature: `pc import assembly` command
 
   @error
   Scenario: Reject unsupported file format as assembly
-    Given I copy file "examples/feature_convert/stl/cube.stl" to "input_files/cube.stl" inside test workspace
+    Given I copy file "examples/feature_convert_part/stl/cube.stl" to "input_files/cube.stl" inside test workspace
     When I run "pc import assembly input_files/cube.stl"
     Then the command should exit with a status code of "1"
