@@ -44,11 +44,12 @@ def cli(cli_ctx: CliContext, input_type, output_type, input_filename, output_fil
         output_type = output_type or (EXT_TO_SKETCH_TYPE.get(output_path.suffix.lower()) if output_path else None)
 
         if not input_type:
-            pc.logging.error("Cannot infer input sketch type. Please specify --input explicitly.")
+            click.echo("Error: Cannot infer input sketch type. Please specify --input explicitly.", err=True)
             raise click.Abort()
         if not output_type:
-            pc.logging.error("Cannot infer output sketch type. Please specify --output explicitly.")
+            click.echo("Error: Cannot infer output sketch type. Please specify --output explicitly.", err=True)
             raise click.Abort()
+
 
         if output_path is None:
             output_path = input_path.with_suffix(f".{SKETCH_EXTENSION_MAPPING[output_type]}")
