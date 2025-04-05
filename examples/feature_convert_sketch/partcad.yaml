@@ -3,7 +3,12 @@ desc: PartCAD example project for testing the conversion of various sketch types
   mechanisms for sketch conversion.
 
 docs:
-  usage: ""
+  usage: |
+    ```shell
+    pc convert sketch circle_basic -t svg
+    pc convert sketch circle_basic -t dxf
+    pc convert sketch slot_dxf --target svg
+    ```
 
 sketches:
   circle_basic:
@@ -28,8 +33,12 @@ sketches:
     parameters:
       width: 3.0
       length: 4.0
-
-
+  sketch_enrich:
+    type: enrich
+    source: :sketch_cadquery
+  clock_alias:
+    type: alias
+    source: :clock_build123d
 render:
-  readme:
+  # readme:
   svg:
