@@ -17,6 +17,7 @@ PARTS_CONFIG = {
     "cube_3mf": {"type": "3mf", "path": "3mf/cube.3mf"},
     "cube_build123d": {"type": "build123d", "path": "build123d/cube.py"},
     "cube_cadquery": {"type": "cadquery", "path": "cadquery/cube.py"},
+    "box_sdf": {"type": "sdf", "path": "sdf/box.py"},
     "prism_scad": {"type": "scad", "path": "scad/prism.scad"},
     "bolt_step": {"type": "step", "path": "step/bolt.step"},
     "cube_stl": {"type": "stl", "path": "stl/cube.stl"},

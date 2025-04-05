@@ -16,6 +16,7 @@ TEST_FILES = {
     "scad": "prism.scad",
     "cadquery": "cube.py",
     "build123d": "cube.py",
+    "sdf": "box.py",
 }
 
 

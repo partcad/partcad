@@ -24,6 +24,7 @@ SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
     "scad": ["scad"],
     "cadquery": ["py"],
     "build123d": ["py"],
+    "sdf": ["py"],
 }
 
 
@@ -95,13 +96,13 @@ def cli(cli_ctx: CliContext, package: str, existing_part: str, target_format: st
 
 def __detect_script_type(file_path: Path, lines_check_range: int = 50) -> str | None:
     """
-    Detect if a Python script is a CadQuery or Build123d model based on its imports.
+    Detect if a Python script is a CadQuery, Build123d or sdf model based on its imports.
 
     Args:
         file_path (Path): Path to the Python script.
 
     Returns:
-        str: "cadquery", "build123d" or None if not detected.
+        str: "cadquery", "build123d", "sdf" or None if not detected.
     """
 
     try:
@@ -113,6 +114,8 @@ def __detect_script_type(file_path: Path, lines_check_range: int = 50) -> str | 
                     return "cadquery"
                 if "import build123d" in line or "from build123d" in line:
                     return "build123d"
+                if "import sdf" in line or "from sdf" in line:
+                    return "sdf"
 
     except Exception as e:
         pc.logging.warning(f"Could not read script file {file_path}: {e}")
