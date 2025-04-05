@@ -67,7 +67,7 @@ RUNNER = pathlib.Path(__file__).parent / "lsp_runner.py"
 
 MAX_WORKERS = 5
 # TODO: Update the language server name and version.
-LSP_SERVER = server.LanguageServer(name="PartCAD", version="0.7.132", max_workers=MAX_WORKERS)
+LSP_SERVER = server.LanguageServer(name="PartCAD", version="0.7.133", max_workers=MAX_WORKERS)
 
 
 # **********************************************************
@@ -671,7 +671,7 @@ def do_activate(params: lsp.ExecuteCommandParams) -> None:
     try:
         load_partcad()
 
-        partcad_requirements = SpecifierSet(">=0.7.132")
+        partcad_requirements = SpecifierSet(">=0.7.133")
         if partcad.__version__ in partcad_requirements:
             LSP_SERVER.send_notification("?/partcad/loaded")
     except Exception as e:
