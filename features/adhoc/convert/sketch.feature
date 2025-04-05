@@ -47,17 +47,17 @@ Feature: `pc adhoc convert sketch` command
   Scenario: Missing input sketch file
     When I run "pc adhoc convert sketch sketch_missing.svg out.dxf"
     Then the command should exit with a status code of "2"
-    And STDOUT should contain "Path 'sketch_missing.svg' does not exist."
+    And STDERR should contain "Path 'sketch_missing.svg' does not exist."
 
   Scenario: Unsupported sketch output type
     When I run "pc adhoc convert sketch circle.svg --input svg --output png"
     Then the command should exit with a status code of "2"
-    And STDOUT should contain "Invalid value for '--output': 'png'"
+    And STDERR should contain "Invalid value for '--output': 'png'"
 
   Scenario: Invalid input sketch type
     When I run "pc adhoc convert sketch circle.svg circle.dxf --input unknown --output dxf"
     Then the command should exit with a status code of "2"
-    And STDOUT should contain "Invalid value for '--input': 'unknown'"
+    And STDERR should contain "Invalid value for '--input': 'unknown'"
 
   Scenario: Invalid SVG file
     Given a file named "invalid.svg" with content:
