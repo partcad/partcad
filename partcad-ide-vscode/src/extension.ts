@@ -712,7 +712,7 @@ connect:
   # (assuming the type of local interface is deteremined automatically).
   withInstance: inner
   # 'name' references to another part to connect to.
-  name: motor  
+  name: motor
   # 'to' is the name of the remote port to connect to.
   to: "/pub/std/metric/m:m2.5-threaded-hole-4"
 `),

@@ -388,6 +388,20 @@ To test VSCode plugin, run the following commands in a shell session in the Term
 
 To test the Python core module using the VSCode plugin, click the `Restart PartCAD` icon in the PartCAD's `Context` view after each change.
 
+.. note::
+
+  If you are developing inside the PartCAD Dev container using PartCAD VSCode extension, and are seeing this:
+
+  .. code-block:: text
+
+      ERROR: Failed to clone repo https://github.com/openvmp/partcad-index.git after 0 retries
+
+  then you are likely to have Git configured to use SSH creds to access GitHub,
+  while the SSH creds are not available in the Dev container.
+
+  This could be fixed by running ``ssh-add`` on the host
+  and confirmed by running ``ssh-add -l`` inside the container.
+
 To test documentation changes, run the following command before navigating your favorite VSCode browser extension to `./docs/build/html`:
 
 .. code-block:: bash
@@ -403,19 +417,10 @@ Alternatively, run the following command before navigating your favorite VSCode 
 Automated Tests
 ---------------
 
-We are using both Unit and Functional testing with main tools being `pytest`_ & `Behave`_:
-
-.. note::
-
-    The ``pytest`` framework makes it easy to write small, readable tests, and can scale to support complex functional
-    testing for applications and libraries.
-
-.. note::
-
-    ``behave`` uses tests written in a natural language style, backed up by Python code.
-
 Pytest
 ^^^^^^
+
+PartCAD uses ``pytest`` for unit testing, where a particular piece of code or feature is tested.
 
 If you `activated virtual environment`_ you can just run ``pytest`` from a bash session in the Terminal view of VSCode.
 
@@ -431,10 +436,16 @@ You also can run ``pytest`` without activating environment via Poetry, for examp
 
     $ poetry run pytest
 
+The tests for the core module are located in the ``./partcad/tests`` directory.
+The tests for the CLI module are located in the ``./partcad-cli/tests`` directory.
+The tests for the LSP server of VSCode plugin are located in the ``./partcad-ide-vscode/src/test/python_tests`` directory.
+
 Behave
 ^^^^^^
 
-To run functional tests using ``behave``, execute the following command in the terminal:
+PartCAD uses ``behave`` for integration testing, where a part of the system is tested as a whole.
+
+To run tests using ``behave``, execute the following command in an activated environment:
 
 .. code-block:: bash
 
