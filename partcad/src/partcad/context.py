@@ -31,6 +31,7 @@ from .project import Project
 from .provider_request_quote import ProviderRequestQuote
 from .provider_data_cart import *
 from . import telemetry
+from .test.all import tests as all_tests
 
 
 def param_getters(attr_name: str):
@@ -270,7 +271,7 @@ class Context(project_config.Configuration):
             package = package[:-1]
 
         # If package is the root package, return the root package path (can be a longer absolute path)
-        if package == "/":
+        if package == "/" or package == "//":
             return self.name
 
         # If package is empty or the explicit reference to the current package, return current package
@@ -931,3 +932,6 @@ class Context(project_config.Configuration):
             return
         path = os.path.dirname(filename)
         os.makedirs(path)
+
+    def get_all_tests(self):
+        return all_tests(self.user_config.threads_max)

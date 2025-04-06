@@ -14,19 +14,6 @@ op account add
 eval $(op signin)
 ```
 
-## Environments
-
-### WSL2
-
-Use PowerShell to show running environments:
-
-```bash
-apk add htop
-htop
-```
-
-![htop](./assets/images/wsl2-htop.png)
-
 ### VS Code
 
 Use `remote-containers.rebuildAndReopenInContainer` aka "Dev Containers: Rebuild and Reopen in Container" to start
@@ -36,28 +23,6 @@ Docker Container with all necessary tooling and dependencies.
 - [Run tests with coverage](https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage)
 - [Debug tests](https://code.visualstudio.com/docs/python/testing#_debug-tests)
   - [`pytest` configuration settings](https://code.visualstudio.com/docs/python/testing#_pytest-configuration-settings)
-
-## Documentation
-
-- `./docs/`: User documentation, based on Sphinx and available at <https://partcad.readthedocs.io/>
-
-  ```bash
-  cd docs
-  sphinx-autobuild --host 0.0.0.0 --open-browser -b html "source" "build"
-  ```
-
-  > Note: `--host 0.0.0.0` is required when running `sphinx-autobuild` in Dev Containers and accessing HTML using the
-  > host browser. Documentation will be served at [http://127.0.0.1:8000/](http://127.0.0.1:8000/). Alternatively, the
-  > [`sphinx-serve`] Python module provides similar functionality.
-
-- `./mkdocs/`: Developer's handbook, based on [`mkdocs-material`] You can serve `mkdocs` docs locally with realtime
-  updates:
-  ```bash
-  poetry install --group=docs
-  cd mkdocs
-  poetry run mkdocs serve
-  ```
-  > Docs will be served on http://127.0.0.1:8000/partcad/partcad/
 
 ## Host Dependencies
 
@@ -70,21 +35,6 @@ Docker Container with all necessary tooling and dependencies.
 - `pipx`: used by [`poetry-plugin-export`]
 - `time`, `moreutils`: used in terminal for troubleshooting
 
-Dependencies are listed in `.devcontainer/apt.in`. You can install them:
-
-```bash
-cd .devcontainer
-sudo apt install $(cat apt.txt)
-```
-
-And also you can update them:
-
-```bash
-cd .devcontainer
-sudo apt install --upgrade $(cat apt.in)
-sudo ./apt-compile.sh
-```
-
 ## Limitations
 
 ### glibc 2.35+
@@ -94,10 +44,6 @@ Wheels in [`cadquery-ocp`] v7.7.2 require glibc to be v2.35 or newer:
 ```text
 Skipping wheel cadquery_ocp-7.7.2-cp310-cp310-manylinux_2_35_x86_64.whl as this is not supported by the current environment
 ```
-
-## Python
-
-Current base version of Python is 3.10. Environment variable for packages configurations could be set in `.env` file.
 
 ### Poetry
 
@@ -111,9 +57,9 @@ use:
 - [`poetry shell ...`] — spawns a shell within the project’s virtual environment.
 - [`poetry add ...`] — adds required packages to your `pyproject.toml` and installs them.
 
-### Behavior-Driven Development (BDD)
+### Behave
 
-Behavior tests are written in Gherkin language ([philosophy]) and stored in `./features` dir as `.feature` files. To run
+Behave tests are written in Gherkin language ([philosophy]) and stored in `./features` dir as `.feature` files. To run
 tests, you need to use `behave` package:
 
 ```bash

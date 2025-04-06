@@ -90,9 +90,14 @@ TOOL_DISPLAY = "PartCAD"
 TOOL_ARGS = []  # default arguments always passed to your tool.
 
 
+# PartCAD modules
 partcad: object = None
+
+# Global constants per PartCAD session (context)
 partcad_ctx: object = None
 package_path: str = None
+
+# Global LSP singletons
 partcad_log_thread: threading.Thread = None
 partcad_log_pipe = None
 partcad_log_w_stream = None
@@ -401,13 +406,14 @@ def add_part(params: lsp.ExecuteCommandParams = None):
 
     kind = params[0]["kind"]
     path = params[0]["path"]
+    package_name = params[0]["packageName"]
     config = {}
     if "config" in params[0]:
         config = params[0]["config"]
     LSP_SERVER.send_notification("?/partcad/info", "Adding %s using the file %s" % (kind, path))
 
     with partcad.logging.Process("AddPart", path):
-        prj = partcad_ctx.get_project(partcad.ROOT)  # TODO(clairbee):  (partcad.CURRENT)
+        prj = partcad_ctx.get_project(package_name)
         prj.add_part(kind, path, config)
 
 
@@ -420,11 +426,42 @@ def add_assembly(params: lsp.ExecuteCommandParams = None):
 
     kind = params[0]["kind"]
     path = params[0]["path"]
+    package_name = params[0]["packageName"]
     LSP_SERVER.send_notification("?/partcad/info", "Adding assembly %s" % path)
 
     with partcad.logging.Process("AddAssy", path):
-        prj = partcad_ctx.get_project(partcad.ROOT)  # TODO(clairbee):(partcad.CURRENT)
+        prj = partcad_ctx.get_project(package_name)
         prj.add_assembly(kind, path)
+
+
+@LSP_SERVER.command("partcad.packagePath")
+def get_package_path(params: lsp.ExecuteCommandParams = None):
+    global partcad
+    global partcad_ctx
+    if partcad_ctx is None:
+        return
+
+    packageName = params[0]["packageName"]
+    callback = params[0]["callback"]
+
+    package = partcad_ctx.get_project(packageName)
+    if not package:
+        LSP_SERVER.send_notification("?/partcad/error", f"Failed to locate the package {packageName}")
+        return
+
+    LSP_SERVER.send_notification(
+        "?/partcad/execute",
+        {
+            "command": callback,
+            "args": [
+                {
+                    "packageName": packageName,
+                    "packagePath": package.path,
+                    "isAbsolute": os.path.isabs(package.path),
+                }
+            ],
+        },
+    )
 
 
 def do_inspect_file(path: str):
@@ -518,6 +555,58 @@ def inspect_file(params: lsp.ExecuteCommandParams = None):
 
     path = params[0]
     do_inspect_file(path)
+
+
+@LSP_SERVER.command("partcad.testReal")
+def test_obj(params: lsp.ExecuteCommandParams = None):
+    global partcad
+    global partcad_ctx
+    if partcad_ctx is None:
+        return
+
+    package_name = params[0]["packageName"]
+    object_name = params[0]["objectName"]
+
+    package = partcad_ctx.get_project(package_name)
+    if not package:
+        LSP_SERVER.send_notification(
+            "?/partcad/error",
+            "Failed to get the package: %s" % str(package_name),
+        )
+        return
+
+    if object_name == "":
+        object_name = package_name
+        obj = package
+    elif package.get_interface_config(object_name):
+        obj = package.get_interface(object_name)
+    elif package.get_sketch_config(object_name):
+        obj = package.get_sketch(object_name)
+    elif package.get_part_config(object_name):
+        obj = package.get_part(object_name)
+    elif package.get_assembly_config(object_name):
+        obj = package.get_assembly(object_name)
+    else:
+        obj = None
+        LSP_SERVER.send_notification(
+            "?/partcad/error",
+            f"Object {object_name} is not found in {package_name}",
+        )
+
+    if obj:
+
+        def do_test_obj(obj):
+            global partcad, partcad_ctx
+            with partcad.logging.Process("Test", object_name):
+                obj.test_log_wrapper(partcad_ctx)
+
+        th = threading.Thread(
+            target=do_test_obj,
+            name="vscode-partcad-cmd-test",
+            args=[obj],
+        )
+        th.start()
+        th.join()
 
 
 @LSP_SERVER.command("partcad.getStats")
@@ -636,7 +725,8 @@ def load_partcad():
             for module_name in sorted(sys.modules.keys()):
                 if module_name.startswith("partcad"):
                     del sys.modules[module_name]
-            # del sys.modules["partcad"]
+                elif module_name.startswith("ocp_vscode"):
+                    del sys.modules[module_name]
             import partcad
 
             partcad = importlib.reload(partcad)
@@ -672,13 +762,23 @@ def do_activate(params: lsp.ExecuteCommandParams) -> None:
         load_partcad()
 
         partcad_requirements = SpecifierSet(">=0.7.134")
-        if partcad.__version__ in partcad_requirements:
-            LSP_SERVER.send_notification("?/partcad/loaded")
+        if not partcad.__version__ in partcad_requirements:
+            LSP_SERVER.send_notification(
+                "?/partcad/error",
+                "Failed to activate PartCAD: PartCAD Python module is not up-to-date.",
+            )
+            LSP_SERVER.send_notification("?/partcad/activateFailed")
+            return
+
+        partcad.healthcheck.run_tests()
+
+        LSP_SERVER.send_notification("?/partcad/loaded")
     except Exception as e:
         LSP_SERVER.send_notification(
             "?/partcad/error",
             "Failed to activate PartCAD: %s.\nFollow instructions in the PartCAD's Explorer view." % e,
         )
+        LSP_SERVER.send_notification("?/partcad/activateFailed")
 
 
 @LSP_SERVER.command("partcad.reinstall")
@@ -851,7 +951,7 @@ def do_load_package_contents(args=list()) -> None:
     global partcad_ctx
     # TODO(clairbee): Update the javascript part (make it aware of the current project path) to fix the following:
     # name = partcad_ctx.get_current_project_path()
-    name = "/"
+    name = "//"
     if isinstance(args, list) and len(args) > 0:
         name = args[0]
 
@@ -870,6 +970,7 @@ def do_load_package_contents(args=list()) -> None:
             return {
                 **pkg.config_obj,
                 "item_path": pkg.config_path if hasattr(pkg, "config_path") else None,
+                "item_dir": pkg.config_dir if hasattr(pkg, "config_dir") else pkg.path,
             }
 
         package_names = project.get_child_project_names()
@@ -1008,7 +1109,7 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
 @LSP_SERVER.feature(lsp.TEXT_DOCUMENT_DID_OPEN)
 def did_open(params: lsp.DidOpenTextDocumentParams) -> None:
     """LSP handler for textDocument/didOpen request."""
-    document = LSP_SERVER.workspace.get_document(params.text_document.uri)
+    document = LSP_SERVER.workspace.get_text_document(params.text_document.uri)
     diagnostics: list[lsp.Diagnostic] = []
     # diagnostics: list[lsp.Diagnostic] = [{"source": "partcad"}]
     LSP_SERVER.publish_diagnostics(document.uri, diagnostics)
@@ -1033,11 +1134,11 @@ def did_save(params: lsp.DidSaveTextDocumentParams) -> None:
 
     # LSP_SERVER.send_notification("?/partcad/info", "Show on save: %s" % path)
 
-    # document = LSP_SERVER.workspace.get_document(params.text_document.uri)
+    # document = LSP_SERVER.workspace.get_text_document(params.text_document.uri)
     # diagnostics: list[lsp.Diagnostic] = _linting_helper(document)
     # TODO(clairbee): implement linting
 
-    # path = LSP_SERVER.workspace.get_document(params.text_document.uri).path
+    # path = LSP_SERVER.workspace.get_text_document(params.text_document.uri).path
     # config = {
     #     "name": "partcad-auto-save",
     #     "path": params.text_document.uri,
@@ -1063,7 +1164,7 @@ def did_save(params: lsp.DidSaveTextDocumentParams) -> None:
 # @LSP_SERVER.feature(lsp.TEXT_DOCUMENT_DID_CLOSE)
 # def did_close(params: lsp.DidCloseTextDocumentParams) -> None:
 #     """LSP handler for textDocument/didClose request."""
-#     document = LSP_SERVER.workspace.get_document(params.text_document.uri)
+#     document = LSP_SERVER.workspace.get_text_document(params.text_document.uri)
 #     # Publishing empty diagnostics to clear the entries for this file.
 #     LSP_SERVER.publish_diagnostics(document.uri, [])
 
@@ -1156,7 +1257,7 @@ def _get_severity(*_codes: list[str]) -> lsp.DiagnosticSeverity:
 #     # formatting support on save. You have to return an array of lsp.TextEdit
 #     # objects, to provide your formatted results.
 
-#     document = LSP_SERVER.workspace.get_document(params.text_document.uri)
+#     document = LSP_SERVER.workspace.get_text_document(params.text_document.uri)
 #     edits = _formatting_helper(document)
 #     if edits:
 #         return edits

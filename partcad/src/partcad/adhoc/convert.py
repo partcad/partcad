@@ -33,7 +33,7 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
         # Initialize PartCAD context and load the project
         ctx = Context(root_path=temp_dir, search_root=False)
         with pc_logging.Process("Convert", "adhoc"):
-            project = ctx.get_project("/")
+            project = ctx.get_project("//")
             part = project.get_part("input_part")
             if not part:
                 raise RuntimeError("Failed to load the input part: no part returned")

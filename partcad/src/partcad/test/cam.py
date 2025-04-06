@@ -1,5 +1,5 @@
 #
-# OpenVMP, 2025
+# PartCAD, 2025
 #
 # Author: Roman Kuzmenko
 # Created: 2025-01-03

@@ -20,6 +20,7 @@ import {
 
 type ItemMetadata = {
     name: string;
+    dir: string | undefined;
     packages: PartConfig[];
     sketches: PartConfig[];
     interfaces: PartConfig[];
@@ -31,15 +32,16 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
     public static readonly viewType = 'partcadExplorer';
 
     packages: { [name: string]: ItemMetadata };
-    // currentItemType: string;
-    // currentItemName: string;
-    // currentItemPackage: string;
-    // currentItemParams: { [id: string]: string };
 
     constructor() {
+        let wsUri = undefined;
+        if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+            wsUri = vscode.workspace.workspaceFolders[0].uri;
+        }
         this.packages = {
-            ['/']: {
-                name: '/',
+            ['//']: {
+                name: '//',
+                dir: wsUri?.fsPath,
                 packages: [],
                 sketches: [],
                 interfaces: [],
@@ -48,25 +50,36 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             },
         };
 
-        // this.currentItemType = 'none';
-        // this.currentItemName = 'this';
-        // this.currentItemPackage = 'this';
-        // this.currentItemParams = {};
-
         vscode.commands.registerCommand('partcad.inspectSource', (item) => this.inspectSource(item));
         vscode.commands.registerCommand('partcad.regeneratePart', (item) => this.regeneratePart(item));
         vscode.commands.registerCommand('partcad.changePart', (item) => this.changePart(item));
+
+        vscode.commands.registerCommand(`partcad.exportToSVG`, (item) => this.exportToSVG(item));
+        vscode.commands.registerCommand(`partcad.exportToPNG`, (item) => this.exportToPNG(item));
+        vscode.commands.registerCommand(`partcad.exportToSTEP`, (item) => this.exportToSTEP(item));
+        vscode.commands.registerCommand(`partcad.exportToSTL`, (item) => this.exportToSTL(item));
+        vscode.commands.registerCommand(`partcad.exportTo3MF`, (item) => this.exportTo3MF(item));
+        vscode.commands.registerCommand(`partcad.exportToThreeJS`, (item) => this.exportToThreeJS(item));
+        vscode.commands.registerCommand(`partcad.exportToOBJ`, (item) => this.exportToOBJ(item));
+        vscode.commands.registerCommand(`partcad.exportToIGES`, (item) => this.exportToIGES(item));
+        vscode.commands.registerCommand(`partcad.exportToGLTF`, (item) => this.exportToGLTF(item));
+
+        vscode.commands.registerCommand(`partcad.test`, (item) => this.test(item));
     }
 
-    // public async inspectPart(item: PartcadItem) {
-    //     this.currentItemType = ITEM_TYPE_PART;
-    //     this.currentItemName = item.name;
-    //     this.currentItemPackage = item.pkg;
-    //     this.currentItemParams = item.params;
-    //     await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
-    //     await partcadInspector?.inspectPackage(pkg);
-    //     await vscode.commands.executeCommand('partcad.getStats');
-    // }
+    public async test(item: PartcadItem) {
+        if (item.itemType === ITEM_TYPE_PACKAGE) {
+            await vscode.commands.executeCommand('partcad.testReal', {
+                packageName: item.name,
+                objectName: '',
+            });
+        } else {
+            await vscode.commands.executeCommand('partcad.testReal', {
+                packageName: item.pkg,
+                objectName: item.name,
+            });
+        }
+    }
 
     public async inspectSource(item: PartcadItem) {
         if (item.itemPath !== undefined) {
@@ -87,9 +100,15 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
     }
 
     clearItems() {
+        let wsUri = undefined;
+        if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+            wsUri = vscode.workspace.workspaceFolders[0].uri;
+        }
+
         this.packages = {
-            ['/']: {
-                name: '/',
+            ['//']: {
+                name: '//',
+                dir: wsUri?.fsPath,
                 packages: [],
                 sketches: [],
                 interfaces: [],
@@ -117,7 +136,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         return elements;
     }
 
-    expandItems(items: ItemMetadata): PartcadItem[] {
+    expandItems(dir: string | undefined, items: ItemMetadata): PartcadItem[] {
         const elements: PartcadItem[] = [];
 
         items.packages = items.packages.sort((i1, i2) => {
@@ -128,7 +147,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             if (pkg.item_path !== undefined) {
                 filepath = pkg.item_path;
             }
-            elements.push(new PartcadItem(pkg.name, items.name, pkg, filepath, ITEM_TYPE_PACKAGE));
+            elements.push(new PartcadItem(dir, pkg.name, items.name, pkg, filepath, ITEM_TYPE_PACKAGE));
         }
 
         items.assemblies = items.assemblies.sort((i1, i2) => {
@@ -145,7 +164,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             if (assembly.type === 'assy') {
                 filepath = assembly.item_path;
             }
-            elements.push(new PartcadItem(assembly.name, items.name, assembly, filepath, ITEM_TYPE_ASSEMBLY));
+            elements.push(new PartcadItem(dir, assembly.name, items.name, assembly, filepath, ITEM_TYPE_ASSEMBLY));
         }
 
         items.parts = items.parts.sort((i1, i2) => {
@@ -167,14 +186,14 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             ) {
                 filepath = part.item_path;
             }
-            elements.push(new PartcadItem(part.name, items.name, part, filepath, ITEM_TYPE_PART));
+            elements.push(new PartcadItem(dir, part.name, items.name, part, filepath, ITEM_TYPE_PART));
         }
 
         items.interfaces = items.interfaces.sort((i1, i2) => {
             return i1['name'].localeCompare(i2['name']);
         });
         for (const intf of items.interfaces) {
-            elements.push(new PartcadItem(intf.name, items.name, intf, undefined, ITEM_TYPE_INTERFACE));
+            elements.push(new PartcadItem(dir, intf.name, items.name, intf, undefined, ITEM_TYPE_INTERFACE));
         }
 
         items.sketches = items.sketches.sort((i1, i2) => {
@@ -191,7 +210,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             if (sketch.type === 'dxf' || sketch.type === 'svg') {
                 filepath = sketch.item_path;
             }
-            elements.push(new PartcadItem(sketch.name, items.name, sketch, filepath, ITEM_TYPE_SKETCH));
+            elements.push(new PartcadItem(dir, sketch.name, items.name, sketch, filepath, ITEM_TYPE_SKETCH));
         }
 
         return elements;
@@ -200,13 +219,13 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
     getChildren(element?: PartcadItem): Thenable<PartcadItem[]> {
         if (element) {
             if (element.name in this.packages) {
-                return Promise.resolve(this.expandItems(this.packages[element.name]));
+                return Promise.resolve(this.expandItems(element.dir, this.packages[element.name]));
             } else {
                 return this.getPackageContents(element.name);
             }
         }
 
-        return Promise.resolve(this.expandItems(this.packages['/']));
+        return Promise.resolve(this.expandItems(this.packages['//'].dir, this.packages['//']));
     }
 
     private _onDidChangeTreeData: vscode.EventEmitter<PartcadItem | undefined | null> = new vscode.EventEmitter<
@@ -218,15 +237,57 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         this._onDidChangeTreeData.fire(undefined);
     }
 
-    public async exportItem(
-        exportType: string,
-        displayString: string,
-        fileExt: string,
-        itemType: string,
-        itemPkg: string,
-        itemName: string,
-        params: Object,
-    ) {
+    public async exportToSVG(item: PartcadItem) {
+        await this.doExportItem('svg', 'SVG files', 'svg', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportToPNG(item: PartcadItem) {
+        await this.doExportItem('png', 'PNG files', 'png', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportToSTEP(item: PartcadItem) {
+        await this.doExportItem('step', 'STEP files', 'step', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportToSTL(item: PartcadItem) {
+        await this.doExportItem('stl', 'STL files', 'stl', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportTo3MF(item: PartcadItem) {
+        await this.doExportItem('3mf', '3MF files', '3mf', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportToThreeJS(item: PartcadItem) {
+        await this.doExportItem('threejs', 'ThreeJS files', 'json', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportToOBJ(item: PartcadItem) {
+        await this.doExportItem('obj', 'OBJ files', 'obj', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportToIGES(item: PartcadItem) {
+        await this.doExportItem('iges', 'IGES files', 'iges', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportToGLTF(item: PartcadItem) {
+        await this.doExportItem('gltf', 'glTF files', 'json', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async doExportItem(exportType: string, displayString: string, fileExt: string, item: PartcadItem) {
+        const itemType = item.itemType;
+        const itemPkg = item.pkg;
+        const itemName = item.name;
+        const params = item.params;
+
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
@@ -242,12 +303,20 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                     }
                     this._exportResolve = resolve;
 
+                    // TODO(clairbee): use the package path, instead of the workspace root
+
+                    let uri = undefined;
+                    if (item.dir) {
+                        uri = vscode.Uri.file(item.dir);
+                    }
+
                     let filters: { [name: string]: string[] } = {};
                     filters[displayString] = [fileExt];
                     vscode.window
                         .showSaveDialog({
-                            title: 'Select the filename for the new script',
+                            title: 'Select the output filename',
                             filters: filters,
+                            defaultUri: uri,
                         })
                         .then(
                             (uri: vscode.Uri | undefined) => {

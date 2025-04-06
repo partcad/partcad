@@ -41,6 +41,7 @@ from .shape import Shape
 from .user_config import user_config
 from .logging_ansi_terminal import init as logging_ansi_terminal_init
 from .logging_ansi_terminal import fini as logging_ansi_terminal_fini
+from .healthcheck import healthcheck
 from . import logging
 from . import utils
 from . import exception
@@ -81,6 +82,7 @@ __all__ = [
     "get_part",
     "get_part_cadquery",
     "get_part_build123d",
+    "healthcheck",
     "init",
     "logging",
     "part",

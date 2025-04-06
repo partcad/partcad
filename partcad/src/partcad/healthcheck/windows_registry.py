@@ -1,3 +1,9 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
 import platform
 
 from .healthcheck import HealthCheckReport, HealthCheckTest
@@ -5,6 +11,7 @@ import partcad.logging as pc_logging
 
 if platform.system() == "Windows":
     import winreg
+
 
 class WindowsRegistryCheck(HealthCheckTest):
     #  Base class for all Windows registry checks
@@ -15,9 +22,9 @@ class WindowsRegistryCheck(HealthCheckTest):
 
     def __init__(self, name: str):
         super().__init__(
-          name = name,
-          tags = ["windows", "registry"],
-          description = f"Check whether the windows registry key '{name}' is {'enabled' if self.expected_value == 1 else 'disabled'}"
+            name=name,
+            tags=["windows", "registry"],
+            description=f"Check whether the windows registry key '{name}' is {'enabled' if self.expected_value == 1 else 'disabled'}",
         )
 
     def auto_fixable(self) -> bool:

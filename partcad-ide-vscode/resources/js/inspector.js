@@ -262,9 +262,19 @@
             const updateButton = contents.querySelector('.update-button');
             if (updateButton) {
               updateButton.addEventListener('click', () => {
+                var command;
+                if (message.type === 'sketch') {
+                  command = "partcad.inspectSketch";
+                } else if (message.type === 'assembly') {
+                  command = "partcad.inspectAssembly";
+                } else if (message.type === 'interface') {
+                  command = "partcad.inspectInterface";
+                } else {
+                  command = "partcad.inspectPart";
+                }
                 vscode.postMessage({
                   action: 'command',
-                  command: message.type === 'part' ? 'partcad.inspectPart' : 'partcad.inspectAssembly',
+                  command: command,
                   params: [message.obj, inspectorParams],
                 });
               });

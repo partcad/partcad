@@ -128,7 +128,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                     }
                 });
 
-                if (itemPath !== undefined && packageName === '/') {
+                if (itemPath !== undefined && packageName === '//') {
                     return new Promise((resolve, reject) => {
                         return vscode.commands
                             .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
@@ -241,7 +241,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                     }
                 });
 
-                if (itemPath !== undefined && packageName === '/') {
+                if (itemPath !== undefined && packageName === '//') {
                     return new Promise((resolve, reject) => {
                         return vscode.commands
                             .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
@@ -354,7 +354,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                     }
                 });
 
-                if (itemPath !== undefined && packageName === '/') {
+                if (itemPath !== undefined && packageName === '//') {
                     return new Promise((resolve, reject) => {
                         return vscode.commands
                             .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
@@ -467,7 +467,7 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                     }
                 });
 
-                if (itemPath !== undefined && packageName === '/') {
+                if (itemPath !== undefined && packageName === '//') {
                     return new Promise((resolve, reject) => {
                         return vscode.commands
                             .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {

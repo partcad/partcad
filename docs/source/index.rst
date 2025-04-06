@@ -32,5 +32,4 @@ product development process.**
    use_cases.rst
    features.rst
    troubleshooting.rst
-   implementation_details.rst
    contributing.rst

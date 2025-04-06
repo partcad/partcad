@@ -1,5 +1,5 @@
 #
-# OpenVMP, 2025
+# PartCAD, 2025
 #
 # Author: Roman Kuzmenko
 # Created: 2025-01-03
@@ -13,13 +13,16 @@ import asyncio
 
 from .. import logging as pc_logging
 
+
 def semaphore_wrapper(f):
     async def wrapper(*args, **kwargs):
         if Test.semaphore is None:
             Test.semaphore = asyncio.Semaphore(Test.MAX_CONCURRENT_TESTS)
         async with Test.semaphore:
             return await f(*args, **kwargs)
+
     return wrapper
+
 
 class Test(ABC):
     # TODO(clairbee): move the constants to the global scope

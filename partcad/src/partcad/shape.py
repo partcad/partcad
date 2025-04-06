@@ -50,6 +50,8 @@ EXTENSION_MAPPING = {
     "scad": "scad",
 }
 
+previously_displayed_shape = None
+
 
 @telemetry.instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
@@ -260,17 +262,21 @@ class Shape(ShapeConfiguration):
                     pc_logging.warning('Failed to load "ocp_vscode". Giving up on connection to VS Code.')
                 else:
                     try:
+                        global previously_displayed_shape
+
+                        show_kwargs = {}
+                        if previously_displayed_shape == self.name:
+                            show_kwargs["reset_camera"] = ocp_vscode.Camera.KEEP
+                        else:
+                            previously_displayed_shape = self.name
+
                         # ocp_vscode.config.status()
                         pc_logging.info('Visualizing in "OCP CAD Viewer"...')
                         # pc_logging.debug(self.shape)
                         ocp_vscode.show(
                             *components,
                             progress=None,
-                            # TODO(clairbee): make showing (and the connection
-                            # to ocp_vscode) a part of the context, and memorize
-                            # which part was displayed last. Keep the camera
-                            # if the part has not changed.
-                            # reset_camera=ocp_vscode.Camera.KEEP,
+                            **show_kwargs,
                         )
                     except Exception as e:
                         pc_logging.warning(e)
@@ -445,28 +451,28 @@ class Shape(ShapeConfiguration):
             kwargs: Additional options (width, height, etc.).
         """
         WRAPPER_FORMATS = {
-        "svg": [
-            "cadquery-ocp==7.7.2",
-            "ocpsvg==0.3.4",
-            "build123d==0.8.0"
-        ],
-        "png": [
-            "cadquery-ocp==7.7.2",
-            "ocpsvg==0.3.4",
-            "build123d==0.8.0",
-            "svglib==1.5.1",
-            "reportlab",
-            "rlpycairo==0.3.0"
-        ],
-        "brep": ["cadquery-ocp==7.7.2"],
-        "step": ["cadquery-ocp==7.7.2"],
-        "stl": ["cadquery-ocp==7.7.2"],
-        "obj": ["cadquery-ocp==7.7.2"],
-        "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
-        "gltf": ["cadquery-ocp==7.7.2"],
-        "iges": ["cadquery-ocp==7.7.2"],
-        "threejs": ["cadquery-ocp==7.7.2"]
-    }
+            "svg": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+            ],
+            "png": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+                "svglib==1.5.1",
+                "reportlab",
+                "rlpycairo==0.3.0",
+            ],
+            "brep": ["cadquery-ocp==7.7.2"],
+            "step": ["cadquery-ocp==7.7.2"],
+            "stl": ["cadquery-ocp==7.7.2"],
+            "obj": ["cadquery-ocp==7.7.2"],
+            "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
+            "gltf": ["cadquery-ocp==7.7.2"],
+            "iges": ["cadquery-ocp==7.7.2"],
+            "threejs": ["cadquery-ocp==7.7.2"],
+        }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
 
@@ -572,3 +578,28 @@ class Shape(ShapeConfiguration):
         filepath=None,
     ) -> None:
         asyncio.run(self.render_async(ctx, format_name, project, filepath))
+
+    async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
+        if not self.finalized:
+            # Skip shapes that are not yet finalized
+            return
+
+        if tests is None:
+            tests = ctx.get_all_tests()
+
+        test_method = "test_log_wrapper" if use_wrapper else "test_cached"
+        tasks = [asyncio.create_task(getattr(t, test_method)(tests, ctx, self)) for t in tests]
+
+        return all(await asyncio.gather(*tasks))
+
+    async def test_async(self, ctx, tests=[]) -> bool:
+        return await self._run_test_async(ctx, tests, use_wrapper=False)
+
+    def test(self, ctx, tests=[]) -> bool:
+        return asyncio.run(self.test_async(ctx, tests))
+
+    async def test_log_wrapper_async(self, ctx, tests=[]) -> bool:
+        return await self._run_test_async(ctx, tests, use_wrapper=True)
+
+    def test_log_wrapper(self, ctx, tests=[]) -> bool:
+        return asyncio.run(self.test_log_wrapper_async(ctx, tests))
