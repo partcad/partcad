@@ -26,6 +26,7 @@ env:
   VERSION: 0.7.133
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
+  PC_TELEMETRY_PERFORMANCE: false
 
 jobs:
   build-containers:

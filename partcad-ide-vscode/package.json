@@ -29,12 +29,17 @@
     "cadquery",
     "build123d",
     "openscad",
+    "ollama",
+    "openai",
+    "gemini",
     "step",
     "stl",
     "dxf",
     "threejs",
     "autodesk",
-    "solidworks"
+    "solidworks",
+    "gltf",
+    "iges"
   ],
   "engines": {
     "vscode": "^1.78.0"
@@ -139,12 +144,18 @@
             "default": "",
             "description": "Google AI API key.",
             "scope": "machine",
+            "tags": [
+              "usesOnlineServices"
+            ],
             "type": "string"
           },
           "partcad.openaiApiKey": {
             "default": "",
             "description": "OpenAI API key.",
             "scope": "machine",
+            "tags": [
+              "usesOnlineServices"
+            ],
             "type": "string"
           }
         }
@@ -228,6 +239,24 @@
               "Notifications are show for anything that the server chooses to show."
             ],
             "scope": "machine",
+            "type": "string"
+          },
+          "partcad.telemetry": {
+            "default": "on",
+            "description": "Controls whether to send PartCAD processes telemetry data to help with PartCAD development. PartCAD collects error messages and time measurements of internal components to guide performance optimization.",
+            "enum": [
+              "on",
+              "off"
+            ],
+            "enumDescriptions": [
+              "PartCAD Telemetry is enabled.",
+              "PartCAD Telemetry is disabled."
+            ],
+            "scope": "machine",
+            "tags": [
+              "telemetry",
+              "usesOnlineServices"
+            ],
             "type": "string"
           }
         }
