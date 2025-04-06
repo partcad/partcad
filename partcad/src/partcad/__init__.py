@@ -35,8 +35,9 @@ from .project import Project
 from .project_factory_local import ProjectFactoryLocal
 from .project_factory_git import ProjectFactoryGit
 from .project_factory_tar import ProjectFactoryTar
-from .provider_data_cart import ProviderCart
-from .provider_request_quote import ProviderRequestQuote
+from .plugin_provider_data_cart import ProviderCart
+from .plugin_request_provider_quote import ProviderRequestQuote
+from .plugin_request_provider_caps import ProviderRequestCaps
 from .shape import Shape
 from .user_config import user_config
 from .logging_ansi_terminal import init as logging_ansi_terminal_init
@@ -44,7 +45,6 @@ from .logging_ansi_terminal import fini as logging_ansi_terminal_fini
 from . import logging
 from . import utils
 from . import exception
-from . import provider_request_caps
 
 from .user_config import UserConfig
 
@@ -68,6 +68,7 @@ __all__ = [
     "ProjectFactoryTar",
     "ProviderCart",
     "ProviderRequestQuote",
+    "ProviderRequestCaps",
     "Shape",
     "UserConfig",
     "config",
@@ -84,7 +85,6 @@ __all__ = [
     "init",
     "logging",
     "part",
-    "provider_request_caps",
     "shape",
     "scene",
     "telemetry",
