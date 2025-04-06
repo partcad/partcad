@@ -1,10 +1,8 @@
 import os
 import re
 import sys
-import io
 from typing import Iterable
 import numpy as np
-from contextlib import redirect_stdout
 
 import sdf
 import OCP
@@ -13,7 +11,6 @@ sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 import custom_cqgi
 import py_stubs.ocp_vscode
-from ocp_serialize import sdf_triangles_to_topods
 from ocp_tessellate.ocp_utils import (
     is_vector,
     vertex,
@@ -63,10 +60,8 @@ def process(path, request):
             script = fobj.read()
 
         if "import partcad" in script:
-            script = "import logging\nlogging.basicConfig(level=60)\n" + script  # Disable PartCAD logging
+            script = "import logging\nlogging.basicConfig(level=60)\n" + script
 
-        # Ignore ocp_vscode as it is of no use in the sandboxed environment
-        # and it produces a lot of sporadic output to stdout and stderr
         sys.modules["ocp_vscode"] = sys.modules["py_stubs.ocp_vscode"]
         if "from ocp_vscode import " in script:
             script = re.sub(
@@ -79,6 +74,13 @@ def process(path, request):
                 "import ocp_vscode",
                 "import ocp_vscode\nocp_vscode.saved_show_object=show_object\n#",
             )
+
+        for param in build_parameters:
+            pattern = r"^\s*" + re.escape(param) + r"\s*=.*$"
+            script = re.sub(pattern, "", script, flags=re.MULTILINE)
+
+        injected_params = "\n".join(f"{k} = {repr(v)}" for k, v in build_parameters.items())
+        script = injected_params + "\n" + script
 
         script_object = custom_cqgi.parse(script)
         build_result = script_object.build(build_parameters=build_parameters)
@@ -106,10 +108,17 @@ def process(path, request):
                     )
                     tri_points = np.array(points).reshape(-1, 3)
                     shape_3d = sdf_triangles_to_topods(tri_points)
+
+                    if shape_3d is None:
+                        continue
+
+                    if hasattr(shape_3d, "IsNull") and shape_3d.IsNull():
+                        continue
+
                     results.append(shape_3d)
-                    continue
+
                 except Exception as e:
-                    results.append(shape)
+                    continue
 
             elif isinstance(shape, Iterable):
 
@@ -117,7 +126,7 @@ def process(path, request):
                     for obj in objs:
                         if isinstance(obj, sdf.d3.SDF3):
                             try:
-                                pts = shape.generate(
+                                pts = obj.generate(
                                     step=step,
                                     samples=samples,
                                     sparse=sparse,
@@ -126,12 +135,11 @@ def process(path, request):
                                 tpts = np.array(pts).reshape(-1, 3)
                                 yield sdf_triangles_to_topods(tpts)
                             except Exception as e:
-                                yield obj
+                                continue
                         elif is_vector(obj):
                             yield vertex(obj.wrapped)
                         else:
                             yield obj
-
                 results.extend(unpack(shape))
 
             else:

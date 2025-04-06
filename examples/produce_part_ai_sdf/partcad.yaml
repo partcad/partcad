@@ -9,30 +9,30 @@ docs:
     ```
 
 parts:
-  cube:
-    type: ai-sdf
-    provider: google
-    desc: A cube
-    requirements:
-      properties:
-        length: 10
-  prism:
-    type: ai-sdf
-    provider: ollama
-    model: llama3.1:70b
-    desc: A hexagonal prism
-    requirements:
-      properties:
-        length: 10
-  tetrahedron:
-    type: ai-sdf
-    provider: openai
-    tokens: 4000
-    top_p: 0.9
-    desc: A tetrahedron
-    requirements:
-      properties:
-        length: 10
+  # cube:
+  #   type: ai-sdf
+  #   provider: google
+  #   desc: A cube
+  #   requirements:
+  #     properties:
+  #       length: 10
+  # prism:
+  #   type: ai-sdf
+  #   provider: ollama
+  #   model: llama3.1:70b
+  #   desc: A hexagonal prism
+  #   requirements:
+  #     properties:
+  #       length: 10
+  # tetrahedron:
+  #   type: ai-sdf
+  #   provider: openai
+  #   tokens: 4000
+  #   top_p: 0.9
+  #   desc: A tetrahedron
+  #   requirements:
+  #     properties:
+  #       length: 10
 
 render:
   readme:

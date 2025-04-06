@@ -75,7 +75,6 @@ class PartFactorySdf(PartFactoryPython):
 
             # Serialize the request
             data = base64.b64encode(pickle.dumps(request)).decode()
-            cwd = os.path.join(self.project.config_dir, self.cwd) if self.cwd else self.project.config_dir
 
             await self.runtime.ensure_async(
                 "git+https://github.com/fogleman/sdf",
@@ -87,6 +86,10 @@ class PartFactorySdf(PartFactoryPython):
             )
             await self.runtime.ensure_async(
                 "ocp-tessellate==3.0.9",
+                session=self.session,
+            )
+            await self.runtime.ensure_async(
+                "build123d==0.8.0",
                 session=self.session,
             )
 

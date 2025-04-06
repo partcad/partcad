@@ -259,23 +259,3 @@ def register():
         OCP.TopoDS.TopoDS_Vertex,
     ):
         copyreg.pickle(cls, _reduce_topods)
-
-
-def sdf_triangles_to_topods(triangles: np.ndarray) -> OCP.TopoDS.TopoDS_Face:
-    builder = OCP.BRep.BRep_Builder()
-    face = OCP.TopoDS.TopoDS_Face()
-
-    n_tris = len(triangles) // 3
-    pts = OCP.TColgp.TColgp_Array1OfPnt(1, len(triangles))
-    for i, (x, y, z) in enumerate(triangles):
-        pts.SetValue(i + 1, OCP.gp.gp_Pnt(x, y, z))
-
-    arr_tris = OCP.Poly.Poly_Array1OfTriangle(1, n_tris)
-    for i in range(n_tris):
-        tri = OCP.Poly.Poly_Triangle(i * 3 + 1, i * 3 + 2, i * 3 + 3)
-        arr_tris.SetValue(i + 1, tri)
-
-    poly = OCP.Poly.Poly_Triangulation(pts, arr_tris)
-    builder.MakeFace(face, poly)
-
-    return face
