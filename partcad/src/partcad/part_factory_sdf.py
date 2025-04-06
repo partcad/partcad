@@ -30,19 +30,48 @@ class PartFactorySdf(PartFactoryPython):
             await self.prepare_python()
             wrapper_path = wrapper.get("sdf.py")
 
-            # Build the request with parameterization similar to the CadQuery example
+            dangerous = [
+                "import",
+                "exec",
+                "eval",
+                "__",
+                "os.",
+                "sys.",
+                "open(",
+                "subprocess",
+                "input(",
+                "globals(",
+                "locals(",
+            ]
+
+            def is_safe(val: str) -> bool:
+                val = val.lower()
+                return not any(d in val for d in dangerous)
+
             request = {"build_parameters": {}}
             if "parameters" in self.config:
                 for param_name, param in self.config["parameters"].items():
-                    request["build_parameters"][param_name] = param["default"]
+                    val = param["default"]
+                    if isinstance(val, str) and not is_safe(val):
+                        raise ValueError(f"Unsafe parameter default for '{param_name}': {val}")
+                    request["build_parameters"][param_name] = val
+
             patch = {}
             if "show" in self.config:
-                patch["\\Z"] = "\nshow(%s)\n" % self.config["show"]
+                val = self.config["show"]
+                if not is_safe(str(val)):
+                    raise ValueError(f"Unsafe show value: {val}")
+                patch["\\Z"] = f"\nshow({val})\n"
             if "showObject" in self.config:
-                patch["\\Z"] = "\nshow_object(%s)\n" % self.config["showObject"]
+                val = self.config["showObject"]
+                if not is_safe(str(val)):
+                    raise ValueError(f"Unsafe showObject value: {val}")
+                patch["\\Z"] = f"\nshow_object({val})\n"
             if "patch" in self.config:
-                patch.update(self.config["patch"])
-            request["patch"] = patch
+                for key, val in self.config["patch"].items():
+                    if not is_safe(val):
+                        raise ValueError(f"Unsafe patch value for '{key}': {val}")
+                    patch[key] = val
 
             # Serialize the request
             data = base64.b64encode(pickle.dumps(request)).decode()

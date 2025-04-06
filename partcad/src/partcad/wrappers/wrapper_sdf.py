@@ -7,6 +7,7 @@ import numpy as np
 from contextlib import redirect_stdout
 
 import sdf
+import OCP
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
@@ -19,6 +20,40 @@ from ocp_tessellate.ocp_utils import (
 )
 
 
+def sdf_triangles_to_topods(triangles: np.ndarray, as_solid: bool = False):
+    if len(triangles) == 0:
+        return None
+
+    arr = np.array(triangles)
+    pts = OCP.TColgp.TColgp_Array1OfPnt(1, len(arr))
+    for i, (x, y, z) in enumerate(arr):
+        pts.SetValue(i + 1, OCP.gp.gp_Pnt(x, y, z))
+
+    n_tris = len(arr) // 3
+    tris = OCP.Poly.Poly_Array1OfTriangle(1, n_tris)
+    for i in range(n_tris):
+        t = OCP.Poly.Poly_Triangle(i * 3 + 1, i * 3 + 2, i * 3 + 3)
+        tris.SetValue(i + 1, t)
+
+    poly = OCP.Poly.Poly_Triangulation(pts, tris)
+
+    face = OCP.TopoDS.TopoDS_Face()
+    builder = OCP.BRep.BRep_Builder()
+    builder.MakeFace(face, poly)
+
+    if as_solid:
+        shell = OCP.TopoDS.TopoDS_Shell()
+        builder.MakeShell(shell)
+        builder.Add(shell, face)
+
+        solid = OCP.TopoDS.TopoDS_Solid()
+        builder.MakeSolid(solid)
+        builder.Add(solid, shell)
+        return solid
+
+    return face
+
+
 def process(path, request):
     try:
         build_parameters = request.get("build_parameters", {})
@@ -26,10 +61,6 @@ def process(path, request):
 
         with open(path, "r", encoding="utf-8") as fobj:
             script = fobj.read()
-
-        # Apply regex patches from the request
-        for old, new in patch.items():
-            script = re.sub(old, new, script, flags=re.MULTILINE)
 
         if "import partcad" in script:
             script = "import logging\nlogging.basicConfig(level=60)\n" + script  # Disable PartCAD logging
@@ -56,7 +87,7 @@ def process(path, request):
             wrapper_common.handle_exception(build_result.exception, path)
 
         step = build_parameters.get("step")
-        samples = build_parameters.get("samples", 2**20)
+        samples = build_parameters.get("samples", 2**16)
         batch_size = build_parameters.get("batch_size", 32)
         sparse = build_parameters.get("sparse", True)
 
@@ -81,6 +112,7 @@ def process(path, request):
                     results.append(shape)
 
             elif isinstance(shape, Iterable):
+
                 def unpack(objs):
                     for obj in objs:
                         if isinstance(obj, sdf.d3.SDF3):
