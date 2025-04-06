@@ -95,7 +95,9 @@ def cli(
     object,
 ):
     with pc.telemetry.set_context(cli_ctx.otel_context):
+        pc.logging.info("cli context before")
         ctx: pc.Context = cli_ctx.get_partcad_context()
+        pc.logging.info("cli context after")
 
         package = ctx.resolve_package_path(package)
         package_obj = ctx.get_project(package)

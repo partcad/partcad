@@ -533,6 +533,8 @@ class Shape(ShapeConfiguration):
             "threejs": ["cadquery-ocp==7.7.2"],
         }
 
+        pc_logging.info(self.name)
+
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
 
             if filepath and os.path.isdir(filepath):
