@@ -26,6 +26,7 @@ env:
   TOTAL_TIMEOUT: 900
   INSTALL_TIMEOUT: 300
   PC_TELEMETRY_ENV: test
+  PC_TELEMETRY_PERFORMANCE: false
 
 jobs:
   devcontainer:

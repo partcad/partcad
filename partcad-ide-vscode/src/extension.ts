@@ -374,7 +374,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             });
             if (uri && uri.length === 1) {
                 await vscode.commands.executeCommand('setContext', 'partcad.itemsReceived', false);
-                await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
                 await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
                 await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
                 await vscode.commands.executeCommand('partcad.loadPackage', uri[0].fsPath);

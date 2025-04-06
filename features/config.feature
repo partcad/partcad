@@ -35,7 +35,6 @@ Feature: `pc config` command
       telemetry:
           type: none
           env: test
-          performance: false
           failures: false
           debug: true
           sentryShutdownTimeout: 20
@@ -59,7 +58,6 @@ Feature: `pc config` command
     And environment variable "PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE" is set to "101"
     And environment variable "PC_CACHE_DEPENDENCIES_IGNORE" is set to "true"
     And environment variable "PC_TELEMETRY_TYPE" is set to "sentry"
-    And environment variable "PC_TELEMETRY_PERFORMANCE" is set to "false"
     And environment variable "PC_TELEMETRY_FAILURES" is set to "true"
     And environment variable "PC_TELEMETRY_DEBUG" is set to "false"
     And environment variable "PC_TELEMETRY_SENTRY_SHUTDOWN_TIMEOUT" is set to "11"
@@ -84,7 +82,6 @@ Feature: `pc config` command
     And STDOUT should contain "cache_memory_double_cache_max_entry_size: 101"
     And STDOUT should contain "cache_dependencies_ignore: True"
     And STDOUT should contain "'type': 'sentry'"
-    And STDOUT should contain "'performance': False"
     And STDOUT should contain "'failures': True"
     And STDOUT should contain "'debug': False"
     And STDOUT should contain "'sentry_shutdown_timeout': 11"
@@ -110,7 +107,6 @@ Feature: `pc config` command
     And environment variable "PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE" is set to "101"
     And environment variable "PC_CACHE_DEPENDENCIES_IGNORE" is set to "false"
     And environment variable "PC_TELEMETRY_TYPE" is set to "sentry"
-    And environment variable "PC_TELEMETRY_PERFORMANCE" is set to "true"
     And environment variable "PC_TELEMETRY_FAILURES" is set to "true"
     And environment variable "PC_TELEMETRY_DEBUG" is set to "false"
     And environment variable "PC_TELEMETRY_SENTRY_SHUTDOWN_TIMEOUT" is set to "35"
@@ -135,7 +131,6 @@ Feature: `pc config` command
     And STDOUT should contain "cache_memory_double_cache_max_entry_size: 102"
     And STDOUT should contain "cache_dependencies_ignore: True"
     And STDOUT should contain "'type': 'sentry'"
-    And STDOUT should contain "'performance': True"
     And STDOUT should contain "'failures': True"
     And STDOUT should contain "'debug': True"
     And STDOUT should contain "'sentry_shutdown_timeout': 200"
@@ -165,7 +160,6 @@ Feature: `pc config` command
       telemetry:
           type: none
           env: test
-          performance: false
           failures: false
           debug: false
           sentryShutdownTimeout: 14
@@ -191,7 +185,6 @@ Feature: `pc config` command
     And STDOUT should contain "cache_memory_double_cache_max_entry_size: 102"
     And STDOUT should contain "cache_dependencies_ignore: True"
     And STDOUT should contain "'type': 'sentry'"
-    And STDOUT should contain "'performance': True"
     And STDOUT should contain "'failures': True"
     And STDOUT should contain "'debug': True"
     And STDOUT should contain "'sentry_shutdown_timeout': 44"

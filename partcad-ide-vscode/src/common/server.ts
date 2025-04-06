@@ -51,6 +51,8 @@ async function createServer(
             : settings.interpreter.slice(1).concat([DEBUG_SERVER_SCRIPT_PATH]);
     traceInfo(`Server run command: ${[command, ...args].join(' ')}`);
 
+    newEnv.PC_TELEMETRY_TYPE = settings.telemetry === 'on' ? 'sentry' : 'none';
+
     const serverOptions: ServerOptions = {
         command,
         args,

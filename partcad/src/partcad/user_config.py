@@ -133,8 +133,16 @@ class TelemetryConfig(dict):
 
     @property
     def env(self):
-        if self.v.is_set("telemetry.env"):
-            return self.v.get_string("telemetry.env")
+        try:
+            if self.v.is_set("telemetry.env"):
+                return self.v.get_string("telemetry.env")
+        except Exception:  # pragma: no cover
+            # Workaround for https://github.com/alexferl/vyper/pull/71
+            if "telemetry.env" in self.v._override:
+                return self.v._override["telemetry.env"]
+            telemetry = self.v._config.get("telemetry", {})
+            if "env" in telemetry:
+                return telemetry["env"]
 
         if is_editable_install(pc_logging):
             return "dev"
