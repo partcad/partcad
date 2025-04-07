@@ -29,7 +29,6 @@ import traceback
 from typing import Any, Optional, Sequence
 
 from lsp_server_pipe import *
-from partcad.part import Part
 
 
 # **********************************************************
@@ -352,7 +351,7 @@ def export_part(params: lsp.ExecuteCommandParams = None):
     def export_part_internal(package_name, part_name, params):
         global partcad, partcad_ctx
         with partcad.logging.Process("Export", package_name, part_name):
-            part: Part = partcad_ctx.get_part(package_name + ":" + part_name, params)
+            part = partcad_ctx.get_part(package_name + ":" + part_name, params)
             if part:
                 part.render(partcad_ctx, exportType, filepath=path)
 
