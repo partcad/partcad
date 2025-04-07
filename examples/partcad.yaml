@@ -7,7 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-# In most cases the path pefix should match what is expected in the real production use case.
+# In most cases the path prefix should match what is expected in the real production use case.
 name: //pub/examples/partcad
 partcad: ">=0.7.134"
 manufacturable: false

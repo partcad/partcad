@@ -45,6 +45,8 @@ let partcadInspector: PartcadInspector | undefined;
 let partcadTerminal: vscode.Terminal | undefined;
 let terminalEmitter: vscode.EventEmitter<string> | undefined;
 
+let lastConfigPath: string | undefined = undefined;
+let lastRoot: string | undefined = undefined;
 let currentItemType: string = PartcadItem.ITEM_TYPE_NONE;
 let currentItemName: string = '//';
 let currentItemPackage: string = '//';
@@ -133,7 +135,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         await vscode.commands.executeCommand('partcad.loadPackage');
                     }
                 }),
-                lsClient.onNotification('?/partcad/packageLoaded', async (configPath) => {
+                lsClient.onNotification('?/partcad/packageLoaded', async ({ configPath, root }) => {
+                    lastConfigPath = configPath;
+                    lastRoot = root;
+
                     await vscode.commands.executeCommand('setContext', 'partcad.activated', true);
                     await vscode.commands.executeCommand('setContext', 'partcad.installed', true);
                     await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', true);
@@ -172,6 +177,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                             // Expect the user to follow instructions in the Explorer view.
                         }
                     }
+
+                    partcadExplorer?.setRoot(root);
                 }),
                 lsClient.onNotification('?/partcad/activateFailed', async () => {
                     await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
@@ -252,10 +259,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         partcadTerminal !== undefined &&
                         !vscode.window.terminals.includes(partcadTerminal)
                     ) {
-                        // Reopen the terminal window if it waas closed
+                        // Reopen the terminal window if it was closed
                         // TODO(clairbee): is this the right way to dispose?
                         partcadTerminal.dispose();
-                        partcadTerminal = terminalInit(terminalEmitter);
+                        partcadTerminal = terminalInit(context, terminalEmitter);
                     }
                     if (getPopupTerminalFromSetting(serverId) === 'true' && partcadTerminal !== undefined) {
                         // Show the terminal if it was hidden
@@ -407,6 +414,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await vscode.commands.executeCommand('partcad.loadPackage', uri[0].fsPath);
             }
         }),
+        // TODO(clairbee): move package specific handlers of the commands to PartCADExplorer
         registerCommand(`partcad.importSketch`, async () => {
             await vscode.window.showWarningMessage(
                 'Import functionality is not yet implemented in VSCode UI. Please, edit `partcad.yaml` manually.',
@@ -433,19 +441,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             );
         }),
         registerCommand(`partcad.genPart`, async () => {
-            let packageName = '//';
-            if (currentItemType === PartcadItem.ITEM_TYPE_PACKAGE) {
-                packageName = currentItemName;
-            } else if (currentItemType !== PartcadItem.ITEM_TYPE_NONE) {
-                packageName = currentItemPackage;
-            }
-
             await vscode.commands.executeCommand('partcad.packagePath', {
-                packageName: packageName,
+                packageName: partcadExplorer?.root ?? '//',
                 callback: 'partcad.genPart2',
             });
         }),
-        registerCommand(`partcad.genPart2`, async () => {
+        registerCommand(`partcad.genPart2`, async ({ packageName, packagePath, isAbsolute }) => {
+            let startUri = undefined;
+            if (isAbsolute) {
+                startUri = vscode.Uri.file(packagePath);
+            } else {
+                let wsUri = undefined;
+                if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+                    wsUri = vscode.workspace.workspaceFolders[0].uri;
+                }
+                if (!wsUri) {
+                    await vscode.window.showWarningMessage('Failed to determine the workspace path');
+                    return;
+                }
+                startUri = vscode.Uri.joinPath(wsUri, packagePath);
+            }
+
             const partTypeTypes: { [partType: string]: string } = {
                 // eslint-disable-next-line @typescript-eslint/naming-convention
                 OpenSCAD: 'ai-openscad',
@@ -470,6 +486,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const uri = await vscode.window.showSaveDialog({
                 title: `Select the ${partType} file to be generated`,
                 filters: filters,
+                defaultUri: startUri,
             });
             if (!uri) {
                 await vscode.window.showWarningMessage('File was not selected');
@@ -502,13 +519,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             wsedit.createFile(uri, { ignoreIfExists: true });
             await vscode.workspace.applyEdit(wsedit);
 
-            var packageName = '//';
-            if (currentItemType === PartcadItem.ITEM_TYPE_PACKAGE) {
-                packageName = currentItemPackage + '/' + currentItemName;
-            } else if (currentItemType !== PartcadItem.ITEM_TYPE_NONE) {
-                packageName = currentItemPackage;
-            }
-
             await vscode.commands.executeCommand('partcad.addPartReal', {
                 kind: partTypeTypes[partType],
                 path: uri.fsPath,
@@ -519,31 +529,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             await vscode.commands.executeCommand('partcad.restart');
         }),
         registerCommand(`partcad.addPart`, async () => {
-            let packageName = '//';
-            if (currentItemType === PartcadItem.ITEM_TYPE_PACKAGE) {
-                packageName = currentItemName;
-            } else if (currentItemType !== PartcadItem.ITEM_TYPE_NONE) {
-                packageName = currentItemPackage;
-            }
-
             await vscode.commands.executeCommand('partcad.packagePath', {
-                packageName: packageName,
+                packageName: partcadExplorer?.root ?? '//',
                 callback: 'partcad.addPart2',
             });
         }),
         registerCommand(`partcad.addPart2`, async ({ packageName, packagePath, isAbsolute }) => {
-            vscode.window.showInformationMessage(`Adding a part to '{packageName}' at '{packagePath}'`);
-
             let startUri = undefined;
             if (isAbsolute) {
-                startUri = vscode.Uri.parse(packagePath);
+                startUri = vscode.Uri.file(packagePath);
             } else {
                 let wsUri = undefined;
                 if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
                     wsUri = vscode.workspace.workspaceFolders[0].uri;
                 }
                 if (!wsUri) {
-                    await vscode.window.showWarningMessage('Failed to deteremine the workspace path');
+                    await vscode.window.showWarningMessage('Failed to determine the workspace path');
                     return;
                 }
                 startUri = vscode.Uri.joinPath(wsUri, packagePath);
@@ -645,29 +646,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             await vscode.commands.executeCommand('partcad.restart');
         }),
         registerCommand(`partcad.addAssembly`, async () => {
-            let packageName = '//';
-            if (currentItemType === PartcadItem.ITEM_TYPE_PACKAGE) {
-                packageName = currentItemName;
-            } else if (currentItemType !== PartcadItem.ITEM_TYPE_NONE) {
-                packageName = currentItemPackage;
-            }
-
             await vscode.commands.executeCommand('partcad.packagePath', {
-                packageName: packageName,
+                packageName: partcadExplorer?.root ?? '//',
                 callback: 'partcad.addAssembly2',
             });
         }),
         registerCommand(`partcad.addAssembly2`, async ({ packageName, packagePath, isAbsolute }) => {
             let startUri = undefined;
             if (isAbsolute) {
-                startUri = vscode.Uri.parse(packagePath);
+                startUri = vscode.Uri.file(packagePath);
             } else {
                 let wsUri = undefined;
                 if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
                     wsUri = vscode.workspace.workspaceFolders[0].uri;
                 }
                 if (!wsUri) {
-                    await vscode.window.showWarningMessage('Failed to deteremine the package path');
+                    await vscode.window.showWarningMessage('Failed to determine the package path');
                     return;
                 }
                 startUri = vscode.Uri.joinPath(wsUri, packagePath);
@@ -735,7 +729,7 @@ connect:
             currentItemName = pkg.pkg;
             currentItemPackage = pkg.pkg;
             currentItemParams = {};
-            // TODO(claibee): add this when packages are viewable
+            // TODO(clairbee): add this when packages are viewable
             // itemToSelectOnRestart = pkg.itemPath;
 
             await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', true);
@@ -791,7 +785,12 @@ connect:
             await vscode.commands.executeCommand('partcad.getStats');
         }),
         registerCommand(`partcad.inspectFileRoot`, async () => {
-            await vscode.commands.executeCommand('partcad.inspectFile', '');
+            if (lastConfigPath !== undefined) {
+                await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(lastConfigPath), 'default', {
+                    viewColumn: vscode.ViewColumn.One,
+                    preview: true,
+                });
+            }
         }),
         registerCommand(`partcad.startInstall`, async () => {
             await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', true);
@@ -876,9 +875,7 @@ connect:
             }
 
             text += '("' + currentItemName + '"';
-            if (currentItemPackage !== '//') {
-                text += ', "' + currentItemPackage + '"';
-            }
+            text += ', "' + currentItemPackage + '"';
             const keys = Object.keys(currentItemParams);
             if (keys.length > 0) {
                 text += ',  {\n';
@@ -955,7 +952,7 @@ connect:
     context.subscriptions.push(completionYaml);
 
     terminalEmitter = new vscode.EventEmitter<string>();
-    partcadTerminal = terminalInit(terminalEmitter);
+    partcadTerminal = terminalInit(context, terminalEmitter);
     context.subscriptions.push(partcadTerminal);
 
     setImmediate(async () => {

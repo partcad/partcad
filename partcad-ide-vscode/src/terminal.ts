@@ -8,8 +8,12 @@
 //
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 
-export function terminalInit(terminalEmitter: vscode.EventEmitter<string>): vscode.Terminal {
+export function terminalInit(
+    context: vscode.ExtensionContext,
+    terminalEmitter: vscode.EventEmitter<string>,
+): vscode.Terminal {
     const defaultLine = 'Keep an eye on this Terminal View to know what PartCAD is busy with...\r\n';
     const pty = {
         onDidWrite: terminalEmitter.event,
@@ -23,6 +27,7 @@ export function terminalInit(terminalEmitter: vscode.EventEmitter<string>): vsco
         location: vscode.TerminalLocation.Panel,
         isTransient: true,
         pty: pty,
+        iconPath: vscode.Uri.joinPath(context.extensionUri, 'resources', 'logo.svg'),
     });
     partcadTerminal.show(true);
 

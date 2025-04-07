@@ -592,14 +592,14 @@ class Shape(ShapeConfiguration):
 
         return all(await asyncio.gather(*tasks))
 
-    async def test_async(self, ctx, tests=[]) -> bool:
+    async def test_async(self, ctx, tests=None) -> bool:
         return await self._run_test_async(ctx, tests, use_wrapper=False)
 
-    def test(self, ctx, tests=[]) -> bool:
+    def test(self, ctx, tests=None) -> bool:
         return asyncio.run(self.test_async(ctx, tests))
 
-    async def test_log_wrapper_async(self, ctx, tests=[]) -> bool:
+    async def test_log_wrapper_async(self, ctx, tests=None) -> bool:
         return await self._run_test_async(ctx, tests, use_wrapper=True)
 
-    def test_log_wrapper(self, ctx, tests=[]) -> bool:
+    def test_log_wrapper(self, ctx, tests=None) -> bool:
         return asyncio.run(self.test_log_wrapper_async(ctx, tests))

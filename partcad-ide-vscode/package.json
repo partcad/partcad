@@ -340,13 +340,31 @@
         "icon": "$(file-add)"
       },
       {
+        "command": "partcad.addPartItem",
+        "category": "PartCAD",
+        "title": "Add a part",
+        "icon": "$(file-add)"
+      },
+      {
         "command": "partcad.genPart",
         "category": "PartCAD",
         "title": "Generate a part with AI",
         "icon": "$(sparkle)"
       },
       {
+        "command": "partcad.genPartItem",
+        "category": "PartCAD",
+        "title": "Generate a part with AI",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "partcad.addAssembly",
+        "category": "PartCAD",
+        "title": "Add an assembly",
+        "icon": "$(diff-added)"
+      },
+      {
+        "command": "partcad.addAssemblyItem",
         "category": "PartCAD",
         "title": "Add an assembly",
         "icon": "$(diff-added)"
@@ -514,6 +532,11 @@
         "icon": "$(add)"
       },
       {
+        "id": "partcad.submenu.addItem",
+        "label": "Add",
+        "icon": "$(add)"
+      },
+      {
         "id": "partcad.submenu.import",
         "label": "Import",
         "icon": "$(new-file)"
@@ -618,7 +641,7 @@
           "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == packageWithCode)"
         },
         {
-          "submenu": "partcad.submenu.add",
+          "submenu": "partcad.submenu.addItem",
           "when": "view == partcadExplorer && (viewItem == package || viewItem == packageWithCode)",
           "group": "additional_commands"
         },
@@ -661,6 +684,33 @@
         },
         {
           "command": "partcad.addAssembly",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        }
+      ],
+      "partcad.submenu.addItem": [
+        {
+          "command": "partcad.addInterface",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.addSketch",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.addPartItem",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.genPartItem",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.addAssemblyItem",
           "group": "add",
           "when": "partcad.packageLoaded && view == partcadExplorer"
         }

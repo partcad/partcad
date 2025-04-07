@@ -480,7 +480,7 @@ def do_inspect_file(path: str):
                 if assy.path is not None and os.path.exists(assy.path) and os.path.samefile(assy.path, path):
                     paramed_names = list(filter(lambda n: n.startswith(name), prj.assemblies.keys()))
                     for paramed_name in paramed_names:
-                        del prj.assemblies[paramed_name]  # Invalidate all the paramterized variations
+                        del prj.assemblies[paramed_name]  # Invalidate all the parametrized variations
 
                     LSP_SERVER.send_notification(
                         "?/partcad/execute",
@@ -502,7 +502,7 @@ def do_inspect_file(path: str):
                 if part.path is not None and os.path.exists(part.path) and os.path.samefile(part.path, path):
                     paramed_names = list(filter(lambda n: n.startswith(name), prj.parts.keys()))
                     for paramed_name in paramed_names:
-                        del prj.parts[paramed_name]  # Invalidate all the paramterized variations
+                        del prj.parts[paramed_name]  # Invalidate all the parametrized variations
 
                     LSP_SERVER.send_notification(
                         "?/partcad/execute",
@@ -530,7 +530,7 @@ def do_inspect_file(path: str):
 
                     paramed_names = list(filter(lambda n: n.startswith(name + ":"), prj.sketches.keys()))
                     for paramed_name in paramed_names:
-                        del prj.sketches[paramed_name]  # Invalidate all the paramterized variations
+                        del prj.sketches[paramed_name]  # Invalidate all the parametrized variations
 
                     LSP_SERVER.send_notification(
                         "?/partcad/execute",
@@ -554,6 +554,8 @@ def inspect_file(params: lsp.ExecuteCommandParams = None):
         return
 
     path = params[0]
+    if path == "":
+        path = partcad_ctx.config_path
     do_inspect_file(path)
 
 
@@ -567,46 +569,64 @@ def test_obj(params: lsp.ExecuteCommandParams = None):
     package_name = params[0]["packageName"]
     object_name = params[0]["objectName"]
 
-    package = partcad_ctx.get_project(package_name)
-    if not package:
-        LSP_SERVER.send_notification(
-            "?/partcad/error",
-            "Failed to get the package: %s" % str(package_name),
-        )
-        return
-
     if object_name == "":
-        object_name = package_name
-        obj = package
-    elif package.get_interface_config(object_name):
-        obj = package.get_interface(object_name)
-    elif package.get_sketch_config(object_name):
-        obj = package.get_sketch(object_name)
-    elif package.get_part_config(object_name):
-        obj = package.get_part(object_name)
-    elif package.get_assembly_config(object_name):
-        obj = package.get_assembly(object_name)
-    else:
-        obj = None
-        LSP_SERVER.send_notification(
-            "?/partcad/error",
-            f"Object {object_name} is not found in {package_name}",
-        )
 
-    if obj:
-
-        def do_test_obj(obj):
+        def do_test_pkg(package):
             global partcad, partcad_ctx
-            with partcad.logging.Process("Test", object_name):
-                obj.test_log_wrapper(partcad_ctx)
+
+            with partcad.logging.Process("Test", package):
+                all_packages = partcad_ctx.get_all_packages(parent_name=package, has_stuff=True)
+                packages = [p["name"] for p in all_packages]
+
+                for package_name in packages:
+                    with partcad.logging.Action("Test", package_name):
+                        project = partcad_ctx.projects[package_name]
+                        project.test_log_wrapper(partcad_ctx)
 
         th = threading.Thread(
-            target=do_test_obj,
-            name="vscode-partcad-cmd-test",
-            args=[obj],
+            target=do_test_pkg,
+            name="vscode-partcad-cmd-test-pkgs",
+            args=[package_name],
         )
         th.start()
         th.join()
+    else:
+        package = partcad_ctx.get_project(package_name)
+        if not package:
+            LSP_SERVER.send_notification(
+                "?/partcad/error",
+                "Failed to get the package: %s" % str(package_name),
+            )
+            return
+        if package.get_interface_config(object_name):
+            obj = package.get_interface(object_name)
+        elif package.get_sketch_config(object_name):
+            obj = package.get_sketch(object_name)
+        elif package.get_part_config(object_name):
+            obj = package.get_part(object_name)
+        elif package.get_assembly_config(object_name):
+            obj = package.get_assembly(object_name)
+        else:
+            obj = None
+            LSP_SERVER.send_notification(
+                "?/partcad/error",
+                f"Object {object_name} is not found in {package_name}",
+            )
+
+        if obj:
+
+            def do_test_obj(obj):
+                global partcad, partcad_ctx
+                with partcad.logging.Process("Test", object_name):
+                    obj.test_log_wrapper(partcad_ctx)
+
+            th = threading.Thread(
+                target=do_test_obj,
+                name="vscode-partcad-cmd-test-objs",
+                args=[obj],
+            )
+            th.start()
+            th.join()
 
 
 @LSP_SERVER.command("partcad.getStats")
@@ -824,8 +844,8 @@ def do_init_package(args) -> None:
             partcad_ctx = partcad.init(path)
             if partcad_ctx and not partcad_ctx.broken:
                 path = partcad_ctx.config_path
-                LSP_SERVER.send_notification("?/partcad/packageLoaded", path)
-                do_load_package_contents()
+                LSP_SERVER.send_notification("?/partcad/packageLoaded", {"configPath": path, "root": partcad_ctx.name})
+                do_load_package_contents([partcad_ctx.name])
             else:
                 LSP_SERVER.send_notification("?/partcad/packageLoadFailed")
         else:
@@ -868,8 +888,8 @@ def do_load_package(args) -> None:
         path = partcad_ctx.config_path
         if partcad_ctx.broken:
             raise Exception("Package YAML file is not found")
-        LSP_SERVER.send_notification("?/partcad/packageLoaded", path)
-        do_load_package_contents()
+        LSP_SERVER.send_notification("?/partcad/packageLoaded", {"configPath": path, "root": partcad_ctx.name})
+        do_load_package_contents([partcad_ctx.name])
     except partcad.exception.NeedsUpdateException as e:
         LSP_SERVER.send_notification("?/partcad/needsUpdate")
     except Exception as e:
@@ -901,9 +921,10 @@ def do_package_refresh(args) -> None:
 
         def refresh():
             with partcad.logging.Process("Refresh", "this"):
+                saved = partcad.user_config.force_update
                 partcad.user_config.force_update = True
                 partcad_ctx.get_all_packages()
-                partcad.user_config.force_update = False
+                partcad.user_config.force_update = saved
 
         th = threading.Thread(
             target=refresh,

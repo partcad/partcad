@@ -8,7 +8,6 @@
 //
 
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
 
 export const ITEM_TYPE_NONE = 'none';
@@ -24,9 +23,9 @@ export type PartConfig = { name: string; desc?: string; type: string; item_path?
 function shortenName(name: string, parentName: string): string {
     if (name.startsWith(parentName)) {
         name = name.substring(parentName.length);
-      while (name.startsWith('/')) {
-        name = name.substring(1);
-      }
+        while (name.startsWith('/')) {
+            name = name.substring(1);
+        }
     }
     return name;
 }

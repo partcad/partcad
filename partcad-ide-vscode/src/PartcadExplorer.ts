@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import {
     PartcadItem,
     PartConfig,
+    ITEM_TYPE_NONE,
     ITEM_TYPE_ASSEMBLY,
     ITEM_TYPE_PACKAGE,
     ITEM_TYPE_SKETCH,
@@ -32,23 +33,16 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
     public static readonly viewType = 'partcadExplorer';
 
     packages: { [name: string]: ItemMetadata };
+    root: string;
 
     constructor() {
         let wsUri = undefined;
         if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
             wsUri = vscode.workspace.workspaceFolders[0].uri;
         }
-        this.packages = {
-            ['//']: {
-                name: '//',
-                dir: wsUri?.fsPath,
-                packages: [],
-                sketches: [],
-                interfaces: [],
-                parts: [],
-                assemblies: [],
-            },
-        };
+
+        this.root = '//';
+        this.packages = {};
 
         vscode.commands.registerCommand('partcad.inspectSource', (item) => this.inspectSource(item));
         vscode.commands.registerCommand('partcad.regeneratePart', (item) => this.regeneratePart(item));
@@ -65,6 +59,10 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         vscode.commands.registerCommand(`partcad.exportToGLTF`, (item) => this.exportToGLTF(item));
 
         vscode.commands.registerCommand(`partcad.test`, (item) => this.test(item));
+
+        vscode.commands.registerCommand(`partcad.genPartItem`, (item) => this.genPart(item));
+        vscode.commands.registerCommand(`partcad.addPartItem`, (item) => this.addPart(item));
+        vscode.commands.registerCommand(`partcad.addAssemblyItem`, (item) => this.addAssembly(item));
     }
 
     public async test(item: PartcadItem) {
@@ -79,6 +77,48 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                 objectName: item.name,
             });
         }
+    }
+
+    public async genPart(item: PartcadItem) {
+        let packageName = this.root;
+        if (item.itemType === ITEM_TYPE_PACKAGE) {
+            packageName = item.name;
+        } else if (item.itemType !== ITEM_TYPE_NONE) {
+            packageName = item.pkg;
+        }
+
+        await vscode.commands.executeCommand('partcad.packagePath', {
+            packageName: packageName,
+            callback: 'partcad.genPart2',
+        });
+    }
+
+    public async addPart(item: PartcadItem) {
+        let packageName = this.root;
+        if (item.itemType === ITEM_TYPE_PACKAGE) {
+            packageName = item.name;
+        } else if (item.itemType !== ITEM_TYPE_NONE) {
+            packageName = item.pkg;
+        }
+
+        await vscode.commands.executeCommand('partcad.packagePath', {
+            packageName: packageName,
+            callback: 'partcad.addPart2',
+        });
+    }
+
+    public async addAssembly(item: PartcadItem) {
+        let packageName = this.root;
+        if (item.itemType === ITEM_TYPE_PACKAGE) {
+            packageName = item.name;
+        } else if (item.itemType !== ITEM_TYPE_NONE) {
+            packageName = item.pkg;
+        }
+
+        await vscode.commands.executeCommand('partcad.packagePath', {
+            packageName: packageName,
+            callback: 'partcad.addAssembly2',
+        });
     }
 
     public async inspectSource(item: PartcadItem) {
@@ -105,17 +145,13 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             wsUri = vscode.workspace.workspaceFolders[0].uri;
         }
 
-        this.packages = {
-            ['//']: {
-                name: '//',
-                dir: wsUri?.fsPath,
-                packages: [],
-                sketches: [],
-                interfaces: [],
-                parts: [],
-                assemblies: [],
-            },
-        };
+        // Keep 'this.root' as is?
+        this.packages = {};
+        this.refresh();
+    }
+
+    setRoot(root: string) {
+        this.root = root;
         this.refresh();
     }
 
@@ -225,7 +261,11 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             }
         }
 
-        return Promise.resolve(this.expandItems(this.packages['//'].dir, this.packages['//']));
+        if (!(this.root in this.packages)) {
+            return Promise.resolve([]);
+        }
+
+        return Promise.resolve(this.expandItems(this.packages[this.root].dir, this.packages[this.root]));
     }
 
     private _onDidChangeTreeData: vscode.EventEmitter<PartcadItem | undefined | null> = new vscode.EventEmitter<
