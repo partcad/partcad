@@ -23,6 +23,7 @@ def make_pipe():
 class PosixPipe(object):
     def __init__(self):
         self._rfd, self._wfd = os.pipe()
+        self._rfd_file = os.fdopen(self._rfd, "r")
 
     def close(self):
         os.close(self._rfd)
@@ -33,6 +34,9 @@ class PosixPipe(object):
 
     def read(self, bufsize):
         return os.read(self._rfd, bufsize)
+
+    def readline(self):
+        return self._rfd_file.readline()
 
     # def write(self, data):
     #     os.write(self._wfd, data)

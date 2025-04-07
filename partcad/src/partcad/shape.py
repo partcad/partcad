@@ -299,10 +299,9 @@ class Shape(ShapeConfiguration):
 
     def error(self, msg: str):
         mute = self.config.get("mute", False)
-        if mute:
-            self.errors.append(msg)
-        else:
+        if not mute:
             pc_logging.error(msg)
+        self.errors.append(msg)
 
     async def render_svg_somewhere(
         self,

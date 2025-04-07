@@ -45,6 +45,7 @@ from . import healthcheck
 from . import logging
 from . import utils
 from . import exception
+from . import interactive
 from . import provider_request_caps
 
 from .user_config import UserConfig
@@ -84,6 +85,7 @@ __all__ = [
     "get_part_build123d",
     "healthcheck",
     "init",
+    "interactive",
     "logging",
     "part",
     "provider_request_caps",

@@ -15,6 +15,7 @@ from typing import Any
 from . import telemetry
 from .ai_feature_file import AiContentFile, AiContentProcessor
 from . import logging as pc_logging
+from . import interactive
 from .user_config import user_config
 
 # Lazy-load AI imports as they are not always needed
@@ -51,6 +52,8 @@ def google_once():
             google_api_core_exceptions = importlib.import_module("google.api_core.exceptions")
 
         latest_key = user_config.google_api_key
+        if not latest_key:
+            latest_key = interactive.prompt("API_KEY_GOOGLE", "Enter Google Cloud Generative Language API key")
         if latest_key != GOOGLE_API_KEY:
             GOOGLE_API_KEY = latest_key
             if not GOOGLE_API_KEY is None:

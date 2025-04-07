@@ -50,8 +50,8 @@ Feature: 'pc healthcheck' command
     And "NoDefaultCurrentDirectoryInExePath" registry key is set to "0"
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
-    Then STDOUT should contain "Suggested healthcheck: LongPathsEnabledCheck: Passed"
-    Then STDOUT should contain "Suggested healthcheck: NoDefaultCurrentDirectoryCheck: Passed"
+    Then STDOUT should contain "Healthcheck: LongPathsEnabledCheck: Passed"
+    Then STDOUT should contain "Healthcheck: NoDefaultCurrentDirectoryCheck: Passed"
 
   @failure @windows-registry
   Scenario: Running health check with LongPathsEnabled failing
@@ -61,7 +61,7 @@ Feature: 'pc healthcheck' command
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "LongPathsEnabled is not set to 1"
-    Then STDOUT should contain "Suggested healthcheck: NoDefaultCurrentDirectoryCheck: Passed"
+    Then STDOUT should contain "Healthcheck: NoDefaultCurrentDirectoryCheck: Passed"
 
   @failure @windows-registry
   Scenario: Running health check with "NoDefaultCurrentDirectoryInExePath" failing
@@ -70,7 +70,7 @@ Feature: 'pc healthcheck' command
     And "NoDefaultCurrentDirectoryInExePath" registry key is set to "1"
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
-    Then STDOUT should contain "Suggested healthcheck: LongPathsEnabledCheck: Passed"
+    Then STDOUT should contain "Healthcheck: LongPathsEnabledCheck: Passed"
     Then STDOUT should contain "NoDefaultCurrentDirectoryInExePath is not set to 0"
 
   @failure @windows-registry
@@ -80,7 +80,7 @@ Feature: 'pc healthcheck' command
     And "NoDefaultCurrentDirectoryInExePath" registry key is set to "1"
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
-    Then STDOUT should contain "Suggested healthcheck: LongPathsEnabled is not set to 1"
+    Then STDOUT should contain "Healthcheck: LongPathsEnabled is not set to 1"
     Then STDOUT should contain "NoDefaultCurrentDirectoryInExePath is not set to 0"
 
   @failure @windows-registry

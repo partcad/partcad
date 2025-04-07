@@ -274,6 +274,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 lsClient.onNotification(`?/partcad/execute`, async ({ command, args }) => {
                     await vscode.commands.executeCommand(command, ...args);
                 }),
+                lsClient.onNotification(`?/partcad/prompt`, async ({ prompt }) => {
+                    const response = await vscode.window.showInputBox({
+                        title: 'Provide missing information',
+                        prompt: prompt,
+                        ignoreFocusOut: true,
+                        password: false,
+                    });
+                    if (!response) {
+                        await vscode.window.showWarningMessage('No response was provided');
+                        return;
+                    }
+                    await vscode.commands.executeCommand('partcad.promptResponse', { response: response });
+                }),
             );
             await vscode.commands.executeCommand('partcad.activate');
             await vscode.commands.executeCommand('setContext', 'partcad.activated', true);
@@ -395,6 +408,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
                 await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
                 await vscode.commands.executeCommand('setContext', 'partcad.beingLoaded', false);
+
                 await vscode.commands.executeCommand('partcad.initPackage', uri[0].fsPath);
             }
         }),
@@ -409,8 +423,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             });
             if (uri && uri.length === 1) {
                 await vscode.commands.executeCommand('setContext', 'partcad.itemsReceived', false);
-                await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
                 await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
+                await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
+                await vscode.commands.executeCommand('setContext', 'partcad.beingLoaded', true);
+                await vscode.commands.executeCommand('setContext', 'partcad.itemSelected', false);
+
+                partcadExplorer?.clearItems();
+                await partcadInspector?.clear();
+
                 await vscode.commands.executeCommand('partcad.loadPackage', uri[0].fsPath);
             }
         }),

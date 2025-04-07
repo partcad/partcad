@@ -716,6 +716,24 @@ def log_thread_kill():
     partcad_log_thread = None
 
 
+prompt_pipe = make_pipe()
+prompt_w_stream = prompt_pipe.get_write_stream()
+
+
+def vscode_prompt(key: str, prompt: str):
+    # TODO(clairbee): lookup the workspace settings for the root config path
+    # if key == "API_KEY_GOOGLE":
+    #   if settings.
+    LSP_SERVER.send_notification("?/partcad/prompt", {"prompt": prompt})
+    return prompt_pipe.readline().strip()
+
+
+@LSP_SERVER.command("partcad.promptResponse")
+def prompt_response(args) -> None:
+    response: str = args["response"] + os.linesep
+    prompt_w_stream.write(response)
+
+
 load_partcad_lock = threading.RLock()
 
 
@@ -749,6 +767,8 @@ def load_partcad():
             import partcad
 
             partcad = importlib.reload(partcad)
+
+        partcad.interactive.prompt = vscode_prompt
 
         settings = copy.deepcopy(_get_settings_by_document(None))
         if "pythonSandbox" in settings and len(settings["pythonSandbox"]) > 0:
