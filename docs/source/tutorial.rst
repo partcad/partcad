@@ -128,7 +128,7 @@ Now the part can be exported:
     pc export -t stl :test
 
 ===================================
-Convert a Part in a Project Package
+Convert a Part
 ===================================
 
 The `pc convert part` command converts a part or assembly within a package into another format.
@@ -186,7 +186,7 @@ In this case, the system automatically resolves the original format and converts
     If the output format is not supported or missing for non-`enrich`/`alias`, the command will fail.
 
 =====================================
-Convert a Sketch in a Project Package
+Convert a Sketch
 =====================================
 
 The `pc convert sketch` command converts a sketch (e.g., SVG or DXF) to another supported format.
