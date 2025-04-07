@@ -32,7 +32,7 @@ search = "__version__: str = \"{current_version}\""
 replace = "__version__: str = \"{new_version}\""
 
 [[tool.bumpversion.files]]
-filename = "docs/mkdocs/docs/development/quick-start.md"
+filename = "docs/source/contributing.rst"
 search = "Installing the current project: partcad-dev ({current_version})"
 replace = "Installing the current project: partcad-dev ({new_version})"
 

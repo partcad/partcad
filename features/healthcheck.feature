@@ -30,20 +30,18 @@ Feature: 'pc healthcheck' command
   Scenario: Run healthcheck command with dry run and filter
     When I run partcad healthcheck with options "--dry-run --filters=python"
     Then the command should exit with a status code of "0"
-    Then STDOUT should contain "Applicable healthcheck tests:"
-    Then STDOUT should contain "PythonVersion - "
-    Then STDOUT should not contain "LongPathsEnabledCheck - "
-    Then STDOUT should not contain "NoDefaultCurrentDirectoryCheck - "
+    Then STDOUT should contain "Suggested healthcheck: PythonVersion - "
+    Then STDOUT should not contain "Suggested healthcheck: LongPathsEnabledCheck - "
+    Then STDOUT should not contain "Suggested healthcheck: NoDefaultCurrentDirectoryCheck - "
 
   @success @windows-registry @filters
   Scenario: Run healthcheck command with dry run and filter
     Given the system is running on Windows
     When I run partcad healthcheck with options "--dry-run --filters=windows"
     Then the command should exit with a status code of "0"
-    Then STDOUT should contain "Applicable healthcheck tests:"
-    Then STDOUT should contain "LongPathsEnabledCheck - "
-    Then STDOUT should contain "NoDefaultCurrentDirectoryCheck - "
-    Then STDOUT should not contain "PythonVersion - "
+    Then STDOUT should contain "Suggested healthcheck: LongPathsEnabledCheck - "
+    Then STDOUT should contain "Suggested healthcheck: NoDefaultCurrentDirectoryCheck - "
+    Then STDOUT should not contain "Suggested healthcheck: PythonVersion - "
 
   @success @windows-registry
   Scenario: Running health check with all registry checks passing
@@ -52,8 +50,8 @@ Feature: 'pc healthcheck' command
     And "NoDefaultCurrentDirectoryInExePath" registry key is set to "0"
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
-    Then STDOUT should contain "LongPathsEnabledCheck: Passed"
-    Then STDOUT should contain "NoDefaultCurrentDirectoryCheck: Passed"
+    Then STDOUT should contain "Healthcheck: LongPathsEnabledCheck: Passed"
+    Then STDOUT should contain "Healthcheck: NoDefaultCurrentDirectoryCheck: Passed"
 
   @failure @windows-registry
   Scenario: Running health check with LongPathsEnabled failing
@@ -63,7 +61,7 @@ Feature: 'pc healthcheck' command
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
     Then STDOUT should contain "LongPathsEnabled is not set to 1"
-    Then STDOUT should contain "NoDefaultCurrentDirectoryCheck: Passed"
+    Then STDOUT should contain "Healthcheck: NoDefaultCurrentDirectoryCheck: Passed"
 
   @failure @windows-registry
   Scenario: Running health check with "NoDefaultCurrentDirectoryInExePath" failing
@@ -72,7 +70,7 @@ Feature: 'pc healthcheck' command
     And "NoDefaultCurrentDirectoryInExePath" registry key is set to "1"
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
-    Then STDOUT should contain "LongPathsEnabledCheck: Passed"
+    Then STDOUT should contain "Healthcheck: LongPathsEnabledCheck: Passed"
     Then STDOUT should contain "NoDefaultCurrentDirectoryInExePath is not set to 0"
 
   @failure @windows-registry

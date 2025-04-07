@@ -18,6 +18,7 @@ from typing import Any
 from . import telemetry
 from .ai_feature_file import AiContentFile, AiContentProcessor
 from . import logging as pc_logging
+from . import interactive
 from .user_config import user_config
 
 # Lazy-load AI imports as they are not always needed
@@ -46,6 +47,8 @@ def openai_once():
             openai_genai = importlib.import_module("openai")
 
         latest_key = user_config.openai_api_key
+        if not latest_key:
+            latest_key = interactive.prompt("API_KEY_OPENAI", "Enter OpenAI API key")
         if latest_key != OPENAI_API_KEY:
             OPENAI_API_KEY = latest_key
             if not OPENAI_API_KEY is None:

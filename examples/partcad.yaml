@@ -7,8 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-# In case this is the root package,
-# use the path prefix that we would expect in the real production use case.
+# In most cases the path prefix should match what is expected in the real production use case.
 name: //pub/examples/partcad
 partcad: ">=0.7.134"
 manufacturable: false
@@ -18,7 +17,7 @@ cover:
 
 dependencies:
   pub:
-    onlyInRoot: True
+    onlyInRoot: true
     type: git
     url: https://github.com/openvmp/partcad-index.git
   # NOTE: The subdirectories automatically become dependencies of the "local" type

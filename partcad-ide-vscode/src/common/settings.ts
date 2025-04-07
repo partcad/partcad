@@ -20,6 +20,8 @@ export interface ISettings {
     interpreter: string[];
     importStrategy: string;
     showNotifications: string;
+    reopenTerminal: string;
+    popupTerminal: string;
 }
 
 export function getExtensionSettings(namespace: string, includeInterpreter?: boolean): Promise<ISettings[]> {
@@ -58,6 +60,16 @@ export function getPackagePathFromSetting(namespace: string, scope?: Configurati
     return config.get<string>('packagePath');
 }
 
+export function getReopenTerminalFromSetting(namespace: string, scope?: ConfigurationScope) {
+    const config = getConfiguration(namespace, scope);
+    return config.get<string>('reopenTerminal');
+}
+
+export function getPopupTerminalFromSetting(namespace: string, scope?: ConfigurationScope) {
+    const config = getConfiguration(namespace, scope);
+    return config.get<string>('popupTerminal');
+}
+
 export async function getWorkspaceSettings(
     namespace: string,
     workspace: WorkspaceFolder,
@@ -87,7 +99,9 @@ export async function getWorkspaceSettings(
         path: resolveVariables(config.get<string[]>(`path`) ?? [], workspace),
         interpreter: resolveVariables(interpreter, workspace),
         importStrategy: config.get<string>(`importStrategy`) ?? 'useBundled',
-        showNotifications: config.get<string>(`showNotifications`) ?? 'off',
+        showNotifications: config.get<string>(`showNotifications`) ?? 'always',
+        reopenTerminal: config.get<string>(`reopenTerminal`) ?? 'true',
+        popupTerminal: config.get<string>(`popupTerminal`) ?? 'false',
     };
     return workspaceSetting;
 }
@@ -122,7 +136,9 @@ export async function getGlobalSettings(namespace: string, includeInterpreter?: 
         path: getGlobalValue<string[]>(config, 'path', []),
         interpreter: interpreter,
         importStrategy: getGlobalValue<string>(config, 'importStrategy', 'useBundled'),
-        showNotifications: getGlobalValue<string>(config, 'showNotifications', 'off'),
+        showNotifications: getGlobalValue<string>(config, 'showNotifications', 'always'),
+        reopenTerminal: getGlobalValue<string>(config, 'reopenTerminal', 'true'),
+        popupTerminal: getGlobalValue<string>(config, 'popupTerminal', 'false'),
     };
     return setting;
 }
@@ -141,6 +157,8 @@ export function checkIfConfigurationChanged(e: ConfigurationChangeEvent, namespa
         `${namespace}.interpreter`,
         `${namespace}.importStrategy`,
         `${namespace}.showNotifications`,
+        `${namespace}.reopenTerminal`,
+        `${namespace}.popupTerminal`,
     ];
     const changed = settings.map((s) => e.affectsConfiguration(s));
     return changed.includes(true);

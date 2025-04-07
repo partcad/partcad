@@ -1,8 +1,13 @@
-import rich_click as click
-from typing import List
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
 
-import partcad.logging as pc_logging
-from partcad.healthcheck.healthcheck import discover_tests
+import rich_click as click
+
+import partcad as pc
+from ..cli_context import CliContext
 
 
 @click.command(help="Perform a health check of the host system to identify known issues.")
@@ -20,30 +25,7 @@ from partcad.healthcheck.healthcheck import discover_tests
     is_flag=True,
     help="Attempt to fix any issues found",
 )
-def cli(filters: str, fix: bool, dry_run: bool) -> None:
-    tests = discover_tests()
-
-    if filters:
-        for val in filters.split(","):
-            tests = filter(lambda test: any(val.strip().lower() in tag.lower() for tag in test.tags), tests)
-
-    if dry_run:
-        if tests:
-            pc_logging.info("Applicable healthcheck tests:")
-            for test in tests:
-                pc_logging.info(f"{test.name} - {test.description}")
-    else:
-        for test in tests:
-            pc_logging.debug(f"Running '{test.name}' health check...")
-            report = test.test()
-            if report.findings:
-                report.warning(test.findings)
-                if fix and test.auto_fixable():
-                    report.debug("Attempting to fix issues...")
-                    report.fixed = test.fix()
-                    if report.fixed:
-                        report.info(f"Auto fix successful")
-                    else:
-                        report.error(f"Auto fix failed")
-            else:
-                report.info(f"Passed")
+@click.pass_obj
+def cli(cli_ctx: CliContext, filters: str, fix: bool, dry_run: bool) -> None:
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        pc.healthcheck.tests.run_tests(filters=filters, fix=fix, dry_run=dry_run)

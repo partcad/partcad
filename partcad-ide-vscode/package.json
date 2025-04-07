@@ -224,7 +224,7 @@
             "type": "array"
           },
           "partcad.showNotifications": {
-            "default": "off",
+            "default": "always",
             "description": "Controls when notifications are shown by this extension.",
             "enum": [
               "off",
@@ -257,6 +257,34 @@
               "telemetry",
               "usesOnlineServices"
             ],
+            "type": "string"
+          },
+          "partcad.reopenTerminal": {
+            "default": "true",
+            "description": "Whether to re-open PartCAD terminal tab on new PartCAD events or not.",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "enumDescriptions": [
+              "Re-open PartCAD terminal on new events, if it was closed.",
+              "Do not re-open PartCAD terminal if closed once."
+            ],
+            "scope": "machine",
+            "type": "string"
+          },
+          "partcad.popupTerminal": {
+            "default": "false",
+            "description": "Whether to bring the PartCAD terminal tab up on new PartCAD events or not.",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "enumDescriptions": [
+              "Bring the PartCAD terminal up on new events, if it was hidden.",
+              "Do not bring the PartCAD terminal up on new events if it is hidden."
+            ],
+            "scope": "machine",
             "type": "string"
           }
         }
@@ -300,9 +328,21 @@
         "icon": "$(sync)"
       },
       {
+        "title": "PartCAD support",
+        "category": "PartCAD",
+        "command": "partcad.support",
+        "icon": "$(icon)"
+      },
+      {
         "command": "partcad.addPart",
         "category": "PartCAD",
-        "title": "Add a part to the current package",
+        "title": "Add a part",
+        "icon": "$(file-add)"
+      },
+      {
+        "command": "partcad.addPartItem",
+        "category": "PartCAD",
+        "title": "Add a part",
         "icon": "$(file-add)"
       },
       {
@@ -312,45 +352,99 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "partcad.genPartItem",
+        "category": "PartCAD",
+        "title": "Generate a part with AI",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "partcad.addAssembly",
         "category": "PartCAD",
-        "title": "Add an assembly file to the current package",
+        "title": "Add an assembly",
         "icon": "$(diff-added)"
+      },
+      {
+        "command": "partcad.addAssemblyItem",
+        "category": "PartCAD",
+        "title": "Add an assembly",
+        "icon": "$(diff-added)"
+      },
+      {
+        "command": "partcad.addSketch",
+        "category": "PartCAD",
+        "title": "Add a sketch",
+        "icon": "$(error)"
+      },
+      {
+        "command": "partcad.addInterface",
+        "category": "PartCAD",
+        "title": "Add an interface",
+        "icon": "$(error)"
+      },
+      {
+        "command": "partcad.importSketch",
+        "category": "PartCAD",
+        "title": "Import a sketch",
+        "icon": "$(error)"
+      },
+      {
+        "command": "partcad.importPart",
+        "category": "PartCAD",
+        "title": "Import a part",
+        "icon": "$(error)"
+      },
+      {
+        "command": "partcad.importAssembly",
+        "category": "PartCAD",
+        "title": "Import an assembly",
+        "icon": "$(error)"
       },
       {
         "command": "partcad.inspectSketch",
         "category": "PartCAD",
-        "title": "View the sketch",
-        "icon": "$(eye)"
-      },
-      {
-        "command": "partcad.inspectInterface",
-        "category": "PartCAD",
-        "title": "View the interface",
+        "title": "Display",
         "icon": "$(eye)"
       },
       {
         "command": "partcad.inspectPart",
         "category": "PartCAD",
-        "title": "View the part",
+        "title": "Display",
         "icon": "$(eye)"
       },
       {
         "command": "partcad.inspectPartWithCode",
         "category": "PartCAD",
-        "title": "View the part and its source code",
+        "title": "Display and edit",
         "icon": "$(eye)"
       },
       {
         "command": "partcad.inspectAssembly",
         "category": "PartCAD",
-        "title": "View the part",
+        "title": "Display",
         "icon": "$(eye)"
+      },
+      {
+        "command": "partcad.inspectInterface",
+        "category": "PartCAD",
+        "title": "Display",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "partcad.test",
+        "category": "PartCAD",
+        "title": "Test",
+        "icon": "$(debug)"
+      },
+      {
+        "command": "partcad.inspectFileRoot",
+        "category": "PartCAD",
+        "title": "Top level config",
+        "icon": "$(edit)"
       },
       {
         "command": "partcad.inspectSource",
         "category": "PartCAD",
-        "title": "View the source code",
+        "title": "Edit",
         "icon": "$(edit)"
       },
       {
@@ -415,12 +509,47 @@
         "group": "Export",
         "title": "OBJ...",
         "icon": "$(export)"
+      },
+      {
+        "command": "partcad.exportToIGES",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "IGES...",
+        "icon": "$(export)"
+      },
+      {
+        "command": "partcad.exportToGLTF",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "glTF...",
+        "icon": "$(export)"
       }
     ],
     "submenus": [
       {
+        "id": "partcad.submenu.add",
+        "label": "Add",
+        "icon": "$(add)"
+      },
+      {
+        "id": "partcad.submenu.addItem",
+        "label": "Add",
+        "icon": "$(add)"
+      },
+      {
+        "id": "partcad.submenu.import",
+        "label": "Import",
+        "icon": "$(new-file)"
+      },
+      {
+        "id": "partcad.submenu.convert",
+        "label": "Convert",
+        "icon": "$(compare-changes)"
+      },
+      {
         "id": "partcad.submenu.export",
-        "label": "Export"
+        "label": "Export",
+        "icon": "$(export)"
       }
     ],
     "menus": {
@@ -441,24 +570,29 @@
           "group": "navigation"
         },
         {
-          "command": "partcad.addPart",
+          "submenu": "partcad.submenu.add",
           "when": "partcad.packageLoaded && view == partcadExplorer",
           "group": "navigation"
         },
         {
-          "command": "partcad.genPart",
+          "submenu": "partcad.submenu.import",
           "when": "partcad.packageLoaded && view == partcadExplorer",
           "group": "navigation"
         },
         {
-          "command": "partcad.addAssembly",
+          "command": "partcad.inspectFileRoot",
           "when": "partcad.packageLoaded && view == partcadExplorer",
           "group": "navigation"
         },
         {
           "command": "partcad.refresh",
           "when": "partcad.packageLoaded && view == partcadExplorer",
-          "group": "navigation"
+          "group": "additional_commands"
+        },
+        {
+          "command": "partcad.support",
+          "when": "view == partcadExplorer",
+          "group": "additional_commands"
         }
       ],
       "view/item/context": [
@@ -470,7 +604,7 @@
         {
           "command": "partcad.inspectInterface",
           "group": "navigation",
-          "when": "view == partcadExplorer && viewItem == interface"
+          "when": "view == partcadExplorer && (viewItem == interface || viewItem == interfaceWithCode)"
         },
         {
           "command": "partcad.inspectPart",
@@ -480,17 +614,16 @@
         {
           "command": "partcad.inspectAssembly",
           "group": "navigation",
-          "when": "view == partcadExplorer && viewItem == assembly"
+          "when": "view == partcadExplorer && (viewItem == assembly || viewItem == assemblyWithCode)"
         },
         {
-          "command": "partcad.inspectAssembly",
-          "group": "navigation",
-          "when": "view == partcadExplorer && viewItem == assemblyWithCode"
+          "command": "partcad.test",
+          "group": "navigation"
         },
         {
           "command": "partcad.inspectSource",
           "group": "inline",
-          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == packageWithCode)"
+          "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == packageWithCode || viewItem == interfaceWithCode)"
         },
         {
           "command": "partcad.changePart",
@@ -508,9 +641,95 @@
           "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == packageWithCode)"
         },
         {
+          "submenu": "partcad.submenu.addItem",
+          "when": "view == partcadExplorer && (viewItem == package || viewItem == packageWithCode)",
+          "group": "additional_commands"
+        },
+        {
+          "submenu": "partcad.submenu.import",
+          "when": "view == partcadExplorer && (viewItem == package || viewItem == packageWithCode)",
+          "group": "additional_commands"
+        },
+        {
+          "submenu": "partcad.submenu.convert",
+          "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode)",
+          "group": "additional_commands"
+        },
+        {
           "submenu": "partcad.submenu.export",
           "when": "view == partcadExplorer && (viewItem == part || viewItem == partWithAI || viewItem == partWithCode || viewItem == assembly || viewItem == assemblyWithCode)",
           "group": "additional_commands"
+        }
+      ],
+      "partcad.submenu.add": [
+        {
+          "command": "partcad.addInterface",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.addSketch",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.addPart",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.genPart",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.addAssembly",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        }
+      ],
+      "partcad.submenu.addItem": [
+        {
+          "command": "partcad.addInterface",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.addSketch",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.addPartItem",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.genPartItem",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.addAssemblyItem",
+          "group": "add",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        }
+      ],
+      "partcad.submenu.import": [
+        {
+          "command": "partcad.importSketch",
+          "group": "import",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.importPart",
+          "group": "import",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
+        },
+        {
+          "command": "partcad.importAssembly",
+          "group": "import",
+          "when": "partcad.packageLoaded && view == partcadExplorer"
         }
       ],
       "partcad.submenu.export": [
@@ -541,6 +760,14 @@
         {
           "command": "partcad.exportToOBJ",
           "when": "view == partcadExplorer"
+        },
+        {
+          "command": "partcad.exportToIGES",
+          "when": "view == partcadExplorer"
+        },
+        {
+          "command": "partcad.exportToGLTF",
+          "when": "view == partcadExplorer"
         }
       ]
     },
@@ -559,6 +786,7 @@
           "id": "partcadContext",
           "type": "webview",
           "name": "Context",
+          "icon": "resources/logo.svg",
           "contextualTitle": "PartCAD Context",
           "initialSize": 5,
           "visibility": "collapsed"
@@ -573,6 +801,7 @@
           "id": "partcadInspector",
           "type": "webview",
           "name": "Inspector",
+          "icon": "resources/logo.svg",
           "contextualTitle": "PartCAD Inspector"
         }
       ]
@@ -676,7 +905,7 @@
     "@typescript-eslint/parser": "^8.0.1",
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
-    "@vscode/vsce": "^2.31.1",
+    "@vscode/vsce": "^2.32.0",
     "eslint": "^8.57.0",
     "glob": "^10.4.2",
     "prettier": "^3.3.3",
