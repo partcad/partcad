@@ -80,6 +80,28 @@ Feature: `pc info` command
       """
     Then the command should exit with a status code of "0"
 
+  @pc-info @add-assembly
+  Scenario: Add assembly from `logo.assy` file
+    Given a file named "partcad.yaml" with content:
+      """
+      parts:
+        invalid:
+          type: cadquery
+      """
+    Given a file named "invalid.py" with content:
+      """
+      import cadquery as cq
+
+      This is not a valid CadQuery script
+      """
+    When I run command:
+      """
+      pc info invalid
+      """
+    Then the command should exit with a non-zero status code
+    And STDOUT should contain "Error"
+    And STDOUT should contain "This is not a valid CadQuery script"
+
   @success @pc-info
   Scenario: Show 'Url' & 'Path' as package info for remote imports(git/tar)
     Given a file named "partcad.yaml" with content:

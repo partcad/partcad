@@ -80,7 +80,7 @@ Feature: 'pc healthcheck' command
     And "NoDefaultCurrentDirectoryInExePath" registry key is set to "1"
     When I run partcad healthcheck
     Then the command should exit with a status code of "0"
-    Then STDOUT should contain "Healthcheck: LongPathsEnabled is not set to 1"
+    Then STDOUT should contain "LongPathsEnabled is not set to 1"
     Then STDOUT should contain "NoDefaultCurrentDirectoryInExePath is not set to 0"
 
   @failure @windows-registry
