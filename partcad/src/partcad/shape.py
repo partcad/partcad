@@ -534,6 +534,7 @@ class Shape(ShapeConfiguration):
         }
 
         pc_logging.info(self.name)
+        pc_logging.debug(self.name)
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
 
