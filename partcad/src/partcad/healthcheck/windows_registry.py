@@ -6,7 +6,7 @@
 
 import platform
 
-from .healthcheck import HealthCheckReport, HealthCheckTest
+from .tests import HealthCheckReport, HealthCheckTest
 import partcad.logging as pc_logging
 
 if platform.system() == "Windows":

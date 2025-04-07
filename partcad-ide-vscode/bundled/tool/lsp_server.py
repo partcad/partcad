@@ -789,7 +789,7 @@ def do_activate(params: lsp.ExecuteCommandParams) -> None:
             LSP_SERVER.send_notification("?/partcad/activateFailed")
             return
 
-        partcad.healthcheck.run_tests()
+        partcad.healthcheck.tests.run_tests()
 
         LSP_SERVER.send_notification("?/partcad/loaded")
     except Exception as e:

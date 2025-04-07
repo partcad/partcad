@@ -6,7 +6,8 @@
 
 import sys
 
-from .healthcheck import HealthCheckReport, HealthCheckTest
+from .tests import HealthCheckReport, HealthCheckTest
+
 
 class PythonVersionCheck(HealthCheckTest):
     min_version: tuple[int, int] = (3, 10)
@@ -14,9 +15,9 @@ class PythonVersionCheck(HealthCheckTest):
 
     def __init__(self):
         super().__init__(
-          name="PythonVersion",
-          tags=["python"],
-          description="Check PartCAD's compatibility with the system's Python version"
+            name="PythonVersion",
+            tags=["python"],
+            description="Check PartCAD's compatibility with the system's Python version",
         )
 
     def auto_fixable(self) -> bool:

@@ -7,7 +7,6 @@
 import rich_click as click
 
 import partcad as pc
-import partcad.healthcheck as healthcheck
 from ..cli_context import CliContext
 
 
@@ -29,4 +28,4 @@ from ..cli_context import CliContext
 @click.pass_obj
 def cli(cli_ctx: CliContext, filters: str, fix: bool, dry_run: bool) -> None:
     with pc.telemetry.set_context(cli_ctx.otel_context):
-        healthcheck.run_tests(filters=filters, fix=fix, dry_run=dry_run)
+        pc.healthcheck.tests.run_tests(filters=filters, fix=fix, dry_run=dry_run)
