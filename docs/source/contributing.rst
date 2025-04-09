@@ -340,7 +340,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad-dev (0.7.133)
+  Installing the current project: partcad-dev (0.7.134)
 
 Activate Environment
 --------------------
