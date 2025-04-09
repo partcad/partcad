@@ -126,7 +126,7 @@ command_groups = [
     },
     {
         "name": "Other commands",
-        "commands": ["adhoc", "healthcheck"],
+        "commands": ["adhoc", "healthcheck", "lint"],
     },
 ]
 click.rich_click.OPTION_GROUPS = {
