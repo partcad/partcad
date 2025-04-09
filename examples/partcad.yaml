@@ -9,7 +9,7 @@
 
 # In most cases the path prefix should match what is expected in the real production use case.
 name: //pub/examples/partcad
-partcad: ">=0.7.134"
+partcad: ">=0.7.135"
 manufacturable: false
 
 cover:
