@@ -49,6 +49,7 @@ from . import interactive
 from . import provider_request_caps
 
 from .user_config import UserConfig
+from .schema.validator import *
 
 
 # TODO: remove partcad old version usage from vscode extension

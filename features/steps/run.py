@@ -8,10 +8,10 @@ from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin py
 
 
 def run(context: Context, command: str):
-    if command.startswith("pc "):
-        command = f"coverage run --rcfile=$PARTCAD_ROOT/dev-tools/coverage.rc --data-file=$PARTCAD_ROOT/.coverage --parallel -m partcad_cli.click.command {command[3:]}"
-    elif command.startswith("partcad "):
-        command = f"coverage run --rcfile=$PARTCAD_ROOT/dev-tools/coverage.rc --data-file=$PARTCAD_ROOT/.coverage --parallel -m partcad_cli.click.command {command[8:]}"
+    # if command.startswith("pc "):
+    #     command = f"coverage run --rcfile=$PARTCAD_ROOT/dev-tools/coverage.rc --data-file=$PARTCAD_ROOT/.coverage --parallel -m partcad_cli.click.command {command[3:]}"
+    # elif command.startswith("partcad "):
+    #     command = f"coverage run --rcfile=$PARTCAD_ROOT/dev-tools/coverage.rc --data-file=$PARTCAD_ROOT/.coverage --parallel -m partcad_cli.click.command {command[8:]}"
 
     command = expandvars(command, context)
     # We need to keep current environment variables
