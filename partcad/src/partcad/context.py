@@ -183,6 +183,7 @@ class Context(project_config.Configuration):
 
         self.cache_shapes = ShapeCache(user_config=self.user_config)
         self.cache_tests = Cache("tests", user_config=self.user_config)
+        self.cache_lints = Cache("lints", user_config=self.user_config)
 
         self.connection_status = {}
 

@@ -144,6 +144,8 @@ ollama = "^0.4.1"
 async-lru = "^2.0.4"
 docker = "^7.1.0"
 psutil = "^6.1.1"
+ruff = "^0.11.8"
+jsonschema = "^4.23.0"
 
 [tool.poetry.group.cli.dependencies]
 setuptools = "^75.5.0"
@@ -165,3 +167,6 @@ snakeviz = "^2.2.2"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff.lint]
+ignore = ["F401", "F403", "F405"]
