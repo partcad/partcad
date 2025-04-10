@@ -72,7 +72,7 @@ Python module
 =============
 
 PartCAD provides Python modules that can be used in CAD as code scripts
-(such as ``CadQuery`` and ``build123d``). It's a dependency of ``partcad-cli`` so it
+(such as ``CadQuery``, ``build123d`` and ``sdf``). It's a dependency of ``partcad-cli`` so it
 doesn't usually need to be installed separately.
 
 .. code-block:: shell

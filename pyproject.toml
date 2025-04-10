@@ -127,6 +127,7 @@ sphinx-autobuild = "^2024.10.3"
 [tool.poetry.group.partcad.dependencies]
 cadquery-ocp = "7.7.2"
 build123d = "0.8.0"
+sdf-fork = "*"
 pyyaml = ">=6.0.1"
 gitpython = ">=3.1.40"
 ruamel-yaml = ">=0.18.5"

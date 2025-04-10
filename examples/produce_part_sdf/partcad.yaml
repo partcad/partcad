@@ -1,0 +1,50 @@
+desc: PartCAD example project which demonstrates parts defined using SDF.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect gear
+    pc inspect box
+    pc inspect blobby
+    ```
+
+parts:
+  gear:
+    desc: This is a gear part defined using SDF.
+    type: sdf
+    parameters:
+      sphere_radius:
+        default: 2.0
+      cylinder_radius:
+        default: 1.0
+      gear_count:
+        default: 16
+  box:
+    desc: This is a cube defined using SDF.
+    type: sdf
+    parameters:
+      width:
+        default: 5.0
+      length:
+        default: 5.0
+      height:
+        default: 5.0
+  blobby:
+    desc: This is a blobby shape defined using SDF.
+    type: sdf
+    parameters:
+      small_sphere_radius:
+        default: 0.75
+      translation_distance:
+        default: 3.0
+      capsule_radius:
+        default: 0.5
+      outer_sphere_radius:
+        default: 1.5
+      blend_value:
+        default: 1
+
+render:
+  readme:
+  svg:
+    prefix: ./

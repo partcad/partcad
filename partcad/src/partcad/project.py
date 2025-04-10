@@ -44,10 +44,12 @@ from .part_factory_sweep import PartFactorySweep
 from . import part_factory_scad as pfscad
 from . import part_factory_step as pfs
 from . import part_factory_stl as pfstl
+from . import part_factory_sdf as pfsdf
 from . import part_factory_obj as pfo
 from . import part_factory_3mf as pf3
 from .part_factory_ai_cadquery import PartFactoryAiCadquery
 from .part_factory_ai_build123d import PartFactoryAiBuild123d
+from .part_factory_ai_sdf import PartFactoryAiSdf
 from .part_factory_ai_openscad import PartFactoryAiScad
 from . import part_factory_cadquery as pfc
 from . import part_factory_build123d as pfb
@@ -572,12 +574,16 @@ class Project(project_config.Configuration):
             PartFactoryAiCadquery(self.ctx, source_project, self, config)
         elif config["type"] == "ai-build123d":
             PartFactoryAiBuild123d(self.ctx, source_project, self, config)
+        elif config["type"] == "ai-sdf":
+            PartFactoryAiSdf(self.ctx, source_project, self, config)
         elif config["type"] == "ai-openscad":
             PartFactoryAiScad(self.ctx, source_project, self, config)
         elif config["type"] == "cadquery":
             pfc.PartFactoryCadquery(self.ctx, source_project, self, config)
         elif config["type"] == "build123d":
             pfb.PartFactoryBuild123d(self.ctx, source_project, self, config)
+        elif config["type"] == "sdf":
+            pfsdf.PartFactorySdf(self.ctx, source_project, self, config)
         elif config["type"] == "step":
             pfs.PartFactoryStep(self.ctx, source_project, self, config)
         elif config["type"] == "brep":
@@ -1228,7 +1234,9 @@ class Project(project_config.Configuration):
         ext_by_kind = {
             "cadquery": "py",
             "build123d": "py",
+            "sdf": "py",
             "ai-cadquery": "py",
+            "ai-sdf": "py",
             "ai-openscad": "scad",
         }
         return self._add_component(
@@ -1550,8 +1558,10 @@ class Project(project_config.Configuration):
                     if (
                         config["type"] == "cadquery"
                         or config["type"] == "build123d"
+                        or config["type"] == "sdf"
                         or config["type"] == "ai-cadquery"
                         or config["type"] == "ai-build123d"
+                        or config["type"] == "ai-sdf"
                     ):
                         path += ".py"
                     elif config["type"] == "openscad" or config["type"] == "ai-openscad":

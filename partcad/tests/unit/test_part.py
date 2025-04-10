@@ -201,6 +201,18 @@ def test_part_example_cadquery_logo():
     assert wrapped is not None
 
 
+def test_part_example_sdf():
+    """Instantiate all parts from the example: part_sdf"""
+    ctx = pc.init("examples")
+    box = ctx.get_part("//produce_part_sdf:box")
+    assert box is not None
+    gear = ctx.get_part("//produce_part_sdf:gear")
+    assert gear is not None
+
+    wrapped = asyncio.run(gear.get_wrapped(ctx))
+    assert wrapped is not None
+
+
 def test_part_example_build123d_primitive():
     """Instantiate all parts from the example: part_build123d_primitive"""
     ctx = pc.init("examples")

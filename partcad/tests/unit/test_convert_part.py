@@ -17,6 +17,7 @@ PARTS_CONFIG = {
     "cube_3mf": {"type": "3mf", "path": "3mf/cube.3mf"},
     "cube_build123d": {"type": "build123d", "path": "build123d/cube.py"},
     "cube_cadquery": {"type": "cadquery", "path": "cadquery/cube.py"},
+    "box_sdf": {"type": "sdf", "path": "sdf/box.py"},
     "prism_scad": {"type": "scad", "path": "scad/prism.scad"},
     "bolt_step": {"type": "step", "path": "step/bolt.step"},
     "cube_stl": {"type": "stl", "path": "stl/cube.stl"},
@@ -27,6 +28,9 @@ PARTS_CONFIG = {
 @pytest.mark.parametrize("target_format", sorted(ALLOWED_TARGET_FORMATS))
 def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: Path):
     """Test converting every supported input format to allowed output formats."""
+
+    if source_part == "box_sdf" and target_format == "iges":
+        pytest.skip("IGES export from SDF is not fully supported yet.")
 
     source_config = PARTS_CONFIG[source_part]
     source_format, source_file = source_config["type"], Path(source_config["path"])

@@ -16,7 +16,7 @@ from ...cli_context import CliContext
 @click.option(
     "--input",
     "input_type",
-    type=click.Choice(["step", "brep", "stl", "3mf", "scad", "cadquery", "build123d"]),
+    type=click.Choice(["step", "brep", "stl", "3mf", "scad", "cadquery", "build123d", "sdf"]),
     help="Input file type. Inferred from filename if not provided.",
     required=False,
     default=None,

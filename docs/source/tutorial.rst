@@ -135,7 +135,7 @@ The `pc adhoc convert` command allows you to quickly convert a CAD file from one
 
 Supported formats:
 ------------------
-- **Input:** STL, STEP, BREP, 3MF, SCAD, CadQuery, Build123d
+- **Input:** STL, STEP, BREP, 3MF, SCAD, CadQuery, Build123d, SDF
 - **Output:** STL, STEP, BREP, 3MF, ThreeJS, OBJ, GLTF, IGES
 
 Examples:

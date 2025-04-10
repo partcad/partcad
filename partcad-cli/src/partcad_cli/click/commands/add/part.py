@@ -41,6 +41,7 @@ from ...cli_context import CliContext
         [
             "cadquery",
             "build123d",
+            "sdf",
             "scad",
             "step",
             "brep",
@@ -49,6 +50,7 @@ from ...cli_context import CliContext
             "obj",
             "ai-cadquery",
             "ai-openscad",
+            "ai-sdf",
         ]
     ),
     # help="Type of the part",
