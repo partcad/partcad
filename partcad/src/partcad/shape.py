@@ -515,28 +515,44 @@ class Shape(ShapeConfiguration):
                 wrapper_path = wrapper.get(f"render_{format}.py")
 
                 request = {"wrapped": obj}
+
+                # Common defaults
+                line_weight = kwargs.get("line_weight", 1.0)
+                viewport_origin = kwargs.get("viewport_origin")
+                viewport_up = kwargs.get("viewport_up")
+
+                # 2D formats
                 if format in ["svg", "png"]:
-                    request["viewport_origin"] = kwargs.get("viewport_origin", [100, -100, 100])
-                    request["line_weight"] = kwargs.get("line_weight", 1.0)
+                    request["viewport_origin"] = viewport_origin or (
+                        [0, 0, 100] if self.kind == "sketch" else [100, -100, 100]
+                    )
+                    if self.kind == "sketch":
+                        request["viewport_up"] = viewport_up or [0, 1, 0]
+                    request["line_weight"] = line_weight
+
                     if format == "png":
                         request["width"] = kwargs.get("width", 512)
                         request["height"] = kwargs.get("height", 512)
 
-                elif format in ["dxf"]:
-                    request["line_weight"] = kwargs.get("line_weight", 1.0)
-                    request["viewport_origin"] = kwargs.get("viewport_origin", [0, 0, -100])
-                    request["viewport_up"] = kwargs.get("viewport_up", [0, -1, 0])
+                # DXF
+                elif format == "dxf":
+                    request["line_weight"] = line_weight
+                    request["viewport_origin"] = viewport_origin or [0, 0, 100]
+                    request["viewport_up"] = viewport_up or [0, 1, 0]
 
+                # Mesh formats
                 elif format in ["3mf", "obj", "gltf", "stl", "threejs"]:
                     request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
                     request["angularTolerance"] = kwargs.get(
                         "angularTolerance", render_opts.get("angularTolerance", 0.1)
                     )
+
                     if format == "stl":
                         request["ascii"] = kwargs.get("ascii", render_opts.get("ascii", False))
                     elif format == "gltf":
                         request["binary"] = kwargs.get("binary", render_opts.get("binary", False))
 
+                # CAD formats
                 elif format in ["step", "iges"]:
                     request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
                     request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))

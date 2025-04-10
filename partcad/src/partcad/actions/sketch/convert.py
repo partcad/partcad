@@ -188,6 +188,7 @@ def convert_sketch_action(
         }
         project.set_sketch_config(sketch_name, new_config)
         pc_logging.debug(f"Final config for sketch '{sketch_name}': {new_config}")
+
         return final_output_path, new_config
 
     return converted_path, new_config
