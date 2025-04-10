@@ -45,11 +45,11 @@ def cli(cli_ctx: CliContext, input_type, output_type, input_filename, output_fil
 
         if not input_type:
             pc.logging.error("Cannot infer input sketch type. Please specify --input explicitly.")
-            raise click.Abort()
+            return
+
         if not output_type:
             pc.logging.error("Cannot infer output sketch type. Please specify --output explicitly.")
-            raise click.Abort()
-
+            return
 
         if output_path is None:
             output_path = input_path.with_suffix(f".{SKETCH_EXTENSION_MAPPING[output_type]}")
@@ -60,4 +60,4 @@ def cli(cli_ctx: CliContext, input_type, output_type, input_filename, output_fil
             pc.logging.info(f"Conversion complete: {output_path}")
         except Exception as e:
             pc.logging.error("Failed to convert: %s", e)
-            raise click.Abort()
+            raise click.Abort() from e

@@ -46,10 +46,10 @@ def cli(cli_ctx: CliContext, input_type, output_type, input_filename, output_fil
 
         if not input_type:
             pc.logging.error("Cannot infer input type. Please specify --input explicitly.")
-            raise click.Abort()
+            return
         if not output_type:
             pc.logging.error("Cannot infer output type. Please specify --output explicitly.")
-            raise click.Abort()
+            return
 
         if output_path is None:
             output_path = input_path.with_suffix(f".{PART_EXTENSION_MAPPING[output_type]}")
@@ -60,4 +60,4 @@ def cli(cli_ctx: CliContext, input_type, output_type, input_filename, output_fil
             pc.logging.info(f"Conversion complete: {output_path}")
         except Exception as e:
             pc.logging.error(f"Error during conversion: {e}")
-            raise click.Abort()
+            raise click.Abort() from e
