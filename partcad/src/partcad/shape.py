@@ -219,10 +219,10 @@ class Shape(ShapeConfiguration):
         return b3d_solid
 
     async def get_sdf(self, ctx):
+        import tempfile
         from OCP.StlAPI import StlAPI_Writer, StlAPI_Reader
-        from OCP.TopoDS import TopoDS_Shape, TopoDS_Shell
-        from OCP.TopAbs import TopAbs_ShapeEnum
-        from OCP.BRep import BRep_Builder
+        from OCP.TopoDS import TopoDS_Shape
+        from OCP.BRepMesh import BRepMesh_IncrementalMesh
 
         if self.config.get("type") != "sdf":
             pc_logging.error("get_sdf() called on non-SDF shape (type = %s)", self.config.get("type"))
@@ -233,30 +233,37 @@ class Shape(ShapeConfiguration):
             pc_logging.error("Cannot generate SDF: shape is empty or null (wrapped = %s)", shape)
             return
 
-        if shape.ShapeType() == TopAbs_ShapeEnum.TopAbs_FACE:
-            pc_logging.debug("Wrapping TopoDS_Face in TopoDS_Shell")
-            builder = BRep_Builder()
-            shell = TopoDS_Shell()
-            builder.MakeShell(shell)
-            builder.Add(shell, shape)
-            shape = shell
-
-        with tempfile.NamedTemporaryFile(suffix=".stl") as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".stl", delete=False) as tmp:
+            tmp_path = tmp.name
             writer = StlAPI_Writer()
-            success = writer.Write(shape, tmp.name)
+            pc_logging.debug("Writing SDF shape to STL (class = %s)", type(shape).__name__)
+            success = writer.Write(shape, tmp_path)
             tmp.flush()
 
-            if not success:
-                pc_logging.error("Failed to write STL from SDF shape (shape class = %s)", type(shape).__name__)
+        if not success:
+            pc_logging.warning("StlAPI_Writer failed, attempting tessellation fallback")
+
+            try:
+                pc_logging.debug("Performing fallback tessellation with BRepMesh_IncrementalMesh")
+                mesh = BRepMesh_IncrementalMesh(shape, 0.1)
+                mesh.Perform()
+
+                writer = StlAPI_Writer()
+                writer.SetASCIIMode(True)
+                with open(tmp_path, "w") as f:
+                    writer.Write(shape, tmp_path)
+
+            except Exception as e:
+                pc_logging.exception("Fallback tessellation failed: %s", e)
                 return
 
-            reader = StlAPI_Reader()
-            result = TopoDS_Shape()
-            read_success = reader.Read(result, tmp.name)
+        reader = StlAPI_Reader()
+        result = TopoDS_Shape()
+        read_success = reader.Read(result, tmp_path)
 
-            if not read_success or result.IsNull():
-                pc_logging.error("Failed to read STL into TopoDS_Shape from: %s", tmp.name)
-                return
+        if not read_success or result.IsNull():
+            pc_logging.error("Failed to read STL into TopoDS_Shape from: %s", tmp_path)
+            return
 
             return result
 

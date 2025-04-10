@@ -1,20 +1,42 @@
 import os
 import re
 import sys
+import tempfile
 from typing import Iterable
 import numpy as np
 
 import sdf
-import OCP
+from OCP.gp import gp_Pnt
+from OCP.TColgp import TColgp_Array1OfPnt
+from OCP.Poly import Poly_Triangle, Poly_Array1OfTriangle, Poly_Triangulation
+from OCP.TopoDS import TopoDS_Face, TopoDS_Shell, TopoDS_Solid
+from OCP.BRep import BRep_Builder
+from OCP.StlAPI import StlAPI_Writer
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 import custom_cqgi
 import py_stubs.ocp_vscode
-from ocp_tessellate.ocp_utils import (
-    is_vector,
-    vertex,
-)
+from ocp_tessellate.ocp_utils import is_vector, vertex
+
+
+def tessellate(shape):
+    from OCP.BRepMesh import BRepMesh_IncrementalMesh
+
+    mesh = BRepMesh_IncrementalMesh(shape, 0.1)
+    mesh.Perform()
+    return shape
+
+
+def serialize_stl(shape, ascii=True):
+    mode = "w" if ascii else "wb"
+    with tempfile.NamedTemporaryFile(suffix=".stl", mode=mode, delete=False) as f:
+        writer = StlAPI_Writer()
+        writer.SetASCIIMode(ascii)
+        writer.Write(shape, f.name)
+        f.flush()
+        f.seek(0)
+        return f.read()
 
 
 def sdf_triangles_to_topods(triangles: np.ndarray, as_solid: bool = False):
@@ -22,28 +44,28 @@ def sdf_triangles_to_topods(triangles: np.ndarray, as_solid: bool = False):
         return None
 
     arr = np.array(triangles)
-    pts = OCP.TColgp.TColgp_Array1OfPnt(1, len(arr))
+    pts = TColgp_Array1OfPnt(1, len(arr))
     for i, (x, y, z) in enumerate(arr):
-        pts.SetValue(i + 1, OCP.gp.gp_Pnt(x, y, z))
+        pts.SetValue(i + 1, gp_Pnt(x, y, z))
 
     n_tris = len(arr) // 3
-    tris = OCP.Poly.Poly_Array1OfTriangle(1, n_tris)
+    tris = Poly_Array1OfTriangle(1, n_tris)
     for i in range(n_tris):
-        t = OCP.Poly.Poly_Triangle(i * 3 + 1, i * 3 + 2, i * 3 + 3)
+        t = Poly_Triangle(i * 3 + 1, i * 3 + 2, i * 3 + 3)
         tris.SetValue(i + 1, t)
 
-    poly = OCP.Poly.Poly_Triangulation(pts, tris)
+    poly = Poly_Triangulation(pts, tris)
 
-    face = OCP.TopoDS.TopoDS_Face()
-    builder = OCP.BRep.BRep_Builder()
+    face = TopoDS_Face()
+    builder = BRep_Builder()
     builder.MakeFace(face, poly)
 
     if as_solid:
-        shell = OCP.TopoDS.TopoDS_Shell()
+        shell = TopoDS_Shell()
         builder.MakeShell(shell)
         builder.Add(shell, face)
 
-        solid = OCP.TopoDS.TopoDS_Solid()
+        solid = TopoDS_Solid()
         builder.MakeSolid(solid)
         builder.Add(solid, shell)
         return solid
@@ -109,15 +131,12 @@ def process(path, request):
                     tri_points = np.array(points).reshape(-1, 3)
                     shape_3d = sdf_triangles_to_topods(tri_points)
 
-                    if shape_3d is None:
-                        continue
-
-                    if hasattr(shape_3d, "IsNull") and shape_3d.IsNull():
+                    if shape_3d is None or (hasattr(shape_3d, "IsNull") and shape_3d.IsNull()):
                         continue
 
                     results.append(shape_3d)
 
-                except Exception as e:
+                except Exception:
                     continue
 
             elif isinstance(shape, Iterable):
@@ -134,7 +153,7 @@ def process(path, request):
                                 )
                                 tpts = np.array(pts).reshape(-1, 3)
                                 yield sdf_triangles_to_topods(tpts)
-                            except Exception as e:
+                            except Exception:
                                 continue
                         elif is_vector(obj):
                             yield vertex(obj.wrapped)
