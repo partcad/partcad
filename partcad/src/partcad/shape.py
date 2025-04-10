@@ -155,8 +155,8 @@ class Shape(ShapeConfiguration):
                             self._wrapped = cached[self.kind]
                         if to_cache_in_memory.get("cmps", False):
                             self.components = cached["cmps"]
-                        if self.kind in cached and cached[self.kind] is not None:
-                            return cached[self.kind]
+                        # if self.kind in cached and cached[self.kind] is not None:
+                        #     return cached[self.kind]
                     else:
                         if self.cache:
                             pc_logging.warning(f"No cache hash for shape: {self.name}")
@@ -220,16 +220,26 @@ class Shape(ShapeConfiguration):
 
     async def get_sdf(self, ctx):
         from OCP.StlAPI import StlAPI_Writer, StlAPI_Reader
-        from OCP.TopoDS import TopoDS_Shape
+        from OCP.TopoDS import TopoDS_Shape, TopoDS_Shell
+        from OCP.TopAbs import TopAbs_ShapeEnum
+        from OCP.BRep import BRep_Builder
 
         if self.config.get("type") != "sdf":
-            pc_logging.error("get_sdf() called on non-SDF shape")
-            raise ValueError("get_sdf() called on non-SDF shape")
+            pc_logging.error("get_sdf() called on non-SDF shape (type = %s)", self.config.get("type"))
+            return
 
         shape = await self.get_wrapped(ctx)
         if shape is None or (hasattr(shape, "IsNull") and shape.IsNull()):
-            pc_logging.error("Cannot generate SDF: shape is empty or null")
-            raise RuntimeError("Cannot generate SDF: shape is empty")
+            pc_logging.error("Cannot generate SDF: shape is empty or null (wrapped = %s)", shape)
+            return
+
+        if shape.ShapeType() == TopAbs_ShapeEnum.TopAbs_FACE:
+            pc_logging.debug("Wrapping TopoDS_Face in TopoDS_Shell")
+            builder = BRep_Builder()
+            shell = TopoDS_Shell()
+            builder.MakeShell(shell)
+            builder.Add(shell, shape)
+            shape = shell
 
         with tempfile.NamedTemporaryFile(suffix=".stl") as tmp:
             writer = StlAPI_Writer()
@@ -237,16 +247,16 @@ class Shape(ShapeConfiguration):
             tmp.flush()
 
             if not success:
-                pc_logging.error("Failed to write STL from SDF shape")
-                raise RuntimeError("STL export failed")
+                pc_logging.error("Failed to write STL from SDF shape (shape class = %s)", type(shape).__name__)
+                return
 
             reader = StlAPI_Reader()
             result = TopoDS_Shape()
             read_success = reader.Read(result, tmp.name)
 
             if not read_success or result.IsNull():
-                pc_logging.error("Failed to read STL into TopoDS_Shape")
-                raise RuntimeError("STL import failed")
+                pc_logging.error("Failed to read STL into TopoDS_Shape from: %s", tmp.name)
+                return
 
             return result
 
