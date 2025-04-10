@@ -571,11 +571,16 @@ class Shape(ShapeConfiguration):
 
                 # 2D formats
                 if format in ["svg", "png"]:
-                    request["viewport_origin"] = viewport_origin or ([0, 0, 100] if self.kind == "sketch" else [100, -100, 100])
+                    request["viewport_origin"] = viewport_origin or ([0, 0, -100] if self.kind == "sketch" else [100, -100, 100])
+
+                    if format == "png":
+                        request["width"] = kwargs.get("width", 512)
+                        request["height"] = kwargs.get("height", 512)
 
                     if self.kind == "sketch":
-                        default_up = [0, 1, 0] if request["viewport_origin"][2] != 0 else [0, 0, 1]
+                        default_up = [1, 0, 0] if request["viewport_origin"][2] != 0 else [0, 0, 1]
                         request["viewport_up"] = viewport_up or default_up
+
 
                     request["line_weight"] = line_weight
 
@@ -600,7 +605,6 @@ class Shape(ShapeConfiguration):
                 elif format in ["step", "iges"]:
                     request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
                     request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
-
 
                 register_ocp_helper()
 
