@@ -163,7 +163,6 @@ Feature: `pc add part` command
       parts:
         example:
           type: sdf
-          path: example.py
       assemblies:
       """
 
