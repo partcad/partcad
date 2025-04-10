@@ -36,7 +36,7 @@ from ocp_serialize import register as register_ocp_helper
 
 from . import telemetry
 
-EXTENSION_MAPPING = {
+PART_EXTENSION_MAPPING = {
     "step": "step",
     "brep": "brep",
     "stl": "stl",
@@ -48,6 +48,13 @@ EXTENSION_MAPPING = {
     "cadquery": "py",
     "build123d": "py",
     "scad": "scad",
+}
+
+SKETCH_EXTENSION_MAPPING = {
+    "svg": "svg",
+    "dxf": "dxf",
+    "cadquery": "py",
+    "build123d": "py",
 }
 
 previously_displayed_shape = None
@@ -444,7 +451,7 @@ class Shape(ShapeConfiguration):
         Centralized method to render shape via external wrapper.
         Args:
             ctx: Execution context.
-            format_name: Render format (e.g., "png", "svg").
+            format_name: Render format (e.g., "png", "svg", "dxf").
             project: Optional project object.
             filepath: Target file path for output.
             kwargs: Additional options (width, height, etc.).
@@ -462,6 +469,13 @@ class Shape(ShapeConfiguration):
                 "svglib==1.5.1",
                 "reportlab",
                 "rlpycairo==0.3.0",
+            ],
+            "dxf": [
+                "cadquery-ocp==7.7.2",
+                "ocpsvg==0.3.4",
+                "build123d==0.8.0",
+                "svgpathtools==1.6.1",
+                "ezdxf==1.1.1",
             ],
             "brep": ["cadquery-ocp==7.7.2"],
             "step": ["cadquery-ocp==7.7.2"],
@@ -493,7 +507,7 @@ class Shape(ShapeConfiguration):
             formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
 
             for format in formats_to_render:
-                file_extension = EXTENSION_MAPPING.get(format, format)
+                file_extension = PART_EXTENSION_MAPPING.get(format, format)
                 render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
                 pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
@@ -502,23 +516,43 @@ class Shape(ShapeConfiguration):
 
                 request = {"wrapped": obj}
 
+                # Common defaults
+                line_weight = kwargs.get("line_weight", 1.0)
+                viewport_origin = kwargs.get("viewport_origin")
+                viewport_up = kwargs.get("viewport_up")
+
+                # 2D formats
                 if format in ["svg", "png"]:
-                    request["viewport_origin"] = kwargs.get("viewport_origin", [100, -100, 100])
-                    request["line_weight"] = kwargs.get("line_weight", 1.0)
+                    request["viewport_origin"] = viewport_origin or (
+                        [0, 0, 100] if self.kind == "sketch" else [100, -100, 100]
+                    )
+                    if self.kind == "sketch":
+                        request["viewport_up"] = viewport_up or [0, 1, 0]
+                    request["line_weight"] = line_weight
+
                     if format == "png":
                         request["width"] = kwargs.get("width", 512)
                         request["height"] = kwargs.get("height", 512)
 
+                # DXF
+                elif format == "dxf":
+                    request["line_weight"] = line_weight
+                    request["viewport_origin"] = viewport_origin or [0, 0, 100]
+                    request["viewport_up"] = viewport_up or [0, 1, 0]
+
+                # Mesh formats
                 elif format in ["3mf", "obj", "gltf", "stl", "threejs"]:
                     request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
                     request["angularTolerance"] = kwargs.get(
                         "angularTolerance", render_opts.get("angularTolerance", 0.1)
                     )
+
                     if format == "stl":
                         request["ascii"] = kwargs.get("ascii", render_opts.get("ascii", False))
                     elif format == "gltf":
                         request["binary"] = kwargs.get("binary", render_opts.get("binary", False))
 
+                # CAD formats
                 elif format in ["step", "iges"]:
                     request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
                     request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
@@ -536,10 +570,7 @@ class Shape(ShapeConfiguration):
                 # Run wrapper
                 with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
                     response_serialized, errors = await runtime.run_async(
-                        [
-                            wrapper_path,
-                            final_filepath,
-                        ],
+                        [wrapper_path, final_filepath],
                         request_serialized,
                     )
                     sys.stderr.write(errors)

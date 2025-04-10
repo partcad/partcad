@@ -29,4 +29,4 @@ def cli(cli_ctx):
             pc.logging.info(f"Successfully updated {len(packages_list)} packages")
         except Exception as e:
             pc.logging.error(f"Error updating packages: {str(e)}")
-            raise click.Abort()
+            raise click.Abort() from e

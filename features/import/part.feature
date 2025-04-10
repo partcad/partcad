@@ -1,11 +1,11 @@
-@cli @import
+@cli @import @part
 Feature: `pc import` command
 
   Background: Initialize PartCAD project
     Given I am in "/tmp/sandbox/behave" directory
     And I have temporary $HOME in "/tmp/sandbox/home"
     And a directory named "input_files" exists
-    And I copy file "examples/feature_convert/stl/cube.stl" to "input_files/cube.stl" inside test workspace
+    And I copy file "examples/feature_convert_part/stl/cube.stl" to "input_files/cube.stl" inside test workspace
     And a file named "partcad.yaml" with content:
       """
       dependencies:
@@ -54,7 +54,7 @@ Feature: `pc import` command
 
   @error
   Scenario: Reject invalid file format conversion
-    Given I copy file "examples/feature_convert/stl/cube.stl" to "input_files/cube.stl" inside test workspace
+    Given I copy file "examples/feature_convert_part/stl/cube.stl" to "input_files/cube.stl" inside test workspace
     When I run "pc import part stl input_files/cube.stl -t unknown_format"
     Then the command should exit with a status code of "2"
 

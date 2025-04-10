@@ -353,6 +353,43 @@ class Project(project_config.Configuration):
             return None
         return self.sketch_configs[sketch_name]
 
+    def set_sketch_config(self, sketch_name, sketch_config):
+        """
+        Save the updated sketch configuration to the project configuration file.
+        """
+        if "name" in sketch_config:
+            del sketch_config["name"]
+        if "orig_name" in sketch_config:
+            del sketch_config["orig_name"]
+
+        if "offset" in sketch_config and isinstance(sketch_config["offset"], list):
+            sketch_config["offset"] = ruamel.yaml.comments.CommentedSeq(sketch_config["offset"])
+            sketch_config["offset"].fa.set_flow_style()
+
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+
+        with self.lock:
+            try:
+                with open(self.config_path) as fp:
+                    package_config = yaml.load(fp)
+
+                if "sketches" in package_config:
+                    sketches = package_config["sketches"]
+                    sketches[sketch_name] = sketch_config
+                else:
+                    package_config["sketches"] = {sketch_name: sketch_config}
+
+                with open(self.config_path, "w") as fp:
+                    yaml.dump(package_config, fp)
+
+            except (IOError, OSError) as e:
+                pc_logging.error(f"Failed to update sketch configuration: {e}")
+                raise
+            except Exception as e:
+                pc_logging.error(f"Unexpected error updating sketch configuration: {e}")
+                raise
+
     def init_sketches(self):
         if self.sketch_configs is None:
             return
@@ -1366,7 +1403,7 @@ class Project(project_config.Configuration):
                 raise EmptyShapesError
 
             tasks = []
-            render_formats = ["svg", "png", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
+            render_formats = ["svg", "png", "dxf", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
 
             for shape in shapes:
                 shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
