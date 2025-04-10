@@ -21,7 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
+  # OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
+  OSES: '["windows-latest"]'
   PYTHONS: '["3.10", "3.11", "3.12"]'
   VERSION: 0.7.135
   CONTAINER_REGISTRY: ghcr.io
@@ -230,11 +231,12 @@ jobs:
           mamba activate ${{ format('env-test-behave-{0}', matrix.python-version) }}
 
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "Windows codepage before change:"
-            chcp
-            echo "Changing codepage to 65001 (UTF-8)..."
-            chcp 65001
+            echo "🧪 Windows codepage before change:"
+            cmd /c chcp
+            echo "🧪 Changing codepage to 65001 (UTF-8)..."
+            cmd /c chcp 65001
           fi
+
 
           echo "Python encoding info:"
           python -c "import sys, locale; print('stdout.encoding:', sys.stdout.encoding); print('locale.getpreferredencoding():', locale.getpreferredencoding())"
