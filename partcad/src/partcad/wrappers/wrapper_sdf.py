@@ -36,7 +36,13 @@ def serialize_stl(shape, ascii=True):
         writer.Write(shape, f.name)
         f.flush()
         f.seek(0)
-        return f.read()
+        content = f.read()
+        try:
+            os.remove(f.name)
+        except Exception:
+            pass
+
+        return content
 
 
 def sdf_triangles_to_topods(triangles: np.ndarray, as_solid: bool = False):
