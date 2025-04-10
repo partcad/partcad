@@ -368,19 +368,27 @@ class Project(project_config.Configuration):
 
         yaml = ruamel.yaml.YAML()
         yaml.preserve_quotes = True
-        with open(self.config_path) as fp:
-            package_config = yaml.load(fp)
-            fp.close()
 
-        if "sketches" in package_config:
-            sketches = package_config["sketches"]
-            sketches[sketch_name] = sketch_config
-        else:
-            package_config["sketches"] = {sketch_name: sketch_config}
+        with self.lock:
+            try:
+                with open(self.config_path) as fp:
+                    package_config = yaml.load(fp)
 
-        with open(self.config_path, "w") as fp:
-            yaml.dump(package_config, fp)
-            fp.close()
+                if "sketches" in package_config:
+                    sketches = package_config["sketches"]
+                    sketches[sketch_name] = sketch_config
+                else:
+                    package_config["sketches"] = {sketch_name: sketch_config}
+
+                with open(self.config_path, "w") as fp:
+                    yaml.dump(package_config, fp)
+
+            except (IOError, OSError) as e:
+                pc_logging.error(f"Failed to update sketch configuration: {e}")
+                raise
+            except Exception as e:
+                pc_logging.error(f"Unexpected error updating sketch configuration: {e}")
+                raise
 
     def init_sketches(self):
         if self.sketch_configs is None:
