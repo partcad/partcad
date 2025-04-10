@@ -572,13 +572,13 @@ class Shape(ShapeConfiguration):
                 # 2D formats
                 if format in ["svg", "png"]:
                     request["viewport_origin"] = viewport_origin or ([0, 0, 100] if self.kind == "sketch" else [100, -100, 100])
+
                     if self.kind == "sketch":
-                        request["viewport_up"] = viewport_up or [0, 1, 0]
+                        default_up = [0, 1, 0] if request["viewport_origin"][2] != 0 else [0, 0, 1]
+                        request["viewport_up"] = viewport_up or default_up
+
                     request["line_weight"] = line_weight
 
-                    if format == "png":
-                        request["width"] = kwargs.get("width", 512)
-                        request["height"] = kwargs.get("height", 512)
 
                 # DXF
                 elif format == "dxf":
@@ -646,7 +646,7 @@ class Shape(ShapeConfiguration):
                         f"Render {format_name.upper()} failed for {self.project_name}:{self.name}: {result.get('exception', 'Unknown error')}"
                     )
                 if "exception" in result and result["exception"]:
-                    pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
+                    pc_logging.exception(RuntimeError(result['exception']))
 
     def render(
         self,
