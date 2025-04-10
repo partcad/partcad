@@ -77,7 +77,7 @@ class PartFactorySdf(PartFactoryPython):
             data = base64.b64encode(pickle.dumps(request)).decode()
 
             await self.runtime.ensure_async(
-                "git+https://github.com/fogleman/sdf",
+                "sdf-fork",
                 session=self.session,
             )
             await self.runtime.ensure_async(

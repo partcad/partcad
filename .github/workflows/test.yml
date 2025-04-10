@@ -296,7 +296,7 @@ jobs:
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples/partcad
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 4 test -r --package //pub/examples/partcad
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi -v --threads-max 4 render -r --package //pub/examples/partcad
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max 4 render -r --package //pub/examples/partcad
           coverage combine
           # END PARTCAD EXAMPLES
 

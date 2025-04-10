@@ -5440,14 +5440,15 @@ doc = ["intersphinx_registry", "jupyterlite-pyodide-kernel", "jupyterlite-sphinx
 test = ["Cython", "array-api-strict (>=2.0,<2.1.1)", "asv", "gmpy2", "hypothesis (>=6.30)", "meson", "mpmath", "ninja ; sys_platform != \"emscripten\"", "pooch", "pytest", "pytest-cov", "pytest-timeout", "pytest-xdist", "scikit-umfpack", "threadpoolctl"]
 
 [[package]]
-name = "sdf"
-version = "0.1"
+name = "sdf-fork"
+version = "0.1.1"
 description = "Generate 3D meshes from signed distance functions."
 optional = false
 python-versions = "*"
 groups = ["partcad"]
-files = []
-develop = false
+files = [
+    {file = "sdf_fork-0.1.1.tar.gz", hash = "sha256:cd1b842960ededf033cf3f099755c6e39cdd9cd1b815d6dcbfefbdf730f601c6"},
+]
 
 [package.dependencies]
 matplotlib = "*"
@@ -5456,12 +5457,6 @@ numpy = "*"
 Pillow = "*"
 scikit-image = ">=0.17"
 scipy = "*"
-
-[package.source]
-type = "git"
-url = "https://github.com/fogleman/sdf.git"
-reference = "HEAD"
-resolved_reference = "d58a6fc63b75fc1cf1ebb71e0b42bf552319c8f1"
 
 [[package]]
 name = "secretstorage"
@@ -7117,4 +7112,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "083ebb80c53be20caf6c38bd1686aa985eb11a8f52f72916643065930563f0e8"
+content-hash = "b95a4fe4459cbffe65069313e7329ab5d45967f3ff100584fafea8e3d3afa793"

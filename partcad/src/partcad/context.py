@@ -868,9 +868,9 @@ class Context(project_config.Configuration):
 
     def get_part_build123d(self, part_spec, params=None):
         return asyncio.run(self._get_part(part_spec, params).get_build123d(self))
-      
-    # def get_part_sdf(self, part_spec, params=None):
-    #     return asyncio.run(self._get_part(part_spec, params).get_sdf(self))
+
+    def get_part_sdf(self, part_spec, params=None):
+        return asyncio.run(self._get_part(part_spec, params).get_sdf(self))
 
     def _get_assembly(self, assembly_spec, params=None):
         project_name, assembly_name = resolve_resource_path(

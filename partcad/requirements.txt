@@ -1,6 +1,7 @@
 cadquery-ocp==7.7.2
 ocpsvg==0.3.4
 build123d==0.8.0
+sdf-fork
 pyyaml>=6.0.1
 GitPython>=3.1.40
 ruamel.yaml>=0.18.5
@@ -25,5 +26,3 @@ openai
 
 # Locally hosted AI
 ollama
-
-sdf @ git+https://github.com/fogleman/sdf.git#egg=sdf

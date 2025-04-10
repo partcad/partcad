@@ -54,7 +54,6 @@ import copyreg
 from io import BytesIO
 from typing import Any
 
-import numpy as np
 import OCP
 
 

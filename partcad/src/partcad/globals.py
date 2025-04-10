@@ -97,9 +97,9 @@ def get_part_build123d(part_name, params=None) -> Part:
     return init().get_part_build123d(part_name, params=params)
 
 
-# def get_part_sdf(part_name, params=None) -> Part:
-#     """Get the part from the given project"""
-#     return init().get_part_sdf(part_name, params=params)
+def get_part_sdf(part_name, params=None) -> Part:
+    """Get the part from the given project"""
+    return init().get_part_sdf(part_name, params=params)
 
 
 def render(format=None, output_dir=None):
