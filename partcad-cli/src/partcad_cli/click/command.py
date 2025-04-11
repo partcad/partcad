@@ -18,6 +18,9 @@ import yaml
 import partcad as pc
 from partcad_cli.click.loader import Loader
 from partcad_cli.click.cli_context import CliContext
+from partcad_cli.click.encoding import initialize_cli
+
+cli_encoding = initialize_cli()
 
 global cli_span
 cli_span: pc.telemetry.trace.Span = None
@@ -140,7 +143,7 @@ click.rich_click.COMMAND_GROUPS = {
     "partcad_cli.click.command": command_groups,
 }
 
-
+@cli_encoding.setup_click_command
 @click.command(cls=Loader)
 @click.option(
     "-v",
@@ -358,6 +361,13 @@ click.rich_click.COMMAND_GROUPS = {
 )
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str, **kwargs):
+
+    if not cli_encoding.unicode_supported and not no_ansi:
+        pc.logging.warning("Your terminal may not support Unicode characters.")
+        pc.logging.warning("Using plain text output (--no-ansi) automatically.")
+        pc.logging.warning("Set codepage to UTF-8 for full output support.")
+        no_ansi = True
+
     """
     \b
     ██████╗  █████╗ ██████╗ ████████╗ ██████╗ █████╗ ██████╗
@@ -546,8 +556,17 @@ cli.context_settings = {
 def process_result(click_ctx: click.Context, result, verbose, quiet, no_ansi, path, **kwargs):
     global cli_span
 
-    if not no_ansi:
-        pc.logging_ansi_terminal.fini()
+    try:
+        if result is not None and verbose:
+            pc.logging.debug(f"Command result: {result}")
+    except UnicodeError:
+        pc.logging.debug("Command completed with Unicode result that couldn't be logged")
+
+    try:
+        if not no_ansi:
+            pc.logging_ansi_terminal.fini()
+    except UnicodeError:
+        pass
 
     # Abort if there was at least one error reported during the execution time.
     # `result` is needed for the case when the command was not correct.
@@ -566,6 +585,9 @@ def process_result(click_ctx: click.Context, result, verbose, quiet, no_ansi, pa
 
 def main():
     try:
+        from partcad_cli.click.encoding import configure_unicode_output
+        configure_unicode_output()
+
         cli()
     except Exception as e:
         sentry_sdk.capture_exception(e)

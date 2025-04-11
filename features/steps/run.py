@@ -6,6 +6,8 @@ import os
 import subprocess
 from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin python.autoComplete.extraPaths
 
+from partcad_cli.click.encoding.subprocess_wrapper import run_command_with_output
+
 
 def run(context: Context, command: str):
     if command.startswith("pc "):
@@ -40,31 +42,37 @@ def run(context: Context, command: str):
     logging.debug(f"Running command: {command} in {cwd}")
 
     start_time = time.time()
-    # Run the command in the shell
-    result = subprocess.run(
+
+    returncode, stdout, stderr = run_command_with_output(
         command,
         shell=True,
-        capture_output=True,
-        text=True,
         cwd=cwd,
         env=env,
         encoding="utf-8",
+        errors="replace"
     )
+
     end_time = time.time()
     context.duration = end_time - start_time
 
-    logging.debug(f"Command output: {result.stdout}")
-    logging.debug(f"Command error: {result.stderr}")
-    logging.debug(f"Command return code: {result.returncode}")
+    logging.debug(f"Command output: {stdout}")
+    logging.debug(f"Command error: {stderr}")
+    logging.debug(f"Command return code: {returncode}")
 
     # Replace None with empty string
-    if result.stdout is None:
-        result.stdout = ""
-    if result.stderr is None:
-        result.stderr = ""
+    if stdout is None:
+        stdout = ""
+    if stderr is None:
+        stderr = ""
+
+    class CompletedProcess:
+        def __init__(self, returncode, stdout, stderr):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
 
     # Store the result in the context for further steps
-    context.result = result
+    context.result = CompletedProcess(returncode, stdout, stderr)
 
 
 @when("I run command")
