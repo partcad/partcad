@@ -256,16 +256,16 @@ jobs:
           mamba deactivate
 
 
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: behave-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: behave-test-results/junit.xml
-          coverage-report: behave-test-results/coverage.xml
+      # - name: Upload test results & coverage reports to github and codecov
+      #   uses: ./.github/actions/upload-test-results
+      #   with:
+      #     name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
+      #     path: behave-test-results/
+      #     retention-days: 7
+      #     status: ${{ job.status }}
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     codecov-files: behave-test-results/junit.xml
+      #     coverage-report: behave-test-results/coverage.xml
 
   # test-examples-partcad:
   #   name: "Examples (PartCAD)"
