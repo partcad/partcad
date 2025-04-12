@@ -5,7 +5,7 @@ from pathlib import Path
 from partcad.adhoc.convert import convert_sketch_file, generate_partcad_config
 
 
-SKETCH_INPUT_FORMATS = ["svg"]
+SKETCH_INPUT_FORMATS = ["svg", "dxf", "build123d", "cadquery"]
 SKETCH_OUTPUT_FORMATS = ["svg", "dxf"]
 
 SKETCH_TEST_FILES = {
