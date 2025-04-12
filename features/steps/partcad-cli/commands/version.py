@@ -120,13 +120,19 @@ def step_impl(context):
 def step_impl(context: Context) -> None:
     import subprocess
     import partcad
-
     import shutil
 
     partcad_path = shutil.which("partcad")
     if not partcad_path:
         raise RuntimeError("partcad executable not found in PATH")
-    cli_version = subprocess.check_output([partcad_path, "version"], stderr=subprocess.STDOUT).decode()
+
+    cli_output = subprocess.check_output([partcad_path, "version"], stderr=subprocess.STDOUT)
+
+    if isinstance(cli_output, bytes):
+        cli_version = cli_output.decode('utf-8', errors='replace')
+    else:
+        cli_version = cli_output
+
     package_version = partcad.__version__
 
     assert package_version in cli_version, (
