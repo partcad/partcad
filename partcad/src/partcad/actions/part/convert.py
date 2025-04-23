@@ -11,7 +11,7 @@ import partcad.logging as pc_logging
 from partcad.project import Project
 from partcad.utils import resolve_resource_path
 
-from partcad.shape import EXTENSION_MAPPING
+from partcad.shape import PART_EXTENSION_MAPPING
 
 SHALLOW_COPY_SUFFICIENT_TYPES = ["alias", "enrich"]
 
@@ -33,7 +33,7 @@ def get_source_path(project: Project, config: dict, part_name: str) -> Path:
         source_path = (Path(project.path) / config["path"]).resolve()
     else:
         part_type = config.get("type")
-        ext = EXTENSION_MAPPING.get(part_type, part_type)
+        ext = PART_EXTENSION_MAPPING.get(part_type, part_type)
         source_path = Path(project.config_dir) / f"{part_name}.{ext}"
 
     pc_logging.debug(f"Checking source path for '{part_name}': {source_path}")
@@ -147,7 +147,7 @@ def perform_conversion(
     dependencies_list: list = [],
 ) -> Path:
     """Handles file conversion and updates project configuration."""
-    new_ext = EXTENSION_MAPPING.get(target_format, target_format)
+    new_ext = PART_EXTENSION_MAPPING.get(target_format, target_format)
 
     if output_dir:
         out_dir = Path(output_dir).resolve()

@@ -24,8 +24,12 @@ def process(path, request):
         b3d_obj = b3d.Solid.make_box(1, 1, 1)
         b3d_obj.wrapped = request["wrapped"]
 
-        viewport_origin = tuple(request["viewport_origin"])
-        visible, hidden = b3d_obj.project_to_viewport(viewport_origin=viewport_origin)
+        viewport_origin = tuple(request.get("viewport_origin"))
+        viewport_up = tuple(request.get("viewport_up", [0, 0, 1]))
+        visible, hidden = b3d_obj.project_to_viewport(
+            viewport_origin=viewport_origin,
+            viewport_up=viewport_up,
+        )
         # visible = b3d_obj.project_to_viewport(
         #     viewport_origin=viewport_origin,
         #     ignore_hidden=True,

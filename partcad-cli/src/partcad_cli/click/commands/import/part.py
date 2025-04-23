@@ -9,7 +9,7 @@ from pathlib import Path
 
 import partcad as pc
 from partcad.actions.part import import_part_action
-from ...commands.convert import SUPPORTED_CONVERT_FORMATS
+from ...commands.convert.part import SUPPORTED_CONVERT_FORMATS
 from ...cli_context import CliContext
 
 # part_type: [file_extensions]

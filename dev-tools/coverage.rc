@@ -2,6 +2,7 @@
 branch = True
 concurrency = thread
 include = */partcad/*, */partcad-cli/*
+disable_warnings = already-imported
 parallel = True
 omit =
         */.partcad/*

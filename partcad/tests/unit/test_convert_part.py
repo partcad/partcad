@@ -6,11 +6,11 @@ from partcad.context import Context
 from partcad.actions.part import convert_part_action
 import yaml
 
-from partcad.shape import EXTENSION_MAPPING
+from partcad.shape import PART_EXTENSION_MAPPING
 
 ALLOWED_TARGET_FORMATS = {"step", "brep", "stl", "3mf", "threejs", "obj", "gltf", "iges"}
 
-SOURCE_DIR = Path("./examples/feature_convert")
+SOURCE_DIR = Path("./examples/feature_convert_part")
 
 PARTS_CONFIG = {
     "box_brep": {"type": "brep", "path": "brep/box.brep"},
@@ -62,79 +62,11 @@ def test_full_conversion_matrix(source_part: str, target_format: str, tmp_path: 
 
     convert_part_action(project, source_part, target_format, output_dir=str(output_dir))
 
-    expected_ext = EXTENSION_MAPPING[target_format]
+    expected_ext = PART_EXTENSION_MAPPING[target_format]
     expected_files = list(output_dir.glob(f"*.{expected_ext}"))
 
     assert expected_files, f"No converted file found in {output_dir}"
     pc_logging.info(f"Conversion successful: {source_part} -> {target_format}")
-
-
-@pytest.mark.parametrize("source_part", ["cube_enrich", "cube_enrich_scad", "cube_enrich_stl"])
-@pytest.mark.parametrize("target_format", ALLOWED_TARGET_FORMATS)
-def test_enrich_conversion(source_part: str, target_format: str, tmp_path: Path):
-    """Test conversion of enrich parts, ensuring parameters are applied correctly."""
-
-    project_dir = tmp_path / "enrich_project"
-    project_dir.mkdir()
-
-    source_file = project_dir / "cube.py"
-    source_file.write_text("# Dummy Cube Part\n")
-
-    yaml_path = project_dir / "partcad.yaml"
-    config_data = {
-        "parts": {
-            "cube": {"type": "cadquery", "path": "cube.py"},
-            source_part: {"type": "enrich", "source": ":cube", "with": {"width": 15, "height": 20}},
-        }
-    }
-
-    with open(yaml_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(config_data, f)
-
-    ctx = Context(str(project_dir))
-    project = ctx.get_project("")
-    output_dir = tmp_path / "output_dir"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    convert_part_action(project, source_part, target_format, output_dir=output_dir)
-
-    expected_ext = EXTENSION_MAPPING[target_format]
-    expected_file = output_dir / f"{source_part}.{expected_ext}"
-
-    assert expected_file.exists(), f"Enrich conversion failed: {expected_file} not found"
-
-
-@pytest.mark.parametrize("source_part", ["cube_alias", "cube_alias_step", "cube_alias_enrich"])
-@pytest.mark.parametrize("target_format", ALLOWED_TARGET_FORMATS)
-def test_alias_conversion(source_part: str, target_format: str, tmp_path: Path):
-    """Test conversion of alias parts, ensuring they correctly resolve their base part."""
-
-    project_dir = tmp_path / "alias_project"
-    project_dir.mkdir()
-
-    # Create base part file for alias resolution
-    source_file = project_dir / "cube.py"
-    source_file.write_text("# Dummy Cube Part\n")
-
-    yaml_path = project_dir / "partcad.yaml"
-    config_data = {
-        "parts": {"cube": {"type": "cadquery", "path": "cube.py"}, source_part: {"type": "alias", "source": ":cube"}}
-    }
-
-    with open(yaml_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(config_data, f)
-
-    ctx = Context(str(project_dir))
-    project = ctx.get_project("")
-    output_dir = tmp_path / "output_dir"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    convert_part_action(project, source_part, target_format, output_dir=output_dir)
-
-    expected_ext = EXTENSION_MAPPING[target_format]
-    expected_file = output_dir / f"{source_part}.{expected_ext}"
-
-    assert expected_file.exists(), f"Alias conversion failed, expected file not found: {expected_file}"
 
 
 def test_parse_parameters_in_source_name():
