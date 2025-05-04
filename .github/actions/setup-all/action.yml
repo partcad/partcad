@@ -130,7 +130,7 @@ runs:
         python -m pip install --upgrade wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
         python -m pip install --upgrade ./partcad
-        python -m pip install --upgrade --only-binary :all: htmlmin
+        python -m pip install --upgrade htmlmin
         python -m pip install --upgrade -r partcad/requirements-dev.in
         python -m pip install --upgrade ./partcad-cli
         python -m pip install --upgrade -r partcad-cli/requirements-dev.txt
