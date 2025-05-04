@@ -130,6 +130,7 @@ runs:
         python -m pip install --upgrade wheel mypy setuptools
         # Install all core and a subset of CLI dependencies, that are required for tests
         python -m pip install --upgrade ./partcad
+        python -m pip install --upgrade jaraco.functools==4.1.0
         python -m pip install --upgrade htmlmin
         python -m pip install --upgrade -r partcad/requirements-dev.in
         python -m pip install --upgrade ./partcad-cli
