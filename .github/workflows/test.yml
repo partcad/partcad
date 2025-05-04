@@ -52,7 +52,8 @@ jobs:
       - name: Build Container for Kicad
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad:${{ steps.setup.outputs.IMAGE_TAG }}"
+          cacheFrom:
+            "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad:${{ steps.setup.outputs.IMAGE_TAG }}"
           imageName: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad
           imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
           configFile: tools/containers/devcontainer-kicad.json
@@ -227,6 +228,8 @@ jobs:
           . ~/.bash_profile
           mkdir -pv behave-test-results
 
+          export PYTHONWARNINGS="ignore:DEPRECATION"
+
           mamba activate ${{ format('env-test-behave-{0}', matrix.python-version) }}
 
           export PYTHONUTF8=1
@@ -376,7 +379,7 @@ jobs:
         # TODO(clairbee): Move this to the environment variables too
         # os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
         python-version: ["3.10", "3.12"]
-        exclude: [{"os": "windows-latest-l", "python-version": "3.12"}]
+        exclude: [{ "os": "windows-latest-l", "python-version": "3.12" }]
     runs-on: ${{ matrix.os }}
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     timeout-minutes: 15
