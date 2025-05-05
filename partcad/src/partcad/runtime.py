@@ -268,7 +268,22 @@ class Runtime:
         # if stdout:
         #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
         if stderr:
-            pc_logging.error("Error in %s: %s" % (cmd, stderr))
+            # TODO(azhar): remove this when the issue is fixed
+            keywords = [
+                "DEPRECATION: Wheel filename",
+                "Invalid wheel filename (invalid version):",
+                "pip 25.3 will enforce this behaviour change.",
+            ]
+
+            stderr_lines = [
+                line.strip()
+                for line in stderr.splitlines()
+                if line.strip() and not any(keyword in line for keyword in keywords)
+            ]
+
+            if stderr_lines:
+                stderr = "\n".join(stderr_lines)
+                pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
         # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
         # f = open("/tmp/log", "w")
