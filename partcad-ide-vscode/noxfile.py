@@ -84,6 +84,14 @@ def _update_npm_packages(session: nox.Session) -> None:
     session.run("npm", "install", external=True)
 
 
+def _install_pip_version(session):
+    """
+    Installing a specific pip version compatible with pip-tools.
+    TODO(azhar): Remove this when pip-tools is updated to support pip 25.1+.
+    """
+    session.install("pip<25.1")
+
+
 def _setup_template_environment(session: nox.Session) -> None:
     session.install("wheel", "pip-tools")
     session.run("pip-compile", "--generate-hashes", "--resolver=backtracking", "--upgrade", "./requirements.in")
@@ -100,6 +108,7 @@ def _setup_template_environment(session: nox.Session) -> None:
 @nox.session()
 def setup(session: nox.Session) -> None:
     """Sets up the template for development."""
+    _install_pip_version(session)
     _setup_template_environment(session)
 
 
