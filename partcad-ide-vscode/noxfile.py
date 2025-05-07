@@ -93,6 +93,7 @@ def _install_pip_version(session):
 
 
 def _setup_template_environment(session: nox.Session) -> None:
+    _install_pip_version(session)
     session.install("wheel", "pip-tools")
     session.run("pip-compile", "--generate-hashes", "--resolver=backtracking", "--upgrade", "./requirements.in")
     session.run(
@@ -108,7 +109,6 @@ def _setup_template_environment(session: nox.Session) -> None:
 @nox.session()
 def setup(session: nox.Session) -> None:
     """Sets up the template for development."""
-    _install_pip_version(session)
     _setup_template_environment(session)
 
 
