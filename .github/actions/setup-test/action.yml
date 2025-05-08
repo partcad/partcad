@@ -1,4 +1,4 @@
-name: "Setup all"
+name: "Setup test"
 description: "Prepare the runner to test"
 
 inputs:
@@ -41,6 +41,15 @@ runs:
       if: runner.os == 'Windows'
       shell: powershell
       run: .github/actions/setup-test/openscad.ps1
+
+    - name: Run Healthcheck
+      shell: bash -el {0}
+      run: |
+        . ~/.bashrc
+        . ~/.bash_profile
+        mamba activate ${{ format('env-test-{0}-{1}', inputs.job, matrix.python-version) }}
+        pc healthcheck --fix
+        mamba deactivate
 
     #################################################  REGISTRY  ####################################################
 
