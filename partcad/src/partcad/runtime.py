@@ -191,10 +191,14 @@ class Runtime:
                 # TODO(clairbee): add timeout
             )
 
-            # if stdout:
-            #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+        if stdout:
+            pc_logging.debug("Output of %s: %s" % (cmd, stdout))
         if stderr:
-            pc_logging.debug("Error in %s: %s" % (cmd, stderr))
+            if p.returncode == 0:
+                pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
+                stderr = ""
+            else:
+                pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
         # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
         # f = open("/tmp/log", "w")
@@ -265,8 +269,8 @@ class Runtime:
             stdout = stdout.decode()
             stderr = stderr.decode()
 
-        # if stdout:
-        #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+        if stdout:
+            pc_logging.debug("Output of %s: %s" % (cmd, stdout))
         if stderr:
             # TODO(azhar): remove this when the issue is fixed
             keywords = [
@@ -283,7 +287,11 @@ class Runtime:
 
             if stderr_lines:
                 stderr = "\n".join(stderr_lines)
-                pc_logging.error("Error in %s: %s" % (cmd, stderr))
+                if p.returncode == 0:
+                    pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
+                    stderr = ""
+                else:
+                    pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
         # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
         # f = open("/tmp/log", "w")

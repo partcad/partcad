@@ -52,7 +52,8 @@ jobs:
       - name: Build Container for Kicad
         uses: devcontainers/ci@v0.3
         with:
-          cacheFrom: "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad:${{ steps.setup.outputs.IMAGE_TAG }}"
+          cacheFrom:
+            "${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad:${{ steps.setup.outputs.IMAGE_TAG }}"
           imageName: ${{ env.CONTAINER_REGISTRY }}/${{ github.repository }}-container-kicad
           imageTag: ${{ steps.setup.outputs.IMAGE_TAG }}
           configFile: tools/containers/devcontainer-kicad.json
@@ -295,7 +296,7 @@ jobs:
           cd ./examples
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub/examples/partcad
           # TODO(clairbee): Limit RAM usage by restricting the number of threads?
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi -v --threads-max 4 test -r --package //pub/examples/partcad
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub/examples/partcad
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.3 -m partcad_cli.click.command --no-ansi --threads-max 4 render -r --package //pub/examples/partcad
           coverage combine
           # END PARTCAD EXAMPLES
@@ -367,19 +368,14 @@ jobs:
 
   test-pub-repo:
     name: "Repo //pub"
-    # Note: preheat is using another set of machines
-    # needs: cache-preheat
+    needs:
+      - set-matrix
+      # - cache-preheat
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
-        # TODO(clairbee): Move this to the environment variables too
-        # os: [ubuntu-24.04-l, windows-latest-l, macos-13, macos-latest]
-        python-version: ["3.10", "3.12"]
-        exclude: [{"os": "windows-latest-l", "python-version": "3.12"}]
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
-    timeout-minutes: 15
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
@@ -390,8 +386,10 @@ jobs:
         with:
           job: pub-repo
 
-      - name: Test the entire repository
+      - name: Basic integration test for CLI (on the public repo)
         shell: bash -el {0}
+        env:
+          PC_PARTCAD_PACKAGE_SUB: ${{ github.workspace }}/partcad
         run: |
           . ~/.bashrc
           . ~/.bash_profile
@@ -400,12 +398,11 @@ jobs:
           mamba activate ${{ format('env-test-pub-repo-{0}', matrix.python-version) }}
 
           # BEGIN PUBLIC REPO
-          cd examples
-          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage -m partcad_cli.click.command --no-ansi list all -r //pub
-          # TODO(clairbee): fix the failing packages first
-          # coverage run --rcfile=../dev-tools/coverage.rc -m partcad_cli.click.command --no-ansi --threads-max=4 test -r --package //pub
-          # END PUBLIC REPO
+          cd ./examples
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub
+          coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub
           coverage combine
+          # END PUBLIC REPO
 
           coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../pub-repo-test-results/coverage.xml
           mamba deactivate

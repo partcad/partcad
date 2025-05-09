@@ -22,6 +22,11 @@ from . import runtime
 from . import logging as pc_logging
 from . import telemetry
 
+def get_local_partcad_pkg(dep: str) -> str:
+    """Use local partcad package instead of the deployed one (specifically intended to be used during testing so that tests are applied on the latest changes corresponding to a PR)"""
+    if os.environ.get("PC_PARTCAD_PACKAGE_SUB") is not None:
+        return os.path.normpath(os.environ.get("PC_PARTCAD_PACKAGE_SUB"))
+    return dep
 
 class VenvLock:
     lock: FileLock
@@ -162,20 +167,23 @@ class PythonRuntime(runtime.Runtime):
     def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
-            if not os.path.exists(session["path"]):
-                with pc_logging.Action("v-env", self.version, session["name"]):
-                    # Create the venv environment
-                    pc_logging.debug("Creating venv: %s" % session["path"])
-                    self.run_onced(
-                        [
-                            "-m",
-                            "venv",
-                            "--upgrade-deps",
-                            session["path"],
-                        ]
-                    )
+            with self.sync_lock():
+                if not os.path.exists(session["path"]):
+                    with pc_logging.Action("v-env", self.version, session["name"]):
+                        # Create the venv environment
+                        pc_logging.debug("Creating venv: %s" % session["path"])
+                        self.run_onced_locked(
+                            [
+                                "-m",
+                                "venv",
+                                "--upgrade-deps",
+                                session["path"],
+                            ]
+                        )
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
+                if dep == "partcad":
+                    dep = get_local_partcad_pkg(dep)
                 self.ensure_onced(dep, path=session["path"])
 
         with self.sync_lock(session):
@@ -206,10 +214,14 @@ class PythonRuntime(runtime.Runtime):
             stdout = stdout.decode()
             stderr = stderr.decode()
 
-            # if stdout:
-            #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+            if stdout:
+                pc_logging.debug("Output of %s: %s" % (cmd, stdout))
             if stderr:
-                pc_logging.debug("Error in %s: %s" % (cmd, stderr))
+                if p.returncode == 0:
+                    pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
+                    stderr = ""
+                else:
+                    pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
             # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
             # f = open("/tmp/log", "w")
@@ -238,6 +250,8 @@ class PythonRuntime(runtime.Runtime):
                     )
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
+                if dep == "partcad":
+                    dep = get_local_partcad_pkg(dep)
                 self.ensure_onced_locked(dep, path=session["path"])
 
         python_path = self.get_venv_python_path(session, path)
@@ -255,20 +269,24 @@ class PythonRuntime(runtime.Runtime):
     async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
-            if not os.path.exists(session["path"]):
-                with pc_logging.Action("v-env", self.version, session["name"]):
-                    # Create the venv environment
-                    pc_logging.debug("Creating venv: %s" % session["path"])
-                    await self.run_async_onced(
-                        [
-                            "-m",
-                            "venv",
-                            "--upgrade-deps",
-                            session["path"],
-                        ]
-                    )
+            async with self.async_lock():
+                if not os.path.exists(session["path"]):
+                    with pc_logging.Action("v-env", self.version, session["name"]):
+                        # Create the venv environment
+                        pc_logging.debug("Creating venv: %s" % session["path"])
+                        await self.run_async_onced_locked(
+                            [
+                                "-m",
+                                "venv",
+                                "--upgrade-deps",
+                                session["path"],
+                            ]
+                        )
+
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
+                if dep == "partcad":
+                    dep = get_local_partcad_pkg(dep)
                 await self.ensure_async_onced(dep, path=session["path"])
 
         async with self.async_lock(session):
@@ -298,10 +316,14 @@ class PythonRuntime(runtime.Runtime):
             stdout = stdout.decode()
             stderr = stderr.decode()
 
-            # if stdout:
-            #     pc_logging.debug("Output of %s: %s" % (cmd, stdout))
+            if stdout:
+                pc_logging.debug("Output of %s: %s" % (cmd, stdout))
             if stderr:
-                pc_logging.error("Error in %s: %s" % (cmd, stderr))
+                if p.returncode == 0:
+                    pc_logging.warning("%s produced stderr: %s" % (cmd, stderr))
+                    stderr = ""
+                else:
+                    pc_logging.error("Error in %s: %s" % (cmd, stderr))
 
             # TODO(clairbee): remove the below when a better troubleshooting mechanism is introduced
             # f = open("/tmp/log", "w")
@@ -330,6 +352,8 @@ class PythonRuntime(runtime.Runtime):
                     )
             # Install of the dependencies into the venv environment
             for dep in session["deps"]:
+                if dep == "partcad":
+                    dep = get_local_partcad_pkg(dep)
                 await self.ensure_async_onced_locked(dep, path=session["path"])
 
         python_path = self.get_venv_python_path(session, path)
@@ -360,6 +384,8 @@ class PythonRuntime(runtime.Runtime):
                 with self.sync_lock_install():
                     if not os.path.exists(guard_path):
                         item = python_package
+                        if item == "partcad":
+                            item = get_local_partcad_pkg(item)
                         if not path is None:
                             item += " in " + path
                         with pc_logging.Action("PipInst", self.version, item):
@@ -384,6 +410,8 @@ class PythonRuntime(runtime.Runtime):
         else:
             if not os.path.exists(guard_path):
                 item = python_package
+                if item == "partcad":
+                    item = get_local_partcad_pkg(item)
                 if not path is None:
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
@@ -415,6 +443,8 @@ class PythonRuntime(runtime.Runtime):
                 with self.sync_lock_install():
                     if not os.path.exists(guard_path):
                         item = python_package
+                        if item == "partcad":
+                            item = get_local_partcad_pkg(item)
                         if not path is None:
                             item += " in " + path
                         with pc_logging.Action("PipInst", self.version, item):
@@ -441,6 +471,8 @@ class PythonRuntime(runtime.Runtime):
         else:
             if not os.path.exists(guard_path):
                 item = python_package
+                if item == "partcad":
+                    item = get_local_partcad_pkg(item)
                 if not path is None:
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
@@ -479,6 +511,9 @@ class PythonRuntime(runtime.Runtime):
                     dependencies.append(line)
 
         for dep in dependencies:
+            # Use local partcad package instead of the deployed one (specifically intended to be used during testing)
+            if dep == "partcad":
+                dep = get_local_partcad_pkg(dep)
             await self.ensure_async_onced(dep, session=session)
 
     async def prepare_for_shape(self, config, session=None):

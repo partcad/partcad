@@ -17,6 +17,7 @@ filelock==3.17.0
 docker>=7.1.0
 ruff>=0.11.8
 jsonschema>=4.23.0
+psutil>=6.1.1
 
 # Google AI
 google.generativeai
