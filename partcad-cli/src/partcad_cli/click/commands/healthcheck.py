@@ -28,4 +28,4 @@ from ..cli_context import CliContext
 @click.pass_obj
 def cli(cli_ctx: CliContext, filters: str, fix: bool, dry_run: bool) -> None:
     with pc.telemetry.set_context(cli_ctx.otel_context):
-        pc.healthcheck.tests.run_tests(filters=filters, fix=fix, dry_run=dry_run)
+        pc.healthcheck.tests.run_healthchecks(filters=filters, fix=fix, dry_run=dry_run)
