@@ -58,11 +58,9 @@ class HealthCheckTest(ABC):
     def fix(self) -> bool:
         pass
 
+from .windows_registry import WindowsRegistryCheck
 
-from partcad.healthcheck.windows_registry import WindowsRegistryCheck
-
-
-def discover_tests() -> list[HealthCheckTest]:
+def discover_healthchecks() -> list[HealthCheckTest]:
     """Dynamically load all health check test modules and return instances"""
     test_instances = []
     package_path = Path(__file__).parent
@@ -85,23 +83,22 @@ def discover_tests() -> list[HealthCheckTest]:
     return test_instances
 
 
-def run_tests(filters: str = None, fix: bool = False, dry_run: bool = False) -> None:
+def run_healthchecks(filters: str = None, fix: bool = False, dry_run: bool = False) -> None:
     with pc_logging.Process("Healthcheck", "global"):
-        with pc_logging.Action("//", "discover"):
-            tests = discover_tests()
+        tests = discover_healthchecks()
 
-            if filters:
-                for val in filters.split(","):
-                    tests = filter(lambda test: any(val.strip().lower() in tag.lower() for tag in test.tags), tests)
+        if filters:
+            for val in filters.split(","):
+                tests = filter(lambda test: any(val.strip().lower() in tag.lower() for tag in test.tags), tests)
 
-            if dry_run:
-                if tests:
-                    for test in tests:
-                        pc_logging.info(f"Suggested healthcheck: {test.name} - {test.description}")
-                return
+        if dry_run:
+            if tests:
+                for test in tests:
+                    pc_logging.info(f"Suggested healthcheck: {test.name} - {test.description}")
+            return
 
         for test in tests:
-            with pc_logging.Action("//", test.name):
+            with pc_logging.Action(test.name, "global"):
                 report = test.test()
                 if report.findings:
                     report.warning(test.findings)

@@ -1,4 +1,4 @@
-FROM ghcr.io/partcad/partcad-devcontainer:0.7.138
+FROM ghcr.io/partcad/partcad-devcontainer:0.7.139
 
 USER vscode
 RUN /home/vscode/miniforge3/bin/conda create --yes --name pc-env python=3.12 pip

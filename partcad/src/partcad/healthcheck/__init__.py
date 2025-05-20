@@ -1,5 +1,5 @@
-from .tests import run_tests
+from .tests import run_healthchecks
 
 __all__ = [
-    "run_tests",
+    "run_healthchecks",
 ]
