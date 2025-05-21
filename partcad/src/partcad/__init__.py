@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-__version__: str = "0.7.139"
+__version__: str = "0.7.140"
 
 from . import telemetry
 
