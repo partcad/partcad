@@ -37,7 +37,7 @@ def generate_partcad_config(temp_dir: Path, part_type: str, description: str, pr
     config_path.write_text(config.strip() + "\n", encoding="utf-8")
 
 
-def generate_cad_file(provider: str, kind: str, description: str) -> None:
+def generate_cad_file(provider: str, kind: str, description: str, path: str = None) -> None:
     """
     Generate a CAD file using specified provider and type.
 
@@ -59,9 +59,10 @@ def generate_cad_file(provider: str, kind: str, description: str) -> None:
             if not part:
                 raise RuntimeError("Failed to load the input part: no part returned")
 
-            current_dir = Path.cwd()
-            target_path = current_dir / Path(part.path).name
-            part.path = str(target_path)
+            if not path:
+                current_dir = Path.cwd()
+                target_path = current_dir / Path(part.path).name
+                part.path = str(target_path)
 
             asyncio.run(get_shape_async(part, ctx))
 
