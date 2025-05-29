@@ -28,7 +28,8 @@ def test_runtime_python_version_3_9_none(config_for):
         pytest.skip("Make no assumptions about availability of other Python versions, other than the current one")
     ctx = pc.Context("partcad/tests", user_config=config_for("none"))
     runtime = ctx.get_python_runtime("3.9")
-    version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    exitcode, version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    assert exitcode == 0
     assert errors == ""
     assert version_string.startswith("Python 3.9")
 
@@ -38,7 +39,8 @@ def test_runtime_python_version_3_10_none(config_for):
         pytest.skip("Make no assumptions about availability of other Python versions, other than the current one")
     ctx = pc.Context("partcad/tests", user_config=config_for("none"))
     runtime = ctx.get_python_runtime("3.10")
-    version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    exitcode, version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    assert exitcode == 0
     assert errors == ""
     assert version_string.startswith("Python 3.10")
 
@@ -48,7 +50,8 @@ def test_runtime_python_version_3_11_none(config_for):
         pytest.skip("Make no assumptions about availability of other Python versions, other than the current one")
     ctx = pc.Context("partcad/tests", user_config=config_for("none"))
     runtime = ctx.get_python_runtime("3.11")
-    version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    exitcode, version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    assert exitcode == 0
     assert errors == ""
     assert version_string.startswith("Python 3.11")
 
@@ -58,7 +61,8 @@ def test_runtime_python_version_3_12_none(config_for):
         pytest.skip("Make no assumptions about availability of other Python versions, other than the current one")
     ctx = pc.Context("partcad/tests", user_config=config_for("none"))
     runtime = ctx.get_python_runtime("3.12")
-    version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    exitcode, version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    assert exitcode == 0
     assert errors == ""
     assert version_string.startswith("Python 3.12")
 
@@ -66,7 +70,8 @@ def test_runtime_python_version_3_12_none(config_for):
 def test_runtime_python_version_3_9_conda(config_for):
     ctx = pc.Context("partcad/tests", user_config=config_for("conda"))
     runtime = ctx.get_python_runtime("3.9")
-    version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    exitcode, version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    assert exitcode == 0
     assert errors == ""
     assert version_string.startswith("Python 3.9")
 
@@ -74,7 +79,8 @@ def test_runtime_python_version_3_9_conda(config_for):
 def test_runtime_python_version_3_10_conda(config_for):
     ctx = pc.Context("partcad/tests", user_config=config_for("conda"))
     runtime = ctx.get_python_runtime("3.10")
-    version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    exitcode, version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    assert exitcode == 0
     assert errors == ""
     assert version_string.startswith("Python 3.10")
 
@@ -82,7 +88,8 @@ def test_runtime_python_version_3_10_conda(config_for):
 def test_runtime_python_version_3_11_conda(config_for):
     ctx = pc.Context("partcad/tests", user_config=config_for("conda"))
     runtime = ctx.get_python_runtime("3.11")
-    version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    exitcode, version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    assert exitcode == 0
     assert errors == ""
     assert version_string.startswith("Python 3.11")
 
@@ -90,6 +97,7 @@ def test_runtime_python_version_3_11_conda(config_for):
 def test_runtime_python_version_3_12_conda(config_for):
     ctx = pc.Context("partcad/tests", user_config=config_for("conda"))
     runtime = ctx.get_python_runtime("3.12")
-    version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    exitcode, version_string, errors = asyncio.run(runtime.run_async(["--version"]))
+    assert exitcode == 0
     assert errors == ""
     assert version_string.startswith("Python 3.12")

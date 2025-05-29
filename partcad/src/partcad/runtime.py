@@ -208,7 +208,13 @@ class Runtime:
         # f.write(" stdout: %s\n" % stdout)
         # f.close()
 
-        return stdout, stderr
+        exitcode = p.returncode if not self.rpc_client else int(stderr is not None)
+        # [Temporary Fix] Ignore exit code 3221226356(0xc0000374) and 3221225477(0xc0000005)
+        # This is a known and open issue on Windows related to the cadquery import
+        # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
+        if exitcode in [3221226356, 3221225477]:
+            exitcode = 0
+        return exitcode, stdout, stderr
 
     async def run_async(
         self,
@@ -301,4 +307,10 @@ class Runtime:
         # f.write(" stdout: %s\n" % stdout)
         # f.close()
 
-        return stdout, stderr
+        exitcode = p.returncode if not self.rpc_client else int(stderr is not None)
+        # [Temporary Fix] Ignore exit code 3221226356(0xc0000374) and 3221225477(0xc0000005)
+        # This is a known and open issue on Windows related to the cadquery import
+        # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
+        if exitcode in [3221226356, 3221225477]:
+            exitcode = 0
+        return exitcode, stdout, stderr

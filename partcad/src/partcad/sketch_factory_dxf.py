@@ -83,15 +83,21 @@ class SketchFactoryDxf(SketchFactoryPython):
 
                 await self.runtime.ensure_async("cadquery-ocp==7.7.2")
                 await self.runtime.ensure_async("cadquery==2.5.2")
-                response_serialized, errors = await self.runtime.run_async(
-                    [
-                        wrapper_path,
-                        os.path.abspath(self.path),
-                        os.path.abspath(self.project.config_dir),
-                    ],
+                command = [
+                    wrapper_path,
+                    os.path.abspath(self.path),
+                    os.path.abspath(self.project.config_dir),
+                ]
+                exitcode, response_serialized, errors = await self.runtime.run_async(
+                    command,
                     request_serialized,
                 )
-                sys.stderr.write(errors)
+                if exitcode != 0 and len(errors) == 0:
+                    errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+
+                if errors:
+                    pc_logging.error(errors)
+                    raise Exception(errors)
 
                 response = base64.b64decode(response_serialized)
                 register_ocp_helper()

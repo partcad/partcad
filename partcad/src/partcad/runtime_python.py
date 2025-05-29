@@ -231,7 +231,12 @@ class PythonRuntime(runtime.Runtime):
             # f.write(" stdout: %s\n" % stdout)
             # f.close()
 
-            return stdout, stderr
+            # [Temporary Fix] Ignore exit code 3221226356(0xc0000374) and 3221225477(0xc0000005)
+            # This is a known and open issue on Windows related to the cadquery import
+            # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
+            exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
+
+            return exitcode, stdout, stderr
 
     def run_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
@@ -258,9 +263,8 @@ class PythonRuntime(runtime.Runtime):
         cmd = [python_path, *self.python_flags, *cmd]
         pc_logging.debug("Running: %s", cmd)
         # pc_logging.debug("stdin: %s", stdin)
-        stdout, stderr = super().run(cmd, stdin=stdin, cwd=cwd)
-
-        return stdout, stderr
+        exitcode, stdout, stderr = super().run(cmd, stdin=stdin, cwd=cwd)
+        return exitcode, stdout, stderr
 
     async def run_async(self, cmd, stdin="", cwd=None, session=None):
         await self.once_async()
@@ -333,7 +337,12 @@ class PythonRuntime(runtime.Runtime):
             # f.write(" stdout: %s\n" % stdout)
             # f.close()
 
-            return stdout, stderr
+            # [Temporary Fix] Ignore exit code 3221226356(0xc0000374) and 3221225477(0xc0000005)
+            # This is a known and open issue on Windows related to the cadquery import
+            # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
+            exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
+
+            return exitcode, stdout, stderr
 
     async def run_async_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
@@ -359,9 +368,8 @@ class PythonRuntime(runtime.Runtime):
         python_path = self.get_venv_python_path(session, path)
         cmd = [python_path, *self.python_flags, *cmd]
         pc_logging.debug("Running: %s", cmd)
-        stdout, stderr = await super().run_async(cmd, stdin=stdin, cwd=cwd)
-
-        return stdout, stderr
+        exitcode, stdout, stderr = await super().run_async(cmd, stdin=stdin, cwd=cwd)
+        return exitcode, stdout, stderr
 
     def ensure(self, python_package, session=None, path=None):
         self.once()
