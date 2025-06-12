@@ -255,9 +255,10 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 short_branch_name = branch_name[branch_name.find("/") + 1 :]
                                 pc_logging.debug("Refreshing the GIT branch: %s" % short_branch_name)
                                 with telemetry.start_as_current_span(
-                                    "*ProjectFactoryGit._clone_or_update_repo.{Repo.pull}"
+                                    "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
                                 ):
-                                    origin.pull(short_branch_name)
+                                    origin.fetch(short_branch_name, depth=1)
+                                    repo.git.reset('--hard', f"origin/{short_branch_name}")
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
                         else:
@@ -276,11 +277,16 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 origin = repo.remote("origin")
                                 # Need to check for updates
                                 with telemetry.start_as_current_span(
-                                    "*ProjectFactoryGit._clone_or_update_repo.{Repo.pull}-{Repo.fetch}"
+                                    "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
                                 ):
-                                    origin.fetch()
-                                    repo.git.checkout(self.import_revision, force=True)
-                                    origin.pull(force=True, rebase=True)
+                                    origin.fetch(self.import_revision, depth=1)
+                                    if self.import_revision in [ref.name for ref in origin.refs]:
+                                        # It's a remote branch
+                                        repo.git.reset('--hard', f"origin/{self.import_revision}")
+                                    else:
+                                        # It's a tag or commit SHA
+                                        repo.git.reset('--hard', self.import_revision)
+
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
                             else:
@@ -354,7 +360,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                     allow_unsafe_options=True,
                                 )
                         self.ctx.stats_git_ops += 1
-                        if not self.import_revision is None:
+                        if self.import_revision is not None:
                             repo.git.checkout(self.import_revision, force=True)
                             after = self.import_revision
                         else:
