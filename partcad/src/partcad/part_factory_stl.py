@@ -37,11 +37,17 @@ class PartFactoryStl(PartFactoryFile):
 
             runtime = self.ctx.get_python_runtime("3.11")
             with telemetry.start_as_current_span("*PartFactoryStl.instantiate.{runtime.run_async}"):
-                response_serialized, errors = await runtime.run_async(
-                    [wrapper_path, os.path.abspath(self.path)],
+                command = [wrapper_path, os.path.abspath(self.path)]
+                exitcode, response_serialized, errors = await runtime.run_async(
+                    command,
                     request_serialized,
                 )
-                sys.stderr.write(errors)
+                if exitcode != 0 and len(errors) == 0:
+                    errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+
+                if errors:
+                    pc_logging.error(errors)
+                    raise Exception(errors)
 
             try:
                 response = base64.b64decode(response_serialized)

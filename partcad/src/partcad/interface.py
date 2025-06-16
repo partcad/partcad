@@ -286,6 +286,15 @@ class Interface:
         self.project.ctx.stats_interfaces += 1
         self.lock = threading.RLock()
 
+    def matches(self, keyword: str) -> bool:
+        if not keyword:
+            return False
+        keyword = keyword.lower()
+
+        if keyword in str(self.config).lower() or keyword in self.name.lower():
+            return True
+        return False
+
     def get_ports(self):
         # TODO(clairbee): make interface a Shape and switch to existing sync mechanisms
         with self.lock:

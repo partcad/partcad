@@ -13,7 +13,7 @@ from .. import logging as pc_logging
 
 
 class HealthCheckReport:
-    def __init__(self, test: str, findings: list[str], fixed: bool):
+    def __init__(self, test: str, findings: list[str], fixed: bool = False):
         self.test: str = test
         self.findings: list[str] = findings
         self.fixed: bool = fixed
@@ -58,7 +58,10 @@ class HealthCheckTest(ABC):
     def fix(self) -> bool:
         pass
 
-from .windows_registry import WindowsRegistryCheck
+
+from ..healthcheck.openscad import OpenSCADCheck
+from ..healthcheck.windows_registry import WindowsRegistryCheck
+
 
 def discover_healthchecks() -> list[HealthCheckTest]:
     """Dynamically load all health check test modules and return instances"""
@@ -71,7 +74,7 @@ def discover_healthchecks() -> list[HealthCheckTest]:
             if (
                 isinstance(Test, type)
                 and issubclass(Test, HealthCheckTest)
-                and Test not in [HealthCheckTest, WindowsRegistryCheck]
+                and Test not in [HealthCheckTest, WindowsRegistryCheck, OpenSCADCheck]
             ):
                 obj = Test()
                 if obj.is_applicable():

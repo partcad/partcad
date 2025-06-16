@@ -114,7 +114,7 @@ command_groups = [
     },
     {
         "name": "Package commands",
-        "commands": ["init", "install", "update"],
+        "commands": ["init", "install", "update", "lint"],
     },
     {
         "name": "Object commands",

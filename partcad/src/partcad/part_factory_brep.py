@@ -116,16 +116,21 @@ class PartFactoryBrep(PartFactoryFile):
 
         # Run the subprocess and handle the response
         try:
-            response_serialized, errors = await self.runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(self.path),
-                    os.path.abspath(self.project.config_dir),
-                ],
+            command = [
+                wrapper_path,
+                os.path.abspath(self.path),
+                os.path.abspath(self.project.config_dir),
+            ]
+            exitcode, response_serialized, errors = await self.runtime.run_async(
+                command,
                 request_serialized,
             )
+            if exitcode != 0 and len(errors) == 0:
+                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+
             if errors:
-                sys.stderr.write(errors)
+                pc_logging.error(errors)
+                raise Exception(errors)
 
             response = pickle.loads(base64.b64decode(response_serialized))
             if not response.get("success", False):

@@ -120,10 +120,14 @@ class PartFactoryBuild123d(PartFactoryPython):
                 os.path.abspath(cwd),
             ]
             pc_logging.debug("Command was: %s" % command)
-            response_serialized, errors = await self.runtime.run_async(
+            exitcode, response_serialized, errors = await self.runtime.run_async(
                 command,
                 request_serialized,
             )
+            if exitcode != 0 and len(errors) == 0:
+                errors = "%s: %s: Failed to instantiate" % (part.project_name, part.name)
+                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (part.project_name, part.name, " ".join(command), exitcode))
+
             if len(errors) > 0:
                 error_lines = errors.split("\n")
                 for error_line in error_lines:

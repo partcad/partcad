@@ -112,14 +112,19 @@ class SketchFactoryBuild123d(SketchFactoryPython):
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
-            response_serialized, errors = await self.runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(sketch.path),
-                    os.path.abspath(cwd),
-                ],
+            command = [
+                wrapper_path,
+                os.path.abspath(sketch.path),
+                os.path.abspath(cwd),
+            ]
+            exitcode, response_serialized, errors = await self.runtime.run_async(
+                command,
                 request_serialized,
             )
+            if exitcode != 0 and len(errors) == 0:
+                errors = "%s: %s: Failed to instantiate" % (sketch.project_name, sketch.name)
+                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (sketch.project_name, sketch.name, " ".join(command), exitcode))
+
             if len(errors) > 0:
                 error_lines = errors.split("\n")
                 for error_line in error_lines:

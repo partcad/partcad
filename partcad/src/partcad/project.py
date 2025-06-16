@@ -15,7 +15,7 @@ import os
 import re
 
 # from pprint import pformat
-from rich_click import Path
+from pathlib import Path
 import ruamel.yaml
 import threading
 import typing
@@ -248,6 +248,15 @@ class Project(project_config.Configuration):
     #         return self.ctx.get_project(
     #             self.path + "/" + self.config_obj["cover"]["package"]
     #         ).get_cover()
+
+    def matches(self, keyword: str) -> bool:
+        if not keyword:
+            return False
+        keyword = keyword.lower()
+
+        if keyword in str(self.config_obj).lower() or keyword in self.name.lower():
+            return True
+        return False
 
     def get_child_project_names(self, absolute: bool = True):
         if self.broken:

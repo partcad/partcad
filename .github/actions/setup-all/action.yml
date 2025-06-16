@@ -127,7 +127,7 @@ runs:
         mamba activate ${{ env.ENV_PATH }}
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip
-        python -m pip install --upgrade wheel mypy setuptools jaraco.functools
+        python -m pip install --upgrade wheel mypy setuptools packaging jaraco.functools
         # Install all core and a subset of CLI dependencies, that are required for tests
         python -m pip install --upgrade ./partcad
         python -m pip install --upgrade -r partcad/requirements-dev.in

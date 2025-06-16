@@ -42,7 +42,7 @@ class AvailableDiskSpaceCheck(HealthCheckTest):
         except Exception as e:
             self.findings.append("Error checking disk space")
 
-        return HealthCheckReport(self.name, self.findings, False)
+        return HealthCheckReport(self.name, self.findings)
 
     def fix(self) -> bool:
         return False

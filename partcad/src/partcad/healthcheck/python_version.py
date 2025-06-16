@@ -31,7 +31,7 @@ class PythonVersionCheck(HealthCheckTest):
             self.findings.append(
                 f"Python version {sys.version_info.major}.{sys.version_info.minor} is not supported. Please make sure your system python version is >={self.min_version[0]}.{self.min_version[1]}, <={self.latest_version[0]}.{self.latest_version[1]}"
             )
-        return HealthCheckReport(self.name, self.findings, False)
+        return HealthCheckReport(self.name, self.findings)
 
     def fix(self) -> bool:
         return False
