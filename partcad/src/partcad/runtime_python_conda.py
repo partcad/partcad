@@ -83,8 +83,11 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                     encoding="utf-8",
                 )
                 stdout, stderr = p.communicate()
-                if not stderr is None and stderr.strip() != "":
-                    pc_logging.warning("conda venv check error: %s" % stderr)
+                if p.returncode != 0:
+                    if stderr is not None and stderr.strip() != "":
+                        pc_logging.warning("conda venv check error: %s" % stderr)
+                    else:
+                        pc_logging.warning(f"conda venv check error")
                     self.conda_initialized = False
                 elif stdout is None or stdout.strip() == "":
                     pc_logging.warning("conda venv check warning: empty version")

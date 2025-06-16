@@ -113,25 +113,31 @@ class PartFactoryCadquery(PartFactoryPython):
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)
             # TODO(clairbee): Move the following code to a separate method in wrapper.py
-            response_serialized, errors = await self.runtime.run_async(
-                [
-                    wrapper_path,
-                    os.path.abspath(part.path),
-                    os.path.abspath(cwd),
-                ],
+            command = [
+                wrapper_path,
+                os.path.abspath(part.path),
+                os.path.abspath(cwd),
+            ]
+            exitcode, response_serialized, errors = await self.runtime.run_async(
+                command,
                 request_serialized,
                 session=self.session,
             )
+
+            if exitcode != 0 and len(errors) == 0:
+                errors = "%s: %s: Failed to instantiate" % (part.project_name, part.name)
+                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (part.project_name, part.name, " ".join(command), exitcode))
+
             if len(errors) > 0:
                 error_lines = errors.split("\n")
                 for error_line in error_lines:
                     part.error("%s: %s" % (part.name, error_line))
 
             try:
-                # pc_logging.error("Response: %s" % response_serialized)
                 response = base64.b64decode(response_serialized)
                 register_ocp_helper()
                 result = pickle.loads(response)
+                pc_logging.debug("Response: %s" % result)
             except Exception as e:
                 part.error("Exception while deserializing %s: %s" % (part.name, e))
                 return None

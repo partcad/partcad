@@ -73,8 +73,14 @@ class PartFactoryScad(PartFactoryFile):
                     shell=False,
                 )
                 _, errors = await p.communicate()
+
+            errors = errors.decode()
+            if p.returncode != 0 and len(errors) == 0:
+                errors = "%s: %s: Failed to instantiate" % (part.project_name, part.name)
+                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (part.project_name, part.name, " ".join(args), p.returncode))
+
             if len(errors) > 0:
-                error_lines = errors.decode().split("\n")
+                error_lines = errors.split("\n")
                 for error_line in error_lines:
                     pc_logging.debug("%s: %s" % (part.name, error_line))
 

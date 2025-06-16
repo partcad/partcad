@@ -376,14 +376,18 @@ class Shape(ShapeConfiguration):
         await runtime.ensure_async("cadquery-ocp==7.7.2")
         await runtime.ensure_async("ocpsvg==0.3.4")
         await runtime.ensure_async("build123d==0.8.0")
-        response_serialized, errors = await runtime.run_async(
-            [
-                wrapper_path,
-                os.path.abspath(filepath),
-            ],
+
+        command = [wrapper_path, os.path.abspath(filepath)]
+        exitcode, response_serialized, errors = await runtime.run_async(
+            command,
             request_serialized,
         )
-        sys.stderr.write(errors)
+        if exitcode != 0 and len(errors) == 0:
+            errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+
+        if errors:
+            pc_logging.error(errors)
+            raise Exception(errors)
 
         response = base64.b64decode(response_serialized)
         result = pickle.loads(response)
@@ -585,11 +589,17 @@ class Shape(ShapeConfiguration):
 
                 # Run wrapper
                 with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
-                    response_serialized, errors = await runtime.run_async(
-                        [wrapper_path, final_filepath],
+                    command = [wrapper_path, os.path.abspath(final_filepath)]
+                    exitcode, response_serialized, errors = await runtime.run_async(
+                        command,
                         request_serialized,
                     )
-                    sys.stderr.write(errors)
+                    if exitcode != 0 and len(errors) == 0:
+                        errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+
+                    if errors:
+                        pc_logging.error(errors)
+                        raise Exception(errors)
 
                 if errors:
                     pc_logging.error(f"Wrapper {format_name} stderr:\n{errors}")

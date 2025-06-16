@@ -44,11 +44,17 @@ class PartFactoryStep(PartFactoryFile):
                 request_serialized = base64.b64encode(picklestring).decode()
 
             with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{runtime.run_async}"):
-                response_serialized, errors = await self.runtime.run_async(
-                    [wrapper_path, os.path.abspath(part.path), os.path.abspath(self.project.config_dir)],
+                command = [wrapper_path, os.path.abspath(part.path), os.path.abspath(self.project.config_dir)]
+                exitcode, response_serialized, errors = await self.runtime.run_async(
+                    command,
                     request_serialized,
                 )
-                sys.stderr.write(errors)
+                if exitcode != 0 and len(errors) == 0:
+                    errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+
+                if errors:
+                    pc_logging.error(errors)
+                    raise Exception(errors)
 
             with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{pickle.loads}"):
                 response = base64.b64decode(response_serialized)

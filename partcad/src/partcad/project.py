@@ -15,7 +15,7 @@ import os
 import re
 
 # from pprint import pformat
-from rich_click import Path
+from pathlib import Path
 import ruamel.yaml
 import threading
 import typing
