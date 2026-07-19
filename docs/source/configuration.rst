@@ -239,7 +239,7 @@ There are other optional fields that are common to all objects:
 
 - ``cache``: <bool> (default: `True`)
 
-  The value `false` indicates the intent to exclude this object from any cacheing behavior.
+  The value `false` indicates the intent to exclude this object from any caching behavior.
   It may be due to storage size or time considerations, or due to known issues with dependency tracking.
   It does not override any global caching settings.
 
