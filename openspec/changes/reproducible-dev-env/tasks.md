@@ -29,11 +29,13 @@
 
 ## 4. Commit inside the environment and validate
 
-- [ ] 4.1 Run the commit inside the container: `npx --yes @devcontainers/cli exec --workspace-folder . git commit -m "<message>"`
-- [ ] 4.2 Capture the hook output and confirm the hooks actually executed rather than being skipped wholesale
-- [ ] 4.3 Verify the commit landed: `git log -1 --stat` on the host shows the new commit with the expected file set
-- [ ] 4.4 Verify the working tree is clean afterward and no unintended files were committed
-- [ ] 4.5 Confirm `--no-verify` was never used at any point in the flow
+- [x] 4.1 Run the commit inside the container: `npx --yes @devcontainers/cli exec --workspace-folder . git commit -m "<message>"`
+- [x] 4.2 Capture the hook output and confirm the hooks actually executed rather than being skipped wholesale
+- [x] 4.3 Verify the commit landed: `git log -1 --stat` on the host shows the new commit with the expected file set
+- [x] 4.4 Verify the working tree is clean afterward and no unintended files were committed
+- [x] 4.5 Confirm `--no-verify` was never used at any point in the flow
+- [x] 4.6 Prove the gate is live by staging a deliberate violation and confirming the hooks block the commit
+- [x] 4.7 Resolve the `Author identity unknown` gap (the CLI does not copy the host gitconfig) via repo-local identity in the bind-mounted `.git/config`
 
 ## 5. Document the flow for coding agents
 
@@ -48,13 +50,13 @@
 
 ## 6. Document the flow for humans
 
-- [ ] 6.1 Add a CLI-based dev container section to `docs/source/contributing.rst`, alongside the existing VS Code Dev Containers instructions
-- [ ] 6.2 Cover the commit step and the host-vs-container distinction for contributors not using VS Code
-- [ ] 6.3 Confirm the Sphinx docs still build without new errors or warnings
+- [x] 6.1 Add a CLI-based dev container section to `docs/source/contributing.rst`, alongside the existing VS Code Dev Containers instructions
+- [x] 6.2 Cover the commit step and the host-vs-container distinction for contributors not using VS Code
+- [x] 6.3 Confirm the Sphinx docs still build without new errors or warnings
 
 ## 7. Verify against the specs
 
-- [ ] 7.1 Run `openspec validate reproducible-dev-env` and resolve any reported issues
-- [ ] 7.2 Walk each requirement in `specs/reproducible-dev-env/spec.md` and confirm the implementation satisfies its scenarios
-- [ ] 7.3 Walk the `agent-instructions` and `user-documentation` deltas and confirm the documentation changes satisfy them
-- [ ] 7.4 Confirm no new environment values were duplicated outside `.devcontainer/devcontainer.json`
+- [x] 7.1 Run `openspec validate reproducible-dev-env` and resolve any reported issues
+- [x] 7.2 Walk each requirement in `specs/reproducible-dev-env/spec.md` and confirm the implementation satisfies its scenarios
+- [x] 7.3 Walk the `agent-instructions` and `user-documentation` deltas and confirm the documentation changes satisfy them
+- [x] 7.4 Confirm no new environment values were duplicated outside `.devcontainer/devcontainer.json`

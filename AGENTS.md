@@ -105,6 +105,22 @@ hardcodes an interpreter path that exists only there. The fix is to re-run the c
 It is never to retry with `--no-verify`, and never to install `pre-commit` on the host — host tool versions are
 not the pinned ones, which is how a commit passes locally and then fails CI.
 
+**If the commit fails with `Author identity unknown`**, the container has no git identity. The VS Code extension
+copies your host gitconfig in; the CLI does not, and anything written to the container's home directory is lost
+when the container is recreated. Set the identity repo-locally instead — `.git/config` lives in the bind-mounted
+workspace, so it survives recreates and is never committed:
+
+```bash
+git config --local user.name "<your name>"
+git config --local user.email "<your email>"
+git config --local user.signingkey "<your key id>"   # only if you sign
+git config --local commit.gpgsign true               # only if you sign
+```
+
+Do not mount your host `~/.gitconfig` into the container to solve this. If it contains `url.*.insteadOf` rules
+rewriting `https://github.com/` to SSH (a common setup), the `git-lfs` feature's post-create step will try SSH,
+find no key in the container, and fail the whole `up`.
+
 **If the commit fails to sign** (`gpg failed to sign the data`), the container has your public key but not your
 private key. The VS Code extension forwards your GPG agent automatically; the CLI does not. Forward the agent's
 extra socket when starting the environment, which keeps the private key on the host:
