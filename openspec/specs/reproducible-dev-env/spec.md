@@ -1,4 +1,12 @@
-## ADDED Requirements
+## Purpose
+
+A pinned, reconstructable container environment in which this repository's build, test, and commit gates run,
+with `.devcontainer/devcontainer.json` as its single source of truth, a headless entry point for contributors
+and coding agents who cannot use the VS Code Dev Containers extension, and hook configuration whose entry points
+all resolve — so that a commit that passes locally passes in CI, and `git commit` never has to be bypassed with
+`--no-verify` to succeed.
+
+## Requirements
 
 ### Requirement: The dev container definition is the single source of truth for the environment
 `.devcontainer/devcontainer.json` SHALL be the only authoritative definition of the development environment in
