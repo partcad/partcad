@@ -21,7 +21,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  OSES: '["ubuntu-latest", "windows-latest", "macos-13", "macos-latest"]'
+  # macos-13 is not in this list: no macos-13 job has ever started on the
+  # current runner plan. They queue for hours and are eventually cancelled
+  # without executing, so they only ever left checks pending forever.
+  OSES: '["ubuntu-latest", "windows-latest", "macos-latest"]'
   PYTHONS: '["3.10", "3.11", "3.12"]'
   VERSION: 0.7.146
   CONTAINER_REGISTRY: ghcr.io
