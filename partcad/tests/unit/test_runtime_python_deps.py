@@ -90,13 +90,26 @@ def test_get_constraints_flags_survives_unwritable_path(tmp_path, monkeypatch):
     assert runtime.get_constraints_flags() == []
 
 
-def test_report_dependency_conflicts_reports_pip_check_output(tmp_path, caplog):
+def _record_warnings(monkeypatch):
+    """Collect pc_logging.warning() calls.
+
+    The 'partcad' logger sets propagate=False, so the caplog fixture (which
+    attaches to the root logger) sees nothing on the pytest version used in CI.
+    Recording the call directly keeps this independent of that.
+    """
+    recorded = []
+    monkeypatch.setattr(pc.logging, "warning", lambda *args, **kwargs: recorded.append(" ".join(str(a) for a in args)))
+    return recorded
+
+
+def test_report_dependency_conflicts_reports_pip_check_output(tmp_path, monkeypatch):
     runtime = _bare_runtime(tmp_path / "sandbox")
     conflict = "cadquery 2.5.2 has requirement cadquery-ocp<7.8, but you have cadquery-ocp 7.9.3.1.1."
+    recorded = _record_warnings(monkeypatch)
 
     runtime.report_dependency_conflicts(1, conflict, "", path=str(tmp_path))
 
-    assert conflict in caplog.text
+    assert any(conflict in message for message in recorded), recorded
 
 
 def test_report_dependency_conflicts_does_not_fail_the_run(tmp_path):
@@ -114,9 +127,10 @@ def test_report_dependency_conflicts_does_not_fail_the_run(tmp_path):
     assert pc.logging.had_errors is False
 
 
-def test_report_dependency_conflicts_silent_when_consistent(tmp_path, caplog):
+def test_report_dependency_conflicts_silent_when_consistent(tmp_path, monkeypatch):
     runtime = _bare_runtime(tmp_path / "sandbox")
+    recorded = _record_warnings(monkeypatch)
 
     runtime.report_dependency_conflicts(0, "", "", path=str(tmp_path))
 
-    assert caplog.text == ""
+    assert recorded == []
