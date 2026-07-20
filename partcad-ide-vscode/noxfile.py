@@ -94,7 +94,12 @@ def _install_pip_version(session):
 
 def _setup_template_environment(session: nox.Session) -> None:
     _install_pip_version(session)
-    session.install("wheel", "pip-tools")
+    # pip-tools 7.6.0 imports typing_extensions in piptools/writer.py on
+    # Python < 3.11 but does not declare it as a dependency, so pip-compile
+    # dies with ModuleNotFoundError on 3.10. Pin to the last known good
+    # release until upstream ships one that declares it.
+    # TODO: Drop this pin once pip-tools > 7.6.0 fixes the missing dependency.
+    session.install("wheel", "pip-tools==7.5.1")
     session.run("pip-compile", "--generate-hashes", "--resolver=backtracking", "--upgrade", "./requirements.in")
     session.run(
         "pip-compile",
@@ -164,6 +169,7 @@ def build_package(session: nox.Session) -> None:
 @nox.session()
 def update_packages(session: nox.Session) -> None:
     """Update pip and npm packages."""
-    session.install("wheel", "pip-tools")
+    # Pinned for the same reason as in _setup_template_environment().
+    session.install("wheel", "pip-tools==7.5.1")
     _update_pip_packages(session)
     _update_npm_packages(session)
