@@ -66,7 +66,11 @@ runs:
       with:
         enableCrossOsArchive: true
         path: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
-        key: ${{ matrix.os }}-partcad-conda-${{ env.CACHE_NUMBER }}
+        # The cached path is per Python version, so the key has to be too.
+        # Without it every Python version on an OS shared a single entry, so
+        # only whichever job saved first was ever cached and the others kept
+        # restoring a directory that did not match what they asked for.
+        key: ${{ matrix.os }}-py${{ matrix.python-version }}-partcad-conda-${{ env.CACHE_NUMBER }}
 
     # TODO(clairbee): Cache the conda environment?
 
