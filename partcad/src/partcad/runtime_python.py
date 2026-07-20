@@ -170,10 +170,12 @@ class PythonRuntime(runtime.Runtime):
         report = (stdout or stderr or "").strip()
         if not report:
             return
-        # Deliberately not fatal: environments that are already inconsistent
-        # keep working today, and failing them here would turn a diagnostic
-        # into an outage. The point is that the conflict stops being silent.
-        pc_logging.error("Dependency conflicts in %s:\n%s" % (path if path else self.path, report))
+        # Must stay a warning, not an error. pc_logging.error() sets the global
+        # had_errors flag that the CLI turns into a non-zero exit code, so
+        # reporting a pre-existing conflict at error level fails runs that
+        # otherwise pass. Whether the conflict is fatal is for the caller that
+        # actually uses the environment to decide; this is only a diagnostic.
+        pc_logging.warning("Dependency conflicts in %s:\n%s" % (path if path else self.path, report))
 
     def check_deps_onced_locked(self, path=None):
         """Report dependency conflicts in a freshly provisioned environment."""
@@ -338,7 +340,12 @@ class PythonRuntime(runtime.Runtime):
                 # looks like: most often two incompatible OCP builds loaded into
                 # one process. Say so here, otherwise the only symptom is an
                 # unrelated AttributeError on a None shape much further away.
-                pc_logging.error(
+                #
+                # Warning rather than error on purpose: pc_logging.error() sets
+                # the global had_errors flag that becomes a non-zero exit code,
+                # and the caller that consumes this exit code already reports
+                # the failure itself. This line only explains why it happened.
+                pc_logging.warning(
                     "%s terminated abnormally (%s) without any output. This usually means conflicting "
                     "native dependencies, such as mismatched cadquery-ocp versions, in %s"
                     % (cmd, describe_exit_code(p.returncode), path if path else self.path)
@@ -463,7 +470,12 @@ class PythonRuntime(runtime.Runtime):
                 # looks like: most often two incompatible OCP builds loaded into
                 # one process. Say so here, otherwise the only symptom is an
                 # unrelated AttributeError on a None shape much further away.
-                pc_logging.error(
+                #
+                # Warning rather than error on purpose: pc_logging.error() sets
+                # the global had_errors flag that becomes a non-zero exit code,
+                # and the caller that consumes this exit code already reports
+                # the failure itself. This line only explains why it happened.
+                pc_logging.warning(
                     "%s terminated abnormally (%s) without any output. This usually means conflicting "
                     "native dependencies, such as mismatched cadquery-ocp versions, in %s"
                     % (cmd, describe_exit_code(p.returncode), path if path else self.path)
