@@ -100,12 +100,19 @@ def _setup_template_environment(session: nox.Session) -> None:
     # release until upstream ships one that declares it.
     # TODO: Drop this pin once pip-tools > 7.6.0 fixes the missing dependency.
     session.install("wheel", "pip-tools==7.5.1")
-    session.run("pip-compile", "--generate-hashes", "--resolver=backtracking", "--upgrade", "./requirements.in")
+    # Deliberately no --upgrade here. Setting up the environment has to
+    # reproduce the versions committed in requirements.txt, not re-resolve
+    # everything to the newest release on every run. requirements.in documents
+    # upgrading as a manual step for exactly this reason, and --upgrade in
+    # setup was silently overriding it: pygls floated from the committed 1.3.1
+    # to 2.1.1, which dropped pygls.server.LanguageServer, so the bundled
+    # language server died on startup and the LSP test hung forever.
+    # Use the update_packages session to upgrade on purpose.
+    session.run("pip-compile", "--generate-hashes", "--resolver=backtracking", "./requirements.in")
     session.run(
         "pip-compile",
         "--generate-hashes",
         "--resolver=backtracking",
-        "--upgrade",
         "./src/test/python_tests/requirements.in",
     )
     _install_bundle(session)

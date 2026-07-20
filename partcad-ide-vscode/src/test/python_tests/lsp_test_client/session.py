@@ -19,6 +19,12 @@ from .defaults import VSCODE_DEFAULT_INITIALIZE
 
 LSP_EXIT_TIMEOUT = 5000
 
+# How long to wait for the server to answer "initialize". Without a bound here
+# a server that dies on startup makes the test hang until CI kills the whole
+# job, and pytest never prints the captured traceback because the test never
+# finishes. Failing after a minute keeps the reason visible.
+LSP_INITIALIZE_TIMEOUT = 60
+
 
 PUBLISH_DIAGNOSTICS = "textDocument/publishDiagnostics"
 WINDOW_LOG_MESSAGE = "window/logMessage"
@@ -99,7 +105,17 @@ class LspSession(MethodDispatcher):
             handle_response=_after_initialize,
         )
 
-        server_initialized.wait()
+        if not server_initialized.wait(LSP_INITIALIZE_TIMEOUT):
+            returncode = self._sub.poll() if self._sub else None
+            raise TimeoutError(
+                "The language server did not respond to 'initialize' within %ds "
+                "(server process %s). Check the server's output above for the "
+                "reason it failed to start."
+                % (
+                    LSP_INITIALIZE_TIMEOUT,
+                    "exited with %s" % returncode if returncode is not None else "still running",
+                )
+            )
 
     def initialized(self, initialized_params=None):
         """Sends the initialized notification to LSP server."""
