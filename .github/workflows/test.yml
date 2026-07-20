@@ -133,6 +133,8 @@ jobs:
           codecov-files: pytest-test-results/junit.xml
           coverage-report: pytest-test-results/coverage.xml
 
+  # timeout-minutes raised once from 20 to 30: every job in this matrix was
+  # being cancelled at ~20m on the current CI runners.
   test-pytest-ide-vscode:
     name: "Pytest (VS Code extension)"
     needs:
@@ -142,7 +144,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4

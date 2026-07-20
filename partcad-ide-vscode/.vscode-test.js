@@ -11,7 +11,10 @@ module.exports = defineConfig([
     workspaceFolder: './sampleWorkspace',
     mocha: {
       ui: 'tdd',
-      timeout: 20000,
+      // Extension activation exceeded the previous 20s budget on the current
+      // CI runners. Raised once by 50% to see whether the runners are simply
+      // slower than they used to be.
+      timeout: 30000,
     },
   },
 ]);
