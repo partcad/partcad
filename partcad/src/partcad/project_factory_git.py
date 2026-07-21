@@ -139,6 +139,21 @@ def get_clone_options(revision) -> list[str]:
     return ["--depth 1", "--single-branch", "--no-tags", "--branch %s" % revision]
 
 
+def get_fetch_options(revision) -> dict:
+    """Pick the cheapest fetch that stays consistent with get_clone_options.
+
+    Refreshing has to match how the cache was cloned. A branch or tag was
+    cloned one commit deep, so one commit is all a refresh needs. A commit id
+    was cloned the other way, with full history and blobs filtered out, and
+    grafting a shallow boundary onto that repository would cut off the older
+    commits it was cloned deep precisely to keep, so it is fetched at full
+    depth.
+    """
+    if revision is not None and looks_like_commit_id(revision):
+        return {}
+    return {"depth": 1}
+
+
 def get_cache_lock(hash):
     global global_cache_lock
     global_cache_lock.acquire()
@@ -258,7 +273,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                     "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
                                 ):
                                     origin.fetch(short_branch_name, depth=1)
-                                    repo.git.reset('--hard', f"origin/{short_branch_name}")
+                                    repo.git.reset("--hard", "origin/%s" % short_branch_name)
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
                         else:
@@ -279,13 +294,16 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 with telemetry.start_as_current_span(
                                     "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
                                 ):
-                                    origin.fetch(self.import_revision, depth=1)
-                                    if self.import_revision in [ref.name for ref in origin.refs]:
-                                        # It's a remote branch
-                                        repo.git.reset('--hard', f"origin/{self.import_revision}")
-                                    else:
-                                        # It's a tag or commit SHA
-                                        repo.git.reset('--hard', self.import_revision)
+                                    origin.fetch(self.import_revision, **get_fetch_options(self.import_revision))
+                                    # FETCH_HEAD is whatever that fetch just
+                                    # resolved, which is right for a branch, a
+                                    # tag and a commit id alike. Matching the
+                                    # revision against origin.refs cannot work:
+                                    # those are named "origin/<branch>", never
+                                    # the bare revision, so every branch would
+                                    # miss and silently reset to the stale local
+                                    # ref instead of what was just fetched.
+                                    repo.git.reset("--hard", "FETCH_HEAD")
 
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
