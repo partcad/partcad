@@ -7,7 +7,7 @@
 
 import pytest
 
-from partcad.project_factory_git import get_clone_options, get_fetch_options, looks_like_commit_id
+from partcad.project_factory_git import get_clone_options, looks_like_commit_id
 
 COMMIT_IDS = [
     "a307044f91c9cc5433fde92cb1fa145c01b2bde7",  # full
@@ -79,31 +79,3 @@ def test_options_are_separate_arguments():
     for revision in [None, "main", COMMIT_IDS[0]]:
         for option in get_clone_options(revision):
             assert option.startswith("--"), option
-
-
-@pytest.mark.parametrize("revision", REFS)
-def test_a_ref_is_refreshed_one_commit_deep(revision):
-    """A ref was cloned one commit deep, so a refresh needs no more than that."""
-    assert get_fetch_options(revision) == {"depth": 1}
-
-
-def test_no_revision_is_refreshed_one_commit_deep():
-    assert get_fetch_options(None) == {"depth": 1}
-
-
-@pytest.mark.parametrize("revision", COMMIT_IDS)
-def test_a_commit_id_is_not_fetched_shallow(revision):
-    """A commit id was cloned with full history and filtered blobs.
-
-    Fetching it shallow would graft a shallow boundary onto a repository that
-    is not shallow, cutting off the older commits it was cloned deep to keep.
-    """
-    assert "depth" not in get_fetch_options(revision)
-
-
-def test_fetch_and_clone_strategies_agree():
-    """Whatever is cloned shallow is refreshed shallow, and vice versa."""
-    for revision in [None] + REFS + COMMIT_IDS:
-        cloned_shallow = "--depth 1" in get_clone_options(revision)
-        fetched_shallow = "depth" in get_fetch_options(revision)
-        assert cloned_shallow == fetched_shallow, revision

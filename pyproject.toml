@@ -1,5 +1,8 @@
 [tool.pytest.ini_options]
-pythonpath = "partcad/src"
+# partcad/tests/unit carries helper modules that tests import by name (see
+# git_http_server.py). With --import-mode importlib pytest does not put the
+# test's own directory on the path, so it has to be named here.
+pythonpath = ["partcad/src", "partcad/tests/unit"]
 addopts = """
     --import-mode importlib
     --alluredir=allure-results
@@ -93,6 +96,10 @@ sentry-sdk = {extras = ["opentelemetry"], version = "^2.22.0"}
 poetry-plugin-shell = "^1.0.1"
 
 [tool.poetry.group.test.dependencies]
+# Serves a throwaway git repository over smart HTTP, so tests can exercise
+# server-side behaviour that file:// cannot express. See
+# partcad/tests/unit/git_http_server.py.
+flask = "^3.1.0"
 pytest = "^8.3.4"
 pytest-cov = "^6.0.0"
 pytest-html = "^4.1.1"
