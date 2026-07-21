@@ -147,8 +147,9 @@ runs:
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip
         python -m pip install --upgrade wheel mypy setuptools packaging jaraco.functools
-        # Install all core and a subset of CLI dependencies, that are required for tests
-        python -m pip install --upgrade ./partcad
+        # Install all core and a subset of CLI dependencies, that are required for tests.
+        # The 'lint' extra brings in ruff, which 'pc lint' needs and the behave suite exercises.
+        python -m pip install --upgrade './partcad[lint]'
         python -m pip install --upgrade -r partcad/requirements-dev.in
         python -m pip install --upgrade ./partcad-cli
         python -m pip install --upgrade -r partcad-cli/requirements-dev.txt
