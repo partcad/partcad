@@ -12,7 +12,7 @@ authors = [
 maintainers = [
   {name = "PartCAD", email = "support@partcad.org" }
 ]
-dynamic = ["dependencies"]
+dynamic = ["dependencies", "optional-dependencies"]
 
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -27,6 +27,14 @@ classifiers = [
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+
+# Optional AI providers. The corresponding SDKs are imported lazily, so they are
+# only required when the matching AI provider is actually used.
+[tool.setuptools.dynamic.optional-dependencies]
+ai-google = {file = ["requirements-ai-google.txt"]}
+ai-openai = {file = ["requirements-ai-openai.txt"]}
+ai-ollama = {file = ["requirements-ai-ollama.txt"]}
+ai = {file = ["requirements-ai.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"
