@@ -90,13 +90,13 @@ jobs:
           python-version: "3.11"
 
       - name: Download lib dists
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: python-package-distributions
           path: dist
 
       - name: Download cli dists
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: python-package-distributions-cli
           path: dist
