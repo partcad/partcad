@@ -15,8 +15,8 @@ import partcad as pc
 class BrokenPart:
     """A child whose shape failed to build.
 
-    get_build123d() returns an object with 'wrapped' set to None whenever the
-    underlying shape could not be produced, which is what happens when the
+    convert("build123d") returns an object with 'wrapped' set to None whenever
+    the underlying shape could not be produced, which is what happens when the
     wrapper process dies before writing any output.
     """
 
@@ -24,7 +24,8 @@ class BrokenPart:
         self.project_name = project_name
         self.name = name
 
-    async def get_build123d(self, ctx=None):
+    async def convert(self, part_type, ctx=None, **kwargs):
+        assert part_type == "build123d"
         import build123d as b3d
 
         solid = b3d.Solid.make_box(1, 1, 1)

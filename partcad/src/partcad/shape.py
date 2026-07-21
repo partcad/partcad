@@ -17,6 +17,7 @@ import pickle
 import sys
 import tempfile
 import threading
+import warnings
 from typing import Optional
 
 from .cache_hash import CacheHash
@@ -56,6 +57,34 @@ SKETCH_EXTENSION_MAPPING = {
     "cadquery": "py",
     "build123d": "py",
 }
+
+# The part types 'Shape.convert()' can hand back as a live in-memory CAD object
+# instead of a serialized representation.
+LIVE_OBJECT_PART_TYPES = frozenset({"build123d", "cadquery"})
+
+# Part types that are named in the extension mappings above but that no exporter
+# in this repository can produce. OpenSCAD is an input format for PartCAD
+# (see part_factory_scad.py); nothing writes it back out.
+UNEXPORTABLE_PART_TYPES = {
+    "scad": "PartCAD can read OpenSCAD but cannot write it",
+}
+
+# Every part type named by the extension mappings that 'Shape.convert()' can
+# serialize. Derived from the mappings rather than hand-listed, so a new format
+# added to a mapping (with a matching 'wrapper_render_<format>.py') is picked up
+# here automatically.
+SERIALIZED_PART_TYPES = (
+    frozenset(set(PART_EXTENSION_MAPPING) | set(SKETCH_EXTENSION_MAPPING))
+    - LIVE_OBJECT_PART_TYPES
+    - set(UNEXPORTABLE_PART_TYPES)
+)
+
+# Serialized part types whose output is text no matter which options are passed.
+# 'stl' and 'gltf' are deliberately absent: both switch between a text and a
+# binary encoding depending on the options, so both always return bytes.
+TEXT_PART_TYPES = frozenset({"step", "iges", "brep", "obj", "threejs", "svg", "dxf"})
+
+SUPPORTED_PART_TYPES = frozenset(LIVE_OBJECT_PART_TYPES | SERIALIZED_PART_TYPES)
 
 previously_displayed_shape = None
 
@@ -220,25 +249,149 @@ class Shape(ShapeConfiguration):
                     self._wrapped = shape
                 return shape
 
-    async def get_cadquery(self, ctx=None):
+    async def convert(self, part_type: str, ctx=None, **kwargs):
+        """Convert this shape to 'part_type' and return the result in memory.
+
+        This is the in-memory counterpart of 'render_async()': it drives the very
+        same export machinery, but hands the result back instead of leaving an
+        output file behind.
+
+        Args:
+            part_type: One of the supported part types (see below).
+            ctx: Execution context. Optional for the live-object types, required
+                for every serialized format (the exporters run in a managed
+                Python runtime that only the context can provide).
+            kwargs: Format-specific export options, forwarded to
+                'render_async()' - e.g. 'tolerance', 'angularTolerance',
+                'ascii' (stl), 'binary' (gltf), 'line_weight' and
+                'viewport_origin' (svg/dxf), 'write_pcurves' and
+                'precision_mode' (step/iges). 'project' may be passed to pick up
+                a project's render options.
+
+        Supported part types:
+            Live objects, returned as the CAD library's own object:
+                "build123d", "cadquery"
+            Serialized formats:
+                "3mf", "brep", "dxf", "gltf", "iges", "obj", "step", "stl",
+                "svg", "threejs"
+
+        Return type:
+            The live-object types return the corresponding object. For the
+            serialized formats the rule is: formats that are textual by
+            definition return 'str' (UTF-8 decoded), and formats that are or can
+            be binary return 'bytes'. Concretely, "step", "iges", "brep", "obj",
+            "threejs", "svg" and "dxf" return 'str'; "stl", "3mf" and "gltf"
+            return 'bytes', because each of those switches between a text and a
+            binary encoding depending on the options. The return type therefore
+            depends only on 'part_type' and never on the options passed.
+
+        Raises:
+            ValueError: 'part_type' is not supported, or a serialized format was
+                requested without a context.
+            RuntimeError: the exporter produced no output.
+        """
+        if not isinstance(part_type, str):
+            raise ValueError(f"Invalid part type {part_type!r}: expected a string, got {type(part_type).__name__}")
+
+        normalized = part_type.strip().lower()
+
+        if normalized in LIVE_OBJECT_PART_TYPES:
+            return await self._convert_to_live_object(normalized, ctx)
+
+        if normalized in SERIALIZED_PART_TYPES:
+            return await self._convert_to_serialized(normalized, ctx, **kwargs)
+
+        supported = ", ".join(sorted(SUPPORTED_PART_TYPES))
+        if normalized in UNEXPORTABLE_PART_TYPES:
+            raise ValueError(
+                f"Cannot convert to '{part_type}': {UNEXPORTABLE_PART_TYPES[normalized]}. "
+                f"Supported part types: {supported}"
+            )
+        raise ValueError(f"Unknown part type '{part_type}'. Supported part types: {supported}")
+
+    async def _convert_to_live_object(self, part_type: str, ctx):
+        """Wrap this shape into a live build123d or CadQuery object."""
+        if not ctx:
+            pc_logging.debug(
+                "No context provided to convert('%s'). Consider using Context.convert_part() instead." % part_type
+            )
+
+        # The shape may fail to instantiate, in which case 'get_wrapped()'
+        # returns None. Keep handing back an object with 'wrapped' set to None
+        # rather than raising: callers such as Assembly._get_shape_real() rely on
+        # being able to tell that apart and report which shape went missing.
+        wrapped = await self.get_wrapped(ctx)
+
+        # Keep the CAD libraries out of the module scope: importing them is
+        # expensive and this process is meant to stop depending on them.
+        if part_type == "build123d":
+            import build123d as b3d
+
+            b3d_solid = b3d.Solid.make_box(1, 1, 1)
+            b3d_solid.wrapped = wrapped
+            return b3d_solid
+
         import cadquery as cq
 
-        if not ctx:
-            pc_logging.debug("No context provided to get_cadquery(). Consider using get_part_cadquery() instead.")
-
         cq_solid = cq.Solid.makeBox(1, 1, 1)
-        cq_solid.wrapped = await self.get_wrapped(ctx)
+        cq_solid.wrapped = wrapped
         return cq_solid
 
+    async def _convert_to_serialized(self, part_type: str, ctx, **kwargs):
+        """Export this shape to 'part_type' and return the payload in memory.
+
+        Every exporter PartCAD ships insists on writing to a path, so the export
+        goes to a temporary directory that is removed on both the success and the
+        error path.
+        """
+        if ctx is None:
+            raise ValueError(
+                f"Cannot convert '{self.name}' to '{part_type}' without a context: "
+                "the exporters run in a context-managed Python runtime"
+            )
+
+        # The extension is not cosmetic: some exporters pick the output format
+        # from it (CadQuery's 3MF exporter, for one), so use the same mapping
+        # 'render_async()' uses when it has to invent a file name.
+        extension = PART_EXTENSION_MAPPING.get(part_type) or SKETCH_EXTENSION_MAPPING.get(part_type, part_type)
+
+        with tempfile.TemporaryDirectory(prefix="partcad-convert-") as temp_dir:
+            # A fixed basename keeps shape names with path separators or other
+            # awkward characters out of the filesystem.
+            filepath = os.path.join(temp_dir, f"shape.{extension}")
+
+            await self.render_async(ctx, part_type, filepath=filepath, **kwargs)
+
+            if not os.path.exists(filepath):
+                raise RuntimeError(
+                    f"Failed to convert {self.project_name}:{self.name} to '{part_type}': "
+                    "the exporter produced no output"
+                )
+
+            with open(filepath, "rb") as f:
+                data = f.read()
+
+        if part_type in TEXT_PART_TYPES:
+            return data.decode("utf-8")
+        return data
+
+    async def get_cadquery(self, ctx=None):
+        """Deprecated. Use 'convert("cadquery", ctx)' instead."""
+        warnings.warn(
+            "Shape.get_cadquery() is deprecated, use Shape.convert('cadquery', ctx) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.convert("cadquery", ctx)
+
     async def get_build123d(self, ctx=None):
-        import build123d as b3d
-
-        if not ctx:
-            pc_logging.debug("No context provided to get_build123d(). Consider using get_part_build123d() instead.")
-
-        b3d_solid = b3d.Solid.make_box(1, 1, 1)
-        b3d_solid.wrapped = await self.get_wrapped(ctx)
-        return b3d_solid
+        """Deprecated. Use 'convert("build123d", ctx)' instead."""
+        warnings.warn(
+            "Shape.get_build123d() is deprecated, use Shape.convert('build123d', ctx) instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.convert("build123d", ctx)
 
     def regenerate(self):
         """Regenerates the shape generated by AI. Config remains the same."""
@@ -513,7 +666,7 @@ class Shape(ShapeConfiguration):
                 self.config_obj.setdefault("render", {})["output_dir"] = filepath
 
             if format_name == "gltf":
-                obj = await self.get_build123d(ctx)
+                obj = await self.convert("build123d", ctx)
             else:
                 obj = await self.get_wrapped(ctx)
 
