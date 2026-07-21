@@ -120,10 +120,15 @@ runs:
         . ~/.bashrc || true
         . ~/.bash_profile || true
         set -e
+        . .github/actions/setup-all/mamba-create-retry.sh
+        # On Windows CONDA is a native path (C:\...) that bash cannot use as-is.
+        conda_root="${CONDA:-$HOME/miniconda3}"
+        if command -v cygpath >/dev/null 2>&1; then
+          conda_root="$(cygpath -u "${conda_root}")"
+        fi
         # Sometimes in GitHub workflows, the test environment is not created from the first attempt due to networking issues
-        if ! mamba env list | awk '{print $1}' | grep -qx test; then
-          rm -rf "${CONDA:-$HOME/miniconda3}/envs/test"
-          bash .github/actions/setup-all/mamba-create-retry.sh -n test
+        if [ ! -d "${conda_root}/envs/test" ]; then
+          mamba_create_retry -n test
         fi
         mamba init
 
@@ -136,7 +141,8 @@ runs:
       run: |
         . ~/.bashrc
         . ~/.bash_profile
-        bash .github/actions/setup-all/mamba-create-retry.sh -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }} poetry
+        . .github/actions/setup-all/mamba-create-retry.sh
+        mamba_create_retry -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }} poetry
         mamba activate ${{ env.ENV_PATH }}
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip
