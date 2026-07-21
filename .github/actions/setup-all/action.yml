@@ -109,14 +109,28 @@ runs:
 
     - name: Init conda
       if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.python_cache.outputs.cache-hit != 'true' }}
-      shell: bash -el {0}
+      # No '-e' here on purpose. The shell profiles auto-activate the 'test'
+      # environment, so when the step above did not manage to create it, that
+      # activation fails. Under '-e' it aborted this step before the recovery
+      # below could run, which is exactly when the recovery is needed.
+      shell: bash -l {0}
       run: |
         [[ -f ~/.bashrc ]] || touch ~/.bashrc
         [[ -f ~/.bash_profile ]] || touch ~/.bash_profile
-        . ~/.bashrc
-        . ~/.bash_profile
+        . ~/.bashrc || true
+        . ~/.bash_profile || true
+        set -e
+        . .github/actions/setup-all/mamba-create-retry.sh
+        # On Windows CONDA is a native path (C:\...) that bash cannot use as-is.
+        conda_root="${CONDA:-$HOME/miniconda3}"
+        if command -v cygpath >/dev/null 2>&1; then
+          conda_root="$(cygpath -u "${conda_root}")"
+        fi
         # Sometimes in GitHub workflows, the test environment is not created from the first attempt due to networking issues
-        mamba init || (rm -rf ~/miniconda3/envs/test && mamba create -y -n test && mamba init)
+        if [ ! -d "${conda_root}/envs/test" ]; then
+          mamba_create_retry -n test
+        fi
+        mamba init
 
     # Install dev dependencies
     - name: install dev dependencies
@@ -127,7 +141,8 @@ runs:
       run: |
         . ~/.bashrc
         . ~/.bash_profile
-        mamba create -y -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }} poetry
+        . .github/actions/setup-all/mamba-create-retry.sh
+        mamba_create_retry -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }} poetry
         mamba activate ${{ env.ENV_PATH }}
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip
