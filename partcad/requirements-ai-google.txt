@@ -1,0 +1,3 @@
+# Google AI
+google.generativeai
+Pillow
