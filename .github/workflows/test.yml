@@ -40,7 +40,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Dev Container
         id: setup
         uses: ./.github/actions/setup-devcontainer
@@ -82,7 +82,7 @@ jobs:
   #     matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
   #   runs-on: ${{ matrix.os }}
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #     - uses: ./.github/actions/setup-all
   #       with:
   #         job: cache-preheat
@@ -101,7 +101,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
         with:
           job: pytest
@@ -150,7 +150,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
         with:
           job: pytest-ide-vscode
@@ -207,7 +207,7 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
         with:
           job: behave
@@ -280,7 +280,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
         with:
           job: examples-partcad
@@ -332,7 +332,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
         with:
           job: examples-all
@@ -383,7 +383,7 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
         with:
           job: pub-repo
