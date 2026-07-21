@@ -16,10 +16,3 @@ def setup_function() -> None:
     This fixture ensures a clean slate for testing.
     """
     pc.logging.reset_errors()
-
-
-@pytest.hookimpl()
-def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
-    if session.testsfailed == 0:
-        with open(".pytest_success", "w") as f:
-            f.write("success")

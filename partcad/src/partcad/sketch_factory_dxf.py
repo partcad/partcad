@@ -7,9 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import base64
 import os
-import pickle
 import sys
 
 from . import wrapper
@@ -17,7 +15,7 @@ from . import logging as pc_logging
 from .sketch_factory_python import SketchFactoryPython
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from ocp_serialize import register as register_ocp_helper
+import ocp_wire
 
 from . import telemetry
 
@@ -77,9 +75,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                     "include": self.include,
                     "exclude": self.exclude,
                 }
-                register_ocp_helper()
-                picklestring = pickle.dumps(request)
-                request_serialized = base64.b64encode(picklestring).decode()
+                request_serialized = ocp_wire.serialize(request)
 
                 await self.runtime.ensure_async("cadquery-ocp==7.7.2")
                 await self.runtime.ensure_async("cadquery==2.5.2")
@@ -99,9 +95,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                     pc_logging.error(errors)
                     raise Exception(errors)
 
-                response = base64.b64decode(response_serialized)
-                register_ocp_helper()
-                result = pickle.loads(response)
+                result = ocp_wire.deserialize(response_serialized)
 
                 if not result["success"]:
                     pc_logging.error(result["exception"])

@@ -9,7 +9,7 @@ from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolyg
 from OCP.gp import gp_Pnt
 
 sys.path.append(os.path.dirname(__file__))
-from . import wrapper_common
+import wrapper_common
 
 def process(path, request):
     try:

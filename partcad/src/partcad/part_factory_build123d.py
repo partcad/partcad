@@ -7,9 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import base64
 import os
-import pickle
 import sys
 
 from OCP.gp import gp_Ax1
@@ -27,7 +25,7 @@ from . import wrapper
 from . import logging as pc_logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from ocp_serialize import register as register_ocp_helper
+import ocp_wire
 
 from . import telemetry
 
@@ -85,10 +83,8 @@ class PartFactoryBuild123d(PartFactoryPython):
             request["patch"] = patch
 
             # Serialize the request
-            register_ocp_helper()
-            with telemetry.start_as_current_span("*PartFactoryBuild123d.instantiate.{pickle.dumps}"):
-                pickle_string = pickle.dumps(request)
-                request_serialized = base64.b64encode(pickle_string).decode()
+            with telemetry.start_as_current_span("*PartFactoryBuild123d.instantiate.{ocp_wire.serialize}"):
+                request_serialized = ocp_wire.serialize(request)
 
             # TODO: @alexanderilyin: those should be read from the package/part config?
             await self.runtime.ensure_async(
@@ -140,9 +136,7 @@ class PartFactoryBuild123d(PartFactoryPython):
 
             try:
                 # pc_logging.error("Response: %s" % response_serialized)
-                response = base64.b64decode(response_serialized)
-                register_ocp_helper()
-                result = pickle.loads(response)
+                result = ocp_wire.deserialize(response_serialized)
             except Exception as e:
                 part.error("Exception while deserializing %s: %s" % (part.name, e))
                 return None

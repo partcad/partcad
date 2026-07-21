@@ -7,7 +7,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import pickle
+import os
+import sys
 
 from .cache import Cache
 from .cache_hash import CacheHash
@@ -15,13 +16,22 @@ from .shape import Shape
 from .utils import total_size
 from . import telemetry
 
-SERIALIZATION_PICKLE = 1
+sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
+import ocp_wire
+
+# The on-disk shape cache used to be pickled. That worked only because the
+# wrapper protocol installed OCP 'copyreg' handlers as a global side effect -
+# without them 'pickle.dumps()' cannot serialize a TopoDS_Shape at all. Now
+# that the protocol no longer registers them, the cache carries the same
+# plain JSON envelope as the wire, which also removes an arbitrary code
+# execution path from a cache file.
+SERIALIZATION_JSON = 1
 SERIALIZATION_BREP = 2
 
 
 @telemetry.instrument()
 class ShapeCache(Cache):
-    def __init__(self, serialization: int = SERIALIZATION_PICKLE, user_config=None) -> None:
+    def __init__(self, serialization: int = SERIALIZATION_JSON, user_config=None) -> None:
         super().__init__("shapes", user_config)
         self.serialization = serialization
 
@@ -35,8 +45,8 @@ class ShapeCache(Cache):
                 #     # serialization = SERIALIZATION_BREP
                 # else:
                 serialization = self.serialization
-                if serialization == SERIALIZATION_PICKLE:
-                    data = pickle.dumps(value)
+                if serialization == SERIALIZATION_JSON:
+                    data = ocp_wire.dumps(value).encode("utf-8")
                 elif serialization == SERIALIZATION_BREP:
                     data = Shape.to_brep(value)
                 else:
@@ -100,9 +110,9 @@ class ShapeCache(Cache):
             #     # serialization = SERIALIZATION_BREP
             # else:
             serialization = self.serialization
-            if serialization == SERIALIZATION_PICKLE:
+            if serialization == SERIALIZATION_JSON:
                 try:
-                    obj = pickle.loads(data)
+                    obj = ocp_wire.loads(data)
                 except:
                     results[key] = None
                     in_memory[key] = False

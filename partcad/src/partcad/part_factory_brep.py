@@ -1,8 +1,6 @@
 import os
 import threading
 import time
-import pickle
-import base64
 import sys
 from OCP.BRep import BRep_Builder
 from OCP.BRepTools import BRepTools
@@ -14,6 +12,7 @@ from .exception import FileReadError, PartFactoryError
 from . import telemetry
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
+import ocp_wire
 
 
 @telemetry.instrument()
@@ -112,7 +111,7 @@ class PartFactoryBrep(PartFactoryFile):
         request = {"build_parameters": {}}
 
         # Serialize the request
-        request_serialized = base64.b64encode(pickle.dumps(request)).decode()
+        request_serialized = ocp_wire.serialize(request)
 
         # Run the subprocess and handle the response
         try:
@@ -132,7 +131,7 @@ class PartFactoryBrep(PartFactoryFile):
                 pc_logging.error(errors)
                 raise Exception(errors)
 
-            response = pickle.loads(base64.b64decode(response_serialized))
+            response = ocp_wire.deserialize(response_serialized)
             if not response.get("success", False):
                 pc_logging.error(response["exception"])
                 raise PartFactoryError(response["exception"])

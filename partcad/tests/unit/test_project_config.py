@@ -49,16 +49,20 @@ def test_project_config_template():
 def test_project_config_template_override():
     ctx = pc.init("partcad/tests/partcad.yaml")
     this = ctx.get_project(pc.ROOT)
+    # Import under a name of its own. pc.init() hands back a process-wide context,
+    # so reusing "//that" here would collide with test_project_config_template()
+    # above whenever both tests run in the same process, and the outcome would
+    # depend on how pytest-xdist happened to distribute them.
     ctx.import_project(
         this,
         {
-            "name": "//that",
+            "name": "//that_include",
             "type": "local",
             "path": "unit/data/project_config_include.yaml",
             "includePaths": ["subdir"],
         },
     )
-    # In this test case, the template is used to name the part the same name as
-    # the package is called.
-    part = ctx._get_part("//that:defined")
+    # The part is named by a variable pulled in from the Jinja include, not by
+    # the package name.
+    part = ctx._get_part("//that_include:defined")
     assert not part is None

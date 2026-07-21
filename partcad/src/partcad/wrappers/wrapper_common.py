@@ -9,15 +9,12 @@
 
 # This script contains code shared by all wrapper scripts.
 
-import base64
-
 # import fcntl  # TODO(clairbee): replace it with whatever works on Windows if needed
 import locale
 import os
-import pickle
 import sys
 
-from ocp_serialize import register as register_ocp_helper
+import ocp_wire
 
 
 def handle_input():
@@ -39,22 +36,26 @@ def handle_input():
     #   - Read until EOF
     input_str = sys.stdin.read()
     #   - Unpack the content received via stdin
-
-    # TODO(clairbee): is .encode() needed here?
-    request_bytes = base64.b64decode(input_str)
-
-    register_ocp_helper()
-    request = pickle.loads(request_bytes)
+    request = ocp_wire.deserialize(input_str)
     return path, request
 
 
 def handle_output(model):
     # Serialize the output
-    register_ocp_helper()
-    picklestring = pickle.dumps(model)
-    response = base64.b64encode(picklestring)
-    sys.stdout.write(response.decode())
+    sys.stdout.write(ocp_wire.serialize(model))
     sys.stdout.flush()
+
+
+def exception_to_str(exc):
+    """Normalize an exception for the response envelope.
+
+    The wire format carries plain data only, so an exception travels as its
+    message. 'None' is preserved as 'None': several consumers distinguish
+    "no exception" from "an exception whose message happens to be empty".
+    """
+    if exc is None:
+        return None
+    return str(exc)
 
 
 def handle_exception(exc, cqscript=None):

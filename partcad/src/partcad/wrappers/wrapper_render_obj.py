@@ -51,7 +51,7 @@ def process(path, request):
         wrapper_common.handle_exception(e)
         return {
             "success": False,
-            "exception": e,
+            "exception": wrapper_common.exception_to_str(e),
         }
 
 
