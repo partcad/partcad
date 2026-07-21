@@ -11,7 +11,7 @@ from . import telemetry
 
 telemetry.init(__version__)
 
-from build123d import Location
+from .geom import Location
 
 from .globals import (
     init,
@@ -23,6 +23,9 @@ from .globals import (
     get_assembly,
     get_assembly_cadquery,
     get_assembly_build123d,
+    convert_part,
+    convert_sketch,
+    convert_assembly,
     _partcad_context,
     render,
 )
@@ -74,6 +77,9 @@ __all__ = [
     "UserConfig",
     "config",
     "context",
+    "convert_assembly",
+    "convert_part",
+    "convert_sketch",
     "create_package",
     "exception",
     "fini",

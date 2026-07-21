@@ -671,11 +671,20 @@ class Context(project_config.Configuration):
     def get_sketch_shape(self, sketch_spec, params=None):
         return asyncio.run(self._get_sketch(sketch_spec, params).get_wrapped(self))
 
+    def convert_sketch(self, sketch_spec, part_type, params=None, **kwargs):
+        """Convert the sketch to 'part_type' and return the result in memory.
+
+        See 'Shape.convert()' for the supported part types and return types.
+        """
+        return asyncio.run(self._get_sketch(sketch_spec, params).convert(part_type, self, **kwargs))
+
     def get_sketch_cadquery(self, sketch_spec, params=None):
-        return asyncio.run(self._get_sketch(sketch_spec, params).get_cadquery(self))
+        """Thin alias for convert_sketch(sketch_spec, "cadquery", params)."""
+        return self.convert_sketch(sketch_spec, "cadquery", params)
 
     def get_sketch_build123d(self, sketch_spec, params=None):
-        return asyncio.run(self._get_sketch(sketch_spec, params).get_build123d(self))
+        """Thin alias for convert_sketch(sketch_spec, "build123d", params)."""
+        return self.convert_sketch(sketch_spec, "build123d", params)
 
     def _get_interface(self, interface_spec):
         project_name, interface_name = resolve_resource_path(
@@ -864,11 +873,20 @@ class Context(project_config.Configuration):
     def get_part_shape(self, part_spec, params=None):
         return asyncio.run(self._get_part(part_spec, params).get_wrapped(self))
 
+    def convert_part(self, part_spec, part_type, params=None, **kwargs):
+        """Convert the part to 'part_type' and return the result in memory.
+
+        See 'Shape.convert()' for the supported part types and return types.
+        """
+        return asyncio.run(self._get_part(part_spec, params).convert(part_type, self, **kwargs))
+
     def get_part_cadquery(self, part_spec, params=None):
-        return asyncio.run(self._get_part(part_spec, params).get_cadquery(self))
+        """Thin alias for convert_part(part_spec, "cadquery", params)."""
+        return self.convert_part(part_spec, "cadquery", params)
 
     def get_part_build123d(self, part_spec, params=None):
-        return asyncio.run(self._get_part(part_spec, params).get_build123d(self))
+        """Thin alias for convert_part(part_spec, "build123d", params)."""
+        return self.convert_part(part_spec, "build123d", params)
 
     def _get_assembly(self, assembly_spec, params=None):
         project_name, assembly_name = resolve_resource_path(
@@ -888,11 +906,20 @@ class Context(project_config.Configuration):
     def get_assembly_shape(self, assembly_spec, params=None):
         return asyncio.run(self._get_assembly(assembly_spec, params).get_wrapped(self))
 
+    def convert_assembly(self, assembly_spec, part_type, params=None, **kwargs):
+        """Convert the assembly to 'part_type' and return the result in memory.
+
+        See 'Shape.convert()' for the supported part types and return types.
+        """
+        return asyncio.run(self._get_assembly(assembly_spec, params).convert(part_type, self, **kwargs))
+
     def get_assembly_cadquery(self, assembly_spec, params=None):
-        return asyncio.run(self._get_assembly(assembly_spec, params).get_cadquery(self))
+        """Thin alias for convert_assembly(assembly_spec, "cadquery", params)."""
+        return self.convert_assembly(assembly_spec, "cadquery", params)
 
     def get_assembly_build123d(self, assembly_spec, params=None):
-        return asyncio.run(self._get_assembly(assembly_spec, params).get_build123d(self))
+        """Thin alias for convert_assembly(assembly_spec, "build123d", params)."""
+        return self.convert_assembly(assembly_spec, "build123d", params)
 
     async def render_async(self, project_path=None, format=None, output_dir=None):
         if project_path is None:

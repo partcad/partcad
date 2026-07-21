@@ -7,12 +7,12 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import importlib
 import threading
 import time
 from typing import Any
 
 from . import telemetry
+from .ai_deps import import_optional
 from .ai_feature_file import AiContentFile, AiContentProcessor
 from . import logging as pc_logging
 from . import interactive
@@ -43,13 +43,13 @@ def google_once():
 
     with lock:
         if pil_image is None:
-            pil_image = importlib.import_module("PIL.Image")
+            pil_image = import_optional("PIL.Image", "Google AI", "ai-google")
 
         if google_genai is None:
-            google_genai = importlib.import_module("google.generativeai")
+            google_genai = import_optional("google.generativeai", "Google AI", "ai-google")
 
         if google_api_core_exceptions is None:
-            google_api_core_exceptions = importlib.import_module("google.api_core.exceptions")
+            google_api_core_exceptions = import_optional("google.api_core.exceptions", "Google AI", "ai-google")
 
         latest_key = user_config.google_api_key
         if not latest_key:

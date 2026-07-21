@@ -72,6 +72,14 @@ def get_assembly(assembly_name, params=None) -> Assembly:
     return init().get_assembly(assembly_name, params=params)
 
 
+def convert_assembly(assembly_name, part_type, params=None, **kwargs):
+    """Convert the assembly to the given part type and return it in memory.
+
+    See 'partcad.Shape.convert()' for the supported part types and return types.
+    """
+    return init().convert_assembly(assembly_name, part_type, params=params, **kwargs)
+
+
 def get_assembly_cadquery(assembly_name, params=None) -> Assembly:
     """Get the assembly from the given project"""
     return init().get_assembly_cadquery(assembly_name, params=params)
@@ -85,6 +93,22 @@ def get_assembly_build123d(assembly_name, params=None) -> Assembly:
 def get_part(part_name, params=None) -> Part:
     """Get the part from the given project"""
     return init().get_part(part_name, params=params)
+
+
+def convert_part(part_name, part_type, params=None, **kwargs):
+    """Convert the part to the given part type and return it in memory.
+
+    See 'partcad.Shape.convert()' for the supported part types and return types.
+    """
+    return init().convert_part(part_name, part_type, params=params, **kwargs)
+
+
+def convert_sketch(sketch_name, part_type, params=None, **kwargs):
+    """Convert the sketch to the given part type and return it in memory.
+
+    See 'partcad.Shape.convert()' for the supported part types and return types.
+    """
+    return init().convert_sketch(sketch_name, part_type, params=params, **kwargs)
 
 
 def get_part_cadquery(part_name, params=None) -> Part:
