@@ -14,11 +14,11 @@ import os
 import yaml
 
 from OCP.gp import gp_Trsf
-import build123d as b3d
 
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
 from .assembly_factory_file import AssemblyFactoryFile
+from .geom import Location
 from . import logging as pc_logging
 from .utils import normalize_resource_path
 
@@ -134,7 +134,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         # "location" is an optional parameter for both parts and assemblies
         if "location" in node:
             l = node["location"]
-            location = b3d.Location((l[0][0], l[0][1], l[0][2]), (l[1][0], l[1][1], l[1][2]), l[2])
+            location = Location((l[0][0], l[0][1], l[0][2]), (l[1][0], l[1][1], l[1][2]), l[2])
         elif "connect" in node:
             connect = node["connect"]
             connect_with_iface = connect.get("with", None)
@@ -160,7 +160,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             connect_to_port = connect.get("to", None)
             location = None
         else:
-            location = b3d.Location((0, 0, 0), (0, 0, 1), 0)
+            location = Location((0, 0, 0), (0, 0, 1), 0)
 
         if connect_with_instance is not None and "*" in connect_with_instance:
             connect_with_instance_pattern = connect_with_instance
@@ -259,7 +259,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     if hasattr(child, "location"):
                         target_part_location = child.location
                     else:
-                        target_part_location = b3d.Location((0, 0, 0), (0, 0, 1), 0)
+                        target_part_location = Location((0, 0, 0), (0, 0, 1), 0)
 
                     # If there is no source interface specified,
                     # but there is only one present, then use it
@@ -750,7 +750,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         # TODO(clairbee): Do we need to support this?
                         pc_logging.warning("Peer port auto-detection has failed: %s" % name)
 
-                    turn_around = b3d.Location(
+                    turn_around = Location(
                         (0, 0, 0),
                         (0.71, 0.71, 0),
                         180,
@@ -776,7 +776,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         for source_offset in source_offsets:
                             trsf.Multiply(source_offset)
                         trsf.Multiply(source_port.location.wrapped.Transformation().Inverted())
-                        location = b3d.Location(trsf)
+                        location = Location(trsf)
                     elif source_port is None and target_port is not None:
                         pc_logging.debug(
                             "Connected %s to %s of %s"
@@ -792,7 +792,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         trsf.Multiply(turn_around)
                         for target_offset in target_offsets:
                             trsf.Multiply(target_offset)
-                        location = b3d.Location(trsf)
+                        location = Location(trsf)
                     elif source_port is not None and target_port is None:
                         pc_logging.debug("Connected %s of %s to %s" % (connect_with_port, name, connect_to_name))
                         trsf = target_part_location.wrapped.Transformation()
@@ -800,15 +800,15 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         for source_offset in source_offsets:
                             trsf.Multiply(source_offset)
                         trsf.Multiply(source_port.location.wrapped.Transformation().Inverted())
-                        location = b3d.Location(trsf)
+                        location = Location(trsf)
                     elif source_port is None and target_port is None:
                         pc_logging.debug("Connected %s to %s" % (name, connect_to_name))
                         trsf = target_part_location.wrapped.Transformation()
                         trsf.Multiply(turn_around)
-                        location = b3d.Location(trsf)
+                        location = Location(trsf)
                     else:
                         pc_logging.error("Not enough data to connect %s" % name)
-                        location = b3d.Location((0, 0, 0), (0, 0, 1), 0)
+                        location = Location((0, 0, 0), (0, 0, 1), 0)
 
         if not item is None:
             return [item, name, location]
