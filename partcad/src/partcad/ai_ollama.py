@@ -15,7 +15,7 @@ import time
 from typing import Any
 
 from . import telemetry
-from .ai_deps import import_optional
+from .optional_deps import import_optional
 from .ai_feature_file import AiContentFile, AiContentProcessor
 from . import logging as pc_logging
 from .user_config import user_config
@@ -45,11 +45,11 @@ def ollama_once():
         # would already be set, so a retry would skip the block entirely and the
         # later 'httpx.ConnectError' lookup would raise AttributeError on None.
         if ollama is None:
-            ollama = import_optional("ollama", "Ollama", "ai-ollama")
+            ollama = import_optional("ollama", "The Ollama provider", "ai-ollama")
             ollama_num_thread = user_config.ollama_num_thread
 
         if httpx is None:
-            httpx = import_optional("httpx", "Ollama", "ai-ollama")
+            httpx = import_optional("httpx", "The Ollama provider", "ai-ollama")
 
     return True
 

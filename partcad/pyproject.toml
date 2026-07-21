@@ -30,11 +30,14 @@ dependencies = {file = ["requirements.txt"]}
 
 # Optional AI providers. The corresponding SDKs are imported lazily, so they are
 # only required when the matching AI provider is actually used.
+# Optional linting dependency. `ruff` ships a native executable that is resolved
+# and launched lazily, so it is only required when `pc lint` actually runs.
 [tool.setuptools.dynamic.optional-dependencies]
 ai-google = {file = ["requirements-ai-google.txt"]}
 ai-openai = {file = ["requirements-ai-openai.txt"]}
 ai-ollama = {file = ["requirements-ai-ollama.txt"]}
 ai = {file = ["requirements-ai.txt"]}
+lint = {file = ["requirements-lint.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"

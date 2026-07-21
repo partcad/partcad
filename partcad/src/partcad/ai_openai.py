@@ -15,7 +15,7 @@ import threading
 from typing import Any
 
 from . import telemetry
-from .ai_deps import import_optional
+from .optional_deps import import_optional
 from .ai_feature_file import AiContentFile, AiContentProcessor
 from . import logging as pc_logging
 from . import interactive
@@ -44,7 +44,7 @@ def openai_once():
 
     with lock:
         if openai_genai is None:
-            openai_genai = import_optional("openai", "OpenAI", "ai-openai")
+            openai_genai = import_optional("openai", "The OpenAI provider", "ai-openai")
 
         latest_key = user_config.openai_api_key
         if not latest_key:
