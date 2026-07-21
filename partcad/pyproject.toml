@@ -1,6 +1,6 @@
 [project]
 name = "partcad"
-version = "0.7.140"
+version = "0.7.146"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "cad", "design", "openscad", "step", "stl"]
@@ -23,6 +23,7 @@ classifiers = [
 [tool.setuptools.package-data]
 "partcad.wrappers" = ["*.py"]
 "partcad.template" = ["*.yaml"]
+"partcad.schema" = ["**/partcad.json"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

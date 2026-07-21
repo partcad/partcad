@@ -78,7 +78,7 @@ class PartFactoryKicad(PartFactoryStep):
                     raise Exception("KiCad executable is not found. Please, install KiCad first.")
 
             pc_logging.debug("Executing KiCad...")
-            stdout, stderr = await kicad_runtime.run_async(
+            exitcode, stdout, stderr = await kicad_runtime.run_async(
                 [
                     kicad_cli_path,
                     "pcb",
@@ -92,7 +92,7 @@ class PartFactoryKicad(PartFactoryStep):
                 output_files=[part.path],
             )
 
-            if not os.path.exists(part.path) or os.path.getsize(part.path) == 0:
+            if exitcode != 0 or not os.path.exists(part.path) or os.path.getsize(part.path) == 0:
                 part.error("KiCad failed to generate the STEP file. Please, check the PCB design.")
                 return None
             pc_logging.debug("Finished executing KiCad")

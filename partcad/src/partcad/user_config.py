@@ -316,6 +316,16 @@ class UserConfig(vyper.Vyper):
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
 
+        # option: git.clone.timeout
+        # description: how long a single git network operation (clone, fetch,
+        #              pull) may take before it is aborted, in seconds. Without
+        #              a bound, an unreachable or stalled remote hangs partcad
+        #              indefinitely; the clone retry logic does not help because
+        #              a hang never raises GitCommandError.
+        # values: <int>
+        # default: 180
+        self.set_default("git.clone.timeout", 180)
+
         self.set_default("useDockerPython", False)
         self.set_default("useDockerKicad", True)
 
@@ -392,6 +402,16 @@ class UserConfig(vyper.Vyper):
         # default: False
         self.bind_env("forceUpdate", "PC_FORCE_UPDATE")
         self.force_update = self.get_bool("forceUpdate")
+
+        # option: git.clone.timeout
+        # description: seconds a single git network operation may take
+        # values: <int>
+        # default: 180
+        self.bind_env("git.clone.timeout", "PC_GIT_CLONE_TIMEOUT")
+        self.git_clone_timeout = self.get_int("git.clone.timeout")
+        if not self.git_clone_timeout or self.git_clone_timeout <= 0:
+            # An unset or nonsensical value must not turn the bound back off
+            self.git_clone_timeout = 180
 
         # option: googleApiKey
         # description: GOOGLE API key for AI services

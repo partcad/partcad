@@ -94,13 +94,25 @@ def _install_pip_version(session):
 
 def _setup_template_environment(session: nox.Session) -> None:
     _install_pip_version(session)
-    session.install("wheel", "pip-tools")
-    session.run("pip-compile", "--generate-hashes", "--resolver=backtracking", "--upgrade", "./requirements.in")
+    # pip-tools 7.6.0 imports typing_extensions in piptools/writer.py on
+    # Python < 3.11 but does not declare it as a dependency, so pip-compile
+    # dies with ModuleNotFoundError on 3.10. Pin to the last known good
+    # release until upstream ships one that declares it.
+    # TODO: Drop this pin once pip-tools > 7.6.0 fixes the missing dependency.
+    session.install("wheel", "pip-tools==7.5.1")
+    # Deliberately no --upgrade here. Setting up the environment has to
+    # reproduce the versions committed in requirements.txt, not re-resolve
+    # everything to the newest release on every run. requirements.in documents
+    # upgrading as a manual step for exactly this reason, and --upgrade in
+    # setup was silently overriding it: pygls floated from the committed 1.3.1
+    # to 2.1.1, which dropped pygls.server.LanguageServer, so the bundled
+    # language server died on startup and the LSP test hung forever.
+    # Use the update_packages session to upgrade on purpose.
+    session.run("pip-compile", "--generate-hashes", "--resolver=backtracking", "./requirements.in")
     session.run(
         "pip-compile",
         "--generate-hashes",
         "--resolver=backtracking",
-        "--upgrade",
         "./src/test/python_tests/requirements.in",
     )
     _install_bundle(session)
@@ -164,6 +176,7 @@ def build_package(session: nox.Session) -> None:
 @nox.session()
 def update_packages(session: nox.Session) -> None:
     """Update pip and npm packages."""
-    session.install("wheel", "pip-tools")
+    # Pinned for the same reason as in _setup_template_environment().
+    session.install("wheel", "pip-tools==7.5.1")
     _update_pip_packages(session)
     _update_npm_packages(session)

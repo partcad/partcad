@@ -26,6 +26,7 @@ product development process.**
    intro.rst
    installation.rst
    tutorial.rst
+   cli.rst
    design.rst
    configuration.rst
    assy.rst

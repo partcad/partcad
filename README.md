@@ -180,6 +180,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `3MF`
     - [x] `ThreeJS`
     - [x] `OBJ`
+    - [x] `IGES`
+    - [x] `glTF`
 
 ## Installation
 

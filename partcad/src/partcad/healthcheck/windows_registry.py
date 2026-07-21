@@ -42,7 +42,7 @@ class WindowsRegistryCheck(HealthCheckTest):
         except FileNotFoundError as e:
             pc_logging.debug(e)
             self.findings.append(f"{self.registry_key} registry key not found")
-        return HealthCheckReport(self.name, self.findings, False)
+        return HealthCheckReport(self.name, self.findings)
 
     def fix(self):
         try:

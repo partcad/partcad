@@ -11,6 +11,7 @@ from git import Repo, exc
 import hashlib
 import re
 import os
+import shutil
 import time
 import threading
 
@@ -18,6 +19,57 @@ from . import project_factory as pf
 from . import logging as pc_logging
 from shlex import quote
 from . import telemetry
+
+
+def _make_git_non_interactive() -> None:
+    """Stop git from ever blocking on a credential prompt.
+
+    A repository that has been deleted, made private or renamed answers with an
+    authentication challenge rather than an error. Left to itself git then waits
+    on a prompt that nothing will ever answer, so the whole process hangs
+    instead of failing. GitPython has no parameter for this, so the environment
+    is set once here, when the git support is first imported.
+
+    setdefault rather than plain assignment: anyone who has deliberately
+    configured an askpass helper to reach private repositories keeps it, and
+    they still get GIT_TERMINAL_PROMPT below to stop the interactive fallback.
+    """
+    os.environ.setdefault("GIT_TERMINAL_PROMPT", "0")
+    if os.name != "nt":
+        # No portable equivalent of /bin/true on Windows. GIT_TERMINAL_PROMPT
+        # alone already blocks the console prompt there.
+        os.environ.setdefault("GIT_ASKPASS", "/bin/true")
+        os.environ.setdefault("SSH_ASKPASS", "/bin/true")
+
+
+def _apply_git_timeout(seconds: int) -> None:
+    """Bound git network operations to 'seconds'.
+
+    Note that GitPython's kill_after_timeout cannot be used for this. Repo's
+    clone, fetch and pull all run the git command with as_process=True, and
+    kill_after_timeout is documented to have no effect in that case, so passing
+    it looks like protection while doing nothing at all. It is also unsupported
+    on Windows regardless.
+
+    git's own transfer abort is used instead: a transfer that stays below
+    lowSpeedLimit bytes/s for lowSpeedTime seconds is terminated. curl enforces
+    it inside git, so it works on every platform and applies to clone, fetch and
+    pull alike. It bounds how long a transfer may make no progress, which is
+    what actually needs bounding here; a large but healthy clone is still
+    allowed to take as long as it needs.
+    """
+    os.environ["GIT_HTTP_LOW_SPEED_LIMIT"] = "1000"
+    os.environ["GIT_HTTP_LOW_SPEED_TIME"] = str(seconds)
+    # Bound the SSH side too, otherwise git+ssh remotes can still hang on a
+    # connection that never completes.
+    if "GIT_SSH_COMMAND" not in os.environ:
+        os.environ["GIT_SSH_COMMAND"] = (
+            "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "
+            f"-o ConnectTimeout={min(seconds, 60)} -o ServerAliveInterval=15"
+        )
+
+
+_make_git_non_interactive()
 
 global_cache_lock = threading.Lock()
 cache_locks = {}
@@ -33,6 +85,11 @@ git_error_patterns = [
     r"error: \d+ bytes of body are still expected",
     # Timeout issue
     r"fatal: unable to access '(https?://github.com/|git@github.com:)[a-zA-Z0-9./_-]+': Operation timed out after \d+ milliseconds with \d+ out of \d+ bytes received",
+    # Transfer stalled and was aborted by http.lowSpeedLimit/http.lowSpeedTime.
+    # A stall is transient, so it belongs with the other retryable errors:
+    # without this the abort would end the run on the first hiccup, where it
+    # used to hang forever instead.
+    r"fatal: unable to access '.+': Operation too slow\. Less than \d+ bytes/sec transferred the last \d+ seconds",
     # SSL/TLS handshake failure
     r"fatal: unable to access 'https?://github.com/[a-zA-Z0-9./_-]+': SSL certificate problem: .+",
     # Broken pipe during data transfer
@@ -47,6 +104,39 @@ git_error_patterns = [
     r"fatal: early EOF",
     r"fatal: fetch-pack: invalid index-pack output",
 ]
+
+
+# A commit id, whole or abbreviated. Anything else is treated as a branch or
+# tag name. Ambiguity is resolved towards "this is a commit id", because that
+# choice merely costs a slightly larger clone, whereas guessing "branch" for a
+# commit id makes "git clone --branch" fail outright.
+_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+def looks_like_commit_id(revision: str) -> bool:
+    return bool(_SHA_RE.match(revision.strip()))
+
+
+def get_clone_options(revision) -> list[str]:
+    """Pick the cheapest clone that can still reach 'revision'.
+
+    A full clone downloads every version of every file that ever existed, while
+    only one tree is ever read. The public index costs about 780MB that way, and
+    the slower the link, the more likely that turns into a stalled transfer.
+
+    Three cases:
+      - no revision: one commit of the default branch is all that is needed.
+      - a branch or tag: same, but ask the server for that ref directly.
+      - a commit id: --branch does not accept one, and a shallow clone would
+        not contain it. Keep the whole commit graph so any commit can be
+        checked out, and leave historical file contents on the server; blobs
+        for the checked out tree are fetched on demand.
+    """
+    if revision is None:
+        return ["--depth 1", "--single-branch", "--no-tags"]
+    if looks_like_commit_id(revision):
+        return ["--filter=blob:none"]
+    return ["--depth 1", "--single-branch", "--no-tags", "--branch %s" % revision]
 
 
 def get_cache_lock(hash):
@@ -136,6 +226,10 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
         with cache_lock:
             attempt = 0
+            # Bound every network operation below. Without this a stalled
+            # remote hangs forever, and the retry loop never helps because a
+            # hang raises nothing for it to catch.
+            _apply_git_timeout(self.ctx.user_config.git_clone_timeout)
             max_retries = self.ctx.user_config.get_int("git.clone.retry.max")
             patience = self.ctx.user_config.get_float("git.clone.retry.patience")
             while attempt <= max_retries and self.ctx.is_connected():
@@ -227,12 +321,38 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     # Clone the repository if it's not cached yet.
                     try:
                         pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
+                        clone_options = get_clone_options(self.import_revision)
                         with telemetry.start_as_current_span(
                             "*ProjectFactoryGit._clone_or_update_repo.{Repo.clone_from}"
                         ):
-                            repo = Repo.clone_from(
-                                repo_url, cache_path, multi_options=self.git_config_options, allow_unsafe_options=True
-                            )
+                            try:
+                                repo = Repo.clone_from(
+                                    repo_url,
+                                    cache_path,
+                                    multi_options=self.git_config_options + clone_options,
+                                    allow_unsafe_options=True,
+                                )
+                            except exc.GitCommandError as e:
+                                # The cheaper clone can be refused for reasons
+                                # that say nothing about reachability: a server
+                                # with uploadpack.allowFilter disabled, or a
+                                # revision that turned out not to be a ref after
+                                # all. None of that should stop the import, so
+                                # take the slow path rather than give up.
+                                if any(re.search(pattern, str(e)) for pattern in git_error_patterns):
+                                    raise  # a real network failure, let the retry loop see it
+                                pc_logging.warning(
+                                    "Optimized clone of %s failed (%s), retrying with a full clone",
+                                    self.import_config_url,
+                                    str(e).splitlines()[-1] if str(e) else e,
+                                )
+                                shutil.rmtree(cache_path, ignore_errors=True)
+                                repo = Repo.clone_from(
+                                    repo_url,
+                                    cache_path,
+                                    multi_options=self.git_config_options,
+                                    allow_unsafe_options=True,
+                                )
                         self.ctx.stats_git_ops += 1
                         if not self.import_revision is None:
                             repo.git.checkout(self.import_revision, force=True)
