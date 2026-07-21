@@ -72,6 +72,24 @@ class Assembly(ShapeWithAi):
         async def per_child(child):
             # TODO(clairbee): use topods objects here
             item = await child.item.get_build123d(ctx)
+            if item is None or item.wrapped is None:
+                # get_build123d() hands back a Solid whose 'wrapped' is None when
+                # the shape could not be built, most often because the wrapper
+                # process died before producing any output. Copying or compounding
+                # such an object fails deep inside build123d with an AttributeError
+                # that names neither this assembly nor the child that is missing,
+                # so report which child failed here instead.
+                child_name = "%s:%s" % (
+                    getattr(child.item, "project_name", "<unknown>"),
+                    getattr(child.item, "name", "<unknown>"),
+                )
+                msg = "%s: %s: failed to get the shape of the child %s" % (
+                    self.project_name,
+                    self.name,
+                    child_name,
+                )
+                self.error(msg)
+                raise Exception(msg)
             if child.name is not None or child.location is not None:
                 item = copy.copy(item)
                 if child.name is not None:

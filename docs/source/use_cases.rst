@@ -138,10 +138,10 @@ Consume models
 CAD Design GUIs
 ---------------
 
-If you want to use models from the public PartCAD repository in a CAD Design GUI
-(like FreeCAD or its paid alternatives), the best way to do it at the moment
-(before PartCAD plugins for these apps are available) is to export the models to
-STEP or 3MF files and, then, import them into the CAD Design GUI of your choice.
+You can use models from the public PartCAD repository in a CAD Design GUI, such as
+FreeCAD or its paid alternatives. PartCAD plugins for these apps are not yet
+available. For now, export the models to STEP or 3MF files and import those files
+into the CAD Design GUI of your choice.
 
   .. code-block:: shell
 
