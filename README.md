@@ -180,6 +180,8 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `3MF`
     - [x] `ThreeJS`
     - [x] `OBJ`
+    - [x] `IGES`
+    - [x] `glTF`
 
 ## Installation
 
@@ -241,4 +243,3 @@ Give us a star for our hard work!
 [OpenCASCADE]: https://www.opencascade.com/
 [KiCad EDA]: https://www.kicad.org/
 [Quick Start]: https://partcad.github.io/partcad/development/quick-start/
-

@@ -1,6 +1,50 @@
 Additional Features
 ###################
 
+============================
+Visual Studio Code extension
+============================
+
+The PartCAD extension for Visual Studio Code is the primary graphical interface to PartCAD. It adds a PartCAD
+workbench with an Explorer view for browsing packages and an Inspector view for viewing objects and editing
+their parameters. Install it from the
+`VS Code marketplace <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_. See
+the :doc:`tutorial <tutorial>` for a step-by-step walkthrough.
+
+The extension exposes the following actions from the Explorer view and the command palette:
+
+Packages
+--------
+
+- **Initialize new package** — Create a ``partcad.yaml`` package in the current workspace (a custom-path
+  variant is also available).
+- **Open package** — Open an existing package.
+- **Reload the package** and **Restart PartCAD** — Refresh the view or restart the PartCAD backend after a
+  change.
+- **Update PartCAD** — Update the PartCAD installation used by the extension.
+
+Objects
+-------
+
+- **Add** a part, assembly, sketch, or interface.
+- **Import** a part, assembly, or sketch from an existing file.
+- **Display** (inspect) a part, assembly, sketch, or interface in the ``OCP CAD Viewer``; parts can also be
+  opened for display and editing together, or their source edited directly.
+- **Test** a part, assembly, or scene.
+
+Generative AI
+-------------
+
+- **Generate a part with AI** — Create a new part from a natural-language description.
+- **Regenerate with AI** — Regenerate an existing part.
+- **Change with AI** — Modify an existing part through a natural-language instruction.
+
+Export
+------
+
+Objects can be exported directly from the extension to any of the following formats: **SVG**, **PNG**,
+**STEP**, **STL**, **3MF**, **ThreeJS**, **OBJ**, **IGES**, and **glTF**.
+
 =============================
 Procurement and Manufacturing
 =============================
@@ -38,7 +82,7 @@ an assembly given assembly instructions and using parts ordered from
 Currently, the provider has to be explicitly specified in the quote or order
 request, or explicitly specified as one of the suppliers in the package where
 the parts are declared. In the future PartCAD will be able to select providers
-based on the location and preferences of the requestor, while leaving the
+based on the location and preferences of the requester, while leaving the
 possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).
 
