@@ -23,8 +23,14 @@ def import_optional(module_name: str, provider: str, extra: str) -> ModuleType:
     try:
         return importlib.import_module(module_name)
     except ModuleNotFoundError as e:
-        missing_root = (e.name or "").split(".")[0]
-        if missing_root != module_name.split(".")[0]:
+        missing = e.name or ""
+        # Treat this as a missing optional extra only when the module that failed
+        # to import IS the requested module or an ANCESTOR package of it. If a
+        # deeper submodule of an otherwise-installed SDK failed to import (same
+        # root, but not an ancestor of what we asked for), that is genuine
+        # breakage inside the SDK, so re-raise the original error untouched.
+        requested_from_missing = missing == module_name or module_name.startswith(missing + ".")
+        if not requested_from_missing:
             raise
         raise AiProviderDependencyError(
             f"The {provider} provider requires an optional dependency "
