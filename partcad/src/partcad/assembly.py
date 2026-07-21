@@ -71,10 +71,10 @@ class Assembly(ShapeWithAi):
         @telemetry.start_as_current_span_async("Assembly._get_shape_real.per_child")
         async def per_child(child):
             # TODO(clairbee): use topods objects here
-            item = await child.item.get_build123d(ctx)
+            item = await child.item.convert("build123d", ctx)
             if item is None or item.wrapped is None:
-                # get_build123d() hands back a Solid whose 'wrapped' is None when
-                # the shape could not be built, most often because the wrapper
+                # convert("build123d") hands back a Solid whose 'wrapped' is None
+                # when the shape could not be built, most often because the wrapper
                 # process died before producing any output. Copying or compounding
                 # such an object fails deep inside build123d with an AttributeError
                 # that names neither this assembly nor the child that is missing,
