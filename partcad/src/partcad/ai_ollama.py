@@ -40,11 +40,16 @@ def ollama_once():
     global ollama, ollama_num_thread, httpx
 
     with lock:
+        # Initialize each module under its own guard. Sharing one guard would let a
+        # failure to import the second module leave it permanently None: 'ollama'
+        # would already be set, so a retry would skip the block entirely and the
+        # later 'httpx.ConnectError' lookup would raise AttributeError on None.
         if ollama is None:
             ollama = import_optional("ollama", "Ollama", "ai-ollama")
-            httpx = import_optional("httpx", "Ollama", "ai-ollama")
-
             ollama_num_thread = user_config.ollama_num_thread
+
+        if httpx is None:
+            httpx = import_optional("httpx", "Ollama", "ai-ollama")
 
     return True
 
