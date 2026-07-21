@@ -94,6 +94,29 @@ doesn't usually need to be installed separately.
     >>> import partcad as pc
     >>> ctx = pc.init()
 
+============
+AI providers
+============
+
+The SDKs of the supported AI providers are optional. Install the extra that
+matches the provider you intend to use, either on ``partcad-cli``:
+
+.. code-block:: shell
+
+    $ python -m pip install -U 'partcad-cli[ai-google]'   # Google Gemini
+    $ python -m pip install -U 'partcad-cli[ai-openai]'   # OpenAI
+    $ python -m pip install -U 'partcad-cli[ai-ollama]'   # locally hosted Ollama
+    $ python -m pip install -U 'partcad-cli[ai]'          # all of the above
+
+or on ``partcad`` itself, using the same extra names:
+
+.. code-block:: shell
+
+    $ python -m pip install -U 'partcad[ai]'
+
+Without the matching extra, using an AI provider fails with an error naming the
+package to install. Everything else in PartCAD works without them.
+
 ============================
 Visual Studio Code extension
 ============================
