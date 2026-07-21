@@ -11,7 +11,7 @@ from . import telemetry
 
 telemetry.init(__version__)
 
-from build123d import Location
+from .geom import Location
 
 from .globals import (
     init,

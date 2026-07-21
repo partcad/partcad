@@ -13,6 +13,7 @@ import typing
 import build123d as b3d
 
 from . import telemetry
+from .geom import Location
 from .shape import Shape
 from .shape_ai import ShapeWithAi
 from .sync_threads import threadpool_manager
@@ -51,7 +52,7 @@ class Assembly(ShapeWithAi):
         self,
         child_item: Shape,  # pc.Part or pc.Assembly
         name=None,
-        loc=b3d.Location((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.0),
+        loc=Location((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.0),
     ):
         self.children.append(AssemblyChild(child_item, name, loc))
         self._wrapped = None  # Invalidate if any
@@ -95,6 +96,9 @@ class Assembly(ShapeWithAi):
                 if child.name is not None:
                     item.label = child.name
                 if child.location is not None:
+                    # 'item' is a build123d object while 'child.location' is a pc.Location
+                    # (see geom.py). build123d's Shape.locate() only reads '.wrapped', which
+                    # both types expose as a TopLoc_Location, so no conversion is needed here.
                     item.locate(child.location)
             return item
 
