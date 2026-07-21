@@ -205,6 +205,38 @@ Here are some examples of how to fetch PartCAD models from within a
     ...
     show_object(assembly)
 
+Python: any format
+------------------
+
+``pc.get_part_cadquery()`` and ``pc.get_part_build123d()`` above are thin
+aliases for the general conversion API, which returns the result in memory for
+any supported format instead of writing an output file:
+
+  .. code-block:: python
+
+    import partcad as pc
+
+    # Live CAD objects
+    part = pc.convert_part("//pub/std/metric/cqwarehouse:hexhead-din931", "build123d")
+    part = pc.convert_part("//pub/std/metric/cqwarehouse:hexhead-din931", "cadquery")
+
+    # Serialized formats
+    step = pc.convert_part("//pub/std/metric/cqwarehouse:hexhead-din931", "step")
+    stl = pc.convert_part("//pub/std/metric/cqwarehouse:hexhead-din931", "stl")
+
+The supported part types are ``build123d`` and ``cadquery``, which return the
+CAD library's own object, plus the serialized formats ``3mf``, ``brep``,
+``dxf``, ``gltf``, ``iges``, ``obj``, ``step``, ``stl``, ``svg`` and
+``threejs``. Formats that are textual by definition (``step``, ``iges``,
+``brep``, ``obj``, ``threejs``, ``svg``, ``dxf``) are returned as ``str``;
+formats that are or can be binary (``stl``, ``3mf``, ``gltf``) are returned as
+``bytes``. The return type depends only on the requested part type, never on
+the export options.
+
+``pc.convert_assembly()`` and ``pc.convert_sketch()`` do the same for
+assemblies and sketches, and ``Shape.convert()`` is available directly on any
+part, sketch or assembly object.
+
 Python
 ------
 
