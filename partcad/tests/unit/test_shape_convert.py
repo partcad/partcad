@@ -82,6 +82,10 @@ def test_convert_serialized_without_context_raises():
 @pytest.mark.slow
 def test_convert_build123d():
     """The live-object path hands back a build123d object."""
+    # PartCAD builds shapes in sandboxed runtimes, so neither build123d nor
+    # CadQuery is guaranteed to be importable in this process. Asking convert()
+    # for a live object of that flavour is an explicit opt-in by the caller.
+    pytest.importorskip("build123d")
     ctx, cube = _cube()
 
     obj = asyncio.run(cube.convert("build123d", ctx))
@@ -92,6 +96,7 @@ def test_convert_build123d():
 @pytest.mark.slow
 def test_convert_cadquery():
     """The live-object path hands back a CadQuery object."""
+    pytest.importorskip("cadquery")
     ctx, cube = _cube()
 
     obj = asyncio.run(cube.convert("cadquery", ctx))
@@ -138,6 +143,7 @@ def test_convert_leaves_no_temporary_file():
 @pytest.mark.slow
 def test_get_build123d_still_works_but_warns():
     """The old accessor keeps working and reports itself as deprecated."""
+    pytest.importorskip("build123d")
     ctx, cube = _cube()
 
     with pytest.deprecated_call():
@@ -149,6 +155,7 @@ def test_get_build123d_still_works_but_warns():
 @pytest.mark.slow
 def test_get_cadquery_still_works_but_warns():
     """The old accessor keeps working and reports itself as deprecated."""
+    pytest.importorskip("cadquery")
     ctx, cube = _cube()
 
     with pytest.deprecated_call():
