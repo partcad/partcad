@@ -36,39 +36,44 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         self.global_conda_lock = FileLock(os.path.join(ctx.user_config.internal_state_dir, ".conda.lock"))
         self.conda_initialized = self.initialized
 
-        self.conda_path = shutil.which("mamba")
-        if self.conda_path is not None:
-            self.is_mamba = True
-            # TODO(clairbee): Initialize the environment variables properly, including PATH
-        else:
-            self.conda_path = shutil.which("conda")
-        if self.conda_path is None:
-            self.conda_cli = importlib.import_module("conda.cli.python_api")
-            self.conda_cli.run_command("config", "--quiet")
-            info_json, _, _ = self.conda_cli.run_command("info", "--json")
-            info = json.loads(info_json)
-            if "CONDA_EXE" in info["env_vars"]:
-                self.conda_path = info["env_vars"]["CONDA_EXE"]
-            else:
-                root_prefix = info["root_prefix"]
-                root_bin = os.path.join(root_prefix, "bin")
-                root_scripts = os.path.join(root_prefix, "Scripts")
-                search_paths = [
-                    root_scripts,
-                    root_bin,
-                    root_prefix,
-                ]
-                if os.name == "nt":
-                    search_path_strings = ";".join(search_paths)
-                else:
-                    search_path_strings = ":".join(search_paths)
-                self.conda_path = shutil.which(
-                    "conda",
-                    path=search_path_strings,
-                )
+        # find conda executable
+        self.conda_path = CondaPythonRuntime.find_conda_executable()
+        self.is_mamba = "mamba" in os.path.basename(self.conda_path).lower() if self.conda_path else False
+        # TODO(clairbee): Initialize the environment variables properly, including PATH
 
         if self.conda_initialized:
             self.verify_conda()
+
+    @staticmethod
+    def find_conda_executable():
+        conda_path = shutil.which("mamba")
+        if conda_path:
+            return conda_path
+
+        conda_path = shutil.which("conda")
+        if conda_path:
+            return conda_path
+
+        try:
+            conda_cli = importlib.import_module("conda.cli.python_api")
+            conda_cli.run_command(conda_cli.Commands.CONFIG, "--quiet")
+            info_json, _, _ = conda_cli.run_command(conda_cli.Commands.INFO, "--json")
+            info = json.loads(info_json)
+            env_vars = info.get("env_vars", {})
+            if "CONDA_EXE" in env_vars:
+                return env_vars["CONDA_EXE"]
+
+            root_prefix = info.get("root_prefix", "")
+            if not root_prefix:
+                return None
+
+            search_paths = [os.path.join(root_prefix, "Scripts"), os.path.join(root_prefix, "bin"), root_prefix]
+            search_path_str = os.pathsep.join(search_paths) if os.name == "nt" else ":".join(search_paths)
+
+            return shutil.which("conda", path=search_path_str)
+        except Exception as e:
+            pc_logging.error(f"Error locating conda executable: {e}")
+            return None
 
     def verify_conda(self):
         # Make a best effort attempt to determine if it's valid
