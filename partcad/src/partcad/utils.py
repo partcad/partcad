@@ -94,6 +94,12 @@ def is_editable_install(module):
     Returns:
         True if the module is from an editable install, False otherwise.
     """
+    # A PyInstaller bundle carries no site-packages at all, so the heuristics
+    # below would call every frozen module editable. It is the opposite: the
+    # code was frozen at build time and cannot be edited in place.
+    if getattr(sys, "frozen", False):
+        return False
+
     if not hasattr(module, "__file__"):
         return False  # Built-in or dynamically generated modules
 

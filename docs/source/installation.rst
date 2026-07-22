@@ -16,6 +16,12 @@ getting tested on Linux, MacOS and Windows.
 
 .. note::
 
+  No Python on the machine, or no interest in maintaining a Python environment?
+  Install the :ref:`standalone command line tools <standalone-cli>` instead. They are
+  the same tools, shipped with their own interpreter.
+
+.. note::
+
   PartCAD works best when `conda <https://docs.conda.io/>`_ is installed.
   If that doesn't help (e.g. MacOS+arm64) then try ``mamba``.
   On Windows, PartCAD must be used inside a ``conda`` environment.
@@ -76,6 +82,165 @@ plain-text logs, and ``-p PATH`` to select the package (a ``partcad.yaml`` file 
 one). Run ``pc <command> --help`` to see the options for any command.
 
 For a full command reference, see :doc:`cli`.
+
+
+.. _standalone-cli:
+
+=========================================
+Standalone command line tools (no Python)
+=========================================
+
+The standalone build is the same ``pc`` and ``partcad`` commands, packaged with their own Python
+interpreter and every dependency they need. Nothing is installed into a Python environment, because
+no Python environment is involved: there is nothing to activate, nothing to keep on the right version,
+and nothing to break the next time some other tool upgrades Python.
+
+Use it if Python is not installed, if the Python that is installed belongs to the operating system and
+should be left alone, or if PartCAD is simply a tool to run rather than a library to program against.
+Use the wheels instead if you want to ``import partcad`` from your own scripts.
+
+Install
+=======
+
+On Linux and MacOS:
+
+.. code-block:: shell
+
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh
+
+That downloads the bundle for the current operating system and architecture from the latest
+`GitHub release <https://github.com/partcad/partcad/releases>`_, verifies its checksum, unpacks it into
+``~/.local/share/partcad/<version>``, and links ``pc`` and ``partcad`` into ``~/.local/bin``.
+Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.local/bin`` is not on your
+``PATH``, the installer says so and prints the line to add.
+
+The bundle is around 800MB unpacked (a quarter of a gigabyte to download): most of it is the OpenCASCADE
+geometry kernel, which the wheels download too, just at ``pip install`` time.
+
+Supported platforms are Linux on x86_64, and MacOS on Apple silicon. Windows is covered by the
+``.zip`` archive under :ref:`manual installation <standalone-manual>`.
+
+Options
+=======
+
+Options go after ``sh -s --``:
+
+.. code-block:: shell
+
+  # A specific version rather than the latest release
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --version 0.7.146
+
+  # Somewhere else entirely
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | \
+      sh -s -- --install-dir /opt/partcad --bin-dir /usr/local/bin
+
+  # What else is there
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --help
+
+============================== ================================ ==========================================
+Option                         Environment variable             Default
+============================== ================================ ==========================================
+``--version <version>``        ``PARTCAD_VERSION``              the latest release
+``--install-dir <dir>``        ``PARTCAD_INSTALL_DIR``          ``${XDG_DATA_HOME:-~/.local/share}/partcad``
+``--bin-dir <dir>``            ``PARTCAD_BIN_DIR``              ``~/.local/bin``
+``--base-url <url>``           ``PARTCAD_BASE_URL``             the GitHub release for the version
+``--repository <owner/name>``  ``PARTCAD_REPOSITORY``           ``partcad/partcad``
+============================== ================================ ==========================================
+
+Installing several versions side by side is fine: each one unpacks into its own directory, and the
+last install wins the ``pc`` and ``partcad`` links. Installing an already installed version replaces it.
+
+Upgrade and uninstall
+=====================
+
+Upgrading is installing again: re-run the same command.
+
+.. code-block:: shell
+
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --uninstall
+
+Uninstalling removes the bundle and the two links, and only the links that point at the bundle, so a
+``pc`` installed from a wheel is left alone. The PartCAD cache and configuration in ``~/.partcad`` are kept;
+delete that directory as well to leave nothing behind.
+
+Installing a development build
+==============================
+
+The installer is a file in the repository, so any branch, tag, or pull request has its own copy of it, and
+the URL selects which one runs. To install using the script as it exists on the ``devel`` branch:
+
+.. code-block:: shell
+
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/devel/install.sh | sh
+
+For a pull request, use the branch it comes from, or its head commit:
+
+.. code-block:: shell
+
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/<branch-or-commit>/install.sh | sh
+
+.. note::
+
+  The URL only decides which *installer* runs. By default that installer still downloads the bundle of the
+  latest release, because bundles are published per release, not per commit. To install the bundle a branch
+  or pull request actually built, take it from the ``Standalone`` workflow run of that branch or pull
+  request: open the run on GitHub, download the ``partcad-standalone-<platform>`` artifact, unzip it, and
+  point the installer at the directory holding the archive.
+
+  .. code-block:: shell
+
+    $ unzip partcad-standalone-linux-x86_64.zip -d /tmp/partcad-build
+    $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/devel/install.sh | \
+        sh -s -- --version <version> --base-url "file:///tmp/partcad-build"
+
+  ``--base-url`` accepts any URL, so a bundle published anywhere else (an internal mirror, a file server)
+  installs the same way.
+
+.. _standalone-manual:
+
+Manual installation
+===================
+
+The archives are attached to every `GitHub release <https://github.com/partcad/partcad/releases>`_ next to
+the wheels, together with a ``.sha256`` file each:
+
+* ``partcad-<version>-linux-x86_64.tar.gz``
+* ``partcad-<version>-macos-arm64.tar.gz``
+* ``partcad-<version>-windows-x86_64.zip``
+
+Each one unpacks into a single ``partcad/`` directory holding ``pc``, ``partcad``, and everything they
+need. Put that directory anywhere and run the commands from it, or add it to ``PATH``. On Windows, unpack
+the ``.zip`` and add the resulting directory to ``PATH`` -- there is no shell script installer for Windows.
+
+.. code-block:: shell
+
+  $ tar -xzf partcad-<version>-linux-x86_64.tar.gz -C ~/.local/share
+  $ ~/.local/share/partcad/pc version
+
+.. note::
+
+  On MacOS, downloading the archive with a browser marks it as quarantined, and Gatekeeper then refuses to
+  run the unpacked commands. Installing with ``install.sh``, or downloading with ``curl``, avoids that.
+  To clear it after the fact: ``xattr -dr com.apple.quarantine <directory>``.
+
+What is included, and what is not
+=================================
+
+The bundle carries everything the wheels would install, including the optional extras that the wheels leave
+to the user: all the AI providers (``ai-google``, ``ai-openai``, ``ai-ollama``) and the Python linter
+(``lint``). A frozen bundle cannot be extended afterwards, so it ships complete.
+
+Two things are deliberately not in it, because PartCAD runs them as external programs rather than importing
+them, exactly as the wheels do:
+
+* **git**, used to fetch package repositories.
+* **conda** (or **mamba**), used to build the sandbox in which PartCAD runs CAD scripts.
+
+Both are only needed for the features that use them. Run ``pc healthcheck`` to see what is missing on the
+current machine.
+
+The bundle provides the command line tools only. The ``partcad`` Python module for CAD-as-code scripts is
+a wheel: ``python -m pip install -U partcad``.
 
 
 =====================================

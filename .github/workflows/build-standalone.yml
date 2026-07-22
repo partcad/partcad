@@ -1,0 +1,147 @@
+# Standalone (PyInstaller) bundles: the alternative to the Python wheels
+name: Standalone # Keep the action badge icon short
+
+on:
+  workflow_dispatch:
+  # Called by "deploy.yml", which uploads the bundles to the GitHub release.
+  workflow_call:
+  merge_group:
+  # Freezing pulls ~500MB of OpenCASCADE per runner, so this does not run on
+  # every change: only on the ones that can change what is frozen. The two
+  # lists are duplicated because GitHub Actions does not support YAML anchors.
+  # "main" is absent on purpose: a push there runs "deploy.yml", which calls
+  # this workflow itself. Listing it here would build everything twice.
+  push:
+    branches: ["devel"]
+    paths:
+      - "dev-tools/pyinstaller/**"
+      - "install.sh"
+      - ".github/workflows/build-standalone.yml"
+      - "partcad/src/**"
+      - "partcad-cli/src/**"
+      - "partcad/requirements*.txt"
+      - "partcad-cli/requirements*.txt"
+  pull_request:
+    branches: ["main", "devel"]
+    paths:
+      - "dev-tools/pyinstaller/**"
+      - "install.sh"
+      - ".github/workflows/build-standalone.yml"
+      - "partcad/src/**"
+      - "partcad-cli/src/**"
+      - "partcad/requirements*.txt"
+      - "partcad-cli/requirements*.txt"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  build:
+    name: "Build (${{ matrix.platform }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          # macos-latest is arm64. There is no macos x86_64 bundle: it would
+          # need macos-13, and no macos-13 job has ever started on the current
+          # runner plan (see the note in test.yml).
+          - os: macos-latest
+            platform: macos-arm64
+          - os: windows-latest
+            platform: windows-x86_64
+          # No linux arm64 bundle: cadquery-ocp 7.7.2 publishes no aarch64
+          # Linux wheel, so there is nothing to freeze there.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          # The bundle embeds this interpreter, so this is the Python version
+          # every user of the standalone tools ends up running. It matches the
+          # version the wheels are published from in "deploy.yml".
+          python-version: "3.11"
+
+      - name: Install system prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes libcairo2-dev
+
+      - name: Build the standalone bundle
+        shell: bash
+        run: dev-tools/pyinstaller/build.sh
+
+      - name: Upload the bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: partcad-standalone-${{ matrix.platform }}
+          path: |
+            dist/standalone/*.tar.gz
+            dist/standalone/*.zip
+            dist/standalone/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  install:
+    name: "Install (${{ matrix.platform }})"
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: macos-latest
+            platform: macos-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-standalone-${{ matrix.platform }}
+          path: archives
+
+      # This exercises the script users pipe into `sh`, against the archive
+      # this run produced, on a machine where PartCAD was never installed.
+      - name: Install with install.sh
+        shell: bash
+        run: |
+          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' partcad/src/partcad/__init__.py)
+          sh install.sh \
+            --version "${version}" \
+            --base-url "file://${PWD}/archives" \
+            --install-dir "${HOME}/partcad-standalone" \
+            --bin-dir "${HOME}/partcad-bin"
+
+      - name: Run the installed commands
+        shell: bash
+        run: |
+          export PATH="${HOME}/partcad-bin:${PATH}"
+          # From a directory that is not the checkout, so nothing can resolve
+          # against the sources by accident.
+          cd "${HOME}"
+          pc version
+          partcad --help
+          pc init
+          pc list
+
+      - name: Uninstall with install.sh
+        shell: bash
+        run: |
+          sh install.sh --uninstall \
+            --install-dir "${HOME}/partcad-standalone" \
+            --bin-dir "${HOME}/partcad-bin"
+          test ! -e "${HOME}/partcad-bin/pc"
+          test ! -d "${HOME}/partcad-standalone"
