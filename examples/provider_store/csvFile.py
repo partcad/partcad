@@ -26,7 +26,7 @@ if not "request" in globals():
 
 
 if __name__ == "caps":
-    raise Exception("Not suported by stores")
+    raise Exception("Not supported by stores")
 
 elif __name__ == "avail":
     load()

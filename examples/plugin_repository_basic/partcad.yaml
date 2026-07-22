@@ -1,0 +1,36 @@
+name: //pub/examples/partcad/plugin_repository_basic
+desc: |
+  Example plugin for an external repository of parts without any hierarchy.
+
+doc:
+  intro: |
+    This example demonstrates how to use a PartCAD plugin to create a simple
+    external repository of parts. It allows users to search for parts by name and
+    retrieve their details. The plugin uses a simple in-memory data structure to
+    store the parts and their details.
+
+    This example demonstrates a package repository with a single package
+    See other examples for hierarchical packages in external repositories.
+  usage: |
+    ```
+    pc list parts -r myCsv
+    pc inspect myCsv:bolt
+    ```
+
+dependencies:
+  example:
+    type: external
+    plugin: :my-csv
+
+repositories:
+  myCsv:
+    type: enrich
+    source: csv
+    with:
+      filename: example.csv
+  csv:
+    type: basic
+    parameters:
+      filename:
+        type: string
+        desc: The name of the CSV file to read the parts from.

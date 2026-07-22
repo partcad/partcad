@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2023
 #
 # Author: Roman Kuzmenko
@@ -8,7 +9,9 @@
 #
 
 import os
+
 from . import project_factory as pf
+from .project_local import ProjectLocal
 from . import telemetry
 
 
@@ -39,3 +42,12 @@ class ProjectFactoryLocal(pf.ProjectFactory, LocalImportConfiguration):
         # TODO(clairbee): consider installing a symlink in the parent's project
 
         self._save()
+
+    def _create_project(self, config):
+        return ProjectLocal(
+            self.ctx,
+            self.name,
+            self.path,
+            include_paths=self.include_paths,
+            inherited_config=self.inherited_config,
+        )

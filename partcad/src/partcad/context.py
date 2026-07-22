@@ -18,18 +18,18 @@ from .cache_shape import ShapeCache
 from . import consts
 from . import logging as pc_logging
 from .mating import Mating
-from . import project_config
 from . import runtime_python_all
 from . import project_factory_local as rfl
 from . import project_factory_git as rfg
 from . import project_factory_tar as rft
+from . import project_factory_external as rfe
 from .sync_threads import threadpool_manager
 from .user_config import UserConfig
 from .utils import *
 from .part import Part
 from .project import Project
-from .provider_request_quote import ProviderRequestQuote
-from .provider_data_cart import *
+from .plugin_request_provider_quote import ProviderRequestQuote
+from .plugin_provider_data_cart import *
 from . import telemetry
 from .test.all import tests as all_tests
 
@@ -46,8 +46,16 @@ def param_getters(attr_name: str):
 
 # Context
 @telemetry.instrument(attr_getters=param_getters)
-class Context(project_config.Configuration):
-    """Stores and caches all imported objects."""
+class Context:
+    """Stores and caches all imported objects.
+
+    Note that this class deliberately does not derive from 'Configuration'.
+    It used to, for a single reason: 'Configuration' parsed 'partcad.yaml' and
+    thus knew how to pick up the root package's 'name' override. Now that
+    configuration parsing lives in 'ProjectLocal', there is nothing left to
+    inherit - the context is not a package and has no configuration file of its
+    own. It holds the root package in 'self.root' and adopts its name instead.
+    """
 
     stats_packages: int
     stats_packages_instantiated: int
@@ -59,8 +67,10 @@ class Context(project_config.Configuration):
     stats_parts_instantiated: int
     stats_assemblies: int
     stats_assemblies_instantiated: int
+    stats_plugins: int
+    stats_plugin_queries: int
     stats_providers: int
-    stats_provider_queries: int
+    stats_repositories: int
     stats_memory: int
     stats_git_ops: int
 
@@ -70,6 +80,9 @@ class Context(project_config.Configuration):
 
     # root_path is the absolute filesystem path to the root package (for monorepo's)
     root_path: str
+
+    # root is the root package itself. It is None if it failed to load.
+    root: Optional[Project]
 
     # current_project_path is the package path (not a filesystem path) of the current package
     # It is expected to match 'self.name' of the current package's object
@@ -122,35 +135,6 @@ class Context(project_config.Configuration):
 
     def __init__(self, root_path=None, search_root=True, user_config=UserConfig()):
         """Initializes the context and loads the root project."""
-        root_file = ""
-        if root_path is None:
-            # Find the top folder containing "partcad.yaml"
-            root_path = "."
-        else:
-            if os.path.isfile(root_path):
-                root_file = os.path.basename(root_path)
-                root_path = os.path.dirname(root_path)
-        initial_root_path = os.path.abspath(root_path)
-        if search_root:
-            while os.path.exists(os.path.join(root_path, "..", "partcad.yaml")):
-                root_path = os.path.join(root_path, "..")
-        self.root_path = os.path.abspath(root_path)
-        if self.root_path == initial_root_path and root_file != "":
-            self.root_path = os.path.join(self.root_path, root_file)
-
-        super().__init__(consts.ROOT, self.root_path)
-        self.current_project_path = self.name
-        if not self.current_project_path.endswith("/"):
-            self.current_project_path += "/"
-        self.current_project_path += os.path.relpath(
-            initial_root_path,
-            root_path,
-        ).replace(os.path.sep, "/")
-        if self.current_project_path == self.name + "/." or (
-            self.name.endswith("/") and self.current_project_path == self.name + "."
-        ):
-            self.current_project_path = self.name
-
         # Protect the critical sections from access in different threads
         self.lock = threading.RLock()
 
@@ -168,8 +152,10 @@ class Context(project_config.Configuration):
         self.stats_parts_instantiated = 0
         self.stats_assemblies = 0
         self.stats_assemblies_instantiated = 0
+        self.stats_plugins = 0
+        self.stats_plugin_queries = 0
         self.stats_providers = 0
-        self.stats_provider_queries = 0
+        self.stats_repositories = 0
         self.stats_memory = 0
         self.stats_git_ops = 0
 
@@ -187,17 +173,81 @@ class Context(project_config.Configuration):
 
         self.connection_status = {}
 
+        root_file = ""
+        if root_path is None:
+            # Find the top folder containing "partcad.yaml"
+            root_path = "."
+        else:
+            if os.path.isfile(root_path):
+                root_file = os.path.basename(root_path)
+                root_path = os.path.dirname(root_path)
+        initial_root_path = os.path.abspath(root_path)
+        if search_root:
+            while os.path.exists(os.path.join(root_path, "..", "partcad.yaml")):
+                root_path = os.path.join(root_path, "..")
+        self.root_path = os.path.abspath(root_path)
+        if self.root_path == initial_root_path and root_file != "":
+            self.root_path = os.path.join(self.root_path, root_file)
+
+        self.path = os.path.abspath(root_path)
+        # 'config_dir' is not read from a configuration file here (the context
+        # has none), but 'ProjectFactory' expects it on the parent-less path.
+        self.config_dir = self.path
+
+        # 'initial_root_path' and 'search_root_path' are kept around because
+        # 'current_project_path' can only be computed once the root package's
+        # name is known, which is not until the root package has been loaded.
+        # Both are stored absolute: 'os.path.relpath()' resolves a relative
+        # argument against the current working directory, which would make
+        # '_recompute_current_project_path()' depend on where it is called from.
+        self._initial_root_path = initial_root_path
+        self._search_root_path = os.path.abspath(root_path)
+
+        # The root package's name is whatever its 'partcad.yaml' says it is, so
+        # it is unknown until that package is loaded, and the package cannot be
+        # loaded without a name to key it by. Break the cycle by loading it
+        # under the default name and adopting the real one afterwards.
+        # 'import_project()' performs the adoption, because it has to happen
+        # before anything else can observe these two attributes.
+        self.name = consts.ROOT
+        self.current_project_path = consts.ROOT
+
         with pc_logging.Process("InitCtx", self.config_dir):
-            self.import_project(
+            self.root = self.import_project(
                 None,  # parent
                 {
-                    "name": self.name,
+                    "name": consts.ROOT,
                     "type": "local",
-                    "path": self.config_path,
+                    "path": self.root_path,
                     "canBeEmpty": True,
                     "isRoot": True,
                 },
             )
+            if self.root is None:
+                # Leave the provisional name in place. 'get_project()' returns
+                # None for every lookup in that state, which is how a failed
+                # root load has always been reported.
+                pc_logging.error("Failed to load the root package: %s" % self.root_path)
+
+    def _recompute_current_project_path(self):
+        """Derives 'current_project_path' from the (possibly adopted) root name.
+
+        Must be called whenever 'self.name' changes: 'current_project_path' is
+        the root package's name followed by the relative path from the root
+        package to the directory this context was created for.
+        """
+        current_project_path = self.name
+        if not current_project_path.endswith("/"):
+            current_project_path += "/"
+        current_project_path += os.path.relpath(
+            self._initial_root_path,
+            self._search_root_path,
+        ).replace(os.path.sep, "/")
+        if current_project_path == self.name + "/." or (
+            self.name.endswith("/") and current_project_path == self.name + "."
+        ):
+            current_project_path = self.name
+        self.current_project_path = current_project_path
 
     def stats_recalc(self, verbose=False):
         self.stats_memory = total_size(self, verbose)
@@ -209,6 +259,7 @@ class Context(project_config.Configuration):
         return p
 
     def import_project(self, parent, project_import_config):
+        pc_logging.debug("Importing project: %s" % project_import_config)
         if "name" not in project_import_config or "type" not in project_import_config:
             pc_logging.error("Invalid project configuration found: %s" % project_import_config)
             return None
@@ -235,6 +286,9 @@ class Context(project_config.Configuration):
                 elif project_import_config["type"] == "tar":
                     with pc_logging.Action("Tar", name):
                         rft.ProjectFactoryTar(self, parent, project_import_config)
+                elif project_import_config["type"] == "external":
+                    with pc_logging.Action("External", name):
+                        rfe.ProjectFactoryExternal(self, parent, project_import_config)
                 else:
                     pc_logging.error("Invalid project type found: %s." % name)
                     del self._projects_being_loaded[name]
@@ -253,6 +307,24 @@ class Context(project_config.Configuration):
                     return None
                 if imported_project.broken:
                     pc_logging.error("Failed to parse the package's 'partcad.yaml': %s" % name)
+
+                # A package is addressed by where it was loaded, never by the
+                # name it declares for itself: the same package vendored into
+                # two different locations is two independent instances, each
+                # reachable at its own path. 'Configuration' therefore forces
+                # 'name' to the location for every package but the root, which
+                # has no location to be derived from and so adopts the name it
+                # declares. Re-key that one.
+                if imported_project.name != name:
+                    assert name == consts.ROOT, "Only the root package may adopt its declared name"
+                    self.projects[imported_project.name] = self.projects.pop(name)
+
+                if project_import_config.get("isRoot", False):
+                    # Adopt the root package's name before returning: the
+                    # context's own name and 'current_project_path' are derived
+                    # from it, and everything downstream resolves against them.
+                    self.name = imported_project.name
+                    self._recompute_current_project_path()
 
                 self.stats_packages += 1
                 self.stats_packages_instantiated += 1
@@ -449,6 +521,7 @@ class Context(project_config.Configuration):
         # background task.
         if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
             dependencies = project.config_obj["dependencies"]
+            pc_logging.debug("Checking the dependency: %s...(1)" % project.name)
             if not project.config_obj.get("isRoot", False):
                 filtered = filter(
                     lambda x: "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"],
@@ -458,6 +531,7 @@ class Context(project_config.Configuration):
 
             for prj_name in dependencies:
                 prj_conf = project.config_obj["dependencies"][prj_name]
+                pc_logging.debug("Checking the dependency: %s...." % prj_name)
 
                 if prj_conf.get("onlyInRoot", False):
                     next_project_path = "//" + prj_name
@@ -556,7 +630,7 @@ class Context(project_config.Configuration):
             self.mates[source_interface_name] = {}
         if target_interface_name in self.mates[source_interface_name]:
             pc_logging.debug("Mate already exists: %s -> %s" % (source_interface_name, target_interface_name))
-            # TODO(clairbee): identify discrepancies in mate_taget_config
+            # TODO(clairbee): identify discrepancies in mate_target_config
             return
 
         mate = Mating(source_interface, target_interface, mate_target_config, reverse)
@@ -585,7 +659,7 @@ class Context(project_config.Configuration):
 
         # real_source_interfaces is the map of source interfaces to the set of
         # interfaces they are compatible with (including themselves). It's
-        # called 'real', beacuase it allows to perform a lookup of
+        # called 'real', because it allows to perform a lookup of
         # the actual (real) source interface(s) which brought in the given
         # compatible interface.
         real_source_interfaces = {interface: set([interface]) for interface in source_interfaces}

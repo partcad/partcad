@@ -13,7 +13,7 @@ import typing
 from . import part_config
 from . import part_factory as pf
 from . import logging as pc_logging
-from .utils import resolve_resource_path, get_child_project_path
+from .utils import get_child_project_path
 
 from . import telemetry
 
@@ -45,8 +45,7 @@ class PartFactoryEnrich(pf.PartFactory):
                     source_project_name = get_child_project_path(target_project.name, source_project_name)
             else:
                 if ":" in source_part_name:
-                    source_project_name, source_part_name = resolve_resource_path(
-                        source_project.name,
+                    source_project_name, source_part_name = source_project.resolve(
                         source_part_name,
                     )
                 else:

@@ -1,0 +1,7 @@
+links:
+  - package: ../produce_part_cadquery_primitive
+    part: cube
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - package: ../produce_part_cadquery_primitive
+    part: cylinder
+    location: [[0, 0, {{ param_offset }}], [0, 0, 1], 0]

@@ -9,7 +9,7 @@
 
 import os
 
-from .provider_factory import ProviderFactory
+from .plugin_factory import PluginFactory
 from .file_factory import FileFactory
 from . import factory
 from . import logging as pc_logging
@@ -17,7 +17,7 @@ from . import telemetry
 
 
 @telemetry.instrument()
-class ProviderFactoryFile(ProviderFactory):
+class PluginFactoryFile(PluginFactory):
     path: str = None
     extension: str
     fileFactory: FileFactory = None

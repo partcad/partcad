@@ -4,6 +4,7 @@ docs:
   usage: |
     ```shell
     pc inspect primitive
+    pc inspect 'primitive_parametrized;offset=12'
     pc inspect logo
     pc inspect logo_embedded
     ```
@@ -11,6 +12,12 @@ docs:
 assemblies:
   primitive:
     type: assy
+  primitive_parametrized:
+    type: assy
+    desc: Parameters declared here are passed to the ASSY file as 'param_<name>'
+    parameters:
+      # The short form is expanded to '{type: float, default: 5.0}'
+      offset: 5.0
   logo:
     type: assy
     desc: PartCAD logo

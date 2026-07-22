@@ -43,7 +43,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
 
 .. code-block:: yaml
 
-  name: <(optional) for advanced users, the assumed package path for standalone development>
+  name: <(optional) the package path this package expects to be seen at; see "The package name" below>
   desc: <(optional) description>
   private: <(optional) boolean flag to mark the package as private>
   url: <(optional) package or maintainer's url>
@@ -67,6 +67,39 @@ Besides the package properties and, optionally, a list of imported dependencies,
 
   assemblies:
       <assembly declarations, see below>
+
+The package name
+----------------
+
+A package is always addressed by its **location** -- the package path at which
+it was loaded, derived from its parent. For example, a package in the
+subfolder ``gobilda`` of the package ``//vendor`` is addressed as
+``//vendor/gobilda`` regardless of what it declares about itself.
+
+The optional ``name`` field declares the package's **identity**: the package
+path at which the package expects to be seen. It only takes effect when the
+package is loaded as the root (the top-most package of the current context) --
+this lets a package be developed standalone using the very same package path
+its consumers will see it at. In every other case ``name`` does not change
+where the package is loaded; the location always wins.
+
+This makes it safe to vendor a package -- copy it into your own package tree to
+drop a dependency or to follow your own naming convention:
+
+* The vendored copy is loaded at its location in your tree, not at the ``name``
+  it declares. If the same package is vendored at two locations (even at two
+  different versions), each is an independent instance, addressed at its own
+  location, and the two never interact.
+* References the package makes to itself using its declared ``name`` are
+  automatically redirected to the location where the copy was actually loaded.
+  A vendored copy therefore uses itself, instead of silently pulling in another
+  copy from the package path it was originally taken from.
+
+As a consequence, a vendored package cannot reference the original copy of
+itself by its declared ``name``: that package path always resolves to the local
+instance. This is intentional -- referencing two copies of the same package at
+once is almost always a mistake, and the alternative would be an implicit,
+easily-missed dependency on the upstream package.
 
 ============
 Dependencies
@@ -221,6 +254,26 @@ package where the original object is declared. This allows for the same parametr
           type: <string|float|int|bool>
           enum: <(optional) list of possible values>
           default: <default value>
+
+The short form ``<param name>: <default value>`` may be used whenever the type
+can be inferred from the value.
+
+Assemblies declare parameters the same way. Their values are passed to the
+``.assy`` file as ``param_<param name>`` when its Jinja templates are resolved:
+
+.. code-block:: yaml
+
+  assemblies:
+    <assembly name>:
+      type: assy
+      parameters:
+        offset: 5.0
+
+.. code-block:: yaml
+
+  links:
+    - part: //package:part
+      location: [[0, 0, {{ param_offset }}], [0, 0, 1], 0]
 
 .. _sketches:
 

@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2023
 #
 # Author: Roman Kuzmenko
@@ -19,6 +20,7 @@ from urllib.parse import urlparse
 import pygit2
 from pygit2.enums import CheckoutStrategy, CredentialType, ReferenceType, ResetMode
 
+from .project_local import ProjectLocal
 from . import project_factory as pf
 from . import logging as pc_logging
 from . import telemetry
@@ -581,6 +583,15 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
             )
 
         return attempt(lambda: self._download(repo_url, cache_path, get_fallback_clone_options(options.revision)))
+
+    def _create_project(self, config):
+        return ProjectLocal(
+            self.ctx,
+            self.name,
+            self.path,
+            include_paths=self.include_paths,
+            inherited_config=self.inherited_config,
+        )
 
     def _clone_or_update_repo(self, repo_url, cache_dir=None):
         """

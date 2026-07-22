@@ -15,7 +15,9 @@ def test_project_config_version_1():
     """Positive test case for PartCAD version requirement in the package config file"""
     try:
         ctx = pc.Context("partcad/tests/unit/data/project_config_valid_1.yaml")
-        assert ctx.config_obj["partcad"] == ">=0.1.0"
+        # The context is not a package and has no configuration of its own.
+        # The parsed configuration belongs to the root package.
+        assert ctx.root.config_obj["partcad"] == ">=0.1.0"
     except Exception as e:
         assert False, "Valid configuration file caused an exception: %s" % e
 

@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2024
 #
 # Author: Roman Kuzmenko
@@ -10,7 +11,7 @@
 from .config import Configuration
 
 
-class ProviderConfiguration:
+class PluginConfiguration:
     def __init__(self, name, config):
         super().__init__(name, config)
 

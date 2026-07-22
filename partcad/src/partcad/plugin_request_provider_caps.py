@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2024
 #
 # Author: Roman Kuzmenko
@@ -7,12 +8,12 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .provider_request import ProviderRequest
+from .plugin_request_provider import PluginRequestProvider
 
 
-class ProviderRequestCaps(ProviderRequest):
+class ProviderRequestCaps(PluginRequestProvider):
     def __init__(self):
-        pass
+        super().__init__()
 
     def compose(self):
         # This request has no parameters
