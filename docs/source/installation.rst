@@ -138,6 +138,27 @@ or on ``partcad`` itself, using the same extra names:
 Without the matching extra, using an AI provider fails with an error naming the
 package to install. Everything else in PartCAD works without them.
 
+=======
+Linting
+=======
+
+The linter used by ``pc lint`` to check Python files is optional. Install the
+``lint`` extra to enable it, either on ``partcad-cli``:
+
+.. code-block:: shell
+
+    $ python -m pip install -U 'partcad-cli[lint]'
+
+or on ``partcad`` itself, using the same extra name:
+
+.. code-block:: shell
+
+    $ python -m pip install -U 'partcad[lint]'
+
+Without the extra, linting Python files reports an error naming the package to
+install. Everything else in PartCAD, including linting of YAML files, works
+without it.
+
 ============================
 Visual Studio Code extension
 ============================

@@ -33,6 +33,7 @@ ai-google = {file = ["requirements-ai-google.txt"]}
 ai-openai = {file = ["requirements-ai-openai.txt"]}
 ai-ollama = {file = ["requirements-ai-ollama.txt"]}
 ai = {file = ["requirements-ai.txt"]}
+lint = {file = ["requirements-lint.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"
