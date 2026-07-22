@@ -99,10 +99,18 @@ echo "==> Building PartCAD ${VERSION} for ${PLATFORM} with $("${PYTHON}" --versi
 
 ##############################################  DEPENDENCIES  ################################################
 
+# setuptools 82 removed `pkg_resources` outright, and PyInstaller's
+# `pyi_rth_pkgres` runtime hook still expects it: the bundle then aborts at
+# start-up with "module 'pkg_resources' has no attribute 'NullProvider'".
+# Passed to every install below, because installing PartCAD is otherwise free to
+# pull the newest setuptools back in. Drop the bound once PyInstaller ships a
+# hook that copes.
+SETUPTOOLS_BOUND="setuptools<82"
+
 if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   echo "==> Installing build dependencies"
-  "${PYTHON}" -m pip install --upgrade pip wheel setuptools
-  "${PYTHON}" -m pip install "pyinstaller>=6.11"
+  "${PYTHON}" -m pip install --upgrade pip wheel "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "pyinstaller>=6.11" "${SETUPTOOLS_BOUND}"
 
   # `partcad-cli` declares its license by a path inside its own directory, but
   # the file itself only exists in the repository root. The wheel build in
@@ -112,10 +120,10 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   echo "==> Installing PartCAD from this checkout"
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras that the wheels leave to the user are all built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[ai,lint]"
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[ai,lint]" "${SETUPTOOLS_BOUND}"
   # This satisfies the `partcad==<version>` pin of `partcad-cli` with the local
   # build rather than with the release on PyPI.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-cli"
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-cli" "${SETUPTOOLS_BOUND}"
 fi
 
 ##############################################  PRE-FLIGHT  ##################################################
