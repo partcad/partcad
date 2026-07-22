@@ -83,6 +83,8 @@ class SketchFactoryBuild123d(SketchFactoryPython):
             request["patch"] = patch
 
             # Serialize the request
+            request["name"] = "%s:%s" % (sketch.project_name, sketch.name)
+            request["label"] = sketch.name
             request_serialized = ocp_serialize.serialize(request)
 
             await self.runtime.ensure_async(

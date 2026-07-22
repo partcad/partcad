@@ -37,6 +37,8 @@ class PartFactoryStep(PartFactoryFile):
             wrapper_path = wrapper.get("step.py")
             request = {"build_parameters": {}}
             with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{ocp_serialize.serialize}"):
+                request["name"] = "%s:%s" % (part.project_name, part.name)
+                request["label"] = part.name
                 request_serialized = ocp_serialize.serialize(request)
 
             with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{runtime.run_async}"):

@@ -233,7 +233,7 @@ class Shape(ShapeConfiguration):
 
                 if cache_hash:
                     if is_cacheable:
-                        to_cache = {self.kind: shape}
+                        to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
                         if self.components and len(self.components) > 0:
                             to_cache["cmps"] = self.components
                         to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
@@ -246,6 +246,22 @@ class Shape(ShapeConfiguration):
                     # Let the file cache tell us if we need to cache this in memory
                     self._wrapped = shape
                 return shape
+
+    async def get_cache_value(self, ctx, shape):
+        """The value stored in the shape cache under 'self.kind'.
+
+        A plain shape is stored as a single {"name", "label", "brep"} object.
+        Assembly overrides this to store its nested tree so that the hierarchy -
+        names, labels and sub-assemblies - survives caching, which a flat
+        compound would lose.
+        """
+        if shape is None:
+            return None
+        name = getattr(self, "name", None)
+        project = getattr(self, "project_name", None)
+        full_name = ("%s:%s" % (project, name)) if project and name else name
+        label = self.config.get("label", name) if isinstance(self.config, dict) else name
+        return ocp_serialize.encode_shape(shape, name=full_name, label=label)
 
     async def convert(self, part_type: str, ctx=None, **kwargs):
         """Convert this shape to 'part_type' and return the result in memory.

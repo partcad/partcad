@@ -111,6 +111,8 @@ class PartFactoryBrep(PartFactoryFile):
         request = {"build_parameters": {}}
 
         # Serialize the request
+        request["name"] = "%s:%s" % (part.project_name, part.name)
+        request["label"] = part.name
         request_serialized = ocp_serialize.serialize(request)
 
         # Run the subprocess and handle the response

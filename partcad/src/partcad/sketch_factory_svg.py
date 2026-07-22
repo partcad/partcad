@@ -74,6 +74,8 @@ class SketchFactorySvg(SketchFactoryPython):
                     "use_wires": self.use_wires,
                     "use_faces": self.use_faces,
                 }
+                request["name"] = "%s:%s" % (sketch.project_name, sketch.name)
+                request["label"] = sketch.name
                 request_serialized = ocp_serialize.serialize(request)
 
                 await self.runtime.ensure_async("cadquery-ocp==7.7.2")

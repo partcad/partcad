@@ -84,6 +84,8 @@ class PartFactoryBuild123d(PartFactoryPython):
 
             # Serialize the request
             with telemetry.start_as_current_span("*PartFactoryBuild123d.instantiate.{ocp_serialize.serialize}"):
+                request["name"] = "%s:%s" % (part.project_name, part.name)
+                request["label"] = part.name
                 request_serialized = ocp_serialize.serialize(request)
 
             # TODO: @alexanderilyin: those should be read from the package/part config?

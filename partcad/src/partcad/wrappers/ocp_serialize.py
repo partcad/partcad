@@ -206,8 +206,11 @@ def decode_shape(obj):
 def encode(obj, name=None, label=None):
     """Convert 'obj' into a structure made only of JSON-native values.
 
-    A TopoDS_Shape becomes a shape object (carrying 'name'/'label' when given).
-    Dicts, lists, tuples and sets are walked; exceptions become their message. A
+    A TopoDS_Shape becomes a shape object. 'name'/'label', when given, are
+    attached to every raw shape encoded - the wrapper protocol uses this to echo
+    the name/label the request carried onto the single shape a response returns.
+    An already-built shape/assembly object keeps its own name/label. Dicts,
+    lists, tuples and sets are walked; exceptions become their message. A
     non-shape OCCT object (a Location/Axis a build123d script showed) drops to
     null - every consumer already discards it - and any other unknown type
     raises, to catch real bugs.
@@ -219,15 +222,16 @@ def encode(obj, name=None, label=None):
         return encode_shape(obj, name=name, label=label)
 
     if isinstance(obj, dict):
+        # An already-built shape/assembly object keeps its own metadata verbatim.
         if KEY_BREP in obj or KEY_ASSEMBLY in obj:
             return {
-                key: (value if key in (KEY_BREP, KEY_ASSEMBLY, "name", "label") else encode(value))
+                key: (value if key in (KEY_BREP, KEY_ASSEMBLY, "name", "label") else encode(value, name, label))
                 for key, value in obj.items()
             }
-        return {key: encode(value) for key, value in obj.items()}
+        return {key: encode(value, name, label) for key, value in obj.items()}
 
     if isinstance(obj, (list, tuple, set, frozenset)):
-        return [encode(item) for item in obj]
+        return [encode(item, name, label) for item in obj]
 
     if isinstance(obj, (bytes, bytearray)):
         return {KEY_BYTES: base64.b64encode(bytes(obj)).decode("ascii")}

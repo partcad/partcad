@@ -16,6 +16,11 @@ import sys
 
 import ocp_serialize
 
+# The name/label the request carried, echoed onto the shape a response returns
+# (the sandbox does not otherwise know a shape's PartCAD name).
+_request_name = None
+_request_label = None
+
 
 def handle_input():
     if len(sys.argv) < 2:
@@ -37,12 +42,16 @@ def handle_input():
     input_str = sys.stdin.read()
     #   - Unpack the content received via stdin
     request = ocp_serialize.deserialize(input_str)
+    global _request_name, _request_label
+    if isinstance(request, dict):
+        _request_name = request.get("name")
+        _request_label = request.get("label")
     return path, request
 
 
 def handle_output(model):
-    # Serialize the output
-    sys.stdout.write(ocp_serialize.serialize(model))
+    # Serialize the output, echoing the request's name/label onto the shape.
+    sys.stdout.write(ocp_serialize.serialize(model, name=_request_name, label=_request_label))
     sys.stdout.flush()
 
 

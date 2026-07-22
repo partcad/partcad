@@ -33,6 +33,8 @@ class PartFactoryStl(PartFactoryFile):
             wrapper_path = wrapper.get("stl.py")
             request = {}
 
+            request["name"] = "%s:%s" % (part.project_name, part.name)
+            request["label"] = part.name
             request_serialized = ocp_serialize.serialize(request)
 
             runtime = self.ctx.get_python_runtime("3.11")

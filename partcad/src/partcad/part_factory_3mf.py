@@ -48,6 +48,8 @@ class PartFactory3mf(PartFactoryFile):
             wrapper_path = wrapper.get("import_mesh.py")
 
             request = {"fallback_import_stl": False}
+            request["name"] = "%s:%s" % (part.project_name, part.name)
+            request["label"] = part.name
             request_serialized = ocp_serialize.serialize(request)
 
             await self.runtime.ensure_async("ocp-tessellate==3.0.9")

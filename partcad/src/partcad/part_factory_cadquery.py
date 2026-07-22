@@ -79,6 +79,8 @@ class PartFactoryCadquery(PartFactoryPython):
 
             # Serialize the request
             with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{ocp_serialize.serialize}"):
+                request["name"] = "%s:%s" % (part.project_name, part.name)
+                request["label"] = part.name
                 request_serialized = ocp_serialize.serialize(request)
 
             await self.runtime.ensure_async(
