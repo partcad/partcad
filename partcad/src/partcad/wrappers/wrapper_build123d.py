@@ -171,7 +171,7 @@ def process(path, request):
 
     return {
         "success": build_result.success,
-        "exception": build_result.exception,
+        "exception": wrapper_common.exception_to_str(build_result.exception),
         "shapes": results,
     }
 

@@ -1,8 +1,5 @@
 import os
 import sys
-import base64
-import pickle
-import traceback
 
 import build123d as b3d
 

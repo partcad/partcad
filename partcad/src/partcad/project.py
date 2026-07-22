@@ -55,6 +55,7 @@ from . import part_factory_alias as pfa
 from . import part_factory_enrich as pfe
 from . import part_factory_brep as pfbr
 from . import part_factory_kicad as pfkicad
+from . import part_factory_compound as pfcompound
 from . import assembly
 from . import assembly_config
 from . import provider
@@ -646,6 +647,8 @@ class Project(project_config.Configuration):
             pfa.PartFactoryAlias(self.ctx, source_project, self, config)
         elif config["type"] == "enrich":
             pfe.PartFactoryEnrich(self.ctx, source_project, self, config)
+        elif config["type"] == "compound":
+            pfcompound.PartFactoryCompound(self.ctx, source_project, self, config)
         else:
             pc_logging.error("Invalid part type encountered: %s: %s" % (part_name, config))
             return None

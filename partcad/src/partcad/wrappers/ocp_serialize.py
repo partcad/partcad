@@ -50,11 +50,34 @@ license:
 
 """
 
-import copyreg
+# NOTE: this module used to install 'copyreg' handlers ('register()', with the
+# '_reduce_*'/'_inflate_*' pairs) so that OCCT objects could be pickled, because
+# the wrapper protocol was a pickle envelope. Pickle has been retired: loading a
+# response no longer executes arbitrary code, and no global 'copyreg' state is
+# registered any more.
+#
+# The wrapper protocol and the on-disk shape cache now use the flat, plain-JSON
+# format implemented at the bottom of this module:
+#
+# * A single shape is an object {"name", "label", "brep"} where "brep" is the
+#   base64 of the bytes 'BRepTools.Write_s' produces.
+# * An assembly is {"name", "label", "assembly": [...]} whose array holds child
+#   shape- or sub-assembly-objects; it decodes to a TopoDS_Compound.
+# * The request and response envelopes are ordinary JSON objects that carry such
+#   a shape object under a key such as "shape" or "wrapped".
+#
+# Nothing is reconstructed implicitly: decode() only ever turns "brep" back into
+# a TopoDS_Shape and "assembly" into a compound.
+
+import base64
+import json
+import sys
 from io import BytesIO
 from typing import Any
 
 import OCP
+import OCP.BRep
+import OCP.BRepTools
 
 
 downcast_LUT = {
@@ -93,7 +116,33 @@ def downcast(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopoDS.TopoDS_Shape:
     return return_value
 
 
-def _inflate_topods(data: bytes):
+#
+# Flat BREP wire / cache format
+#
+
+# The three object shapes are told apart by which of these keys is present.
+KEY_BREP = "brep"
+KEY_ASSEMBLY = "assembly"
+KEY_BYTES = "__bytes__"
+
+
+def _warn(message: str) -> None:
+    """Report a lossy conversion to stderr (the sandboxed wrappers have no logger)."""
+    try:
+        sys.stderr.write("ocp_serialize: %s\n" % message)
+    except Exception:
+        pass
+
+
+def shape_to_brep(shape) -> bytes:
+    """Serialize a TopoDS_Shape into the flat BREP byte array."""
+    with BytesIO() as bio:
+        OCP.BRepTools.BRepTools.Write_s(shape, bio)
+        return bio.getvalue()
+
+
+def shape_from_brep(data: bytes):
+    """Deserialize a flat BREP byte array into a downcast TopoDS_Shape."""
     with BytesIO(data) as bio:
         shape = OCP.TopoDS.TopoDS_Shape()
         builder = OCP.BRep.BRep_Builder()
@@ -101,160 +150,152 @@ def _inflate_topods(data: bytes):
         return downcast(shape)
 
 
-def _reduce_topods(shape):
-    with BytesIO() as bio:
-        OCP.BRepTools.BRepTools.Write_s(shape, bio)
-        return _inflate_topods, (bio.getvalue(),)
+def _brep_b64(shape) -> str:
+    return base64.b64encode(shape_to_brep(shape)).decode("ascii")
 
 
-def _inflate_transform(*values: float):
-    trsf = OCP.gp.gp_Trsf()
-    trsf.SetValues(*values)
-    return trsf
+def _shape_from_b64(brep_b64: str):
+    return shape_from_brep(base64.b64decode(brep_b64))
 
 
-def _reduce_transform(transform: OCP.gp.gp_Trsf):
-    return _inflate_transform, tuple(transform.Value(i, j) for i in range(1, 4) for j in range(1, 5))
+def compound_of(shapes):
+    """Combine OCCT shapes into a single TopoDS_Compound."""
+    result = OCP.TopoDS.TopoDS_Compound()
+    builder = OCP.BRep.BRep_Builder()
+    builder.MakeCompound(result)
+    for shape in shapes:
+        if shape is not None:
+            builder.Add(result, shape)
+    return result
 
 
-def _inflate_Gtransform(*values):
-    gtrsf = OCP.gp.gp_GTrsf(values[0], values[1])
-    return gtrsf
+def encode_shape(shape, name=None, label=None) -> dict:
+    """Represent a single shape as {"name", "label", "brep"}."""
+    return {"name": name, "label": label, KEY_BREP: _brep_b64(shape)}
 
 
-def _reduce_Gtransform(transform: OCP.gp.gp_GTrsf):
-    return _inflate_Gtransform, tuple(
-        [
-            transform.VectorialPart(),
-            transform.TranslationPart(),
-        ]
-    )
+def encode_assembly(children, name=None, label=None) -> dict:
+    """Represent an assembly as {"name", "label", "assembly": [...]}.
 
-
-def _inflate_mat(*values):
-    trsf = OCP.gp.gp_Mat(values[0], values[1], values[2])
-    return trsf
-
-
-def _reduce_mat(mat: OCP.gp.gp_Mat):
-    return _inflate_mat, (
-        mat.Column(1),
-        mat.Column(2),
-        mat.Column(3),
-    )
-
-
-def _inflate_ax1(*values: float):
-    ax1 = OCP.gp.gp_Ax1(values[0], values[1])
-    return ax1
-
-
-def _reduce_ax1(ax1: OCP.gp.gp_Ax1):
-    return _inflate_ax1, (
-        ax1.Location(),
-        ax1.Direction(),
-    )
-
-
-def _inflate_ax3(*values: float):
-    ax3 = OCP.gp.gp_Ax3(values[0], values[1], values[2])
-    ax3.SetYDirection(values[3])
-    return ax3
-
-
-def _reduce_ax3(ax3: OCP.gp.gp_Ax3):
-    return _inflate_ax3, (
-        ax3.Location(),
-        ax3.Direction(),
-        ax3.XDirection(),
-        ax3.YDirection(),
-    )
-
-
-def _inflate_pln(*values: float):
-    ax3 = OCP.gp.gp_Ax3(values[0], values[1], values[2])
-    ax3.SetYDirection(values[3])
-    pln = OCP.gp.gp_Pln(ax3)
-    return pln
-
-
-def _reduce_pln(pln: OCP.gp.gp_Pln):
-    ax3 = pln.Position()
-    return _inflate_pln, (
-        ax3.Location(),
-        ax3.Direction(),
-        ax3.XDirection(),
-        ax3.YDirection(),
-    )
-
-
-def _inflate_pnt(*values: float):
-    pnt = OCP.gp.gp_Pnt(values[0], values[1], values[2])
-    return pnt
-
-
-def _reduce_pnt(pnt: OCP.gp.gp_Pnt):
-    return _inflate_pnt, (pnt.X(), pnt.Y(), pnt.Z())
-
-
-def _inflate_vec(*values: float):
-    pnt = OCP.gp.gp_Vec(values[0], values[1], values[2])
-    return pnt
-
-
-def _reduce_vec(pnt: OCP.gp.gp_Vec):
-    return _inflate_vec, (pnt.X(), pnt.Y(), pnt.Z())
-
-
-def _inflate_dir(*values: float):
-    dir = OCP.gp.gp_Dir(values[0], values[1], values[2])
-    return dir
-
-
-def _reduce_dir(dir: OCP.gp.gp_Dir):
-    return _inflate_dir, (dir.X(), dir.Y(), dir.Z())
-
-
-def _inflate_xyz(*values: float):
-    dir = OCP.gp.gp_XYZ(values[0], values[1], values[2])
-    return dir
-
-
-def _reduce_xyz(dir: OCP.gp.gp_XYZ):
-    return _inflate_xyz, (dir.X(), dir.Y(), dir.Z())
-
-
-def register():
+    'children' is the already-encoded list of shape/assembly objects.
     """
-    Registers pickle support functions for common OCCT objects.
+    return {"name": name, "label": label, KEY_ASSEMBLY: list(children)}
+
+
+def is_shape_object(obj) -> bool:
+    return isinstance(obj, dict) and KEY_BREP in obj
+
+
+def is_assembly_object(obj) -> bool:
+    return isinstance(obj, dict) and KEY_ASSEMBLY in obj
+
+
+def decode_shape(obj):
+    """Turn a shape or assembly object back into OCCT geometry.
+
+    A shape object yields its TopoDS_Shape; an assembly object yields a
+    TopoDS_Compound of its children (recursively). name/label are metadata.
     """
+    if is_shape_object(obj):
+        return _shape_from_b64(obj[KEY_BREP])
+    if is_assembly_object(obj):
+        return compound_of(decode_shape(child) for child in obj[KEY_ASSEMBLY])
+    raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
 
-    copyreg.pickle(OCP.gp.gp_Pnt, _reduce_pnt)
-    copyreg.pickle(OCP.gp.gp_Vec, _reduce_vec)
-    copyreg.pickle(OCP.gp.gp_Dir, _reduce_dir)
-    copyreg.pickle(OCP.gp.gp_Mat, _reduce_mat)
-    copyreg.pickle(OCP.gp.gp_XYZ, _reduce_xyz)
 
-    copyreg.pickle(OCP.gp.gp_Ax1, _reduce_ax1)
-    copyreg.pickle(OCP.gp.gp_Ax3, _reduce_ax3)
-    copyreg.pickle(OCP.gp.gp_Pln, _reduce_pln)
+def encode(obj, name=None, label=None):
+    """Convert 'obj' into a structure made only of JSON-native values.
 
-    copyreg.pickle(OCP.gp.gp_Trsf, _reduce_transform)
-    copyreg.pickle(OCP.gp.gp_GTrsf, _reduce_Gtransform)
-    copyreg.pickle(
-        OCP.TopLoc.TopLoc_Location,
-        lambda loc: (OCP.TopLoc.TopLoc_Location, (loc.Transformation(),)),
-    )
+    A TopoDS_Shape becomes a shape object. 'name'/'label', when given, are
+    attached to every raw shape encoded - the wrapper protocol uses this to echo
+    the name/label the request carried onto the single shape a response returns.
+    An already-built shape/assembly object keeps its own name/label. Dicts,
+    lists, tuples and sets are walked; exceptions become their message. A
+    non-shape OCCT object (a Location/Axis a build123d script showed) drops to
+    null - every consumer already discards it - and any other unknown type
+    raises, to catch real bugs.
+    """
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
 
-    for cls in (
-        OCP.TopoDS.TopoDS_Shape,
-        OCP.TopoDS.TopoDS_Compound,
-        OCP.TopoDS.TopoDS_CompSolid,
-        OCP.TopoDS.TopoDS_Solid,
-        OCP.TopoDS.TopoDS_Shell,
-        OCP.TopoDS.TopoDS_Face,
-        OCP.TopoDS.TopoDS_Wire,
-        OCP.TopoDS.TopoDS_Edge,
-        OCP.TopoDS.TopoDS_Vertex,
-    ):
-        copyreg.pickle(cls, _reduce_topods)
+    if isinstance(obj, OCP.TopoDS.TopoDS_Shape):
+        return encode_shape(obj, name=name, label=label)
+
+    if isinstance(obj, dict):
+        # An already-built shape/assembly object keeps its own metadata verbatim.
+        if KEY_BREP in obj or KEY_ASSEMBLY in obj:
+            return {
+                key: (value if key in (KEY_BREP, KEY_ASSEMBLY, "name", "label") else encode(value, name, label))
+                for key, value in obj.items()
+            }
+        return {key: encode(value, name, label) for key, value in obj.items()}
+
+    if isinstance(obj, (list, tuple, set, frozenset)):
+        return [encode(item, name, label) for item in obj]
+
+    if isinstance(obj, (bytes, bytearray)):
+        return {KEY_BYTES: base64.b64encode(bytes(obj)).decode("ascii")}
+
+    if isinstance(obj, BaseException):
+        return str(obj)
+
+    if type(obj).__module__.split(".")[0] == "OCP":
+        _warn("dropping non-shape OCCT object of type %s" % type(obj))
+        return None
+
+    raise TypeError("Cannot encode %s for the wrapper protocol" % type(obj))
+
+
+def decode(obj):
+    """Inverse of 'encode()'."""
+    if isinstance(obj, dict):
+        if KEY_BREP in obj or KEY_ASSEMBLY in obj:
+            return decode_shape(obj)
+        if KEY_BYTES in obj and len(obj) == 1:
+            return base64.b64decode(obj[KEY_BYTES])
+        return {key: decode(value) for key, value in obj.items()}
+
+    if isinstance(obj, list):
+        return [decode(item) for item in obj]
+
+    return obj
+
+
+def dumps(obj, name=None, label=None) -> str:
+    """Serialize 'obj' into a single-line JSON string (used by the cache)."""
+    return json.dumps(encode(obj, name=name, label=label))
+
+
+def loads(text) -> object:
+    """Deserialize a JSON string produced by 'dumps()'."""
+    if isinstance(text, (bytes, bytearray)):
+        text = text.decode("utf-8")
+    return decode(json.loads(text))
+
+
+def serialize(obj, name=None, label=None) -> str:
+    """Serialize 'obj' into the single-line form that travels over the pipe.
+
+    Plain JSON, not base64-wrapped JSON: the JSON is already single-line and
+    transport-safe (the BREP payload is base64), so an extra base64 layer would
+    only cost time and ~1.3x size.
+    """
+    return dumps(obj, name=name, label=label)
+
+
+def deserialize(data) -> object:
+    """Deserialize the form produced by 'serialize()'.
+
+    The response is taken as the last non-empty line of 'data', so any leading
+    progress a wrapper wrote to stdout is ignored.
+    """
+    if isinstance(data, (bytes, bytearray)):
+        data = data.decode("utf-8")
+    line = data.strip()
+    if "\n" in line:
+        for candidate in reversed(line.splitlines()):
+            candidate = candidate.strip()
+            if candidate:
+                line = candidate
+                break
+    return loads(line)

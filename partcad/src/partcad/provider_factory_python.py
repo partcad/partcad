@@ -7,13 +7,11 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import base64
 import os
-import pickle
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from ocp_serialize import register as register_ocp_helper
+import ocp_serialize
 
 from .user_config import user_config
 from .provider_factory_file import ProviderFactoryFile
@@ -131,9 +129,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             # request["patch"] = patch
 
             # Serialize the request
-            register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            request_serialized = ocp_serialize.serialize(request)
 
             # TODO-199: Use a requirements.txt or pyproject.toml for version specifications
             # TODO-200: Create a version resolution mechanism that can handle dependency conflicts
@@ -186,9 +182,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
                     provider.error("%s: %s" % (provider.name, error_line))
 
             try:
-                response = base64.b64decode(response_serialized)
-                register_ocp_helper()
-                result = pickle.loads(response)
+                result = ocp_serialize.deserialize(response_serialized)
             except Exception as e:
                 provider.error("Exception while deserializing %s: %s" % (provider.name, e))
                 return None

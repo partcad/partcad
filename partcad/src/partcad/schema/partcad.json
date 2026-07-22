@@ -251,7 +251,7 @@
                     "cadquery", "build123d", "svg", "dxf", "extrude", "sweep",
                     "stl", "step", "scad", "ai-cadquery", "ai-build123d",
                     "ai-openscad", "3mf", "enrich", "alias", "brep", "obj",
-                    "kicad"
+                    "kicad", "compound"
                   ]
                 },
                 "aliases": {

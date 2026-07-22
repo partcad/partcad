@@ -9,8 +9,6 @@
 
 import os
 import sys
-import pickle
-import base64
 
 import build123d as b3d
 
@@ -23,6 +21,11 @@ def process(path, request):
         obj = request.get("wrapped")
         if obj is None:
             raise ValueError("No wrapped object provided for GLTF export")
+
+        # The caller sends raw OCCT geometry, so rebuild the build123d wrapper that
+        # export_gltf() needs. 'cast' picks the matching type, which matters here
+        # because an assembly arrives as a compound rather than a solid.
+        obj = b3d.Shape.cast(obj)
 
         tolerance = request.get("tolerance", 0.1)
         angular_tolerance = request.get("angularTolerance", 0.1)

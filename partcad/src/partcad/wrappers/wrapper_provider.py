@@ -36,7 +36,7 @@ def process(path, request):
         output = {}
 
     if "exception" in result:
-        output["exception"] = result["exception"]
+        output["exception"] = wrapper_common.exception_to_str(result["exception"])
         wrapper_common.handle_exception(result["exception"], path)
 
     return output

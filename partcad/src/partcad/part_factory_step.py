@@ -7,9 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import base64
 import os
-import pickle
 import sys
 import threading
 
@@ -19,7 +17,7 @@ from .part_factory_file import PartFactoryFile
 from . import telemetry
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from ocp_serialize import register as register_ocp_helper
+import ocp_serialize
 
 
 @telemetry.instrument()
@@ -38,10 +36,10 @@ class PartFactoryStep(PartFactoryFile):
         with pc_logging.Action("STEP", part.project_name, part.name):
             wrapper_path = wrapper.get("step.py")
             request = {"build_parameters": {}}
-            register_ocp_helper()
-            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{pickle.dumps}"):
-                picklestring = pickle.dumps(request)
-                request_serialized = base64.b64encode(picklestring).decode()
+            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{ocp_serialize.serialize}"):
+                request["name"] = "%s:%s" % (part.project_name, part.name)
+                request["label"] = part.name
+                request_serialized = ocp_serialize.serialize(request)
 
             with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{runtime.run_async}"):
                 command = [wrapper_path, os.path.abspath(part.path), os.path.abspath(self.project.config_dir)]
@@ -56,10 +54,8 @@ class PartFactoryStep(PartFactoryFile):
                     pc_logging.error(errors)
                     raise Exception(errors)
 
-            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{pickle.loads}"):
-                response = base64.b64decode(response_serialized)
-                register_ocp_helper()
-                result = pickle.loads(response)
+            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{ocp_serialize.deserialize}"):
+                result = ocp_serialize.deserialize(response_serialized)
             if not result["success"]:
                 pc_logging.error(result["exception"])
                 raise Exception(result["exception"])
