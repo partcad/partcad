@@ -25,12 +25,13 @@ def pytest_sessionfinish(session, exitstatus):
     """Record the run's verdict for the pre-commit gate.
 
     pytest has been observed to exit 0 despite failures on some platforms
-    (Windows in particular), so the pre-commit hook cannot trust the process
-    exit code. When it wants a reliable verdict it passes a marker path via
-    PYTEST_RESULT_MARKER; this writes "success" or "failure" there based on
-    pytest's own internal counters rather than the exit code. The hook picks a
-    PID-unique path so concurrent runs never collide, and removes the file as
-    soon as it has read it.
+    (Windows in particular), so the pre-commit hook cannot rely on the process
+    exit code alone. When it wants a reliable verdict it passes a marker path
+    via PYTEST_RESULT_MARKER; this writes "success" only when the exit status is
+    clean AND pytest counted no failed tests, so a run that exits 0 with a
+    failure (via session.testsfailed) is still recorded as "failure". The hook
+    (.devcontainer/pytest_hook.sh) chooses a PID-unique path so concurrent runs
+    never collide, and it is the hook that reads this file and removes it.
     """
     marker = os.environ.get("PYTEST_RESULT_MARKER")
     if not marker:
