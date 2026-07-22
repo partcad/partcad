@@ -1,0 +1,2 @@
+# Locally hosted AI
+ollama
