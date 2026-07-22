@@ -80,7 +80,7 @@ class _SlowChild:
         self.name = name
         self.delay = delay
 
-    async def get_build123d(self, ctx):
+    async def convert(self, part_type, ctx=None):
         await asyncio.sleep(self.delay)
         return b3d.Solid.make_box(1.0, 1.0, 1.0)
 
