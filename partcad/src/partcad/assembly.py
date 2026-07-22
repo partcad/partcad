@@ -67,8 +67,6 @@ class Assembly(ShapeWithAi):
             return await self._get_shape_real(ctx)
 
     async def _get_shape_real(self, ctx):
-        child_shapes = []
-
         @telemetry.start_as_current_span_async("Assembly._get_shape_real.per_child")
         async def per_child(child):
             # TODO(clairbee): use topods objects here
@@ -107,10 +105,13 @@ class Assembly(ShapeWithAi):
 
         tasks = [asyncio.create_task(per_child(child)) for child in self.children]
 
-        # TODO(clairbee): revisit whether non-determinism here is acceptable
-        for f in asyncio.as_completed(tasks):
-            item = await f
-            child_shapes.append(item)
+        # The children are still built concurrently, but they are collected in the
+        # order they are declared in, not in the order the workers happen to finish.
+        # Completion order varies from run to run (a part loaded from a STEP file
+        # finishes long before one built by CadQuery), and it ends up baked into the
+        # resulting compound, making rendered artifacts differ between otherwise
+        # identical runs.
+        child_shapes = list(await asyncio.gather(*tasks))
 
         compound = b3d.Compound(children=child_shapes)
         if not self.name is None:

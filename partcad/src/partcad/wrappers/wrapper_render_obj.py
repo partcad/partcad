@@ -15,8 +15,6 @@ import sys
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from utils_ocp import tessellate
 
 
