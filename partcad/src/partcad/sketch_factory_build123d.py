@@ -25,7 +25,7 @@ from . import wrapper
 from . import logging as pc_logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_wire
+import ocp_serialize
 
 from . import telemetry
 
@@ -83,7 +83,7 @@ class SketchFactoryBuild123d(SketchFactoryPython):
             request["patch"] = patch
 
             # Serialize the request
-            request_serialized = ocp_wire.serialize(request)
+            request_serialized = ocp_serialize.serialize(request)
 
             await self.runtime.ensure_async(
                 "ocp-tessellate==3.0.9",
@@ -133,7 +133,7 @@ class SketchFactoryBuild123d(SketchFactoryPython):
 
             try:
                 # pc_logging.error("Response: %s" % response_serialized)
-                result = ocp_wire.deserialize(response_serialized)
+                result = ocp_serialize.deserialize(response_serialized)
             except Exception as e:
                 sketch.error("Exception while deserializing %s: %s" % (sketch.name, e))
                 return None

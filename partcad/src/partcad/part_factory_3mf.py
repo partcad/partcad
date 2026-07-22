@@ -16,7 +16,7 @@ from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_wire
+import ocp_serialize
 
 
 @telemetry.instrument()
@@ -48,7 +48,7 @@ class PartFactory3mf(PartFactoryFile):
             wrapper_path = wrapper.get("import_mesh.py")
 
             request = {"fallback_import_stl": False}
-            request_serialized = ocp_wire.serialize(request)
+            request_serialized = ocp_serialize.serialize(request)
 
             await self.runtime.ensure_async("ocp-tessellate==3.0.9")
             await self.runtime.ensure_async("typing_extensions==4.12.2")
@@ -73,7 +73,7 @@ class PartFactory3mf(PartFactoryFile):
                 pc_logging.error(errors)
                 raise Exception(errors)
 
-            result = ocp_wire.deserialize(response_serialized)
+            result = ocp_serialize.deserialize(response_serialized)
 
             if not result["success"]:
                 pc_logging.error(result["exception"])

@@ -52,18 +52,32 @@ license:
 
 # NOTE: this module used to install 'copyreg' handlers ('register()', with the
 # '_reduce_*'/'_inflate_*' pairs) so that OCCT objects could be pickled, because
-# the wrapper protocol was a pickle envelope. The protocol is now a plain JSON
-# envelope with explicit BREP markers - see 'ocp_wire' - so that pickle support
-# has been retired: no global 'copyreg' state is registered any more, and no
-# OCP-aware unpickling machinery is reachable from the protocol.
+# the wrapper protocol was a pickle envelope. Pickle has been retired: loading a
+# response no longer executes arbitrary code, and no global 'copyreg' state is
+# registered any more.
 #
-# What remains here are 'shapetype()' and 'downcast()', which are ordinary
-# utilities unrelated to serialization. They deliberately stay at this import
-# path so that existing importers keep working; 'ocp_wire' re-exports them.
+# The wrapper protocol and the on-disk shape cache now use the flat, plain-JSON
+# format implemented at the bottom of this module:
+#
+# * A single shape is an object {"name", "label", "brep"} where "brep" is the
+#   base64 of the bytes 'BRepTools.Write_s' produces.
+# * An assembly is {"name", "label", "assembly": [...]} whose array holds child
+#   shape- or sub-assembly-objects; it decodes to a TopoDS_Compound.
+# * The request and response envelopes are ordinary JSON objects that carry such
+#   a shape object under a key such as "shape" or "wrapped".
+#
+# Nothing is reconstructed implicitly: decode() only ever turns "brep" back into
+# a TopoDS_Shape and "assembly" into a compound.
 
+import base64
+import json
+import sys
+from io import BytesIO
 from typing import Any
 
 import OCP
+import OCP.BRep
+import OCP.BRepTools
 
 
 downcast_LUT = {
@@ -100,3 +114,184 @@ def downcast(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopoDS.TopoDS_Shape:
     return_value = f_downcast(obj)
 
     return return_value
+
+
+#
+# Flat BREP wire / cache format
+#
+
+# The three object shapes are told apart by which of these keys is present.
+KEY_BREP = "brep"
+KEY_ASSEMBLY = "assembly"
+KEY_BYTES = "__bytes__"
+
+
+def _warn(message: str) -> None:
+    """Report a lossy conversion to stderr (the sandboxed wrappers have no logger)."""
+    try:
+        sys.stderr.write("ocp_serialize: %s\n" % message)
+    except Exception:
+        pass
+
+
+def shape_to_brep(shape) -> bytes:
+    """Serialize a TopoDS_Shape into the flat BREP byte array."""
+    with BytesIO() as bio:
+        OCP.BRepTools.BRepTools.Write_s(shape, bio)
+        return bio.getvalue()
+
+
+def shape_from_brep(data: bytes):
+    """Deserialize a flat BREP byte array into a downcast TopoDS_Shape."""
+    with BytesIO(data) as bio:
+        shape = OCP.TopoDS.TopoDS_Shape()
+        builder = OCP.BRep.BRep_Builder()
+        OCP.BRepTools.BRepTools.Read_s(shape, bio, builder)
+        return downcast(shape)
+
+
+def _brep_b64(shape) -> str:
+    return base64.b64encode(shape_to_brep(shape)).decode("ascii")
+
+
+def _shape_from_b64(brep_b64: str):
+    return shape_from_brep(base64.b64decode(brep_b64))
+
+
+def compound_of(shapes):
+    """Combine OCCT shapes into a single TopoDS_Compound."""
+    result = OCP.TopoDS.TopoDS_Compound()
+    builder = OCP.BRep.BRep_Builder()
+    builder.MakeCompound(result)
+    for shape in shapes:
+        if shape is not None:
+            builder.Add(result, shape)
+    return result
+
+
+def encode_shape(shape, name=None, label=None) -> dict:
+    """Represent a single shape as {"name", "label", "brep"}."""
+    return {"name": name, "label": label, KEY_BREP: _brep_b64(shape)}
+
+
+def encode_assembly(children, name=None, label=None) -> dict:
+    """Represent an assembly as {"name", "label", "assembly": [...]}.
+
+    'children' is the already-encoded list of shape/assembly objects.
+    """
+    return {"name": name, "label": label, KEY_ASSEMBLY: list(children)}
+
+
+def is_shape_object(obj) -> bool:
+    return isinstance(obj, dict) and KEY_BREP in obj
+
+
+def is_assembly_object(obj) -> bool:
+    return isinstance(obj, dict) and KEY_ASSEMBLY in obj
+
+
+def decode_shape(obj):
+    """Turn a shape or assembly object back into OCCT geometry.
+
+    A shape object yields its TopoDS_Shape; an assembly object yields a
+    TopoDS_Compound of its children (recursively). name/label are metadata.
+    """
+    if is_shape_object(obj):
+        return _shape_from_b64(obj[KEY_BREP])
+    if is_assembly_object(obj):
+        return compound_of(decode_shape(child) for child in obj[KEY_ASSEMBLY])
+    raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
+
+
+def encode(obj, name=None, label=None):
+    """Convert 'obj' into a structure made only of JSON-native values.
+
+    A TopoDS_Shape becomes a shape object (carrying 'name'/'label' when given).
+    Dicts, lists, tuples and sets are walked; exceptions become their message. A
+    non-shape OCCT object (a Location/Axis a build123d script showed) drops to
+    null - every consumer already discards it - and any other unknown type
+    raises, to catch real bugs.
+    """
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
+
+    if isinstance(obj, OCP.TopoDS.TopoDS_Shape):
+        return encode_shape(obj, name=name, label=label)
+
+    if isinstance(obj, dict):
+        if KEY_BREP in obj or KEY_ASSEMBLY in obj:
+            return {
+                key: (value if key in (KEY_BREP, KEY_ASSEMBLY, "name", "label") else encode(value))
+                for key, value in obj.items()
+            }
+        return {key: encode(value) for key, value in obj.items()}
+
+    if isinstance(obj, (list, tuple, set, frozenset)):
+        return [encode(item) for item in obj]
+
+    if isinstance(obj, (bytes, bytearray)):
+        return {KEY_BYTES: base64.b64encode(bytes(obj)).decode("ascii")}
+
+    if isinstance(obj, BaseException):
+        return str(obj)
+
+    if type(obj).__module__.split(".")[0] == "OCP":
+        _warn("dropping non-shape OCCT object of type %s" % type(obj))
+        return None
+
+    raise TypeError("Cannot encode %s for the wrapper protocol" % type(obj))
+
+
+def decode(obj):
+    """Inverse of 'encode()'."""
+    if isinstance(obj, dict):
+        if KEY_BREP in obj or KEY_ASSEMBLY in obj:
+            return decode_shape(obj)
+        if KEY_BYTES in obj and len(obj) == 1:
+            return base64.b64decode(obj[KEY_BYTES])
+        return {key: decode(value) for key, value in obj.items()}
+
+    if isinstance(obj, list):
+        return [decode(item) for item in obj]
+
+    return obj
+
+
+def dumps(obj, name=None, label=None) -> str:
+    """Serialize 'obj' into a single-line JSON string (used by the cache)."""
+    return json.dumps(encode(obj, name=name, label=label))
+
+
+def loads(text) -> object:
+    """Deserialize a JSON string produced by 'dumps()'."""
+    if isinstance(text, (bytes, bytearray)):
+        text = text.decode("utf-8")
+    return decode(json.loads(text))
+
+
+def serialize(obj, name=None, label=None) -> str:
+    """Serialize 'obj' into the single-line form that travels over the pipe.
+
+    Plain JSON, not base64-wrapped JSON: the JSON is already single-line and
+    transport-safe (the BREP payload is base64), so an extra base64 layer would
+    only cost time and ~1.3x size.
+    """
+    return dumps(obj, name=name, label=label)
+
+
+def deserialize(data) -> object:
+    """Deserialize the form produced by 'serialize()'.
+
+    The response is taken as the last non-empty line of 'data', so any leading
+    progress a wrapper wrote to stdout is ignored.
+    """
+    if isinstance(data, (bytes, bytearray)):
+        data = data.decode("utf-8")
+    line = data.strip()
+    if "\n" in line:
+        for candidate in reversed(line.splitlines()):
+            candidate = candidate.strip()
+            if candidate:
+                line = candidate
+                break
+    return loads(line)

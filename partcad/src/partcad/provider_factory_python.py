@@ -11,7 +11,7 @@ import os
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_wire
+import ocp_serialize
 
 from .user_config import user_config
 from .provider_factory_file import ProviderFactoryFile
@@ -129,7 +129,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
             # request["patch"] = patch
 
             # Serialize the request
-            request_serialized = ocp_wire.serialize(request)
+            request_serialized = ocp_serialize.serialize(request)
 
             # TODO-199: Use a requirements.txt or pyproject.toml for version specifications
             # TODO-200: Create a version resolution mechanism that can handle dependency conflicts
@@ -182,7 +182,7 @@ class ProviderFactoryPython(ProviderFactoryFile):
                     provider.error("%s: %s" % (provider.name, error_line))
 
             try:
-                result = ocp_wire.deserialize(response_serialized)
+                result = ocp_serialize.deserialize(response_serialized)
             except Exception as e:
                 provider.error("Exception while deserializing %s: %s" % (provider.name, e))
                 return None

@@ -20,7 +20,7 @@ from . import wrapper
 from . import logging as pc_logging
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_wire
+import ocp_serialize
 
 from . import telemetry
 
@@ -78,8 +78,8 @@ class PartFactoryCadquery(PartFactoryPython):
             request["patch"] = patch
 
             # Serialize the request
-            with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{ocp_wire.serialize}"):
-                request_serialized = ocp_wire.serialize(request)
+            with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{ocp_serialize.serialize}"):
+                request_serialized = ocp_serialize.serialize(request)
 
             await self.runtime.ensure_async(
                 "ocp-tessellate==3.0.9",
@@ -130,7 +130,7 @@ class PartFactoryCadquery(PartFactoryPython):
                     part.error("%s: %s" % (part.name, error_line))
 
             try:
-                result = ocp_wire.deserialize(response_serialized)
+                result = ocp_serialize.deserialize(response_serialized)
                 pc_logging.debug("Response: %s" % result)
             except Exception as e:
                 part.error("Exception while deserializing %s: %s" % (part.name, e))

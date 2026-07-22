@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from partcad.project import Project
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_wire
+import ocp_serialize
 
 from . import telemetry
 
@@ -515,8 +515,8 @@ class Shape(ShapeConfiguration):
             "line_weight": line_weight,
             "viewport_origin": viewport_origin,
         }
-        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{ocp_wire.serialize}"):
-            request_serialized = ocp_wire.serialize(request)
+        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{ocp_serialize.serialize}"):
+            request_serialized = ocp_serialize.serialize(request)
 
         # We don't care about customer preferences much here
         # as this is expected to be hermetic.
@@ -538,7 +538,7 @@ class Shape(ShapeConfiguration):
             pc_logging.error(errors)
             raise Exception(errors)
 
-        result = ocp_wire.deserialize(response_serialized)
+        result = ocp_serialize.deserialize(response_serialized)
         if not result["success"]:
             pc_logging.error("RenderSVG failed: %s:%s: %s" % (self.project_name, self.name, result["exception"]))
         if "exception" in result and not result["exception"] is None:
@@ -725,7 +725,7 @@ class Shape(ShapeConfiguration):
                     request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
                     request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
 
-                request_serialized = ocp_wire.serialize(request)
+                request_serialized = ocp_serialize.serialize(request)
 
                 runtime = ctx.get_python_runtime(version="3.11")
 
@@ -759,7 +759,7 @@ class Shape(ShapeConfiguration):
                 # Handle response
                 result = {}
                 try:
-                    result = ocp_wire.deserialize(cleaned_response)
+                    result = ocp_serialize.deserialize(cleaned_response)
                 except Exception as e:
                     pc_logging.error(f"Failed to deserialize response: {e}")
 

@@ -16,7 +16,7 @@ from . import wrapper
 from . import telemetry
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_wire
+import ocp_serialize
 
 
 @telemetry.instrument()
@@ -33,7 +33,7 @@ class PartFactoryStl(PartFactoryFile):
             wrapper_path = wrapper.get("stl.py")
             request = {}
 
-            request_serialized = ocp_wire.serialize(request)
+            request_serialized = ocp_serialize.serialize(request)
 
             runtime = self.ctx.get_python_runtime("3.11")
             with telemetry.start_as_current_span("*PartFactoryStl.instantiate.{runtime.run_async}"):
@@ -50,7 +50,7 @@ class PartFactoryStl(PartFactoryFile):
                     raise Exception(errors)
 
             try:
-                result = ocp_wire.deserialize(response_serialized)
+                result = ocp_serialize.deserialize(response_serialized)
             except Exception as e:
                 pc_logging.error(f"Failed to deserialize STL wrapper response: {e}")
                 raise

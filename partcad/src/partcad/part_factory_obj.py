@@ -12,7 +12,7 @@ from . import wrapper
 from .exception import PartFactoryError
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_wire
+import ocp_serialize
 
 class PartFactoryObj(PartFactoryFile):
     MIN_SIMPLE_INFLIGHT = 1
@@ -128,7 +128,7 @@ class PartFactoryObj(PartFactoryFile):
         request = {"build_parameters": {}}
 
         # Serialize the request
-        request_serialized = ocp_wire.serialize(request)
+        request_serialized = ocp_serialize.serialize(request)
 
         # Run the subprocess and handle the response
         try:
@@ -148,7 +148,7 @@ class PartFactoryObj(PartFactoryFile):
                 pc_logging.error(errors)
                 raise Exception(errors)
 
-            response = ocp_wire.deserialize(response_serialized)
+            response = ocp_serialize.deserialize(response_serialized)
             if not response.get("success", False):
                 pc_logging.error(response["exception"])
                 raise PartFactoryError(response["exception"])

@@ -15,7 +15,7 @@ from . import logging as pc_logging
 from .sketch_factory_python import SketchFactoryPython
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_wire
+import ocp_serialize
 
 from . import telemetry
 
@@ -74,7 +74,7 @@ class SketchFactorySvg(SketchFactoryPython):
                     "use_wires": self.use_wires,
                     "use_faces": self.use_faces,
                 }
-                request_serialized = ocp_wire.serialize(request)
+                request_serialized = ocp_serialize.serialize(request)
 
                 await self.runtime.ensure_async("cadquery-ocp==7.7.2")
                 await self.runtime.ensure_async("ocpsvg==0.3.4")
@@ -96,7 +96,7 @@ class SketchFactorySvg(SketchFactoryPython):
                     pc_logging.error(errors)
                     raise Exception(errors)
 
-                result = ocp_wire.deserialize(response_serialized)
+                result = ocp_serialize.deserialize(response_serialized)
 
                 if not result["success"]:
                     pc_logging.error(result["exception"])

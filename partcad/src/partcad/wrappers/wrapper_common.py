@@ -14,7 +14,7 @@ import locale
 import os
 import sys
 
-import ocp_wire
+import ocp_serialize
 
 
 def handle_input():
@@ -36,13 +36,13 @@ def handle_input():
     #   - Read until EOF
     input_str = sys.stdin.read()
     #   - Unpack the content received via stdin
-    request = ocp_wire.deserialize(input_str)
+    request = ocp_serialize.deserialize(input_str)
     return path, request
 
 
 def handle_output(model):
     # Serialize the output
-    sys.stdout.write(ocp_wire.serialize(model))
+    sys.stdout.write(ocp_serialize.serialize(model))
     sys.stdout.flush()
 
 
