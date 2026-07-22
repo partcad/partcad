@@ -1,0 +1,2 @@
+# Python linting
+ruff>=0.11.8,<1.0

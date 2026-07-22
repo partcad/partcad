@@ -78,6 +78,27 @@ one). Run ``pc <command> --help`` to see the options for any command.
 For a full command reference, see :doc:`cli`.
 
 
+=====================================
+Latest Development Version of PartCAD
+=====================================
+
+You can install the latest development version of PartCAD from the ``devel`` branch on
+`PartCAD <https://github.com/partcad/partcad>`_. First, create an isolated Python environment,
+and ensure ``pip``, ``setuptools``, and ``wheel`` are upgraded, then follow the instructions
+below to install the core module and the CLI tool.
+
+1. **Install or upgrade the Core Python Module**
+
+   .. code-block:: shell
+
+      $ python -m pip install --upgrade git+https://github.com/partcad/partcad.git@devel#subdirectory=partcad
+
+2. **Install or upgrade the CLI**
+
+   .. code-block:: shell
+
+      $ python -m pip install --upgrade git+https://github.com/partcad/partcad.git@devel#subdirectory=partcad-cli
+
 =============
 Python module
 =============
@@ -116,6 +137,27 @@ or on ``partcad`` itself, using the same extra names:
 
 Without the matching extra, using an AI provider fails with an error naming the
 package to install. Everything else in PartCAD works without them.
+
+=======
+Linting
+=======
+
+The linter used by ``pc lint`` to check Python files is optional. Install the
+``lint`` extra to enable it, either on ``partcad-cli``:
+
+.. code-block:: shell
+
+    $ python -m pip install -U 'partcad-cli[lint]'
+
+or on ``partcad`` itself, using the same extra name:
+
+.. code-block:: shell
+
+    $ python -m pip install -U 'partcad[lint]'
+
+Without the extra, linting Python files reports an error naming the package to
+install. Everything else in PartCAD, including linting of YAML files, works
+without it.
 
 ============================
 Visual Studio Code extension
