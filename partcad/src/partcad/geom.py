@@ -8,6 +8,7 @@
 #
 
 import math
+from typing import Sequence
 
 from OCP.TopLoc import TopLoc_Location
 from OCP.gp import (
@@ -22,18 +23,57 @@ from . import logging as pc_logging
 
 
 class Location:
+    """A rigid body transform: a rotation about an axis through the origin followed by a translation.
+
+    The accepted constructor forms are:
+      Location()                                  the identity location
+      Location(gp_Trsf)                           wrap an existing OCCT transformation
+      Location(TopLoc_Location)                   wrap an existing OCCT location
+      Location(Location)                          copy of another location
+      Location([t, axis, angle])                  the packed form used by PartCAD config files,
+                                                  e.g. [[0, 0, 0], [0, 0, 1], 0]
+      Location(t, axis, angle)                    the same, spelled as three arguments
+    """
+
     wrapped: TopLoc_Location
 
-    def __init__(self, arg=None):
-        if arg is None:
+    def __init__(self, arg=None, axis=None, angle=None):
+        if axis is not None or angle is not None:
+            # The three-argument form: Location((x, y, z), (ax, ay, az), angle).
+            if arg is None or axis is None or angle is None:
+                raise ValueError("geom.Location: the three-argument form needs a translation, an axis and an angle")
+            trsf = Location.trsf_from_coords(arg, axis, angle)
+            self.wrapped = TopLoc_Location(trsf)
+        elif arg is None:
             self.wrapped = TopLoc_Location()
         elif isinstance(arg, gp_Trsf):
             self.wrapped = TopLoc_Location(arg)
-        elif isinstance(arg, list):
+        elif isinstance(arg, TopLoc_Location):
+            # Copy rather than alias: TopLoc_Location is mutable (Clear(), Identity()),
+            # so sharing the instance would let one Location change another.
+            self.wrapped = TopLoc_Location(arg.Transformation())
+        elif isinstance(arg, Location):
+            self.wrapped = TopLoc_Location(arg.wrapped.Transformation())
+        elif isinstance(arg, (list, tuple)):
+            if len(arg) != 3:
+                raise ValueError(
+                    "geom.Location: the packed form needs exactly 3 elements "
+                    "([x, y, z], [ax, ay, az], angle), got %d" % len(arg)
+                )
             trsf = Location.trsf_from_coords(arg[0], arg[1], arg[2])
             self.wrapped = TopLoc_Location(trsf)
         else:
             raise ValueError("geom.Location: Invalid argument type")
+
+    def inverse(self) -> "Location":
+        """Return the location that undoes this one."""
+        return Location(self.wrapped.Transformation().Inverted())
+
+    def __mul__(self, other: "Location") -> "Location":
+        """Compose two locations: (a * b) applies b first and then a."""
+        if not isinstance(other, Location):
+            return NotImplemented
+        return Location(self.wrapped.Transformation().Multiplied(other.wrapped.Transformation()))
 
     def __repr__(self):
         trsf = self.wrapped.Transformation()
@@ -45,7 +85,7 @@ class Location:
         return f"Location({[trans.X(), trans.Y(), trans.Z()]}, {[dir.X(), dir.Y(), dir.Z()]}, {angle})"
 
     @classmethod
-    def trsf_from_coords(self, t: list[float], ax: list[float], angle: float):
+    def trsf_from_coords(self, t: Sequence[float], ax: Sequence[float], angle: float):
         # pc_logging.info(f"trsf_from_coords: {t}, {ax}, {angle}")
         T = gp_Trsf()
         T.SetRotation(
