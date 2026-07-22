@@ -1,0 +1,14 @@
+# All AI providers.
+# Keep in sync with requirements-ai-google.txt, requirements-ai-openai.txt
+# and requirements-ai-ollama.txt. `-r` includes are not expanded by
+# setuptools' file-based dynamic dependencies, so the list is spelled out here.
+
+# Google AI
+google.generativeai
+Pillow
+
+# OpenAI
+openai
+
+# Locally hosted AI
+ollama

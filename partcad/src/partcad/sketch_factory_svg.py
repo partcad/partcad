@@ -7,38 +7,44 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import build123d as b3d
+import base64
+import os
+import pickle
+import sys
 
-from OCP.ShapeExtend import ShapeExtend_WireData
-from OCP.ShapeFix import (
-    ShapeFix_Shape,
-)
-from OCP.BRepAlgoAPI import BRepAlgoAPI_Fuse
-from OCP.BOPAlgo import BOPAlgo_Operation
-from OCP.TopTools import TopTools_ListOfShape
-
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
-from OCP.TopoDS import TopoDS
-
+from . import wrapper
 from . import logging as pc_logging
-from .sketch_factory_file import SketchFactoryFile
+from .sketch_factory_python import SketchFactoryPython
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
+from ocp_serialize import register as register_ocp_helper
+
 from . import telemetry
 
 
 @telemetry.instrument()
-class SketchFactorySvg(SketchFactoryFile):
+class SketchFactorySvg(SketchFactoryPython):
     flip_y = True
     ignore_visibility = False
     use_wires = False
     use_faces = False
 
-    def __init__(self, ctx, source_project, target_project, config):
+    def __init__(self, ctx, source_project, target_project, config, can_create=False):
         with pc_logging.Action("InitSVG", target_project.name, config["name"]):
+            python_version = source_project.python_version
+            if python_version is None:
+                # Stay one step ahead of the minimum required Python version
+                python_version = "3.11"
+            if python_version == "3.12" or python_version == "3.10":
+                # Switching Python version to 3.11 to avoid compatibility issues with build123d
+                python_version = "3.11"
             super().__init__(
                 ctx,
                 source_project,
                 target_project,
                 config,
+                can_create=can_create,
+                python_version=python_version,
                 extension=".svg",
             )
 
@@ -61,59 +67,48 @@ class SketchFactorySvg(SketchFactoryFile):
 
         with pc_logging.Action("SVG", sketch.project_name, sketch.name):
             try:
-                shape_list = b3d.import_svg(
-                    self.path,
-                    flip_y=self.flip_y,
-                    ignore_visibility=self.ignore_visibility,
+                wrapper_path = wrapper.get("import_svg.py")
+
+                request = {
+                    "path": self.path,
+                    "flip_y": self.flip_y,
+                    "ignore_visibility": self.ignore_visibility,
+                    "use_wires": self.use_wires,
+                    "use_faces": self.use_faces,
+                }
+                register_ocp_helper()
+                picklestring = pickle.dumps(request)
+                request_serialized = base64.b64encode(picklestring).decode()
+
+                await self.runtime.ensure_async("cadquery-ocp==7.7.2")
+                await self.runtime.ensure_async("ocpsvg==0.3.4")
+                await self.runtime.ensure_async("typing_extensions==4.12.2")
+                await self.runtime.ensure_async("build123d==0.8.0")
+                command = [
+                    wrapper_path,
+                    os.path.abspath(self.path),
+                    os.path.abspath(self.project.config_dir),
+                ]
+                exitcode, response_serialized, errors = await self.runtime.run_async(
+                    command,
+                    request_serialized,
                 )
+                if exitcode != 0 and len(errors) == 0:
+                    errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
 
-                faces = []
-                if self.use_wires or not self.use_faces:
-                    wires = shape_list.wires()
+                if errors:
+                    pc_logging.error(errors)
+                    raise Exception(errors)
 
-                    wire_merger = ShapeExtend_WireData()
-                    for wire in wires:
-                        wire_merger.Add(wire.wrapped)
-                    wire = wire_merger.Wire()
+                response = base64.b64decode(response_serialized)
+                register_ocp_helper()
+                result = pickle.loads(response)
 
-                    wire_fixer = ShapeFix_Shape(wire)
-                    wire_fixer.Perform()
-                    fixed_wire_shape = wire_fixer.Shape()
-                    wire = TopoDS.Wire_s(fixed_wire_shape)
+                if not result["success"]:
+                    pc_logging.error(result["exception"])
+                    raise Exception(result["exception"])
 
-                    face_builder = BRepBuilderAPI_MakeFace(wire, True)
-                    face_builder.Build()
-                    if not face_builder.IsDone():
-                        raise ValueError(f"Cannot build face(s): {face_builder.Error()}")
-
-                    face = face_builder.Face()
-
-                    face_fixer = ShapeFix_Shape(face)
-                    face_fixer.Perform()
-                    fixed_face_shape = face_fixer.Shape()
-                    face = TopoDS.Face_s(fixed_face_shape)
-
-                    faces.append(face)
-
-                if self.use_faces or not self.use_wires:
-                    faces.extend(shape_list.faces())
-
-                if len(faces) == 1:
-                    shape = faces[0]
-                else:
-                    # TODO(clairbee): verify this branch
-                    shapes = TopTools_ListOfShape()
-                    for face in faces:
-                        shapes.Append(face)
-                    face_fuser = BRepAlgoAPI_Fuse()
-                    face_fuser.SetArguments(shapes)
-                    face_fuser.SetOperation(BOPAlgo_Operation.BOPAlgo_FUSE)
-                    # face_fuser.SetRunParallel(True)
-                    face_fuser.Build()
-                    if face_fuser.IsDone():
-                        shape = face_fuser.Shape()
-                    else:
-                        shape = None
+                shape = result["shape"]
             except Exception as e:
                 pc_logging.exception("Failed to import the SVG file: %s: %s" % (self.path, e))
                 shape = None
