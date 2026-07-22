@@ -23,7 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+        # macos-13 dropped: see the note on OSES in test.yml. Those jobs never
+        # start on the current runner plan.
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version:
           - "3.10"
           - "3.11"
@@ -40,7 +42,7 @@ jobs:
       BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
         with:
           job: build

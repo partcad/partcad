@@ -13,6 +13,7 @@ import typing
 import build123d as b3d
 
 from . import telemetry
+from .geom import Location
 from .shape import Shape
 from .shape_ai import ShapeWithAi
 from .sync_threads import threadpool_manager
@@ -51,7 +52,7 @@ class Assembly(ShapeWithAi):
         self,
         child_item: Shape,  # pc.Part or pc.Assembly
         name=None,
-        loc=b3d.Location((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.0),
+        loc=Location((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.0),
     ):
         self.children.append(AssemblyChild(child_item, name, loc))
         self._wrapped = None  # Invalidate if any
@@ -66,17 +67,36 @@ class Assembly(ShapeWithAi):
             return await self._get_shape_real(ctx)
 
     async def _get_shape_real(self, ctx):
-        child_shapes = []
-
         @telemetry.start_as_current_span_async("Assembly._get_shape_real.per_child")
         async def per_child(child):
             # TODO(clairbee): use topods objects here
-            item = await child.item.get_build123d(ctx)
+            item = await child.item.convert("build123d", ctx)
+            if item is None or item.wrapped is None:
+                # convert("build123d") hands back a Solid whose 'wrapped' is None
+                # when the shape could not be built, most often because the wrapper
+                # process died before producing any output. Copying or compounding
+                # such an object fails deep inside build123d with an AttributeError
+                # that names neither this assembly nor the child that is missing,
+                # so report which child failed here instead.
+                child_name = "%s:%s" % (
+                    getattr(child.item, "project_name", "<unknown>"),
+                    getattr(child.item, "name", "<unknown>"),
+                )
+                msg = "%s: %s: failed to get the shape of the child %s" % (
+                    self.project_name,
+                    self.name,
+                    child_name,
+                )
+                self.error(msg)
+                raise Exception(msg)
             if child.name is not None or child.location is not None:
                 item = copy.copy(item)
                 if child.name is not None:
                     item.label = child.name
                 if child.location is not None:
+                    # 'item' is a build123d object while 'child.location' is a pc.Location
+                    # (see geom.py). build123d's Shape.locate() only reads '.wrapped', which
+                    # both types expose as a TopLoc_Location, so no conversion is needed here.
                     item.locate(child.location)
             return item
 
@@ -85,10 +105,13 @@ class Assembly(ShapeWithAi):
 
         tasks = [asyncio.create_task(per_child(child)) for child in self.children]
 
-        # TODO(clairbee): revisit whether non-determinism here is acceptable
-        for f in asyncio.as_completed(tasks):
-            item = await f
-            child_shapes.append(item)
+        # The children are still built concurrently, but they are collected in the
+        # order they are declared in, not in the order the workers happen to finish.
+        # Completion order varies from run to run (a part loaded from a STEP file
+        # finishes long before one built by CadQuery), and it ends up baked into the
+        # resulting compound, making rendered artifacts differ between otherwise
+        # identical runs.
+        child_shapes = list(await asyncio.gather(*tasks))
 
         compound = b3d.Compound(children=child_shapes)
         if not self.name is None:

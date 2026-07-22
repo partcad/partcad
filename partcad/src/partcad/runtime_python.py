@@ -13,6 +13,7 @@ import hashlib
 import os
 import pathlib
 import platform
+import signal
 import subprocess
 import sys
 import threading
@@ -22,11 +23,57 @@ from . import runtime
 from . import logging as pc_logging
 from . import telemetry
 
+
 def get_local_partcad_pkg(dep: str) -> str:
     """Use local partcad package instead of the deployed one (specifically intended to be used during testing so that tests are applied on the latest changes corresponding to a PR)"""
     if os.environ.get("PC_PARTCAD_PACKAGE_SUB") is not None:
         return os.path.normpath(os.environ.get("PC_PARTCAD_PACKAGE_SUB"))
     return dep
+
+
+# Dependencies are installed one "pip install" invocation at a time, so pip
+# never sees the constraints of the whole environment at once and cannot detect
+# a conflict between them. That matters most for cadquery-ocp: cadquery and
+# ocpsvg cap it below 7.8, but build123d 0.8.0 asks only for ">=7.7.0", so a
+# "pip install build123d==0.8.0" into an environment that does not already have
+# cadquery-ocp pulls the newest release (7.9.x at the time of writing). Mixing
+# OCP versions between cadquery and build123d loads two incompatible native
+# libraries into one interpreter, which crashes the wrapper process with no
+# Python traceback and no stderr at all.
+#
+# The install order happens to install cadquery-ocp before build123d today, so
+# this is currently correct only by accident. These constraints are passed to
+# every "pip install" so the bound holds regardless of order.
+#
+# build123d 0.8.0 also depends on "ocpsvg" with no bound whatsoever, and ocpsvg
+# switched from cadquery-ocp to the cadquery-ocp-proxy package in 0.4. Since
+# cadquery-ocp-proxy only exists for 7.9+, letting ocpsvg float pulls a 7.9
+# native runtime back in alongside the 7.7.2 one, which is the same conflict by
+# another route. Keep ocpsvg on the pre-proxy line to match cadquery-ocp.
+PIP_CONSTRAINTS = [
+    "cadquery-ocp>=7.7.0,<7.8",
+    "ocpsvg>=0.3.4,<0.4",
+]
+
+
+def describe_exit_code(returncode: int) -> str:
+    """Describe a process exit code, naming the signal if it was killed by one."""
+    # POSIX reports a signal death as a negative returncode
+    if returncode < 0:
+        try:
+            name = signal.Signals(-returncode).name
+        except ValueError:
+            name = "unknown signal"
+        return "killed by signal %d (%s)" % (-returncode, name)
+    # Windows surfaces native crashes as large unsigned status codes
+    known_windows_faults = {
+        3221225477: "EXCEPTION_ACCESS_VIOLATION",
+        3221226356: "STATUS_HEAP_CORRUPTION",
+    }
+    if returncode in known_windows_faults:
+        return "exit code %d (%s)" % (returncode, known_windows_faults[returncode])
+    return "exit code %d" % returncode
+
 
 class VenvLock:
     lock: FileLock
@@ -92,6 +139,53 @@ class PythonRuntime(runtime.Runtime):
         self.pip_install_flags = []
         if platform.system() == "Windows":
             self.pip_install_flags += ["--no-warn-script-location"]
+
+        self.constraints_path = None
+
+    def get_constraints_flags(self):
+        """Return the pip flags that apply PIP_CONSTRAINTS to an install.
+
+        The constraints file lives in the runtime sandbox and is shared by the
+        runtime environment and every v-env created under it.
+        """
+        if self.constraints_path is None:
+            constraints_path = os.path.join(self.path, "partcad-constraints.txt")
+            try:
+                os.makedirs(self.path, exist_ok=True)
+                with open(constraints_path, "w") as f:
+                    f.write("\n".join(PIP_CONSTRAINTS) + "\n")
+                self.constraints_path = constraints_path
+            except OSError as e:
+                # Not being able to write constraints must not stop the install;
+                # it only means we fall back to the previous ordering-dependent
+                # behavior, so warn loudly instead of failing.
+                pc_logging.warning("Failed to write pip constraints to %s: %s" % (constraints_path, e))
+                return []
+        return ["--constraint", self.constraints_path]
+
+    def report_dependency_conflicts(self, exitcode, stdout, stderr, path=None):
+        """Log whatever "pip check" reported. Never raises."""
+        if exitcode == 0:
+            return
+        report = (stdout or stderr or "").strip()
+        if not report:
+            return
+        # Must stay a warning, not an error. pc_logging.error() sets the global
+        # had_errors flag that the CLI turns into a non-zero exit code, so
+        # reporting a pre-existing conflict at error level fails runs that
+        # otherwise pass. Whether the conflict is fatal is for the caller that
+        # actually uses the environment to decide; this is only a diagnostic.
+        pc_logging.warning("Dependency conflicts in %s:\n%s" % (path if path else self.path, report))
+
+    def check_deps_onced_locked(self, path=None):
+        """Report dependency conflicts in a freshly provisioned environment."""
+        exitcode, stdout, stderr = self.run_onced_locked(["-m", "pip", "check"], path=path)
+        self.report_dependency_conflicts(exitcode, stdout, stderr, path=path)
+
+    async def check_deps_async_onced_locked(self, path=None):
+        """Report dependency conflicts in a freshly provisioned environment."""
+        exitcode, stdout, stderr = await self.run_async_onced_locked(["-m", "pip", "check"], path=path)
+        self.report_dependency_conflicts(exitcode, stdout, stderr, path=path)
 
     def get_async_lock(self):
         if not hasattr(self.tls, "async_locks"):
@@ -167,8 +261,10 @@ class PythonRuntime(runtime.Runtime):
     def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
+            venv_created = False
             with self.sync_lock():
                 if not os.path.exists(session["path"]):
+                    venv_created = True
                     with pc_logging.Action("v-env", self.version, session["name"]):
                         # Create the venv environment
                         pc_logging.debug("Creating venv: %s" % session["path"])
@@ -185,6 +281,8 @@ class PythonRuntime(runtime.Runtime):
                 if dep == "partcad":
                     dep = get_local_partcad_pkg(dep)
                 self.ensure_onced(dep, path=session["path"])
+            if venv_created:
+                self.check_deps_onced_locked(path=session["path"])
 
         with self.sync_lock(session):
             python_path = self.get_venv_python_path(session, path)
@@ -236,11 +334,29 @@ class PythonRuntime(runtime.Runtime):
             # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
             exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
 
+            if exitcode != 0 and not stdout and not stderr:
+                # Neither a traceback nor stderr means the interpreter died
+                # before it could report anything, which is what a native crash
+                # looks like: most often two incompatible OCP builds loaded into
+                # one process. Say so here, otherwise the only symptom is an
+                # unrelated AttributeError on a None shape much further away.
+                #
+                # Warning rather than error on purpose: pc_logging.error() sets
+                # the global had_errors flag that becomes a non-zero exit code,
+                # and the caller that consumes this exit code already reports
+                # the failure itself. This line only explains why it happened.
+                pc_logging.warning(
+                    "%s terminated abnormally (%s) without any output. This usually means conflicting "
+                    "native dependencies, such as mismatched cadquery-ocp versions, in %s"
+                    % (cmd, describe_exit_code(p.returncode), path if path else self.path)
+                )
+
             return exitcode, stdout, stderr
 
     def run_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
+            venv_created = not os.path.exists(session["path"])
             if not os.path.exists(session["path"]):
                 with pc_logging.Action("v-env", self.version, session["name"]):
                     # Create the venv environment
@@ -258,6 +374,8 @@ class PythonRuntime(runtime.Runtime):
                 if dep == "partcad":
                     dep = get_local_partcad_pkg(dep)
                 self.ensure_onced_locked(dep, path=session["path"])
+            if venv_created:
+                self.check_deps_onced_locked(path=session["path"])
 
         python_path = self.get_venv_python_path(session, path)
         cmd = [python_path, *self.python_flags, *cmd]
@@ -273,8 +391,10 @@ class PythonRuntime(runtime.Runtime):
     async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
+            venv_created = False
             async with self.async_lock():
                 if not os.path.exists(session["path"]):
+                    venv_created = True
                     with pc_logging.Action("v-env", self.version, session["name"]):
                         # Create the venv environment
                         pc_logging.debug("Creating venv: %s" % session["path"])
@@ -292,6 +412,8 @@ class PythonRuntime(runtime.Runtime):
                 if dep == "partcad":
                     dep = get_local_partcad_pkg(dep)
                 await self.ensure_async_onced(dep, path=session["path"])
+            if venv_created:
+                await self.check_deps_async_onced_locked(path=session["path"])
 
         async with self.async_lock(session):
             python_path = self.get_venv_python_path(session, path)
@@ -342,11 +464,29 @@ class PythonRuntime(runtime.Runtime):
             # For more information, see: https://github.com/CadQuery/cadquery/issues/1564
             exitcode = 0 if p.returncode in [3221226356, 3221225477] else p.returncode
 
+            if exitcode != 0 and not stdout and not stderr:
+                # Neither a traceback nor stderr means the interpreter died
+                # before it could report anything, which is what a native crash
+                # looks like: most often two incompatible OCP builds loaded into
+                # one process. Say so here, otherwise the only symptom is an
+                # unrelated AttributeError on a None shape much further away.
+                #
+                # Warning rather than error on purpose: pc_logging.error() sets
+                # the global had_errors flag that becomes a non-zero exit code,
+                # and the caller that consumes this exit code already reports
+                # the failure itself. This line only explains why it happened.
+                pc_logging.warning(
+                    "%s terminated abnormally (%s) without any output. This usually means conflicting "
+                    "native dependencies, such as mismatched cadquery-ocp versions, in %s"
+                    % (cmd, describe_exit_code(p.returncode), path if path else self.path)
+                )
+
             return exitcode, stdout, stderr
 
     async def run_async_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
         if session and session["dirty"]:
             # The venv environment has to be created
+            venv_created = not os.path.exists(session["path"])
             if not os.path.exists(session["path"]):
                 with pc_logging.Action("v-env", self.version, session["name"]):
                     # Create the venv environment
@@ -364,6 +504,8 @@ class PythonRuntime(runtime.Runtime):
                 if dep == "partcad":
                     dep = get_local_partcad_pkg(dep)
                 await self.ensure_async_onced_locked(dep, path=session["path"])
+            if venv_created:
+                await self.check_deps_async_onced_locked(path=session["path"])
 
         python_path = self.get_venv_python_path(session, path)
         cmd = [python_path, *self.python_flags, *cmd]
@@ -398,7 +540,15 @@ class PythonRuntime(runtime.Runtime):
                             item += " in " + path
                         with pc_logging.Action("PipInst", self.version, item):
                             self.run_onced_locked(
-                                ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
+                                [
+                                    "-m",
+                                    "pip",
+                                    *self.pip_flags,
+                                    "install",
+                                    *self.pip_install_flags,
+                                    *self.get_constraints_flags(),
+                                    python_package,
+                                ],
                                 path=path,
                             )
                         pathlib.Path(guard_path).touch()
@@ -424,7 +574,15 @@ class PythonRuntime(runtime.Runtime):
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
                     self.run_onced_locked(
-                        ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
+                        [
+                            "-m",
+                            "pip",
+                            *self.pip_flags,
+                            "install",
+                            *self.pip_install_flags,
+                            *self.get_constraints_flags(),
+                            python_package,
+                        ],
                         path=path,
                     )
                 pathlib.Path(guard_path).touch()
@@ -457,7 +615,15 @@ class PythonRuntime(runtime.Runtime):
                             item += " in " + path
                         with pc_logging.Action("PipInst", self.version, item):
                             await self.run_async_onced_locked(
-                                ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
+                                [
+                                    "-m",
+                                    "pip",
+                                    *self.pip_flags,
+                                    "install",
+                                    *self.pip_install_flags,
+                                    *self.get_constraints_flags(),
+                                    python_package,
+                                ],
                                 path=path,
                             )
                         pathlib.Path(guard_path).touch()
@@ -485,7 +651,15 @@ class PythonRuntime(runtime.Runtime):
                     item += " in " + path
                 with pc_logging.Action("PipInst", self.version, item):
                     await self.run_async_onced_locked(
-                        ["-m", "pip", *self.pip_flags, "install", *self.pip_install_flags, python_package],
+                        [
+                            "-m",
+                            "pip",
+                            *self.pip_flags,
+                            "install",
+                            *self.pip_install_flags,
+                            *self.get_constraints_flags(),
+                            python_package,
+                        ],
                         path=path,
                     )
                 pathlib.Path(guard_path).touch()

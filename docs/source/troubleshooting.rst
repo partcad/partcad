@@ -53,6 +53,12 @@ In order to selectively execute only a subset of the healthchecks tests, the ``h
 
     pc healthcheck --filters python,windows
 
+Typical problems
+----------------
+
+When running `pc ...` commands, getting: "pc is not a recognized command..."
+
+- Make sure that Conda environment is activated in the current terminal, for example by running `conda info`
 
 ========================
 PartCAD VSCode Extension
@@ -66,6 +72,27 @@ For troubleshooting purposes, the ``PartCAD`` terminal view output may not
 suffice due to the ephemeral nature of some output in that view (many output
 lines get overwritten). To get the complete and detailed error log, see the
 ``PartCAD`` output in the ``Output`` view.
+
+Typical problems
+----------------
+
+Message in "Explorer" left panel: "No Python (>= 3.10) installed"
+
+ - Install Conda environment into the current working directory (main menu: View -> Command palette -> Python: Create environment...)
+ - Choose interpreter (main menu: View -> Command palette -> Python: Choose interpreter...)
+ - Reload PartCAD extension (by pressing "Reload" button in "Context" left panel)
+
+"The PartCAD extension is being initialized..." in "Explorer" gets into infinite loop (and nothing happens in the corresponding terminal window)
+
+ - Close and reopen VSCode
+
+Error while loading part or assembly view: "Unknown module: CadQuery"
+
+ - In "OCP CAD Viewer -> Viewer manager" left panel, install the needed libraries by pressing "Quickstart CadQuery" button
+
+Error while loading part or assembly view: "Module ... not found"
+
+ - Make sure that extension version matches PartCAD Python module version in `pc version` command output
 
 ==============
 OCP CAD Viewer
@@ -87,3 +114,10 @@ Any part or assembly can be displayed in ``OCP CAD Viewer`` by running
 
     # Display the part in 'OCP CAD Viewer'
     pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-iso4014
+
+Typical problems
+----------------
+
+Demo preview window is not shown on the right panel
+
+- Close the right panel and press "Arrow" button in "Viewer manager" left panel (next to "ocp_vscode")

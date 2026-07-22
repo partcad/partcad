@@ -8,8 +8,6 @@
 #
 
 import base64
-import importlib
-import httpx
 from pathlib import Path
 import re
 import threading
@@ -17,13 +15,17 @@ import time
 from typing import Any
 
 from . import telemetry
+from .ai_deps import import_optional
 from .ai_feature_file import AiContentFile, AiContentProcessor
 from . import logging as pc_logging
 from .user_config import user_config
 
-# Lazy-load AI imports as they are not always needed
+# Lazy-load AI imports as they are not always needed.
+# `httpx` is only reachable through the `ollama` SDK, so it is loaded lazily too.
 # import ollama
 ollama = None
+# import httpx
+httpx = None
 
 lock = threading.Lock()
 
@@ -35,13 +37,19 @@ models_pulled = {}
 
 
 def ollama_once():
-    global ollama, ollama_num_thread
+    global ollama, ollama_num_thread, httpx
 
     with lock:
+        # Initialize each module under its own guard. Sharing one guard would let a
+        # failure to import the second module leave it permanently None: 'ollama'
+        # would already be set, so a retry would skip the block entirely and the
+        # later 'httpx.ConnectError' lookup would raise AttributeError on None.
         if ollama is None:
-            ollama = importlib.import_module("ollama")
-
+            ollama = import_optional("ollama", "Ollama", "ai-ollama")
             ollama_num_thread = user_config.ollama_num_thread
+
+        if httpx is None:
+            httpx = import_optional("httpx", "Ollama", "ai-ollama")
 
     return True
 

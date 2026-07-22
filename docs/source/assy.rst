@@ -50,7 +50,7 @@ The following syntax is used to create a node that places a part in the assembly
     connect: # alternative to "location" and "connectPorts", used to connect by interfaces
       with: <(optional) name of the interface in this part, if more than one exists>
       withInstance: <(optional) name of the instance of the interface in this part, if more than one exists>
-      withPort: <(optional) name of the port in this part to connect witht>
+      withPort: <(optional) name of the port in this part to connect with>
       name: <the name of the target part in this assembly to connect to>
       to: <(optional) name of the interface in the target part to connect to, if more than one compatible one exists>
       toInstance: <(optional) name of the instance of the interface in the target part to connect to, if more than one exists>

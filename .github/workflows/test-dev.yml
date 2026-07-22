@@ -40,7 +40,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Dev Container
         id: setup
         uses: ./.github/actions/setup-devcontainer
@@ -72,7 +72,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Dev Container
         id: setup
         uses: ./.github/actions/setup-devcontainer
@@ -121,7 +121,7 @@ jobs:
   pytest:
     name: "Run: pytest"
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs: poetry-install
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
@@ -129,7 +129,7 @@ jobs:
       packages: read
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Dev Container
         id: setup
         uses: ./.github/actions/setup-devcontainer
@@ -210,7 +210,7 @@ jobs:
   #   timeout-minutes: 10
   #   steps:
   #     - name: Checkout (GitHub)
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
   #     - name: Setup Dev Container
   #       id: setup
   #       uses: ./.github/actions/setup-devcontainer
@@ -258,7 +258,7 @@ jobs:
       packages: read
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Dev Container
         id: setup
         uses: ./.github/actions/setup-devcontainer
@@ -287,7 +287,7 @@ jobs:
         shell: pwsh
 
       - name: Start SSH Agent
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
 
@@ -367,7 +367,7 @@ jobs:
   #     packages: read
   #   steps:
   #     - name: Checkout (GitHub)
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v7
   #     - name: Setup Dev Container
   #       id: setup
   #       uses: ./.github/actions/setup-devcontainer
@@ -438,7 +438,7 @@ jobs:
       packages: read
     steps:
       - name: Checkout (GitHub)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Setup Dev Container
         id: setup
         uses: ./.github/actions/setup-devcontainer

@@ -36,19 +36,17 @@ If you need help deciding what could be the best project for you to work on,
 engage with the community on
 `PartCAD's Discord server <https://discord.gg/h5qhbHtygj>`_
 
-Documentation and Tutorials
-===========================
+Spread The Word
+===============
 
-Currently, our team is short on skills required to document PartCAD well.
-Join us and bring the word to the world!
-
-You can also make a huge impact on lots of people by simply creating a simple post
-or a basic video tutorial. It is very much appreciated.
+You can make a huge impact on lots of people by simply creating a simple post
+or a basic video tutorial for PartCAD in your social media accounts.
+It is very much appreciated.
 
 PartCAD Public Repository
 =========================
 
-Besides main PartCAD software components, you can contrinute to the community by publishing design data
+Besides main PartCAD software components, you can contribute to the community by publishing design data
 as well as pluggable software modules to PartCAD Public Repository.
 
 Assemblies
@@ -63,13 +61,13 @@ Start by creating a package (in a dedicated git repository)
 for all products by your company or community.
 Then add parametrized assembly declarations to the package.
 
-The best way to write Assembly YAML files is to use PartCAD VS Code extension
-and use code completion features: select the part you want to add in the
-explorer view on the left and, then,
-start typing '- part: ' in the Assembly YAML file editor as if you were to add
-a new part to the assembly. After you typed "- pa", a code completion suggestion
-will show up, offering to add the complete YAML block which adds the selected
-part to the assembly.
+The best way to write Assembly YAML files is to use the PartCAD VS Code extension
+and its code completion features. Select the part you want to add in the explorer
+view on the left. Then, in the Assembly YAML file editor, start typing ``- part:``
+(including the trailing space) as if you were adding a new part to the assembly.
+After you type ``- pa``, a code
+completion suggestion appears that adds the complete YAML block for the selected
+part.
 
 Parts
 -----
@@ -95,7 +93,7 @@ After that declare the location of ports.
 This will enable connecting parts to each other, instead of placing them using
 absolute and relative coordinates and ensuring they remain properly co-located
 using finger-crossing guarantees.
-Whenever possible, use interfaces and mating declarations insteaf of pure ports,
+Whenever possible, use interfaces and mating declarations instead of pure ports,
 so that it's easier for PartCAD (including AIs using PartCAD) to determine
 which parts are meant to be connected to which parts, and how exactly they need
 to be connected.
@@ -136,9 +134,9 @@ only these parts and corresponding assembly ideas were easily discoverable?
 
 Help them migrate to PartCAD!
 
-*****************
-How to contrbute?
-*****************
+******************
+How to contribute?
+******************
 
 .. _Environment:
 
@@ -316,6 +314,87 @@ Linux
   environment.
 
   - `Open an existing folder in a container`_
+
+Without VS Code: Dev Containers CLI
+-----------------------------------
+
+If you do not use VS Code — or you are automating the workflow, for example from a coding agent — you can enter the same
+environment from a terminal with the `Dev Containers CLI`_. It reads the same ``.devcontainer/devcontainer.json``, so
+you get the same image, features, mounts, and lifecycle commands the VS Code extension would give you.
+
+Start the environment from the repository root on your host. The first run is slow while features are installed:
+
+.. code-block:: bash
+
+  $ npx --yes @devcontainers/cli up --workspace-folder .
+
+Then run any command inside it:
+
+.. code-block:: bash
+
+  $ npx --yes @devcontainers/cli exec --workspace-folder . <command>
+
+The project virtual environment is not activated automatically and ``pytest``, ``pc``, and ``partcad`` are not on
+``$PATH``, so prefix project commands with ``poetry run``:
+
+.. code-block:: bash
+
+  $ npx --yes @devcontainers/cli exec --workspace-folder . poetry run pc version
+
+.. note::
+
+  ``poetry.toml`` sets ``in-project = true``, so the virtual environment lives at ``./.venv`` inside the bind-mounted
+  workspace and is shared between your host and the container. If you run ``poetry`` on both sides, each will rebuild
+  ``.venv`` because the interpreter paths recorded in it are only valid on one side. Keep Python work on one side.
+
+Committing from the CLI
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Run ``git commit`` **inside** the environment. That is where ``pre-commit`` is installed, by the ``postStartCommand``
+declared in ``.devcontainer/devcontainer.json``:
+
+.. code-block:: bash
+
+  $ npx --yes @devcontainers/cli exec --workspace-folder . git commit -m "<message>"
+
+If you commit on the host instead, the commit fails with ``` `pre-commit` not found ```. The ``.git/hooks/pre-commit``
+script is generated by ``pre-commit install`` running inside the container, so it refers to an interpreter path that
+only exists there. Re-run the commit inside the environment rather than bypassing the hooks with ``--no-verify``.
+
+The VS Code extension copies your host git identity into the container, but the CLI does not, and anything written to
+the container's home directory is lost when the container is recreated. If the commit fails with ``Author identity
+unknown``, set the identity repo-locally — ``.git/config`` lives in the bind-mounted workspace, so it survives
+container recreates and is never committed:
+
+.. code-block:: bash
+
+  $ git config --local user.name "<your name>"
+  $ git config --local user.email "<your email>"
+
+.. warning::
+
+  Do not mount your host ``~/.gitconfig`` into the container to solve this. If it contains ``url.*.insteadOf`` rules
+  that rewrite ``https://github.com/`` to SSH — a common setup — the ``git-lfs`` feature's post-create step will
+  attempt SSH, find no key inside the container, and fail the entire ``up``.
+
+If you sign your commits, note that the VS Code extension forwards your GPG agent automatically but the CLI does not —
+the container will have your public key but no private key, and the commit fails to sign. Forward the agent's extra
+socket when starting the environment, which keeps your private key on the host:
+
+.. code-block:: bash
+
+  $ npx --yes @devcontainers/cli up --workspace-folder . \
+      --mount "type=bind,source=$(gpgconf --list-dirs agent-extra-socket),target=/run/host-gpg-agent.sock"
+
+Then point the container's agent socket at the forwarded one. Note the socket lives under ``/run/user/$(id -u)/gnupg/``,
+not ``~/.gnupg/``:
+
+.. code-block:: bash
+
+  $ gpgconf --kill gpg-agent
+  $ ln -sf /run/host-gpg-agent.sock /run/user/$(id -u)/gnupg/S.gpg-agent
+
+.. _Dev Containers CLI: https://github.com/devcontainers/cli
 
 Install Dependencies
 --------------------

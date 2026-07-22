@@ -1,0 +1,1 @@
+partcad[ai-google]==0.7.146
