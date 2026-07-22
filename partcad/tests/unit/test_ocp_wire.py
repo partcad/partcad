@@ -5,16 +5,18 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-"""Round-trip tests for the wrapper protocol wire format.
+"""Round-trip tests for the flat-BREP wire format.
 
-The wrapper protocol carries OCCT shapes as base64-encoded BREP bytes inside a
-plain JSON envelope. These tests pin down that a shape survives the round trip
-numerically - volume, centre of mass, bounding box - and, most importantly,
-that its 'TopLoc_Location' is not lost, which is the failure mode a BREP round
-trip is most likely to introduce silently.
+A shape travels as ``{"name", "label", "brep"}`` with ``brep`` the base64 of
+``BRepTools.Write_s`` output; an assembly as ``{"name", "label", "assembly":
+[...]}``. These tests pin down that a shape survives the round trip numerically -
+volume, centre of mass, bounding box - that its ``TopLoc_Location`` is not lost,
+that the assembly structure rebuilds into a compound, and that the envelope is
+plain single-line JSON rather than base64-wrapped JSON.
 """
 
 import base64
+import json
 import math
 import os
 import sys
@@ -29,9 +31,9 @@ from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
 from OCP.BRepGProp import BRepGProp
 from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeSphere
 from OCP.GProp import GProp_GProps
-from OCP.gp import gp_Ax1, gp_Ax3, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec
+from OCP.gp import gp_Ax1, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec
 from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS_Builder, TopoDS_Compound, TopoDS_Iterator
+from OCP.TopoDS import TopoDS_Builder, TopoDS_Compound
 
 import partcad  # noqa: F401  (imported for its side effect on sys.path below)
 
@@ -61,19 +63,18 @@ def _bbox(shape):
     return box.Get()
 
 
-def _trsf_values(trsf):
-    return [trsf.Value(i, j) for i in range(1, 4) for j in range(1, 5)]
-
-
 def _assert_close(actual, expected):
     assert len(actual) == len(expected)
     for a, e in zip(actual, expected):
         assert math.isclose(a, e, rel_tol=1e-9, abs_tol=1e-9), f"{actual} != {expected}"
 
 
-def _round_trip(obj):
-    """Send 'obj' through the full wire form and back."""
-    return ocp_wire.deserialize(ocp_wire.serialize({"payload": obj}))["payload"]
+def _assert_same_solid(a, b):
+    va, ca = _volume(a)
+    vb, cb = _volume(b)
+    assert math.isclose(va, vb, rel_tol=1e-9)
+    _assert_close(ca, cb)
+    _assert_close(_bbox(a), _bbox(b))
 
 
 def _translation(x, y, z):
@@ -105,215 +106,164 @@ def _compound():
     return compound
 
 
+def _located(shape, trsf):
+    return shape.Located(TopLoc_Location(trsf))
+
+
+#
+# Shape objects
+#
+
+
 @pytest.mark.parametrize(
     "make_shape",
     [_box, BRepPrimAPI_MakeSphere(7.5).Shape, _compound],
     ids=["solid_box", "solid_sphere", "compound"],
 )
-def test_ocp_wire_solid_round_trip(make_shape):
-    """A 3D shape keeps its volume, centre of mass and bounding box."""
+def test_shape_object_round_trip(make_shape):
     shape = make_shape()
-    result = _round_trip(shape)
-
-    assert result.ShapeType() == shape.ShapeType()
-    assert type(result) is type(ocp_wire.downcast(shape))
-
-    mass, com = _volume(shape)
-    result_mass, result_com = _volume(result)
-    _assert_close([result_mass], [mass])
-    _assert_close(result_com, com)
-    _assert_close(_bbox(result), _bbox(shape))
-    assert result.Orientation() == shape.Orientation()
+    obj = ocp_wire.encode_shape(shape, name="//pkg:x", label="x")
+    assert set(obj) == {"name", "label", "brep"}
+    _assert_same_solid(ocp_wire.decode_shape(obj), shape)
 
 
-def test_ocp_wire_face_round_trip():
-    """A 2D shape keeps its area, centroid and bounding box."""
+def test_shape_object_carries_name_and_label():
+    obj = ocp_wire.encode_shape(_box(), name="//pkg:box", label="my-label")
+    assert obj["name"] == "//pkg:box"
+    assert obj["label"] == "my-label"
+
+
+def test_face_round_trip():
     face = _face()
-    result = _round_trip(face)
-
-    assert result.ShapeType() == face.ShapeType()
-    area, com = _surface(face)
-    result_area, result_com = _surface(result)
-    _assert_close([result_area], [area])
-    _assert_close(result_com, com)
-    _assert_close(_bbox(result), _bbox(face))
+    back = ocp_wire.decode_shape(ocp_wire.encode_shape(face))
+    _assert_close(_surface(back)[0:1], _surface(face)[0:1])
+    _assert_close(_bbox(back), _bbox(face))
 
 
 @pytest.mark.parametrize(
-    "make_shape",
-    [_box, _face, _compound],
-    ids=["solid", "face", "compound"],
+    "trsf",
+    [_translation(3, -4, 5), _rotation()],
+    ids=["translation", "rotation"],
 )
-@pytest.mark.parametrize(
-    "make_trsf",
-    [
-        lambda: _translation(100.0, 200.0, 300.0),
-        _rotation,
-        lambda: _translation(100.0, 200.0, 300.0).Multiplied(_rotation()),
-    ],
-    ids=["translation", "rotation", "combined"],
-)
-def test_ocp_wire_location_survives(make_shape, make_trsf):
-    """The top-level TopLoc_Location must not be lost by the BREP round trip.
-
-    'BRepTools.Write_s()' does record the top-level location, but the envelope
-    also carries it explicitly so that it can be restored if it ever is not.
-    """
-    trsf = make_trsf()
-    shape = make_shape().Moved(TopLoc_Location(trsf))
-    assert not shape.Location().IsIdentity()
-
-    result = _round_trip(shape)
-
-    assert not result.Location().IsIdentity(), "the location was lost"
-    _assert_close(_trsf_values(result.Location().Transformation()), _trsf_values(trsf))
-    _assert_close(_bbox(result), _bbox(shape))
+def test_location_survives(trsf):
+    located = _located(_box(), trsf)
+    back = ocp_wire.decode_shape(ocp_wire.encode_shape(located))
+    _assert_same_solid(back, located)
 
 
-def test_ocp_wire_nested_location_survives():
-    """A location on a child of a compound survives too."""
-    builder = TopoDS_Builder()
-    compound = TopoDS_Compound()
-    builder.MakeCompound(compound)
-    builder.Add(compound, _box().Moved(TopLoc_Location(_translation(100.0, 200.0, 300.0))))
-    builder.Add(compound, BRepPrimAPI_MakeSphere(7.5).Shape())
-
-    result = _round_trip(compound)
-
-    identities = []
-    iterator = TopoDS_Iterator(result)
-    while iterator.More():
-        identities.append(iterator.Value().Location().IsIdentity())
-        iterator.Next()
-    assert identities == [False, True]
-    _assert_close(_bbox(result), _bbox(compound))
+def test_brep_field_is_base64_of_breptools_output():
+    shape = _box()
+    obj = ocp_wire.encode_shape(shape)
+    stream = BytesIO()
+    BRepTools.Write_s(shape, stream)
+    assert base64.b64decode(obj["brep"]) == stream.getvalue()
 
 
-def test_ocp_wire_location_is_restored_when_brep_drops_it():
-    """The explicit location in the marker is a working fallback.
-
-    Simulated by handing 'decode()' a marker whose BREP payload has no
-    location but whose 'loc' field does.
-    """
-    trsf = _translation(100.0, 200.0, 300.0)
-    marker = ocp_wire.encode(_box())
-    assert marker[ocp_wire.MARKER_TOPODS]["loc"] is None
-    marker[ocp_wire.MARKER_TOPODS]["loc"] = _trsf_values(trsf)
-
-    result = ocp_wire.decode(marker)
-
-    assert not result.Location().IsIdentity()
-    _assert_close(_trsf_values(result.Location().Transformation()), _trsf_values(trsf))
-    _assert_close(_bbox(result), _bbox(_box().Moved(TopLoc_Location(trsf))))
+#
+# Assembly objects
+#
 
 
-def test_ocp_wire_location_is_not_applied_twice():
-    """A location that did survive the BREP round trip is left alone."""
-    trsf = _translation(100.0, 200.0, 300.0)
-    shape = _box().Moved(TopLoc_Location(trsf))
-    _assert_close(_bbox(ocp_wire.decode(ocp_wire.encode(shape))), _bbox(shape))
-
-
-def test_ocp_wire_gp_types_round_trip():
-    """Every OCCT type that can cross the wrapper boundary survives."""
-    trsf = _translation(100.0, 200.0, 300.0).Multiplied(_rotation())
-
-    result = _round_trip(trsf)
-    assert isinstance(result, gp_Trsf)
-    _assert_close(_trsf_values(result), _trsf_values(trsf))
-
-    location = TopLoc_Location(trsf)
-    result = _round_trip(location)
-    assert isinstance(result, TopLoc_Location)
-    _assert_close(_trsf_values(result.Transformation()), _trsf_values(location.Transformation()))
-
-    ax1 = gp_Ax1(gp_Pnt(1.0, 2.0, 3.0), gp_Dir(0.0, 1.0, 0.0))
-    result = _round_trip(ax1)
-    assert isinstance(result, gp_Ax1)
-    _assert_close(
-        [result.Location().X(), result.Location().Y(), result.Location().Z()],
-        [1.0, 2.0, 3.0],
-    )
-    _assert_close(
-        [result.Direction().X(), result.Direction().Y(), result.Direction().Z()],
-        [0.0, 1.0, 0.0],
-    )
-
-    ax3 = gp_Ax3(gp_Pnt(1.0, 2.0, 3.0), gp_Dir(0.0, 0.0, 1.0), gp_Dir(1.0, 0.0, 0.0))
-    result = _round_trip(ax3)
-    assert isinstance(result, gp_Ax3)
-    _assert_close(
-        [result.XDirection().X(), result.XDirection().Y(), result.XDirection().Z()],
-        [1.0, 0.0, 0.0],
-    )
-
-    point = _round_trip(gp_Pnt(1.5, -2.5, 3.5))
-    assert isinstance(point, gp_Pnt)
-    _assert_close([point.X(), point.Y(), point.Z()], [1.5, -2.5, 3.5])
-
-
-def test_ocp_wire_envelope_carries_plain_data_unchanged():
-    request = {
-        "tolerance": 0.1,
-        "ascii": False,
-        "viewport_origin": [100, -100, 100],
-        "build_parameters": {"a": 1, "b": "two", "c": None},
-        "patch": {"\\Z": "\nshow(x)\n"},
-    }
-    assert ocp_wire.deserialize(ocp_wire.serialize(request)) == request
-
-
-def test_ocp_wire_envelope_carries_nested_shape_lists():
-    """The build123d and cadquery wrappers return nested lists of shapes."""
+def test_assembly_object_round_trips_to_compound():
     box = _box()
-    response = {
-        "success": True,
-        "exception": None,
-        "shapes": [box, "a string", [_face(), [BRepPrimAPI_MakeSphere(4.0).Shape()]], None],
-    }
-    result = ocp_wire.deserialize(ocp_wire.serialize(response))
-
-    assert result["success"] is True
-    assert result["exception"] is None
-    assert result["shapes"][1] == "a string"
-    assert result["shapes"][3] is None
-    _assert_close([_volume(result["shapes"][0])[0]], [_volume(box)[0]])
-    _assert_close(_bbox(result["shapes"][2][0]), _bbox(_face()))
+    cyl = BRepPrimAPI_MakeCylinder(3.0, 12.0).Shape()
+    asm = ocp_wire.encode_assembly(
+        [ocp_wire.encode_shape(box, name="//p:b", label="b"), ocp_wire.encode_shape(cyl, name="//p:c", label="c")],
+        name="//p:asm",
+        label="asm",
+    )
+    assert set(asm) == {"name", "label", "assembly"}
+    assert ocp_wire.is_assembly_object(asm)
+    compound = ocp_wire.decode_shape(asm)
+    want = _volume(box)[0] + _volume(cyl)[0]
+    assert math.isclose(_volume(compound)[0], want, rel_tol=1e-9)
 
 
-def test_ocp_wire_exceptions_become_strings():
-    """Exceptions travel as messages: JSON cannot carry a live exception."""
+def test_nested_sub_assembly_survives_json():
+    box = _box()
+    sub = ocp_wire.encode_assembly([ocp_wire.encode_shape(box)], name="//p:sub", label="sub")
+    top = ocp_wire.encode_assembly([ocp_wire.encode_shape(box), sub], name="//p:top", label="top")
+    # round-trip through JSON text, as the cache does
+    top = json.loads(json.dumps(top))
+    assert ocp_wire.is_assembly_object(top["assembly"][1])
+    compound = ocp_wire.decode_shape(top)
+    assert math.isclose(_volume(compound)[0], 2 * _volume(box)[0], rel_tol=1e-9)
+
+
+def test_shape_vs_assembly_discrimination():
+    shape_obj = ocp_wire.encode_shape(_box())
+    asm_obj = ocp_wire.encode_assembly([shape_obj])
+    assert ocp_wire.is_shape_object(shape_obj) and not ocp_wire.is_assembly_object(shape_obj)
+    assert ocp_wire.is_assembly_object(asm_obj) and not ocp_wire.is_shape_object(asm_obj)
+
+
+#
+# Envelope
+#
+
+
+def test_envelope_carries_plain_data_unchanged():
+    payload = {"success": True, "exception": None, "count": 3, "opts": {"tol": 0.1}, "names": ["a", "b"]}
+    assert ocp_wire.deserialize(ocp_wire.serialize(payload)) == payload
+
+
+def test_envelope_carries_a_shape_under_a_key():
+    shape = _box()
+    wire = ocp_wire.serialize({"success": True, "exception": None, "shape": shape})
+    result = ocp_wire.deserialize(wire)
+    assert result["success"] is True and result["exception"] is None
+    _assert_same_solid(result["shape"], shape)
+
+
+def test_envelope_carries_nested_shape_lists():
+    shapes = [_box(), None, "ignored", [BRepPrimAPI_MakeCylinder(3.0, 12.0).Shape()]]
+    result = ocp_wire.deserialize(ocp_wire.serialize({"shapes": shapes}))["shapes"]
+    _assert_same_solid(result[0], _box())
+    assert result[1] is None and result[2] == "ignored"
+    _assert_same_solid(result[3][0], BRepPrimAPI_MakeCylinder(3.0, 12.0).Shape())
+
+
+def test_exceptions_become_strings():
     result = ocp_wire.deserialize(ocp_wire.serialize({"exception": ValueError("boom")}))
     assert result["exception"] == "boom"
 
-    # 'None' must stay 'None' - consumers distinguish it from an empty message.
-    result = ocp_wire.deserialize(ocp_wire.serialize({"exception": None}))
-    assert result["exception"] is None
+
+def test_non_shape_occt_objects_drop_to_none():
+    # A TopLoc_Location or gp_Ax1 (a build123d visualization helper) is not
+    # geometry; it drops to null, which every consumer already skips.
+    result = ocp_wire.deserialize(ocp_wire.serialize({"shapes": [TopLoc_Location(), gp_Ax1(gp_Pnt(), gp_Dir(0, 0, 1))]}))
+    assert result["shapes"] == [None, None]
 
 
-def test_ocp_wire_envelope_does_not_execute_payload():
-    """Unlike pickle, the envelope cannot name a type or a callable."""
-    payload = '{"a": {"__reduce__": ["os.system", ["echo pwned"]]}}'
-    assert ocp_wire.loads(payload) == {"a": {"__reduce__": ["os.system", ["echo pwned"]]}}
+def test_unknown_python_type_is_rejected():
+    with pytest.raises(TypeError):
+        ocp_wire.serialize({"x": object()})
 
 
-def test_ocp_wire_rejects_reserved_marker_keys():
-    """Payload data may not shadow a marker, which would corrupt decoding."""
-    with pytest.raises(ValueError):
-        ocp_wire.dumps({ocp_wire.MARKER_TOPODS: "not a shape"})
+#
+# Wire form
+#
 
 
-def test_ocp_wire_marker_carries_plain_brep_bytes():
-    """The marker payload is the very same BREP stream OCCT writes itself."""
-    box = _box()
+def test_serialize_is_plain_single_line_json_not_base64():
+    wire = ocp_wire.serialize({"success": True, "shape": _box()})
+    assert "\n" not in wire
+    # It parses directly as JSON (the old format base64-wrapped the whole thing).
+    parsed = json.loads(wire)
+    assert parsed["success"] is True
+    assert ocp_wire.is_shape_object(parsed["shape"])
 
-    stream = BytesIO()
-    BRepTools.Write_s(box, stream)
-    assert ocp_wire.shape_to_brep(box) == stream.getvalue()
 
-    shape = ocp_wire.shape_from_brep(stream.getvalue())
-    _assert_close([_volume(shape)[0]], [_volume(box)[0]])
+def test_deserialize_takes_the_last_nonempty_line():
+    wire = ocp_wire.serialize({"success": True, "shape": _box()})
+    noisy = "some wrapper progress\n\n" + wire + "\n"
+    result = ocp_wire.deserialize(noisy)
+    assert result["success"] is True
+    _assert_same_solid(result["shape"], _box())
 
-    marker = ocp_wire.encode(box)
-    assert set(marker) == {ocp_wire.MARKER_TOPODS}
-    assert base64.b64decode(marker[ocp_wire.MARKER_TOPODS]["brep"]) == stream.getvalue()
+
+def test_envelope_does_not_execute_payload():
+    # There is no code path by which decoding runs arbitrary code; a dict that
+    # merely looks structured comes back as plain data.
+    payload = {"module": "os", "callable": "system", "args": ["echo hi"]}
+    assert ocp_wire.deserialize(ocp_wire.serialize(payload)) == payload
