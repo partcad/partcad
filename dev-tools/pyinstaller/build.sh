@@ -26,6 +26,15 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+# On Windows this script runs in Git Bash, but the Python, pip and PyInstaller
+# it drives are native Windows programs: they read a Git Bash path like
+# "/d/a/partcad" as the nonexistent "\d\a\partcad". `cygpath -m` converts it to
+# the mixed form, "D:/a/partcad", which the native tools and Git Bash both
+# understand -- unlike `cygpath -w`, whose backslashes would need re-quoting
+# every time the path is interpolated below.
+if command -v cygpath >/dev/null 2>&1; then
+  REPO_ROOT="$(cygpath -m "${REPO_ROOT}")"
+fi
 SPEC_DIR="${REPO_ROOT}/dev-tools/pyinstaller"
 OUTPUT_DIR="${REPO_ROOT}/dist/standalone"
 PYTHON="${PYTHON:-python3}"
@@ -73,8 +82,11 @@ esac
 PLATFORM="${OS_NAME}-${ARCH_NAME}"
 if [ "${OS_NAME}" = "windows" ]; then
   ARCHIVE_EXT="zip"
+  # PyInstaller names the executables `pc.exe` and `partcad.exe` there.
+  EXE_SUFFIX=".exe"
 else
   ARCHIVE_EXT="tar.gz"
+  EXE_SUFFIX=""
 fi
 
 VERSION="$("${PYTHON}" -c "
@@ -161,8 +173,8 @@ echo "==> Smoke testing the bundle"
 # depends on the source tree still works when started next to it.
 SMOKE_DIR="$(mktemp -d)"
 trap 'rm -rf "${SMOKE_DIR}"' EXIT
-(cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/pc" version)
-(cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/partcad" --help >/dev/null)
+(cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/pc${EXE_SUFFIX}" version)
+(cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/partcad${EXE_SUFFIX}" --help >/dev/null)
 
 if [ "${CREATE_ARCHIVE}" = "0" ]; then
   echo "==> Bundle: ${BUNDLE_DIR}"
