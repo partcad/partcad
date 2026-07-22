@@ -78,6 +78,27 @@ one). Run ``pc <command> --help`` to see the options for any command.
 For a full command reference, see :doc:`cli`.
 
 
+=====================================
+Latest Development Version of PartCAD
+=====================================
+
+You can install the latest development version of PartCAD from the ``devel`` branch on
+`PartCAD <https://github.com/partcad/partcad>`_. First, create an isolated Python environment,
+and ensure ``pip``, ``setuptools``, and ``wheel`` are upgraded, then follow the instructions
+below to install the core module and the CLI tool.
+
+1. **Install or upgrade the Core Python Module**
+
+   .. code-block:: shell
+
+      $ python -m pip install --upgrade git+https://github.com/partcad/partcad.git@devel#subdirectory=partcad
+
+2. **Install or upgrade the CLI**
+
+   .. code-block:: shell
+
+      $ python -m pip install --upgrade git+https://github.com/partcad/partcad.git@devel#subdirectory=partcad-cli
+
 =============
 Python module
 =============
