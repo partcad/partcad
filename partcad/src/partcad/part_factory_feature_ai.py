@@ -125,8 +125,9 @@ class PartFactoryFeatureAi(Ai):
         from partcad import __version__
 
         date_string = datetime.now().strftime("%b %d, %Y")
-        author = Git().config("--global", "--get", "user.name")
-        if not author:
+        try:
+            author = Git().config("--global", "--get", "user.name") or "Anonymous"
+        except Exception:
             author = "Anonymous"
 
         comment_syntax = "//" if "openscad" in self.script_type.lower() else "#"

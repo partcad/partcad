@@ -60,9 +60,9 @@ def generate_cad_file(provider: str, kind: str, description: str, path: str = No
                 raise RuntimeError("Failed to load the input part: no part returned")
 
             if not path:
-                current_dir = Path.cwd()
-                target_path = current_dir / Path(part.path).name
-                part.path = str(target_path)
+                path = Path.cwd()
+
+            part.path = str(Path(path) / Path(part.path).name)
 
             asyncio.run(get_shape_async(part, ctx))
 
