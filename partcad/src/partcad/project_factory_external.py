@@ -57,6 +57,7 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
             self.ctx,
             self.name,
             self.path,
+            plugin_ref=self.plugin,
             cache=self.cache,
             inherited_config=self.inherited_config,
         )

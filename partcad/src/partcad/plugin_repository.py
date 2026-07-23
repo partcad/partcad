@@ -16,6 +16,10 @@ from . import telemetry
 
 @telemetry.instrument()
 class Repository(Plugin):
+    # Set by the factory to the coroutine that fetches a key from the backing
+    # data source (in-process, a subprocess, or a remote endpoint).
+    query_data = None
+
     def __init__(self, name: str, config: dict[str, typing.Any] = {}, target_project_name=None):
         super().__init__(name, config, target_project_name)
 
@@ -23,3 +27,18 @@ class Repository(Plugin):
         if not self.caps:
             self.caps = await self.query_caps(PluginRequestRepositoryCaps())
         return self.caps
+
+    async def get_data(self, key: str):
+        """Return the value stored under 'key' in this repository.
+
+        Keys address any data the package exposes uniformly - object
+        enumerations, single objects, child packages, metadata - so that new
+        kinds of data need no new methods here. See ProjectExternalRepository
+        for the key conventions.
+        """
+        if self.query_data is None:
+            return None
+        response = await self.query_data(key)
+        if response is None:
+            return None
+        return response.get("result")

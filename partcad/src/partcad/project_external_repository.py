@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import asyncio
 import threading
 
 from .project_plugin import ProjectPlugin
@@ -21,19 +22,36 @@ class ProjectExternalRepository(ProjectPlugin):
     rather than a whole 'list' or a whole 'get' - keeps entries small and
     composable: a paged listing becomes several keyed entries, and many
     single-object fetches can share the enumeration entry instead of each
-    producing its own. Repository query implementations are expected to route
-    every call to the backing plugin through 'request()'.
+    producing its own. All access to the backing plugin goes through 'request()'.
 
-    The keys are cache keys, so they must be stable and fully identify the
-    request (e.g. 'objects/part', 'objects/part/bolt_m4', 'meta'). The value is
-    whatever the handler returns; it is treated as opaque here.
+    Data is addressed as key/value pairs so that new metadata or new kinds of
+    objects can be introduced without changing this class:
+
+        objects/<kind>              -> {name: config, ...}   (enumeration)
+        objects/<kind>/<name>       -> config                (single fetch)
+        deps                        -> [child package names]
+        meta                        -> package-level metadata
+
+    'get_data(key)' is the single method a repository plugin must implement; the
+    accessors below are expressed entirely in terms of it.
     """
 
-    def __init__(self, ctx, name, path, repository=None, cache=None, config_obj=None, inherited_config=None):
-        # The backing repository plugin (the singleton that answers queries) and
-        # the on-disk cache scoped to this repository instance. Both may be None
-        # while the wiring is being built out; 'request()' still memoizes
-        # in-memory so callers can rely on the contract regardless.
+    def __init__(
+        self,
+        ctx,
+        name,
+        path,
+        plugin_ref: str = None,
+        repository=None,
+        cache=None,
+        config_obj=None,
+        inherited_config=None,
+    ):
+        # 'plugin_ref' is the '<package>:<repository>' reference to the backing
+        # repository plugin; it is resolved to the actual Repository object
+        # lazily, on first use, because the package that hosts it may not be
+        # fully loaded when this package is constructed.
+        self._plugin_ref = plugin_ref
         self._repository = repository
         self._cache = cache
         self._request_cache: dict[str, object] = {}
@@ -45,11 +63,9 @@ class ProjectExternalRepository(ProjectPlugin):
 
         'handler' performs the actual (expensive, possibly remote) call. The
         first request for a key runs it and caches the result; later requests
-        for the same key return the cached value without calling 'handler'
-        again. Concurrent first-requests for the same key are collapsed to a
-        single 'handler' invocation.
+        for the same key return the cached value. Concurrent first-requests for
+        the same key are collapsed to a single 'handler' invocation.
         """
-        # Fast path: already memoized in this process.
         with self._request_lock:
             if key in self._request_cache:
                 return self._request_cache[key]
@@ -65,3 +81,38 @@ class ProjectExternalRepository(ProjectPlugin):
             # 'setdefault' so a racing request that already stored a value wins
             # and every caller observes the same object.
             return self._request_cache.setdefault(key, value)
+
+    def _get_repository(self):
+        """Resolve the backing repository plugin, once, on first use."""
+        if self._repository is None and self._plugin_ref is not None:
+            package_name, repository_name = self.ctx.get_project(self.name).resolve(self._plugin_ref)
+            source = self.ctx.get_project(package_name)
+            if source is not None:
+                self._repository = source.get_repository(repository_name)
+            if self._repository is None:
+                pc_logging.error("%s: repository plugin not found: %s" % (self.name, self._plugin_ref))
+        return self._repository
+
+    def get_data(self, key: str):
+        """Fetch the value for 'key' from the repository plugin (cached)."""
+
+        def handler():
+            repository = self._get_repository()
+            if repository is None:
+                return None
+            # The repository query is async (it talks to a subprocess/endpoint);
+            # bridge it here. This is safe: enumeration is only ever first
+            # triggered from a synchronous accessor, never from within a running
+            # event loop (see Context.import_all / the CLI entry points).
+            return asyncio.run(repository.get_data(key))
+
+        return self.request(key, handler)
+
+    # --- Object-access hooks (see Project) sourced from the repository ---
+
+    def _enumerate_object_configs(self, kind):
+        configs = self.get_data("objects/" + kind)
+        return configs if configs else {}
+
+    def _fetch_object_config(self, kind, name):
+        return self.get_data("objects/" + kind + "/" + name)

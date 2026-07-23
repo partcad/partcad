@@ -1,52 +1,55 @@
-# Repository plugin: parts listed over a remote endpoint
+# Repository plugin: a hierarchy of packages
 
-This example demonstrates a package whose parts are **enumerated and fetched
-over network calls**, rather than read from a local file (as in
-`../plugin_repository_basic`).
-
-The "remote" endpoint is a small Flask server implemented inside this same
-package. Conceptually it is a remote server: the repository plugin talks to it
-over HTTP, so the same code would work against a real remote repository by
-changing only the endpoint URL.
+This example extends `../plugin_repository_basic` from a single package to a
+**hierarchy of packages**, all served by one repository plugin.
 
 ## What it demonstrates
 
-- `type: external` import backed by a repository plugin (`type: basic`).
-- The plugin answering the `list` query by calling the endpoint, so the set of
-  parts is discovered at access time, not at package-load time.
-- The plugin answering `get <name>` by fetching a single part's definition,
-  without listing the whole repository first.
+- A top-level `type: external` package that, when its children are listed,
+  reports that it **contains several sub-packages**.
+- Each sub-package is itself an `external` package backed by the same repository
+  plugin, forwarding the same queries to the plugin with an additional
+  **`subfolder`** key that scopes the request to that part of the tree.
+- Inner packages define their own lists of **sketches, parts and assemblies**,
+  each enumerated and fetched lazily.
+- The top-level package also hosts a **supply provider** that every inner part
+  can be quoted/ordered through — showing that a plugin-backed package is
+  indistinguishable from a local one: it can host any kind of object, including
+  providers, and can have children.
+
+## Structure served by the plugin
+
+```
+example/                         (external; subfolder="")
+  ├── brackets/                  (external; subfolder="brackets")
+  │     ├── sketches: ...
+  │     └── parts:    ...
+  ├── motors/                    (external; subfolder="motors")
+  │     ├── parts:      ...
+  │     └── assemblies: ...
+  └── providers:
+        supplier                 (used by parts across all sub-packages)
+```
+
+Listing the top-level package returns its child package names (the `deps` key);
+listing a child forwards the object queries with its `subfolder`; fetching a
+part forwards the same with the object name.
 
 ## Intended usage
 
 ```shell
-# starts the bundled endpoint, then queries it through the package
-pc list parts example
-pc inspect example:<part>
-```
-
-## Consumption (see partcad.yaml)
-
-```yaml
-dependencies:
-  example:
-    type: external
-    plugin: :remote        # a package served by the 'remote' repository plugin
-
-repositories:
-  remote:
-    type: basic
-    parameters:
-      endpoint:
-        type: string
-        default: http://127.0.0.1:5000
+pc list packages example
+pc list parts -r example
+pc inspect example/motors:<assembly>
+pc supply quote example/brackets:<part>
 ```
 
 ## Status
 
-The consumption syntax above is final. The endpoint server (`server.py`) and
-the repository plugin script (`remote.py`) implement the generic key/value
-data-access protocol (`ProjectExternalRepository.request()` with the
-`objects/<kind>` and `objects/<kind>/<name>` keys). They are pending the
-finalization of that protocol; this README specifies the contract they
-implement.
+The consumption syntax is final and mirrors `../plugin_repository_basic`. The
+plugin script that serves the hierarchy implements the generic key/value
+data-access protocol — the same accessors as a local package
+(`object_config` / `object_configs` / child enumeration), keyed by
+`<subfolder>/deps` and `<subfolder>/objects/<kind>[/<name>]`, cached through
+`ProjectExternalRepository.request()`. It is pending finalization of that
+protocol; this README specifies the contract it implements.

@@ -31,10 +31,19 @@ class PluginFactoryRepositoryBasic(PluginFactoryRepository):
 
     def _create(self, config):
         super()._create(config)
+        # The generic key/value accessor every plugin-backed package uses.
+        self.plugin.query_data = self.query_data
+        # Legacy request-shaped queries, kept for compatibility.
         self.plugin.query_list_deps = lambda x: {"result": []}
         self.plugin.query_list = self.query_list
         self.plugin.query_get = self.query_get
         self.plugin.query_search = self.query_search
+
+    async def query_data(self, key: str):
+        # A single 'get' call parameterized by the key. The plugin script
+        # dispatches on the key, so introducing new data (metadata, a new object
+        # kind, a subfolder) needs no new query method here.
+        return await self.query_script(self.plugin, "get", {"key": key})
 
     async def query_list(self, request: PluginRequestRepositoryList):
         return await self.query_script(self.plugin, "list", request.compose())
