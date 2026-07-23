@@ -1,8 +1,6 @@
 import os
 import threading
 import time
-import pickle
-import base64
 import sys
 from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
 from OCP.gp import gp_Pnt
@@ -14,6 +12,7 @@ from . import wrapper
 from .exception import PartFactoryError
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
+import ocp_serialize
 
 class PartFactoryObj(PartFactoryFile):
     MIN_SIMPLE_INFLIGHT = 1
@@ -129,7 +128,9 @@ class PartFactoryObj(PartFactoryFile):
         request = {"build_parameters": {}}
 
         # Serialize the request
-        request_serialized = base64.b64encode(pickle.dumps(request)).decode()
+        request["name"] = "%s:%s" % (part.project_name, part.name)
+        request["label"] = part.name
+        request_serialized = ocp_serialize.serialize(request)
 
         # Run the subprocess and handle the response
         try:
@@ -149,7 +150,7 @@ class PartFactoryObj(PartFactoryFile):
                 pc_logging.error(errors)
                 raise Exception(errors)
 
-            response = pickle.loads(base64.b64decode(response_serialized))
+            response = ocp_serialize.deserialize(response_serialized)
             if not response.get("success", False):
                 pc_logging.error(response["exception"])
                 raise PartFactoryError(response["exception"])

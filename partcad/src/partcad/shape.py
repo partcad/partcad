@@ -10,10 +10,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import asyncio
-import base64
 import copy
 import os
-import pickle
 import sys
 import tempfile
 import threading
@@ -33,7 +31,7 @@ if TYPE_CHECKING:
     from partcad.project import Project
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from ocp_serialize import register as register_ocp_helper
+import ocp_serialize
 
 from . import telemetry
 
@@ -235,7 +233,7 @@ class Shape(ShapeConfiguration):
 
                 if cache_hash:
                     if is_cacheable:
-                        to_cache = {self.kind: shape}
+                        to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
                         if self.components and len(self.components) > 0:
                             to_cache["cmps"] = self.components
                         to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
@@ -248,6 +246,22 @@ class Shape(ShapeConfiguration):
                     # Let the file cache tell us if we need to cache this in memory
                     self._wrapped = shape
                 return shape
+
+    async def get_cache_value(self, ctx, shape):
+        """The value stored in the shape cache under 'self.kind'.
+
+        A plain shape is stored as a single {"name", "label", "brep"} object.
+        Assembly overrides this to store its nested tree so that the hierarchy -
+        names, labels and sub-assemblies - survives caching, which a flat
+        compound would lose.
+        """
+        if shape is None:
+            return None
+        name = getattr(self, "name", None)
+        project = getattr(self, "project_name", None)
+        full_name = ("%s:%s" % (project, name)) if project and name else name
+        label = self.config.get("label", name) if isinstance(self.config, dict) else name
+        return ocp_serialize.encode_shape(shape, name=full_name, label=label)
 
     async def convert(self, part_type: str, ctx=None, **kwargs):
         """Convert this shape to 'part_type' and return the result in memory.
@@ -517,10 +531,8 @@ class Shape(ShapeConfiguration):
             "line_weight": line_weight,
             "viewport_origin": viewport_origin,
         }
-        register_ocp_helper()
-        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{pickle.dumps}"):
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{ocp_serialize.serialize}"):
+            request_serialized = ocp_serialize.serialize(request)
 
         # We don't care about customer preferences much here
         # as this is expected to be hermetic.
@@ -542,8 +554,7 @@ class Shape(ShapeConfiguration):
             pc_logging.error(errors)
             raise Exception(errors)
 
-        response = base64.b64decode(response_serialized)
-        result = pickle.loads(response)
+        result = ocp_serialize.deserialize(response_serialized)
         if not result["success"]:
             pc_logging.error("RenderSVG failed: %s:%s: %s" % (self.project_name, self.name, result["exception"]))
         if "exception" in result and not result["exception"] is None:
@@ -655,7 +666,7 @@ class Shape(ShapeConfiguration):
             "stl": ["cadquery-ocp==7.7.2"],
             "obj": ["cadquery-ocp==7.7.2"],
             "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
-            "gltf": ["cadquery-ocp==7.7.2"],
+            "gltf": ["cadquery-ocp==7.7.2", "build123d==0.8.0"],
             "iges": ["cadquery-ocp==7.7.2"],
             "threejs": ["cadquery-ocp==7.7.2"],
         }
@@ -665,10 +676,10 @@ class Shape(ShapeConfiguration):
             if filepath and os.path.isdir(filepath):
                 self.config_obj.setdefault("render", {})["output_dir"] = filepath
 
-            if format_name == "gltf":
-                obj = await self.convert("build123d", ctx)
-            else:
-                obj = await self.get_wrapped(ctx)
+            # The wire format carries OCCT geometry, not build123d objects, so glTF
+            # is handed the raw shape too and the wrapper rebuilds the build123d
+            # wrapper it needs on the far side.
+            obj = await self.get_wrapped(ctx)
 
             if obj is None:
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
@@ -730,10 +741,7 @@ class Shape(ShapeConfiguration):
                     request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
                     request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
 
-                register_ocp_helper()
-
-                picklestring = pickle.dumps(request)
-                request_serialized = base64.b64encode(picklestring).decode()
+                request_serialized = ocp_serialize.serialize(request)
 
                 runtime = ctx.get_python_runtime(version="3.11")
 
@@ -767,8 +775,7 @@ class Shape(ShapeConfiguration):
                 # Handle response
                 result = {}
                 try:
-                    response_bytes = base64.b64decode(cleaned_response)
-                    result = pickle.loads(response_bytes)
+                    result = ocp_serialize.deserialize(cleaned_response)
                 except Exception as e:
                     pc_logging.error(f"Failed to deserialize response: {e}")
 

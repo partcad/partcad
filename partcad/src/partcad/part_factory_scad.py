@@ -8,9 +8,7 @@
 #
 
 import asyncio
-import base64
 import os
-import pickle
 import shutil
 import subprocess
 import sys
@@ -22,7 +20,7 @@ from . import telemetry
 from . import wrapper
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-from ocp_serialize import register as register_ocp_helper
+import ocp_serialize
 
 
 @telemetry.instrument()
@@ -108,9 +106,9 @@ class PartFactoryScad(PartFactoryFile):
             wrapper_path = wrapper.get("import_mesh.py")
 
             request = {"fallback_import_stl": True}
-            register_ocp_helper()
-            picklestring = pickle.dumps(request)
-            request_serialized = base64.b64encode(picklestring).decode()
+            request["name"] = "%s:%s" % (part.project_name, part.name)
+            request["label"] = part.name
+            request_serialized = ocp_serialize.serialize(request)
 
             await self.runtime.ensure_async("ocp-tessellate==3.0.9")
             await self.runtime.ensure_async("typing_extensions==4.12.2")
@@ -136,9 +134,7 @@ class PartFactoryScad(PartFactoryFile):
                 return None
 
             try:
-                response = base64.b64decode(response_serialized)
-                register_ocp_helper()
-                result = pickle.loads(response)
+                result = ocp_serialize.deserialize(response_serialized)
             except Exception as e:
                 part.error("%s: %s" % (part.name, e))
                 return None

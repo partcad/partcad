@@ -79,7 +79,15 @@ def exception(
 ):
     _track_error(args)
     logging.getLogger("partcad").exception(*args)
-    sentry_sdk.capture_exception(args[0])
+    # Several callers pass a preformatted string rather than an exception
+    # object (e.g. logging a wrapper's already-stringified error). Sentry's
+    # capture_exception rejects a non-exception with "Expected Exception object
+    # to report", which would turn the error being logged into a crash of the
+    # logging call itself. Route non-exceptions to capture_message instead.
+    if args and isinstance(args[0], BaseException):
+        sentry_sdk.capture_exception(args[0])
+    elif args:
+        sentry_sdk.capture_message(str(args[0]), level="error")
 
 
 # Create 'ops' that are used for dependency injection of the logic to control
