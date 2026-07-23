@@ -24,6 +24,13 @@ getting tested on Linux, MacOS and Windows.
 
   On Ubuntu, try ``apt install libcairo2-dev`` if ``pip install`` fails to install ``cairo``.
 
+.. note::
+
+  Git does not need to be installed. PartCAD talks to git servers itself, through the
+  ``libgit2`` library that comes with its dependencies, so packages imported from git
+  repositories are cloned and updated without the ``git`` command line tool. Where git is
+  installed, PartCAD still reads its configuration: see :ref:`git-configuration`.
+
 The commands and options supported by PartCAD CLI:
 
 .. code-block:: text

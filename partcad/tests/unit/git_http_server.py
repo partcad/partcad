@@ -23,8 +23,33 @@ import subprocess
 import threading
 from contextlib import contextmanager
 
+import pygit2
 from flask import Flask, Response, request
 from werkzeug.serving import make_server
+
+
+def mirror(source, target, default_branch="main") -> None:
+    """Make 'target' a bare repository serving everything 'source' has.
+
+    A bare clone made with pygit2 still files the branches it took under
+    refs/remotes/origin/*, which is not where a served repository keeps them:
+    upload-pack offers refs/heads/*, and that is what a client's refspec
+    matches. Left as they are, every branch but the default one would be
+    invisible to anything cloning from here, so they are moved.
+    """
+    pygit2.clone_repository(str(source), str(target), bare=True)
+
+    repo = pygit2.Repository(str(target))
+    for name in list(repo.references):
+        if not name.startswith("refs/remotes/origin/"):
+            continue
+        ref = repo.references[name]
+        short = name.removeprefix("refs/remotes/origin/")
+        if short != "HEAD":
+            repo.references.create("refs/heads/%s" % short, ref.target, force=True)
+        repo.references.delete(name)
+
+    repo.set_head("refs/heads/%s" % default_branch)
 
 
 def _make_app(project_root: str, protocol_v2: bool) -> Flask:

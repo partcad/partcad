@@ -16,7 +16,7 @@ python-jsonrpc-server
 
 # partcad
 pyyaml>=6.0.1
-GitPython>=3.1.40
+pygit2>=1.15.0
 ruamel.yaml>=0.18.5
 setuptools
 jinja2
