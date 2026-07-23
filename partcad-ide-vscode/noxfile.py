@@ -12,12 +12,19 @@ import nox  # pylint: disable=import-error
 
 
 def _install_bundle(session: nox.Session) -> None:
+    # Deliberately without "--implementation py". That flag keeps pip to wheels
+    # built for no particular interpreter, which is right for the template this
+    # file came from, whose bundle is pure Python. This one has never been:
+    # aiohttp, cffi, pyyaml, ruamel.yaml.clib and ujson all carry compiled code,
+    # and the flag only pushed pip past their wheels onto the sdists, which it
+    # then built here against whatever the machine happened to have. pygit2 is
+    # where that stops working, because building it needs libgit2's headers,
+    # which no runner has. Taking the published wheels instead leaves the bundle
+    # exactly as platform-specific as it already was, minus the build.
     session.install(
         "-t",
         "./bundled/libs",
         "--no-cache-dir",
-        "--implementation",
-        "py",
         "--no-deps",
         "--upgrade",
         "-r",
