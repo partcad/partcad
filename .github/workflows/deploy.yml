@@ -12,6 +12,12 @@ permissions:
   contents: write
 
 jobs:
+  # The standalone bundles: the same tools packaged with their own Python
+  # interpreter, for users who have none. They are attached to the same GitHub
+  # release as the wheels, which is where "install.sh" downloads them from.
+  build-standalone:
+    uses: ./.github/workflows/build-standalone.yml
+
   # Keep the "build" job identical to "python-build.yml".
   # TODO(clairbee): include "python-build.yml" instead
   build:
@@ -79,6 +85,9 @@ jobs:
     name: Publish to PyPI
     needs:
       - build
+      # Deliberately blocking: a release that carries the wheels but not the
+      # bundles is a release "install.sh" cannot install.
+      - build-standalone
     runs-on: ubuntu-24.04
     environment:
       name: pypi
@@ -101,6 +110,34 @@ jobs:
           name: python-package-distributions-cli
           path: dist
 
+      # Kept out of "dist", which is uploaded to PyPI as a whole.
+      - name: Download standalone bundles
+        uses: actions/download-artifact@v8
+        with:
+          pattern: partcad-standalone-*
+          merge-multiple: true
+          path: standalone
+
+      # "install.sh" derives an asset name from `uname` and fails for the user
+      # if that asset is not on the release. Downloading artifacts does not fail
+      # when none match, so check here, before the release exists, rather than
+      # discovering a platform is missing after it is published.
+      - name: Check the standalone bundles are complete
+        run: |
+          missing=0
+          # The platforms built by "build-standalone.yml".
+          for platform in linux-x86_64 macos-arm64 windows-x86_64; do
+            archive=$(find standalone -type f -name "partcad-*-${platform}.*" ! -name "*.sha256")
+            checksum=$(find standalone -type f -name "partcad-*-${platform}.*.sha256")
+            if [ -z "${archive}" ] || [ -z "${checksum}" ]; then
+              echo "::error::no standalone bundle for ${platform}"
+              missing=1
+            else
+              echo "${archive} $(stat -c%s "${archive}") bytes"
+            fi
+          done
+          exit "${missing}"
+
       - name: Determine the release tag
         if: github.ref == 'refs/heads/main'
         run: |
@@ -115,6 +152,7 @@ jobs:
         run: |
           gh release create '${{ env.MERGED_TAG }}' --repo '${{ github.repository }}' --notes "";
           gh release upload '${{ env.MERGED_TAG }}' dist/** --repo '${{ github.repository }}'
+          gh release upload '${{ env.MERGED_TAG }}' standalone/** --repo '${{ github.repository }}'
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

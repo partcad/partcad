@@ -78,6 +78,13 @@ poetry run behave                                                               
 
 Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
 
+### Packaging
+
+Two artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI) and the standalone
+PyInstaller bundles for users who have no Python. Adding a runtime dependency, an optional extra, or a file
+that is read at runtime can be invisible to the frozen bundle and break it while the wheels stay fine — see
+`dev-tools/pyinstaller/README.md` before doing any of those.
+
 ### Committing
 
 This repo uses `pre-commit` (config at `dev-tools/pre-commit-config.yaml`) to run formatting/lint checks,

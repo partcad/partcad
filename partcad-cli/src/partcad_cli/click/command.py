@@ -22,7 +22,16 @@ from partcad_cli.click.cli_context import CliContext
 global cli_span
 cli_span: pc.telemetry.trace.Span = None
 
-locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+try:
+    locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+except locale.Error:
+    # A machine that carries no en_US.UTF-8 locale must not fail before the
+    # first command runs. Minimal container images and the bare machines the
+    # standalone bundle targets frequently have only "C" generated.
+    try:
+        locale.setlocale(locale.LC_ALL, "C.UTF-8")
+    except locale.Error:
+        pass
 
 if True:
     # IMPORTANT:

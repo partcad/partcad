@@ -210,6 +210,19 @@ pip install -U partcad-cli
 - On **macOS**, make sure XCode and command lines tools are installed. Also, use `mamba` should you experience
   difficulties on macOS with the ARM architecture.
 
+### Command-Line Interface without Python
+
+If Python is not installed, or you would rather not maintain a Python environment for PartCAD, install the
+standalone build instead. It is the same `pc` and `partcad` commands, packaged with their own interpreter:
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh
+```
+
+It installs into `~/.local/share/partcad` and links the commands into `~/.local/bin`, without `sudo`. See
+[Installation](https://partcad.readthedocs.io/en/latest/installation.html) for the options, for Windows, and for
+uninstalling.
+
 ### PartCAD development
 
 Refer to the [Quick Start] guide for step-by-step instructions on setting up your development environment, adding
