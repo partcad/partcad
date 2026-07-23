@@ -50,3 +50,23 @@ def test_default_python_version_is_supported():
     major, minor = (int(part) for part in sandbox_versions.DEFAULT_PYTHON_VERSION.split("."))
     assert (major, minor) >= (3, 10)
     assert (major, minor) <= (3, 14)
+
+
+@pytest.mark.parametrize(
+    "version, minimum, expected",
+    [
+        ("3.10", "3.11", False),
+        ("3.11", "3.11", True),
+        ("3.14", "3.11", True),
+        # Numeric, not lexicographic: "3.9" > "3.11" as strings.
+        ("3.9", "3.11", False),
+    ],
+)
+def test_is_at_least(version, minimum, expected):
+    assert sandbox_versions.is_at_least(version, minimum) is expected
+
+
+def test_cadquery_floor_excludes_the_oldest_supported_python():
+    """CadQuery publishes nothing for 3.10, so sandboxes there must skip it."""
+    assert not sandbox_versions.is_at_least("3.10", sandbox_versions.MIN_PYTHON_VERSION_CADQUERY)
+    assert sandbox_versions.is_at_least("3.11", sandbox_versions.MIN_PYTHON_VERSION_CADQUERY)

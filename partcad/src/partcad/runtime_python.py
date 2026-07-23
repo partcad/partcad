@@ -284,7 +284,13 @@ class PythonRuntime(runtime.Runtime):
                     # Preinstall the most common packages to avoid race conditions
                     self.ensure_onced_locked(sandbox_versions.OCP_TESSELLATE)
                     self.ensure_onced_locked(sandbox_versions.NLOPT)
-                    self.ensure_onced_locked(sandbox_versions.CADQUERY)
+                    # CadQuery has no release for Python 3.10, and pip fails the
+                    # whole install rather than skipping it. Nothing is lost by
+                    # leaving it out: the factories that need CadQuery render on
+                    # MIN_PYTHON_VERSION_CADQUERY or newer, so they never look at
+                    # a 3.10 sandbox in the first place.
+                    if sandbox_versions.is_at_least(self.version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY):
+                        self.ensure_onced_locked(sandbox_versions.CADQUERY)
                     self.ensure_onced_locked(sandbox_versions.NUMPY)
                     self.ensure_onced_locked(sandbox_versions.TYPING_EXTENSIONS)
                     self.ensure_onced_locked(sandbox_versions.OCPSVG)
@@ -301,7 +307,9 @@ class PythonRuntime(runtime.Runtime):
                     # Preinstall the most common packages to avoid
                     await self.ensure_async_onced_locked(sandbox_versions.OCP_TESSELLATE)
                     await self.ensure_async_onced_locked(sandbox_versions.NLOPT)
-                    await self.ensure_async_onced_locked(sandbox_versions.CADQUERY)
+                    # See the note in once(): CadQuery has no Python 3.10 release.
+                    if sandbox_versions.is_at_least(self.version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY):
+                        await self.ensure_async_onced_locked(sandbox_versions.CADQUERY)
                     await self.ensure_async_onced_locked(sandbox_versions.NUMPY)
                     await self.ensure_async_onced_locked(sandbox_versions.TYPING_EXTENSIONS)
                     await self.ensure_async_onced_locked(sandbox_versions.OCPSVG)

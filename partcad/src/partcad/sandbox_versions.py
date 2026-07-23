@@ -65,10 +65,18 @@ DEFAULT_PYTHON_VERSION = "3.11"
 MIN_PYTHON_VERSION_CADQUERY = "3.11"
 
 
+def _parsed(version: str):
+    return tuple(int(part) for part in version.split("."))
+
+
+def is_at_least(python_version: str, minimum: str) -> bool:
+    """Whether a "<major>.<minor>" version is not older than another.
+
+    Compared numerically: as strings "3.9" sorts after "3.11".
+    """
+    return _parsed(python_version) >= _parsed(minimum)
+
+
 def at_least(python_version: str, minimum: str) -> str:
     """Return the newer of two "<major>.<minor>" version strings."""
-
-    def parsed(version):
-        return tuple(int(part) for part in version.split("."))
-
-    return python_version if parsed(python_version) >= parsed(minimum) else minimum
+    return python_version if is_at_least(python_version, minimum) else minimum
