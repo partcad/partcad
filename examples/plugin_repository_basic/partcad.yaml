@@ -13,17 +13,19 @@ doc:
     See other examples for hierarchical packages in external repositories.
   usage: |
     ```
-    pc list parts -r myCsv
-    pc inspect myCsv:bolt
+    pc list parts example
+    pc inspect example:bolt
     ```
 
 dependencies:
+  # 'example' is a package whose contents are served by the 'my_csv'
+  # repository plugin below, instead of by a folder or a git/tar archive.
   example:
     type: external
-    plugin: :my-csv
+    plugin: :my_csv
 
 repositories:
-  myCsv:
+  my_csv:
     type: enrich
     source: csv
     with:

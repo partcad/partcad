@@ -13,7 +13,8 @@ import hashlib
 
 from . import project_factory as pf
 from .project import Project
-from .project_plugin import ProjectPlugin
+from .project_external_repository import ProjectExternalRepository
+from .cache import Cache
 from . import logging as pc_logging
 from . import telemetry
 
@@ -35,11 +36,16 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
         # a directory on disk and never a valid package name.
         self.plugin = parent.normalize(self.plugin)
 
-        # Find a place to store all temporary artifacts if any
+        # Find a place to store all temporary artifacts if any. The hash of the
+        # resolved plugin reference identifies this repository instance, so two
+        # vendored copies backed by different plugins get separate caches.
         repo_hash = hashlib.sha256(self.plugin.encode()).hexdigest()[:16]
         self.path = os.path.join(ctx.user_config.internal_state_dir, "external", repo_hash)
+        # A cache scoped to this repository instance, shared by every child of
+        # the plugin-backed package via 'ProjectExternalRepository.request()'.
+        self.cache = Cache("external/" + repo_hash, ctx.user_config)
 
-        pc_logging.info(f"External project path: {self.path}")
+        pc_logging.debug(f"External project path: {self.path}")
 
         # Complement the config object here if necessary
         self._create(config)
@@ -47,9 +53,10 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
         self._save()
 
     def _create_project(self, config):
-        return ProjectPlugin(
+        return ProjectExternalRepository(
             self.ctx,
             self.name,
             self.path,
+            cache=self.cache,
             inherited_config=self.inherited_config,
         )

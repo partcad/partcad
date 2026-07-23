@@ -49,12 +49,25 @@ if TYPE_CHECKING:
     from partcad.shape import Shape
 
 
+# The kinds of first-class objects a package may contain, mapped to the
+# 'partcad.yaml' section that declares them. Kept as data so that introducing a
+# new kind of object does not require touching the per-kind accessor plumbing.
+OBJECT_KINDS = ("interface", "sketch", "part", "assembly", "provider", "repository")
+OBJECT_KIND_SECTIONS = {
+    "interface": "interfaces",
+    "sketch": "sketches",
+    "part": "parts",
+    "assembly": "assemblies",
+    "provider": "providers",
+    "repository": "repositories",
+}
+
+
 @telemetry.instrument()
 class Project(project_config.Configuration):
     sketches: dict[str, sketch.Sketch]
     parts: dict[str, Part]
     assemblies: dict[str, assembly.Assembly]
-    interface_configs: dict[str, dict]
     providers: dict[str, plugin_provider.Provider]
     repositories: dict[str, plugin_repository.Repository]
 
@@ -161,64 +174,37 @@ class Project(project_config.Configuration):
         # Protect the critical sections from access in different threads
         self.lock = threading.Lock()
 
-        # self.interface_configs contains the configs of all the interfaces in this project
-        if "interfaces" in self.config_obj and not self.config_obj["interfaces"] is None:
-            self.interface_configs = self.config_obj["interfaces"]
-            # pc_logging.debug(
-            #     "Interfaces: %s" % str(self.interface_configs.keys())
-            # )
-        else:
-            self.interface_configs = {}
-        # self.interfaces contains all the initialized interfaces in this project
+        # self._object_configs[kind] holds the declared configuration of every
+        # object of that kind. 'None' means "not enumerated yet": a local
+        # package knows everything from its parsed 'partcad.yaml' and populates
+        # all kinds here, while a plugin-backed package (see ProjectPlugin)
+        # leaves them None and fills them on demand through the accessors
+        # (object_config / object_configs / object_names).
+        self._object_configs: dict[str, typing.Optional[dict]] = {
+            kind: self._initial_object_configs(kind) for kind in OBJECT_KINDS
+        }
+
+        # The instantiated objects of each kind, filled lazily by the getters.
         self.interfaces = {}
         self.interface_locks = {}
         self.interface_locks_lock = threading.Lock()
 
-        # self.sketch_configs contains the configs of all the sketches in this project
-        if "sketches" in self.config_obj and not self.config_obj["sketches"] is None:
-            self.sketch_configs = self.config_obj["sketches"]
-        else:
-            self.sketch_configs = {}
-        # self.sketches contains all the initialized sketches in this project
         self.sketches = {}
         self.sketch_locks = {}
         self.sketch_locks_lock = threading.Lock()
 
-        # self.part_configs contains the configs of all the parts in this project
-        if "parts" in self.config_obj and not self.config_obj["parts"] is None:
-            self.part_configs = self.config_obj["parts"]
-        else:
-            self.part_configs = {}
-        # self.parts contains all the initialized parts in this project
         self.parts = {}
         self.part_locks = {}
         self.part_locks_lock = threading.Lock()
 
-        # self.assembly_configs contains the configs of all the assemblies in this project
-        if "assemblies" in self.config_obj and not self.config_obj["assemblies"] is None:
-            self.assembly_configs = self.config_obj["assemblies"]
-        else:
-            self.assembly_configs = {}
-        # self.assemblies contains all the initialized assemblies in this project
         self.assemblies = {}
         self.assembly_locks = {}
         self.assembly_locks_lock = threading.Lock()
 
-        # self.provider_configs contains the configs of all the providers in this project
-        if "providers" in self.config_obj and not self.config_obj["providers"] is None:
-            self.provider_configs = self.config_obj["providers"]
-        else:
-            self.provider_configs = {}
-        # self.providers contains all the initialized providers in this project
         self.providers = {}
         self.provider_locks = {}
         self.provider_locks_lock = threading.Lock()
 
-        # self.repository_configs contains the configs of all the repositories in this project
-        if "repositories" in self.config_obj and not self.config_obj["repositories"] is None:
-            self.repository_configs = self.config_obj["repositories"]
-        else:
-            self.repository_configs = {}
         self.repositories = {}
         self.repository_locks = {}
         self.repository_locks_lock = threading.Lock()
@@ -232,6 +218,25 @@ class Project(project_config.Configuration):
         else:
             self.desc = ""
 
+        self._instantiate_objects()
+
+    def _initial_object_configs(self, kind: str):
+        """The configs of the given kind known at construction time.
+
+        A local package returns everything its configuration declares. A
+        plugin-backed package overrides this to return None, deferring
+        enumeration until the data is actually requested.
+        """
+        cfg = self.config_obj.get(OBJECT_KIND_SECTIONS[kind])
+        return {} if cfg is None else cfg
+
+    def _instantiate_objects(self):
+        """Instantiate the package's objects.
+
+        Split out of the constructor so that a plugin-backed package can
+        override it to instantiate lazily, on demand, instead of enumerating
+        and instantiating everything up front.
+        """
         self.init_sketches()
         self.init_interfaces()  # After sketches
         self.init_mates()  # After interfaces
@@ -240,6 +245,71 @@ class Project(project_config.Configuration):
         self.init_providers()  # after parts
         self.init_suppliers()  # after providers
         self.init_repositories()  # after parts
+
+    # The generic object-access layer. Every read of a package's declared
+    # objects goes through these three methods so that a plugin-backed package
+    # can source the same data lazily without changing any caller.
+
+    def object_configs(self, kind: str) -> dict:
+        """All declared configs of 'kind', enumerating on demand if needed."""
+        configs = self._object_configs.get(kind)
+        if configs is None:
+            configs = self._enumerate_object_configs(kind)
+            self._object_configs[kind] = configs
+        return configs
+
+    def object_config(self, kind: str, name: str):
+        """The config of a single object, fetched individually when possible.
+
+        For a plugin-backed package this avoids a full enumeration: it asks the
+        plugin for just this one object and only falls back to listing
+        everything if the targeted fetch is not supported.
+        """
+        configs = self._object_configs.get(kind)
+        if configs is not None:
+            return configs.get(name)
+        one = self._fetch_object_config(kind, name)
+        if one is not None:
+            return one
+        return self.object_configs(kind).get(name)
+
+    def object_names(self, kind: str) -> list:
+        return list(self.object_configs(kind).keys())
+
+    # Hooks for plugin-backed packages. Never reached for a local package,
+    # whose '_object_configs' are all populated at construction.
+    def _enumerate_object_configs(self, kind: str) -> dict:
+        return {}
+
+    def _fetch_object_config(self, kind: str, name: str):
+        return None
+
+    # Backward-compatible views onto the object-access layer. These keep the
+    # historical 'self.<kind>_configs' attribute name working (now sourced
+    # through the accessor, so plugin packages enumerate lazily here too).
+    @property
+    def interface_configs(self) -> dict:
+        return self.object_configs("interface")
+
+    @property
+    def sketch_configs(self) -> dict:
+        return self.object_configs("sketch")
+
+    @property
+    def part_configs(self) -> dict:
+        return self.object_configs("part")
+
+    @property
+    def assembly_configs(self) -> dict:
+        return self.object_configs("assembly")
+
+    @property
+    def provider_configs(self) -> dict:
+        return self.object_configs("provider")
+
+    @property
+    def repository_configs(self) -> dict:
+        return self.object_configs("repository")
 
     # TODO(clairbee): Implement get_cover()
     # def get_cover(self):
@@ -350,15 +420,10 @@ class Project(project_config.Configuration):
             source_interface.add_mates(self, mate_config)
 
     def get_interface_config(self, interface_name):
-        if not interface_name in self.interface_configs:
-            return None
-        return self.interface_configs[interface_name]
+        return self.object_config("interface", interface_name)
 
     def init_interfaces(self):
-        if self.interface_configs is None:
-            return
-
-        for interface_name in self.interface_configs.keys():
+        for interface_name in self.object_names("interface"):
             config = self.get_interface_config(interface_name)
             config["name"] = interface_name
             self.init_interface_by_config(config)
@@ -399,7 +464,7 @@ class Project(project_config.Configuration):
             return self.interfaces[interface_name]
 
     def get_sketch_config(self, sketch_name):
-        return self.get_object_config(sketch_name, self.sketch_configs)
+        return self.object_config("sketch", sketch_name)
 
     def set_sketch_config(self, sketch_name, sketch_config):
         """
@@ -439,16 +504,16 @@ class Project(project_config.Configuration):
                 raise
 
     def get_part_config(self, part_name):
-        return self.get_object_config(part_name, self.part_configs)
+        return self.object_config("part", part_name)
 
     def get_assembly_config(self, assembly_name):
-        return self.get_object_config(assembly_name, self.assembly_configs)
+        return self.object_config("assembly", assembly_name)
 
     def get_provider_config(self, provider_name):
-        return self.get_object_config(provider_name, self.provider_configs)
+        return self.object_config("provider", provider_name)
 
     def get_repository_config(self, repository_name):
-        return self.get_object_config(repository_name, self.repository_configs)
+        return self.object_config("repository", repository_name)
 
     def get_object_config(self, object_name, configs: dict[str, dict[str, typing.Any]]):
         if not object_name in configs:
