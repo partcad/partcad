@@ -114,8 +114,8 @@ That downloads the bundle for the current operating system and architecture from
 Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.local/bin`` is not on your
 ``PATH``, the installer says so and prints the line to add.
 
-The bundle is around 800MB unpacked (a quarter of a gigabyte to download): most of it is the OpenCASCADE
-geometry kernel, which the wheels download too, just at ``pip install`` time.
+The bundle is around 875MB unpacked and 290MB to download on Linux, somewhat less on MacOS and Windows.
+Most of it is the OpenCASCADE geometry kernel, which the wheels download too, just at ``pip install`` time.
 
 Supported platforms are Linux on x86_64, and MacOS on Apple silicon. Windows is covered by the
 ``.zip`` archive under :ref:`manual installation <standalone-manual>`.
@@ -230,14 +230,29 @@ The bundle carries everything the wheels would install, including the optional e
 to the user: all the AI providers (``ai-google``, ``ai-openai``, ``ai-ollama``) and the Python linter
 (``lint``). A frozen bundle cannot be extended afterwards, so it ships complete.
 
-Two things are deliberately not in it, because PartCAD runs them as external programs rather than importing
-them, exactly as the wheels do:
+On Linux and Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to build
+``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
+bundle behaves the same everywhere rather than depending on which version a given host happens to have. Two
+consequences worth knowing:
+
+* A newer OpenSCAD installed on the machine will *not* be used by the standalone build. If you need a
+  specific OpenSCAD, use the wheels, which always use the host's.
+* On Linux the bundled OpenSCAD is the upstream AppImage, which resolves a few libraries from the host
+  (``libGL``, ``libX11``, ``libxcb``, ``fontconfig``, ``freetype``, ``glib``, ``harfbuzz``). Desktop
+  installations have these; a stripped-down container or a minimal server may not, and there the bundled
+  OpenSCAD will not start.
+
+The macOS bundle carries no OpenSCAD: the last OpenSCAD release predates Apple silicon and ships an
+Intel-only build, which would quietly require Rosetta 2. On macOS, install OpenSCAD yourself and PartCAD
+will use it.
+
+Two other things are deliberately not in the bundle, because PartCAD runs them as external programs rather
+than importing them, exactly as the wheels do:
 
 * **git**, used to fetch package repositories.
 * **conda** (or **mamba**), used to build the sandbox in which PartCAD runs CAD scripts.
 
-Both are only needed for the features that use them. Run ``pc healthcheck`` to see what is missing on the
-current machine.
+Run ``pc healthcheck`` to see what is missing on the current machine.
 
 The bundle provides the command line tools only. The ``partcad`` Python module for CAD-as-code scripts is
 a wheel: ``python -m pip install -U partcad``.

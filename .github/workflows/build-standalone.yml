@@ -137,6 +137,23 @@ jobs:
           pc init
           pc list
 
+      # The bundled OpenSCAD has to survive being packed, downloaded and
+      # unpacked with its executable bit intact, which the build's own smoke
+      # test cannot show: it runs against the bundle before it is archived.
+      - name: Run the bundled OpenSCAD after installation
+        if: matrix.platform == 'linux-x86_64'
+        shell: bash
+        run: |
+          export PATH="${HOME}/partcad-bin:${PATH}"
+          cd "${HOME}"
+          test -x "$(readlink -f "${HOME}/partcad-bin/pc" | xargs dirname)/_internal/openscad/AppRun"
+          printf 'cube(10);\n' > smoke.scad
+          "$(readlink -f "${HOME}/partcad-bin/pc" | xargs dirname)/_internal/openscad/AppRun" \
+            --export-format binstl -o smoke.stl smoke.scad
+          test -s smoke.stl
+          pc --no-ansi healthcheck --filters openscad 2>&1 | tee healthcheck.log
+          grep -q "OpenSCAD: Passed" healthcheck.log
+
       - name: Uninstall with install.sh
         shell: bash
         run: |

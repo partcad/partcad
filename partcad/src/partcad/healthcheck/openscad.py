@@ -1,5 +1,4 @@
 import os
-import shutil
 import zipfile
 import hashlib
 import platform
@@ -10,6 +9,7 @@ from pathlib import Path
 if platform.system() == "Windows":
     import winreg
 
+from partcad.openscad import find_executable as find_openscad_executable
 from partcad.user_config import UserConfig
 from partcad.logging import logging as pc_logging
 from partcad.healthcheck.tests import HealthCheckReport, HealthCheckTest
@@ -26,8 +26,11 @@ class OpenSCADCheck(HealthCheckTest):
         return False
 
     def test(self) -> HealthCheckReport:
-        if shutil.which("openscad") is None:
-            self.findings.append("OpenSCAD executable not found in PATH")
+        # The same resolution the rest of PartCAD uses, so that a standalone
+        # bundle carrying its own OpenSCAD passes this check on a host that has
+        # none, and does not offer to install one it will not use.
+        if find_openscad_executable() is None:
+            self.findings.append("OpenSCAD executable not found, neither bundled nor in PATH")
         return HealthCheckReport(self.name, self.findings)
 
 
