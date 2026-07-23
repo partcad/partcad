@@ -7,7 +7,12 @@ from click.testing import CliRunner
 from partcad_cli.click.command import cli
 import partcad.logging  as pc_logging
 
-runner = CliRunner(mix_stderr=False)
+# Click 8.2 removed the 'mix_stderr' argument. It is not needed any more
+# either: a Result now always exposes 'stdout' and 'stderr' separately, which
+# is what passing mix_stderr=False used to buy. Only 'output' changed meaning -
+# it is the two interleaved now rather than stdout alone - and the sole use
+# below is an error message, which is better off with both.
+runner = CliRunner()
 
 def healthcheck_cli(context, options: List[str] = []):
     patches = []

@@ -136,6 +136,13 @@ hiddenimports += command_modules()
 hiddenimports += ["OCP"]
 add_package("build123d")
 add_package("ocpsvg")
+# build123d.mesher imports lib3mf unconditionally, and lib3mf ctypes-loads
+# 'lib3mf.so' from its own directory rather than importing it, so PyInstaller's
+# analysis never sees the binary. Without this the bundle dies on the very
+# first "import partcad" with "The required binary .../lib3mf.so could not be
+# found". (Only lib3mf does this; build123d's other native dependencies are
+# ordinary extension modules.)
+add_package("lib3mf")
 
 # Data-driven packages: they resolve resources or plugins at runtime, so their
 # non-Python files have to travel with them.
