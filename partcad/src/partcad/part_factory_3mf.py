@@ -10,6 +10,7 @@
 import os
 import sys
 
+from . import sandbox_versions
 from . import telemetry
 from . import wrapper
 from .part_factory_file import PartFactoryFile
@@ -22,7 +23,7 @@ import ocp_serialize
 @telemetry.instrument()
 class PartFactory3mf(PartFactoryFile):
     # The sandboxed runtime used to keep build123d out of the main process
-    PYTHON_SANDBOX_VERSION = "3.11"
+    PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("Init3MF", target_project.name, config["name"]):
@@ -52,11 +53,13 @@ class PartFactory3mf(PartFactoryFile):
             request["label"] = part.name
             request_serialized = ocp_serialize.serialize(request)
 
-            await self.runtime.ensure_async("ocp-tessellate==3.0.9")
-            await self.runtime.ensure_async("typing_extensions==4.12.2")
-            await self.runtime.ensure_async("cadquery-ocp==7.7.2")
-            await self.runtime.ensure_async("ocpsvg==0.3.4")
-            await self.runtime.ensure_async("build123d==0.8.0")
+            await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE)
+            await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS)
+            await self.runtime.ensure_async(sandbox_versions.OCPSVG)
+            await self.runtime.ensure_async(sandbox_versions.BUILD123D)
+            # Last: re-asserts the VTK-enabled OCP that build123d's
+            # 'cadquery-ocp-novtk' dependency has just replaced.
+            await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
 
             command = [
                 wrapper_path,

@@ -24,11 +24,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # ubuntu-24.04 is still the newest generally available Ubuntu LTS
+        # runner image (ubuntu-26.04 is preview only), so this stays pinned.
         os: [ubuntu-24.04]
-        python-version: ["3.11"]
+        # The sdist/wheel we publish are pure Python, so a single interpreter
+        # is enough. Pinned to 3.13 rather than the newest supported 3.14:
+        # the release path should not be the first place a brand new
+        # interpreter is exercised. Must match the guards on the upload steps
+        # and the publish job below.
+        python-version: ["3.13"]
     runs-on: ${{ matrix.os }}
     env:
-      BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
+      BIN_DIR: ${{ startsWith(matrix.os, 'windows') && 'Scripts' || 'bin' }}
 
     steps:
       - uses: actions/checkout@v7
@@ -36,7 +43,7 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         id: cache
         with:
           path: ~/.cache/pip
@@ -69,14 +76,14 @@ jobs:
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli && deactivate)
       # Upload artifact from the selected OS/Python version combination only
       - name: Upload "partcad"
-        if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.11' }}
-        uses: actions/upload-artifact@v4
+        if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
+        uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions
           path: partcad/dist/
       - name: Upload "partcad-cli"
-        if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.11' }}
-        uses: actions/upload-artifact@v4
+        if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
+        uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions-cli
           path: partcad-cli/dist/
@@ -96,7 +103,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Download lib dists
         uses: actions/download-artifact@v8

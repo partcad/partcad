@@ -19,6 +19,7 @@ import sys
 import threading
 from filelock import FileLock
 
+from . import sandbox_versions
 from . import runtime
 from . import logging as pc_logging
 from . import telemetry
@@ -33,27 +34,79 @@ def get_local_partcad_pkg(dep: str) -> str:
 
 # Dependencies are installed one "pip install" invocation at a time, so pip
 # never sees the constraints of the whole environment at once and cannot detect
-# a conflict between them. That matters most for cadquery-ocp: cadquery and
-# ocpsvg cap it below 7.8, but build123d 0.8.0 asks only for ">=7.7.0", so a
-# "pip install build123d==0.8.0" into an environment that does not already have
-# cadquery-ocp pulls the newest release (7.9.x at the time of writing). Mixing
-# OCP versions between cadquery and build123d loads two incompatible native
-# libraries into one interpreter, which crashes the wrapper process with no
-# Python traceback and no stderr at all.
+# a conflict between them. That matters most for OCP: loading two OCP builds
+# into one interpreter crashes the wrapper process with no Python traceback and
+# no stderr at all. These constraints are passed to every "pip install" so the
+# bound holds regardless of the order the factories install things in.
 #
-# The install order happens to install cadquery-ocp before build123d today, so
-# this is currently correct only by accident. These constraints are passed to
-# every "pip install" so the bound holds regardless of order.
+# Since 7.9 both 'cadquery-ocp' (what cadquery depends on) and
+# 'cadquery-ocp-novtk' (what build123d 0.11 depends on) declare
+# 'cadquery-ocp-proxy' at the exact same version, so bounding the proxy is what
+# keeps a single OCP generation in the sandbox -- capping only 'cadquery-ocp'
+# would leave the novtk edge free to pull a different one.
 #
-# build123d 0.8.0 also depends on "ocpsvg" with no bound whatsoever, and ocpsvg
-# switched from cadquery-ocp to the cadquery-ocp-proxy package in 0.4. Since
-# cadquery-ocp-proxy only exists for 7.9+, letting ocpsvg float pulls a 7.9
-# native runtime back in alongside the 7.7.2 one, which is the same conflict by
-# another route. Keep ocpsvg on the pre-proxy line to match cadquery-ocp.
+# Note this does NOT decide which of the two builds wins: they ship the same
+# native module and overwrite each other. That is handled by install ordering,
+# see sandbox_versions.GUARD_INVALIDATED_BY.
+#
+# ocpsvg is bounded for the same reason: it depends on the proxy directly and
+# build123d's own bound on it is wide.
 PIP_CONSTRAINTS = [
-    "cadquery-ocp>=7.7.0,<7.8",
-    "ocpsvg>=0.3.4,<0.4",
+    "cadquery-ocp-proxy>=7.9,<8.0",
+    "ocpsvg>=0.6,<0.7",
 ]
+
+
+# pip treats an already-recorded distribution as satisfied and leaves its files
+# alone, so re-asserting cadquery-ocp over a novtk install is a no-op without
+# this.
+#
+# Deliberately without "--no-deps": the VTK-enabled OCP module is linked
+# against VTK, so it fails to load at all ("libvtkWrappingPythonCore*.so:
+# cannot open shared object file") unless the 'vtk' it depends on is installed
+# alongside it. Skipping deps trades one broken sandbox for another.
+FORCE_REINSTALL_FLAGS = ["--force-reinstall"]
+
+
+def get_guard_path(path: str, python_package: str) -> str:
+    """Path of the marker file recording that a package is installed."""
+    python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()[:16]
+    return os.path.join(path, ".partcad.installed." + python_package_hash)
+
+
+def get_reassert_path(path: str, python_package: str) -> str:
+    """Path of the marker file demanding that a package be re-installed."""
+    python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()[:16]
+    return os.path.join(path, ".partcad.reassert." + python_package_hash)
+
+
+def invalidate_dependent_guards(path: str, python_package: str) -> None:
+    """Flag the packages whose files this install has just overwritten.
+
+    Installing build123d pulls 'cadquery-ocp-novtk', which writes the very same
+    OCP native module as 'cadquery-ocp' and replaces it with a build compiled
+    without VTK -- after which "import cadquery" fails inside the sandbox (see
+    sandbox_versions.GUARD_INVALIDATED_BY).
+
+    Dropping the install guard alone does not fix it: pip still considers
+    'cadquery-ocp' satisfied and leaves the files alone. So a second marker is
+    left behind to say the next install of that package has to be forced.
+    """
+    for clobbered in sandbox_versions.GUARD_INVALIDATED_BY.get(python_package, ()):
+        with contextlib.suppress(OSError):
+            os.remove(get_guard_path(path, clobbered))
+        with contextlib.suppress(OSError):
+            pathlib.Path(get_reassert_path(path, clobbered)).touch()
+
+
+def needs_reassert(path: str, python_package: str) -> bool:
+    """Whether this package has to be re-installed over a clobbered copy."""
+    return os.path.exists(get_reassert_path(path, python_package))
+
+
+def clear_reassert(path: str, python_package: str) -> None:
+    with contextlib.suppress(OSError):
+        os.remove(get_reassert_path(path, python_package))
 
 
 def describe_exit_code(returncode: int) -> str:
@@ -229,14 +282,16 @@ class PythonRuntime(runtime.Runtime):
             with self.sync_lock_install():
                 if not self.initialized:
                     # Preinstall the most common packages to avoid race conditions
-                    self.ensure_onced_locked("ocp-tessellate==3.0.9")
-                    self.ensure_onced_locked("nlopt==2.9.1")
-                    self.ensure_onced_locked("cadquery==2.5.2")
-                    self.ensure_onced_locked("numpy==2.2.1")
-                    self.ensure_onced_locked("typing_extensions==4.12.2")
-                    self.ensure_onced_locked("cadquery-ocp==7.7.2")
-                    self.ensure_onced_locked("ocpsvg==0.3.4")
-                    self.ensure_onced_locked("build123d==0.8.0")
+                    self.ensure_onced_locked(sandbox_versions.OCP_TESSELLATE)
+                    self.ensure_onced_locked(sandbox_versions.NLOPT)
+                    self.ensure_onced_locked(sandbox_versions.CADQUERY)
+                    self.ensure_onced_locked(sandbox_versions.NUMPY)
+                    self.ensure_onced_locked(sandbox_versions.TYPING_EXTENSIONS)
+                    self.ensure_onced_locked(sandbox_versions.OCPSVG)
+                    self.ensure_onced_locked(sandbox_versions.BUILD123D)
+                    # Last: re-asserts the VTK-enabled OCP that build123d's
+                    # 'cadquery-ocp-novtk' dependency has just replaced.
+                    self.ensure_onced_locked(sandbox_versions.CADQUERY_OCP)
                     self.initialized = True
 
     async def once_async(self):
@@ -244,14 +299,16 @@ class PythonRuntime(runtime.Runtime):
             with self.sync_lock_install():
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
-                    await self.ensure_async_onced_locked("ocp-tessellate==3.0.9")
-                    await self.ensure_async_onced_locked("nlopt==2.9.1")
-                    await self.ensure_async_onced_locked("cadquery==2.5.2")
-                    await self.ensure_async_onced_locked("numpy==2.2.1")
-                    await self.ensure_async_onced_locked("typing_extensions==4.12.2")
-                    await self.ensure_async_onced_locked("cadquery-ocp==7.7.2")
-                    await self.ensure_async_onced_locked("ocpsvg==0.3.4")
-                    await self.ensure_async_onced_locked("build123d==0.8.0")
+                    await self.ensure_async_onced_locked(sandbox_versions.OCP_TESSELLATE)
+                    await self.ensure_async_onced_locked(sandbox_versions.NLOPT)
+                    await self.ensure_async_onced_locked(sandbox_versions.CADQUERY)
+                    await self.ensure_async_onced_locked(sandbox_versions.NUMPY)
+                    await self.ensure_async_onced_locked(sandbox_versions.TYPING_EXTENSIONS)
+                    await self.ensure_async_onced_locked(sandbox_versions.OCPSVG)
+                    await self.ensure_async_onced_locked(sandbox_versions.BUILD123D)
+                    # Last: re-asserts the VTK-enabled OCP that build123d's
+                    # 'cadquery-ocp-novtk' dependency has just replaced.
+                    await self.ensure_async_onced_locked(sandbox_versions.CADQUERY_OCP)
                     self.initialized = True
 
     def run(self, cmd, stdin="", cwd=None, session=None):
@@ -513,16 +570,16 @@ class PythonRuntime(runtime.Runtime):
         exitcode, stdout, stderr = await super().run_async(cmd, stdin=stdin, cwd=cwd)
         return exitcode, stdout, stderr
 
-    def ensure(self, python_package, session=None, path=None):
+    def ensure(self, python_package, session=None, path=None, force=False):
         self.once()
-        self.ensure_onced(python_package, session=session, path=path)
+        self.ensure_onced(python_package, session=session, path=path, force=force)
 
-    def ensure_onced(self, python_package, session=None, path=None):
+    def ensure_onced(self, python_package, session=None, path=None, force=False):
         if path is None:
             path = self.path
 
-        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()[:16]
-        guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
+        guard_path = get_guard_path(path, python_package)
+        force = force or needs_reassert(path, python_package)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
@@ -547,18 +604,22 @@ class PythonRuntime(runtime.Runtime):
                                     "install",
                                     *self.pip_install_flags,
                                     *self.get_constraints_flags(),
+                                    *(FORCE_REINSTALL_FLAGS if force else []),
                                     python_package,
                                 ],
                                 path=path,
                             )
                         pathlib.Path(guard_path).touch()
+                        clear_reassert(path, python_package)
+                        invalidate_dependent_guards(path, python_package)
+                invalidate_dependent_guards(path, python_package)
 
-    def ensure_onced_locked(self, python_package, session=None, path=None):
+    def ensure_onced_locked(self, python_package, session=None, path=None, force=False):
         if path is None:
             path = self.path
 
-        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()[:16]
-        guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
+        guard_path = get_guard_path(path, python_package)
+        force = force or needs_reassert(path, python_package)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
@@ -581,23 +642,26 @@ class PythonRuntime(runtime.Runtime):
                             "install",
                             *self.pip_install_flags,
                             *self.get_constraints_flags(),
+                            *(FORCE_REINSTALL_FLAGS if force else []),
                             python_package,
                         ],
                         path=path,
                     )
                 pathlib.Path(guard_path).touch()
+                clear_reassert(path, python_package)
+                invalidate_dependent_guards(path, python_package)
 
-    async def ensure_async(self, python_package, session=None, path=None):
+    async def ensure_async(self, python_package, session=None, path=None, force=False):
         await self.once_async()
-        await self.ensure_async_onced(python_package, session=session, path=path)
+        await self.ensure_async_onced(python_package, session=session, path=path, force=force)
 
-    async def ensure_async_onced(self, python_package, session=None, path=None):
+    async def ensure_async_onced(self, python_package, session=None, path=None, force=False):
         if path is None:
             path = self.path
 
         # TODO(clairbee): expire the guard file after a certain time
-        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()[:16]
-        guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
+        guard_path = get_guard_path(path, python_package)
+        force = force or needs_reassert(path, python_package)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
@@ -622,20 +686,24 @@ class PythonRuntime(runtime.Runtime):
                                     "install",
                                     *self.pip_install_flags,
                                     *self.get_constraints_flags(),
+                                    *(FORCE_REINSTALL_FLAGS if force else []),
                                     python_package,
                                 ],
                                 path=path,
                             )
                         pathlib.Path(guard_path).touch()
+                        clear_reassert(path, python_package)
+                        invalidate_dependent_guards(path, python_package)
+                invalidate_dependent_guards(path, python_package)
 
-    async def ensure_async_onced_locked(self, python_package, session=None, path=None):
+    async def ensure_async_onced_locked(self, python_package, session=None, path=None, force=False):
         if path is None:
             path = self.path
 
         # TODO(clairbee): expire the guard file after a certain time
 
-        python_package_hash = hashlib.sha256(python_package.encode()).hexdigest()[:16]
-        guard_path = os.path.join(path, ".partcad.installed." + python_package_hash)
+        guard_path = get_guard_path(path, python_package)
+        force = force or needs_reassert(path, python_package)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
@@ -658,11 +726,14 @@ class PythonRuntime(runtime.Runtime):
                             "install",
                             *self.pip_install_flags,
                             *self.get_constraints_flags(),
+                            *(FORCE_REINSTALL_FLAGS if force else []),
                             python_package,
                         ],
                         path=path,
                     )
                 pathlib.Path(guard_path).touch()
+                clear_reassert(path, python_package)
+                invalidate_dependent_guards(path, python_package)
 
     async def prepare_for_package(self, project, session=None):
         await self.once_async()

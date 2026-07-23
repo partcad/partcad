@@ -4,7 +4,7 @@ version = "0.7.146"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.15"
 license = {file = "LICENSE"}
 authors = [
   {name = "PartCAD", email = "support@partcad.org" }
@@ -16,6 +16,11 @@ dynamic = ["dependencies", "optional-dependencies"]
 
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]

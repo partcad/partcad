@@ -85,7 +85,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Python Environment
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/pypoetry
@@ -142,7 +142,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Python Environment
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/pypoetry
@@ -197,7 +197,7 @@ jobs:
 
       - name: Publish Allure Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pytest-allure-report
           path: allure-report/
@@ -223,7 +223,7 @@ jobs:
   #         password: ${{ secrets.GITHUB_TOKEN }}
 
   #     - name: Cache pre-commit dependencies
-  #       uses: actions/cache@v4
+  #       uses: actions/cache@v6
   #       with:
   #         path: |
   #           .pre-commit
@@ -271,7 +271,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Python Environment
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/pypoetry
@@ -339,7 +339,7 @@ jobs:
 
       - name: Publish Allure Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: behave-allure-report
           path: allure-report/
@@ -380,7 +380,7 @@ jobs:
   #         password: ${{ secrets.GITHUB_TOKEN }}
 
   #     # - name: Cache Python Environment
-  #     #   uses: actions/cache@v4
+  #     #   uses: actions/cache@v6
   #     #   with:
   #     #     path: |
   #     #       ~/.cache/pypoetry
@@ -420,7 +420,7 @@ jobs:
 
   #     # - name: Publish Allure Report
   #     #   if: always()
-  #     #   uses: actions/upload-artifact@v4
+  #     #   uses: actions/upload-artifact@v7
   #     #   with:
   #     #     name: pytest-allure-report
   #     #     path: allure-report/
@@ -451,7 +451,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Python Environment
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/pypoetry

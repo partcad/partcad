@@ -89,10 +89,10 @@ RUN apt-get update -y \
 # TODO: @alexanderilyin: Run `mamba init`
 
 # hadolint ignore=DL3004,DL4006,SC1091
-RUN curl -L -O "https://github.com/conda-forge/miniforge/releases/download/24.11.3-0/Miniforge3-$(uname)-$(uname -m).sh" \
+RUN curl -L -O "https://github.com/conda-forge/miniforge/releases/download/26.3.2-3/Miniforge3-$(uname)-$(uname -m).sh" \
   && sudo -u vscode bash "Miniforge3-$(uname)-$(uname -m).sh" -b -p /home/vscode/miniforge3 \
   && sudo -u vscode /home/vscode/miniforge3/condabin/conda init \
-  && sudo -u vscode /home/vscode/miniforge3/condabin/conda install -y python=3.10.16 \
+  && sudo -u vscode /home/vscode/miniforge3/condabin/conda install -y python=3.10.20 \
   # && sudo -u vscode /home/vscode/miniforge3/condabin/conda config --set auto_activate_base true \
   && sudo -u vscode /home/vscode/miniforge3/condabin/conda run python -m pip install poetry pre-commit actionlint-py \
   \

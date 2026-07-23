@@ -23,23 +23,45 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-13 dropped: see the note on OSES in test.yml. Those jobs never
-        # start on the current runner plan.
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Keep this list in sync with OSES in test.yml, which documents why
+        # each image is here and why macos-13/macos-14/ubuntu-26.04 are not.
+        os: [ubuntu-latest, ubuntu-22.04, windows-latest, windows-2022, macos-latest, macos-26]
         python-version:
           - "3.10"
           - "3.11"
           - "3.12"
-          # - "3.13"
+          - "3.13"
+          - "3.14"
         exclude:
-          # TODO(clairbee): Remove this when the ensurepip issue is fixed
-          - os: "windows-latest"
-            python-version: "3.12"
+          # Same cost trade-off as test.yml: the full Python range runs on
+          # ubuntu-latest only, every other image builds on the oldest and the
+          # newest supported Python, plus Windows on 3.12.
+          # 30 -> 17 combinations.
+          #
+          # Windows + 3.12 is deliberately back in the matrix. It was excluded
+          # for an 'ensurepip' failure (#374); the toolchain underneath has
+          # since moved a long way, so this run is what tells us whether that
+          # is still real. Re-exclude it if it is.
+          - { os: "ubuntu-22.04", python-version: "3.11" }
+          - { os: "ubuntu-22.04", python-version: "3.12" }
+          - { os: "ubuntu-22.04", python-version: "3.13" }
+          - { os: "windows-latest", python-version: "3.11" }
+          - { os: "windows-latest", python-version: "3.13" }
+          - { os: "windows-2022", python-version: "3.11" }
+          - { os: "windows-2022", python-version: "3.13" }
+          - { os: "macos-latest", python-version: "3.11" }
+          - { os: "macos-latest", python-version: "3.12" }
+          - { os: "macos-latest", python-version: "3.13" }
+          - { os: "macos-26", python-version: "3.11" }
+          - { os: "macos-26", python-version: "3.12" }
+          - { os: "macos-26", python-version: "3.13" }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     env:
-      BIN_DIR: ${{ matrix.os == 'windows-latest' && 'Scripts' || 'bin' }}
+      # 'startsWith', not '== windows-latest': the matrix now also contains a
+      # pinned windows-2022, which needs the very same venv layout.
+      BIN_DIR: ${{ startsWith(matrix.os, 'windows') && 'Scripts' || 'bin' }}
 
     steps:
       - uses: actions/checkout@v7

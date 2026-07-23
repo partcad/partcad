@@ -11,7 +11,7 @@ import asyncio
 import tempfile
 import yaml
 
-from .ai import Ai
+from .ai import Ai, DEFAULT_GOOGLE_MODEL, DEFAULT_OPENAI_MODEL
 from . import logging as pc_logging
 from .shape import Shape
 from .user_config import user_config
@@ -69,7 +69,9 @@ Produce text which is ready to be narrated as is.
 """
 
         config = {
-            "model": ("gpt-4o" if project.ctx.user_config.openai_api_key is not None else "gemini-1.5-pro"),
+            "model": (
+                DEFAULT_OPENAI_MODEL if project.ctx.user_config.openai_api_key is not None else DEFAULT_GOOGLE_MODEL
+            ),
             "provider": ("openai" if project.ctx.user_config.openai_api_key is not None else "google"),
         }
         summary = self.generate(

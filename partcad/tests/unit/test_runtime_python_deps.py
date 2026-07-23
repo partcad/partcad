@@ -6,15 +6,22 @@
 #
 
 import os
+import pathlib
+import re
 import signal
 
 import pytest
 
 import partcad as pc
+from partcad import sandbox_versions
 from partcad.runtime_python import (
     PIP_CONSTRAINTS,
     PythonRuntime,
+    clear_reassert,
     describe_exit_code,
+    get_guard_path,
+    invalidate_dependent_guards,
+    needs_reassert,
 )
 
 
@@ -50,14 +57,69 @@ def test_describe_exit_code_plain_failure():
 
 
 def test_constraints_bound_ocp_and_ocpsvg():
-    """Both unbounded edges out of build123d 0.8.0 have to stay bounded."""
+    """Every edge that can drag a second OCP build in has to stay bounded."""
     joined = " ".join(PIP_CONSTRAINTS)
-    assert "cadquery-ocp" in joined
-    assert "<7.8" in joined
-    # ocpsvg moved to the cadquery-ocp-proxy package in 0.4, which only exists
-    # for OCP 7.9+, so letting it float reintroduces the conflict
+    # Since 7.9 the native library is in 'cadquery-ocp-proxy'; both
+    # 'cadquery-ocp' and 'cadquery-ocp-novtk' are wrappers over it, so the
+    # proxy is the one that has to be pinned
+    assert "cadquery-ocp-proxy" in joined
+    assert "<8.0" in joined
     assert "ocpsvg" in joined
-    assert "<0.4" in joined
+    assert "<0.7" in joined
+
+
+def test_build123d_install_demands_a_cadquery_ocp_reassert(tmp_path):
+    """build123d overwrites the OCP that cadquery-ocp installed.
+
+    It depends on 'cadquery-ocp-novtk', which ships the same native module
+    built without VTK. Leaving that in place makes "import cadquery" fail
+    inside the sandbox, so the install guard has to go and the next install of
+    cadquery-ocp has to be forced.
+    """
+    guard = get_guard_path(str(tmp_path), sandbox_versions.CADQUERY_OCP)
+    open(guard, "w").close()
+    assert not needs_reassert(str(tmp_path), sandbox_versions.CADQUERY_OCP)
+
+    invalidate_dependent_guards(str(tmp_path), sandbox_versions.BUILD123D)
+
+    assert not os.path.exists(guard)
+    assert needs_reassert(str(tmp_path), sandbox_versions.CADQUERY_OCP)
+
+
+def test_reassert_is_cleared_once_satisfied(tmp_path):
+    invalidate_dependent_guards(str(tmp_path), sandbox_versions.BUILD123D)
+
+    clear_reassert(str(tmp_path), sandbox_versions.CADQUERY_OCP)
+
+    assert not needs_reassert(str(tmp_path), sandbox_versions.CADQUERY_OCP)
+
+
+def test_unrelated_install_invalidates_nothing(tmp_path):
+    guard = get_guard_path(str(tmp_path), sandbox_versions.CADQUERY_OCP)
+    open(guard, "w").close()
+
+    invalidate_dependent_guards(str(tmp_path), sandbox_versions.OCP_TESSELLATE)
+
+    assert os.path.exists(guard)
+    assert not needs_reassert(str(tmp_path), sandbox_versions.CADQUERY_OCP)
+
+
+def test_cadquery_ocp_is_installed_after_build123d_everywhere():
+    """Order matters: the re-assert has to happen in the same sequence.
+
+    Any install list that has both must end with cadquery-ocp, otherwise the
+    sandbox is left holding the VTK-less OCP build until something else
+    happens to install it again.
+    """
+    src = pathlib.Path(__file__).parent.parent.parent / "src" / "partcad"
+    offenders = []
+    for path in sorted(src.rglob("*.py")):
+        text = path.read_text()
+        ocp = [m.start() for m in re.finditer(r"sandbox_versions\.CADQUERY_OCP", text)]
+        b3d = [m.start() for m in re.finditer(r"sandbox_versions\.BUILD123D", text)]
+        if ocp and b3d and max(ocp) < max(b3d):
+            offenders.append(path.name)
+    assert offenders == [], offenders
 
 
 def test_get_constraints_flags_writes_the_file(tmp_path):

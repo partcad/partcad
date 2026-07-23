@@ -20,7 +20,7 @@ runs:
         echo "BRANCH_SANITIZED=$(echo -n ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}} | sed 's|/|_|g')"
 
     - name: Check for changes that require the container to be rebuilt
-      uses: dorny/paths-filter@v3
+      uses: dorny/paths-filter@v4
       id: changes
       with:
         filters: |

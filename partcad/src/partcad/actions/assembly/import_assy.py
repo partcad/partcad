@@ -11,7 +11,6 @@ from OCP.TDF import TDF_LabelSequence, TDF_Label, TDF_AttributeIterator
 from OCP.TDataStd import TDataStd_Name
 from OCP.TCollection import TCollection_ExtendedString
 from OCP.TDocStd import TDocStd_Document
-from OCP.Standard import Standard_GUID
 
 from OCP.TopoDS import TopoDS_Shape
 from OCP.gp import gp_Trsf
@@ -40,7 +39,9 @@ def get_label_name(label: TDF_Label, default="Unnamed") -> str:
     iterator = TDF_AttributeIterator(label)
     while iterator.More():
         attr = iterator.Value()
-        if Standard_GUID.IsEqual_s(attr.ID(), TDataStd_Name.GetID_s()):
+        # OCP 7.9 dropped the static Standard_GUID.IsEqual_s in favour of the
+        # instance method IsSame, which compares the same way.
+        if attr.ID().IsSame(TDataStd_Name.GetID_s()):
             return attr.Get().ToExtString()
         iterator.Next()
     return default

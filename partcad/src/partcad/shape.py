@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 import ocp_serialize
 
+from . import sandbox_versions
 from . import telemetry
 
 PART_EXTENSION_MAPPING = {
@@ -550,9 +551,11 @@ class Shape(ShapeConfiguration):
         # as this is expected to be hermetic.
         # Stick to the version where CadQuery and build123d are known to work.
         runtime = ctx.get_python_runtime(version="3.11")
-        await runtime.ensure_async("cadquery-ocp==7.7.2")
-        await runtime.ensure_async("ocpsvg==0.3.4")
-        await runtime.ensure_async("build123d==0.8.0")
+        await runtime.ensure_async(sandbox_versions.OCPSVG)
+        await runtime.ensure_async(sandbox_versions.BUILD123D)
+        # Last: re-asserts the VTK-enabled OCP that build123d's
+        # 'cadquery-ocp-novtk' dependency has just replaced.
+        await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
 
         command = [wrapper_path, os.path.abspath(filepath)]
         exitcode, response_serialized, errors = await runtime.run_async(
@@ -653,34 +656,38 @@ class Shape(ShapeConfiguration):
             kwargs: Additional options (width, height, etc.).
         """
         WRAPPER_FORMATS = {
+            # NOTE: cadquery-ocp comes last in every list that also has
+            # build123d. build123d pulls 'cadquery-ocp-novtk', which replaces
+            # the OCP native module with a VTK-less build; re-asserting
+            # cadquery-ocp afterwards puts the right one back.
             "svg": [
-                "cadquery-ocp==7.7.2",
-                "ocpsvg==0.3.4",
-                "build123d==0.8.0",
+                sandbox_versions.OCPSVG,
+                sandbox_versions.BUILD123D,
+                sandbox_versions.CADQUERY_OCP,
             ],
             "png": [
-                "cadquery-ocp==7.7.2",
-                "ocpsvg==0.3.4",
-                "build123d==0.8.0",
-                "svglib==1.5.1",
-                "reportlab",
-                "rlpycairo==0.3.0",
+                sandbox_versions.OCPSVG,
+                sandbox_versions.BUILD123D,
+                sandbox_versions.SVGLIB,
+                sandbox_versions.REPORTLAB,
+                sandbox_versions.RLPYCAIRO,
+                sandbox_versions.CADQUERY_OCP,
             ],
             "dxf": [
-                "cadquery-ocp==7.7.2",
-                "ocpsvg==0.3.4",
-                "build123d==0.8.0",
-                "svgpathtools==1.6.1",
-                "ezdxf==1.1.1",
+                sandbox_versions.OCPSVG,
+                sandbox_versions.BUILD123D,
+                sandbox_versions.SVGPATHTOOLS,
+                sandbox_versions.EZDXF,
+                sandbox_versions.CADQUERY_OCP,
             ],
-            "brep": ["cadquery-ocp==7.7.2"],
-            "step": ["cadquery-ocp==7.7.2"],
-            "stl": ["cadquery-ocp==7.7.2"],
-            "obj": ["cadquery-ocp==7.7.2"],
-            "3mf": ["cadquery-ocp==7.7.2", "cadquery==2.5.2"],
-            "gltf": ["cadquery-ocp==7.7.2", "build123d==0.8.0"],
-            "iges": ["cadquery-ocp==7.7.2"],
-            "threejs": ["cadquery-ocp==7.7.2"],
+            "brep": [sandbox_versions.CADQUERY_OCP],
+            "step": [sandbox_versions.CADQUERY_OCP],
+            "stl": [sandbox_versions.CADQUERY_OCP],
+            "obj": [sandbox_versions.CADQUERY_OCP],
+            "3mf": [sandbox_versions.CADQUERY_OCP, sandbox_versions.CADQUERY],
+            "gltf": [sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP],
+            "iges": [sandbox_versions.CADQUERY_OCP],
+            "threejs": [sandbox_versions.CADQUERY_OCP],
         }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
@@ -768,7 +775,11 @@ class Shape(ShapeConfiguration):
                 runtime = ctx.get_python_runtime(version="3.11")
 
                 dependencies = WRAPPER_FORMATS[format_name]
-                await asyncio.gather(*(runtime.ensure_async(dep) for dep in dependencies))
+                # Installed one at a time, not with asyncio.gather(): the
+                # order matters, since build123d overwrites the OCP native
+                # module that cadquery-ocp installs (see the note above).
+                for dep in dependencies:
+                    await runtime.ensure_async(dep)
 
                 # Run wrapper
                 with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):

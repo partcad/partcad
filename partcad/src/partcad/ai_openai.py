@@ -30,13 +30,17 @@ OPENAI_API_KEY = None
 openai_client = None
 
 model_tokens = {
-    "gpt-3": 4000,
     "gpt-3.5-turbo": 4096,
     "gpt-4": 8000,  # 32600,
-    "gpt-4-vision-preview": 8192,
     "gpt-4o": 16000,  # 32600,
     "gpt-4o-mini": 16000,  # 32600,
+    "gpt-4.1": 32000,
+    "gpt-4.1-mini": 32000,
 }
+
+# Reasoning models reject `max_tokens`, `temperature` and `top_p`: they take
+# `max_completion_tokens` instead and sample at the service's own settings.
+REASONING_MODEL_PREFIXES = ("o1", "o3", "o4", "gpt-5")
 
 
 def openai_once():
@@ -77,7 +81,9 @@ class AiOpenAI(AiContentProcessor):
         if "tokens" in config:
             tokens = config["tokens"]
         else:
-            tokens = model_tokens[model]
+            # Unknown (e.g. newly released) models fall back to the service
+            # default instead of raising KeyError.
+            tokens = model_tokens.get(model, None)
 
         if "top_p" in config:
             top_p = config["top_p"]
@@ -137,11 +143,12 @@ class AiOpenAI(AiContentProcessor):
             "n": options_num,
             "model": model,
         }
-        if model.startswith("o1"):
-            # params["max_completion_tokens"] = tokens
-            pass
+        if model.startswith(REASONING_MODEL_PREFIXES):
+            if tokens is not None:
+                params["max_completion_tokens"] = tokens
         else:
-            params["max_tokens"] = tokens
+            if tokens is not None:
+                params["max_tokens"] = tokens
             params["temperature"] = temperature
             params["top_p"] = top_p
         pc_logging.debug("Params: %s", str(params))

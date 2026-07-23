@@ -21,14 +21,57 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # macos-13 is not in this list: no macos-13 job has ever started on the
-  # current runner plan. They queue for hours and are eventually cancelled
-  # without executing, so they only ever left checks pending forever.
-  OSES: '["ubuntu-latest", "windows-latest", "macos-latest"]'
-  PYTHONS: '["3.10", "3.11", "3.12"]'
+  # Runner images, checked against actions/runner-images on 2026-07-21.
+  # For every OS we run the '*-latest' alias plus one other generally
+  # available image, so that a change of what '*-latest' points at cannot
+  # silently become the only thing we ever tested on.
+  #
+  # Deliberately NOT in this list:
+  #  * ubuntu-24.04, windows-2025, macos-15 - these are exactly what
+  #    ubuntu-latest / windows-latest / macos-latest alias today, so naming
+  #    them as well would run the very same image twice.
+  #  * ubuntu-26.04 (and ubuntu-26.04-arm) - still a preview image, not
+  #    covered by the Actions SLA, so it would only make CI flaky.
+  #  * macos-14 - deprecated by GitHub, scheduled for removal.
+  #  * macos-13 - no macos-13 job has ever started on the current runner
+  #    plan. They queue for hours and are eventually cancelled without
+  #    executing, so they only ever left checks pending forever.
+  OSES: '["ubuntu-latest", "ubuntu-22.04", "windows-latest", "windows-2022", "macos-latest", "macos-26"]'
+  PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # Number of parallel shards the behave suite is split into. Keep in sync with
   # the "shard" list in the set-matrix job's matrix-behave output.
   BEHAVE_SHARDS: 4
+  # 6 OSes x 5 Pythons = 30 combinations per job, and macOS minutes bill at
+  # 10x, which is not affordable. Only ubuntu-latest runs the full Python
+  # range; every other image runs the oldest and the newest supported Python
+  # only, which is where a version specific breakage actually shows up, plus
+  # Windows on 3.12 (see the note below). 30 -> 17 combinations.
+  #
+  # NOTE: windows + Python 3.12 used to be excluded on its own, for an
+  # 'ensurepip' failure (see #374), NOT for a missing cadquery-ocp wheel. It is
+  # deliberately back in the matrix here: the toolchain underneath it has moved
+  # a long way (miniforge 24.11 -> 26.3, setup-miniconda v3 -> v4), so this run
+  # is what tells us whether #374 is still real. Re-exclude it if it is.
+  EXCLUDES: >-
+    [{"os": "ubuntu-22.04", "python-version": "3.11"},
+    {"os": "ubuntu-22.04", "python-version": "3.12"},
+    {"os": "ubuntu-22.04", "python-version": "3.13"},
+    {"os": "windows-latest", "python-version": "3.11"},
+    {"os": "windows-latest", "python-version": "3.13"},
+    {"os": "windows-2022", "python-version": "3.11"},
+    {"os": "windows-2022", "python-version": "3.13"},
+    {"os": "macos-latest", "python-version": "3.11"},
+    {"os": "macos-latest", "python-version": "3.12"},
+    {"os": "macos-latest", "python-version": "3.13"},
+    {"os": "macos-26", "python-version": "3.11"},
+    {"os": "macos-26", "python-version": "3.12"},
+    {"os": "macos-26", "python-version": "3.13"}]
+  # The sharded 'test-behave' jobs and 'test-pub-repo' (45 min) are by far the
+  # most expensive, so they get a reduced matrix: the '*-latest' images only, on
+  # the oldest and the newest supported Python. Behave then shards each of those
+  # BEHAVE_SHARDS ways.
+  OSES_SLIM: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+  PYTHONS_SLIM: '["3.10", "3.14"]'
   VERSION: 0.7.146
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
@@ -71,18 +114,21 @@ jobs:
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      matrix-slim: ${{ steps.set-matrix.outputs.matrix-slim }}
       matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
     steps:
       - name: Set matrix
         id: set-matrix
         run: |
-          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}}' >> $GITHUB_OUTPUT
+          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> $GITHUB_OUTPUT
+          echo 'matrix-slim={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}}' >> $GITHUB_OUTPUT
           # Behave is single-process and dominates CI wall-clock, so it runs
           # sharded across parallel jobs. The "shard" axis is derived from
           # BEHAVE_SHARDS (1..N) here, so the number of behave jobs can never
-          # drift from it, and crosses os/python.
+          # drift from it, and crosses os/python. Behave uses the slim matrix
+          # (like test-pub-repo), so sharding does not multiply the full matrix.
           SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
-          echo 'matrix-behave={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "shard": '"$SHARDS_JSON"'}' >> $GITHUB_OUTPUT
+          echo 'matrix-behave={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> $GITHUB_OUTPUT
 
   # cache-preheat:
   #   name: "Update caches"
@@ -212,6 +258,8 @@ jobs:
       # - cache-preheat
     strategy:
       fail-fast: false
+      # Sharded, reduced matrix: the slim OS/Python set (OSES_SLIM/PYTHONS_SLIM),
+      # each split BEHAVE_SHARDS ways across parallel jobs.
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-behave) }}
     runs-on: ${{ matrix.os }}
     # The suite is sharded BEHAVE_SHARDS ways, so a single shard is a fraction
@@ -418,7 +466,9 @@ jobs:
       # - cache-preheat
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+      # Reduced matrix on purpose: 45 minutes per job, and it hits the network
+      # for the whole public repo. See OSES_SLIM/PYTHONS_SLIM above.
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-slim) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
 

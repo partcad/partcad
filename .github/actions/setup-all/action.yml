@@ -33,7 +33,7 @@ runs:
 
     # Cache for vcpkg
     - name: Export GitHub Actions cache environment variables
-      uses: actions/github-script@v7
+      uses: actions/github-script@v9
       with:
         script: |
           core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
@@ -59,7 +59,7 @@ runs:
     # Miniconda
     - name: Cache conda
       id: conda_cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       env:
         # Increase this value to reset cache if etc/example-environment.yml has not changed
         CACHE_NUMBER: 5
@@ -75,7 +75,7 @@ runs:
     # TODO(clairbee): Cache the conda environment?
 
     - name: Cache Python Environment
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       id: python_cache
       with:
         path: ~/.cache/pip
@@ -84,11 +84,13 @@ runs:
           ${{ runner.os }}-pip-1-
           ${{ runner.os }}-pip-
 
-    - uses: conda-incubator/setup-miniconda@v3
+    - uses: conda-incubator/setup-miniconda@v4
       if: ${{ inputs.preheat_only != 'true' || steps.conda_cache.outputs.cache-hit != 'true' || steps.python_cache.outputs.cache-hit != 'true' }}
       continue-on-error: true # Usually it fails while setting up the unwanted 'test' environment
       with:
-        miniforge-version: 24.11.3-0
+        # Current miniforge release. Needed for Python 3.13/3.14 support:
+        # conda-forge ships both, but the 24.11 installer predates them.
+        miniforge-version: 26.3.2-3
         use-mamba: true
         channels: conda-forge,defaults
         python-version: ${{ matrix.python-version }}

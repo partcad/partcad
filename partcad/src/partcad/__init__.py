@@ -7,6 +7,16 @@
 
 __version__: str = "0.7.146"
 
+# Must come before anything that can pull OCP in. VTK, which the OCP build we
+# use links against, bundles its own older copy of expat and exports it under
+# the standard XML_* names. Once that is in the process, the standard library's
+# pyexpat resolves against it and fails with "undefined symbol:
+# XML_SetReparseDeferralEnabled" on any interpreter built against expat 2.6+.
+# Loading pyexpat first pins it to the right library. It matters since
+# build123d 0.11, which imports IPython (-> prompt_toolkit -> xml.dom.minidom)
+# at import time and so trips over this on the way in.
+import pyexpat  # noqa: F401
+
 from . import telemetry
 
 telemetry.init(__version__)
