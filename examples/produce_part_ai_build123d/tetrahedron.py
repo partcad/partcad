@@ -16,12 +16,14 @@ edge_BD = Edge.make_line(B, D)
 edge_CD = Edge.make_line(C, D)
 
 # Create faces from edges
-face_ABC = Face.make_from_wires(Wire.make_wire([edge_AB, edge_BC, edge_AC]))
-face_ABD = Face.make_from_wires(Wire.make_wire([edge_AB, edge_BD, edge_AD]))
-face_ACD = Face.make_from_wires(Wire.make_wire([edge_AC, edge_CD, edge_AD]))
-face_BCD = Face.make_from_wires(Wire.make_wire([edge_BC, edge_CD, edge_BD]))
+# build123d 0.11 dropped the make_wire/make_from_wires/make_solid class
+# methods; the constructors take the same arguments.
+face_ABC = Face(Wire([edge_AB, edge_BC, edge_AC]))
+face_ABD = Face(Wire([edge_AB, edge_BD, edge_AD]))
+face_ACD = Face(Wire([edge_AC, edge_CD, edge_AD]))
+face_BCD = Face(Wire([edge_BC, edge_CD, edge_BD]))
 
 # Create the tetrahedron by combining faces
-tetrahedron = Solid.make_solid(Shell([face_ABC, face_ABD, face_ACD, face_BCD]))
+tetrahedron = Solid(Shell([face_ABC, face_ABD, face_ACD, face_BCD]))
 
 show_object(tetrahedron)

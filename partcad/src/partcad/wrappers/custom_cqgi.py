@@ -488,16 +488,14 @@ class ConstantAssignmentFinder(ast.NodeTransformer):
         self.cqModel = cq_model
 
     def handle_assignment(self, var_name, value_node):
+        # NOTE: this used to start with 'ast.Num' and 'ast.Str' branches. The
+        # parser has emitted 'ast.Constant' for every literal since Python 3.8,
+        # so they were already unreachable, and Python 3.14 removed the names
+        # altogether -- referencing them raised AttributeError and took every
+        # CadQuery script down with it. The 'ast.Constant' branch below is what
+        # actually handles numbers and strings.
         try:
-            if type(value_node) == ast.Num:
-                self.cqModel.add_script_parameter(
-                    InputParameter.create(value_node, var_name, NumberParameterType, value_node.n)
-                )
-            elif type(value_node) == ast.Str:
-                self.cqModel.add_script_parameter(
-                    InputParameter.create(value_node, var_name, StringParameterType, value_node.s)
-                )
-            elif type(value_node) == ast.Name:
+            if type(value_node) == ast.Name:
                 if value_node.id == "True":
                     self.cqModel.add_script_parameter(
                         InputParameter.create(value_node, var_name, BooleanParameterType, True)
@@ -520,17 +518,7 @@ class ConstantAssignmentFinder(ast.NodeTransformer):
                         tup,
                     )
                 )
-            elif hasattr(ast, "NameConstant") and type(value_node) == ast.NameConstant:
-                if value_node.value == True:
-                    self.cqModel.add_script_parameter(
-                        InputParameter.create(value_node, var_name, BooleanParameterType, True)
-                    )
-                else:
-                    self.cqModel.add_script_parameter(
-                        InputParameter.create(value_node, var_name, BooleanParameterType, False)
-                    )
-
-            elif hasattr(ast, "Constant") and type(value_node) == ast.Constant:
+            elif type(value_node) == ast.Constant:
 
                 type_dict = {
                     bool: BooleanParameterType,
@@ -555,17 +543,19 @@ class ConstantAssignmentFinder(ast.NodeTransformer):
 
     def handle_ann_assignment(self, var_name, annotation_id, value_node):
         try:
+            # 'value_node.value', not the '.n'/'.s' aliases: those were
+            # deprecated with ast.Num/ast.Str and removed in Python 3.14.
             if annotation_id == "int" or annotation_id == "float":
                 self.cqModel.add_script_parameter(
-                    InputParameter.create(value_node, var_name, NumberParameterType, value_node.n)
+                    InputParameter.create(value_node, var_name, NumberParameterType, value_node.value)
                 )
             elif annotation_id == "str":
                 self.cqModel.add_script_parameter(
-                    InputParameter.create(value_node, var_name, StringParameterType, value_node.s)
+                    InputParameter.create(value_node, var_name, StringParameterType, value_node.value)
                 )
             elif annotation_id == "bool":
                 self.cqModel.add_script_parameter(
-                    InputParameter.create(value_node, var_name, BooleanParameterType, value_node.s)
+                    InputParameter.create(value_node, var_name, BooleanParameterType, value_node.value)
                 )
 
         except:
@@ -581,13 +571,10 @@ class ConstantAssignmentFinder(ast.NodeTransformer):
             if isinstance(left_side, ast.Attribute):
                 return
 
-            # Handle the NamedConstant type that is only present in Python 3
-            astTypes = [ast.Num, ast.Str, ast.Name]
-            if hasattr(ast, "NameConstant"):
-                astTypes.append(ast.NameConstant)
-
-            if hasattr(ast, "Constant"):
-                astTypes.append(ast.Constant)
+            # ast.Constant covers every literal (number, string, bool, None);
+            # the ast.Num/ast.Str/ast.NameConstant aliases it replaced were
+            # removed in Python 3.14.
+            astTypes = [ast.Name, ast.Constant]
 
             if type(node.value) in astTypes:
                 self.handle_assignment(left_side.id, node.value)
