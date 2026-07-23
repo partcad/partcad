@@ -159,8 +159,9 @@ add_package("ocp_vscode")
 # cannot be extended with pip afterwards, so it carries all of them.
 add_package("openai", include_metadata=True)
 add_package("ollama", include_metadata=True)
-add_package("google.generativeai")
-add_metadata("google-generativeai")
+# Import name and distribution name differ, so these are two calls.
+add_package("google.genai")
+add_metadata("google-genai")
 
 # `pc lint` runs the linter as a subprocess. `ruff.__main__.find_ruff_bin()`
 # looks in `sysconfig.get_path("scripts")` first, which inside a frozen bundle
@@ -222,10 +223,12 @@ a = Analysis(
 # `google-api-python-client` ships a cached copy of the REST discovery document
 # of every Google API, ~100MB of JSON, and PyInstaller has a hook that collects
 # all of them. They are only read by `googleapiclient.discovery.build()`, which
-# nothing here calls: the Gemini SDK talks to the generative language API over
-# gRPC. Dropping the documents keeps the package importable and takes an eighth
-# off the bundle. This runs after the analysis because that is where the hook
-# added them; filtering the `datas` above would not see them.
+# nothing here calls. `google-genai` does not depend on that package at all -
+# unlike the `google-generativeai` it replaced - so this normally matches
+# nothing now. It is kept as a guard: the filter costs nothing, and without it
+# any transitive dependency that reintroduces the package silently adds an
+# eighth to the bundle. This runs after the analysis because that is where the
+# hook adds them; filtering the `datas` above would not see them.
 _discovery_documents = os.path.join("googleapiclient", "discovery_cache", "documents")
 a.datas = [entry for entry in a.datas if _discovery_documents not in os.path.normpath(entry[0])]
 

@@ -263,7 +263,7 @@ REQUIRED = {
     "ocp_vscode": "`pc inspect` (needs Python 3.11 or newer)",
     "openai": "the OpenAI provider",
     "ollama": "the Ollama provider",
-    "google.generativeai": "the Google Gemini provider",
+    "google.genai": "the Google Gemini provider",
     "ruff.__main__": "`pc lint` of Python files",
 }
 
