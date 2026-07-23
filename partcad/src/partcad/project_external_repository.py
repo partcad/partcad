@@ -10,6 +10,7 @@
 import asyncio
 import threading
 
+from .project import OBJECT_KINDS
 from .project_plugin import ProjectPlugin
 from . import logging as pc_logging
 
@@ -42,6 +43,7 @@ class ProjectExternalRepository(ProjectPlugin):
         name,
         path,
         plugin_ref: str = None,
+        subfolder: str = "",
         repository=None,
         cache=None,
         config_obj=None,
@@ -52,6 +54,11 @@ class ProjectExternalRepository(ProjectPlugin):
         # lazily, on first use, because the package that hosts it may not be
         # fully loaded when this package is constructed.
         self._plugin_ref = plugin_ref
+        # 'subfolder' scopes every request to a location within the repository.
+        # A hierarchy is served by one plugin: the top package uses "", and each
+        # child forwards the same requests under its own subfolder, so a child
+        # in "motors" asks for "motors/objects/part" instead of "objects/part".
+        self._subfolder = subfolder
         self._repository = repository
         self._cache = cache
         self._request_cache: dict[str, object] = {}
@@ -93,20 +100,64 @@ class ProjectExternalRepository(ProjectPlugin):
                 pc_logging.error("%s: repository plugin not found: %s" % (self.name, self._plugin_ref))
         return self._repository
 
-    def get_data(self, key: str):
-        """Fetch the value for 'key' from the repository plugin (cached)."""
+    def _scope(self, key: str) -> str:
+        """Prefix a key with this package's subfolder within the repository."""
+        return self._subfolder + "/" + key if self._subfolder else key
 
-        def handler():
+    async def get_data_async(self, key: str):
+        """Fetch the value for 'key' from the repository plugin (cached).
+
+        The async path used when already inside an event loop (e.g. the import
+        traversal). The scoped key is also the cache key, so sibling packages
+        served by the same repository never collide and the synchronous
+        'get_data' below reuses whatever this fetched.
+        """
+        scoped = self._scope(key)
+        with self._request_lock:
+            if scoped in self._request_cache:
+                return self._request_cache[scoped]
+
+        value = None
+        try:
             repository = self._get_repository()
-            if repository is None:
-                return None
-            # The repository query is async (it talks to a subprocess/endpoint);
-            # bridge it here. This is safe: enumeration is only ever first
-            # triggered from a synchronous accessor, never from within a running
-            # event loop (see Context.import_all / the CLI entry points).
-            return asyncio.run(repository.get_data(key))
+            if repository is not None:
+                value = await repository.get_data(scoped)
+        except Exception as e:
+            # A repository being broken or unreachable must not crash the caller
+            # (e.g. 'pc list' over many packages); treat it as empty.
+            pc_logging.error("%s: failed to fetch '%s' from the repository: %s" % (self.name, scoped, e))
 
-        return self.request(key, handler)
+        with self._request_lock:
+            return self._request_cache.setdefault(scoped, value)
+
+    def get_data(self, key: str):
+        """Synchronous fetch, for accessors reached outside an event loop.
+
+        Returns the cached value if present (so this never blocks once the async
+        traversal has warmed the cache); otherwise it bridges to the async fetch.
+        Bridging is only safe outside a running loop, which holds for the CLI
+        entry points; inside the loop, enumeration is warmed via
+        'ensure_enumerated_async' so this path stays a cache hit.
+        """
+        scoped = self._scope(key)
+        with self._request_lock:
+            if scoped in self._request_cache:
+                return self._request_cache[scoped]
+        return asyncio.run(self.get_data_async(key))
+
+    async def ensure_enumerated_async(self):
+        """Warm the object and dependency caches from the repository.
+
+        Called from the async import traversal so that the synchronous accessors
+        (object_configs, dependencies, ...) reached later only ever hit the
+        cache and never bridge to async from within a running loop.
+        """
+        for kind in OBJECT_KINDS:
+            if self._object_configs.get(kind) is None:
+                configs = await self.get_data_async("objects/" + kind)
+                self._object_configs[kind] = configs if configs else {}
+        # Warm 'deps' too, so the synchronous 'dependencies()' is a cache hit.
+        await self.get_data_async("deps")
 
     # --- Object-access hooks (see Project) sourced from the repository ---
 
@@ -116,3 +167,21 @@ class ProjectExternalRepository(ProjectPlugin):
 
     def _fetch_object_config(self, kind, name):
         return self.get_data("objects/" + kind + "/" + name)
+
+    def dependencies(self):
+        """Child packages of this package, served by the same repository.
+
+        The repository lists its children by name under the 'deps' key; each
+        child is imported as another external package backed by the same plugin,
+        forwarding requests under the child's subfolder. This is what lets a
+        plugin-backed package host a hierarchy just like a local monorepo.
+        """
+        names = self.get_data("deps") or []
+        deps = {}
+        for child in names:
+            deps[child] = {
+                "type": "external",
+                "plugin": self._plugin_ref,
+                "subfolder": self._scope(child),
+            }
+        return deps

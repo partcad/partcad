@@ -10,6 +10,8 @@ These inject a fake repository in place of the plugin subprocess/endpoint, so
 the lazy object-access layer is exercised without a runtime or a CAD kernel.
 """
 
+import asyncio
+
 import partcad as pc
 from partcad.project_external_repository import ProjectExternalRepository
 
@@ -75,3 +77,37 @@ def test_single_fetch_avoids_full_enumeration():
     assert repo.object_config("part", "bolt") == {"type": "step", "path": "bolt.step"}
     assert fake.keys == ["objects/part/bolt"]
     assert "objects/part" not in fake.keys
+
+
+def test_ensure_enumerated_async_warms_the_sync_accessors():
+    """After the async warm-up, the sync accessors never bridge to async."""
+    ctx = pc.Context("examples")
+    data = {"objects/part": {"bolt": {"type": "step"}}, "deps": ["child"]}
+    repo, fake = _make_repo(ctx, data)
+
+    asyncio.run(repo.ensure_enumerated_async())
+
+    # Now these are pure cache reads (no event loop involved).
+    assert repo.object_names("part") == ["bolt"]
+    assert list(repo.dependencies()) == ["child"]
+
+
+def test_hierarchy_forwards_under_a_subfolder():
+    """A child of the hierarchy scopes its requests to its subfolder."""
+    ctx = pc.Context("examples")
+    data = {
+        "deps": ["motors"],
+        "motors/objects/part": {"rotor": {"type": "step"}},
+    }
+    top = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//ext:remote")
+    fake = FakeRepository(data)
+    top._repository = fake
+
+    # The top package advertises its children with their subfolders.
+    assert top.dependencies()["motors"]["subfolder"] == "motors"
+
+    # A child scoped to 'motors' fetches 'motors/objects/part'.
+    child = ProjectExternalRepository(ctx, "//ext/motors", "/tmp/ext", plugin_ref="//ext:remote", subfolder="motors")
+    child._repository = fake
+    assert child.object_names("part") == ["rotor"]
+    assert "motors/objects/part" in fake.keys

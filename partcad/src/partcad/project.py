@@ -284,6 +284,30 @@ class Project(project_config.Configuration):
     def _fetch_object_config(self, kind: str, name: str):
         return None
 
+    def dependencies(self) -> dict:
+        """The declared child-package dependencies of this package.
+
+        Routed through an accessor so that a plugin-backed package can source
+        its children from the repository (see ProjectExternalRepository) instead
+        of from a 'dependencies' section on disk.
+        """
+        deps = self.config_obj.get("dependencies")
+        return deps if deps else {}
+
+    async def ensure_enumerated_async(self):
+        """Warm any lazily-enumerated data from within an async context.
+
+        A no-op for a local package (enumerated at construction). A plugin-backed
+        package overrides this to await its repository, so the synchronous
+        consumers downstream only ever hit the cache. Called from the import
+        traversal (see Context._import_all_recursive).
+        """
+        return None
+
+    def object_count(self, kind: str) -> int:
+        """Number of declared objects of a kind, without instantiating them."""
+        return len(self.object_configs(kind))
+
     # Backward-compatible views onto the object-access layer. These keep the
     # historical 'self.<kind>_configs' attribute name working (now sourced
     # through the accessor, so plugin packages enumerate lazily here too).
@@ -375,25 +399,26 @@ class Project(project_config.Configuration):
             return
 
         children = list()
-        sub_folders = [f.name for f in os.scandir(self.config_dir) if f.is_dir()]
-        for subdir in list(sub_folders):
-            if os.path.exists(
-                os.path.join(
-                    self.config_dir,
-                    subdir,
-                    consts.DEFAULT_PACKAGE_CONFIG,
-                )
-            ):
-                children.append(self.name + "/" + subdir if absolute else subdir)
+        if os.path.isdir(self.config_dir):
+            sub_folders = [f.name for f in os.scandir(self.config_dir) if f.is_dir()]
+            for subdir in list(sub_folders):
+                if os.path.exists(
+                    os.path.join(
+                        self.config_dir,
+                        subdir,
+                        consts.DEFAULT_PACKAGE_CONFIG,
+                    )
+                ):
+                    children.append(self.name + "/" + subdir if absolute else subdir)
 
-        if "dependencies" in self.config_obj and not self.config_obj["dependencies"] is None:
-            dependencies = self.config_obj["dependencies"]
+        dependencies = self.dependencies()
+        if dependencies:
             if not self.config_obj.get("isRoot", False):
-                filtered = filter(
-                    lambda x: "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"],
-                    dependencies,
-                )
-                dependencies = list(filtered)
+                dependencies = [
+                    x
+                    for x in dependencies
+                    if "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"]
+                ]
             if absolute:
                 children.extend([self.name + "/" + project_name for project_name in dependencies])
             else:

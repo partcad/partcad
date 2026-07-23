@@ -22,6 +22,9 @@ from . import telemetry
 class ExternalImportConfiguration:
     def __init__(self):
         self.plugin = self.config_obj.get("plugin", ":plugin")
+        # A child of a plugin-backed hierarchy carries the subfolder that scopes
+        # its requests within the repository. Empty for a top-level package.
+        self.subfolder = self.config_obj.get("subfolder", "")
 
 
 @telemetry.instrument()
@@ -58,6 +61,7 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
             self.name,
             self.path,
             plugin_ref=self.plugin,
+            subfolder=self.subfolder,
             cache=self.cache,
             inherited_config=self.inherited_config,
         )

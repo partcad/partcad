@@ -516,11 +516,19 @@ class Context:
             pc_logging.warn("Ignoring the broken package: %s" % project.name)
             return []
 
+        # A plugin-backed package is enumerated here, inside the async traversal,
+        # so that the synchronous consumers downstream (e.g. get_packages, the
+        # CLI 'list' commands) observe a populated package without having to
+        # bridge to async themselves.
+        await project.ensure_enumerated_async()
+
         # First, iterate all explicitly mentioned "dependencies"s.
         # Do it before iterating subdirectories, as it may kick off a long
-        # background task.
-        if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
-            dependencies = project.config_obj["dependencies"]
+        # background task. 'dependencies()' is an accessor so that a plugin
+        # package can report its children from the repository.
+        all_dependencies = project.dependencies()
+        if all_dependencies:
+            dependencies = all_dependencies
             pc_logging.debug("Checking the dependency: %s...(1)" % project.name)
             if not project.config_obj.get("isRoot", False):
                 filtered = filter(
@@ -530,7 +538,7 @@ class Context:
                 dependencies = list(filtered)
 
             for prj_name in dependencies:
-                prj_conf = project.config_obj["dependencies"][prj_name]
+                prj_conf = all_dependencies[prj_name]
                 pc_logging.debug("Checking the dependency: %s...." % prj_name)
 
                 if prj_conf.get("onlyInRoot", False):
@@ -549,8 +557,14 @@ class Context:
 
                 tasks.append(asyncio.create_task(threadpool_manager.run(self.import_project, project, prj_conf)))
 
-        # Second, iterate over all subfolder and check for packages
-        subfolders = [f.name for f in os.scandir(project.config_dir) if f.is_dir()]
+        # Second, iterate over all subfolder and check for packages. A
+        # plugin-backed package has no directory on disk, so there is nothing to
+        # scan; its children came from 'dependencies()' above.
+        subfolders = (
+            [f.name for f in os.scandir(project.config_dir) if f.is_dir()]
+            if os.path.isdir(project.config_dir)
+            else []
+        )
         for subdir in list(subfolders):
             if os.path.exists(
                 os.path.join(
@@ -590,8 +604,11 @@ class Context:
         if has_stuff:
             # Filter out projects that don't contain anything the user might be interested in.
             # TODO(clairbee): Add interfaces and providers to this list when the UIs are ready to display them
+            # Count via the object accessors (enumeration) rather than the
+            # instantiated dicts, so a plugin-backed package - which enumerates
+            # lazily and does not instantiate up front - is counted correctly.
             projects = filter(
-                lambda x: len(x.sketches) + len(x.parts) + len(x.assemblies) > 0,
+                lambda x: x.object_count("sketch") + x.object_count("part") + x.object_count("assembly") > 0,
                 projects,
             )
         return list(
