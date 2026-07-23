@@ -250,6 +250,22 @@ class Project(project_config.Configuration):
     #             self.path + "/" + self.config_obj["cover"]["package"]
     #         ).get_cover()
 
+    def info(self) -> dict:
+        """Return package-level information (name, description, URLs).
+
+        Mirrors the object factories' ``info()`` so that ``pc info`` can render
+        a package the same way it renders parts, sketches and assemblies. It
+        intentionally does not enumerate the package's objects.
+        """
+        info = {"Path": self.name}
+        if "url" in self.config_obj and self.config_obj["url"] is not None:
+            info["Url"] = self.config_obj["url"]
+        if "importUrl" in self.config_obj and self.config_obj["importUrl"] is not None:
+            info["ImportUrl"] = self.config_obj["importUrl"]
+        if self.desc:
+            info["Desc"] = self.desc
+        return info
+
     def matches(self, keyword: str) -> bool:
         if not keyword:
             return False

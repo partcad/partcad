@@ -164,6 +164,16 @@ class Shape(ShapeConfiguration):
     def get_cacheable(self) -> bool:
         return self.cacheable and not self.get_cache_dependencies_broken()
 
+    async def get_summary_async(self, project=None):
+        # Return a manually configured summary if present; otherwise None so
+        # that AI-backed shapes (ShapeWithAi) can generate one via super().
+        if "summary" in self.config and self.config["summary"] is not None:
+            return self.config["summary"]
+        return None
+
+    def get_summary(self, project=None):
+        return asyncio.run(self.get_summary_async(project))
+
     def get_async_lock(self) -> asyncio.Lock:
         if not hasattr(self.tls, "async_shape_locks"):
             self.tls.async_shape_locks = {}
@@ -685,15 +695,18 @@ class Shape(ShapeConfiguration):
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
                 return
 
-            if project is not None:
-                project.ctx.ensure_dirs_for_file(filepath)
-
             formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
 
             for format in formats_to_render:
                 file_extension = PART_EXTENSION_MAPPING.get(format, format)
                 render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
+                # Create the output directory for the resolved path. Use
+                # 'final_filepath' (the incoming 'filepath' is None when called
+                # from Project.render_async, which broke '--create-dirs' with a
+                # TypeError) and the 'ctx' passed in, so direct callers without a
+                # project still get '--create-dirs'.
+                ctx.ensure_dirs_for_file(final_filepath)
                 pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
 
                 wrapper_path = wrapper.get(f"render_{format}.py")

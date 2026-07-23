@@ -76,6 +76,19 @@ def cli(cli_ctx: CliContext, package, interface, assembly, sketch, scene, object
                 k, v = kv.split("=")
                 param_dict[k] = v
 
+        # Without an object name, show information about the current package
+        # (or the one selected via '-P') instead of crashing on a missing name.
+        if object is None:
+            package_name = ctx.resolve_package_path(package)
+            package_obj = ctx.get_project(package_name)
+            if not package_obj:
+                pc.logging.error(f"Package {package_name} is not found")
+                return
+            info = package_obj.info()
+            for k, v in info.items():
+                pc.logging.info(f"INFO: {k}: {pformat(v)}")
+            return
+
         package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object)
         path = f"{package}:{object}"
 

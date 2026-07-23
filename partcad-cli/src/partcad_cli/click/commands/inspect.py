@@ -88,6 +88,12 @@ def cli(cli_ctx: CliContext, context, verbal, package, interface, assembly, sket
                     k, v = kv.split("=")
                     param_dict[k] = v
 
+            if object is None:
+                pc.logging.error(
+                    "No object specified. Provide a part, assembly, sketch, interface, or scene to inspect."
+                )
+                return
+
             package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object)
             path = f"{package}:{object}"
 
