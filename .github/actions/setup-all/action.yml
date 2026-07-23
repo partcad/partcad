@@ -132,7 +132,15 @@ runs:
         if [ ! -d "${conda_root}/envs/test" ]; then
           mamba_create_retry -n test
         fi
-        mamba init
+        # mamba 2, which miniforge has shipped since 25.x, dropped "mamba init"
+        # in favour of "mamba shell init"; mamba 1 has only the former. Later
+        # steps just need 'mamba activate' to work in a login bash, so ask for
+        # bash explicitly on the new one.
+        if mamba shell init --help >/dev/null 2>&1; then
+          mamba shell init --shell bash
+        else
+          mamba init
+        fi
 
     # Install dev dependencies
     - name: install dev dependencies
