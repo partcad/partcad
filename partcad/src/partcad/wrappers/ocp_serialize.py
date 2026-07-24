@@ -92,7 +92,6 @@ import OCP
 # resolve as they always did.
 import OCP.BRep  # noqa: F401
 import OCP.BRepTools  # noqa: F401
-import OCP.gp  # noqa: F401
 import OCP.TopAbs  # noqa: F401
 import OCP.TopoDS  # noqa: F401
 
