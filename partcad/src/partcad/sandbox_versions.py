@@ -33,9 +33,23 @@ NLOPT = "nlopt==2.11.0"
 NUMPY = "numpy>=2.2,<3"
 
 # Only needed by the sandboxes that rasterize or export 2D formats.
-SVGLIB = "svglib==2.0.2"
-REPORTLAB = "reportlab==5.0.0"
-RLPYCAIRO = "rlpycairo==0.4.0"
+#
+# Deliberately held at the versions this repo already shipped, not bumped to the
+# newest releases. These run inside a fixed ~3.11 render sandbox, so they gain
+# nothing from the 3.10-3.14 widening, and svglib 2.0 is a ground-up rewrite
+# (new lxml/tinycss2 stack) whose behaviour change belongs in its own PR rather
+# than riding along in a dependency sweep.
+#
+# NOTE: bumping these is not what makes PNG rendering work. reportlab renders
+# PNG through renderPM's rlPyCairo backend (its wheels carry no compiled
+# '_renderPM'), so PNG needs pycairo -> cairo. pycairo has no Linux wheel and
+# building it against a system cairo is fragile (it broke on the ubuntu-22.04
+# runner); that is solved separately by installing pycairo from conda-forge
+# into the sandbox -- see runtime_python_conda. These versions are just the
+# proven-stable ones.
+SVGLIB = "svglib==1.5.1"
+REPORTLAB = "reportlab==4.4.3"
+RLPYCAIRO = "rlpycairo==0.3.0"
 SVGPATHTOOLS = "svgpathtools==1.7.2"
 EZDXF = "ezdxf==1.4.4"
 
