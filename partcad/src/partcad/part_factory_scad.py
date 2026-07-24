@@ -9,13 +9,13 @@
 
 import asyncio
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
 
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
+from .healthcheck.openscad import find_executable as find_openscad_executable
 from . import telemetry
 from . import wrapper
 
@@ -56,7 +56,11 @@ class PartFactoryScad(PartFactoryFile):
                 pc_logging.error("OpenSCAD script is empty or does not exist: %s" % part.path)
                 return None
 
-            scad_path = shutil.which("openscad")
+            # The bundled OpenSCAD first, the host's second -- unless the user
+            # opted out of the bundled one. See `partcad.healthcheck.openscad`.
+            scad_path = find_openscad_executable(
+                ignore_bundled=self.ctx.user_config.ignore_bundled_openscad
+            )
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 

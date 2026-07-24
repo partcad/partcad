@@ -9,7 +9,7 @@ with [`install.sh`](../../install.sh) and never see Python.
 | --- | --- | --- |
 | Install | `pip install -U partcad-cli` | `curl -fsSL .../install.sh \| sh` |
 | Needs Python | yes, 3.10-3.12 | no |
-| Size | ~15MB plus whatever pip resolves | ~800MB unpacked, ~230MB compressed |
+| Size | ~15MB plus whatever pip resolves | ~875MB unpacked, ~290MB compressed (Linux, OpenSCAD included) |
 | Optional extras (`ai`, `lint`) | installed on demand | always included |
 | Importable as a library | yes | no, it is only the CLI |
 
@@ -54,6 +54,40 @@ Freezing replaces the *installation*, not the architecture. PartCAD still runs C
 build123d, OpenSCAD) in a separate Python interpreter that it provisions itself with conda, and still clones
 package repositories with `git`. Both remain external prerequisites of the standalone bundle, exactly as they
 are for the wheels. `pc healthcheck` reports what is missing.
+
+## OpenSCAD
+
+The Linux and Windows bundles carry OpenSCAD, pinned to the version in `build.sh` and downloaded from
+`files.openscad.org` at build time (checksum-verified). `partcad.healthcheck.openscad.find_executable()` prefers it over
+any OpenSCAD on the host, and falls back to `shutil.which` when there is no bundled copy — which is what the
+wheels always do. A user can opt out of the bundled copy with `--ignore-bundled-openscad` /
+`IGNORE_BUNDLED_OPENSCAD=1` (`user_config.ignore_bundled_openscad`), which makes the resolver skip the
+payload and use the host's OpenSCAD — handy when the pinned version is too old, or on a minimal Linux host
+where the AppImage's library dependencies are absent.
+
+| | what ships | self-contained |
+| --- | --- | --- |
+| Linux | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib, harfbuzz from the host |
+| Windows | the portable build | yes — one statically linked `openscad.exe`, no DLLs |
+| macOS | nothing | — |
+
+The AppImage ships *unpacked* because running it as an image needs FUSE, which a minimal host may not have.
+
+It is **not** declared in `partcad.spec`: `build.sh` copies it into the bundle after PyInstaller has run.
+Declaring it in `datas` does not keep PyInstaller's hands off it — shared libraries found among data files
+are reclassified as binaries and collected into the top level of the bundle, which puts OpenSCAD's Qt, ICU
+and glib beside the ones Python needs, on the frozen application's own library search path, and duplicates
+~100MB. That means a bare `pyinstaller partcad.spec` produces a bundle without OpenSCAD; `build.sh` is the
+supported way to build one, as it already is for the dependency pre-flight.
+
+macOS is excluded because the 2021.01 release predates Apple silicon and ships an x86_64-only `.dmg`, which
+on the arm64 bundle would require Rosetta 2 — absent from a clean machine. Development snapshots may be
+universal binaries, but they are snapshots and their architecture has not been confirmed; `lipo -archs` on a
+mounted snapshot `.dmg` would settle it.
+
+To move to a different OpenSCAD, change `OPENSCAD_VERSION` in `build.sh`. Upstream publishes a `.sha256` next
+to each artifact and the build verifies it, so nothing else needs updating — but note the published checksum
+files name a `releases/` path rather than the bare file, which is why the build compares the hash alone.
 
 That sandbox is also why `partcad/wrappers/*.py` are bundled as *data* rather than frozen as modules: they are
 handed to that other interpreter as a file path.
