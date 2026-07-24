@@ -1034,6 +1034,9 @@ class Context:
                     sys.version_info.major,
                     sys.version_info.minor,
                 )
+            # A version like 3.11 declared in YAML arrives as a float; keep it a
+            # string so the runtime name below can be built by concatenation.
+            version = str(version)
             if python_runtime is None:
                 python_runtime = self.user_config.python_sandbox
             runtime_name = python_runtime + "-" + version

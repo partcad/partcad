@@ -110,7 +110,10 @@ class Configuration:
         # values: string (e.g. "3.10")
         # default: <The major and minor version of the current interpreter>
         if "pythonVersion" in self.config_obj:
-            self.python_version = self.config_obj["pythonVersion"]
+            # Coerce to a string: YAML parses e.g. 'pythonVersion: 3.11' as a
+            # float, which later breaks string concatenation when building the
+            # sandbox runtime name.
+            self.python_version = str(self.config_obj["pythonVersion"])
         else:
             self.python_version = "%d.%d" % (
                 sys.version_info.major,
