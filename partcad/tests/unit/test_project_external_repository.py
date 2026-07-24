@@ -11,8 +11,10 @@ the lazy object-access layer is exercised without a runtime or a CAD kernel.
 """
 
 import asyncio
+import shutil
 
 import partcad as pc
+from partcad.cache import Cache
 from partcad.project_external_repository import ProjectExternalRepository
 
 
@@ -90,6 +92,43 @@ def test_ensure_enumerated_async_warms_the_sync_accessors():
     # Now these are pure cache reads (no event loop involved).
     assert repo.object_names("part") == ["bolt"]
     assert list(repo.dependencies()) == ["child"]
+
+
+def test_on_disk_cache_persists_across_instances():
+    """A second package instance is served from disk without re-querying."""
+    ctx = pc.Context("examples")
+    cache = Cache("external/test_persist", ctx.user_config)
+    try:
+        data = {"objects/part": {"bolt": {"type": "step"}}}
+
+        first, fake1 = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache), FakeRepository(data)
+        first._repository = fake1
+        assert first.object_names("part") == ["bolt"]
+        assert fake1.keys == ["objects/part"]  # fetched from the repository
+
+        # A fresh in-memory instance sharing the on-disk cache; its repository
+        # would return nothing, so a correct read must come from disk.
+        second, fake2 = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", cache=cache), FakeRepository({})
+        second._repository = fake2
+        assert second.object_names("part") == ["bolt"]
+        assert fake2.keys == []  # served from disk, repository never called
+    finally:
+        shutil.rmtree(cache.cache_dir, ignore_errors=True)
+
+
+def test_metadata_materializes_from_the_repository():
+    """Package-level metadata comes from the 'meta' key; identity is protected."""
+    ctx = pc.Context("examples")
+    data = {
+        "meta": {"desc": "A remote package", "manufacturable": False, "render": {"svg": {}}, "name": "//evil"},
+    }
+    repo, _ = _make_repo(ctx, data)
+    asyncio.run(repo.ensure_enumerated_async())
+
+    assert repo.desc == "A remote package"
+    assert repo.is_manufacturable is False
+    assert repo.config_obj["render"] == {"svg": {}}
+    assert repo.name == "//ext"  # identity is never overridden by metadata
 
 
 def test_hierarchy_forwards_under_a_subfolder():

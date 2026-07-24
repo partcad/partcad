@@ -8,11 +8,16 @@
 #
 
 import asyncio
+import json
 import threading
 
+from .cache_hash import CacheHash
 from .project import OBJECT_KINDS
 from .project_plugin import ProjectPlugin
 from . import logging as pc_logging
+
+# Distinguishes "no cached value" from a cached value of None.
+_MISSING = object()
 
 
 class ProjectExternalRepository(ProjectPlugin):
@@ -108,27 +113,71 @@ class ProjectExternalRepository(ProjectPlugin):
         """Fetch the value for 'key' from the repository plugin (cached).
 
         The async path used when already inside an event loop (e.g. the import
-        traversal). The scoped key is also the cache key, so sibling packages
-        served by the same repository never collide and the synchronous
-        'get_data' below reuses whatever this fetched.
+        traversal). Three layers back it: the in-memory memo (this process), the
+        on-disk cache (across runs), and finally the repository itself. The
+        scoped key is the cache key throughout, so sibling packages served by
+        the same repository never collide and the synchronous 'get_data' below
+        reuses whatever this fetched.
         """
         scoped = self._scope(key)
+
+        # 1. In-memory memo.
         with self._request_lock:
             if scoped in self._request_cache:
                 return self._request_cache[scoped]
 
+        # 2. On-disk cache. Skipped on a forced refresh, but consulted anyway
+        #    when offline (there is no way to refresh), mirroring the git/tar
+        #    dependency factories.
+        offline = self.ctx.user_config.offline
+        if self._cache is not None and (not self.ctx.user_config.force_update or offline):
+            cached = await self._read_cache(scoped)
+            if cached is not _MISSING:
+                with self._request_lock:
+                    return self._request_cache.setdefault(scoped, cached)
+
+        # 3. The repository. A broken or unreachable repository must not crash
+        #    the caller (e.g. 'pc list' over many packages); treat it as empty.
         value = None
         try:
             repository = self._get_repository()
             if repository is not None:
                 value = await repository.get_data(scoped)
         except Exception as e:
-            # A repository being broken or unreachable must not crash the caller
-            # (e.g. 'pc list' over many packages); treat it as empty.
             pc_logging.error("%s: failed to fetch '%s' from the repository: %s" % (self.name, scoped, e))
+
+        # Persist a successful fetch so it survives across runs.
+        if value is not None and self._cache is not None:
+            await self._write_cache(scoped, value)
 
         with self._request_lock:
             return self._request_cache.setdefault(scoped, value)
+
+    def _cache_hash(self, scoped_key: str) -> CacheHash:
+        # The cache directory is already scoped to this repository instance, so
+        # the scoped key alone identifies the entry within it.
+        h = CacheHash(scoped_key, cache=True)
+        h.add_string(scoped_key)
+        return h
+
+    async def _read_cache(self, scoped_key: str):
+        try:
+            got = await self._cache.read_data_async(self._cache_hash(scoped_key), ["data"])
+            raw = got.get("data")
+            if raw is None:
+                return _MISSING
+            return json.loads(raw.decode())
+        except Exception as e:
+            pc_logging.debug("%s: cache read failed for '%s': %s" % (self.name, scoped_key, e))
+            return _MISSING
+
+    async def _write_cache(self, scoped_key: str, value):
+        try:
+            await self._cache.write_data_async(
+                self._cache_hash(scoped_key), {"data": json.dumps(value).encode()}
+            )
+        except Exception as e:
+            pc_logging.debug("%s: cache write failed for '%s': %s" % (self.name, scoped_key, e))
 
     def get_data(self, key: str):
         """Synchronous fetch, for accessors reached outside an event loop.
@@ -146,18 +195,45 @@ class ProjectExternalRepository(ProjectPlugin):
         return asyncio.run(self.get_data_async(key))
 
     async def ensure_enumerated_async(self):
-        """Warm the object and dependency caches from the repository.
+        """Warm the metadata, object and dependency caches from the repository.
 
         Called from the async import traversal so that the synchronous accessors
-        (object_configs, dependencies, ...) reached later only ever hit the
+        (object_configs, dependencies, desc, ...) reached later only ever hit the
         cache and never bridge to async from within a running loop.
         """
+        await self._materialize_meta_async()
         for kind in OBJECT_KINDS:
             if self._object_configs.get(kind) is None:
                 configs = await self.get_data_async("objects/" + kind)
                 self._object_configs[kind] = configs if configs else {}
         # Warm 'deps' too, so the synchronous 'dependencies()' is a cache hit.
         await self.get_data_async("deps")
+
+    async def _materialize_meta_async(self):
+        """Fill package-level metadata from the repository.
+
+        Metadata is just another key in the same key/value space, so a plugin
+        package can carry any package property a local one can (desc, render,
+        manufacturable, ...) with no new methods here. The location-derived
+        fields already set on the package win; the repository fills the rest.
+        """
+        meta = await self.get_data_async("meta")
+        if not meta:
+            return
+        # The repository supplies package properties, but never the identity
+        # (name) or the import-derived fields: those pin where and how this
+        # package was loaded. Child packages come from the 'deps' key, not from
+        # any 'dependencies' the metadata might carry.
+        protected = {"name", "type", "isRoot", "importUrl", "dependencies"}
+        for key, value in meta.items():
+            if key not in protected:
+                self.config_obj[key] = value
+        # Re-derive the fields Configuration computed from config_obj at
+        # construction, now that the repository has supplied them.
+        if isinstance(meta.get("desc"), str):
+            self.desc = meta["desc"].strip()
+        if "manufacturable" in meta:
+            self.is_manufacturable = bool(meta["manufacturable"])
 
     # --- Object-access hooks (see Project) sourced from the repository ---
 

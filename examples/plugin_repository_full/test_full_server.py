@@ -15,6 +15,8 @@ import sys
 
 import pytest
 
+pytest.importorskip("flask")
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 import server  # noqa: E402

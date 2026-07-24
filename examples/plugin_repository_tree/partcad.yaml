@@ -1,0 +1,26 @@
+name: //pub/examples/partcad/plugin_repository_tree
+desc: |
+  Example of a hierarchy of packages served by one repository plugin.
+
+doc:
+  intro: |
+    The 'example' package is served by the 'remote' repository plugin. When its
+    children are listed, the plugin reports two sub-packages ('brackets' and
+    'motors'); each is imported as another external package backed by the same
+    plugin, forwarding its requests under its own subfolder. The top package
+    also hosts a shared supply provider.
+  usage: |
+    ```
+    pc list packages example
+    pc list parts -r example
+    pc inspect example/motors:gearbox
+    ```
+
+dependencies:
+  example:
+    type: external
+    plugin: :remote
+
+repositories:
+  remote:
+    type: basic

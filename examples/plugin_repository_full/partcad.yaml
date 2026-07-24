@@ -1,0 +1,33 @@
+name: //pub/examples/partcad/plugin_repository_full
+desc: |
+  Example of a package whose parts are served by an RPC/web server.
+
+doc:
+  intro: |
+    Unlike 'plugin_repository_basic', which hardcodes its data in the plugin
+    script, this example serves it from a Flask endpoint (server.py) that the
+    plugin (remote.py) calls over HTTP. The endpoint is short-lived and covered
+    by its own pytest (test_server.py, test_remote.py), independently of
+    PartCAD.
+  usage: |
+    ```
+    # in one shell: python server.py
+    pc list parts example
+    pc inspect example:cube
+    ```
+
+dependencies:
+  # 'example' is a package whose contents are served by the 'remote' repository
+  # plugin, which forwards each request to the HTTP endpoint.
+  example:
+    type: external
+    plugin: :remote
+
+repositories:
+  remote:
+    type: basic
+    parameters:
+      endpoint:
+        type: string
+        desc: The base URL of the repository endpoint.
+        default: http://127.0.0.1:5000
