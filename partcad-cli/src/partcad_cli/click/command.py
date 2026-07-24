@@ -546,10 +546,13 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 exc.exit_code = 2
                 raise exc from e
             except Exception as e:
-                import traceback
-
                 pc.logging.error(e)
-                traceback.print_exc()
+                # Keep the traceback for troubleshooting, but do not dump it at
+                # the user during normal operation.
+                if logging.getLogger("partcad").isEnabledFor(logging.DEBUG):
+                    import traceback
+
+                    traceback.print_exc()
                 raise click.Abort from e
 
         # Pass everything the commands might need through the context object
@@ -591,6 +594,13 @@ def main():
         cli()
     except Exception as e:
         sentry_sdk.capture_exception(e)
+        # When a clean error was already reported to the user (for example a
+        # repository that could not be cloned), do not additionally dump a
+        # traceback. Unexpected failures stay loud so that real bugs are not
+        # hidden, and the traceback remains available under '-v'.
+        if pc.logging.had_errors and not logging.getLogger("partcad").isEnabledFor(logging.DEBUG):
+            pc.logging.error(str(e) if str(e) else type(e).__name__)
+            sys.exit(1)
         raise e
 
 

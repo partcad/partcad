@@ -19,5 +19,5 @@ dependencies:
   pub:
     onlyInRoot: true
     type: git
-    url: https://github.com/openvmp/partcad-index.git
+    url: https://github.com/partcad/partcad-index.git
   # NOTE: The subdirectories automatically become dependencies of the "local" type

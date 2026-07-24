@@ -55,7 +55,7 @@ The command line tools are the easiest way to browse parts:
     pc init
 
     # List all available packages
-    pc list
+    pc list packages
 
     # List all sketches in all available packages
     pc list sketches -r

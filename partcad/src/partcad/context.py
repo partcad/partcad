@@ -959,7 +959,8 @@ class Context(project_config.Configuration):
         if not self.option_create_dirs:
             return
         path = os.path.dirname(filename)
-        os.makedirs(path)
+        if path:
+            os.makedirs(path, exist_ok=True)
 
     def get_all_tests(self):
         return all_tests(self.user_config.threads_max)
