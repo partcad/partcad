@@ -46,6 +46,7 @@ PART_EXTENSION_MAPPING = {
     "gltf": "json",
     "cadquery": "py",
     "build123d": "py",
+    "sdf": "py",
     "scad": "scad",
 }
 
@@ -65,6 +66,7 @@ LIVE_OBJECT_PART_TYPES = frozenset({"build123d", "cadquery"})
 # (see part_factory_scad.py); nothing writes it back out.
 UNEXPORTABLE_PART_TYPES = {
     "scad": "PartCAD can read OpenSCAD but cannot write it",
+    "sdf": "PartCAD can read SDF scripts but cannot write them",
 }
 
 # Every part type named by the extension mappings that 'Shape.convert()' can
@@ -726,6 +728,13 @@ class Shape(ShapeConfiguration):
                     if self.kind == "sketch":
                         request["viewport_up"] = viewport_up or [0, 1, 0]
                     request["line_weight"] = line_weight
+
+                    # SDF parts (including AI-generated ones) are meshes: the
+                    # wrapped shape is a triangulation with no edges to project,
+                    # so ask the render runtime to normalize it first (see
+                    # wrapper_render_svg._normalize_mesh).
+                    if self.config.get("type") in ("sdf", "ai-sdf"):
+                        request["normalize_mesh"] = True
 
                     if format == "png":
                         request["width"] = kwargs.get("width", 512)
