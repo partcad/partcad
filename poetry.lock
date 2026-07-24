@@ -533,30 +533,24 @@ files = [
 
 [[package]]
 name = "behave"
-version = "1.3.3"
+version = "1.2.6"
 description = "behave is behaviour-driven development, Python style"
 optional = false
-python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
+python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 groups = ["test"]
 files = [
-    {file = "behave-1.3.3-py2.py3-none-any.whl", hash = "sha256:89bdb62af8fb9f147ce245736a5de69f025e5edfb66f1fbe16c5007493f842c0"},
-    {file = "behave-1.3.3.tar.gz", hash = "sha256:2b8f4b64ed2ea756a5a2a73e23defc1c4631e9e724c499e46661778453ebaf51"},
+    {file = "behave-1.2.6-py2.py3-none-any.whl", hash = "sha256:ebda1a6c9e5bfe95c5f9f0a2794e01c7098b3dde86c10a95d8621c5907ff6f1c"},
+    {file = "behave-1.2.6.tar.gz", hash = "sha256:b9662327aa53294c1351b0a9c369093ccec1d21026f050c3bd9b3e5cccf81a86"},
 ]
 
 [package.dependencies]
-colorama = ">=0.3.7"
-cucumber-expressions = {version = ">=17.1.0", markers = "python_version >= \"3.8\""}
-cucumber-tag-expressions = ">=4.1.0"
-parse = ">=1.18.0"
-parse-type = ">=0.6.0"
-six = ">=1.15.0"
-tomli = {version = ">=1.1.0", markers = "python_version >= \"3.0\" and python_version < \"3.11\""}
+parse = ">=1.8.2"
+parse-type = ">=0.4.2"
+six = ">=1.11"
 
 [package.extras]
-develop = ["PyHamcrest (<2.0) ; python_version < \"3.0\"", "PyHamcrest (>=2.0.2) ; python_version >= \"3.0\"", "build (>=0.5.1)", "coverage (>=5.0)", "invoke (>=1.7.0) ; python_version >= \"3.6\"", "invoke (>=1.7.0,<2.0) ; python_version < \"3.6\"", "mock (<4.0) ; python_version < \"3.6\"", "mock (>=4.0) ; python_version >= \"3.6\"", "modernize (>=0.5)", "path (>=13.1.0) ; python_version >= \"3.5\"", "path.py (>=11.5.0) ; python_version < \"3.5\"", "pycmd", "pylint", "pytest (>=4.2,<5.0) ; python_version < \"3.0\"", "pytest (>=5.0) ; python_version >= \"3.0\"", "pytest-cov", "pytest-html (>=1.19.0,<2.0) ; python_version < \"3.0\"", "pytest-html (>=2.0) ; python_version >= \"3.0\"", "ruff ; python_version >= \"3.7\"", "tox (>=3.28.0,<4.0)", "twine (>=1.13.0)", "virtualenv (<20.22.0) ; python_version < \"3.7\"", "virtualenv (>=20.26.6) ; python_version >= \"3.7\""]
-docs = ["furo (>=2024.04.27) ; python_version >= \"3.8\"", "sphinx (>=1.6,<4.4) ; python_version < \"3.7\"", "sphinx (>=7.4.0) ; python_version >= \"3.7\"", "sphinx-copybutton (>=0.5.2) ; python_version >= \"3.7\"", "sphinxcontrib-applehelp (>=1.0.8) ; python_version >= \"3.7\"", "sphinxcontrib-htmlhelp (>=2.0.5) ; python_version >= \"3.7\""]
-formatters = ["behave-html-formatter (>=0.9.10) ; python_version >= \"3.6\"", "behave-html-pretty-formatter (>=1.9.1) ; python_version >= \"3.6\""]
-testing = ["PyHamcrest (<2.0) ; python_version < \"3.0\"", "PyHamcrest (>=2.0.2) ; python_version >= \"3.0\"", "assertpy (>=1.1)", "chardet", "freezegun (>=1.5.1) ; python_version > \"3.7\"", "mock (<4.0) ; python_version < \"3.6\"", "mock (>=4.0) ; python_version >= \"3.6\"", "path (>=13.1.0) ; python_version >= \"3.5\"", "path.py (>=11.5.0,<13.0) ; python_version < \"3.5\"", "pytest (<5.0) ; python_version < \"3.0\"", "pytest (>=5.0) ; python_version >= \"3.0\"", "pytest-html (>=1.19.0,<2.0) ; python_version < \"3.0\"", "pytest-html (>=2.0) ; python_version >= \"3.0\""]
+develop = ["coverage", "invoke (>=0.21.0)", "modernize (>=0.5)", "path.py (>=8.1.2)", "pathlib", "pycmd", "pylint", "pytest (>=3.0)", "pytest-cov", "tox"]
+docs = ["sphinx (>=1.6)", "sphinx-bootstrap-theme (>=0.6)"]
 
 [[package]]
 name = "behavex"
@@ -1187,7 +1181,7 @@ files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
 ]
-markers = {main = "os_name == \"nt\"", cli = "platform_system == \"Windows\" or sys_platform == \"win32\"", dev = "os_name == \"nt\" or platform_system == \"Windows\"", partcad = "sys_platform == \"win32\" or platform_system == \"Windows\""}
+markers = {main = "os_name == \"nt\"", cli = "platform_system == \"Windows\" or sys_platform == \"win32\"", dev = "os_name == \"nt\" or platform_system == \"Windows\"", partcad = "sys_platform == \"win32\" or platform_system == \"Windows\"", test = "os_name == \"nt\" or platform_system == \"Windows\" or sys_platform == \"win32\""}
 
 [[package]]
 name = "colorlog"
@@ -1597,30 +1591,6 @@ python-versions = "*"
 groups = ["test"]
 files = [
     {file = "csscompressor-0.9.5.tar.gz", hash = "sha256:afa22badbcf3120a4f392e4d22f9fff485c044a1feda4a950ecc5eba9dd31a05"},
-]
-
-[[package]]
-name = "cucumber-expressions"
-version = "20.0.0"
-description = "Cucumber Expressions - a simpler alternative to Regular Expressions"
-optional = false
-python-versions = ">=3.10"
-groups = ["test"]
-files = [
-    {file = "cucumber_expressions-20.0.0-py3-none-any.whl", hash = "sha256:8a0434529efd7ca6e2052934ec8d677c7e24edc0fad3b1d1b1bc4bbca5e521f3"},
-    {file = "cucumber_expressions-20.0.0.tar.gz", hash = "sha256:5cbd4012c66584aa82ada990a6e7cb131274796e132e905d27d95ae9a2ca0f48"},
-]
-
-[[package]]
-name = "cucumber-tag-expressions"
-version = "11.0.0"
-description = "Provides a tag-expression parser and evaluation logic for cucumber/behave"
-optional = false
-python-versions = ">=3.10"
-groups = ["test"]
-files = [
-    {file = "cucumber_tag_expressions-11.0.0-py3-none-any.whl", hash = "sha256:86ce0647bed1e52d6a634649c31758faa22821531541848f221b1f6c4f75c9f7"},
-    {file = "cucumber_tag_expressions-11.0.0.tar.gz", hash = "sha256:9739a7b3e04b3ee9f77748d2b48dc9e7ff41b041ed6b651283cfec022f0e6d0b"},
 ]
 
 [[package]]
@@ -8852,4 +8822,4 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "84452011335ca632a5fa7685679afb7b6ecd9e3a1c40c6536ed20a8ea57a46a4"
+content-hash = "ce5ec74c99b051e76d8d697aebd361a257a8cedc44902e213518bafdce8033cb"
