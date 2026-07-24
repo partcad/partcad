@@ -97,6 +97,18 @@ parts:
         type: float
         default: 10
 
+  box_sdf:
+    desc: This is a box defined using SDF.
+    type: sdf
+    path: sdf/box.py
+    parameters:
+      width:
+        default: 1.0
+      length:
+        default: 1.0
+      height:
+        default: 1.0
+
 
 # ---------------------------- #
 # Enrich parts

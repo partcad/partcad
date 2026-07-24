@@ -625,7 +625,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|brep|stl|3mf|extrude|sweep>
+      type: <openscad|cadquery|build123d|sdf|ai-openscad|ai-cadquery|ai-build123d|step|brep|stl|3mf|extrude|sweep>
       desc: <(optional) textual description, also used by AI>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       # ... type-specific options ...
@@ -658,7 +658,7 @@ Define parts with CodeCAD scripts using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d>
+      type: <openscad|cadquery|build123d|sdf>
       cwd: <alternative current working directory>
       showObject: <(optional) the name of the object to show using "show_object(...)">
       patch:

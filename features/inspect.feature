@@ -104,6 +104,13 @@ Feature: `pc inspect` command
     | package | part |
     | /produce_part_build123d_primitive | cube |
 
+  @sdf
+  Examples: Part: sdf
+    | package | part |
+    | /produce_part_sdf | box |
+    | /produce_part_sdf | gear |
+    | /produce_part_sdf | blobby |
+
   @cadquery
   Examples: Part: cadquery
     | package | part |
