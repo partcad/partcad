@@ -60,7 +60,10 @@ are for the wheels. `pc healthcheck` reports what is missing.
 The Linux and Windows bundles carry OpenSCAD, pinned to the version in `build.sh` and downloaded from
 `files.openscad.org` at build time (checksum-verified). `partcad.healthcheck.openscad.find_executable()` prefers it over
 any OpenSCAD on the host, and falls back to `shutil.which` when there is no bundled copy — which is what the
-wheels always do.
+wheels always do. A user can opt out of the bundled copy with `--ignore-bundled-openscad` /
+`IGNORE_BUNDLED_OPENSCAD=1` (`user_config.ignore_bundled_openscad`), which makes the resolver skip the
+payload and use the host's OpenSCAD — handy when the pinned version is too old, or on a minimal Linux host
+where the AppImage's library dependencies are absent.
 
 | | what ships | self-contained |
 | --- | --- | --- |

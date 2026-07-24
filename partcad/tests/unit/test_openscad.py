@@ -81,3 +81,17 @@ def test_none_when_there_is_no_openscad_anywhere(monkeypatch):
     monkeypatch.delattr(pc_openscad.sys, "frozen", raising=False)
     monkeypatch.setattr(pc_openscad.shutil, "which", lambda _name: None)
     assert pc_openscad.find_executable() is None
+
+
+def test_ignore_bundled_uses_the_host_even_inside_a_bundle(bundle, monkeypatch):
+    """The opt-out: with ignore_bundled the host's OpenSCAD wins over the payload."""
+    _make_payload(bundle)  # a bundled copy exists...
+    monkeypatch.setattr(pc_openscad.shutil, "which", lambda _name: "/usr/bin/openscad")
+    assert pc_openscad.find_executable(ignore_bundled=True) == "/usr/bin/openscad"
+
+
+def test_ignore_bundled_returns_none_when_the_host_has_none(bundle, monkeypatch):
+    """Opting out of the bundled copy leaves nothing when the host has none."""
+    _make_payload(bundle)
+    monkeypatch.setattr(pc_openscad.shutil, "which", lambda _name: None)
+    assert pc_openscad.find_executable(ignore_bundled=True) is None

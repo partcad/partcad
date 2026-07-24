@@ -389,6 +389,20 @@ class UserConfig(vyper.Vyper):
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
         self.python_sandbox = self.get_string("pythonSandbox")
 
+        # option: ignoreBundledOpenscad
+        # description: ignore the OpenSCAD that the standalone bundle carries and
+        #              use the one installed on the host instead. Only the
+        #              standalone (PyInstaller) build carries an OpenSCAD; the
+        #              wheels never do, so this has no effect there.
+        # values: [True | False]
+        # default: False
+        # Bound to IGNORE_BUNDLED_OPENSCAD (without the PC_ prefix the other
+        # options use) because it is a property of the bundle rather than of a
+        # PartCAD run, so a user is likely to set it once in their environment.
+        self.set_default("ignoreBundledOpenscad", False)
+        self.bind_env("ignoreBundledOpenscad", "IGNORE_BUNDLED_OPENSCAD")
+        self.ignore_bundled_openscad = self.get_bool("ignoreBundledOpenscad")
+
         # option: internalStateDir
         # description: folder to store all temporary files
         # values: <path>

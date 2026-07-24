@@ -235,12 +235,14 @@ On Linux and Windows it also carries **OpenSCAD**, which PartCAD runs as an exte
 bundle behaves the same everywhere rather than depending on which version a given host happens to have. Two
 consequences worth knowing:
 
-* A newer OpenSCAD installed on the machine will *not* be used by the standalone build. If you need a
-  specific OpenSCAD, use the wheels, which always use the host's.
+* A newer OpenSCAD installed on the machine is *not* used by default. To use the host's OpenSCAD instead of
+  the bundled one, pass ``--ignore-bundled-openscad`` or set ``IGNORE_BUNDLED_OPENSCAD=1`` in the
+  environment. (Outside the standalone build there is no bundled OpenSCAD, so the option does nothing.)
 * On Linux the bundled OpenSCAD is the upstream AppImage, which resolves a few libraries from the host
   (``libGL``, ``libX11``, ``libxcb``, ``fontconfig``, ``freetype``, ``glib``, ``harfbuzz``). Desktop
   installations have these; a stripped-down container or a minimal server may not, and there the bundled
-  OpenSCAD will not start.
+  OpenSCAD will not start -- pass ``--ignore-bundled-openscad`` to fall back to a host OpenSCAD if you have
+  one.
 
 The macOS bundle carries no OpenSCAD: the last OpenSCAD release predates Apple silicon and ships an
 Intel-only build, which would quietly require Rosetta 2. On macOS, install OpenSCAD yourself and PartCAD
