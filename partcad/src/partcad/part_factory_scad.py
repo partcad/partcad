@@ -81,13 +81,47 @@ def _write_render_script(source_path, call_line):
     """
     with open(source_path, "r") as f:
         source = f.read()
-    tmp_path = tempfile.mktemp(".scad")
-    with open(tmp_path, "w") as f:
+    fd, tmp_path = tempfile.mkstemp(suffix=".scad")
+    with os.fdopen(fd, "w") as f:
         f.write(source)
         if source and not source.endswith("\n"):
             f.write("\n")
         f.write(call_line + "\n")
     return tmp_path
+
+
+def _build_render_args(scad_executable, stl_path, source_path, config):
+    """Assemble the OpenSCAD command line for a part.
+
+    Returns ``(args, tmp_scad_path)``. When the config names a ``method``, the
+    parameters become a call appended to a throwaway copy of the source, whose
+    path is returned so the caller can delete it after the render. Otherwise the
+    parameters become ``-D name=value`` variable overrides and the source is
+    rendered directly. ``tmp_scad_path`` is ``None`` when no copy was made.
+    """
+    values = _parameter_values(config)
+    method = config.get("method")
+
+    tmp_scad_path = None
+    define_args = []
+    if method:
+        tmp_scad_path = _write_render_script(source_path, _build_method_call(method, values))
+        render_path = tmp_scad_path
+    else:
+        render_path = source_path
+        if values:
+            define_args = _build_define_args(values)
+
+    args = [
+        scad_executable,
+        "--export-format",
+        "binstl",
+        "-o",
+        stl_path,
+        *define_args,
+        render_path,
+    ]
+    return args, tmp_scad_path
 
 
 @telemetry.instrument()
@@ -129,36 +163,17 @@ class PartFactoryScad(PartFactoryFile):
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 
-            # Parameters either override the script's top-level variables
-            # ('-D name=value') or, when a module is named via 'method', are
-            # passed to a call to that module appended to a throwaway copy of
-            # the script (the source file is never modified).
-            values = _parameter_values(self.config)
-            method = self.config.get("method")
-
             with telemetry.start_as_current_span(
                 "PartFactoryScad.instantiate.*{asyncio.create_subprocess_exec}"
             ) as span:
-                stl_path = tempfile.mktemp(".stl")
+                fd, stl_path = tempfile.mkstemp(suffix=".stl")
+                os.close(fd)  # OpenSCAD writes to the path itself via '-o'
 
-                render_path = part.path
-                tmp_scad_path = None
-                define_args = []
-                if method:
-                    tmp_scad_path = _write_render_script(part.path, _build_method_call(method, values))
-                    render_path = tmp_scad_path
-                elif values:
-                    define_args = _build_define_args(values)
-
-                args = [
-                    scad_path,
-                    "--export-format",
-                    "binstl",
-                    "-o",
-                    stl_path,
-                    *define_args,
-                    render_path,
-                ]
+                # Parameters either override the script's top-level variables
+                # ('-D name=value') or, when a module is named via 'method', are
+                # passed to a call to that module appended to a throwaway copy of
+                # the script (the source file is never modified).
+                args, tmp_scad_path = _build_render_args(scad_path, stl_path, part.path, self.config)
                 span.set_attribute("cmd", " ".join(args))
                 try:
                     p = await asyncio.create_subprocess_exec(
