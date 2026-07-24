@@ -44,6 +44,12 @@ PYTHON="${PYTHON:-python3}"
 # rebuild of a given PartCAD version produces the same bundle, and matching the
 # version `partcad.healthcheck.openscad` installs on Windows hosts.
 OPENSCAD_VERSION="2021.01"
+# The staged payload is keyed by version, so that bumping OPENSCAD_VERSION and
+# rebuilding in a tree that still holds an old `build/` fetches the new version
+# rather than silently reusing the stale one (`build/` is not wiped between
+# builds, and CI aside, nobody wipes it by hand). Stale siblings are harmless:
+# `build/` is gitignored, and only the matching directory is ever read.
+OPENSCAD_PAYLOAD_DIR="${OPENSCAD_STAGE_DIR}/payload-${OPENSCAD_VERSION}"
 
 INSTALL_DEPENDENCIES=1
 CREATE_ARCHIVE=1
@@ -136,14 +142,14 @@ fi
 
 # The bundle carries OpenSCAD, so `pc` can build .scad parts on a machine that
 # has none, and prefers it over any copy installed on the host (see
-# `partcad.openscad`).
+# `partcad.healthcheck.openscad`).
 #
 # Linux takes the upstream AppImage but ships it *extracted*: running an
 # AppImage as an image needs FUSE, which a minimal host may not have, while the
 # extracted tree runs anywhere. Note that the AppImage is not fully
-# self-contained -- it resolves libGL, libX11, fontconfig, freetype, glib and
-# harfbuzz from the host -- so on a stripped-down Linux system the bundled
-# OpenSCAD still needs those present. Windows takes the upstream portable
+# self-contained -- it resolves libGL, libX11, libxcb, fontconfig, freetype,
+# glib and harfbuzz from the host -- so on a stripped-down Linux system the
+# bundled OpenSCAD still needs those present. Windows takes the upstream portable
 # build, a single statically linked executable that needs nothing at all.
 #
 # macOS is deliberately excluded. The 2021.01 release predates Apple Silicon
@@ -155,8 +161,8 @@ fi
 # OpenSCAD, exactly as the wheels do.
 stage_openscad() {
   local artifact download_dir payload_dir entry_point
-  download_dir="${OPENSCAD_STAGE_DIR}/download"
-  payload_dir="${OPENSCAD_STAGE_DIR}/payload"
+  download_dir="${OPENSCAD_STAGE_DIR}/download-${OPENSCAD_VERSION}"
+  payload_dir="${OPENSCAD_PAYLOAD_DIR}"
 
   case "${PLATFORM}" in
   linux-x86_64)
@@ -285,7 +291,7 @@ rm -rf "${OUTPUT_DIR}/partcad"
   "${SPEC_DIR}/partcad.spec"
 
 BUNDLE_DIR="${OUTPUT_DIR}/partcad"
-# `sys._MEIPASS`, which is where `partcad.openscad` looks for the payload.
+# `sys._MEIPASS`, which is where `partcad.healthcheck.openscad` looks for the payload.
 OPENSCAD_BUNDLED_DIR="${BUNDLE_DIR}/_internal/openscad"
 
 # OpenSCAD is copied in after the freeze rather than declared in the spec.
@@ -296,10 +302,10 @@ OPENSCAD_BUNDLED_DIR="${BUNDLE_DIR}/_internal/openscad"
 # tree in here keeps OpenSCAD's libraries where only OpenSCAD will find them.
 # `cp -a` also carries the executable bits over, which the tar and the zip then
 # preserve; PyInstaller would have dropped them.
-if [ -d "${OPENSCAD_STAGE_DIR}/payload" ]; then
+if [ -d "${OPENSCAD_PAYLOAD_DIR}" ]; then
   echo "==> Installing the bundled OpenSCAD"
   rm -rf "${OPENSCAD_BUNDLED_DIR}"
-  cp -a "${OPENSCAD_STAGE_DIR}/payload" "${OPENSCAD_BUNDLED_DIR}"
+  cp -a "${OPENSCAD_PAYLOAD_DIR}" "${OPENSCAD_BUNDLED_DIR}"
 fi
 
 echo "==> Smoke testing the bundle"
@@ -311,17 +317,27 @@ trap 'rm -rf "${SMOKE_DIR}"' EXIT
 (cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/partcad${EXE_SUFFIX}" --help >/dev/null)
 
 if [ -d "${OPENSCAD_BUNDLED_DIR}" ]; then
-  # First that the payload itself runs: this is what catches a data file that
-  # shipped without its executable bit, or an AppImage tree that lost a piece
-  # on the way in.
+  # First that the payload itself runs, and that it is the version we pinned:
+  # this catches a data file that shipped without its executable bit, an
+  # AppImage tree that lost a piece on the way in, and a stale payload left in
+  # `build/` from a different OPENSCAD_VERSION. OpenSCAD prints its version to
+  # stderr.
   if [ "${OS_NAME}" = "windows" ]; then
-    (cd "${SMOKE_DIR}" && "${OPENSCAD_BUNDLED_DIR}/openscad.exe" --version)
+    openscad_version_output="$(cd "${SMOKE_DIR}" && "${OPENSCAD_BUNDLED_DIR}/openscad.exe" --version 2>&1)"
   else
-    (cd "${SMOKE_DIR}" && "${OPENSCAD_BUNDLED_DIR}/AppRun" --version)
+    openscad_version_output="$(cd "${SMOKE_DIR}" && "${OPENSCAD_BUNDLED_DIR}/AppRun" --version 2>&1)"
   fi
+  echo "    ${openscad_version_output}"
+  case "${openscad_version_output}" in
+  *"OpenSCAD version ${OPENSCAD_VERSION}"*) ;;
+  *)
+    echo "error: bundled OpenSCAD is not ${OPENSCAD_VERSION}: '${openscad_version_output}'" >&2
+    exit 1
+    ;;
+  esac
 
   # Then that `pc` resolves an OpenSCAD at all. Note what this does and does not
-  # prove: the health check reports only that `partcad.openscad` found one, so
+  # prove: the health check reports only that `partcad.healthcheck.openscad` found one, so
   # it demonstrates the bundled copy was used only on a machine that has no
   # OpenSCAD of its own, which is why the host is reported alongside. That the
   # bundled copy *wins* over a host one is pinned down by the unit tests, where

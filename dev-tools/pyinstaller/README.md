@@ -58,7 +58,7 @@ are for the wheels. `pc healthcheck` reports what is missing.
 ## OpenSCAD
 
 The Linux and Windows bundles carry OpenSCAD, pinned to the version in `build.sh` and downloaded from
-`files.openscad.org` at build time (checksum-verified). `partcad.openscad.find_executable()` prefers it over
+`files.openscad.org` at build time (checksum-verified). `partcad.healthcheck.openscad.find_executable()` prefers it over
 any OpenSCAD on the host, and falls back to `shutil.which` when there is no bundled copy — which is what the
 wheels always do.
 

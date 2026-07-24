@@ -15,7 +15,7 @@ import tempfile
 
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
-from . import openscad
+from .healthcheck.openscad import find_executable as find_openscad_executable
 from . import telemetry
 from . import wrapper
 
@@ -56,8 +56,9 @@ class PartFactoryScad(PartFactoryFile):
                 pc_logging.error("OpenSCAD script is empty or does not exist: %s" % part.path)
                 return None
 
-            # The bundled OpenSCAD first, the host's second. See `partcad.openscad`.
-            scad_path = openscad.find_executable()
+            # The bundled OpenSCAD first, the host's second. See
+            # `partcad.healthcheck.openscad`.
+            scad_path = find_openscad_executable()
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 

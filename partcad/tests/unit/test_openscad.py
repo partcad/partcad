@@ -9,7 +9,7 @@ import stat
 
 import pytest
 
-import partcad.openscad as pc_openscad
+import partcad.healthcheck.openscad as pc_openscad
 
 
 # The standalone bundle ships its own OpenSCAD and must run that one rather than
