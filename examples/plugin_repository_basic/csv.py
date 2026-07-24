@@ -1,82 +1,56 @@
-import csv
-from datetime import datetime, timedelta, timezone
-
-NOW = datetime.now(timezone.utc)
-
-repository = {}
-
-
-def load():
-    global repository, request
-
-    with open(request["parameters"]["filename"], newline="\n") as csv_file:
-        reader = csv.DictReader(csv_file, lineterminator="\n")
-        for row in reader:
-            repository[(row["name"])] = (
-                str(row["desc"]),
-                str(row["type"]),
-                str(row["filename"]),
-            )
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+# A 'basic' repository plugin backed by a local CSV file.
+#
+# PartCAD runs this script for every data request, with the generic key in
+# 'request["key"]' and '__name__' set to the API ("get"); it returns
+# '{"result": <value>}'. See the "Repositories" section of the documentation for
+# the key conventions.
+#
+# NOTE: the file is named 'csv.py' (after the repository), so it must not
+# 'import csv' - that would import this file, not the standard library. The
+# small comma-separated format is parsed by hand instead.
 
 
-if not "request" in globals():
-    request = {
-        "api": "caps",
-    }
-
-
-if __name__ == "caps":
-    raise Exception("Not supported by stores")
-
-elif __name__ == "list":
-    load()
-
-    vendor = request["vendor"]
-    sku = request["sku"]
-    count_per_sku = request["count_per_sku"]
-    count = request["count"]
-
-    if (vendor, sku) in stock:
-        output = {
-            "available": stock[(vendor, sku)][0] * count_per_sku >= count,
-            "count": stock[(vendor, sku)][0],
-            "price": stock[(vendor, sku)][1],
+def load_parts():
+    """Read the CSV into the part catalog: {name: {config}}."""
+    parts = {}
+    filename = request["parameters"].get("filename")  # noqa: F821 - injected by the runtime
+    try:
+        with open(filename) as csv_file:
+            rows = [line.rstrip("\n") for line in csv_file if line.strip()]
+    except (FileNotFoundError, TypeError):
+        return parts
+    if not rows:
+        return parts
+    header = rows[0].split(",")
+    for row in rows[1:]:
+        fields = dict(zip(header, row.split(",")))
+        parts[fields["name"]] = {
+            "type": fields["type"],
+            "path": fields["filename"],
+            "desc": fields.get("desc", ""),
         }
-    else:
-        output = {
-            "available": False,
-        }
+    return parts
 
-elif __name__ == "quote":
-    parts = request["cart"]["parts"]
 
-    load()
-
-    price = 0
-    for part_spec in parts.values():
-        vendor = part_spec["vendor"]
-        sku = part_spec["sku"]
-        count_per_sku = part_spec["count_per_sku"]
-        count = part_spec["count"]
-
-        available = stock[(vendor, sku)][0] * count_per_sku
-        if available < part_spec["count"]:
-            raise Exception("Not enough stock")
-
-        items = (count + count_per_sku - 1) // count_per_sku
-        price += stock[(vendor, sku)][1] * float(items)
-
-    output = {
-        "qos": request["cart"]["qos"],
-        "price": price,
-        "expire": (NOW + timedelta(hours=1)).timestamp(),
-        "cartId": "123456",
-        "etaMin": (NOW + timedelta(hours=1)).timestamp(),
-        "etaMax": (NOW + timedelta(hours=2)).timestamp(),
+def get(key):
+    parts = load_parts()
+    data = {
+        "objects/part": parts,
+        "deps": [],
+        "meta": {"desc": "A CSV-backed example repository"},
     }
+    for name, config in parts.items():
+        data["objects/part/" + name] = config
+    return data.get(key)
 
-elif __name__ == "order":
-    raise Exception("Not implemented")
 
+if __name__ == "get":
+    output = {"result": get(request["key"])}  # noqa: F821 - 'request' is injected by the runtime
 else:
-    raise Exception("Unknown API: {}".format(__name__))
+    # Any other API (e.g. 'caps') has no data to return.
+    output = {}

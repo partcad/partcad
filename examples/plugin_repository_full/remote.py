@@ -28,6 +28,11 @@ def _http_fetch(endpoint, key):
     except urllib.error.HTTPError:
         # An unknown key (404) means "no such data" - report it as empty.
         return None
+    except urllib.error.URLError:
+        # The endpoint is not reachable (e.g. the server is not running). Report
+        # empty rather than crash, so listing a repository whose server is down
+        # degrades gracefully.
+        return None
 
 
 def handle(request, fetch=_http_fetch):
