@@ -55,11 +55,13 @@ Besides the package properties and, optionally, a list of imported dependencies,
   dependencies:
       <dependency-name>:
           desc: <(optional) textual description>
-          type: <(optional) git|tar|local, can be guessed by path or url>
+          type: <(optional) git|tar|local|external, can be guessed by path or url>
           path: <(local only) relative path to the package>
           url: <(git|tar only) URL of the package>
           relPath: <(git|tar only) relative path within the repository>
           revision: <(git only) the exact revision to import>
+          plugin: <(external only) reference to the repository plugin that serves this package>
+          subfolder: <(external only) location within the repository, for hierarchies>
           includePaths: <(optional) Jinja2 include path>
 
   parts:
@@ -67,6 +69,9 @@ Besides the package properties and, optionally, a list of imported dependencies,
 
   assemblies:
       <assembly declarations, see below>
+
+  repositories:
+      <repository plugin declarations, see below>
 
 The package name
 ----------------
@@ -136,6 +141,41 @@ Here are some examples of a dependency declaration in ``partcad.yaml``:
 Each dependency becomes a subpackage of the current package. All subfolders of the current package are considered
 subpackages (of the type `local`) if they contain a ``partcad.yaml`` file. Subfolders do not need to be explicitly
 declared as a dependency, but may be declared to provide a more detailed description.
+
+External packages
+-----------------
+
+A dependency of type ``external`` is a package whose contents are served by a
+**repository plugin** instead of being read from a folder (``local``) or a
+remote archive (``git``, ``tar``). Its ``plugin`` field references a repository
+declared in the ``repositories`` section (see :ref:`repositories`):
+
+.. code-block:: yaml
+
+  dependencies:
+    example:
+      type: external
+      plugin: :my_repo    # a repository declared in this package
+
+  repositories:
+    my_repo:
+      type: basic
+
+The package's objects (parts, sketches, assemblies, ...), its child packages,
+and its metadata are all fetched from the plugin on demand, rather than being
+enumerated up front. This keeps loading cheap even when the repository is large
+or remote: a part is fetched only when it is actually used.
+
+An external package can host a hierarchy. When its children are listed, the
+plugin reports child package names; each child is imported as another external
+package backed by the same plugin, with a ``subfolder`` that scopes its
+requests within the repository. In this way one plugin can serve an entire tree
+of packages, each with its own sketches, parts, assemblies, providers and
+further children.
+
+See ``examples/plugin_repository_basic`` (a package backed by a local file),
+``examples/plugin_repository_full`` (backed by an HTTP endpoint) and
+``examples/plugin_repository_tree`` (a hierarchy of packages).
 
 .. _objects:
 
@@ -1115,3 +1155,60 @@ Manufacturer
     for payments yet.
 
     - `request["cartId"]`: the id of the cart to be purchased
+
+.. _repositories:
+
+============
+Repositories
+============
+
+A repository plugin serves the contents of a package: its objects, its child
+packages and its metadata. It is what backs an ``external`` dependency (see
+`External packages`_).
+
+Repositories are declared in ``partcad.yaml`` using the following syntax:
+
+.. code-block:: yaml
+
+  repositories:
+    <repository name>:
+      type: <basic|enrich>
+      desc: <(optional) textual description>
+      parameters:  # (optional)
+        <param name>:
+          type: <string|float|int|bool>
+          enum: <(optional) list of possible values>
+          default: <default value>
+
+``enrich`` repositories are references to other repositories with some
+parameters modified to specific values.
+
+``basic`` repositories are implemented as Python scripts, invoked the same way
+as provider scripts (via ``runpy``, with the input in the global ``request`` and
+the output in the global ``output``). A repository script answers a single,
+generic key/value request:
+
+- `request["api"] == "get"`
+- `request["key"]`: the key being requested
+- `output["result"]`: the value stored under that key (or ``null`` if unknown)
+
+The keys address every kind of data uniformly, so serving a new kind of object
+or a new piece of metadata needs no new API:
+
+- ``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}`` (kinds
+  are ``sketch``, ``part``, ``assembly``, ``interface``, ``provider``,
+  ``repository``)
+- ``objects/<kind>/<name>`` -- a single object's config, fetched without listing
+  the whole repository
+- ``deps`` -- the names of the child packages
+- ``meta`` -- package-level properties (``desc``, ``render``, ``manufacturable``,
+  ...)
+
+For a hierarchy, a child package's requests are prefixed with its
+``subfolder``: a child in ``motors`` asks for ``motors/objects/part``,
+``motors/deps`` and so on, all served by the same script.
+
+Responses are cached per key (in memory and on disk), so a repository that is
+slow or remote is queried as little as possible. See
+``examples/plugin_repository_basic``, ``examples/plugin_repository_full`` (an
+HTTP-backed repository) and ``examples/plugin_repository_tree`` (a hierarchy).

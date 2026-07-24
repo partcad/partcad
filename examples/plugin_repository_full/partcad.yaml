@@ -2,7 +2,7 @@ name: //pub/examples/partcad/plugin_repository_full
 desc: |
   Example of a package whose parts are served by an RPC/web server.
 
-doc:
+docs:
   intro: |
     Unlike 'plugin_repository_basic', which hardcodes its data in the plugin
     script, this example serves it from a Flask endpoint (server.py) that the

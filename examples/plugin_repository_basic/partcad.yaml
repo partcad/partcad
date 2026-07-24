@@ -2,7 +2,7 @@ name: //pub/examples/partcad/plugin_repository_basic
 desc: |
   Example plugin for an external repository of parts without any hierarchy.
 
-doc:
+docs:
   intro: |
     This example demonstrates how to use a PartCAD plugin to create a simple
     external repository of parts. It allows users to search for parts by name and

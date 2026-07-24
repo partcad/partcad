@@ -2,7 +2,7 @@ name: //pub/examples/partcad/plugin_repository_tree
 desc: |
   Example of a hierarchy of packages served by one repository plugin.
 
-doc:
+docs:
   intro: |
     The 'example' package is served by the 'remote' repository plugin. When its
     children are listed, the plugin reports two sub-packages ('brackets' and
