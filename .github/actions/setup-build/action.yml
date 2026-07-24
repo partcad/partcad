@@ -31,3 +31,10 @@ runs:
       uses: ./.github/actions/setup-cadquery
       with:
         envs: env-build env-build-cli
+
+    ###################################################  SDF  #######################################################
+
+    - name: Setup SDF
+      uses: ./.github/actions/setup-sdf
+      with:
+        envs: env-build env-build-cli

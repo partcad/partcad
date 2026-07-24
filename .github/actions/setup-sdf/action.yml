@@ -1,0 +1,31 @@
+name: "Setup SDF"
+description: "Installs the sdf-fork package with compatible setuptools"
+
+inputs:
+  envs:
+    description: "The name of the conda environment to install SDF into"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install sdf-fork with compatible setuptools
+      shell: bash -el {0}
+      run: |
+        . ~/.bashrc || true
+        . ~/.bash_profile || true
+
+        for env in ${{ inputs.envs }}; do
+          echo "Installing SDF into conda env: $env"
+          mamba activate "$env"
+
+          # Downgrade setuptools temporarily
+          pip install "setuptools<69" wheel
+
+          pip install sdf-fork
+
+          # Restore latest setuptools
+          pip install --upgrade setuptools
+
+          mamba deactivate
+        done
