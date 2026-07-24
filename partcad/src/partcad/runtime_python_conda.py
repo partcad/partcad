@@ -209,6 +209,16 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         "-p",
                         self.path,
                         "pip",
+                        # PNG rendering goes through reportlab's renderPM, whose
+                        # only backend now is rlPyCairo -> pycairo -> cairo.
+                        # pycairo has no Linux wheel, so pip has to compile it
+                        # against a system cairo, which is not reliably present
+                        # or discoverable inside this sandbox (it breaks on the
+                        # ubuntu-22.04 runner, for instance). Bringing pycairo
+                        # from conda-forge instead ships cairo with it and makes
+                        # PNG output work without any system dependency; pip then
+                        # sees it already satisfied and does not rebuild it.
+                        "pycairo",
                     ]
                     # Strip user home directory from the path, if any
                     sanitized_args = copy.copy(args)
