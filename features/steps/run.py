@@ -49,6 +49,7 @@ def run(context: Context, command: str):
         cwd=cwd,
         env=env,
         encoding="utf-8",
+        errors="replace",
     )
     end_time = time.time()
     context.duration = end_time - start_time
