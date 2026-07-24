@@ -7,118 +7,178 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from git import Repo, exc
 import hashlib
 import re
 import os
 import shutil
 import time
 import threading
+from dataclasses import dataclass
+from urllib.parse import urlparse
+
+import pygit2
+from pygit2.enums import CheckoutStrategy, CredentialType, ReferenceType, ResetMode
 
 from . import project_factory as pf
 from . import logging as pc_logging
-from shlex import quote, split as shlex_split
 from . import telemetry
 
 
-def _make_git_non_interactive() -> None:
-    """Stop git from ever blocking on a credential prompt.
+class GitCallbacks(pygit2.RemoteCallbacks):
+    """Answer what a remote asks for, without ever waiting on a prompt.
 
     A repository that has been deleted, made private or renamed answers with an
-    authentication challenge rather than an error. Left to itself git then waits
-    on a prompt that nothing will ever answer, so the whole process hangs
-    instead of failing. GitPython has no parameter for this, so the environment
-    is set once here, when the git support is first imported.
+    authentication challenge rather than an error. The git command line used to
+    wait there on a credential prompt that nothing would ever answer, so the
+    whole process hung instead of failing. libgit2 asks this callback instead,
+    so the same situation ends in an exception as long as this callback never
+    tries to reach a terminal, which it does not.
 
-    setdefault rather than plain assignment: anyone who has deliberately
-    configured an askpass helper to reach private repositories keeps it, and
-    they still get GIT_TERMINAL_PROMPT below to stop the interactive fallback.
+    ssh remotes are the one case worth answering: the git command line reached
+    them through ssh, which offers the running agent's keys and the key files
+    it keeps by default, so the same is offered here. Each is offered once,
+    because libgit2 asks again for every credential a remote refuses and an
+    offer that is never withdrawn would loop forever.
     """
-    os.environ.setdefault("GIT_TERMINAL_PROMPT", "0")
-    if os.name != "nt":
-        # No portable equivalent of /bin/true on Windows. GIT_TERMINAL_PROMPT
-        # alone already blocks the console prompt there.
-        os.environ.setdefault("GIT_ASKPASS", "/bin/true")
-        os.environ.setdefault("SSH_ASKPASS", "/bin/true")
+
+    # What ssh would reach for on its own. A key that needs a passphrase only
+    # works through the agent, since asking for one is the thing that must
+    # never happen here.
+    _ssh_key_files = ("id_ed25519", "id_ecdsa", "id_rsa")
+
+    def __init__(self):
+        super().__init__()
+        self._ssh_credentials = None
+
+    def credentials(self, url, username_from_url, allowed_types):
+        username = username_from_url or "git"
+        if allowed_types & CredentialType.USERNAME:
+            return pygit2.Username(username)
+        if allowed_types & CredentialType.SSH_KEY:
+            if self._ssh_credentials is None:
+                self._ssh_credentials = self._ssh_candidates(username)
+            if self._ssh_credentials:
+                return self._ssh_credentials.pop(0)
+        raise pygit2.GitError("Authentication is required for '%s' and no credentials are available" % url)
+
+    def _ssh_candidates(self, username) -> list:
+        candidates = [pygit2.KeypairFromAgent(username)]
+
+        ssh_dir = os.path.join(os.path.expanduser("~"), ".ssh")
+        for name in self._ssh_key_files:
+            private_key = os.path.join(ssh_dir, name)
+            if not os.path.exists(private_key):
+                continue
+            public_key = private_key + ".pub"
+            candidates.append(
+                pygit2.Keypair(username, public_key if os.path.exists(public_key) else "", private_key, "")
+            )
+
+        return candidates
 
 
 def _apply_git_timeout(seconds: int) -> None:
     """Bound git network operations to 'seconds'.
 
-    Note that GitPython's kill_after_timeout cannot be used for this. Repo's
-    clone, fetch and pull all run the git command with as_process=True, and
-    kill_after_timeout is documented to have no effect in that case, so passing
-    it looks like protection while doing nothing at all. It is also unsupported
-    on Windows regardless.
+    libgit2 speaks the transport protocols itself, so the bound is a property of
+    the library rather than of the environment: server_connect_timeout bounds
+    reaching the remote at all, and server_timeout bounds every read and write
+    afterwards. Together they bound how long an operation may make no progress,
+    which is what actually needs bounding here; a large but healthy clone is
+    still allowed to take as long as it needs.
 
-    git's own transfer abort is used instead: a transfer that stays below
-    lowSpeedLimit bytes/s for lowSpeedTime seconds is terminated. curl enforces
-    it inside git, so it works on every platform and applies to clone, fetch and
-    pull alike. It bounds how long a transfer may make no progress, which is
-    what actually needs bounding here; a large but healthy clone is still
-    allowed to take as long as it needs.
+    Both are process-wide libgit2 settings rather than per-call arguments, which
+    costs nothing here because every caller below wants the same bound.
     """
-    os.environ["GIT_HTTP_LOW_SPEED_LIMIT"] = "1000"
-    os.environ["GIT_HTTP_LOW_SPEED_TIME"] = str(seconds)
-    # Bound the SSH side too, otherwise git+ssh remotes can still hang on a
-    # connection that never completes.
-    if "GIT_SSH_COMMAND" not in os.environ:
-        os.environ["GIT_SSH_COMMAND"] = (
-            "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "
-            f"-o ConnectTimeout={min(seconds, 60)} -o ServerAliveInterval=15"
-        )
+    pygit2.settings.server_connect_timeout = min(seconds, 60) * 1000
+    pygit2.settings.server_timeout = seconds * 1000
 
-
-_make_git_non_interactive()
 
 global_cache_lock = threading.Lock()
 cache_locks = {}
 
+# libgit2 reports failures as free-form text, so a retryable one is recognized
+# by its wording, the way the git command line's output used to be. Everything
+# here is a transient network condition. A definitive answer (a 404, an
+# authentication challenge, a ref that does not exist) must not match: retrying
+# it only delays reporting a repository that is genuinely unusable.
 git_error_patterns = [
-    # Network issue (RPC failed)
-    r"error: RPC failed; curl \d+ .* stream \d+ was not closed cleanly: .* \(err \d+\)",
     # Host resolution problem
-    r"fatal: unable to access 'https?://github.com/[a-zA-Z0-9./_-]+': Could not resolve host: .+",
-    r"fatal: Could not resolve host: .+",
-    r"fatal: Could not read from remote repository.",
-    # Partial data transfer issue
-    r"error: \d+ bytes of body are still expected",
-    # Timeout issue
-    r"fatal: unable to access '(https?://github.com/|git@github.com:)[a-zA-Z0-9./_-]+': Operation timed out after \d+ milliseconds with \d+ out of \d+ bytes received",
-    # Transfer stalled and was aborted by http.lowSpeedLimit/http.lowSpeedTime.
-    # A stall is transient, so it belongs with the other retryable errors:
-    # without this the abort would end the run on the first hiccup, where it
-    # used to hang forever instead.
-    r"fatal: unable to access '.+': Operation too slow\. Less than \d+ bytes/sec transferred the last \d+ seconds",
-    # SSL/TLS handshake failure
-    r"fatal: unable to access 'https?://github.com/[a-zA-Z0-9./_-]+': SSL certificate problem: .+",
-    # Broken pipe during data transfer
-    r"error: RPC failed; curl \d+ .*Send failure: Broken pipe",
-    # Incomplete negotiation during fetch
-    r"error: remote did not send all necessary objects",
-    # Proxy-related failure
-    r"fatal: unable to access 'https?://github.com/[a-zA-Z0-9./_-]+': Received HTTP code \d+ from proxy after CONNECT",
-    # Unexpected EOF
-    r"fetch-pack: unexpected disconnect while reading sideband packet",
-    # Invalid index-pack output
-    r"fatal: early EOF",
-    r"fatal: fetch-pack: invalid index-pack output",
+    r"failed to resolve address for .+",
+    r"could not resolve (host|address)",
+    # The remote could not be reached at all
+    r"failed to connect to .+",
+    r"connection (refused|reset|timed out)",
+    # Timeout, either the remote's own or the one _apply_git_timeout sets
+    r"timed out",
+    r"timeout was reached",
+    # The transfer started and then stopped short
+    r"broken pipe",
+    r"early EOF",
+    r"unexpected disconnect while reading sideband packet",
+    r"remote did not send all necessary objects",
+    r"RPC failed",
+    r"failed to (send|receive) (request|response)",
+    # The server is temporarily unable to answer. Other 4xx codes are
+    # deliberately excluded: those are answers about the repository, not hiccups.
+    r"unexpected http status code: (5\d\d|429)",
+    # A proxy in the way, which says nothing about the repository whatever code
+    # it returns, so any of them is worth another attempt.
+    r"received http code \d+ from proxy",
+    # SSL/TLS failure
+    r"ssl (error|certificate problem)",
 ]
+
+# libgit2 reports a missing reference as a KeyError rather than as a GitError,
+# and an unusable revision as an InvalidSpecError, so every git operation below
+# can end in any of the three.
+GIT_ERRORS = (pygit2.GitError, pygit2.InvalidSpecError, KeyError)
+
+
+def is_retryable(error: Exception) -> bool:
+    """Whether 'error' is a hiccup worth another attempt rather than an answer."""
+    message = str(error)
+    return any(re.search(pattern, message, re.IGNORECASE) for pattern in git_error_patterns)
 
 
 # A commit id, whole or abbreviated. Anything else is treated as a branch or
 # tag name. Ambiguity is resolved towards "this is a commit id", because that
 # choice merely costs a slightly larger clone, whereas guessing "branch" for a
-# commit id makes "git clone --branch" fail outright.
+# commit id makes the clone ask the server for a branch that does not exist.
 _SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+
+# "git@github.com:org/repo", the scp-like spelling of an ssh url. It has no
+# scheme, so urlparse cannot tell it apart from a local path.
+_SCP_LIKE_RE = re.compile(r"^[A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+:")
 
 
 def looks_like_commit_id(revision: str) -> bool:
     return bool(_SHA_RE.match(revision.strip()))
 
 
-def get_clone_options(revision) -> list[str]:
-    """Pick the cheapest clone that can still reach 'revision'.
+@dataclass(frozen=True)
+class CloneOptions:
+    """How much of a repository has to be downloaded to reach a revision."""
+
+    # What to ask the server for. None means "whatever the default branch is",
+    # which is the one request that needs no revision to be named.
+    revision: str | None
+    # How many commits to ask for. 0 means the whole history, which is only
+    # needed where a single commit cannot be requested by name.
+    depth: int
+    # Whether every branch has to come down rather than just the one that gets
+    # used. Only a commit id needs this: it names no branch, so the one it
+    # belongs to is unknown until the commit is in hand.
+    all_branches: bool = False
+
+    @property
+    def single_commit(self) -> bool:
+        """Whether the request names a commit id, which not every server serves."""
+        return self.revision is not None and looks_like_commit_id(self.revision)
+
+
+def get_clone_options(revision) -> CloneOptions:
+    """Pick the cheapest download that can still reach 'revision'.
 
     A full clone downloads every version of every file that ever existed, while
     only one tree is ever read. The public index costs about 780MB that way, and
@@ -127,64 +187,295 @@ def get_clone_options(revision) -> list[str]:
     Three cases:
       - no revision: one commit of the default branch is all that is needed.
       - a branch or tag: same, but ask the server for that ref directly.
-      - a commit id: --branch does not accept one, and a shallow clone would
-        not contain it. This is the fallback only. clone_single_commit tries
-        to fetch the one commit first and only lands here when the server will
-        not serve a commit id by name; the whole commit graph is then kept so
-        the checkout can succeed, with historical file contents left on the
-        server and blobs for the checked out tree fetched on demand.
+      - a commit id: a clone cannot check one out by name and a shallow clone of
+        a branch would not contain it, so the commit is requested by id.
+        clone_single_commit does that and only falls back to the whole history
+        when the server will not serve a commit id by name.
     """
     if revision is None:
-        return ["--depth 1", "--single-branch", "--no-tags"]
-    if looks_like_commit_id(revision):
-        return ["--filter=blob:none"]
-    return ["--depth 1", "--single-branch", "--no-tags", "--branch %s" % revision]
+        return CloneOptions(revision=None, depth=1)
+    return CloneOptions(revision=revision, depth=1)
 
 
-def clone_single_commit(repo_url, cache_path, revision, git_config_options=()) -> Repo:
+def get_fallback_clone_options(revision) -> CloneOptions:
+    """What to ask for when the cheapest request was refused.
+
+    A branch or a tag can still be asked for by name. Only the depth has to go,
+    because a server that will not serve a shallow request will serve the same
+    ref whole.
+
+    A commit id is the harder case: nothing identifies it to a server that will
+    not serve it by name, so the only way to reach it is to take the commit
+    graph whole and look the commit up locally. The git command line paired
+    that with --filter=blob:none, which left historical file contents on the
+    server; libgit2 has no partial clone, so this does download them. It stays
+    a fallback for exactly that reason: it is only reached against a server
+    still speaking protocol v0 with uploadpack.allowReachableSHA1InWant off.
+    """
+    if revision is not None and looks_like_commit_id(revision):
+        return CloneOptions(revision=None, depth=0, all_branches=True)
+    return CloneOptions(revision=revision, depth=0)
+
+
+def _supports_shallow(repo_url: str) -> bool:
+    """Whether the transport serving 'repo_url' can answer a shallow request.
+
+    libgit2 refuses a depth on the local transport ("shallow fetch is not
+    supported by the local transport") where the git command line merely
+    ignored it, so a local path has to be asked for the whole history.
+    """
+    if _SCP_LIKE_RE.match(repo_url):
+        return True
+    return urlparse(repo_url).scheme in ("http", "https", "ssh", "git")
+
+
+def _apply_git_config(repo: pygit2.Repository, git_config) -> None:
+    """Write the user's git settings into the repository.
+
+    They have to be in place before anything touches the network, because this
+    is where libgit2 reads the settings that shape the transfer itself, http
+    proxies among them.
+    """
+    for key, value in dict(git_config).items():
+        repo.config[key] = str(value)
+
+
+def _repository_factory(git_config):
+    """Create the repository a clone fills in, configured before it is filled."""
+
+    def create(path, bare):
+        repo = pygit2.init_repository(path, bare=bare)
+        _apply_git_config(repo, git_config)
+        return repo
+
+    return create
+
+
+def _tracking_refspecs(revision: str) -> list[str]:
+    """The refspecs naming 'revision' and nothing else.
+
+    This is how --single-branch is expressed here: the remote tracks the one
+    ref that was asked for instead of the wildcard a clone would configure by
+    default, so nothing else is ever downloaded, now or on a later refresh.
+
+    A revision can be a branch or a tag and the import configuration does not
+    say which, so both spellings are configured. The one that matches nothing
+    on the remote is simply never used.
+    """
+    return [
+        "+refs/heads/{rev}:refs/remotes/origin/{rev}".format(rev=revision),
+        "+refs/tags/{rev}:refs/tags/{rev}".format(rev=revision),
+    ]
+
+
+def _create_origin(repo: pygit2.Repository, repo_url: str, revision) -> None:
+    """Point the repository at 'repo_url', tracking as little as will do.
+
+    A commit id names no ref, so there is nothing to narrow to and the default
+    wildcard stays; every fetch of a commit id asks for it by id anyway.
+    """
+    if revision is None or looks_like_commit_id(revision):
+        repo.remotes.create("origin", repo_url)
+        return
+
+    refspecs = _tracking_refspecs(revision)
+    repo.remotes.create("origin", repo_url, refspecs[0])
+    for refspec in refspecs[1:]:
+        repo.remotes.add_fetch("origin", refspec)
+
+
+def _single_branch_remote():
+    """Configure a clone's remote to follow the default branch alone.
+
+    A clone left to itself configures "+refs/heads/*:refs/remotes/origin/*",
+    and with a depth that still means a complete snapshot of every branch the
+    remote has rather than of the one that gets used. git spells the cure
+    --single-branch; libgit2 spells it as the refspec the remote is created
+    with, which is what this does.
+
+    Which branch that is only the remote knows, so it is asked: the ref
+    advertisement carries HEAD and what it points at. That costs one round trip
+    against a server that has just been reached anyway, and saves downloading
+    every other branch in full.
+    """
+
+    def create(repo, name, url):
+        head = None
+        for ref in repo.remotes.create_anonymous(url).ls_remotes(callbacks=GitCallbacks(), proxy=True):
+            if ref["name"] == "HEAD":
+                head = ref.get("symref_target")
+                break
+
+        if not head:
+            # A remote that does not say which branch is its default. Take
+            # everything, as a clone would have anyway.
+            return repo.remotes.create(name, url)
+
+        return repo.remotes.create(
+            name,
+            url,
+            "+{ref}:refs/remotes/origin/{short}".format(ref=head, short=head.removeprefix("refs/heads/")),
+        )
+
+    return create
+
+
+def _clone(repo_url, cache_path, git_config, options: CloneOptions) -> pygit2.Repository:
+    """Clone 'repo_url' into 'cache_path', taking as few branches as will do."""
+    return pygit2.clone_repository(
+        repo_url,
+        cache_path,
+        depth=options.depth if _supports_shallow(repo_url) else 0,
+        callbacks=GitCallbacks(),
+        repository=_repository_factory(git_config),
+        # A commit id can be on any branch, so that search needs the wildcard
+        # refspec a clone configures by default.
+        remote=None if options.all_branches else _single_branch_remote(),
+        # Honour http.proxy from the config written above and the http_proxy
+        # environment, the way the git command line did through curl. Without
+        # this libgit2 ignores both and talks to the remote directly.
+        proxy=True,
+    )
+
+
+def _fetch(repo: pygit2.Repository, revision: str, depth: int = 1) -> pygit2.Oid:
+    """Fetch 'revision' from origin, returning the commit it resolved to."""
+    remote = repo.remotes["origin"]
+    remote.fetch(
+        [revision],
+        depth=depth if _supports_shallow(remote.url) else 0,
+        callbacks=GitCallbacks(),
+        proxy=True,
+    )
+    return _fetched_commit(repo, revision)
+
+
+def _fetched_commit(repo: pygit2.Repository, revision: str) -> pygit2.Oid:
+    """The commit the last fetch resolved 'revision' to.
+
+    FETCH_HEAD is whatever that fetch just resolved, which is right for a
+    branch, a tag and a commit id alike. Matching the revision against the
+    repository's own references cannot work: a branch lands under
+    "origin/<branch>", a tag under its own name and a commit id under no name
+    at all, so a single lookup would miss and silently use whatever stale
+    reference it found instead of what was just fetched.
+
+    FETCH_HEAD is read as a file rather than looked up as a reference because
+    it is not quite one: a fetch that brings several refs down writes a line
+    each, which no reference lookup can resolve.
+
+    It is also emptied by a fetch that had nothing to bring down, which is the
+    ordinary outcome of refreshing a tag that has not moved. That says the
+    local copy of the revision is what the remote has, so the revision is
+    resolved locally there. Only a revision that is neither in the file nor
+    already downloaded is one the remote does not have.
+    """
+    entries = []
+    fetch_head = os.path.join(repo.path, "FETCH_HEAD")
+    if os.path.exists(fetch_head):
+        with open(fetch_head, "r") as f:
+            entries = [line.split("\t") for line in f.read().splitlines() if line.strip()]
+
+    for fields in entries:
+        # The requested ref is the one written to be merged. Anything the
+        # server volunteered alongside it is marked "not-for-merge".
+        if len(fields) < 2 or not fields[1].strip():
+            # An annotated tag resolves to the tag object, not to a commit.
+            return repo.get(fields[0].strip()).peel(pygit2.Commit).id
+
+    local = _local_commit(repo, revision)
+    if local is not None:
+        return local
+
+    raise pygit2.GitError("Revision '%s' was not found on the remote" % revision)
+
+
+def _local_commit(repo: pygit2.Repository, revision: str):
+    """Where 'revision' points in what has already been downloaded, if anywhere.
+
+    Each kind of revision lands somewhere else: a tag under its own name, a
+    branch under the remote it came from, and a commit id under no name at all.
+    A single lookup of the bare revision finds none of them.
+    """
+    for candidate in ("refs/tags/%s" % revision, "refs/remotes/origin/%s" % revision, revision):
+        try:
+            obj = repo.revparse_single(candidate)
+        except (KeyError, ValueError):
+            continue
+        if obj is not None:
+            return obj.peel(pygit2.Commit).id
+    return None
+
+
+def _checkout(repo: pygit2.Repository, revision) -> pygit2.Oid:
+    """Check 'revision' out, discarding whatever is in the working tree.
+
+    HEAD is left detached. A commit id or a tag leaves it detached anyway, and
+    nothing here reads the branch: the refresh path resets HEAD to what it just
+    fetched, which works the same either way.
+    """
+    obj = repo.get(revision) if isinstance(revision, pygit2.Oid) else repo.revparse_single(str(revision))
+    if obj is None:
+        raise pygit2.GitError("Revision '%s' is missing from the repository" % revision)
+    commit = obj.peel(pygit2.Commit)
+    repo.checkout_tree(commit, strategy=CheckoutStrategy.FORCE)
+    repo.set_head(commit.id)
+    return commit.id
+
+
+def _default_branch(repo: pygit2.Repository) -> str:
+    """The short name of the branch the remote considers its default.
+
+    A clone records it as a symbolic origin/HEAD, which is the only place the
+    remote's own choice survives locally.
+    """
+    try:
+        head = repo.references["refs/remotes/origin/HEAD"]
+        if head.type == ReferenceType.SYMBOLIC:
+            return head.target.removeprefix("refs/remotes/origin/")
+    except KeyError:
+        pass
+    if not repo.head_is_detached:
+        return repo.head.shorthand
+    raise pygit2.GitError("Could not determine the default branch of 'origin'")
+
+
+def clone_single_commit(repo_url, cache_path, revision, git_config=()) -> pygit2.Repository:
     """Make one commit available without downloading any history.
 
-    A commit id cannot be reached by "git clone --branch", and a shallow clone
-    would not contain it, so the cheapest route is an empty repository plus a
-    request for that one commit. What lands is a single commit and nothing
-    else.
+    A clone cannot check out a commit id by name, and a shallow clone of a
+    branch would not contain it, so the cheapest route is an empty repository
+    plus a request for that one commit. What lands is a single commit and
+    nothing else, checked out.
 
     Servers do not have to allow this, though most now do. Under protocol v2,
     the default since git 2.26, a reachable commit is served whatever
     uploadpack.allowReachableSHA1InWant says. Only a server still speaking v0
     applies that setting, and there the request is refused unless it was turned
-    on. Where it is refused, fall back to a clone that keeps the commit graph
-    but leaves historical file contents on the server: one wasted round trip on
-    such a server, and nothing at all on one that answers directly.
+    on. Where it is refused, fall back to taking the whole history so the
+    checkout can succeed: one wasted round trip on such a server, and nothing at
+    all on one that answers directly.
     """
-    # git_config_options is kept the way multi_options wants it, one string per
-    # option ("-c key=value"), which is not what a raw git invocation takes.
-    config_args = []
-    for option in git_config_options:
-        config_args.extend(shlex_split(option))
-
-    repo = Repo.init(cache_path)
-    repo.create_remote("origin", repo_url)
+    repo = pygit2.init_repository(cache_path)
+    _apply_git_config(repo, git_config)
+    _create_origin(repo, repo_url, revision)
     try:
-        repo.git.execute(["git", *config_args, "fetch", "--depth", "1", "origin", revision])
+        _checkout(repo, _fetch(repo, revision, depth=get_clone_options(revision).depth))
         return repo
-    except exc.GitCommandError as e:
-        if any(re.search(pattern, str(e)) for pattern in git_error_patterns):
+    except GIT_ERRORS as e:
+        if is_retryable(e):
             raise  # a real network failure, let the retry loop see it
         pc_logging.warning(
-            "Server would not serve commit %s of %s directly (%s), falling back to a blobless clone",
+            "Server would not serve commit %s of %s directly (%s), falling back to the whole history",
             revision,
             repo_url,
             str(e).splitlines()[-1] if str(e) else e,
         )
 
     shutil.rmtree(cache_path, ignore_errors=True)
-    return Repo.clone_from(
-        repo_url,
-        cache_path,
-        multi_options=list(git_config_options) + get_clone_options(revision),
-        allow_unsafe_options=True,
-    )
+    repo = _clone(repo_url, cache_path, git_config, get_fallback_clone_options(revision))
+    _checkout(repo, revision)
+    return repo
 
 
 def get_cache_lock(hash):
@@ -213,14 +504,13 @@ class GitImportConfiguration:
                 if value in self.import_config_url:
                     self.import_config_url = self.import_config_url.replace(value, key)
 
-    def _git_config_options(self) -> list[str]:
-        params = []
+    def _git_config(self) -> dict[str, str]:
+        params = {}
         for key, value in self.ctx.user_config.git_config.items():
             if key.find("url") != -1 and key.find("insteadOf") != -1:
                 continue
 
-            # Use shlex.quote to properly escape shell arguments
-            params.append(f"-c {quote(key)}={quote(str(value))}")
+            params[key] = str(value)
         return params
 
 
@@ -230,7 +520,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         pf.ProjectFactory.__init__(self, ctx, parent, config)
         GitImportConfiguration.__init__(self)
 
-        self.git_config_options: list[str] = self._git_config_options()
+        self.git_config: dict[str, str] = self._git_config()
         self.path = self._clone_or_update_repo(self.import_config_url)
 
         # Complement the config object here if necessary
@@ -239,6 +529,58 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         # TODO(clairbee): actually fill in the self.project object here
 
         self._save()
+
+    def _download(self, repo_url, cache_path, options: CloneOptions) -> pygit2.Repository:
+        """Fill 'cache_path' from 'repo_url', with the revision checked out."""
+        if options.revision is None:
+            return _clone(repo_url, cache_path, self.git_config, options)
+
+        # A branch or a tag. Ask the server for that ref alone: a clone can only
+        # check out a branch, so reaching a tag through one would mean taking
+        # the default branch's history first.
+        repo = pygit2.init_repository(cache_path)
+        _apply_git_config(repo, self.git_config)
+        _create_origin(repo, repo_url, options.revision)
+        _checkout(repo, _fetch(repo, options.revision, options.depth))
+        return repo
+
+    def _clone_repo(self, repo_url, cache_path, options: CloneOptions) -> pygit2.Repository:
+        """Download 'repo_url' into 'cache_path' with the revision checked out.
+
+        The cheapest download can be refused for reasons that say nothing about
+        reachability: a server with shallow requests turned off, or a revision
+        the server will not resolve the cheap way. None of that should stop the
+        import, so ask for the whole history rather than give up.
+
+        An attempt that fails leaves nothing behind. Whatever it had managed to
+        create would be taken for a cached copy by the next attempt, which
+        would then try to refresh a repository that was never filled in.
+        """
+
+        def attempt(download):
+            try:
+                return download()
+            except GIT_ERRORS:
+                shutil.rmtree(cache_path, ignore_errors=True)
+                raise
+
+        if options.single_commit:
+            # One commit, no history. Handles its own fallback for the servers
+            # that refuse the request.
+            return attempt(lambda: clone_single_commit(repo_url, cache_path, options.revision, self.git_config))
+
+        try:
+            return attempt(lambda: self._download(repo_url, cache_path, options))
+        except GIT_ERRORS as e:
+            if is_retryable(e):
+                raise  # a real network failure, let the retry loop see it
+            pc_logging.warning(
+                "Optimized clone of %s failed (%s), retrying with a full clone",
+                self.import_config_url,
+                str(e).splitlines()[-1] if str(e) else e,
+            )
+
+        return attempt(lambda: self._download(repo_url, cache_path, get_fallback_clone_options(options.revision)))
 
     def _clone_or_update_repo(self, repo_url, cache_dir=None):
         """
@@ -292,21 +634,18 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                         if self.import_revision is None:
                             # Import the default branch
                             if self.ctx.user_config.force_update or (now - os.path.getmtime(guard_path) > 24 * 3600):
-                                repo = Repo(cache_path)
-                                origin = repo.remote("origin")
-                                before = repo.head.commit
+                                repo = pygit2.Repository(cache_path)
+                                before = repo.head.target
 
                                 # If there is more than 1 remote branch, we have to
                                 # explicitly specify the branch to pull.
-                                remote_head = origin.refs.HEAD
-                                branch_name = remote_head.reference.name
-                                short_branch_name = branch_name[branch_name.find("/") + 1 :]
+                                short_branch_name = _default_branch(repo)
                                 pc_logging.debug("Refreshing the GIT branch: %s" % short_branch_name)
                                 with telemetry.start_as_current_span(
                                     "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
                                 ):
-                                    origin.fetch(short_branch_name, depth=1)
-                                    repo.git.reset("--hard", "origin/%s" % short_branch_name)
+                                    fetched = _fetch(repo, short_branch_name)
+                                    repo.reset(fetched, ResetMode.HARD)
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
                         else:
@@ -330,27 +669,18 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 stale = False
 
                             if before != self.import_revision or stale:
-                                repo = Repo(cache_path)
-                                # head.commit, not active_branch.commit: checking
+                                repo = pygit2.Repository(cache_path)
+                                # head.target, not the active branch: checking
                                 # out a tag or a commit id leaves HEAD detached,
-                                # and active_branch raises TypeError there. head
+                                # and there is no branch to read there. HEAD
                                 # works either way.
-                                before = repo.head.commit
-                                origin = repo.remote("origin")
+                                before = repo.head.target
                                 # Need to check for updates
                                 with telemetry.start_as_current_span(
                                     "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
                                 ):
-                                    origin.fetch(self.import_revision, depth=1)
-                                    # FETCH_HEAD is whatever that fetch just
-                                    # resolved, which is right for a branch, a
-                                    # tag and a commit id alike. Matching the
-                                    # revision against origin.refs cannot work:
-                                    # those are named "origin/<branch>", never
-                                    # the bare revision, so every branch would
-                                    # miss and silently reset to the stale local
-                                    # ref instead of what was just fetched.
-                                    repo.git.reset("--hard", "FETCH_HEAD")
+                                    fetched = _fetch(repo, self.import_revision)
+                                    repo.reset(fetched, ResetMode.HARD)
 
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
@@ -360,7 +690,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
                         if not before is None:
                             # Update was performed
-                            after = repo.head.commit
+                            after = repo.head.target
                             if before != after:
                                 pc_logging.info("Updated the GIT repo: %s" % self.import_config_url)
                             if before != after or self.ctx.user_config.force_update:
@@ -370,9 +700,9 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                     else:
                                         f.write(self.import_revision)
                         break
-                    except exc.GitCommandError as e:
-                        # Check if the error message matches any of the patterns
-                        if any(re.search(pattern, str(e)) for pattern in git_error_patterns) and attempt < max_retries:
+                    except GIT_ERRORS as e:
+                        # Check if the error is a transient network failure
+                        if is_retryable(e) and attempt < max_retries:
                             pc_logging.warning(
                                 "Failed to update repo. Retrying (%d/%d) in %d secs...",
                                 attempt + 1,
@@ -394,58 +724,21 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                         pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
                         clone_options = get_clone_options(self.import_revision)
                         with telemetry.start_as_current_span(
-                            "*ProjectFactoryGit._clone_or_update_repo.{Repo.clone_from}"
+                            "*ProjectFactoryGit._clone_or_update_repo.{clone_repository}"
                         ):
-                            if self.import_revision is not None and looks_like_commit_id(self.import_revision):
-                                # One commit, no history. Handles its own
-                                # fallback for servers that refuse the request.
-                                repo = clone_single_commit(
-                                    repo_url, cache_path, self.import_revision, self.git_config_options
-                                )
-                            else:
-                                try:
-                                    repo = Repo.clone_from(
-                                        repo_url,
-                                        cache_path,
-                                        multi_options=self.git_config_options + clone_options,
-                                        allow_unsafe_options=True,
-                                    )
-                                except exc.GitCommandError as e:
-                                    # The cheaper clone can be refused for
-                                    # reasons that say nothing about
-                                    # reachability: a server with
-                                    # uploadpack.allowFilter disabled, or a
-                                    # revision that turned out not to be a ref
-                                    # after all. None of that should stop the
-                                    # import, so take the slow path rather than
-                                    # give up.
-                                    if any(re.search(pattern, str(e)) for pattern in git_error_patterns):
-                                        raise  # a real network failure, let the retry loop see it
-                                    pc_logging.warning(
-                                        "Optimized clone of %s failed (%s), retrying with a full clone",
-                                        self.import_config_url,
-                                        str(e).splitlines()[-1] if str(e) else e,
-                                    )
-                                    shutil.rmtree(cache_path, ignore_errors=True)
-                                    repo = Repo.clone_from(
-                                        repo_url,
-                                        cache_path,
-                                        multi_options=self.git_config_options,
-                                        allow_unsafe_options=True,
-                                    )
+                            repo = self._clone_repo(repo_url, cache_path, clone_options)
                         self.ctx.stats_git_ops += 1
                         if self.import_revision is not None:
-                            repo.git.checkout(self.import_revision, force=True)
                             after = self.import_revision
                         else:
-                            after = repo.head.commit
+                            after = repo.head.target
 
                         with open(guard_path, "w") as f:
                             f.write(str(after))
                         break
-                    except exc.GitCommandError as e:
-                        # Check if the error message matches any of the patterns
-                        if any(re.search(pattern, str(e)) for pattern in git_error_patterns) and attempt < max_retries:
+                    except GIT_ERRORS as e:
+                        # Check if the error is a transient network failure
+                        if is_retryable(e) and attempt < max_retries:
                             pc_logging.warning(
                                 "Failed to clone repo. Retrying (%d/%d) in %d secs...",
                                 attempt + 1,
