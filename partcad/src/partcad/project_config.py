@@ -110,10 +110,18 @@ class Configuration:
         # values: string (e.g. "3.10")
         # default: <The major and minor version of the current interpreter>
         if "pythonVersion" in self.config_obj:
-            # Coerce to a string: YAML parses e.g. 'pythonVersion: 3.11' as a
-            # float, which later breaks string concatenation when building the
-            # sandbox runtime name.
-            self.python_version = str(self.config_obj["pythonVersion"])
+            python_version = self.config_obj["pythonVersion"]
+            if not isinstance(python_version, str):
+                # YAML parses an unquoted version like 3.11 as a float, which
+                # breaks string use later and, worse, loses a trailing zero
+                # (3.10 becomes 3.1). Recover the 'major.minor' string and
+                # advise quoting; Python 3.1 has not existed for over a decade,
+                # so a bare '3.1' is really '3.10'.
+                pc_logging.warning('%s: quote "pythonVersion" as a string (e.g. "3.10")' % name)
+                python_version = str(python_version)
+                if python_version == "3.1":
+                    python_version = "3.10"
+            self.python_version = python_version
         else:
             self.python_version = "%d.%d" % (
                 sys.version_info.major,
