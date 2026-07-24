@@ -1203,6 +1203,10 @@ or a new piece of metadata needs no new API:
 - ``deps`` -- the names of the child packages
 - ``meta`` -- package-level properties (``desc``, ``render``, ``manufacturable``,
   ...)
+- ``files/<path>`` -- the base64-encoded content of a file an object references
+  by ``path``. A plugin-backed package has no source tree, so a file-backed
+  object's file is fetched from the plugin and materialized into the package's
+  cache directory when the object is built.
 
 For a hierarchy, a child package's requests are prefixed with its
 ``subfolder``: a child in ``motors`` asks for ``motors/objects/part``,

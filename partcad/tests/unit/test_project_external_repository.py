@@ -76,7 +76,10 @@ def test_single_fetch_avoids_full_enumeration():
     repo, fake = _make_repo(ctx, data)
 
     # Asking for one object before enumerating fetches just that object.
-    assert repo.object_config("part", "bolt") == {"type": "step", "path": "bolt.step"}
+    config = repo.object_config("part", "bolt")
+    assert config["type"] == "step" and config["path"] == "bolt.step"
+    # A file-backed object is tagged so its file is materialized on demand.
+    assert config["fileFrom"] == "plugin"
     assert fake.keys == ["objects/part/bolt"]
     assert "objects/part" not in fake.keys
 
@@ -114,6 +117,21 @@ def test_on_disk_cache_persists_across_instances():
         assert fake2.keys == []  # served from disk, repository never called
     finally:
         shutil.rmtree(cache.cache_dir, ignore_errors=True)
+
+
+def test_file_backed_configs_are_tagged_for_materialization():
+    """Served configs with a 'path' get fileFrom=plugin; others are untouched."""
+    ctx = pc.Context("examples")
+    data = {
+        "objects/part": {
+            "bolt": {"type": "step", "path": "bolt.step"},
+            "ref": {"type": "alias", "source": "//x:y"},
+        }
+    }
+    repo, _ = _make_repo(ctx, data)
+    configs = repo.object_configs("part")
+    assert configs["bolt"]["fileFrom"] == "plugin"  # file-backed -> materialized
+    assert "fileFrom" not in configs["ref"]  # alias has no file
 
 
 def test_metadata_materializes_from_the_repository():

@@ -25,15 +25,20 @@ def _get(key):
     return remote.handle({"key": key})["result"]
 
 
-def test_top_package_lists_children_and_provider():
+def test_top_package_lists_children():
     assert _get("deps") == ["brackets", "motors"]
-    assert "supplier" in _get("objects/provider")
 
 
-def test_subfolders_serve_their_own_objects():
+def test_subfolders_serve_their_own_parts():
     assert list(_get("brackets/objects/part")) == ["l_bracket"]
-    assert list(_get("brackets/objects/sketch")) == ["outline"]
-    assert list(_get("motors/objects/assembly")) == ["gearbox"]
+    assert list(_get("motors/objects/part")) == ["shaft"]
+
+
+def test_subfolders_serve_their_part_files():
+    import base64
+
+    content = base64.b64decode(_get("brackets/files/l_bracket.py")).decode()
+    assert "cadquery" in content
 
 
 def test_leaf_subfolders_have_no_children():

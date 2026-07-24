@@ -23,18 +23,34 @@ dependency, so it can be started on demand and unit-tested directly (see
 
 from flask import Flask, jsonify, request
 
+import base64
+
+# The CadQuery scripts the parts are built from. A real server would keep these
+# in a database or object store; here they are inline so the example is
+# self-contained. They are served (base64-encoded) under the 'files/<path>' key
+# and materialized by PartCAD into the package's cache directory.
+_CUBE = "import cadquery as cq\nshow_object(cq.Workplane().box(10, 10, 10))\n"
+_CYLINDER = "import cadquery as cq\nshow_object(cq.Workplane().cylinder(10, 5))\n"
+
 # The repository's catalog: parts addressable by the generic key space.
 PARTS = {
-    "cube": {"type": "cadquery", "path": "cube.py", "desc": "A parametric cube"},
-    "cylinder": {"type": "cadquery", "path": "cylinder.py", "desc": "A parametric cylinder"},
+    "cube": {"type": "cadquery", "path": "cube.py", "desc": "A cube"},
+    "cylinder": {"type": "cadquery", "path": "cylinder.py", "desc": "A cylinder"},
+}
+
+FILES = {
+    "cube.py": _CUBE,
+    "cylinder.py": _CYLINDER,
 }
 
 CATALOG = {
     "objects/part": PARTS,
     **{"objects/part/" + name: config for name, config in PARTS.items()},
+    **{"files/" + path: base64.b64encode(text.encode()).decode() for path, text in FILES.items()},
     # No sketches or assemblies in this flat example.
     "objects/sketch": {},
     "objects/assembly": {},
+    "deps": [],
 }
 
 

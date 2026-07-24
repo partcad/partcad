@@ -16,6 +16,7 @@ from .assembly import Assembly
 from .assembly_factory_assy import AssemblyFactoryAssy
 from .assembly_factory_alias import AssemblyFactoryAlias
 from .file_factory_url import FileFactoryUrl
+from .file_factory_plugin import FileFactoryPlugin
 from .plugin_factory_provider_manufacturer import PluginFactoryProviderManufacturer
 from .plugin_factory_provider_store import PluginFactoryProviderStore
 from .plugin_factory_provider_enrich import PluginFactoryProviderEnrich
@@ -89,6 +90,7 @@ factory.register("part", "compound", PartFactoryCompound)
 factory.register("assembly", "assy", AssemblyFactoryAssy)
 factory.register("assembly", "alias", AssemblyFactoryAlias)
 factory.register("file", "url", FileFactoryUrl)
+factory.register("file", "plugin", FileFactoryPlugin)
 factory.register("provider", "manufacturer", PluginFactoryProviderManufacturer)
 factory.register("provider", "enrich", PluginFactoryProviderEnrich)
 factory.register("provider", "store", PluginFactoryProviderStore)

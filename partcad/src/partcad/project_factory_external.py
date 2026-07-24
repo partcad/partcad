@@ -44,6 +44,10 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
         # vendored copies backed by different plugins get separate caches.
         repo_hash = hashlib.sha256(self.plugin.encode()).hexdigest()[:16]
         self.path = os.path.join(ctx.user_config.internal_state_dir, "external", repo_hash)
+        # The package is served by a plugin and has no source tree of its own,
+        # but it still needs a real directory: it is the base into which
+        # file-backed objects are materialized (see ProjectExternalRepository).
+        os.makedirs(self.path, exist_ok=True)
         # A cache scoped to this repository instance, shared by every child of
         # the plugin-backed package via 'ProjectExternalRepository.request()'.
         self.cache = Cache("external/" + repo_hash, ctx.user_config)

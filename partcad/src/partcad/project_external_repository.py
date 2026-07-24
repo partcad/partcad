@@ -237,12 +237,27 @@ class ProjectExternalRepository(ProjectPlugin):
 
     # --- Object-access hooks (see Project) sourced from the repository ---
 
+    def _augment(self, config):
+        """Mark a file-backed object so its file is materialized on demand.
+
+        A plugin-backed package has no source tree, so an object that references
+        a file by 'path' must fetch it from the plugin. Tagging it with
+        'fileFrom: plugin' both defers the file's existence check to build time
+        and routes materialization through 'FileFactoryPlugin'.
+        """
+        if isinstance(config, dict) and "path" in config and "fileFrom" not in config:
+            config = dict(config)
+            config["fileFrom"] = "plugin"
+        return config
+
     def _enumerate_object_configs(self, kind):
         configs = self.get_data("objects/" + kind)
-        return configs if configs else {}
+        if not configs:
+            return {}
+        return {name: self._augment(config) for name, config in configs.items()}
 
     def _fetch_object_config(self, kind, name):
-        return self.get_data("objects/" + kind + "/" + name)
+        return self._augment(self.get_data("objects/" + kind + "/" + name))
 
     def dependencies(self):
         """Child packages of this package, served by the same repository.

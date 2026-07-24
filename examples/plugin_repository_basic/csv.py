@@ -14,6 +14,9 @@
 # 'import csv' - that would import this file, not the standard library. The
 # small comma-separated format is parsed by hand instead.
 
+import base64
+import os
+
 
 def load_parts():
     """Read the CSV into the part catalog: {name: {config}}."""
@@ -37,7 +40,24 @@ def load_parts():
     return parts
 
 
+def get_file(rel_path):
+    """Return the base64 content of a file the catalog points at.
+
+    The paths in the CSV are relative to this plugin, so resolve them relative
+    to this script's directory and hand the bytes back for PartCAD to
+    materialize into the package's cache directory.
+    """
+    base = os.path.dirname(os.path.abspath(__file__))
+    try:
+        with open(os.path.join(base, rel_path), "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except (FileNotFoundError, OSError):
+        return None
+
+
 def get(key):
+    if key.startswith("files/"):
+        return get_file(key[len("files/") :])
     parts = load_parts()
     data = {
         "objects/part": parts,
