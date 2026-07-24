@@ -134,6 +134,20 @@ def test_file_backed_configs_are_tagged_for_materialization():
     assert "fileFrom" not in configs["ref"]  # alias has no file
 
 
+def test_tagging_survives_async_warmup():
+    """The import-time warm-up must tag configs too, not just lazy access.
+
+    The async warm-up runs first in the real flow; if it skipped the tagging,
+    a file-backed part would demand its file at list time instead of deferring
+    to materialization.
+    """
+    ctx = pc.Context("examples")
+    data = {"objects/part": {"bolt": {"type": "step", "path": "bolt.step"}}}
+    repo, _ = _make_repo(ctx, data)
+    asyncio.run(repo.ensure_enumerated_async())
+    assert repo.object_config("part", "bolt")["fileFrom"] == "plugin"
+
+
 def test_metadata_materializes_from_the_repository():
     """Package-level metadata comes from the 'meta' key; identity is protected."""
     ctx = pc.Context("examples")

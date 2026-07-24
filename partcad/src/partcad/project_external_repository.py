@@ -205,7 +205,12 @@ class ProjectExternalRepository(ProjectPlugin):
         for kind in OBJECT_KINDS:
             if self._object_configs.get(kind) is None:
                 configs = await self.get_data_async("objects/" + kind)
-                self._object_configs[kind] = configs if configs else {}
+                # Apply the same augmentation as '_enumerate_object_configs';
+                # this async warm-up runs first, so skipping it would leave the
+                # configs untagged for file materialization.
+                self._object_configs[kind] = (
+                    {name: self._augment(config) for name, config in configs.items()} if configs else {}
+                )
         # Warm 'deps' too, so the synchronous 'dependencies()' is a cache hit.
         await self.get_data_async("deps")
 
