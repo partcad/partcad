@@ -11,6 +11,25 @@ parts:
     type: scad
     desc: A cube defined in SCAD
 
+  # A library-style SCAD file that only defines a module. `method` names the
+  # module to call and `parameters` supply its named arguments, so PartCAD can
+  # instantiate it without editing the source file.
+  box:
+    type: scad
+    path: parametric_box.scad
+    desc: A box instantiated from a parameterized SCAD module
+    method: box
+    parameters:
+      width:
+        type: float
+        default: 10
+      depth:
+        type: float
+        default: 20
+      height:
+        type: float
+        default: 5
+
 render:
   readme:
   svg:
