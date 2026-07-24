@@ -162,3 +162,127 @@ jobs:
             --bin-dir "${HOME}/partcad-bin"
           test ! -e "${HOME}/partcad-bin/pc"
           test ! -d "${HOME}/partcad-standalone"
+
+  # The wheel-based "Examples (PartCAD)" and "Examples (All)" jobs in test.yml,
+  # cloned to run the same commands through the *bundled* `pc` rather than
+  # `python -m partcad_cli ...`. This is the end-to-end check the build's own
+  # smoke test cannot be: it fetches a git dependency (through the bundle's
+  # libgit2, which nothing else here exercises), runs CAD scripts in the conda
+  # sandbox, and -- on Linux -- uses the OpenSCAD the bundle carries.
+  #
+  # Skipped on the release path (deploy.yml calls this workflow on a push to
+  # main) and in the merge queue, to keep those fast and off heavy integration
+  # tests; the deterministic build and install jobs above gate the release.
+  examples:
+    name: "Examples ${{ matrix.suite }} via bundle (${{ matrix.platform }})"
+    needs: build
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/devel')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            suite: PartCAD
+            package: "//pub/examples/partcad"
+            render: true
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            suite: All
+            package: "//pub/examples"
+            render: false
+          - os: macos-latest
+            platform: macos-arm64
+            suite: PartCAD
+            package: "//pub/examples/partcad"
+            render: true
+          - os: macos-latest
+            platform: macos-arm64
+            suite: All
+            package: "//pub/examples"
+            render: false
+    runs-on: ${{ matrix.os }}
+    # No conda cache and a sandbox built from scratch (cadquery-ocp is ~150MB),
+    # so this is slower than the cached wheel-based jobs in test.yml.
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # PartCAD runs CAD scripts in a conda sandbox it provisions at runtime, so
+      # the bundle still needs conda/mamba on PATH -- the one host prerequisite
+      # it does not carry, exactly as for the wheels.
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: 24.11.3-0
+          use-mamba: true
+          channels: conda-forge,defaults
+          # Only base is needed -- PartCAD creates its own sandbox env at
+          # runtime. No named env, which is the part of setup-all that is flaky
+          # enough to need continue-on-error.
+          auto-activate-base: true
+          activate-environment: ""
+
+      # The libraries the bundled OpenSCAD AppImage resolves from the host: it is
+      # not fully self-contained (see dev-tools/pyinstaller/build.sh). A desktop
+      # has these; a CI runner may not, so install them and let the examples use
+      # the bundled OpenSCAD.
+      - name: Install the bundled OpenSCAD's host libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libgl1 libx11-6 libxcb1 libfontconfig1 libfreetype6 libglib2.0-0 libharfbuzz0b
+
+      # macOS bundles carry no OpenSCAD (see build.sh), so the examples fall back
+      # to a host OpenSCAD there, exactly as the wheels do. Same install as the
+      # wheel-based jobs' setup-test action.
+      - name: Install OpenSCAD (macOS)
+        if: runner.os == 'macOS'
+        shell: bash -el {0}
+        run: |
+          which openscad \
+            || HOMEBREW_NO_AUTO_UPDATE=1 brew install -f openscad \
+            || ( \
+              rm /Users/"$USER"/Library/Caches/Homebrew/downloads/*--OpenSCAD-*.dmg \
+              && HOMEBREW_NO_AUTO_UPDATE=1 brew install -f openscad \
+            )
+
+      - name: Download the bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-standalone-${{ matrix.platform }}
+          path: archives
+
+      - name: Install with install.sh
+        shell: bash -el {0}
+        run: |
+          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' partcad/src/partcad/__init__.py)
+          sh install.sh \
+            --version "${version}" \
+            --base-url "file://${PWD}/archives" \
+            --install-dir "${HOME}/partcad-standalone" \
+            --bin-dir "${HOME}/partcad-bin"
+          # Put the bundled `pc` on PATH for the steps below.
+          echo "${HOME}/partcad-bin" >> "${GITHUB_PATH}"
+
+      - name: Healthcheck
+        shell: bash -el {0}
+        run: pc --no-ansi healthcheck
+
+      # The same commands the wheel-based Examples jobs run, through the bundled
+      # `pc`. No coverage: a frozen binary cannot be instrumented, and coverage
+      # of the shipped bundle is not meaningful. `cd examples` so the local
+      # package resolves as it does in test.yml.
+      - name: Run the ${{ matrix.suite }} examples through the bundle
+        shell: bash -el {0}
+        run: |
+          cd examples
+          pc --no-ansi list all -r ${{ matrix.package }}
+          pc --no-ansi --threads-max 4 test -r --package ${{ matrix.package }}
+          if [ "${{ matrix.render }}" = "true" ]; then
+            pc --no-ansi --threads-max 4 render -r --package ${{ matrix.package }}
+          fi
