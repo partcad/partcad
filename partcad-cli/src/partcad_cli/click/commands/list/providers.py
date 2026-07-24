@@ -49,7 +49,15 @@ def cli(cli_ctx: CliContext, recursive: bool, package: str) -> None:
                 if not recursive and package != project_name:
                     continue
 
-                if recursive and not project_name.startswith(package):
+                if (
+                    recursive
+                    and package != "//"
+                    and project_name != package
+                    and not project_name.startswith(f"{package}/")
+                ):
+                    # Only the package itself or its descendants, not unrelated
+                    # identities that merely share a name prefix (e.g. '//foobar'
+                    # when listing '//foo').
                     continue
 
                 project = ctx.projects[project_name]
