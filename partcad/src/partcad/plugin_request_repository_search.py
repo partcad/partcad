@@ -22,6 +22,6 @@ class PluginRequestRepositorySearch(PluginRequestRepository):
         composed = {
             "keywords": self.keywords,
         }
-        if not self.result is None:
+        if self.result is not None:
             composed["result"] = self.result
         return composed

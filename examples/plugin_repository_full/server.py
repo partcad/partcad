@@ -18,7 +18,7 @@ The keys are the ones ``ProjectExternalRepository`` uses:
 The catalog below is tiny and static; a real server would look it up in a
 database or a filesystem. Everything here is ordinary Python with no CAD-kernel
 dependency, so it can be started on demand and unit-tested directly (see
-``test_server.py``).
+``test_full_server.py``).
 """
 
 from flask import Flask, jsonify, request

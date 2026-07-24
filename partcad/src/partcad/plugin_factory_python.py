@@ -169,8 +169,11 @@ class PluginFactoryPython(PluginFactoryFile):
             )
 
             if exitcode != 0 and len(errors) == 0:
-                errors = "%s: %s: Failed to instantiate" % (self.project.name, provider.name)
-                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (provider.project.name, provider.name, " ".join(command), exitcode))
+                errors = "%s: %s: Failed to instantiate" % (self.project.name, plugin.name)
+                pc_logging.debug(
+                    "%s: %s: Failed to execute command: '%s' with exitcode %s"
+                    % (plugin.project_name, plugin.name, " ".join(command), exitcode)
+                )
 
             if len(errors) > 0:
                 error_lines = errors.split("\n")

@@ -27,6 +27,6 @@ class ProviderRequestQuote(PluginRequestProvider):
         composed = {
             "cart": self.cart.compose(),
         }
-        if not self.result is None:
+        if self.result is not None:
             composed["result"] = self.result
         return composed

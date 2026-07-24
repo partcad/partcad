@@ -9,7 +9,7 @@ PartCAD runs this script in its sandbox for every data request, with the
 generic key in ``request["key"]`` and ``__name__`` set to the API ("get"). It
 returns ``{"result": <value>}``. The transport is factored into ``fetch`` so the
 request/response mapping can be unit-tested against the server without a port
-(see test_remote.py).
+(see test_full_remote.py).
 """
 
 import json

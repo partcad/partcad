@@ -22,5 +22,6 @@ class PluginRequestRepositoryGet(PluginRequestRepository):
         composed = {
             "name": self.name,
         }
-        if not self.result is None:
+        if self.result is not None:
             composed["result"] = self.result
+        return composed

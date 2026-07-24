@@ -8,7 +8,7 @@ Conceptually it is a remote endpoint: the plugin talks to it over HTTP, so the
 same plugin would work against a real remote repository by changing only the
 endpoint URL. The server is short-lived — it only needs to answer the requests a
 single `pc` invocation makes — and it is covered directly by `pytest`
-(`test_server.py`), independently of PartCAD, since it is ordinary Python with
+(`test_full_server.py`), independently of PartCAD, since it is ordinary Python with
 no CAD-kernel dependency.
 
 ## What it demonstrates
@@ -24,7 +24,7 @@ no CAD-kernel dependency.
 | File | Role |
 |------|------|
 | `server.py`      | The Flask endpoint (the "remote" repository). Runnable and unit-tested standalone. |
-| `test_server.py` | `pytest` coverage of the endpoint's list/get responses. |
+| `test_full_server.py` | `pytest` coverage of the endpoint's list/get responses. |
 | `remote.py`      | The repository plugin script PartCAD runs; forwards queries to the endpoint. |
 | `partcad.yaml`   | Declares the `external` package and the `remote` repository plugin. |
 

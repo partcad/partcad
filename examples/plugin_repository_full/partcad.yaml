@@ -7,7 +7,7 @@ docs:
     Unlike 'plugin_repository_basic', which hardcodes its data in the plugin
     script, this example serves it from a Flask endpoint (server.py) that the
     plugin (remote.py) calls over HTTP. The endpoint is short-lived and covered
-    by its own pytest (test_server.py, test_remote.py), independently of
+    by its own pytest (test_full_server.py, test_full_remote.py), independently of
     PartCAD.
   usage: |
     ```

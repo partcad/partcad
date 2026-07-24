@@ -17,9 +17,9 @@ class PluginRequestRepositoryCaps(PluginRequestRepository):
         super().__init__()
 
     def compose(self):
-        composed = {
-            "name": self.name,
-        }
-        if not self.result is None:
+        # A capabilities request carries no name (it is about the repository as
+        # a whole, not a single object).
+        composed = {}
+        if self.result is not None:
             composed["result"] = self.result
         return composed
