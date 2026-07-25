@@ -108,6 +108,8 @@ parts:
         default: 1.0
       height:
         default: 1.0
+      samples:
+        default: 16384
 
 
 # ---------------------------- #

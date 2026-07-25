@@ -19,6 +19,8 @@ parts:
         default: 1.0
       gear_count:
         default: 16
+      samples:
+        default: 16384
   box:
     desc: This is a cube defined using SDF.
     type: sdf
@@ -29,6 +31,8 @@ parts:
         default: 5.0
       height:
         default: 5.0
+      samples:
+        default: 16384
   blobby:
     desc: This is a blobby shape defined using SDF.
     type: sdf
@@ -43,6 +47,8 @@ parts:
         default: 1.5
       blend_value:
         default: 1
+      samples:
+        default: 16384
 
 render:
   readme:

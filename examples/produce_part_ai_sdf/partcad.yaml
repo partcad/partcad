@@ -15,12 +15,18 @@ parts:
     desc: A cube
     properties:
       length: 10
+    parameters:
+      samples:
+        default: 16384
   prism:
     type: ai-sdf
     provider: openai
     desc: A hexagonal prism
     properties:
       length: 10
+    parameters:
+      samples:
+        default: 16384
   tetrahedron:
     type: ai-sdf
     provider: openai
@@ -29,6 +35,9 @@ parts:
     desc: A tetrahedron
     properties:
       length: 10
+    parameters:
+      samples:
+        default: 16384
 
 render:
   readme:
