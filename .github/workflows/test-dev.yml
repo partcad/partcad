@@ -90,9 +90,17 @@ jobs:
           path: |
             ~/.cache/pypoetry
             .venv
-          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
+          # Prefix bumped to -v2- to abandon the incrementally-built caches.
+          # The old restore-keys fallback ('devcontainer-poetry-') served a
+          # .venv that had been carried forward and patched across many lock
+          # changes on this branch; behave then segfaulted at startup while
+          # loading the OCP/VTK native stack, in a way that never reproduced
+          # from a freshly built .venv. This forces a clean rebuild for the
+          # current lock (there is no -v2- cache yet) and only ever restores
+          # -v2- caches afterwards.
+          key: devcontainer-poetry-v2-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            devcontainer-poetry-
+            devcontainer-poetry-v2-
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
@@ -150,9 +158,17 @@ jobs:
             ~/.cache/pypoetry
             .venv
           # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
-          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
+          # Prefix bumped to -v2- to abandon the incrementally-built caches.
+          # The old restore-keys fallback ('devcontainer-poetry-') served a
+          # .venv that had been carried forward and patched across many lock
+          # changes on this branch; behave then segfaulted at startup while
+          # loading the OCP/VTK native stack, in a way that never reproduced
+          # from a freshly built .venv. This forces a clean rebuild for the
+          # current lock (there is no -v2- cache yet) and only ever restores
+          # -v2- caches afterwards.
+          key: devcontainer-poetry-v2-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            devcontainer-poetry-
+            devcontainer-poetry-v2-
 
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
@@ -281,9 +297,17 @@ jobs:
           path: |
             ~/.cache/pypoetry
             .venv
-          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
+          # Prefix bumped to -v2- to abandon the incrementally-built caches.
+          # The old restore-keys fallback ('devcontainer-poetry-') served a
+          # .venv that had been carried forward and patched across many lock
+          # changes on this branch; behave then segfaulted at startup while
+          # loading the OCP/VTK native stack, in a way that never reproduced
+          # from a freshly built .venv. This forces a clean rebuild for the
+          # current lock (there is no -v2- cache yet) and only ever restores
+          # -v2- caches afterwards.
+          key: devcontainer-poetry-v2-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            devcontainer-poetry-
+            devcontainer-poetry-v2-
 
       # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
       - name: Set SSH Agent Service to Manual
@@ -462,9 +486,17 @@ jobs:
             ~/.cache/pypoetry
             .venv
           # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
-          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
+          # Prefix bumped to -v2- to abandon the incrementally-built caches.
+          # The old restore-keys fallback ('devcontainer-poetry-') served a
+          # .venv that had been carried forward and patched across many lock
+          # changes on this branch; behave then segfaulted at startup while
+          # loading the OCP/VTK native stack, in a way that never reproduced
+          # from a freshly built .venv. This forces a clean rebuild for the
+          # current lock (there is no -v2- cache yet) and only ever restores
+          # -v2- caches afterwards.
+          key: devcontainer-poetry-v2-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            devcontainer-poetry-
+            devcontainer-poetry-v2-
 
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3
