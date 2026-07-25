@@ -19,10 +19,47 @@ sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
 
+def _normalize_mesh(shape):
+    """Round-trip a triangulation-only shape (e.g. an SDF mesh) through STL.
+
+    Such a shape has no topological edges for 'project_to_viewport' to use;
+    writing it to STL and reading it back yields a shape it can project. This
+    runs inside the render runtime, so no OCCT mesh handling leaks into the main
+    process, and the normalized shape never crosses a runtime boundary.
+    """
+    import tempfile
+    from OCP.StlAPI import StlAPI_Writer, StlAPI_Reader
+    from OCP.TopoDS import TopoDS_Shape
+
+    fd, tmp_path = tempfile.mkstemp(suffix=".stl")
+    os.close(fd)
+    try:
+        writer = StlAPI_Writer()
+        if not writer.Write(shape, tmp_path):
+            from OCP.BRepMesh import BRepMesh_IncrementalMesh
+
+            BRepMesh_IncrementalMesh(shape, 0.1).Perform()
+            writer.Write(shape, tmp_path)
+        reader = StlAPI_Reader()
+        result = TopoDS_Shape()
+        if reader.Read(result, tmp_path) and not result.IsNull():
+            return result
+        return shape
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
 def process(path, request):
     try:
+        wrapped = request["wrapped"]
+        if request.get("normalize_mesh"):
+            wrapped = _normalize_mesh(wrapped)
+
         b3d_obj = b3d.Solid.make_box(1, 1, 1)
-        b3d_obj.wrapped = request["wrapped"]
+        b3d_obj.wrapped = wrapped
 
         viewport_origin = tuple(request.get("viewport_origin"))
         viewport_up = tuple(request.get("viewport_up", [0, 0, 1]))

@@ -979,6 +979,10 @@ class Context:
         """Thin alias for convert_part(part_spec, "build123d", params)."""
         return self.convert_part(part_spec, "build123d", params)
 
+    def get_part_sdf(self, part_spec, params=None):
+        """Return the SDF part's mesh (normalized in the sandbox at build time)."""
+        return asyncio.run(self._get_part(part_spec, params).get_wrapped(self))
+
     def _get_assembly(self, assembly_spec, params=None):
         project_name, assembly_name = resolve_resource_path(
             self.current_project_path,

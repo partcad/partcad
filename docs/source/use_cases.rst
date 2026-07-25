@@ -14,7 +14,7 @@ and data may be desired. Below is a list of some common use cases.
 Develop CAD models faster
 =========================
 
-PartCAD VSCode Extension is a powerful tool to develop code-CAD (OpenSCAD, CadQuery and build123d)
+PartCAD VSCode Extension is a powerful tool to develop code-CAD (OpenSCAD, CadQuery, build123d and sdf)
 models faster. It provides a rich set of features to help you develop models:
 
 - :ref:`caching` of intermediate and final results of all model compilations

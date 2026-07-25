@@ -99,10 +99,24 @@ Feature: `pc inspect` command
     | /produce_part_ai_openscad | prism |
     | /produce_part_ai_openscad | tetrahedron |
 
+  @ai @sdf
+  Examples: Part: sdf [AI]
+    | package | part |
+    | /produce_part_ai_sdf | cube |
+    | /produce_part_ai_sdf | prism |
+    | /produce_part_ai_sdf | tetrahedron |
+
   @build123d
   Examples: Part: build123d
     | package | part |
     | /produce_part_build123d_primitive | cube |
+
+  @sdf
+  Examples: Part: sdf
+    | package | part |
+    | /produce_part_sdf | box |
+    | /produce_part_sdf | gear |
+    | /produce_part_sdf | blobby |
 
   @cadquery
   Examples: Part: cadquery

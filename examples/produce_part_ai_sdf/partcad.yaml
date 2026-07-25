@@ -1,0 +1,36 @@
+desc: PartCAD parts defined using AI-generated SDF scripts.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect cube
+    pc inspect prism
+    pc inspect tetrahedron
+    ```
+
+parts:
+  cube:
+    type: ai-sdf
+    provider: google
+    desc: A cube
+    properties:
+      length: 10
+  prism:
+    type: ai-sdf
+    provider: openai
+    desc: A hexagonal prism
+    properties:
+      length: 10
+  tetrahedron:
+    type: ai-sdf
+    provider: openai
+    tokens:
+    top_p: 0.9
+    desc: A tetrahedron
+    properties:
+      length: 10
+
+render:
+  readme:
+  svg:
+    prefix: ./
