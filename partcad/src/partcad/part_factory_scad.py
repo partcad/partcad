@@ -35,7 +35,13 @@ def _scad_literal(value):
     if isinstance(value, (int, float)):
         return repr(value)
     if isinstance(value, str):
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        escaped = (
+            value.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+        )
         return '"%s"' % escaped
     if isinstance(value, (list, tuple)):
         return "[%s]" % ", ".join(_scad_literal(item) for item in value)
@@ -78,10 +84,15 @@ def _write_render_script(source_path, call_line):
     The source is never modified: a library-style SCAD file that only defines a
     module renders nothing on its own, so a call to that module is appended to a
     temporary copy that is rendered and then deleted.
+
+    The copy is created in the source's own directory so that any relative
+    'include'/'use'/'import' paths in the script still resolve -- OpenSCAD
+    resolves those relative to the file that contains them, so a copy placed in
+    the system temp directory would break them.
     """
     with open(source_path, "r") as f:
         source = f.read()
-    fd, tmp_path = tempfile.mkstemp(suffix=".scad")
+    fd, tmp_path = tempfile.mkstemp(suffix=".scad", dir=os.path.dirname(source_path) or None)
     with os.fdopen(fd, "w") as f:
         f.write(source)
         if source and not source.endswith("\n"):
@@ -163,98 +174,100 @@ class PartFactoryScad(PartFactoryFile):
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 
-            with telemetry.start_as_current_span(
-                "PartFactoryScad.instantiate.*{asyncio.create_subprocess_exec}"
-            ) as span:
-                fd, stl_path = tempfile.mkstemp(suffix=".stl")
-                os.close(fd)  # OpenSCAD writes to the path itself via '-o'
-
-                # Parameters either override the script's top-level variables
-                # ('-D name=value') or, when a module is named via 'method', are
-                # passed to a call to that module appended to a throwaway copy of
-                # the script (the source file is never modified).
-                args, tmp_scad_path = _build_render_args(scad_path, stl_path, part.path, self.config)
-                span.set_attribute("cmd", " ".join(args))
-                try:
-                    p = await asyncio.create_subprocess_exec(
-                        *args,
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        shell=False,
-                    )
-                    _, errors = await p.communicate()
-                finally:
-                    if tmp_scad_path is not None and os.path.exists(tmp_scad_path):
-                        os.unlink(tmp_scad_path)
-
-            errors = errors.decode()
-            if p.returncode != 0 and len(errors) == 0:
-                errors = "%s: %s: Failed to instantiate" % (part.project_name, part.name)
-                pc_logging.debug(
-                    "%s: %s: Failed to execute command: '%s' with exitcode %s"
-                    % (part.project_name, part.name, " ".join(args), p.returncode)
-                )
-
-            if len(errors) > 0:
-                error_lines = errors.split("\n")
-                for error_line in error_lines:
-                    pc_logging.debug("%s: %s" % (part.name, error_line))
-
-            if not os.path.exists(stl_path) or os.path.getsize(stl_path) == 0:
-                part.error("OpenSCAD failed to generate the STL file. Please, check the script.")
-                return None
-
-            # The mesh is imported by a wrapper script executed in a sandboxed
-            # python runtime, so that build123d is not needed in this process.
-            # The wrapper falls back onto 'import_stl' if 'Mesher' fails,
-            # to work around the known problem in Mesher.
-            if self.runtime is None:
-                self.runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
-
-            wrapper_path = wrapper.get("import_mesh.py")
-
-            request = {"fallback_import_stl": True}
-            request["name"] = "%s:%s" % (part.project_name, part.name)
-            request["label"] = part.name
-            request_serialized = ocp_serialize.serialize(request)
-
-            await self.runtime.ensure_async("ocp-tessellate==3.0.9")
-            await self.runtime.ensure_async("typing_extensions==4.12.2")
-            await self.runtime.ensure_async("cadquery-ocp==7.7.2")
-            await self.runtime.ensure_async("ocpsvg==0.3.4")
-            await self.runtime.ensure_async("build123d==0.8.0")
-
-            command = [
-                wrapper_path,
-                os.path.abspath(stl_path),
-                os.path.abspath(self.project.config_dir),
-            ]
-            with telemetry.start_as_current_span("*PartFactoryScad.instantiate.{runtime.run_async}"):
-                exitcode, response_serialized, errors = await self.runtime.run_async(
-                    command,
-                    request_serialized,
-                )
-            if exitcode != 0 and len(errors) == 0:
-                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
-
-            if errors:
-                part.error("%s: %s" % (part.name, errors))
-                return None
-
+            fd, stl_path = tempfile.mkstemp(suffix=".stl")
+            os.close(fd)  # OpenSCAD writes to the path itself via '-o'
             try:
-                result = ocp_serialize.deserialize(response_serialized)
-            except Exception as e:
-                part.error("%s: %s" % (part.name, e))
-                return None
+                with telemetry.start_as_current_span(
+                    "PartFactoryScad.instantiate.*{asyncio.create_subprocess_exec}"
+                ) as span:
+                    # Parameters either override the script's top-level variables
+                    # ('-D name=value') or, when a module is named via 'method', are
+                    # passed to a call to that module appended to a throwaway copy of
+                    # the script (the source file is never modified).
+                    args, tmp_scad_path = _build_render_args(scad_path, stl_path, part.path, self.config)
+                    span.set_attribute("cmd", " ".join(args))
+                    try:
+                        p = await asyncio.create_subprocess_exec(
+                            *args,
+                            stdin=subprocess.PIPE,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            shell=False,
+                        )
+                        _, errors = await p.communicate()
+                    finally:
+                        if tmp_scad_path is not None and os.path.exists(tmp_scad_path):
+                            os.unlink(tmp_scad_path)
 
-            if not result["success"]:
-                part.error("%s: %s" % (part.name, result["exception"]))
-                return None
+                errors = errors.decode()
+                if p.returncode != 0 and len(errors) == 0:
+                    errors = "%s: %s: Failed to instantiate" % (part.project_name, part.name)
+                    pc_logging.debug(
+                        "%s: %s: Failed to execute command: '%s' with exitcode %s"
+                        % (part.project_name, part.name, " ".join(args), p.returncode)
+                    )
 
-            shape = result["shape"]
-            os.unlink(stl_path)
+                if len(errors) > 0:
+                    error_lines = errors.split("\n")
+                    for error_line in error_lines:
+                        pc_logging.debug("%s: %s" % (part.name, error_line))
 
-            self.ctx.stats_parts_instantiated += 1
+                if not os.path.exists(stl_path) or os.path.getsize(stl_path) == 0:
+                    part.error("OpenSCAD failed to generate the STL file. Please, check the script.")
+                    return None
 
-            return shape
+                # The mesh is imported by a wrapper script executed in a sandboxed
+                # python runtime, so that build123d is not needed in this process.
+                # The wrapper falls back onto 'import_stl' if 'Mesher' fails,
+                # to work around the known problem in Mesher.
+                if self.runtime is None:
+                    self.runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
+
+                wrapper_path = wrapper.get("import_mesh.py")
+
+                request = {"fallback_import_stl": True}
+                request["name"] = "%s:%s" % (part.project_name, part.name)
+                request["label"] = part.name
+                request_serialized = ocp_serialize.serialize(request)
+
+                await self.runtime.ensure_async("ocp-tessellate==3.0.9")
+                await self.runtime.ensure_async("typing_extensions==4.12.2")
+                await self.runtime.ensure_async("cadquery-ocp==7.7.2")
+                await self.runtime.ensure_async("ocpsvg==0.3.4")
+                await self.runtime.ensure_async("build123d==0.8.0")
+
+                command = [
+                    wrapper_path,
+                    os.path.abspath(stl_path),
+                    os.path.abspath(self.project.config_dir),
+                ]
+                with telemetry.start_as_current_span("*PartFactoryScad.instantiate.{runtime.run_async}"):
+                    exitcode, response_serialized, errors = await self.runtime.run_async(
+                        command,
+                        request_serialized,
+                    )
+                if exitcode != 0 and len(errors) == 0:
+                    errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+
+                if errors:
+                    part.error("%s: %s" % (part.name, errors))
+                    return None
+
+                try:
+                    result = ocp_serialize.deserialize(response_serialized)
+                except Exception as e:
+                    part.error("%s: %s" % (part.name, e))
+                    return None
+
+                if not result["success"]:
+                    part.error("%s: %s" % (part.name, result["exception"]))
+                    return None
+
+                shape = result["shape"]
+
+                self.ctx.stats_parts_instantiated += 1
+
+                return shape
+            finally:
+                if os.path.exists(stl_path):
+                    os.unlink(stl_path)

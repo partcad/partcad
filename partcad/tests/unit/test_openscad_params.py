@@ -43,6 +43,12 @@ def test_scad_literal_strings_are_quoted_and_escaped():
     assert _scad_literal('a"b\\c') == '"a\\"b\\\\c"'
 
 
+def test_scad_literal_escapes_control_characters():
+    # Raw newlines/tabs/carriage returns are not valid inside an OpenSCAD
+    # string literal and must be emitted as escape sequences.
+    assert _scad_literal("a\nb\tc\rd") == '"a\\nb\\tc\\rd"'
+
+
 def test_scad_literal_vectors():
     assert _scad_literal([1, 2, 3]) == "[1, 2, 3]"
     assert _scad_literal((1, "x", True)) == '[1, "x", true]'
@@ -99,6 +105,19 @@ def test_write_render_script_appends_without_touching_source(tmp_path):
         assert rendered != str(source)
         with open(rendered) as f:
             assert f.read() == "module box(s) { cube(s); }\nbox(s=5);\n"
+    finally:
+        os.unlink(rendered)
+
+
+def test_write_render_script_copy_lives_beside_source(tmp_path):
+    # The copy must sit in the source's own directory so relative
+    # 'include'/'use'/'import' paths in the script still resolve.
+    source = tmp_path / "lib.scad"
+    source.write_text("module box(s) { cube(s); }\n")
+
+    rendered = _write_render_script(str(source), "box(s=5);")
+    try:
+        assert os.path.dirname(rendered) == str(tmp_path)
     finally:
         os.unlink(rendered)
 
