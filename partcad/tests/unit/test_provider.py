@@ -11,7 +11,7 @@
 import asyncio
 
 import partcad as pc
-from partcad.provider_data_cart import ProviderCart
+from partcad.plugin_provider_data_cart import ProviderCart
 
 
 def test_provider_quote_store_csv():

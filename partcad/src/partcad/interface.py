@@ -65,14 +65,18 @@ class InterfacePort:
                 self.source_project_name = config["project"]
                 if self.source_project_name == "this" or self.source_project_name == "":
                     self.source_project_name = project.name
+                else:
+                    self.source_project_name = project.relocate(self.source_project_name)
             else:
                 self.source_project_name = project.name
 
             self.source_sketch_name = config["sketch"]
             if ":" in self.source_sketch_name:
+                # The reference is resolved against the package named above,
+                # but it was authored by 'project', so relocate it as such.
                 self.source_project_name, self.source_sketch_name = resolve_resource_path(
                     self.source_project_name,
-                    self.source_sketch_name,
+                    project.relocate(self.source_sketch_name),
                 )
                 self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
                 self.sketch = project.ctx.get_sketch(self.source_sketch_spec)
@@ -454,9 +458,7 @@ class Interface:
         for target_interface_name, mate_target_config in mates.items():
             if not ":" in target_interface_name:
                 target_interface_name = project.name + ":" + target_interface_name
-            target_package_name, short_target_interface_name = resolve_resource_path(
-                project.name, target_interface_name
-            )
+            target_package_name, short_target_interface_name = project.resolve(target_interface_name)
 
             if target_package_name == project.name:
                 target_project = project

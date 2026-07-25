@@ -4,6 +4,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import copy
 import os
 
 import pytest
@@ -18,6 +19,24 @@ def setup_function() -> None:
     This fixture ensures a clean slate for testing.
     """
     pc.logging.reset_errors()
+
+
+@pytest.fixture(autouse=True)
+def restore_parameter_config():
+    """
+    Restores the user configuration parameter overrides after each test.
+
+    'pc.user_config' is a process-wide singleton, so a test that overrides an
+    object's parameters would otherwise leak them into every test that happens
+    to run afterwards, making the outcome depend on the test order.
+    """
+    saved = copy.deepcopy(pc.user_config.parameter_config.to_dict())
+    yield
+    parameter_config = pc.user_config.parameter_config
+    for key in list(parameter_config):
+        del parameter_config[key]
+    for key, value in saved.items():
+        parameter_config[key] = value
 
 
 @pytest.hookimpl(trylast=True)

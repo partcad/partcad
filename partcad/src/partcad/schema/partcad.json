@@ -218,12 +218,14 @@
           "type": "object",
           "properties": {
             "desc": { "type": "string", "maxLength": 1000 },
-            "type": { "type": "string", "enum": ["git", "tar", "local"] },
+            "type": { "type": "string", "enum": ["git", "tar", "local", "external"] },
             "onlyInRoot": { "type": "boolean", "default": false },
             "path": { "type": "string", "minLength": 1 },
             "url": { "$ref": "#/definitions/url" },
             "relPath": { "type": "string", "minLength": 1 },
             "revision": { "type": "string", "minLength": 1 },
+            "plugin": { "type": "string", "minLength": 1 },
+            "subfolder": { "type": "string" },
             "includePaths": {
               "type": "array",
               "items": { "type": "string", "minLength": 1 },
@@ -642,6 +644,25 @@
               "additionalProperties": false
             },
             "abstract": { "type": "boolean", "default": false },
+            "parameters": { "$ref": "#/definitions/shape-parameter"}
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "repositories": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["basic", "enrich"] },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "source": { "type": "string", "minLength": 1 },
+            "package": { "type": "string", "minLength": 1 },
+            "with": { "type": "object" },
             "parameters": { "$ref": "#/definitions/shape-parameter"}
           },
           "required": ["type"],

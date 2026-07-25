@@ -57,6 +57,37 @@ def test_assembly_example_assy_logo_embedded():
     assert asyncio.run(logo.convert("build123d", ctx)) is not None
 
 
+def test_assembly_params_short_form():
+    """The short form of an assembly parameter is expanded on normalization"""
+    ctx = pc.Context("examples/produce_assembly_assy")
+    primitive = ctx._get_assembly(":primitive_parametrized")
+    assert primitive is not None
+    assert asyncio.run(primitive.get_wrapped(ctx)) is not None
+    assert primitive.config["parameters"]["offset"]["type"] == "float"
+    assert primitive.config["parameters"]["offset"]["default"] == 5.0
+
+
+def test_assembly_params_get():
+    """Instantiate an ASSY assembly with a parameter value passed in"""
+    ctx = pc.Context("examples/produce_assembly_assy")
+    primitive = ctx._get_assembly(":primitive_parametrized", {"offset": 12.0})
+    assert primitive is not None
+    assert asyncio.run(primitive.get_wrapped(ctx)) is not None
+    assert primitive.config["parameters"]["offset"]["default"] == 12.0
+
+
+def test_assembly_user_config_params_get():
+    """Load an ASSY assembly and see if the parameters changed from user_config"""
+    ctx = pc.Context("examples/produce_assembly_assy")
+    pc.user_config.parameter_config["//pub/examples/partcad/produce_assembly_assy:primitive_parametrized"] = {
+        "offset": 21.0
+    }
+    primitive = ctx._get_assembly(":primitive_parametrized")
+    assert primitive is not None
+    assert asyncio.run(primitive.get_wrapped(ctx)) is not None
+    assert primitive.config["parameters"]["offset"]["default"] == 21.0
+
+
 def test_assembly_example_assy_logo_bom():
     ctx = pc.init("examples")
     logo = ctx._get_assembly("//produce_assembly_assy:logo_embedded")
