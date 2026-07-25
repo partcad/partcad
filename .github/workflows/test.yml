@@ -277,7 +277,9 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # Raised 30->40: the SDF examples add marching-cubes render time that pushed
+    # this matrix past ~30m on the slower Windows runners.
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v7
@@ -329,7 +331,9 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # Raised 30->40: the SDF examples add marching-cubes render time that pushed
+    # this matrix past ~30m on the slower Windows runners.
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v7
