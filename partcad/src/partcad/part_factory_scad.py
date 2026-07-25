@@ -13,14 +13,115 @@ import subprocess
 import sys
 import tempfile
 
-from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
+from . import telemetry, wrapper
 from .healthcheck.openscad import find_executable as find_openscad_executable
-from . import telemetry
-from . import wrapper
+from .part_factory_file import PartFactoryFile
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 import ocp_serialize
+
+
+def _scad_literal(value):
+    """Render a Python value as an OpenSCAD literal.
+
+    Shared by the '-D name=value' overrides and the arguments of an injected
+    module call, so numbers, booleans, strings and vectors all reach OpenSCAD
+    with the right syntax.
+    """
+    if isinstance(value, bool):
+        # bool is a subclass of int, so it has to be handled first
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return '"%s"' % escaped
+    if isinstance(value, (list, tuple)):
+        return "[%s]" % ", ".join(_scad_literal(item) for item in value)
+    if value is None:
+        return "undef"
+    raise ValueError("Unsupported OpenSCAD parameter value: %r" % (value,))
+
+
+def _parameter_values(config):
+    """Collect the declared parameters as a {name: value} mapping.
+
+    A parameter is either a bare value or an object carrying a 'default' (see
+    the 'shape-parameter' schema), matching how the CadQuery and build123d
+    factories read 'parameters'. Reading 'default' also picks up values
+    overridden at runtime (e.g. 'pc inspect -p name=value').
+    """
+    values = {}
+    for name, param in (config.get("parameters") or {}).items():
+        values[name] = param.get("default") if isinstance(param, dict) else param
+    return values
+
+
+def _build_define_args(values):
+    """Turn parameters into OpenSCAD '-D name=value' command-line args."""
+    args = []
+    for name, value in values.items():
+        args += ["-D", "%s=%s" % (name, _scad_literal(value))]
+    return args
+
+
+def _build_method_call(method, values):
+    """Build a call to 'method' passing the parameters as named args."""
+    call_args = ", ".join("%s=%s" % (name, _scad_literal(value)) for name, value in values.items())
+    return "%s(%s);" % (method, call_args)
+
+
+def _write_render_script(source_path, call_line):
+    """Copy the script to a throwaway file with 'call_line' appended.
+
+    The source is never modified: a library-style SCAD file that only defines a
+    module renders nothing on its own, so a call to that module is appended to a
+    temporary copy that is rendered and then deleted.
+    """
+    with open(source_path, "r") as f:
+        source = f.read()
+    fd, tmp_path = tempfile.mkstemp(suffix=".scad")
+    with os.fdopen(fd, "w") as f:
+        f.write(source)
+        if source and not source.endswith("\n"):
+            f.write("\n")
+        f.write(call_line + "\n")
+    return tmp_path
+
+
+def _build_render_args(scad_executable, stl_path, source_path, config):
+    """Assemble the OpenSCAD command line for a part.
+
+    Returns ``(args, tmp_scad_path)``. When the config names a ``method``, the
+    parameters become a call appended to a throwaway copy of the source, whose
+    path is returned so the caller can delete it after the render. Otherwise the
+    parameters become ``-D name=value`` variable overrides and the source is
+    rendered directly. ``tmp_scad_path`` is ``None`` when no copy was made.
+    """
+    values = _parameter_values(config)
+    method = config.get("method")
+
+    tmp_scad_path = None
+    define_args = []
+    if method:
+        tmp_scad_path = _write_render_script(source_path, _build_method_call(method, values))
+        render_path = tmp_scad_path
+    else:
+        render_path = source_path
+        if values:
+            define_args = _build_define_args(values)
+
+    args = [
+        scad_executable,
+        "--export-format",
+        "binstl",
+        "-o",
+        stl_path,
+        *define_args,
+        render_path,
+    ]
+    return args, tmp_scad_path
 
 
 @telemetry.instrument()
@@ -58,38 +159,42 @@ class PartFactoryScad(PartFactoryFile):
 
             # The bundled OpenSCAD first, the host's second -- unless the user
             # opted out of the bundled one. See `partcad.healthcheck.openscad`.
-            scad_path = find_openscad_executable(
-                ignore_bundled=self.ctx.user_config.ignore_bundled_openscad
-            )
+            scad_path = find_openscad_executable(ignore_bundled=self.ctx.user_config.ignore_bundled_openscad)
             if scad_path is None:
                 raise Exception("OpenSCAD executable is not found. Please, install OpenSCAD first.")
 
             with telemetry.start_as_current_span(
                 "PartFactoryScad.instantiate.*{asyncio.create_subprocess_exec}"
             ) as span:
-                stl_path = tempfile.mktemp(".stl")
-                args = [
-                    scad_path,
-                    "--export-format",
-                    "binstl",
-                    "-o",
-                    stl_path,
-                    part.path,
-                ]
+                fd, stl_path = tempfile.mkstemp(suffix=".stl")
+                os.close(fd)  # OpenSCAD writes to the path itself via '-o'
+
+                # Parameters either override the script's top-level variables
+                # ('-D name=value') or, when a module is named via 'method', are
+                # passed to a call to that module appended to a throwaway copy of
+                # the script (the source file is never modified).
+                args, tmp_scad_path = _build_render_args(scad_path, stl_path, part.path, self.config)
                 span.set_attribute("cmd", " ".join(args))
-                p = await asyncio.create_subprocess_exec(
-                    *args,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=False,
-                )
-                _, errors = await p.communicate()
+                try:
+                    p = await asyncio.create_subprocess_exec(
+                        *args,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        shell=False,
+                    )
+                    _, errors = await p.communicate()
+                finally:
+                    if tmp_scad_path is not None and os.path.exists(tmp_scad_path):
+                        os.unlink(tmp_scad_path)
 
             errors = errors.decode()
             if p.returncode != 0 and len(errors) == 0:
                 errors = "%s: %s: Failed to instantiate" % (part.project_name, part.name)
-                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (part.project_name, part.name, " ".join(args), p.returncode))
+                pc_logging.debug(
+                    "%s: %s: Failed to execute command: '%s' with exitcode %s"
+                    % (part.project_name, part.name, " ".join(args), p.returncode)
+                )
 
             if len(errors) > 0:
                 error_lines = errors.split("\n")

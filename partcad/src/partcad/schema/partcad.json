@@ -324,6 +324,7 @@
                 "top_k": { "type": "integer", "minimum": 1 },
                 "cwd": { "type": "string", "minLength": 1 },
                 "showObject": { "type": "string", "minLength": 1 },
+                "method": { "type": "string", "minLength": 1 },
                 "patch": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } },
                 "pythonRequirements": {
                   "type": "array",
