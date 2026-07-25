@@ -13,12 +13,14 @@ import re
 import os
 import shutil
 import time
+import contextlib
 import threading
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import pygit2
-from pygit2.enums import CheckoutStrategy, CredentialType, ReferenceType, ResetMode
+from filelock import FileLock
+from pygit2.enums import CheckoutStrategy, ConfigLevel, CredentialType, ReferenceType, ResetMode
 
 from .project_local import ProjectLocal
 from . import project_factory as pf
@@ -141,6 +143,32 @@ def is_retryable(error: Exception) -> bool:
     """Whether 'error' is a hiccup worth another attempt rather than an answer."""
     message = str(error)
     return any(re.search(pattern, message, re.IGNORECASE) for pattern in git_error_patterns)
+
+
+# An authentication or credential failure, as opposed to a transient network
+# problem (is_retryable) or a definitive answer such as a 404 or a missing ref.
+# These are what a 'url.*.insteadOf' rewrite in the ambient git config produces
+# when it sends an anonymous clone to a transport whose credentials are not
+# available here, so they are the failures worth retrying with that config
+# ignored. A repository that is genuinely gone answers differently and must not
+# match: ignoring the config cannot make a missing repository appear.
+auth_error_patterns = [
+    r"authentication is required",
+    r"authentication required",
+    r"no credentials",
+    r"unsupported credentials",
+    r"failed to authenticate",
+    r"permission denied",
+    r"too many redirects or authentication replays",
+    # HTTP unauthorized/forbidden, worded the way libgit2 words a bad status
+    r"unexpected http status code: 40[13]",
+]
+
+
+def is_auth_failure(error: Exception) -> bool:
+    """Whether 'error' is an authentication or credential failure."""
+    message = str(error)
+    return any(re.search(pattern, message, re.IGNORECASE) for pattern in auth_error_patterns)
 
 
 # A commit id, whole or abbreviated. Anything else is treated as a branch or
@@ -490,6 +518,74 @@ def get_cache_lock(hash):
     return lock
 
 
+# libgit2 reads the ambient git configuration (~/.gitconfig and the system
+# config) directly. A user's 'url.*.insteadOf' rewrite there can send an
+# anonymous clone to a transport whose credentials are not available here (an
+# https URL rewritten to ssh with no key in a container, for example). When a
+# clone has otherwise failed, PartCAD retries it once with these configuration
+# levels ignored, so the URL is used as written. Clearing them is a process-wide
+# libgit2 setting, so the retry must run with no clone that honors the ambient
+# config in flight, and the levels have to be restored afterwards.
+_AMBIENT_CONFIG_LEVELS = (ConfigLevel.SYSTEM, ConfigLevel.XDG, ConfigLevel.GLOBAL)
+
+
+class _AmbientConfigGuard:
+    """Coordinate the process-wide libgit2 config search path across threads.
+
+    The search path is a single process-wide libgit2 setting, so clearing it for
+    one clone would strip the ambient configuration from every clone running
+    beside it. Clones that honor the ambient config are therefore readers and
+    stay concurrent, while the fallback clone that clears the search path is the
+    writer: it waits until no reader is in flight, then blocks new readers until
+    it has restored the search path.
+
+    This coordinates threads within one process, which is all the search path
+    needs: it is process-local memory, so a separate process clearing its own
+    copy cannot affect this one. Cross-process safety of the shared cache on
+    disk is a different concern, handled by the per-repository file lock.
+    """
+
+    def __init__(self):
+        self._condition = threading.Condition()
+        self._readers = 0
+        self._writer = False
+
+    @contextlib.contextmanager
+    def honoring_ambient_config(self):
+        with self._condition:
+            while self._writer:
+                self._condition.wait()
+            self._readers += 1
+        try:
+            yield
+        finally:
+            with self._condition:
+                self._readers -= 1
+                if self._readers == 0:
+                    self._condition.notify_all()
+
+    @contextlib.contextmanager
+    def ignoring_ambient_config(self):
+        with self._condition:
+            while self._writer or self._readers > 0:
+                self._condition.wait()
+            self._writer = True
+        saved = {level: pygit2.settings.search_path[level] for level in _AMBIENT_CONFIG_LEVELS}
+        try:
+            for level in _AMBIENT_CONFIG_LEVELS:
+                pygit2.settings.search_path[level] = ""
+            yield
+        finally:
+            for level, path in saved.items():
+                pygit2.settings.search_path[level] = path
+            with self._condition:
+                self._writer = False
+                self._condition.notify_all()
+
+
+_ambient_config_guard = _AmbientConfigGuard()
+
+
 class GitImportConfiguration:
     def __init__(self):
         self.import_config_url = self.config_obj.get("url")
@@ -593,6 +689,29 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
             inherited_config=self.inherited_config,
         )
 
+    def _clone_ignoring_ambient_config(self, repo_url, cache_path, clone_options, guard_path) -> bool:
+        """Retry a failed clone with the ambient git config ignored.
+
+        Returns True if the retry filled the cache. A False return leaves the
+        original failure for the caller to report, because ignoring the config
+        did not help.
+        """
+        pc_logging.warning(
+            "Clone of %s failed to authenticate; retrying with the ambient git config ignored",
+            self.import_config_url,
+        )
+        try:
+            with _ambient_config_guard.ignoring_ambient_config():
+                repo = self._clone_repo(repo_url, cache_path, clone_options)
+        except GIT_ERRORS:
+            return False
+        self.ctx.stats_git_ops += 1
+        after = self.import_revision if self.import_revision is not None else repo.head.target
+        with open(guard_path, "w") as f:
+            f.write(str(after))
+        pc_logging.info("Cloned %s with the ambient git config ignored", self.import_config_url)
+        return True
+
     def _clone_or_update_repo(self, repo_url, cache_dir=None):
         """
         Clones a Git repository to a local directory and keeps it up-to-date.
@@ -623,9 +742,17 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         cache_path = os.path.join(cache_dir, repo_hash)
         cache_lock = get_cache_lock(repo_hash)
 
+        # A file lock beside the cached copy serializes this repository across
+        # processes as well, not just across the threads the threading lock
+        # covers, so two 'pc' invocations never clone into the same directory at
+        # once. The lock file is released when the process exits but left on
+        # disk; the 'StaleGitLocks' healthcheck removes ones no process holds.
+        os.makedirs(cache_dir, exist_ok=True)
+        repo_file_lock = FileLock(os.path.join(cache_dir, repo_hash + ".lock"))
+
         guard_path = os.path.join(cache_path, ".partcad.git.cloned")
 
-        with cache_lock:
+        with cache_lock, repo_file_lock:
             attempt = 0
             # Bound every network operation below. Without this a stalled
             # remote hangs forever, and the retry loop never helps because a
@@ -650,13 +777,14 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
 
                                 # If there is more than 1 remote branch, we have to
                                 # explicitly specify the branch to pull.
-                                short_branch_name = _default_branch(repo)
-                                pc_logging.debug("Refreshing the GIT branch: %s" % short_branch_name)
-                                with telemetry.start_as_current_span(
-                                    "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
-                                ):
-                                    fetched = _fetch(repo, short_branch_name)
-                                    repo.reset(fetched, ResetMode.HARD)
+                                with _ambient_config_guard.honoring_ambient_config():
+                                    short_branch_name = _default_branch(repo)
+                                    pc_logging.debug("Refreshing the GIT branch: %s" % short_branch_name)
+                                    with telemetry.start_as_current_span(
+                                        "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
+                                    ):
+                                        fetched = _fetch(repo, short_branch_name)
+                                        repo.reset(fetched, ResetMode.HARD)
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
                         else:
@@ -687,11 +815,12 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                 # works either way.
                                 before = repo.head.target
                                 # Need to check for updates
-                                with telemetry.start_as_current_span(
-                                    "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
-                                ):
-                                    fetched = _fetch(repo, self.import_revision)
-                                    repo.reset(fetched, ResetMode.HARD)
+                                with _ambient_config_guard.honoring_ambient_config():
+                                    with telemetry.start_as_current_span(
+                                        "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
+                                    ):
+                                        fetched = _fetch(repo, self.import_revision)
+                                        repo.reset(fetched, ResetMode.HARD)
 
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
@@ -734,10 +863,11 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                     try:
                         pc_logging.info("Cloning the GIT repo: %s" % self.import_config_url)
                         clone_options = get_clone_options(self.import_revision)
-                        with telemetry.start_as_current_span(
-                            "*ProjectFactoryGit._clone_or_update_repo.{clone_repository}"
-                        ):
-                            repo = self._clone_repo(repo_url, cache_path, clone_options)
+                        with _ambient_config_guard.honoring_ambient_config():
+                            with telemetry.start_as_current_span(
+                                "*ProjectFactoryGit._clone_or_update_repo.{clone_repository}"
+                            ):
+                                repo = self._clone_repo(repo_url, cache_path, clone_options)
                         self.ctx.stats_git_ops += 1
                         if self.import_revision is not None:
                             after = self.import_revision
@@ -758,6 +888,17 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                             )
                             time.sleep(patience)
                         else:
+                            # An authentication failure here is most often a
+                            # 'url.*.insteadOf' rewrite in the ambient git config
+                            # sending this anonymous clone to a transport whose
+                            # credentials are not available. Try once more with
+                            # that config ignored, using the URL as written,
+                            # before giving up. Other definitive failures (a 404,
+                            # a missing ref) are reported as-is.
+                            if is_auth_failure(e) and self._clone_ignoring_ambient_config(
+                                repo_url, cache_path, clone_options, guard_path
+                            ):
+                                break
                             pc_logging.error(
                                 "Failed to clone repo %s after %d retries", self.import_config_url, attempt
                             )
