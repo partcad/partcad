@@ -7,13 +7,13 @@ docs:
     The 'example' package is served by the 'remote' repository plugin. When its
     children are listed, the plugin reports two sub-packages ('brackets' and
     'motors'); each is imported as another external package backed by the same
-    plugin, forwarding its requests under its own subfolder. The top package
-    also hosts a shared supply provider.
+    plugin, forwarding its requests under its own subfolder. Each sub-package
+    serves its own parts, whose files are materialized from the plugin.
   usage: |
     ```
     pc list packages example
     pc list parts -r example
-    pc inspect example/motors:gearbox
+    pc inspect example/motors:shaft
     ```
 
 dependencies:
