@@ -62,6 +62,21 @@ def step_impl(context, substring):
         raise AssertionError(f"Expected '{substring}' in STDERR, but it was not found")
 
 
+@then("OUTPUT should contain '{substring}'")
+@then('OUTPUT should contain "{substring}"')
+def step_impl(context, substring):
+    # Matches against STDOUT and STDERR combined. rich_click routes click
+    # usage errors to different streams depending on the environment (STDOUT
+    # under the conda env CI runs behave in, STDERR under the poetry dev
+    # container), so asserting a single stream is environment-fragile.
+    substring = expandvars(substring, context)
+    combined = strip_ansi(context.result.stdout) + "\n" + strip_ansi(context.result.stderr)
+    logging.debug(f"STDOUT: {strip_ansi(context.result.stdout)}")
+    logging.debug(f"STDERR: {strip_ansi(context.result.stderr)}")
+    if substring not in combined:
+        raise AssertionError(f"Expected '{substring}' in STDOUT or STDERR, but it was not found")
+
+
 @then('STDOUT should not contain "{substring}" with path')
 def step_impl(context, substring):
     substring = expandvars(substring, context)
@@ -126,7 +141,9 @@ def step_impl(context: Context) -> None:
     partcad_path = shutil.which("partcad")
     if not partcad_path:
         raise RuntimeError("partcad executable not found in PATH")
-    cli_version = subprocess.check_output([partcad_path, "version"], stderr=subprocess.STDOUT).decode()
+    cli_version = subprocess.check_output([partcad_path, "version"], stderr=subprocess.STDOUT).decode(
+        "utf-8", errors="replace"
+    )
     package_version = partcad.__version__
 
     assert package_version in cli_version, (

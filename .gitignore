@@ -14,8 +14,12 @@ __pycache__
 *.prof
 *.pyc
 **/.DS_Store
+/build
+/dist
 /partcad-cli/build
 /partcad-cli/dist
+# Copied in from the repository root by the wheel and standalone builds
+/partcad-cli/LICENSE.txt
 /partcad/build
 /partcad/dist
 allure-report/

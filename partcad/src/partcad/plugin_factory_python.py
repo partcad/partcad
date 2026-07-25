@@ -13,8 +13,8 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 import ocp_serialize
 
-from .user_config import user_config
-from .provider_factory_file import ProviderFactoryFile
+from .plugin import Plugin
+from .plugin_factory_file import PluginFactoryFile
 from .runtime_python import PythonRuntime
 
 from . import wrapper
@@ -23,7 +23,7 @@ from . import telemetry
 
 
 @telemetry.instrument()
-class ProviderFactoryPython(ProviderFactoryFile):
+class PluginFactoryPython(PluginFactoryFile):
     runtime: PythonRuntime
     cwd: str
 
@@ -60,17 +60,13 @@ class ProviderFactoryPython(ProviderFactoryFile):
         self.runtime = self.ctx.get_python_runtime(python_version)
         self.session = self.runtime.get_session(source_project.name)
 
-    def info(self, provider):
-        info: dict[str, object] = provider.shape_info(self.ctx)
-        info.update(
-            {
-                "sandbox_version": self.runtime.version,
-                "sandbox_path": self.runtime.path,
-            }
-        )
-        return info
+    def info(self, plugin: Plugin):
+        return {
+            "sandbox_version": self.runtime.version,
+            "sandbox_path": self.runtime.path,
+        }
 
-    async def prepare_script(self, provider) -> bool:
+    async def prepare_script(self, plugin) -> bool:
         """
         Finish initialization of PythonRuntime
         which was too expensive to do in the constructor
@@ -80,9 +76,9 @@ class ProviderFactoryPython(ProviderFactoryFile):
         await self.runtime.prepare_for_package(self.project, session=self.session)
         await self.runtime.prepare_for_shape(self.config, session=self.session)
 
-        return await super().prepare_script(provider)
+        return await super().prepare_script(plugin)
 
-    async def query_script(self, provider, script_name, request):
+    async def query_script(self, plugin: Plugin, script_name: str, request):
         extra = ""
         if script_name == "avail":
             vendor = request.get("vendor", None)
@@ -97,24 +93,24 @@ class ProviderFactoryPython(ProviderFactoryFile):
                 extra = vendor + ":" + sku
         with pc_logging.Action(
             script_name.capitalize(),
-            provider.project_name,
-            provider.name,
+            plugin.project_name,
+            plugin.name,
             extra,
         ):
-            prepared = await self.prepare_script(provider)
+            prepared = await self.prepare_script(plugin)
             if not prepared:
-                pc_logging.error("Failed to prepare %s of %s" % (script_name, provider.name))
+                pc_logging.error("Failed to prepare %s of %s" % (script_name, plugin.name))
                 return None
 
             # Get the path to the wrapper script
             # which needs to be executed
-            wrapper_path = wrapper.get("provider.py")
+            wrapper_path = wrapper.get("plugin.py")
 
             # Build the request
             request["partcad_version"] = sys.modules["partcad"].__version__
             request["verbose"] = pc_logging.getLevel() <= pc_logging.DEBUG
             request["api"] = script_name
-            request["user"] = user_config.pii_config.to_dict()
+            request["user"] = self.ctx.user_config.pii_config.to_dict()
             request["parameters"] = {}
             if "parameters" in self.config:
                 for param_name, param in self.config["parameters"].items():
@@ -173,24 +169,27 @@ class ProviderFactoryPython(ProviderFactoryFile):
             )
 
             if exitcode != 0 and len(errors) == 0:
-                errors = "%s: %s: Failed to instantiate" % (self.project.name, provider.name)
-                pc_logging.debug("%s: %s: Failed to execute command: '%s' with exitcode %s" % (provider.project.name, provider.name, " ".join(command), exitcode))
+                errors = "%s: %s: Failed to instantiate" % (self.project.name, plugin.name)
+                pc_logging.debug(
+                    "%s: %s: Failed to execute command: '%s' with exitcode %s"
+                    % (plugin.project_name, plugin.name, " ".join(command), exitcode)
+                )
 
             if len(errors) > 0:
                 error_lines = errors.split("\n")
                 for error_line in error_lines:
-                    provider.error("%s: %s" % (provider.name, error_line))
+                    plugin.error("%s: %s" % (plugin.name, error_line))
 
             try:
                 result = ocp_serialize.deserialize(response_serialized)
             except Exception as e:
-                provider.error("Exception while deserializing %s: %s" % (provider.name, e))
+                plugin.error("Exception while deserializing %s: %s" % (plugin.name, e))
                 return None
 
             if "exception" in result:
-                provider.error("%s: %s" % (provider.name, result["exception"]))
+                plugin.error("%s: %s" % (plugin.name, result["exception"]))
                 return None
 
-            self.ctx.stats_provider_queries += 1
+            self.ctx.stats_plugin_queries += 1
 
             return result

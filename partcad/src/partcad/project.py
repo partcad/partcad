@@ -30,36 +30,16 @@ from . import interface
 from . import sketch
 from . import sketch_config
 from .exception import EmptyShapesError
-from .sketch_factory_alias import SketchFactoryAlias
-from .sketch_factory_enrich import SketchFactoryEnrich
-from .sketch_factory_basic import SketchFactoryBasic
-from .sketch_factory_dxf import SketchFactoryDxf
-from .sketch_factory_svg import SketchFactorySvg
-from .sketch_factory_build123d import SketchFactoryBuild123d
-from .sketch_factory_cadquery import SketchFactoryCadquery
+from . import sketch_factory_alias as sfa
 from .part import Part
-from . import part_config
-from .part_factory_extrude import PartFactoryExtrude
-from .part_factory_sweep import PartFactorySweep
-from . import part_factory_scad as pfscad
-from . import part_factory_step as pfs
-from . import part_factory_stl as pfstl
-from . import part_factory_obj as pfo
-from . import part_factory_3mf as pf3
-from .part_factory_ai_cadquery import PartFactoryAiCadquery
-from .part_factory_ai_build123d import PartFactoryAiBuild123d
-from .part_factory_ai_openscad import PartFactoryAiScad
-from . import part_factory_cadquery as pfc
-from . import part_factory_build123d as pfb
 from . import part_factory_alias as pfa
-from . import part_factory_enrich as pfe
-from . import part_factory_brep as pfbr
-from . import part_factory_kicad as pfkicad
-from . import part_factory_compound as pfcompound
+from . import part_config
 from . import assembly
+from . import assembly_factory_alias as afa
 from . import assembly_config
-from . import provider
-from . import provider_config
+from . import plugin_provider
+from . import plugin_repository
+from . import plugin_config
 from .render import render_cfg_merge
 from .utils import resolve_resource_path, normalize_resource_path
 from . import telemetry
@@ -69,8 +49,27 @@ if TYPE_CHECKING:
     from partcad.shape import Shape
 
 
+# The kinds of first-class objects a package may contain, mapped to the
+# 'partcad.yaml' section that declares them. Kept as data so that introducing a
+# new kind of object does not require touching the per-kind accessor plumbing.
+OBJECT_KINDS = ("interface", "sketch", "part", "assembly", "provider", "repository")
+OBJECT_KIND_SECTIONS = {
+    "interface": "interfaces",
+    "sketch": "sketches",
+    "part": "parts",
+    "assembly": "assemblies",
+    "provider": "providers",
+    "repository": "repositories",
+}
+
+
 @telemetry.instrument()
 class Project(project_config.Configuration):
+    sketches: dict[str, sketch.Sketch]
+    parts: dict[str, Part]
+    assemblies: dict[str, assembly.Assembly]
+    providers: dict[str, plugin_provider.Provider]
+    repositories: dict[str, plugin_repository.Repository]
 
     class InterfaceLock(object):
         def __init__(self, prj, interface_name: str):
@@ -142,18 +141,32 @@ class Project(project_config.Configuration):
         def __exit__(self, *_args):
             self.lock.release()
 
+    class RepositoryLock(object):
+        def __init__(self, prj, repository_name: str):
+            prj.repository_locks_lock.acquire()
+            if not repository_name in prj.repository_locks:
+                prj.repository_locks[repository_name] = threading.Lock()
+            self.lock = prj.repository_locks[repository_name]
+            prj.repository_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
     def __init__(
         self,
         ctx: Context,
         name: str,
         path: str,
-        include_paths: list[str] = [],
-        inherited_config: dict = {},
+        config_obj: dict | None = None,
+        inherited_config: dict | None = None,
     ):
         super().__init__(
             name,
             path,
-            include_paths=include_paths,
+            config_obj=config_obj,
             inherited_config=inherited_config,
         )
         self.ctx = ctx
@@ -161,66 +174,40 @@ class Project(project_config.Configuration):
         # Protect the critical sections from access in different threads
         self.lock = threading.Lock()
 
-        # The 'path' parameter is the config filename or the directory
-        # where 'partcad.yaml' is present.
-        # 'self.path' has to be set to the directory name.
-        dir_name = path
-        if not os.path.isdir(dir_name):
-            dir_name = os.path.dirname(os.path.abspath(dir_name))
-        self.path = dir_name
+        # self._object_configs[kind] holds the declared configuration of every
+        # object of that kind. 'None' means "not enumerated yet": a local
+        # package knows everything from its parsed 'partcad.yaml' and populates
+        # all kinds here, while a plugin-backed package (see ProjectPlugin)
+        # leaves them None and fills them on demand through the accessors
+        # (object_config / object_configs / object_names).
+        self._object_configs: dict[str, typing.Optional[dict]] = {
+            kind: self._initial_object_configs(kind) for kind in OBJECT_KINDS
+        }
 
-        # self.interface_configs contains the configs of all the interfaces in this project
-        if "interfaces" in self.config_obj and not self.config_obj["interfaces"] is None:
-            self.interface_configs = self.config_obj["interfaces"]
-            # pc_logging.debug(
-            #     "Interfaces: %s" % str(self.interface_configs.keys())
-            # )
-        else:
-            self.interface_configs = {}
-        # self.interfaces contains all the initialized interfaces in this project
+        # The instantiated objects of each kind, filled lazily by the getters.
         self.interfaces = {}
         self.interface_locks = {}
         self.interface_locks_lock = threading.Lock()
 
-        # self.sketch_configs contains the configs of all the sketches in this project
-        if "sketches" in self.config_obj and not self.config_obj["sketches"] is None:
-            self.sketch_configs = self.config_obj["sketches"]
-        else:
-            self.sketch_configs = {}
-        # self.sketches contains all the initialized sketches in this project
         self.sketches = {}
         self.sketch_locks = {}
         self.sketch_locks_lock = threading.Lock()
 
-        # self.part_configs contains the configs of all the parts in this project
-        if "parts" in self.config_obj and not self.config_obj["parts"] is None:
-            self.part_configs = self.config_obj["parts"]
-        else:
-            self.part_configs = {}
-        # self.parts contains all the initialized parts in this project
         self.parts = {}
         self.part_locks = {}
         self.part_locks_lock = threading.Lock()
 
-        # self.assembly_configs contains the configs of all the assemblies in this project
-        if "assemblies" in self.config_obj and not self.config_obj["assemblies"] is None:
-            self.assembly_configs = self.config_obj["assemblies"]
-        else:
-            self.assembly_configs = {}
-        # self.assemblies contains all the initialized assemblies in this project
         self.assemblies = {}
         self.assembly_locks = {}
         self.assembly_locks_lock = threading.Lock()
 
-        # self.provider_configs contains the configs of all the providers in this project
-        if "providers" in self.config_obj and not self.config_obj["providers"] is None:
-            self.provider_configs = self.config_obj["providers"]
-        else:
-            self.provider_configs = {}
-        # self.providers contains all the initialized providers in this project
         self.providers = {}
         self.provider_locks = {}
         self.provider_locks_lock = threading.Lock()
+
+        self.repositories = {}
+        self.repository_locks = {}
+        self.repository_locks_lock = threading.Lock()
 
         if (
             "desc" in self.config_obj
@@ -231,13 +218,122 @@ class Project(project_config.Configuration):
         else:
             self.desc = ""
 
+        self._instantiate_objects()
+
+    def _initial_object_configs(self, kind: str):
+        """The configs of the given kind known at construction time.
+
+        A local package returns everything its configuration declares. A
+        plugin-backed package overrides this to return None, deferring
+        enumeration until the data is actually requested.
+        """
+        cfg = self.config_obj.get(OBJECT_KIND_SECTIONS[kind])
+        return {} if cfg is None else cfg
+
+    def _instantiate_objects(self):
+        """Instantiate the package's objects.
+
+        Split out of the constructor so that a plugin-backed package can
+        override it to instantiate lazily, on demand, instead of enumerating
+        and instantiating everything up front.
+        """
         self.init_sketches()
         self.init_interfaces()  # After sketches
         self.init_mates()  # After interfaces
         self.init_parts()  # After sketches and interfaces, and mates
         self.init_assemblies()  # after parts
         self.init_providers()  # after parts
-        self.init_suppliers()  # after suppliers
+        self.init_suppliers()  # after providers
+        self.init_repositories()  # after parts
+
+    # The generic object-access layer. Every read of a package's declared
+    # objects goes through these three methods so that a plugin-backed package
+    # can source the same data lazily without changing any caller.
+
+    def object_configs(self, kind: str) -> dict:
+        """All declared configs of 'kind', enumerating on demand if needed."""
+        configs = self._object_configs.get(kind)
+        if configs is None:
+            configs = self._enumerate_object_configs(kind)
+            self._object_configs[kind] = configs
+        return configs
+
+    def object_config(self, kind: str, name: str):
+        """The config of a single object, fetched individually when possible.
+
+        For a plugin-backed package this avoids a full enumeration: it asks the
+        plugin for just this one object and only falls back to listing
+        everything if the targeted fetch is not supported.
+        """
+        configs = self._object_configs.get(kind)
+        if configs is not None:
+            return configs.get(name)
+        one = self._fetch_object_config(kind, name)
+        if one is not None:
+            return one
+        return self.object_configs(kind).get(name)
+
+    def object_names(self, kind: str) -> list:
+        return list(self.object_configs(kind).keys())
+
+    # Hooks for plugin-backed packages. Never reached for a local package,
+    # whose '_object_configs' are all populated at construction.
+    def _enumerate_object_configs(self, kind: str) -> dict:
+        return {}
+
+    def _fetch_object_config(self, kind: str, name: str):
+        return None
+
+    def dependencies(self) -> dict:
+        """The declared child-package dependencies of this package.
+
+        Routed through an accessor so that a plugin-backed package can source
+        its children from the repository (see ProjectExternalRepository) instead
+        of from a 'dependencies' section on disk.
+        """
+        deps = self.config_obj.get("dependencies")
+        return deps if deps else {}
+
+    async def ensure_enumerated_async(self):
+        """Warm any lazily-enumerated data from within an async context.
+
+        A no-op for a local package (enumerated at construction). A plugin-backed
+        package overrides this to await its repository, so the synchronous
+        consumers downstream only ever hit the cache. Called from the import
+        traversal (see Context._import_all_recursive).
+        """
+        return None
+
+    def object_count(self, kind: str) -> int:
+        """Number of declared objects of a kind, without instantiating them."""
+        return len(self.object_configs(kind))
+
+    # Backward-compatible views onto the object-access layer. These keep the
+    # historical 'self.<kind>_configs' attribute name working (now sourced
+    # through the accessor, so plugin packages enumerate lazily here too).
+    @property
+    def interface_configs(self) -> dict:
+        return self.object_configs("interface")
+
+    @property
+    def sketch_configs(self) -> dict:
+        return self.object_configs("sketch")
+
+    @property
+    def part_configs(self) -> dict:
+        return self.object_configs("part")
+
+    @property
+    def assembly_configs(self) -> dict:
+        return self.object_configs("assembly")
+
+    @property
+    def provider_configs(self) -> dict:
+        return self.object_configs("provider")
+
+    @property
+    def repository_configs(self) -> dict:
+        return self.object_configs("repository")
 
     # TODO(clairbee): Implement get_cover()
     # def get_cover(self):
@@ -250,6 +346,22 @@ class Project(project_config.Configuration):
     #             self.path + "/" + self.config_obj["cover"]["package"]
     #         ).get_cover()
 
+    def info(self) -> dict:
+        """Return package-level information (name, description, URLs).
+
+        Mirrors the object factories' ``info()`` so that ``pc info`` can render
+        a package the same way it renders parts, sketches and assemblies. It
+        intentionally does not enumerate the package's objects.
+        """
+        info = {"Path": self.name}
+        if "url" in self.config_obj and self.config_obj["url"] is not None:
+            info["Url"] = self.config_obj["url"]
+        if "importUrl" in self.config_obj and self.config_obj["importUrl"] is not None:
+            info["ImportUrl"] = self.config_obj["importUrl"]
+        if self.desc:
+            info["Desc"] = self.desc
+        return info
+
     def matches(self, keyword: str) -> bool:
         if not keyword:
             return False
@@ -259,31 +371,70 @@ class Project(project_config.Configuration):
             return True
         return False
 
+    def relocate(self, pattern: str) -> str:
+        """Rewrites a reference this package authored against its own name.
+
+        A package declares its identity ('name' in its configuration) but may
+        be loaded at a different location, e.g. when it is vendored into
+        another package tree. References it makes to itself are written using
+        the identity, because that is what resolves while the package is being
+        developed standalone. Point them back at wherever this instance
+        actually lives, so that a vendored copy uses itself instead of pulling
+        a second instance in from the package it was copied from.
+
+        The rewrite is per-instance state: two copies of the same package
+        loaded at two locations relocate independently and never interact.
+        """
+        declared_name = self.declared_name
+        if not declared_name or declared_name == self.name:
+            # The common case: loaded exactly where it says it belongs.
+            return pattern
+
+        if (
+            pattern == declared_name
+            or pattern.startswith(declared_name + "/")
+            or pattern.startswith(declared_name + ":")
+        ):
+            relocated = self.name + pattern[len(declared_name) :]
+            pc_logging.debug("%s: relocated the reference '%s' to '%s'" % (self.name, pattern, relocated))
+            return relocated
+
+        return pattern
+
+    def resolve(self, pattern: str):
+        """Resolves a reference authored by this package into (package, item)."""
+        return resolve_resource_path(self.name, self.relocate(pattern))
+
+    def normalize(self, pattern: str) -> str:
+        """Resolves a reference authored by this package into 'package:item'."""
+        return normalize_resource_path(self.name, self.relocate(pattern))
+
     def get_child_project_names(self, absolute: bool = True):
         if self.broken:
             pc_logging.info("Ignoring the broken package: %s" % self.name)
             return
 
         children = list()
-        sub_folders = [f.name for f in os.scandir(self.config_dir) if f.is_dir()]
-        for subdir in list(sub_folders):
-            if os.path.exists(
-                os.path.join(
-                    self.config_dir,
-                    subdir,
-                    consts.DEFAULT_PACKAGE_CONFIG,
-                )
-            ):
-                children.append(self.name + "/" + subdir if absolute else subdir)
+        if os.path.isdir(self.config_dir):
+            sub_folders = [f.name for f in os.scandir(self.config_dir) if f.is_dir()]
+            for subdir in list(sub_folders):
+                if os.path.exists(
+                    os.path.join(
+                        self.config_dir,
+                        subdir,
+                        consts.DEFAULT_PACKAGE_CONFIG,
+                    )
+                ):
+                    children.append(self.name + "/" + subdir if absolute else subdir)
 
-        if "dependencies" in self.config_obj and not self.config_obj["dependencies"] is None:
-            dependencies = self.config_obj["dependencies"]
+        dependencies = self.dependencies()
+        if dependencies:
             if not self.config_obj.get("isRoot", False):
-                filtered = filter(
-                    lambda x: "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"],
-                    dependencies,
-                )
-                dependencies = list(filtered)
+                dependencies = [
+                    x
+                    for x in dependencies
+                    if "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"]
+                ]
             if absolute:
                 children.extend([self.name + "/" + project_name for project_name in dependencies])
             else:
@@ -295,7 +446,7 @@ class Project(project_config.Configuration):
         for source_interface_name, mate_config in mates.items():
             if not ":" in source_interface_name:
                 source_interface_name = self.name + ":" + source_interface_name
-            source_package_name, short_source_interface_name = resolve_resource_path(self.name, source_interface_name)
+            source_package_name, short_source_interface_name = self.resolve(source_interface_name)
 
             # Short-circuit the case when the source package is the current one
             # to avoid recursive package loading
@@ -310,15 +461,10 @@ class Project(project_config.Configuration):
             source_interface.add_mates(self, mate_config)
 
     def get_interface_config(self, interface_name):
-        if not interface_name in self.interface_configs:
-            return None
-        return self.interface_configs[interface_name]
+        return self.object_config("interface", interface_name)
 
     def init_interfaces(self):
-        if self.interface_configs is None:
-            return
-
-        for interface_name in self.interface_configs.keys():
+        for interface_name in self.object_names("interface"):
             config = self.get_interface_config(interface_name)
             config["name"] = interface_name
             self.init_interface_by_config(config)
@@ -359,9 +505,7 @@ class Project(project_config.Configuration):
             return self.interfaces[interface_name]
 
     def get_sketch_config(self, sketch_name):
-        if not sketch_name in self.sketch_configs:
-            return None
-        return self.sketch_configs[sketch_name]
+        return self.object_config("sketch", sketch_name)
 
     def set_sketch_config(self, sketch_name, sketch_config):
         """
@@ -400,674 +544,281 @@ class Project(project_config.Configuration):
                 pc_logging.error(f"Unexpected error updating sketch configuration: {e}")
                 raise
 
-    def init_sketches(self):
-        if self.sketch_configs is None:
-            return
-
-        for sketch_name in self.sketch_configs:
-            object_name = f"{self.name}:{sketch_name}"
-            config = self.get_sketch_config(sketch_name)
-            config = sketch_config.SketchConfiguration.normalize(sketch_name, config, object_name)
-            self.init_sketch_by_config(config)
-
-    def init_sketch_by_config(self, config, source_project=None):
-        if source_project is None:
-            source_project = self
-
-        sketch_name: str = config["name"]
-
-        if not "type" in config:
-            raise Exception("ERROR: Sketch type is not specified: %s: %s" % (sketch_name, config))
-        elif config["type"] == "build123d":
-            SketchFactoryBuild123d(self.ctx, source_project, self, config)
-        elif config["type"] == "cadquery":
-            SketchFactoryCadquery(self.ctx, source_project, self, config)
-        elif config["type"] == "dxf":
-            SketchFactoryDxf(self.ctx, source_project, self, config)
-        elif config["type"] == "svg":
-            SketchFactorySvg(self.ctx, source_project, self, config)
-        elif config["type"] == "basic":
-            SketchFactoryBasic(self.ctx, source_project, self, config)
-        elif config["type"] == "alias":
-            SketchFactoryAlias(self.ctx, source_project, self, config)
-        elif config["type"] == "enrich":
-            SketchFactoryEnrich(self.ctx, source_project, self, config)
-        else:
-            pc_logging.error("Invalid sketch type encountered: %s: %s" % (sketch_name, config))
-            return None
-
-        # Initialize aliases if they are declared implicitly
-        if "aliases" in config and not config["aliases"] is None:
-            for alias in config["aliases"]:
-                if ";" in sketch_name:
-                    # Copy parameters
-                    alias += sketch_name[sketch_name.index(";") :]
-                alias_sketch_config = {
-                    "type": "alias",
-                    "name": alias,
-                    "source": ":" + sketch_name,
-                }
-                object_name = f"{self.name}:{alias}"
-                alias_sketch_config = sketch_config.SketchConfiguration.normalize(
-                    alias, alias_sketch_config, object_name
-                )
-                pfa.SketchFactoryAlias(self.ctx, source_project, self, alias_sketch_config)
-
-    def get_sketch(self, sketch_name, func_params=None) -> sketch.Sketch:
-        if func_params is None or not func_params:
-            has_func_params = False
-        else:
-            has_func_params = True
-
-        params: dict[str, typing.Any] = {}
-        if ";" in sketch_name:
-            has_name_params = True
-            base_sketch_name = sketch_name.split(";")[0]
-            sketch_name_params_string = sketch_name.split(";")[1]
-
-            for kv in sketch_name_params_string.split[","]:
-                k, v = kv.split("")
-                params[k] = v
-        else:
-            has_name_params = False
-            base_sketch_name = sketch_name
-
-        if has_func_params:
-            params = {**params, **func_params}
-            has_name_params = True
-
-        if not has_name_params:
-            result_name = sketch_name
-        else:
-            # Determine the name we want this parameterized sketch to have
-            result_name = base_sketch_name + ";"
-            result_name += ",".join(map(lambda n: n + "=" + str(params[n]), sorted(params)))
-
-        self.lock.acquire()
-
-        # See if it's already available
-        if result_name in self.sketches and not self.sketches[result_name] is None:
-            p = self.sketches[result_name]
-            self.lock.release()
-            return p
-
-        with Project.SketchLock(self, result_name):
-            # Release the project lock, and continue with holding the sketch lock only
-            self.lock.release()
-
-            if not has_name_params:
-                # This is just a regular sketch name, no params (sketch_name == result_name)
-                if not sketch_name in self.sketch_configs:
-                    # We don't know anything about such a sketch
-                    pc_logging.error("Sketch '%s' not found in '%s'", sketch_name, self.name)
-                    return None
-                object_name = f"{self.name}:{sketch_name}"
-                # This is not yet created (invalidated?)
-                config = self.get_sketch_config(sketch_name)
-                config = sketch_config.SketchConfiguration.normalize(sketch_name, config, object_name)
-                self.init_sketch_by_config(config)
-
-                if not sketch_name in self.sketches or self.sketches[sketch_name] is None:
-                    pc_logging.error("Failed to instantiate a non-parametrized sketch %s" % sketch_name)
-                return self.sketches[sketch_name]
-
-            # This sketch has params (sketch_name != result_name)
-            if not base_sketch_name in self.sketches:
-                pc_logging.error(
-                    "Base sketch '%s' not found in '%s'",
-                    base_sketch_name,
-                    self.name,
-                )
-                return None
-            pc_logging.debug("Found the base sketch: %s" % base_sketch_name)
-
-            # Now we have the original sketch name and the complete set of parameters
-            config = self.sketch_configs[base_sketch_name]
-            if config is None:
-                pc_logging.error(
-                    "The config for the base sketch '%s' is not found in '%s'",
-                    base_sketch_name,
-                    self.name,
-                )
-                return None
-
-            config = copy.deepcopy(config)
-            if (not "parameters" in config or config["parameters"] is None) and (config["type"] != "enrich"):
-                pc_logging.error(
-                    "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
-                    base_sketch_name,
-                    self.name,
-                    str(config),
-                )
-                return None
-            object_name = f"{self.name}:{result_name}"
-            # Expand the config object so that the parameter values can be set
-            config = sketch_config.SketchConfiguration.normalize(result_name, config, object_name)
-            config["orig_name"] = base_sketch_name
-
-            # Fill in the parameter values
-            param_name: str
-            if "parameters" in config and not config["parameters"] is None:
-                # Filling "parameters"
-                for param_name, param_value in params.items():
-                    if config["parameters"][param_name]["type"] == "string":
-                        config["parameters"][param_name]["default"] = str(param_value)
-                    elif config["parameters"][param_name]["type"] == "int":
-                        config["parameters"][param_name]["default"] = int(param_value)
-                    elif config["parameters"][param_name]["type"] == "float":
-                        config["parameters"][param_name]["default"] = float(param_value)
-                    elif config["parameters"][param_name]["type"] == "bool":
-                        if isinstance(param_value, str):
-                            if param_value.lower() == "true":
-                                config["parameters"][param_name]["default"] = True
-                            else:
-                                config["parameters"][param_name]["default"] = False
-                        else:
-                            config["parameters"][param_name]["default"] = bool(param_value)
-                    elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
-            else:
-                # Filling "with"
-                if not "with" in config:
-                    config["with"] = {}
-                for param_name, param_value in params.items():
-                    config["with"][param_name] = param_value
-
-            # Now initialize the sketch
-            pc_logging.debug("Initializing a parametrized sketch: %s" % result_name)
-            # pc_logging.debug(
-            #     "Initializing a parametrized sketch using the following config: %s"
-            #     % pformat(config)
-            # )
-            self.init_sketch_by_config(config)
-
-            # See if it worked
-            if not result_name in self.sketches:
-                pc_logging.error(
-                    "Failed to instantiate parameterized sketch '%s' in '%s'",
-                    result_name,
-                    self.name,
-                )
-                return None
-
-            return self.sketches[result_name]
-
     def get_part_config(self, part_name):
-        if not part_name in self.part_configs:
-            return None
-        return self.part_configs[part_name]
-
-    def init_parts(self):
-        if self.part_configs is None:
-            return
-
-        for part_name in self.part_configs:
-            object_name = f"{self.name}:{part_name}"
-            config = self.get_part_config(part_name)
-            config = part_config.PartConfiguration.normalize(part_name, config, object_name)
-            self.init_part_by_config(config)
-
-    def init_part_by_config(self, config: dict, source_project: "Project" = None):
-        if source_project is None:
-            source_project = self
-
-        part_name: str = config["name"]
-
-        if not "type" in config:
-            raise Exception("ERROR: Part type is not specified: %s: %s" % (part_name, config))
-        elif config["type"] == "ai-cadquery":
-            PartFactoryAiCadquery(self.ctx, source_project, self, config)
-        elif config["type"] == "ai-build123d":
-            PartFactoryAiBuild123d(self.ctx, source_project, self, config)
-        elif config["type"] == "ai-openscad":
-            PartFactoryAiScad(self.ctx, source_project, self, config)
-        elif config["type"] == "cadquery":
-            pfc.PartFactoryCadquery(self.ctx, source_project, self, config)
-        elif config["type"] == "build123d":
-            pfb.PartFactoryBuild123d(self.ctx, source_project, self, config)
-        elif config["type"] == "step":
-            pfs.PartFactoryStep(self.ctx, source_project, self, config)
-        elif config["type"] == "brep":
-            pfbr.PartFactoryBrep(self.ctx, source_project, self, config)
-        elif config["type"] == "stl":
-            pfstl.PartFactoryStl(self.ctx, source_project, self, config)
-        elif config["type"] == "3mf":
-            pf3.PartFactory3mf(self.ctx, source_project, self, config)
-        elif config["type"] == "obj":
-            pfo.PartFactoryObj(self.ctx, source_project, self, config)
-        elif config["type"] == "scad":
-            pfscad.PartFactoryScad(self.ctx, source_project, self, config)
-        elif config["type"] == "kicad":
-            pfkicad.PartFactoryKicad(self.ctx, source_project, self, config)
-        elif config["type"] == "extrude":
-            PartFactoryExtrude(self.ctx, source_project, self, config)
-        elif config["type"] == "sweep":
-            PartFactorySweep(self.ctx, source_project, self, config)
-        elif config["type"] == "alias":
-            pfa.PartFactoryAlias(self.ctx, source_project, self, config)
-        elif config["type"] == "enrich":
-            pfe.PartFactoryEnrich(self.ctx, source_project, self, config)
-        elif config["type"] == "compound":
-            pfcompound.PartFactoryCompound(self.ctx, source_project, self, config)
-        else:
-            pc_logging.error("Invalid part type encountered: %s: %s" % (part_name, config))
-            return None
-
-        # Initialize aliases if they are declared implicitly
-        if "aliases" in config and not config["aliases"] is None:
-            for alias in config["aliases"]:
-                if ";" in part_name:
-                    # Copy parameters
-                    alias += part_name[part_name.index(";") :]
-                alias_part_config = {
-                    "type": "alias",
-                    "name": alias,
-                    "source": ":" + part_name,
-                }
-                object_name = f"{self.name}:{alias}"
-                alias_part_config = part_config.PartConfiguration.normalize(alias, alias_part_config, object_name)
-                pfa.PartFactoryAlias(self.ctx, source_project, self, alias_part_config)
-
-    def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
-        if func_params is None or not func_params:
-            has_func_params = False
-        else:
-            has_func_params = True
-
-        params: dict[str, typing.Any] = {}
-        if ";" in part_name:
-            has_name_params = True
-            base_part_name = part_name.split(";")[0]
-            part_name_params_string = part_name.split(";")[1]
-
-            for kv in part_name_params_string.split(","):
-                k, v = kv.split("=")
-                params[k] = v
-        else:
-            has_name_params = False
-            base_part_name = part_name
-
-        if has_func_params:
-            params = {**params, **func_params}
-            has_name_params = True
-
-        if not has_name_params:
-            result_name = part_name
-        else:
-            # Determine the name we want this parameterized part to have
-            result_name = base_part_name + ";"
-            result_name += ",".join(map(lambda n: n + "=" + str(params[n]), sorted(params)))
-
-        self.lock.acquire()
-
-        # See if it's already available
-        if result_name in self.parts and not self.parts[result_name] is None:
-            part = self.parts[result_name]
-            self.lock.release()
-            return part
-
-        with Project.PartLock(self, result_name):
-            # Release the project lock, and continue with holding the part lock only
-            self.lock.release()
-
-            if not has_name_params:
-                # This is just a regular part name, no params (part_name == result_name)
-                if not part_name in self.part_configs:
-                    # We don't know anything about such a part
-                    if not quiet:
-                        pc_logging.error("Part '%s' not found in '%s'", part_name, self.name)
-                    return None
-                object_name = f"{self.name}:{part_name}"
-                # This is not yet created (invalidated?)
-                config = self.get_part_config(part_name)
-                config = part_config.PartConfiguration.normalize(part_name, config, object_name)
-                self.init_part_by_config(config)
-
-                if not part_name in self.parts or self.parts[part_name] is None:
-                    pc_logging.error("Failed to instantiate a non-parametrized part %s" % part_name)
-                return self.parts[part_name]
-
-            # This part has params (part_name != result_name)
-            if not base_part_name in self.parts:
-                pc_logging.error(
-                    "Base part '%s' not found in '%s'",
-                    base_part_name,
-                    self.name,
-                )
-                return None
-            pc_logging.debug("Found the base part: %s" % base_part_name)
-
-            # Now we have the original part name and the complete set of parameters
-            config = self.part_configs[base_part_name]
-            if config is None:
-                pc_logging.error(
-                    "The config for the base part '%s' is not found in '%s'",
-                    base_part_name,
-                    self.name,
-                )
-                return None
-
-            config = copy.deepcopy(config)
-            if (not "parameters" in config or config["parameters"] is None) and (config["type"] != "enrich"):
-                pc_logging.error(
-                    "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
-                    base_part_name,
-                    self.name,
-                    str(config),
-                )
-                return None
-
-            object_name = f"{self.name}:{result_name}"
-            # Expand the config object so that the parameter values can be set
-            config = part_config.PartConfiguration.normalize(result_name, config, object_name)
-            config["orig_name"] = base_part_name
-
-            # Fill in the parameter values
-            param_name: str
-            if "parameters" in config and not config["parameters"] is None:
-                # Filling "parameters"
-                for param_name, param_value in params.items():
-                    if config["parameters"][param_name]["type"] == "string":
-                        config["parameters"][param_name]["default"] = str(param_value)
-                    elif config["parameters"][param_name]["type"] == "int":
-                        config["parameters"][param_name]["default"] = int(param_value)
-                    elif config["parameters"][param_name]["type"] == "float":
-                        config["parameters"][param_name]["default"] = float(param_value)
-                    elif config["parameters"][param_name]["type"] == "bool":
-                        if isinstance(param_value, str):
-                            if param_value.lower() == "true":
-                                config["parameters"][param_name]["default"] = True
-                            else:
-                                config["parameters"][param_name]["default"] = False
-                        else:
-                            config["parameters"][param_name]["default"] = bool(param_value)
-                    elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
-            else:
-                # Filling "with"
-                if not "with" in config:
-                    config["with"] = {}
-                for param_name, param_value in params.items():
-                    config["with"][param_name] = param_value
-
-            # Now initialize the part
-            pc_logging.debug("Initializing a parametrized part: %s" % result_name)
-            # pc_logging.debug(
-            #     "Initializing a parametrized part using the following config: %s"
-            #     % pformat(config)
-            # )
-            self.init_part_by_config(config)
-
-            # See if it worked
-            if not result_name in self.parts:
-                pc_logging.error(
-                    "Failed to instantiate parameterized part '%s' in '%s'",
-                    result_name,
-                    self.name,
-                )
-                return None
-
-            return self.parts[result_name]
+        return self.object_config("part", part_name)
 
     def get_assembly_config(self, assembly_name):
-        if not assembly_name in self.assembly_configs:
-            return None
-        return self.assembly_configs[assembly_name]
-
-    def init_assemblies(self):
-        if self.assembly_configs is None:
-            return
-
-        for assembly_name in self.assembly_configs:
-            config = self.get_assembly_config(assembly_name)
-            config = assembly_config.AssemblyConfiguration.normalize(assembly_name, config)
-            factory.instantiate("assembly", config["type"], self.ctx, self, self, config)
-
-    def get_assembly(self, assembly_name, func_params=None) -> assembly.Assembly:
-        if func_params is None or not func_params:
-            has_func_params = False
-        else:
-            has_func_params = True
-
-        params: dict[str, typing.Any] = {}
-        if ";" in assembly_name:
-            has_name_params = True
-            base_assembly_name = assembly_name.split(";")[0]
-            assembly_name_params_string = assembly_name.split(";")[1]
-
-            for kv in assembly_name_params_string.split(","):
-                k, v = kv.split("=")
-                params[k] = v
-        else:
-            has_name_params = False
-            base_assembly_name = assembly_name
-
-        if has_func_params:
-            params = {**params, **func_params}
-            has_name_params = True
-
-        if not has_name_params:
-            result_name = assembly_name
-        else:
-            # Determine the name we want this parameterized assembly to have
-            result_name = base_assembly_name + ";"
-            result_name += ",".join(map(lambda n: n + "=" + str(params[n]), sorted(params)))
-
-        self.lock.acquire()
-
-        # See if it's already available
-        if result_name in self.assemblies and not self.assemblies[result_name] is None:
-            p = self.assemblies[result_name]
-            self.lock.release()
-            return p
-
-        with Project.AssemblyLock(self, result_name):
-            # Release the project lock, and continue with holding the part lock only
-            self.lock.release()
-
-            if not has_name_params:
-                # This is just a regular assembly name, no params (assembly_name == result_name)
-                if not assembly_name in self.assembly_configs:
-                    # We don't know anything about such an assembly
-                    pc_logging.error(
-                        "Assembly '%s' not found in '%s'",
-                        assembly_name,
-                        self.name,
-                    )
-                    return None
-                # This is not yet created (invalidated?)
-                config = self.get_assembly_config(assembly_name)
-                config = assembly_config.AssemblyConfiguration.normalize(assembly_name, config)
-                factory.instantiate("assembly", config["type"], self.ctx, self, self, config)
-
-                if not assembly_name in self.assemblies or self.assemblies[assembly_name] is None:
-                    pc_logging.error("Failed to instantiate a non-parametrized assembly %s" % assembly_name)
-                return self.assemblies[assembly_name]
-
-            # This assembly has params (part_name != result_name)
-            if not base_assembly_name in self.assemblies:
-                pc_logging.error(
-                    "Base assembly '%s' not found in '%s'",
-                    base_assembly_name,
-                    self.name,
-                )
-                return None
-            pc_logging.debug("Found the base assembly: %s" % base_assembly_name)
-
-            # Now we have the original assembly name and the complete set of parameters
-            config = self.assembly_configs[base_assembly_name]
-            if config is None:
-                pc_logging.error(
-                    "The config for the base assembly '%s' is not found in '%s'",
-                    base_assembly_name,
-                    self.name,
-                )
-                return None
-
-            config = copy.deepcopy(config)
-            if (not "parameters" in config or config["parameters"] is None) and (config["type"] != "enrich"):
-                pc_logging.error(
-                    "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
-                    base_assembly_name,
-                    self.name,
-                    str(config),
-                )
-                return None
-
-            # Expand the config object so that the parameter values can be set
-            config = assembly_config.AssemblyConfiguration.normalize(result_name, config)
-            config["orig_name"] = base_assembly_name
-
-            # Fill in the parameter values
-            param_name: str
-            if "parameters" in config and not config["parameters"] is None:
-                # Filling "parameters"
-                for param_name, param_value in params.items():
-                    if config["parameters"][param_name]["type"] == "string":
-                        config["parameters"][param_name]["default"] = str(param_value)
-                    elif config["parameters"][param_name]["type"] == "int":
-                        config["parameters"][param_name]["default"] = int(param_value)
-                    elif config["parameters"][param_name]["type"] == "float":
-                        config["parameters"][param_name]["default"] = float(param_value)
-                    elif config["parameters"][param_name]["type"] == "bool":
-                        if isinstance(param_value, str):
-                            if param_value.lower() == "true":
-                                config["parameters"][param_name]["default"] = True
-                            else:
-                                config["parameters"][param_name]["default"] = False
-                        else:
-                            config["parameters"][param_name]["default"] = bool(param_value)
-                    elif config["parameters"][param_name]["type"] == "array":
-                        config["parameters"][param_name]["default"] = param_value
-            else:
-                # Filling "with"
-                if not "with" in config:
-                    config["with"] = {}
-                for param_name, param_value in params.items():
-                    config["with"][param_name] = param_value
-
-            # Now initialize the assembly
-            pc_logging.debug("Initializing a parametrized assembly: %s" % result_name)
-            # pc_logging.debug(
-            #     "Initializing a parametrized assembly using the following config: %s"
-            #     % pformat(config)
-            # )
-            factory.instantiate("assembly", config["type"], self.ctx, self, self, config)
-
-            # See if it worked
-            if not result_name in self.assemblies:
-                pc_logging.error(
-                    "Failed to instantiate parameterized assembly '%s' in '%s'",
-                    result_name,
-                    self.name,
-                )
-                return None
-
-            return self.assemblies[result_name]
+        return self.object_config("assembly", assembly_name)
 
     def get_provider_config(self, provider_name):
-        if not provider_name in self.provider_configs:
+        return self.object_config("provider", provider_name)
+
+    def get_repository_config(self, repository_name):
+        return self.object_config("repository", repository_name)
+
+    def get_object_config(self, object_name, configs: dict[str, dict[str, typing.Any]]):
+        if not object_name in configs:
             return None
-        return self.provider_configs[provider_name]
+        return configs[object_name]
+
+    def init_sketches(self):
+        return self.init_objects(
+            "sketch",
+            self.sketch_configs,
+            sketch_config.SketchConfiguration,
+            sfa.SketchFactoryAlias,
+            self.get_sketch_config,
+        )
+
+    def init_parts(self):
+        return self.init_objects(
+            "part",
+            self.part_configs,
+            part_config.PartConfiguration,
+            pfa.PartFactoryAlias,
+            self.get_part_config,
+        )
+
+    def init_assemblies(self):
+        return self.init_objects(
+            "assembly",
+            self.assembly_configs,
+            assembly_config.AssemblyConfiguration,
+            afa.AssemblyFactoryAlias,
+            self.get_assembly_config,
+        )
 
     def init_providers(self):
-        if self.provider_configs is None:
+        return self.init_objects(
+            "provider",
+            self.provider_configs,
+            plugin_config.PluginConfiguration,
+            None,
+            self.get_provider_config,
+        )
+
+    def init_repositories(self):
+        return self.init_objects(
+            "repository",
+            self.repository_configs,
+            plugin_config.PluginConfiguration,
+            None,
+            self.get_repository_config,
+        )
+
+    def init_objects(
+        self,
+        factory_name: str,
+        configs: dict[str, dict[str, typing.Any]],
+        config_class,
+        alias_class,
+        get_config: callable,
+    ):
+        if configs is None:
             return
 
-        for provider_name in self.provider_configs:
-            config = self.get_provider_config(provider_name)
-            object_name = f"{self.name}:{provider_name}"
-            config = provider_config.ProviderConfiguration.normalize(provider_name, config, object_name)
-            factory.instantiate("provider", config["type"], self.ctx, self, self, config)
+        for name in configs:
+            config = get_config(name)
+            full_object_name = f"{self.name}:{name}"
+            config = config_class.normalize(name, config, full_object_name)
+            self.init_object_by_config(factory_name, config_class, alias_class, config)
 
-    # TODO(clairbee): either call init_*_by_config or call
-    #                  factory->instantiate everywhere.
-    #                  Recall what was the thinking about it when the factory
-    #                  class was introduced.
+    def init_sketch_by_config(self, config, source_project=None):
+        self.init_object_by_config(
+            "sketch", sketch_config.SketchConfiguration, sfa.SketchFactoryAlias, config, source_project
+        )
+
+    def init_part_by_config(self, config, source_project=None):
+        self.init_object_by_config("part", part_config.PartConfiguration, pfa.PartFactoryAlias, config, source_project)
 
     def init_provider_by_config(self, config, source_project=None):
+        self.init_object_by_config("provider", plugin_config.PluginConfiguration, None, config, source_project)
+
+    def init_repository_by_config(self, config, source_project=None):
+        self.init_object_by_config("repository", plugin_config.PluginConfiguration, None, config, source_project)
+
+    def init_object_by_config(self, factory_name: str, config_class, alias_class, config, source_project=None):
         if source_project is None:
             source_project = self
-        factory.instantiate("provider", config["type"], self.ctx, source_project, self, config)
+        factory.instantiate(factory_name, config["type"], self.ctx, source_project, self, config)
 
-    def get_provider(self, provider_name, func_params=None) -> provider.Provider:
+        # Initialize aliases if they are declared implicitly
+        if alias_class and config.get("aliases"):
+            object_name = config["name"]
+            for alias in config["aliases"]:
+                if ";" in object_name:
+                    # Copy parameters
+                    alias += object_name[object_name.index(";") :]
+                alias_object_config = {
+                    "type": "alias",
+                    "name": alias,
+                    "source": ":" + object_name,
+                }
+                # User configuration may override the parameters of the alias
+                # itself, so the alias (with the parameters copied above, if
+                # any) is what the fully qualified name is built from - not the
+                # object the alias points at.
+                full_alias_name = f"{self.name}:{alias}"
+                alias_object_config = config_class.normalize(alias, alias_object_config, full_alias_name)
+                alias_class(self.ctx, source_project, self, alias_object_config)
+
+    def get_sketch(self, sketch_name, func_params=None) -> Optional[sketch.Sketch]:
+        return self.get_object(
+            "sketch",
+            Project.SketchLock,
+            self.sketches,
+            self.sketch_configs,
+            self.get_sketch_config,
+            sketch_config.SketchConfiguration,
+            sfa.SketchFactoryAlias,
+            sketch_name,
+            func_params,
+        )
+
+    def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+        return self.get_object(
+            "part",
+            Project.PartLock,
+            self.parts,
+            self.part_configs,
+            self.get_part_config,
+            part_config.PartConfiguration,
+            pfa.PartFactoryAlias,
+            part_name,
+            func_params,
+            quiet=quiet,
+        )
+
+    def get_assembly(self, assembly_name, func_params=None) -> Optional[assembly.Assembly]:
+        return self.get_object(
+            "assembly",
+            Project.AssemblyLock,
+            self.assemblies,
+            self.assembly_configs,
+            self.get_assembly_config,
+            assembly_config.AssemblyConfiguration,
+            afa.AssemblyFactoryAlias,
+            assembly_name,
+            func_params,
+        )
+
+    def get_provider(self, provider_name, func_params=None) -> Optional[plugin_provider.Provider]:
+        return self.get_object(
+            "provider",
+            Project.ProviderLock,
+            self.providers,
+            self.provider_configs,
+            self.get_provider_config,
+            plugin_config.PluginConfiguration,
+            None,
+            provider_name,
+            func_params,
+        )
+
+    def get_repository(self, repository_name, func_params=None) -> Optional[plugin_repository.Repository]:
+        return self.get_object(
+            "repository",
+            Project.RepositoryLock,
+            self.repositories,
+            self.repository_configs,
+            self.get_repository_config,
+            plugin_config.PluginConfiguration,
+            None,
+            repository_name,
+            func_params,
+        )
+
+    def get_object(
+        self,
+        factory_name: str,
+        lock_class,
+        objects,
+        object_configs: dict[str, dict[str, typing.Any]],
+        get_config: callable,
+        config_class,
+        alias_class,
+        object_name: str,
+        func_params=None,
+        quiet=False,
+    ):
         if func_params is None or not func_params:
             has_func_params = False
         else:
             has_func_params = True
 
         params: dict[str, typing.Any] = {}
-        if ";" in provider_name:
+        if ";" in object_name:
             has_name_params = True
-            base_provider_name = provider_name.split(";")[0]
-            provider_name_params_string = provider_name.split(";")[1]
+            base_object_name = object_name.split(";")[0]
+            object_name_params_string = object_name.split(";")[1]
 
-            for kv in provider_name_params_string.split(","):
+            for kv in object_name_params_string.split(","):
                 k, v = kv.split("=")
                 params[k] = v
         else:
             has_name_params = False
-            base_provider_name = provider_name
+            base_object_name = object_name
 
         if has_func_params:
             params = {**params, **func_params}
             has_name_params = True
 
         if not has_name_params:
-            result_name = provider_name
+            result_name = object_name
         else:
-            # Determine the name we want this parameterized provider to have
-            result_name = base_provider_name + ";"
+            # Determine the name we want this parameterized object to have
+            result_name = base_object_name + ";"
             result_name += ",".join(map(lambda n: n + "=" + str(params[n]), sorted(params)))
 
         self.lock.acquire()
 
         # See if it's already available
-        if result_name in self.providers and not self.providers[result_name] is None:
-            p = self.providers[result_name]
+        if result_name in objects and not objects[result_name] is None:
+            p = objects[result_name]
             self.lock.release()
             return p
 
-        with Project.ProviderLock(self, result_name):
+        with lock_class(self, result_name):
             # Release the project lock, and continue with holding the part lock only
             self.lock.release()
 
             if not has_name_params:
-                # This is just a regular provider name, no params (provider_name == result_name)
-                if not provider_name in self.provider_configs:
-                    # We don't know anything about such an provider
-                    pc_logging.error(
-                        "Provider '%s' not found in '%s'",
-                        provider_name,
-                        self.name,
-                    )
+                # This is just a regular object name, no params (object_name == result_name)
+                if not object_name in object_configs:
+                    # We don't know anything about such an object
+                    if not quiet:
+                        pc_logging.error(
+                            "Object '%s' not found in '%s'",
+                            object_name,
+                            self.name,
+                        )
                     return None
                 # This is not yet created (invalidated?)
-                config = self.get_provider_config(provider_name)
-                object_name = f"{self.name}:{provider_name}"
-                config = provider_config.ProviderConfiguration.normalize(provider_name, config, object_name)
-                factory.instantiate("provider", config["type"], self.ctx, self, self, config)
+                config = get_config(object_name)
+                full_object_name = f"{self.name}:{object_name}"
+                config = config_class.normalize(object_name, config, full_object_name)
+                self.init_object_by_config(factory_name, config_class, alias_class, config)
 
-                if not provider_name in self.providers or self.providers[provider_name] is None:
-                    pc_logging.error("Failed to instantiate a non-parametrized provider %s" % provider_name)
-                return self.providers[provider_name]
+                if not object_name in objects or objects[object_name] is None:
+                    pc_logging.error("Failed to instantiate a non-parametrized object %s" % object_name)
+                return objects[object_name]
 
-            # This provider has params (part_name != result_name)
-            if not base_provider_name in self.providers:
+            # This object has params (part_name != result_name)
+            if not base_object_name in objects:
                 pc_logging.error(
-                    "Base provider '%s' not found in '%s'",
-                    base_provider_name,
+                    "Base object '%s' not found in '%s'",
+                    base_object_name,
                     self.name,
                 )
                 return None
-            pc_logging.debug("Found the base provider: %s" % base_provider_name)
+            pc_logging.debug("Found the base object: %s" % base_object_name)
 
             # Now we have the original assembly name and the complete set of parameters
-            config = self.provider_configs[base_provider_name]
+            config = object_configs[base_object_name]
             if config is None:
                 pc_logging.error(
-                    "The config for the base provider '%s' is not found in '%s'",
-                    base_provider_name,
+                    "The config for the base object '%s' is not found in '%s'",
+                    base_object_name,
                     self.name,
                 )
                 return None
@@ -1076,16 +827,16 @@ class Project(project_config.Configuration):
             if (not "parameters" in config or config["parameters"] is None) and (config["type"] != "enrich"):
                 pc_logging.error(
                     "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
-                    base_provider_name,
+                    base_object_name,
                     self.name,
                     str(config),
                 )
                 return None
 
             # Expand the config object so that the parameter values can be set
-            object_name = f"{self.name}:{result_name}"
-            config = provider_config.ProviderConfiguration.normalize(result_name, config, object_name)
-            config["orig_name"] = base_provider_name
+            full_object_name = f"{self.name}:{result_name}"
+            config = config_class.normalize(result_name, config, full_object_name)
+            config["orig_name"] = base_object_name
 
             # Fill in the parameter values
             param_name: str
@@ -1115,24 +866,24 @@ class Project(project_config.Configuration):
                 for param_name, param_value in params.items():
                     config["with"][param_name] = param_value
 
-            # Now initialize the provider
-            pc_logging.debug("Initializing a parametrized provider: %s" % result_name)
+            # Now initialize the object
+            pc_logging.debug("Initializing a parametrized object: %s" % result_name)
             # pc_logging.debug(
-            #     "Initializing a parametrized provider using the following config: %s"
+            #     "Initializing a parametrized object using the following config: %s"
             #     % pformat(config)
             # )
-            factory.instantiate("provider", config["type"], self.ctx, self, self, config)
+            factory.instantiate(factory_name, config["type"], self.ctx, self, self, config)
 
             # See if it worked
-            if not result_name in self.providers:
+            if not result_name in objects:
                 pc_logging.error(
-                    "Failed to instantiate parameterized assembly '%s' in '%s'",
+                    "Failed to instantiate parameterized object '%s' in '%s'",
                     result_name,
                     self.name,
                 )
                 return None
 
-            return self.providers[result_name]
+            return objects[result_name]
 
     def get_suppliers(self):
         return {
@@ -1727,7 +1478,7 @@ class Project(project_config.Configuration):
             for name in shape_names:
                 shape = self.assemblies[name]
                 if shape.config["type"] == "alias":
-                    source_path = normalize_resource_path(self.name, shape.config["source_resolved"])
+                    source_path = self.normalize(shape.config["source_resolved"])
                     shape = self.ctx.get_assembly(source_path)
                     display_name = name + " (alias to " + shape.name + ")"
                 else:
@@ -1741,7 +1492,7 @@ class Project(project_config.Configuration):
             for name in shape_names:
                 shape = self.parts[name]
                 if shape.config["type"] == "alias":
-                    source_path = normalize_resource_path(self.name, shape.config["source_resolved"])
+                    source_path = self.normalize(shape.config["source_resolved"])
                     shape = self.ctx.get_part(source_path)
                     display_name = name + " (alias to " + shape.name + ")"
                 else:

@@ -7,7 +7,11 @@
 
 import pytest
 
-from partcad.project_factory_git import get_clone_options, looks_like_commit_id
+from partcad.project_factory_git import (
+    get_clone_options,
+    get_fallback_clone_options,
+    looks_like_commit_id,
+)
 
 COMMIT_IDS = [
     "a307044f91c9cc5433fde92cb1fa145c01b2bde7",  # full
@@ -39,43 +43,52 @@ def test_refs_are_not_mistaken_for_commit_ids(revision):
 
 def test_no_revision_clones_a_single_commit():
     options = get_clone_options(None)
-    assert "--depth 1" in options
-    assert "--single-branch" in options
-    assert not any(o.startswith("--branch") for o in options)
+    assert options.depth == 1
+    assert options.revision is None
+    assert not options.single_commit
 
 
 @pytest.mark.parametrize("revision", REFS)
 def test_a_ref_is_requested_from_the_server_directly(revision):
     options = get_clone_options(revision)
-    assert "--depth 1" in options
-    assert "--branch %s" % revision in options
+    assert options.depth == 1
+    assert options.revision == revision
+
+
+@pytest.mark.parametrize("revision", REFS)
+def test_a_ref_is_never_requested_as_a_commit_id(revision):
+    """Asking for a ref by id would send a name no server can resolve."""
+    assert not get_clone_options(revision).single_commit
 
 
 @pytest.mark.parametrize("revision", COMMIT_IDS)
-def test_a_commit_id_never_becomes_a_branch_argument(revision):
-    """git clone --branch <commit id> fails outright, so it must never happen.
+def test_a_commit_id_is_requested_by_id(revision):
+    """A clone cannot check out a commit id, so it has to be fetched by id.
 
     Verified against a real repository: asking for a commit id as a branch gives
     "Remote branch <id> not found in upstream origin".
     """
     options = get_clone_options(revision)
-    assert not any(o.startswith("--branch") for o in options), options
+    assert options.single_commit
+    assert options.revision == revision
+    assert options.depth == 1
 
 
 @pytest.mark.parametrize("revision", COMMIT_IDS)
-def test_a_commit_id_keeps_the_whole_commit_graph(revision):
+def test_a_refusing_server_costs_the_whole_commit_graph(revision):
     """A shallow clone would not contain an arbitrary commit.
 
-    Filtering blobs instead keeps every commit reachable, so the checkout
-    succeeds, while historical file contents stay on the server.
+    Where the commit cannot be requested by id, every commit reachable from the
+    default refs has to come down so the checkout can find it locally.
     """
-    options = get_clone_options(revision)
-    assert "--filter=blob:none" in options
-    assert "--depth 1" not in options
+    options = get_fallback_clone_options(revision)
+    assert options.depth == 0
+    assert options.revision is None
 
 
-def test_options_are_separate_arguments():
-    """multi_options entries are passed through to git as written."""
-    for revision in [None, "main", COMMIT_IDS[0]]:
-        for option in get_clone_options(revision):
-            assert option.startswith("--"), option
+@pytest.mark.parametrize("revision", REFS + [None])
+def test_a_ref_is_still_asked_for_by_name_when_shallow_is_refused(revision):
+    """Only the depth has to go: the server still knows the ref by name."""
+    options = get_fallback_clone_options(revision)
+    assert options.depth == 0
+    assert options.revision == revision

@@ -20,7 +20,6 @@ from .assembly import Assembly, AssemblyChild
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from . import logging as pc_logging
-from .utils import normalize_resource_path
 
 
 @telemetry.instrument()
@@ -55,10 +54,17 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         with pc_logging.Action("ASSY", assembly.project_name, assembly.name):
             assy = {}
             if os.path.exists(self.path):
+                # Pass the parameter values to the ASSY template as
+                # 'param_<name>'. The configuration has been through
+                # 'AssemblyConfiguration.normalize()' by now, so every
+                # parameter is in the expanded form and carries the value to
+                # use: the declared default, overridden by '~/.partcad/config.yaml'
+                # or '--extra_param', overridden by the values given in the
+                # object name (e.g. '//package:assembly;length=96').
                 params = {}
-                if "parameters" in self.config:
-                    for param_name, param in self.config["parameters"].items():
-                        params["param_" + param_name] = param["default"]
+                parameters = self.config.get("parameters") or {}
+                for param_name, param in parameters.items():
+                    params["param_" + param_name] = param["default"]
                 params["name"] = self.config["name"]
 
                 # Read the body of the configuration file
@@ -67,9 +73,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 fp.close()
 
                 # Resolve Jinja templates
+                # NOTE: autoescape must stay off. The rendered document is YAML,
+                # not HTML, so escaping corrupts every parameter value that
+                # contains '&', '<', '>', '"' or "'" (e.g. 'a & b' would reach
+                # the parser as 'a &amp; b'). This matches how 'partcad.yaml'
+                # itself is rendered in 'ProjectLocal'.
                 template = Environment(
                     loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep),
-                    autoescape=True,
                 ).from_string(config)
                 config = template.render(params)
 
@@ -205,7 +215,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     assy_name = node["package"] + ":" + assy_name
                 elif not ":" in assy_name:
                     assy_name = ":" + assy_name
-                assy_name = normalize_resource_path(self.project.name, assy_name)
+                assy_name = self.project.normalize(assy_name)
                 item = self.ctx._get_assembly(assy_name, params)
                 if item is None:
                     pc_logging.error("Assembly not found: %s" % name)
@@ -218,7 +228,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     part_name = node["package"] + ":" + part_name
                 elif not ":" in part_name:
                     part_name = ":" + part_name
-                part_name = normalize_resource_path(self.project.name, part_name)
+                part_name = self.project.normalize(part_name)
                 item = self.ctx._get_part(part_name, params)
                 if item is None:
                     pc_logging.error("Part not found: %s in %s" % (name, self.name))

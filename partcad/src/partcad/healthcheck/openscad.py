@@ -1,5 +1,18 @@
+"""OpenSCAD: where PartCAD finds the executable, and the check that reports it.
+
+The resolution helpers below (``find_executable`` and friends) are the single
+place that decides which OpenSCAD PartCAD runs. The standalone bundle carries
+its own OpenSCAD and that copy is preferred over anything installed on the host,
+so the bundle behaves the same on every machine rather than depending on
+whatever version a host happens to have; everywhere else -- the wheels, a source
+checkout -- there is no bundled copy and this falls back to the host's, exactly
+as before. Only the Linux and Windows bundles carry OpenSCAD; see
+``dev-tools/pyinstaller/build.sh`` for why macOS does not.
+"""
+
 import os
 import shutil
+import sys
 import zipfile
 import hashlib
 import platform
@@ -10,9 +23,60 @@ from pathlib import Path
 if platform.system() == "Windows":
     import winreg
 
-from partcad.user_config import UserConfig
+from partcad.user_config import UserConfig, user_config
 from partcad.logging import logging as pc_logging
 from partcad.healthcheck.tests import HealthCheckReport, HealthCheckTest
+
+
+# Where the bundle keeps OpenSCAD, relative to the directory holding the frozen
+# interpreter (``build.sh`` copies it there).
+#
+# Linux ships the contents of the upstream AppImage, whose ``AppRun`` launcher
+# sets up the library paths its Qt build needs -- the OpenSCAD binary beside it
+# is not meant to be run directly. ``AppRun`` resolves those paths relative to
+# its own location, so it must be invoked by its real path rather than through a
+# symlink placed on PATH.
+#
+# Windows ships the upstream portable build, a single statically linked
+# executable with no libraries of its own.
+BUNDLED_SUBPATH = ("openscad", "openscad.exe") if os.name == "nt" else ("openscad", "AppRun")
+
+
+def find_bundled_executable() -> "str | None":
+    """Return the OpenSCAD shipped inside the standalone bundle, or None.
+
+    Returns None whenever PartCAD is not running from a bundle, and also when it
+    is running from a bundle built without OpenSCAD (macOS, or a bundle built by
+    hand without staging the payload).
+    """
+    if not getattr(sys, "frozen", False):
+        return None
+
+    # PyInstaller points ``sys._MEIPASS`` at the directory it unpacked the
+    # bundle into, which is where the payload lives.
+    bundle_dir = getattr(sys, "_MEIPASS", None)
+    if not bundle_dir:
+        return None
+
+    path = os.path.join(bundle_dir, *BUNDLED_SUBPATH)
+    if os.path.isfile(path) and os.access(path, os.X_OK):
+        return path
+    return None
+
+
+def find_executable(ignore_bundled: bool = False) -> "str | None":
+    """Return the OpenSCAD executable to run, or None if there is none.
+
+    The bundled copy first, the host's (on PATH) second. ``ignore_bundled``
+    skips the bundled copy so the host's is used even inside a bundle -- the
+    opt-out for a user who wants a newer OpenSCAD than the one pinned into the
+    bundle (see ``user_config.ignore_bundled_openscad``).
+    """
+    if not ignore_bundled:
+        bundled = find_bundled_executable()
+        if bundled is not None:
+            return bundled
+    return shutil.which("openscad")
 
 
 class OpenSCADCheck(HealthCheckTest):
@@ -26,8 +90,13 @@ class OpenSCADCheck(HealthCheckTest):
         return False
 
     def test(self) -> HealthCheckReport:
-        if shutil.which("openscad") is None:
-            self.findings.append("OpenSCAD executable not found in PATH")
+        # The same resolution the rest of PartCAD uses, honouring the opt-out,
+        # so that a standalone bundle carrying its own OpenSCAD passes this check
+        # on a host that has none, and does not offer to install one it will not
+        # use -- while a user who set ignore_bundled_openscad is told the truth
+        # about the host's OpenSCAD, which is the one they will actually get.
+        if find_executable(ignore_bundled=user_config.ignore_bundled_openscad) is None:
+            self.findings.append("OpenSCAD executable not found, neither bundled nor in PATH")
         return HealthCheckReport(self.name, self.findings)
 
 

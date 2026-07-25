@@ -27,7 +27,15 @@ def handle_input():
         sys.stderr.write("Usage: %s <path>\n" % sys.argv[0])
         sys.exit(1)
 
-    locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+    try:
+        locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+    except locale.Error:
+        # Same fallback as the CLI: the sandbox interpreter inherits the host's
+        # locales, and a bare machine may have only "C" generated.
+        try:
+            locale.setlocale(locale.LC_ALL, "C.UTF-8")
+        except locale.Error:
+            pass
 
     # Handle the input
     # - Comand line parameters

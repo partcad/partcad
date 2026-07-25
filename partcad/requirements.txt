@@ -2,7 +2,7 @@ cadquery-ocp==7.7.2
 ocpsvg==0.3.4
 build123d==0.8.0
 pyyaml>=6.0.1
-GitPython>=3.1.40
+pygit2>=1.15.0
 ruamel.yaml>=0.18.5
 packaging>=23.1
 setuptools

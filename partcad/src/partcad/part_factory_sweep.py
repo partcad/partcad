@@ -10,7 +10,6 @@
 from .part_factory import PartFactory
 from .sketch import Sketch
 from . import logging as pc_logging
-from .utils import resolve_resource_path
 
 
 class PartFactorySweep(PartFactory):
@@ -45,8 +44,7 @@ class PartFactorySweep(PartFactory):
                     self.source_project_name = source_project.name
             else:
                 if ":" in self.source_sketch_name:
-                    self.source_project_name, self.source_sketch_name = resolve_resource_path(
-                        source_project.name,
+                    self.source_project_name, self.source_sketch_name = source_project.resolve(
                         self.source_sketch_name,
                     )
                 else:

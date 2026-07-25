@@ -20,6 +20,8 @@ all = {
     "part": {},
     "file": {},
     "provider": {},
+    "repository": {},
+    "sketch": {},
 }
 
 

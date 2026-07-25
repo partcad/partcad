@@ -114,17 +114,17 @@ Feature: `pc adhoc convert` command
   Scenario: Fail on unknown input type
     When I run "pc adhoc convert part test.stl test.step --input unknown --output step"
     Then the command should exit with a status code of "2"
-    And STDOUT should contain "Invalid value for '--input'"
+    And OUTPUT should contain "Invalid value for '--input'"
 
   Scenario: Fail on unknown output type
     When I run "pc adhoc convert part test.stl test.step --input stl --output unknown"
     Then the command should exit with a status code of "2"
-    And STDOUT should contain "Invalid value for '--output'"
+    And OUTPUT should contain "Invalid value for '--output'"
 
   Scenario: Fail when input file is missing
     When I run "pc adhoc convert part missing.stl test.step"
     Then the command should exit with a status code of "2"
-    And STDOUT should contain "Path 'missing.stl' does not exist."
+    And OUTPUT should contain "Path 'missing.stl' does not exist."
 
   Scenario: Fail on empty file
     Given a file named "empty.stl" with content:

@@ -12,7 +12,7 @@ import typing
 
 from .sketch_factory import SketchFactory
 from . import logging as pc_logging
-from .utils import resolve_resource_path, get_child_project_path
+from .utils import get_child_project_path
 from . import telemetry
 
 
@@ -49,8 +49,7 @@ class SketchFactoryAlias(SketchFactory):
                     self.source_project_name = get_child_project_path(target_project.name, self.source_project_name)
             else:
                 if ":" in self.source_sketch_name:
-                    self.source_project_name, self.source_sketch_name = resolve_resource_path(
-                        source_project.name,
+                    self.source_project_name, self.source_sketch_name = source_project.resolve(
                         self.source_sketch_name,
                     )
                 else:

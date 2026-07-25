@@ -10,7 +10,6 @@
 from . import telemetry
 from .geom import Location
 from . import logging as pc_logging
-from .utils import resolve_resource_path
 
 
 @telemetry.instrument()
@@ -31,8 +30,7 @@ class InterfaceInherits:
         self.instances = {}
         # Resolve the interface by name
         if ":" in name:
-            self.source_project_name, self.source_interface_name = resolve_resource_path(
-                project.name,
+            self.source_project_name, self.source_interface_name = project.resolve(
                 name,
             )
         else:

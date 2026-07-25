@@ -22,7 +22,16 @@ from partcad_cli.click.cli_context import CliContext
 global cli_span
 cli_span: pc.telemetry.trace.Span = None
 
-locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+try:
+    locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
+except locale.Error:
+    # A machine that carries no en_US.UTF-8 locale must not fail before the
+    # first command runs. Minimal container images and the bare machines the
+    # standalone bundle targets frequently have only "C" generated.
+    try:
+        locale.setlocale(locale.LC_ALL, "C.UTF-8")
+    except locale.Error:
+        pass
 
 if True:
     # IMPORTANT:
@@ -71,7 +80,7 @@ option_groups = [
     },
     {
         "name": "Sandbox options",
-        "options": ["--python-sandbox"],
+        "options": ["--python-sandbox", "--ignore-bundled-openscad"],
     },
     {
         "name": "Telemetry options",
@@ -224,6 +233,17 @@ click.rich_click.COMMAND_GROUPS = {
     show_envvar=True,
     type=click.Choice(["none", "pypy", "conda"]),
     help="Sandboxing environment for invoking python scripts(defaults to conda)",
+)
+@click.option(
+    "--ignore-bundled-openscad",
+    is_flag=True,
+    default=None,
+    # The env var is IGNORE_BUNDLED_OPENSCAD, read by user_config directly, so it
+    # works for the standalone bundle and for `import partcad` alike. show_envvar
+    # is off to avoid advertising the PC_ form that click would otherwise infer.
+    show_envvar=False,
+    help="Ignore the OpenSCAD bundled into the standalone build and use the host's "
+    "instead (env: IGNORE_BUNDLED_OPENSCAD=1). No effect outside the bundle.",
 )
 @click.option(
     "--internal-state-dir",
@@ -379,6 +399,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
         ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
         ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
         ("PC_PYTHON_SANDBOX", "python_sandbox"),
+        ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
         ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
         ("PC_FORCE_UPDATE", "force_update"),
         ("PC_OFFLINE", "offline"),
@@ -473,6 +494,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
             ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
             ("PC_PYTHON_SANDBOX", "python_sandbox"),
+            ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
             ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
             ("PC_FORCE_UPDATE", "force_update"),
             ("PC_OFFLINE", "offline"),
@@ -524,10 +546,13 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 exc.exit_code = 2
                 raise exc from e
             except Exception as e:
-                import traceback
-
                 pc.logging.error(e)
-                traceback.print_exc()
+                # Keep the traceback for troubleshooting, but do not dump it at
+                # the user during normal operation.
+                if logging.getLogger("partcad").isEnabledFor(logging.DEBUG):
+                    import traceback
+
+                    traceback.print_exc()
                 raise click.Abort from e
 
         # Pass everything the commands might need through the context object
@@ -569,6 +594,13 @@ def main():
         cli()
     except Exception as e:
         sentry_sdk.capture_exception(e)
+        # When a clean error was already reported to the user (for example a
+        # repository that could not be cloned), do not additionally dump a
+        # traceback. Unexpected failures stay loud so that real bugs are not
+        # hidden, and the traceback remains available under '-v'.
+        if pc.logging.had_errors and not logging.getLogger("partcad").isEnabledFor(logging.DEBUG):
+            pc.logging.error(str(e) if str(e) else type(e).__name__)
+            sys.exit(1)
         raise e
 
 

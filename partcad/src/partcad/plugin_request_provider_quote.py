@@ -1,4 +1,5 @@
 #
+# PartCAD, 2025
 # OpenVMP, 2024
 #
 # Author: Roman Kuzmenko
@@ -7,30 +8,25 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .provider_data_cart import *
-from .provider_request import ProviderRequest
+from .plugin_provider_data_cart import *
+from .plugin_request_provider import PluginRequestProvider
 
 
-class ProviderRequestQuote(ProviderRequest):
+class ProviderRequestQuote(PluginRequestProvider):
     cart: ProviderCart = None
     result: object = None
 
     def __init__(self, cart: ProviderCart = None):
+        super().__init__()
         if cart is None:
-            cart = ProviderCart()
-        self.cart = cart
-        self.result = None
-
-    def set_result(self, result: object):
-        self.result = result
+            self.cart = ProviderCart()
+        else:
+            self.cart = cart
 
     def compose(self):
         composed = {
             "cart": self.cart.compose(),
         }
-        if not self.result is None:
+        if self.result is not None:
             composed["result"] = self.result
         return composed
-
-    def __repr__(self):
-        return str(self.compose())

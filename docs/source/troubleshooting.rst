@@ -59,6 +59,15 @@ Typical problems
 When running `pc ...` commands, getting: "pc is not a recognized command..."
 
 - Make sure that Conda environment is activated in the current terminal, for example by running `conda info`
+- With the :ref:`standalone build <standalone-cli>`, there is no environment to activate: the commands are
+  linked into ``~/.local/bin``, which has to be on ``PATH``. Run ``~/.local/bin/pc version`` to confirm the
+  installation itself is fine, then add the directory to ``PATH``.
+
+Which one is running, the standalone build or a wheel?
+
+- ``command -v pc`` says. A path under ``~/.local/share/partcad`` (or wherever ``--install-dir`` pointed) is
+  the standalone build; a path inside a Python environment is the wheel. Having both installed is supported,
+  but only the first on ``PATH`` runs.
 
 ========================
 PartCAD VSCode Extension

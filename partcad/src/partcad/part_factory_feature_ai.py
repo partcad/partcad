@@ -14,7 +14,7 @@ import os
 import tempfile
 import threading
 import yaml
-from git import Git
+import pygit2
 from datetime import datetime
 
 from partcad.part import Part
@@ -24,6 +24,17 @@ from . import logging as pc_logging
 from .utils import total_size
 from .user_config import user_config
 from . import telemetry
+
+
+def git_user_name() -> str:
+    """The name git would put on a commit, read straight from the config.
+
+    There may be no global config file at all, and it may not name a user, so
+    either can fail and neither is worth reporting: the header just says
+    "Anonymous" then.
+    """
+    return pygit2.Config.get_global_config()["user.name"]
+
 
 DEFAULT_ALTERNATIVES_GEOMETRIC_MODELING = 3
 DEFAULT_ALTERNATIVES_MODEL_GENERATION = 3
@@ -126,7 +137,7 @@ class PartFactoryFeatureAi(Ai):
 
         date_string = datetime.now().strftime("%b %d, %Y")
         try:
-            author = Git().config("--global", "--get", "user.name") or "Anonymous"
+            author = git_user_name() or "Anonymous"
         except Exception:
             author = "Anonymous"
 

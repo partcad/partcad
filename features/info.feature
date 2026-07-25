@@ -134,6 +134,31 @@ Feature: `pc info` command
     When I run "pc info test"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "Path: '//'"
+
+  @success @pc-info
+  Scenario: `pc info` without an object shows the current package
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A sample PartCAD package
+      parts:
+        cube:
+          type: cadquery
+          path: cube.py
+      """
+    And a file named "cube.py" with content:
+      """
+      import cadquery as cq
+
+      if __name__ != "__cqgi__":
+          from cq_server.ui import ui, show_object
+
+      shape = cq.Workplane("front").box(10, 10, 10)
+      show_object(shape)
+      """
+    When I run "pc info"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Path: '//'"
+    And STDOUT should contain "sample PartCAD package"
 # And STDOUT should contain "cube" in the parts list
 # And STDOUT should contain "cylinder" in the parts list
 # And STDOUT should contain valid location coordinates

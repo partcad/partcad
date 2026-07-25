@@ -13,7 +13,7 @@ import typing
 from . import sketch_config
 from . import sketch_factory as pf
 from . import logging as pc_logging
-from .utils import resolve_resource_path, get_child_project_path
+from .utils import get_child_project_path
 from . import telemetry
 
 
@@ -44,8 +44,7 @@ class SketchFactoryEnrich(pf.SketchFactory):
                     source_project_name = get_child_project_path(target_project.name, source_project_name)
             else:
                 if ":" in source_sketch_name:
-                    source_project_name, source_sketch_name = resolve_resource_path(
-                        source_project.name,
+                    source_project_name, source_sketch_name = source_project.resolve(
                         source_sketch_name,
                     )
                 else:

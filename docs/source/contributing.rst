@@ -473,7 +473,7 @@ To test the Python core module using the VSCode plugin, click the `Restart PartC
 
   .. code-block:: text
 
-      ERROR: Failed to clone repo https://github.com/openvmp/partcad-index.git after 0 retries
+      ERROR: Failed to clone repo https://github.com/partcad/partcad-index.git after 0 retries
 
   then you are likely to have Git configured to use SSH creds to access GitHub,
   while the SSH creds are not available in the Dev container.

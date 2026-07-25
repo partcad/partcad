@@ -61,6 +61,13 @@ poetry install        # installs partcad + partcad-cli in editable mode
 The project virtualenv is not auto-activated, and `pytest`, `pc`, and `partcad` are **not** on `PATH` — prefix
 project commands with `poetry run`.
 
+Pass the global `--no-ansi` flag whenever `pc` is run non-interactively — in scripts, in batch jobs, and
+especially when an LLM agent parses the output. Without it, `pc` draws animated ANSI progress bars whose control
+characters corrupt captured output; with it, output is plain text with `INFO:`/`ERROR:` prefixes. Note that
+`--no-ansi` routes those logs to **stderr** (plain `logging`), whereas the default ANSI renderer writes to
+**stdout** — so capture both streams (`2>&1`) when parsing. The flag is global and goes before the subcommand:
+`poetry run pc --no-ansi info`.
+
 Note that `poetry.toml` sets `in-project = true`, so the virtualenv lives at `./.venv` inside the bind-mounted
 workspace and is shared between host and container. Running `poetry` on the host after running it in the
 container (or vice versa) makes each side rebuild `.venv`, because the interpreter paths baked into it are only
@@ -77,6 +84,13 @@ poetry run behave                                                               
 ```
 
 Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
+
+### Packaging
+
+Two artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI) and the standalone
+PyInstaller bundles for users who have no Python. Adding a runtime dependency, an optional extra, or a file
+that is read at runtime can be invisible to the frozen bundle and break it while the wheels stay fine — see
+`dev-tools/pyinstaller/README.md` before doing any of those.
 
 ### Committing
 

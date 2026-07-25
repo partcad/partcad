@@ -111,7 +111,7 @@ def cli(
 
             for package in packages:
                 if not object is None:
-                    package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path() + package, object)
+                    package, object = pc.utils.resolve_resource_path(package, object)
 
                 if object is None:
                     # Render all parts and assemblies configured to be auto-rendered in this project
