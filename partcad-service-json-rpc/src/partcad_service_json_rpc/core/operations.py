@@ -378,6 +378,15 @@ def prompt_respond(session, params):
     return None
 
 
+# ---- host / info -----------------------------------------------------------
+
+
+def version(session, params):
+    """Return the PartCAD Python module version."""
+    pc = session.ensure_partcad()
+    return {"partcad": pc.__version__}
+
+
 # ---- telemetry -------------------------------------------------------------
 
 
