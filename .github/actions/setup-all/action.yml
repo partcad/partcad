@@ -90,7 +90,19 @@ runs:
       with:
         miniforge-version: 24.11.3-0
         use-mamba: true
-        channels: conda-forge,defaults
+        # conda-forge only. Mixing Anaconda's 'defaults' ('pkgs/main') into a
+        # conda-forge environment picks whichever channel happens to hold the
+        # newer build, and the two are not ABI-compatible. That is how the
+        # macOS/3.12 job started segfaulting: 'defaults' ships cffi 2.1.0 for
+        # py312 while conda-forge is still on 1.17.1, so the Anaconda build won
+        # and satisfied pygit2's 'cffi>=2.0', which stopped pip from installing
+        # the PyPI wheel that pygit2's own wheel is built against. Its
+        # _cffi_backend mis-passes variadic arguments on Apple arm64, so the
+        # first 'git_libgit2_opts(GIT_OPT_GET_SEARCH_PATH, level, git_buf *)'
+        # handed libgit2 a garbage pointer to write through. With conda-forge
+        # alone, cffi resolves below pygit2's floor and pip installs the PyPI
+        # wheel -- which is what the 3.10 and 3.11 jobs already do.
+        channels: conda-forge
         python-version: ${{ matrix.python-version }}
         activate-environment: test
         auto-activate-base: false
