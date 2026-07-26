@@ -26,6 +26,9 @@ env:
   # without executing, so they only ever left checks pending forever.
   OSES: '["ubuntu-latest", "windows-latest", "macos-latest"]'
   PYTHONS: '["3.10", "3.11", "3.12"]'
+  # Number of parallel shards the behave suite is split into. Keep in sync with
+  # the "shard" list in the set-matrix job's matrix-behave output.
+  BEHAVE_SHARDS: 4
   VERSION: 0.7.146
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
@@ -68,11 +71,18 @@ jobs:
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
     steps:
       - name: Set matrix
         id: set-matrix
         run: |
-          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": [{"os": "windows-latest", "python-version": "3.12"}]}' >> $GITHUB_OUTPUT
+          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}}' >> $GITHUB_OUTPUT
+          # Behave is single-process and dominates CI wall-clock, so it runs
+          # sharded across parallel jobs. The "shard" axis is derived from
+          # BEHAVE_SHARDS (1..N) here, so the number of behave jobs can never
+          # drift from it, and crosses os/python.
+          SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
+          echo 'matrix-behave={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "shard": '"$SHARDS_JSON"'}' >> $GITHUB_OUTPUT
 
   # cache-preheat:
   #   name: "Update caches"
@@ -202,9 +212,12 @@ jobs:
       # - cache-preheat
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-behave) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    # The suite is sharded BEHAVE_SHARDS ways, so a single shard is a fraction
+    # of the old whole-suite runtime (which used to hit the 120m cap on
+    # Windows). 60m leaves generous margin for the slowest shard.
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v7
@@ -228,6 +241,12 @@ jobs:
 
       - name: Test with behave
         shell: bash -el {0}
+        # Pass matrix.* through env rather than interpolating templates straight
+        # into the script (zizmor template-injection). BEHAVE_SHARDS and PYTHONS
+        # are already exported as workflow-level env vars.
+        env:
+          MATRIX_SHARD: ${{ matrix.shard }}
+          MATRIX_PYTHON: ${{ matrix.python-version }}
         run: |
           . ~/.bashrc
           . ~/.bash_profile
@@ -238,29 +257,46 @@ jobs:
           export PYTHONUTF8=1
           export PYTHONIOENCODING=utf-8
 
-          BEHAVE_CMD="coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave"
+          # This shard's slice of the feature files (balanced by scenario
+          # count). Across all shards every feature runs; sharding only changes
+          # how many run in parallel.
+          FEATURES=$(python dev-tools/behave_shard.py --shards "$BEHAVE_SHARDS" --index "$MATRIX_SHARD")
+          echo "Shard $MATRIX_SHARD/$BEHAVE_SHARDS runs:"
+          printf '  %s\n' $FEATURES
+
+          BEHAVE_ARGS="$FEATURES"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            BEHAVE_CMD="$BEHAVE_CMD --tags=-skip-windows"
+            BEHAVE_ARGS="$BEHAVE_ARGS --tags=-skip-windows"
           fi
 
-          if ! eval "$BEHAVE_CMD"; then
-            echo "Behave tests failed"
-            exit 1
+          # Coverage of the source that behave exercises is, apart from
+          # OS-specific branches, identical across Python versions -- so only
+          # the lowest Python of each OS traces (this keeps the OS-specific
+          # coverage, e.g. the Windows registry paths). Every other cell runs
+          # the CLI directly (see features/steps/run.py), which removes
+          # coverage.py from each subprocess the scenarios spawn. All scenarios
+          # still run on every cell.
+          COV_PY=$(echo "$PYTHONS" | python -c "import json,sys; print(json.load(sys.stdin)[0])")
+          if [[ "$MATRIX_PYTHON" == "$COV_PY" ]]; then
+            export PC_BEHAVE_COVERAGE=1
+            if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave $BEHAVE_ARGS; then
+              echo "Behave tests failed"
+              exit 1
+            fi
+            coverage combine
+            coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
+          else
+            if ! behave $BEHAVE_ARGS; then
+              echo "Behave tests failed"
+              exit 1
+            fi
           fi
-
-          # if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave; then
-          #   echo "Behave tests failed"
-          #   exit 1
-          # fi
-
-          coverage combine
-          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./behave-test-results/coverage.xml
           mamba deactivate
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
         with:
-          name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}
+          name: behave-test-results-${{matrix.os}}-${{matrix.python-version}}-${{matrix.shard}}
           path: behave-test-results/
           retention-days: 7
           status: ${{ job.status }}

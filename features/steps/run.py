@@ -8,10 +8,25 @@ from features.utils import expandvars  # type: ignore # TODO: @alexanderilyin py
 
 
 def run(context: Context, command: str):
-    if command.startswith("pc "):
-        command = f"coverage run --rcfile=$PARTCAD_ROOT/dev-tools/coverage.rc --data-file=$PARTCAD_ROOT/.coverage --parallel -m partcad_cli.click.command {command[3:]}"
-    elif command.startswith("partcad "):
-        command = f"coverage run --rcfile=$PARTCAD_ROOT/dev-tools/coverage.rc --data-file=$PARTCAD_ROOT/.coverage --parallel -m partcad_cli.click.command {command[8:]}"
+    # Each scenario shells out to the CLI, often several times. Wrapping every
+    # invocation in `coverage run` imports coverage.py and enables line tracing
+    # on each fresh subprocess, which is a large share of behave's runtime.
+    # Only pay that cost when coverage is actually being collected
+    # (PC_BEHAVE_COVERAGE=1, set on the single CI cell that reports coverage);
+    # otherwise -- local runs and every other CI cell -- invoke the CLI
+    # directly. The scenarios that run are identical either way.
+    collect_coverage = os.environ.get("PC_BEHAVE_COVERAGE", "") not in ("", "0", "false", "False")
+    for prefix in ("pc ", "partcad "):
+        if command.startswith(prefix):
+            cli_args = command[len(prefix) :]
+            if collect_coverage:
+                command = (
+                    "coverage run --rcfile=$PARTCAD_ROOT/dev-tools/coverage.rc "
+                    f"--data-file=$PARTCAD_ROOT/.coverage --parallel -m partcad_cli.click.command {cli_args}"
+                )
+            else:
+                command = f"python -m partcad_cli.click.command {cli_args}"
+            break
 
     command = expandvars(command, context)
     # We need to keep current environment variables
