@@ -76,12 +76,13 @@ jobs:
       - name: Set matrix
         id: set-matrix
         run: |
-          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": [{"os": "windows-latest", "python-version": "3.12"}]}' >> $GITHUB_OUTPUT
+          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}}' >> $GITHUB_OUTPUT
           # Behave is single-process and dominates CI wall-clock, so it runs
-          # sharded across parallel jobs. The "shard" axis crosses os/python;
-          # keep the list in sync with BEHAVE_SHARDS. The exclude matches on
-          # os+python, so it drops all shards of that combination.
-          echo 'matrix-behave={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "shard": [1, 2, 3, 4], "exclude": [{"os": "windows-latest", "python-version": "3.12"}]}' >> $GITHUB_OUTPUT
+          # sharded across parallel jobs. The "shard" axis is derived from
+          # BEHAVE_SHARDS (1..N) here, so the number of behave jobs can never
+          # drift from it, and crosses os/python.
+          SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
+          echo 'matrix-behave={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "shard": '"$SHARDS_JSON"'}' >> $GITHUB_OUTPUT
 
   # cache-preheat:
   #   name: "Update caches"
@@ -240,6 +241,12 @@ jobs:
 
       - name: Test with behave
         shell: bash -el {0}
+        # Pass matrix.* through env rather than interpolating templates straight
+        # into the script (zizmor template-injection). BEHAVE_SHARDS and PYTHONS
+        # are already exported as workflow-level env vars.
+        env:
+          MATRIX_SHARD: ${{ matrix.shard }}
+          MATRIX_PYTHON: ${{ matrix.python-version }}
         run: |
           . ~/.bashrc
           . ~/.bash_profile
@@ -253,8 +260,8 @@ jobs:
           # This shard's slice of the feature files (balanced by scenario
           # count). Across all shards every feature runs; sharding only changes
           # how many run in parallel.
-          FEATURES=$(python dev-tools/behave_shard.py --shards ${{ env.BEHAVE_SHARDS }} --index ${{ matrix.shard }})
-          echo "Shard ${{ matrix.shard }}/${{ env.BEHAVE_SHARDS }} runs:"
+          FEATURES=$(python dev-tools/behave_shard.py --shards "$BEHAVE_SHARDS" --index "$MATRIX_SHARD")
+          echo "Shard $MATRIX_SHARD/$BEHAVE_SHARDS runs:"
           printf '  %s\n' $FEATURES
 
           BEHAVE_ARGS="$FEATURES"
@@ -269,8 +276,8 @@ jobs:
           # the CLI directly (see features/steps/run.py), which removes
           # coverage.py from each subprocess the scenarios spawn. All scenarios
           # still run on every cell.
-          COV_PY=$(echo '${{ env.PYTHONS }}' | python -c "import json,sys; print(json.load(sys.stdin)[0])")
-          if [[ "${{ matrix.python-version }}" == "$COV_PY" ]]; then
+          COV_PY=$(echo "$PYTHONS" | python -c "import json,sys; print(json.load(sys.stdin)[0])")
+          if [[ "$MATRIX_PYTHON" == "$COV_PY" ]]; then
             export PC_BEHAVE_COVERAGE=1
             if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave $BEHAVE_ARGS; then
               echo "Behave tests failed"
