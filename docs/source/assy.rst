@@ -19,7 +19,7 @@ external assembly, or a container for such references.
 Containers
 ----------
 
-The top-level mode of an ASSY file is a container node.
+The top-level node of an ASSY file is a container node.
 The container nodes have the following syntax:
 
   .. code-block:: yaml

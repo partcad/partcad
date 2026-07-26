@@ -290,7 +290,7 @@ The last time we've measured, the size of base Docker Image with all system-leve
 - Git: 423.87 MB
 - Python: 411.28 MB
 - Common Utils: 251.11 MB
-- Debian (Bookwork): 116.56 MB
+- Debian (Bookworm): 116.56 MB
 
 Mac & Windows
 ^^^^^^^^^^^^^

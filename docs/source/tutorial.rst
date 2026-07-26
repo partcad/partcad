@@ -312,8 +312,8 @@ PartCAD package, saving the file makes it displayed automatically.
 Press ``Save`` (Ctrl-S or Cmd-S) to save the script and trigger an automatic
 inspection of the part. The ``OCP CAD Viewer`` view will appear on the right.
 
-Import parts part
------------------
+Import parts
+------------
 
 In case you want to use existing PartCAD parts in the design of your part,
 then follow the following steps.

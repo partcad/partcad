@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"POT-Creation-Date: 2026-07-26 20:49+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: de\n"
@@ -42,15 +42,14 @@ msgid ""
 "If there is no ``-p`` flag passed to ``pc init`` then the dependency on "
 "the public PartCAD repository is added automatically."
 msgstr ""
-"Wird ``pc init`` ohne die Option ``-p`` aufgerufen, wird die Abhängigkeit "
-"vom öffentlichen PartCAD-Repository automatisch hinzugefügt."
+"Wird ``pc init`` ohne die Option ``-p`` aufgerufen, wird die Abhängigkeit"
+" vom öffentlichen PartCAD-Repository automatisch hinzugefügt."
 
 #: ../../source/tutorial.rst:21
 msgid ""
 "Alternatively, manually create ``partcad.yaml`` with the following "
 "content:"
-msgstr ""
-"Alternativ erstellen Sie ``partcad.yaml`` manuell mit folgendem Inhalt:"
+msgstr "Alternativ erstellen Sie ``partcad.yaml`` manuell mit folgendem Inhalt:"
 
 #: ../../source/tutorial.rst:32
 msgid ""
@@ -80,9 +79,9 @@ msgid ""
 "public PartCAD repository needs to be added if PartCAD is supposed to "
 "query it."
 msgstr ""
-"PartCAD hat keine impliziten integrierten Abhängigkeiten, daher muss "
-"eine Abhängigkeit vom öffentlichen PartCAD-Repository hinzugefügt "
-"werden, falls PartCAD dieses abfragen soll."
+"PartCAD hat keine impliziten integrierten Abhängigkeiten, daher muss eine"
+" Abhängigkeit vom öffentlichen PartCAD-Repository hinzugefügt werden, "
+"falls PartCAD dieses abfragen soll."
 
 #: ../../source/tutorial.rst:50
 msgid ""
@@ -90,8 +89,8 @@ msgid ""
 " ``#``) and see how the output of ``pc list`` changes."
 msgstr ""
 "Kommentieren Sie im neu erstellten Paket die Abhängigkeit „pub“ aus "
-"(stellen Sie ``#`` voran) und sehen Sie, wie sich die Ausgabe von "
-"``pc list`` ändert."
+"(stellen Sie ``#`` voran) und sehen Sie, wie sich die Ausgabe von ``pc "
+"list`` ändert."
 
 #: ../../source/tutorial.rst:54
 msgid "Add a part"
@@ -109,8 +108,7 @@ msgstr ""
 
 #: ../../source/tutorial.rst:65
 msgid "Now let's add a declaration of this part to ``partcad.yaml``."
-msgstr ""
-"Fügen wir nun eine Deklaration dieses Teils zu ``partcad.yaml`` hinzu."
+msgstr "Fügen wir nun eine Deklaration dieses Teils zu ``partcad.yaml`` hinzu."
 
 #: ../../source/tutorial.rst:72
 msgid "Import an existing part"
@@ -148,9 +146,7 @@ msgstr "Das importierte Teil wird dem Projektverzeichnis hinzugefügt."
 
 #: ../../source/tutorial.rst:109
 msgid "If a target format is specified, the part is converted automatically."
-msgstr ""
-"Wenn ein Zielformat angegeben ist, wird das Teil automatisch "
-"konvertiert."
+msgstr "Wenn ein Zielformat angegeben ist, wird das Teil automatisch konvertiert."
 
 #: ../../source/tutorial.rst:113 ../../source/tutorial.rst:308
 msgid "Inspect the part"
@@ -181,8 +177,8 @@ msgid ""
 "format changes."
 msgstr ""
 "Der Befehl `pc convert part` konvertiert ein Teil oder eine Baugruppe "
-"innerhalb eines Pakets in ein anderes Format. Er aktualisiert den Typ "
-"des Teils, falls sich das Format ändert."
+"innerhalb eines Pakets in ein anderes Format. Er aktualisiert den Typ des"
+" Teils, falls sich das Format ändert."
 
 #: ../../source/tutorial.rst:138 ../../source/tutorial.rst:196
 msgid "Usage:"
@@ -194,18 +190,15 @@ msgstr "Optionen:"
 
 #: ../../source/tutorial.rst:157
 msgid "``-t``, ``--target-format``: Output format (e.g., step, stl, obj, etc.)"
-msgstr ""
-"``-t``, ``--target-format``: Ausgabeformat (z. B. step, stl, obj usw.)"
+msgstr "``-t``, ``--target-format``: Ausgabeformat (z. B. step, stl, obj usw.)"
 
 #: ../../source/tutorial.rst:158 ../../source/tutorial.rst:216
 msgid "``-P``, ``--package``: Package name (default is current directory)"
-msgstr ""
-"``-P``, ``--package``: Paketname (Standard ist das aktuelle Verzeichnis)"
+msgstr "``-P``, ``--package``: Paketname (Standard ist das aktuelle Verzeichnis)"
 
 #: ../../source/tutorial.rst:159
 msgid "``-O``, ``--output-dir``: Directory to save output files"
-msgstr ""
-"``-O``, ``--output-dir``: Verzeichnis zum Speichern der Ausgabedateien"
+msgstr "``-O``, ``--output-dir``: Verzeichnis zum Speichern der Ausgabedateien"
 
 #: ../../source/tutorial.rst:160
 msgid "``--dry-run``: Simulate the conversion process without modifying any files"
@@ -293,8 +286,7 @@ msgstr "``-t``, ``--target-format``: Ausgabeformat (`svg` oder `dxf`)"
 
 #: ../../source/tutorial.rst:217
 msgid "``-O``, ``--output-dir``: Output folder for the converted sketch"
-msgstr ""
-"``-O``, ``--output-dir``: Ausgabeordner für die konvertierte Skizze"
+msgstr "``-O``, ``--output-dir``: Ausgabeordner für die konvertierte Skizze"
 
 #: ../../source/tutorial.rst:218
 msgid "``--dry-run``: Perform a dry-run (no files are created or modified)"
@@ -396,9 +388,9 @@ msgid ""
 msgstr ""
 "Wechseln Sie zur PartCAD-Werkbank (halten Sie Ausschau nach dem PartCAD-"
 "Logo am linken Bildschirmrand). Dort befindet sich links die PartCAD-"
-"Explorer-Ansicht. Klicken Sie in der Explorer-Ansicht auf "
-"``Install PartCAD``, falls diese Schaltfläche angezeigt wird, um PartCAD "
-"in der aktivierten Python-Umgebung zu installieren."
+"Explorer-Ansicht. Klicken Sie in der Explorer-Ansicht auf ``Install "
+"PartCAD``, falls diese Schaltfläche angezeigt wird, um PartCAD in der "
+"aktivierten Python-Umgebung zu installieren."
 
 #: ../../source/tutorial.rst:283
 msgid ""
@@ -420,8 +412,8 @@ msgid ""
 "on the right."
 msgstr ""
 "Durchsuchen Sie die importierten Pakete in der Explorer-Ansicht. Klicken "
-"Sie auf die Teile und Baugruppen, um sie in der ``OCP CAD Viewer``-"
-"Ansicht zu sehen, die rechts erscheint."
+"Sie auf die Teile und Baugruppen, um sie in der ``OCP CAD "
+"Viewer``-Ansicht zu sehen, die rechts erscheint."
 
 #: ../../source/tutorial.rst:294
 msgid ""
@@ -447,10 +439,10 @@ msgid ""
 "the template to use. An editor view with the newly created script will be"
 " shown."
 msgstr ""
-"Klicken Sie in der Symbolleiste der Explorer-Ansicht auf "
-"``Add a CAD script``. Wählen Sie ``build123d`` aus der Dropdown-Liste. "
-"Wählen Sie dann ``Example 3: Bead`` als zu verwendende Vorlage. Es wird "
-"eine Editor-Ansicht mit dem neu erstellten Skript angezeigt."
+"Klicken Sie in der Symbolleiste der Explorer-Ansicht auf ``Add a CAD "
+"script``. Wählen Sie ``build123d`` aus der Dropdown-Liste. Wählen Sie "
+"dann ``Example 3: Bead`` als zu verwendende Vorlage. Es wird eine Editor-"
+"Ansicht mit dem neu erstellten Skript angezeigt."
 
 #: ../../source/tutorial.rst:310
 msgid ""
@@ -461,13 +453,13 @@ msgid ""
 "right."
 msgstr ""
 "Wenn Sie Python- oder OpenSCAD-Dateien bearbeiten, die im aktuellen "
-"PartCAD-Paket verwendet werden, wird die Datei beim Speichern "
-"automatisch angezeigt. Drücken Sie ``Save`` (Strg-S oder Cmd-S), um das "
-"Skript zu speichern und eine automatische Inspektion des Teils "
-"auszulösen. Die ``OCP CAD Viewer``-Ansicht erscheint rechts."
+"PartCAD-Paket verwendet werden, wird die Datei beim Speichern automatisch"
+" angezeigt. Drücken Sie ``Save`` (Strg-S oder Cmd-S), um das Skript zu "
+"speichern und eine automatische Inspektion des Teils auszulösen. Die "
+"``OCP CAD Viewer``-Ansicht erscheint rechts."
 
 #: ../../source/tutorial.rst:316
-msgid "Import parts part"
+msgid "Import parts"
 msgstr "Teile importieren"
 
 #: ../../source/tutorial.rst:318
@@ -516,11 +508,10 @@ msgid ""
 "individual parts, and creates an assembly YAML file that records each "
 "part along with its transformation data."
 msgstr ""
-"Mit dem Befehl ``pc import assembly`` können Sie eine Baugruppe aus "
-"einer STEP-Datei importieren. Dieser Befehl parst die STEP-Datei "
-"automatisch, extrahiert einzelne Teile und erstellt eine Assembly-YAML-"
-"Datei, die jedes Teil zusammen mit seinen Transformationsdaten "
-"festhält."
+"Mit dem Befehl ``pc import assembly`` können Sie eine Baugruppe aus einer"
+" STEP-Datei importieren. Dieser Befehl parst die STEP-Datei automatisch, "
+"extrahiert einzelne Teile und erstellt eine Assembly-YAML-Datei, die "
+"jedes Teil zusammen mit seinen Transformationsdaten festhält."
 
 #: ../../source/tutorial.rst:353
 msgid "Usage"
@@ -536,9 +527,9 @@ msgid ""
 " an XDE-based approach. If no parts are found via XDE, it falls back to a"
 " classic STEP parsing method."
 msgstr ""
-"**Datei-Parsing:** Der Befehl versucht zunächst, die STEP-Datei mit "
-"einem XDE-basierten Ansatz zu parsen. Werden über XDE keine Teile "
-"gefunden, wird auf eine klassische STEP-Parsing-Methode zurückgegriffen."
+"**Datei-Parsing:** Der Befehl versucht zunächst, die STEP-Datei mit einem"
+" XDE-basierten Ansatz zu parsen. Werden über XDE keine Teile gefunden, "
+"wird auf eine klassische STEP-Parsing-Methode zurückgegriffen."
 
 #: ../../source/tutorial.rst:367
 msgid ""
@@ -595,8 +586,8 @@ msgid ""
 "If the file does not represent an assembly (i.e. only a single SOLID is "
 "found), the command will raise an error."
 msgstr ""
-"Wenn die Datei keine Baugruppe darstellt (d. h. es wird nur ein "
-"einzelnes SOLID gefunden), gibt der Befehl einen Fehler aus."
+"Wenn die Datei keine Baugruppe darstellt (d. h. es wird nur ein einzelnes"
+" SOLID gefunden), gibt der Befehl einen Fehler aus."
 
 #: ../../source/tutorial.rst:395
 msgid ""
@@ -626,10 +617,10 @@ msgid ""
 "Explorer view. After that select an existing assembly file (`*.assy`) or "
 "enter a filename for the new file to be created."
 msgstr ""
-"Klicken Sie in der PartCAD-Explorer-Ansicht auf "
-"``Add an assembly file to the current package``. Wählen Sie danach eine "
-"vorhandene Assembly-Datei (`*.assy`) aus, oder geben Sie einen Dateinamen "
-"für die neu zu erstellende Datei ein."
+"Klicken Sie in der PartCAD-Explorer-Ansicht auf ``Add an assembly file to"
+" the current package``. Wählen Sie danach eine vorhandene Assembly-Datei "
+"(`*.assy`) aus, oder geben Sie einen Dateinamen für die neu zu "
+"erstellende Datei ein."
 
 #: ../../source/tutorial.rst:407
 msgid ""
@@ -653,10 +644,10 @@ msgid ""
 "and, then, select the code completion suggestion from PartCAD."
 msgstr ""
 "Wählen Sie das gewünschte Teil oder die gewünschte Baugruppe im PartCAD-"
-"Explorer aus. Navigieren Sie danach zur nächsten Zeile unter "
-"„``links:``“ und geben Sie „- pa“ ein (das tun Sie, wenn Sie ein "
-"Kindelement mit dem Namen „part“ hinzufügen möchten), und wählen Sie "
-"dann den Codevervollständigungs-Vorschlag von PartCAD aus."
+"Explorer aus. Navigieren Sie danach zur nächsten Zeile unter „``links:``“"
+" und geben Sie „- pa“ ein (das tun Sie, wenn Sie ein Kindelement mit dem "
+"Namen „part“ hinzufügen möchten), und wählen Sie dann den "
+"Codevervollständigungs-Vorschlag von PartCAD aus."
 
 #: ../../source/tutorial.rst:426
 msgid "This will add the selected part or assembly to the assembly file."
