@@ -170,10 +170,11 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    # 30 -> 45: the build123d 0.11 / OCP 7.9 stack installs a much larger
-    # dependency tree into each sandbox, and Windows was landing right at the
-    # old 30-minute budget (~20 min on the previous stack).
-    timeout-minutes: 45
+    # 30 -> 60: the build123d 0.11 / OCP 7.9 stack installs a much larger
+    # dependency tree into each sandbox (~20 min on the previous stack). Measured
+    # here: ubuntu ~25-31 min, Windows ~38-50 min -- the 45-minute step was still
+    # catching the slower Windows runs, so give it headroom.
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v7
@@ -383,10 +384,11 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    # 30 -> 45: this job renders the examples, so it populates sandboxes harder
-    # than "Examples (All)" and felt the larger OCP 7.9 install the most --
-    # Windows was landing at the old 30-minute budget.
-    timeout-minutes: 45
+    # 30 -> 60: this job renders the examples, so it populates sandboxes harder
+    # than "Examples (All)" and felt the larger OCP 7.9 install the most.
+    # Measured: ubuntu 24-31 min, Windows 38-50 min -- Windows straddled the
+    # 45-minute step (some passed at ~44 min, others timed out), so raise it.
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v7
@@ -438,8 +440,9 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    # 30 -> 45: same larger install as the other example jobs.
-    timeout-minutes: 45
+    # 30 -> 60: same larger install as the other example jobs; matches the
+    # "Examples (PartCAD)" budget so Windows does not straddle the timeout.
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v7
