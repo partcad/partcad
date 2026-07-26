@@ -495,7 +495,7 @@ class ConstantAssignmentFinder(ast.NodeTransformer):
         # CadQuery script down with it. The 'ast.Constant' branch below is what
         # actually handles numbers and strings.
         try:
-            if type(value_node) == ast.Name:
+            if isinstance(value_node, ast.Name):
                 if value_node.id == "True":
                     self.cqModel.add_script_parameter(
                         InputParameter.create(value_node, var_name, BooleanParameterType, True)
@@ -504,7 +504,7 @@ class ConstantAssignmentFinder(ast.NodeTransformer):
                     self.cqModel.add_script_parameter(
                         InputParameter.create(value_node, var_name, BooleanParameterType, False)
                     )
-            elif type(value_node) == ast.Tuple:
+            elif isinstance(value_node, ast.Tuple):
                 # Handle multi-length tuples
                 tup = ()
                 for entry in value_node.elts:
@@ -518,7 +518,7 @@ class ConstantAssignmentFinder(ast.NodeTransformer):
                         tup,
                     )
                 )
-            elif type(value_node) == ast.Constant:
+            elif isinstance(value_node, ast.Constant):
 
                 type_dict = {
                     bool: BooleanParameterType,

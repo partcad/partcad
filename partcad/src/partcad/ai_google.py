@@ -77,7 +77,7 @@ def google_once():
             latest_key = interactive.prompt("API_KEY_GOOGLE", "Enter Google Cloud Generative Language API key")
         if latest_key != GOOGLE_API_KEY:
             GOOGLE_API_KEY = latest_key
-            if not GOOGLE_API_KEY is None:
+            if GOOGLE_API_KEY is not None:
                 google_client = google_genai.Client(api_key=GOOGLE_API_KEY)
                 return True
 
@@ -170,7 +170,7 @@ class AiGoogle(AiContentProcessor):
         while options_left > 0:
             response = None
             retry = True
-            while retry == True:
+            while retry:
                 retry = False
                 try:
                     response = google_client.models.generate_content(

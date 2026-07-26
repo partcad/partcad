@@ -117,7 +117,7 @@ class AiOllama(AiContentProcessor):
         for _ in range(options_num):
             response = None
             retry = True
-            while retry == True:
+            while retry:
                 retry = False
                 try:
                     # `Options` has no `tokens` field: pydantic silently dropped
