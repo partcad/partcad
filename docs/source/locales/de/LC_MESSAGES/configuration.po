@@ -1,0 +1,1576 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 21:23+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/configuration.rst:2 ../../source/configuration.rst:678
+#: ../../source/configuration.rst:760 ../../source/configuration.rst:835
+#: ../../source/configuration.rst:987 ../../source/configuration.rst:1027
+msgid "Configuration"
+msgstr "Konfiguration"
+
+#: ../../source/configuration.rst:4
+msgid ""
+"Most users need to create a single package, containing one or more parts,"
+" and maybe an assembly. That is achieved by creating a configuration file"
+" (``partcad.yaml``) that defines the package and declares all parts and "
+"assemblies it contains. PartCAD aims to maintain three ways to manage the"
+" configuration files:"
+msgstr ""
+"Die meisten Nutzer müssen ein einzelnes Paket erstellen, das ein oder "
+"mehrere Teile und vielleicht eine Baugruppe enthält. Dies wird durch das "
+"Erstellen einer Konfigurationsdatei (``partcad.yaml``) erreicht, die das "
+"Paket definiert und alle darin enthaltenen Teile und Baugruppen "
+"deklariert. PartCAD hat zum Ziel, drei Wege zur Verwaltung der "
+"Konfigurationsdateien zu pflegen:"
+
+#: ../../source/configuration.rst:9
+msgid "Manual configuration file edits."
+msgstr "Manuelle Bearbeitung der Konfigurationsdatei."
+
+#: ../../source/configuration.rst:11
+msgid ""
+"PartCAD aims to maintain a simple and intuitive syntax for configuration "
+"files. It is currently expected that PartCAD users edit the configuration"
+" file manually immediately or after a few hours of using PartCAD, as the "
+"other ways to maintain the configuration files are not mature enough yet "
+"to meet the needs of advanced users."
+msgstr ""
+"PartCAD hat zum Ziel, eine einfache und intuitive Syntax für "
+"Konfigurationsdateien zu pflegen. Derzeit wird erwartet, dass PartCAD-"
+"Nutzer die Konfigurationsdatei sofort oder nach ein paar Stunden Nutzung "
+"von PartCAD manuell bearbeiten, da die anderen Wege zur Pflege der "
+"Konfigurationsdateien noch nicht ausgereift genug sind, um den "
+"Bedürfnissen fortgeschrittener Nutzer gerecht zu werden."
+
+#: ../../source/configuration.rst:16
+msgid "Command line interface."
+msgstr "Befehlszeilenschnittstelle."
+
+#: ../../source/configuration.rst:18
+msgid ""
+"PartCAD aims to provide a command line interface for all possible "
+"configuration changes to any section or field. However, there is "
+"currently a very limited set of commands implemented: mostly the very "
+"first operations a new PartCAD user would need."
+msgstr ""
+"PartCAD hat zum Ziel, eine Befehlszeilenschnittstelle für alle möglichen "
+"Konfigurationsänderungen an jedem Abschnitt oder Feld bereitzustellen. "
+"Derzeit ist jedoch nur eine sehr begrenzte Anzahl von Befehlen "
+"implementiert: hauptsächlich die allerersten Operationen, die ein neuer "
+"PartCAD-Nutzer benötigen würde."
+
+#: ../../source/configuration.rst:23
+msgid "Graphical user interface."
+msgstr "Grafische Benutzeroberfläche."
+
+#: ../../source/configuration.rst:25
+msgid ""
+"PartCAD aims to provide a Visual Studio Code plugin with a graphical "
+"interface to allow changes to any configuration file sections or fields. "
+"However, there is currently a very limited set of operations implemented:"
+" mostly the very first operations a new PartCAD user would need."
+msgstr ""
+"PartCAD hat zum Ziel, ein Visual-Studio-Code-Plugin mit einer grafischen "
+"Oberfläche bereitzustellen, das Änderungen an beliebigen Abschnitten oder"
+" Feldern der Konfigurationsdatei erlaubt. Derzeit ist jedoch nur eine "
+"sehr begrenzte Anzahl von Operationen implementiert: hauptsächlich die "
+"allerersten Operationen, die ein neuer PartCAD-Nutzer benötigen würde."
+
+#: ../../source/configuration.rst:30
+msgid "The complete syntax of configuration files is described below."
+msgstr ""
+"Die vollständige Syntax der Konfigurationsdateien wird im Folgenden "
+"beschrieben."
+
+#: ../../source/configuration.rst:36
+msgid "Packages"
+msgstr "Pakete"
+
+#: ../../source/configuration.rst:38
+msgid ""
+"The package is defined using the configuration file ``partcad.yaml`` "
+"placed in the package folder. Besides the package properties and, "
+"optionally, a list of imported dependencies, ``partcad.yaml`` declares a "
+"list of :ref:`objects` contained in this package."
+msgstr ""
+"Das Paket wird über die Konfigurationsdatei ``partcad.yaml`` im "
+"Paketordner definiert. Neben den Paketeigenschaften und optional einer "
+"Liste importierter Abhängigkeiten deklariert ``partcad.yaml`` eine Liste "
+"von :ref:`objects`, die in diesem Paket enthalten sind."
+
+#: ../../source/configuration.rst:77
+msgid "The package name"
+msgstr "Der Paketname"
+
+#: ../../source/configuration.rst:79
+msgid ""
+"A package is always addressed by its **location** -- the package path at "
+"which it was loaded, derived from its parent. For example, a package in "
+"the subfolder ``gobilda`` of the package ``//vendor`` is addressed as "
+"``//vendor/gobilda`` regardless of what it declares about itself."
+msgstr ""
+"Ein Paket wird immer über seinen **Speicherort** (location) angesprochen "
+"-- den Paketpfad, unter dem es geladen wurde, abgeleitet von seinem "
+"übergeordneten Paket. Zum Beispiel wird ein Paket im Unterordner "
+"``gobilda`` des Pakets ``//vendor`` als ``//vendor/gobilda`` "
+"angesprochen, unabhängig davon, was es über sich selbst deklariert."
+
+#: ../../source/configuration.rst:84
+msgid ""
+"The optional ``name`` field declares the package's **identity**: the "
+"package path at which the package expects to be seen. It only takes "
+"effect when the package is loaded as the root (the top-most package of "
+"the current context) -- this lets a package be developed standalone using"
+" the very same package path its consumers will see it at. In every other "
+"case ``name`` does not change where the package is loaded; the location "
+"always wins."
+msgstr ""
+"Das optionale Feld ``name`` deklariert die **Identität** des Pakets: den "
+"Paketpfad, unter dem das Paket gesehen werden möchte. Es wirkt sich nur "
+"aus, wenn das Paket als Root (das oberste Paket des aktuellen Kontexts) "
+"geladen wird -- dies erlaubt es, ein Paket eigenständig unter genau "
+"demselben Paketpfad zu entwickeln, unter dem seine Konsumenten es sehen "
+"werden. In jedem anderen Fall ändert ``name`` nicht, wo das Paket geladen"
+" wird; der Speicherort gewinnt immer."
+
+#: ../../source/configuration.rst:91
+msgid ""
+"This makes it safe to vendor a package -- copy it into your own package "
+"tree to drop a dependency or to follow your own naming convention:"
+msgstr ""
+"Dies macht es sicher, ein Paket zu vendoren -- es in Ihren eigenen "
+"Paketbaum zu kopieren, um eine Abhängigkeit fallen zu lassen oder Ihrer "
+"eigenen Namenskonvention zu folgen:"
+
+#: ../../source/configuration.rst:94
+msgid ""
+"The vendored copy is loaded at its location in your tree, not at the "
+"``name`` it declares. If the same package is vendored at two locations "
+"(even at two different versions), each is an independent instance, "
+"addressed at its own location, and the two never interact."
+msgstr ""
+"Die vendorte Kopie wird an ihrem Speicherort in Ihrem Baum geladen, nicht"
+" am von ihr deklarierten ``name``. Wird dasselbe Paket an zwei "
+"Speicherorten vendort (sogar in zwei verschiedenen Versionen), ist jede "
+"eine eigenständige Instanz, angesprochen an ihrem eigenen Speicherort, "
+"und die beiden interagieren nie miteinander."
+
+#: ../../source/configuration.rst:98
+msgid ""
+"References the package makes to itself using its declared ``name`` are "
+"automatically redirected to the location where the copy was actually "
+"loaded. A vendored copy therefore uses itself, instead of silently "
+"pulling in another copy from the package path it was originally taken "
+"from."
+msgstr ""
+"Verweise, die das Paket über seinen deklarierten ``name`` auf sich selbst"
+" macht, werden automatisch zu dem Speicherort umgeleitet, an dem die "
+"Kopie tatsächlich geladen wurde. Eine vendorte Kopie verwendet daher sich"
+" selbst, statt stillschweigend eine andere Kopie vom Paketpfad zu ziehen,"
+" aus dem sie ursprünglich stammt."
+
+#: ../../source/configuration.rst:103
+msgid ""
+"As a consequence, a vendored package cannot reference the original copy "
+"of itself by its declared ``name``: that package path always resolves to "
+"the local instance. This is intentional -- referencing two copies of the "
+"same package at once is almost always a mistake, and the alternative "
+"would be an implicit, easily-missed dependency on the upstream package."
+msgstr ""
+"Infolgedessen kann ein vendortes Paket nicht über seinen deklarierten "
+"``name`` auf seine eigene Originalkopie verweisen: Dieser Paketpfad löst "
+"sich immer zur lokalen Instanz auf. Dies ist beabsichtigt -- der "
+"gleichzeitige Verweis auf zwei Kopien desselben Pakets ist fast immer ein"
+" Fehler, und die Alternative wäre eine implizite, leicht zu übersehende "
+"Abhängigkeit vom Upstream-Paket."
+
+#: ../../source/configuration.rst:111
+msgid "Dependencies"
+msgstr "Abhängigkeiten"
+
+#: ../../source/configuration.rst:113
+msgid "Here are some examples of a dependency declaration in ``partcad.yaml``:"
+msgstr ""
+"Hier sind einige Beispiele für eine Abhängigkeitsdeklaration in "
+"``partcad.yaml``:"
+
+#: ../../source/configuration.rst:119 ../../source/configuration.rst:835
+#: ../../source/configuration.rst:1027
+msgid "Method"
+msgstr "Methode"
+
+#: ../../source/configuration.rst:119 ../../source/configuration.rst:678
+#: ../../source/configuration.rst:736 ../../source/configuration.rst:760
+#: ../../source/configuration.rst:789 ../../source/configuration.rst:817
+msgid "Example"
+msgstr "Beispiel"
+
+#: ../../source/configuration.rst
+msgid "Local package"
+msgstr "Lokales Paket"
+
+#: ../../source/configuration.rst
+msgid "(in the same"
+msgstr "(im selben"
+
+#: ../../source/configuration.rst
+msgid "source code"
+msgstr "Quellcode-"
+
+#: ../../source/configuration.rst
+msgid "repository)"
+msgstr "Repository)"
+
+#: ../../source/configuration.rst:127
+msgid "GIT repository :raw-html:`<br />` (HTTPS, SSH)"
+msgstr "GIT-Repository :raw-html:`<br />` (HTTPS, SSH)"
+
+#: ../../source/configuration.rst:134
+msgid "Hosted tar ball :raw-html:`<br />` (HTTPS)"
+msgstr "Gehostetes Tarball-Archiv :raw-html:`<br />` (HTTPS)"
+
+#: ../../source/configuration.rst:141
+msgid ""
+"Each dependency becomes a subpackage of the current package. All "
+"subfolders of the current package are considered subpackages (of the type"
+" `local`) if they contain a ``partcad.yaml`` file. Subfolders do not need"
+" to be explicitly declared as a dependency, but may be declared to "
+"provide a more detailed description."
+msgstr ""
+"Jede Abhängigkeit wird zu einem Unterpaket des aktuellen Pakets. Alle "
+"Unterordner des aktuellen Pakets gelten als Unterpakete (vom Typ "
+"`local`), wenn sie eine ``partcad.yaml``-Datei enthalten. Unterordner "
+"müssen nicht explizit als Abhängigkeit deklariert werden, können aber "
+"deklariert werden, um eine detailliertere Beschreibung bereitzustellen."
+
+#: ../../source/configuration.rst:146
+msgid "External packages"
+msgstr "Externe Pakete"
+
+#: ../../source/configuration.rst:148
+msgid ""
+"A dependency of type ``external`` is a package whose contents are served "
+"by a **repository plugin** instead of being read from a folder "
+"(``local``) or a remote archive (``git``, ``tar``). Its ``plugin`` field "
+"references a repository declared in the ``repositories`` section (see "
+":ref:`repositories`):"
+msgstr ""
+"Eine Abhängigkeit vom Typ ``external`` ist ein Paket, dessen Inhalte von "
+"einem **Repository-Plugin** bereitgestellt werden, statt aus einem Ordner"
+" (``local``) oder einem entfernten Archiv (``git``, ``tar``) gelesen zu "
+"werden. Das Feld ``plugin`` referenziert ein im Abschnitt "
+"``repositories`` deklariertes Repository (siehe :ref:`repositories`):"
+
+#: ../../source/configuration.rst:164
+msgid ""
+"The package's objects (parts, sketches, assemblies, ...), its child "
+"packages, and its metadata are all fetched from the plugin on demand, "
+"rather than being enumerated up front. This keeps loading cheap even when"
+" the repository is large or remote: a part is fetched only when it is "
+"actually used."
+msgstr ""
+"Die Objekte des Pakets (Teile, Skizzen, Baugruppen, ...), seine "
+"Unterpakete und seine Metadaten werden alle bei Bedarf vom Plugin "
+"abgerufen, statt im Voraus aufgelistet zu werden. Dies hält das Laden "
+"auch dann günstig, wenn das Repository groß oder entfernt ist: Ein Teil "
+"wird nur abgerufen, wenn es tatsächlich verwendet wird."
+
+#: ../../source/configuration.rst:169
+msgid ""
+"An external package can host a hierarchy. When its children are listed, "
+"the plugin reports child package names; each child is imported as another"
+" external package backed by the same plugin, with a ``subfolder`` that "
+"scopes its requests within the repository. In this way one plugin can "
+"serve an entire tree of packages, each with its own sketches, parts, "
+"assemblies, providers and further children."
+msgstr ""
+"Ein externes Paket kann eine Hierarchie beherbergen. Wenn seine "
+"Kindpakete aufgelistet werden, meldet das Plugin die Namen der "
+"Kindpakete; jedes Kind wird als weiteres externes Paket importiert, das "
+"vom selben Plugin unterstützt wird, mit einem ``subfolder``, der seine "
+"Anfragen innerhalb des Repositorys eingrenzt. Auf diese Weise kann ein "
+"einziges Plugin einen gesamten Baum von Paketen bereitstellen, jedes mit "
+"seinen eigenen Skizzen, Teilen, Baugruppen, Anbietern und weiteren "
+"Kindern."
+
+#: ../../source/configuration.rst:176
+msgid ""
+"See ``examples/plugin_repository_basic`` (a package backed by a local "
+"file), ``examples/plugin_repository_full`` (backed by an HTTP endpoint) "
+"and ``examples/plugin_repository_tree`` (a hierarchy of packages)."
+msgstr ""
+"Siehe ``examples/plugin_repository_basic`` (ein Paket, das von einer "
+"lokalen Datei unterstützt wird), ``examples/plugin_repository_full`` "
+"(unterstützt von einem HTTP-Endpunkt) und "
+"``examples/plugin_repository_tree`` (eine Hierarchie von Paketen)."
+
+#: ../../source/configuration.rst:184
+msgid "Objects"
+msgstr "Objekte"
+
+#: ../../source/configuration.rst:186
+msgid "PartCAD :ref:`packages` may contain the following objects:"
+msgstr "PartCAD-:ref:`packages` können die folgenden Objekte enthalten:"
+
+#: ../../source/configuration.rst:188
+msgid ""
+":ref:`sketches` are 2D objects that can be used to create 3D objects "
+"(e.g. using :ref:`extrude` or :ref:`sweep`), but can also be used to aid "
+"visualization of :ref:`interfaces` or to provide detailed instructions "
+"for AI actors."
+msgstr ""
+":ref:`sketches` sind 2D-Objekte, die zur Erstellung von 3D-Objekten "
+"verwendet werden können (z. B. mittels :ref:`extrude` oder :ref:`sweep`),"
+" aber auch zur Unterstützung der Visualisierung von :ref:`interfaces` "
+"oder zur Bereitstellung detaillierter Anweisungen für KI-Akteure "
+"verwendet werden können."
+
+#: ../../source/configuration.rst:191
+msgid ""
+":ref:`interfaces` are abstract objects that describe the endpoint of a "
+"connection between parts and provide sufficient information to "
+"automatically determine the mating of parts."
+msgstr ""
+":ref:`interfaces` sind abstrakte Objekte, die den Endpunkt einer "
+"Verbindung zwischen Teilen beschreiben und ausreichend Informationen "
+"bereitstellen, um das Mating von Teilen automatisch zu bestimmen."
+
+#: ../../source/configuration.rst:194
+msgid ""
+":ref:`parts` are 3D objects that are meant to be available for purchase "
+"or manufacturing."
+msgstr ""
+":ref:`parts` sind 3D-Objekte, die zum Kauf oder zur Fertigung verfügbar "
+"sein sollen."
+
+#: ../../source/configuration.rst:196
+msgid ""
+":ref:`assemblies` are instructions how to put parts and other assemblies "
+"together to be used as a single object."
+msgstr ""
+":ref:`assemblies` sind Anweisungen, wie Teile und andere Baugruppen "
+"zusammengesetzt werden, um als ein einzelnes Objekt verwendet zu werden."
+
+#: ../../source/configuration.rst:198
+msgid ""
+":ref:`providers` are implementations of a way to get parts and assemblies"
+" (to purchase them or to manufacture them)."
+msgstr ""
+":ref:`providers` sind Implementierungen einer Methode, um Teile und "
+"Baugruppen zu beziehen (zu kaufen oder fertigen zu lassen)."
+
+#: ../../source/configuration.rst:202
+msgid "Common Metadata"
+msgstr "Gemeinsame Metadaten"
+
+#: ../../source/configuration.rst:204
+msgid "All :ref:`objects` in PartCAD may carry the following metadata:"
+msgstr "Alle :ref:`objects` in PartCAD können die folgenden Metadaten tragen:"
+
+#: ../../source/configuration.rst:209
+msgid "Requirements"
+msgstr "Anforderungen"
+
+#: ../../source/configuration.rst:211
+msgid ""
+"Objects may contain a list of requirements in free form (any YAML syntax "
+"works). These requirements help describe the object in more detail. They "
+"are not used by PartCAD itself, but by AI or human actors to create, "
+"improve, or better understand the object."
+msgstr ""
+"Objekte können eine Liste von Anforderungen in freier Form enthalten "
+"(jede YAML-Syntax funktioniert). Diese Anforderungen helfen, das Objekt "
+"detaillierter zu beschreiben. Sie werden nicht von PartCAD selbst "
+"verwendet, sondern von KI- oder menschlichen Akteuren, um das Objekt zu "
+"erstellen, zu verbessern oder besser zu verstehen."
+
+#: ../../source/configuration.rst:216
+msgid ""
+"The requirements are from the user’s perspective and serve to guide the "
+"design. Once the design is complete, it may impose further requirements "
+"(for example, on manufacturing), but those are not part of this section. "
+"This section exclusively covers the requirements used to create the "
+"design."
+msgstr ""
+"Die Anforderungen sind aus Sicht des Nutzers formuliert und dienen dazu, "
+"das Design zu lenken. Sobald das Design fertiggestellt ist, können sich "
+"daraus weitere Anforderungen ergeben (zum Beispiel an die Fertigung), die"
+" jedoch nicht Teil dieses Abschnitts sind. Dieser Abschnitt behandelt "
+"ausschließlich die Anforderungen, die zur Erstellung des Designs "
+"verwendet werden."
+
+#: ../../source/configuration.rst:253
+msgid "Files"
+msgstr "Dateien"
+
+#: ../../source/configuration.rst:255
+msgid ""
+"For objects that are defined using a source file, the default file path "
+"is the name of the object plus the extension of that file type."
+msgstr ""
+"Bei Objekten, die über eine Quelldatei definiert werden, ist der "
+"Standard-Dateipfad der Name des Objekts plus die Erweiterung dieses "
+"Dateityps."
+
+#: ../../source/configuration.rst:258
+msgid ""
+"An alternative file path (absolute or relative to the package path) can "
+"be defined explicitly using the `path` parameter:"
+msgstr ""
+"Ein alternativer Dateipfad (absolut oder relativ zum Paketpfad) kann "
+"explizit über den Parameter `path` definiert werden:"
+
+#: ../../source/configuration.rst:268
+msgid ""
+"When the source file is not present in the package source repository but "
+"needs to be pulled from a remote location, the following options can be "
+"used:"
+msgstr ""
+"Wenn die Quelldatei nicht im Quell-Repository des Pakets vorhanden ist, "
+"sondern von einem entfernten Ort abgerufen werden muss, können die "
+"folgenden Optionen verwendet werden:"
+
+#: ../../source/configuration.rst:281 ../../source/configuration.rst:865
+msgid "Parameters"
+msgstr "Parameter"
+
+#: ../../source/configuration.rst:283
+msgid ""
+"Objects may declare parameters. Once parameters are declared, each use of"
+" such objects may be accompanied by a set of parameter values. The "
+"parameter values are resolved and applied to the object to create a "
+"parametrized variant of the object. The parametrized variant remains "
+"stored (e.g. at runtime) as a separate object in the same package where "
+"the original object is declared. This allows for the same parametrized "
+"object to be used multiple times."
+msgstr ""
+"Objekte können Parameter deklarieren. Sobald Parameter deklariert sind, "
+"kann jede Verwendung solcher Objekte von einem Satz von Parameterwerten "
+"begleitet werden. Die Parameterwerte werden aufgelöst und auf das Objekt "
+"angewendet, um eine parametrisierte Variante des Objekts zu erzeugen. Die"
+" parametrisierte Variante bleibt (z. B. zur Laufzeit) als separates "
+"Objekt im selben Paket gespeichert, in dem das ursprüngliche Objekt "
+"deklariert ist. Dies erlaubt es, dasselbe parametrisierte Objekt mehrfach"
+" zu verwenden."
+
+#: ../../source/configuration.rst:298
+msgid ""
+"The short form ``<param name>: <default value>`` may be used whenever the"
+" type can be inferred from the value."
+msgstr ""
+"Die Kurzform ``<param name>: <default value>`` kann verwendet werden, "
+"wann immer sich der Typ aus dem Wert ableiten lässt."
+
+#: ../../source/configuration.rst:301
+msgid ""
+"Assemblies declare parameters the same way. Their values are passed to "
+"the ``.assy`` file as ``param_<param name>`` when its Jinja templates are"
+" resolved:"
+msgstr ""
+"Baugruppen deklarieren Parameter auf dieselbe Weise. Ihre Werte werden an"
+" die ``.assy``-Datei als ``param_<param name>`` übergeben, wenn deren "
+"Jinja-Templates aufgelöst werden:"
+
+#: ../../source/configuration.rst:321
+msgid "Other"
+msgstr "Sonstiges"
+
+#: ../../source/configuration.rst:323
+msgid "There are other optional fields that are common to all objects:"
+msgstr "Es gibt weitere optionale Felder, die allen Objekten gemeinsam sind:"
+
+#: ../../source/configuration.rst:325
+msgid "``desc``: <text>"
+msgstr "``desc``: <text>"
+
+#: ../../source/configuration.rst:327
+msgid "Description of the object."
+msgstr "Beschreibung des Objekts."
+
+#: ../../source/configuration.rst:329
+msgid "``offset``: <OCCT Location object>"
+msgstr "``offset``: <OCCT-Location-Objekt>"
+
+#: ../../source/configuration.rst:331
+msgid "Defines the offset to apply to the CAD model when this object is used."
+msgstr ""
+"Definiert den Versatz, der auf das CAD-Modell angewendet wird, wenn "
+"dieses Objekt verwendet wird."
+
+#: ../../source/configuration.rst:333
+msgid "``cache``: <bool> (default: `True`)"
+msgstr "``cache``: <bool> (Standard: `True`)"
+
+#: ../../source/configuration.rst:335
+msgid ""
+"The value `false` indicates the intent to exclude this object from any "
+"caching behavior. It may be due to storage size or time considerations, "
+"or due to known issues with dependency tracking. It does not override any"
+" global caching settings."
+msgstr ""
+"Der Wert `false` zeigt die Absicht an, dieses Objekt von jeglichem "
+"Caching-Verhalten auszuschließen. Dies kann an Speichergrößen- oder "
+"Zeitüberlegungen liegen, oder an bekannten Problemen bei der "
+"Abhängigkeitsverfolgung. Es überschreibt keine globalen Caching-"
+"Einstellungen."
+
+#: ../../source/configuration.rst:341
+msgid "Sketches"
+msgstr "Skizzen"
+
+#: ../../source/configuration.rst:343
+msgid "Sketches are declared in ``partcad.yaml`` using the following syntax:"
+msgstr "Skizzen werden in ``partcad.yaml`` mit folgender Syntax deklariert:"
+
+#: ../../source/configuration.rst:355
+msgid "Basic"
+msgstr "Basis"
+
+#: ../../source/configuration.rst:357
+msgid "The basic sketches are defined using the following syntax:"
+msgstr "Die Basisskizzen werden mit folgender Syntax definiert:"
+
+#: ../../source/configuration.rst:389
+msgid ""
+"There must be only one field ``circle``, ``square`` or ``rectangle`` at "
+"the top level of the sketch or in the ``inner`` field."
+msgstr ""
+"Es darf nur ein Feld ``circle``, ``square`` oder ``rectangle`` auf der "
+"obersten Ebene der Skizze oder im Feld ``inner`` geben."
+
+#: ../../source/configuration.rst:392
+msgid "DXF"
+msgstr "DXF"
+
+#: ../../source/configuration.rst:394
+msgid ""
+"A sketch can be defined using a `DXF "
+"<https://en.wikipedia.org/wiki/AutoCAD_DXF>`_ file. Such sketches are "
+"declared using the following syntax:"
+msgstr ""
+"Eine Skizze kann über eine `DXF "
+"<https://en.wikipedia.org/wiki/AutoCAD_DXF>`_-Datei definiert werden. "
+"Solche Skizzen werden mit folgender Syntax deklariert:"
+
+#: ../../source/configuration.rst:409
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/configuration.rst:411
+msgid ""
+"A sketch can be defined using an `SVG "
+"<https://en.wikipedia.org/wiki/SVG>`_ file. Such sketches are declared "
+"using the following syntax:"
+msgstr ""
+"Eine Skizze kann über eine `SVG "
+"<https://en.wikipedia.org/wiki/SVG>`_-Datei definiert werden. Solche "
+"Skizzen werden mit folgender Syntax deklariert:"
+
+#: ../../source/configuration.rst:427 ../../source/configuration.rst:653
+msgid "CAD Scripts"
+msgstr "CAD-Skripte"
+
+#: ../../source/configuration.rst:429
+msgid "See the \"CAD Scripts\" section in the \"Parts\" chapter below."
+msgstr "Siehe den Abschnitt „CAD Scripts“ im nachfolgenden Kapitel „Parts“."
+
+#: ../../source/configuration.rst:435
+msgid "Interfaces"
+msgstr "Interfaces"
+
+#: ../../source/configuration.rst:437
+msgid "Interfaces are declared in ``partcad.yaml`` using the following syntax:"
+msgstr "Interfaces werden in ``partcad.yaml`` mit folgender Syntax deklariert:"
+
+#: ../../source/configuration.rst:475
+msgid "Abstract interfaces"
+msgstr "Abstrakte Interfaces"
+
+#: ../../source/configuration.rst:477
+msgid ""
+"Abstract interfaces can't be implemented by parts directly. They also "
+"can't be used for mating with other interfaces. They are a convenience "
+"feature so that a property can be implemented once but inherited multiple"
+" times by all child interfaces."
+msgstr ""
+"Abstrakte Interfaces können nicht direkt von Teilen implementiert werden."
+" Sie können auch nicht für das Mating mit anderen Interfaces verwendet "
+"werden. Sie sind eine Komfortfunktion, damit eine Eigenschaft einmal "
+"implementiert, aber von allen Kind-Interfaces mehrfach geerbt werden "
+"kann."
+
+#: ../../source/configuration.rst:483
+msgid "Port visualization"
+msgstr "Port-Visualisierung"
+
+#: ../../source/configuration.rst:485
+msgid ""
+"When a part or an assembly is rendered (in a GUI or when exported to a "
+"file), the ports can be visualized. When ports are visualized, each port "
+"looks like a coordinate system (3D location, direction and rotation) and,"
+" optionally, as a 2D image of an alleged \"boundary\" (or \"siluette\") "
+"of the port."
+msgstr ""
+"Wenn ein Teil oder eine Baugruppe gerendert wird (in einer GUI oder beim "
+"Export in eine Datei), können die Ports visualisiert werden. Werden Ports"
+" visualisiert, sieht jeder Port wie ein Koordinatensystem aus (3D-Lage, "
+"Richtung und Rotation) und optional als 2D-Bild einer vermeintlichen "
+"„Begrenzung“ (oder „Silhouette“) des Ports."
+
+#: ../../source/configuration.rst:490
+msgid ""
+"It is recommended to define the port boundary at all times. Here is an "
+"example how to define the port boundary using a primitive sketch:"
+msgstr ""
+"Es wird empfohlen, die Port-Begrenzung stets zu definieren. Hier ist ein "
+"Beispiel, wie die Port-Begrenzung mithilfe einer primitiven Skizze "
+"definiert wird:"
+
+#: ../../source/configuration.rst:505
+msgid "Here is how it will get visualized:"
+msgstr "So wird es visualisiert:"
+
+#: ../../source/configuration.rst:512
+msgid "Port matching"
+msgstr "Port-Abgleich"
+
+#: ../../source/configuration.rst:514
+msgid ""
+"Each port has the coordinates of the logical center of the port and the "
+"direction (orientation) of the port. Whenever two ports are meant to "
+"connect without any offset or angle (e.g. male and female connectors), "
+"their coordinates should match and their directions should be opposite "
+"(rotated 180 degrees around [1, 1, 0]). The suggested convention is to "
+"use the Z-axis (blue) as the main direction. Male ports should have the "
+"Z-axis pointing outwards, while female ports should have the Z-axis "
+"pointing inwards."
+msgstr ""
+"Jeder Port besitzt die Koordinaten seines logischen Mittelpunkts und die "
+"Richtung (Ausrichtung) des Ports. Sollen sich zwei Ports ohne Versatz "
+"oder Winkel verbinden (z. B. Stecker und Buchse), sollten ihre "
+"Koordinaten übereinstimmen und ihre Richtungen entgegengesetzt sein (um "
+"180 Grad um [1, 1, 0] gedreht). Die empfohlene Konvention ist, die "
+"Z-Achse (blau) als Hauptrichtung zu verwenden. Bei männlichen Ports "
+"sollte die Z-Achse nach außen zeigen, bei weiblichen Ports nach innen."
+
+#: ../../source/configuration.rst:524
+msgid "Matching multiple ports"
+msgstr "Abgleich mehrerer Ports"
+
+#: ../../source/configuration.rst:526
+msgid ""
+"Sometimes there are multiple interchangeable ports within one interface. "
+"For example, take a look at the NEMA-17 mounting ports:"
+msgstr ""
+"Manchmal gibt es mehrere austauschbare Ports innerhalb eines Interfaces. "
+"Betrachten Sie zum Beispiel die NEMA-17-Montageports:"
+
+#: ../../source/configuration.rst:533
+msgid ""
+"It is desired that any mounting port of the motor can be connected to any"
+" mounting port of the bracket. That can be achieved by orienting the "
+"ports in a circular direction. See how the X-axis (red) is pointing to "
+"the next port clockwise (right-hand rule). If any pair of ports is "
+"aligned then all three other port pairs are aligned too."
+msgstr ""
+"Es ist gewünscht, dass jeder Montageport des Motors mit jedem Montageport"
+" der Halterung verbunden werden kann. Das lässt sich erreichen, indem die"
+" Ports kreisförmig ausgerichtet werden. Beachten Sie, wie die X-Achse "
+"(rot) im Uhrzeigersinn zum nächsten Port zeigt (Rechte-Hand-Regel). Wenn "
+"ein Portpaar ausgerichtet ist, sind alle drei anderen Portpaare ebenfalls"
+" ausgerichtet."
+
+#: ../../source/configuration.rst:544
+msgid "Interface parameters"
+msgstr "Interface-Parameter"
+
+#: ../../source/configuration.rst:546
+msgid ""
+"Each interface may declare parameters to allow parametrized mating (e.g. "
+"a slotted hole allows for a mating at an offset within the size of the "
+"slot). There is a list of predefined parameters that are easy to use:"
+msgstr ""
+"Jedes Interface kann Parameter deklarieren, um parametrisiertes Mating zu"
+" ermöglichen (z. B. erlaubt ein Langloch ein Mating mit einem Versatz "
+"innerhalb der Größe des Lochs). Es gibt eine Liste vordefinierter, leicht"
+" zu verwendender Parameter:"
+
+#: ../../source/configuration.rst:550
+msgid "moveX, moveY, moveZ: offset along X, Y, and Z axes"
+msgstr "moveX, moveY, moveZ: Versatz entlang der X-, Y- und Z-Achse"
+
+#: ../../source/configuration.rst:551
+msgid "turnX, turnY, turnZ: rotation around X, Y, and Z axes"
+msgstr "turnX, turnY, turnZ: Rotation um die X-, Y- und Z-Achse"
+
+#: ../../source/configuration.rst:563
+msgid ""
+"However custom parameters can be defined to use an arbitrary direction "
+"vector and an arbitrary offset or rotation."
+msgstr ""
+"Es können jedoch benutzerdefinierte Parameter definiert werden, um einen "
+"beliebigen Richtungsvektor und einen beliebigen Versatz oder eine "
+"beliebige Rotation zu verwenden."
+
+#: ../../source/configuration.rst:578
+msgid ""
+"When the interface is inherited or used to connect parts, the parameter "
+"values get resolved and applied as inheritance or connection coordinate "
+"offsets."
+msgstr ""
+"Wenn das Interface geerbt oder zum Verbinden von Teilen verwendet wird, "
+"werden die Parameterwerte aufgelöst und als Vererbungs- oder "
+"Verbindungskoordinaten-Versätze angewendet."
+
+#: ../../source/configuration.rst:612
+msgid "Interface examples"
+msgstr "Interface-Beispiele"
+
+#: ../../source/configuration.rst:614
+msgid "See the `feature_interfaces` example for more information."
+msgstr "Weitere Informationen finden Sie im Beispiel `feature_interfaces`."
+
+#: ../../source/configuration.rst:620
+msgid "Parts"
+msgstr "Teile"
+
+#: ../../source/configuration.rst:622
+msgid "Parts are declared in ``partcad.yaml`` using the following syntax:"
+msgstr "Teile werden in ``partcad.yaml`` mit folgender Syntax deklariert:"
+
+#: ../../source/configuration.rst:648
+msgid ""
+"Depending on the type of the part, the configuration may have different "
+"options."
+msgstr ""
+"Je nach Typ des Teils kann die Konfiguration unterschiedliche Optionen "
+"aufweisen."
+
+#: ../../source/configuration.rst:650
+msgid "See :ref:`location` for more information on the OCCT Location object."
+msgstr ""
+"Weitere Informationen zum OCCT-Location-Objekt finden Sie unter "
+":ref:`location`."
+
+#: ../../source/configuration.rst:655
+msgid "Define parts with CodeCAD scripts using the following syntax:"
+msgstr ""
+"Definieren Sie Teile mit CodeCAD-Skripten unter Verwendung folgender "
+"Syntax:"
+
+#: ../../source/configuration.rst:678 ../../source/configuration.rst:736
+#: ../../source/configuration.rst:760 ../../source/configuration.rst:789
+#: ../../source/configuration.rst:817 ../../source/configuration.rst:987
+msgid "Result"
+msgstr "Ergebnis"
+
+#: ../../source/configuration.rst
+msgid "`CadQuery <https://github.com/CadQuery/cadquery>`_ or"
+msgstr "`CadQuery <https://github.com/CadQuery/cadquery>`_ oder"
+
+#: ../../source/configuration.rst
+msgid "`build123d <https://github.com/gumyr/build123d>`_ script"
+msgstr "`build123d <https://github.com/gumyr/build123d>`_-Skript"
+
+#: ../../source/configuration.rst
+msgid "in ``src/cylinder.py``"
+msgstr "in ``src/cylinder.py``"
+
+#: ../../source/configuration.rst
+msgid "`OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_ script"
+msgstr "`OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_-Skript"
+
+#: ../../source/configuration.rst
+msgid "in ``cube.scad``"
+msgstr "in ``cube.scad``"
+
+#: ../../source/configuration.rst:695
+msgid "AI Generated CAD Scripts"
+msgstr "KI-generierte CAD-Skripte"
+
+#: ../../source/configuration.rst:697
+msgid ""
+"Generate OpenSCAD, CadQuery or build123d scripts with Generative AI using"
+" the following syntax:"
+msgstr ""
+"Erzeugen Sie OpenSCAD-, CadQuery- oder build123d-Skripte mit generativer "
+"KI unter Verwendung folgender Syntax:"
+
+#: ../../source/configuration.rst:713
+msgid ""
+"Place the detailed description of the part in the ``desc`` field. Provide"
+" as much information as possible through the :ref:`requirements` field, "
+"using ``INCLUDE(<filename>)`` or ``DOWNLOAD(<url>)`` to add supported "
+"file formats to the prompt either from a file in the package folder or "
+"from a URL."
+msgstr ""
+"Platzieren Sie die detaillierte Beschreibung des Teils im Feld ``desc``. "
+"Stellen Sie so viele Informationen wie möglich über das Feld "
+":ref:`requirements` bereit, indem Sie ``INCLUDE(<filename>)`` oder "
+"``DOWNLOAD(<url>)`` verwenden, um unterstützte Dateiformate entweder aus "
+"einer Datei im Paketordner oder von einer URL zum Prompt hinzuzufügen."
+
+#: ../../source/configuration.rst:718
+msgid "The following models are recommended for use:"
+msgstr "Die folgenden Modelle werden zur Verwendung empfohlen:"
+
+#: ../../source/configuration.rst:721
+msgid "Provider"
+msgstr "Anbieter"
+
+#: ../../source/configuration.rst:721
+msgid "Model"
+msgstr "Modell"
+
+#: ../../source/configuration.rst:723
+msgid "google"
+msgstr "google"
+
+#: ../../source/configuration.rst:723
+msgid "gemini-2.5-pro (default)"
+msgstr "gemini-2.5-pro (Standard)"
+
+#: ../../source/configuration.rst:724
+msgid "gemini-2.5-flash"
+msgstr "gemini-2.5-flash"
+
+#: ../../source/configuration.rst:725
+msgid "gemini-3.5-flash"
+msgstr "gemini-3.5-flash"
+
+#: ../../source/configuration.rst:727
+msgid "openai"
+msgstr "openai"
+
+#: ../../source/configuration.rst:727
+msgid "gpt-4o (default)"
+msgstr "gpt-4o (Standard)"
+
+#: ../../source/configuration.rst:728
+msgid "gpt-4o-mini"
+msgstr "gpt-4o-mini"
+
+#: ../../source/configuration.rst:730
+msgid "ollama"
+msgstr "ollama"
+
+#: ../../source/configuration.rst:730
+msgid "llama-3.1:8b"
+msgstr "llama-3.1:8b"
+
+#: ../../source/configuration.rst:731
+msgid "llama-3.1:70b (default)"
+msgstr "llama-3.1:70b (Standard)"
+
+#: ../../source/configuration.rst:732
+msgid "llama-3.1:405b"
+msgstr "llama-3.1:405b"
+
+#: ../../source/configuration.rst:748
+msgid "CAD Files"
+msgstr "CAD-Dateien"
+
+#: ../../source/configuration.rst:750
+msgid "Define parts with CAD files using the following syntax:"
+msgstr "Definieren Sie Teile mit CAD-Dateien unter Verwendung folgender Syntax:"
+
+#: ../../source/configuration.rst
+msgid "CAD file"
+msgstr "CAD-Datei"
+
+#: ../../source/configuration.rst
+msgid "(`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_ in ``screw.step``,"
+msgstr "(`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_ in ``screw.step``,"
+
+#: ../../source/configuration.rst
+msgid "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_ in ``screw.stl``,"
+msgstr "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_ in ``screw.stl``,"
+
+#: ../../source/configuration.rst
+msgid ""
+"or `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_ in "
+"``screw.3mf``)"
+msgstr ""
+"oder `3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_ in "
+"``screw.3mf``)"
+
+#: ../../source/configuration.rst:776
+msgid "Extrude"
+msgstr "Extrudieren"
+
+#: ../../source/configuration.rst:778
+msgid "Define parts by extruding a sketch using the following syntax:"
+msgstr ""
+"Definieren Sie Teile durch Extrudieren einer Skizze unter Verwendung "
+"folgender Syntax:"
+
+#: ../../source/configuration.rst:803
+msgid "Sweep"
+msgstr "Sweep"
+
+#: ../../source/configuration.rst:805
+msgid "Define parts by sweeping a sketch using the following syntax:"
+msgstr ""
+"Definieren Sie Teile durch das Sweep einer Skizze unter Verwendung "
+"folgender Syntax:"
+
+#: ../../source/configuration.rst:829 ../../source/configuration.rst:1020
+msgid "References"
+msgstr "Referenzen"
+
+#: ../../source/configuration.rst:831
+msgid ""
+"It is also possible to declare new parts by referencing other parts that "
+"are already defined elsewhere."
+msgstr ""
+"Es ist auch möglich, neue Teile zu deklarieren, indem auf andere Teile "
+"verwiesen wird, die bereits an anderer Stelle definiert sind."
+
+#: ../../source/configuration.rst:835 ../../source/configuration.rst:1027
+msgid "Description"
+msgstr "Beschreibung"
+
+#: ../../source/configuration.rst:837 ../../source/configuration.rst:1029
+msgid "Alias"
+msgstr "Alias"
+
+#: ../../source/configuration.rst
+msgid "Create a shallow"
+msgstr "Erstellt einen flachen"
+
+#: ../../source/configuration.rst
+msgid "clone of the"
+msgstr "Klon des"
+
+#: ../../source/configuration.rst
+msgid "existing part."
+msgstr "vorhandenen Teils."
+
+#: ../../source/configuration.rst
+msgid "For example, to"
+msgstr "Zum Beispiel, um"
+
+#: ../../source/configuration.rst
+msgid "make it easier to"
+msgstr "es einfacher zu machen,"
+
+#: ../../source/configuration.rst
+msgid "reference it locally."
+msgstr "es lokal zu referenzieren."
+
+#: ../../source/configuration.rst:844
+msgid "Enrich"
+msgstr "Enrich"
+
+#: ../../source/configuration.rst
+msgid "Create an opinionated"
+msgstr "Erstellt eine eigenständige"
+
+#: ../../source/configuration.rst
+msgid "alternative to the"
+msgstr "Alternative zum"
+
+#: ../../source/configuration.rst
+msgid "existing part by"
+msgstr "vorhandenen Teil, indem"
+
+#: ../../source/configuration.rst
+msgid "initializing some of"
+msgstr "einige seiner"
+
+#: ../../source/configuration.rst
+msgid "its parameters, and"
+msgstr "Parameter initialisiert und"
+
+#: ../../source/configuration.rst
+msgid "overriding any of its"
+msgstr "beliebige seiner"
+
+#: ../../source/configuration.rst
+msgid "properties. For"
+msgstr "Eigenschaften überschrieben werden. Zum"
+
+#: ../../source/configuration.rst
+msgid "example, to avoid"
+msgstr "Beispiel, um zu vermeiden,"
+
+#: ../../source/configuration.rst
+msgid "passing the same set"
+msgstr "dass derselbe Satz"
+
+#: ../../source/configuration.rst
+msgid "of parameters many times."
+msgstr "an Parametern mehrfach übergeben wird."
+
+#: ../../source/configuration.rst:858
+msgid "Other Part Types"
+msgstr "Weitere Teiletypen"
+
+#: ../../source/configuration.rst:860
+msgid ""
+"Other methods to define parts are coming soon (e.g. `SDF "
+"<https://github.com/fogleman/sdf>`_). Please, express your interest in "
+"support for other formats by filing a corresponding issue on GitHub or "
+"sending an email to `support@partcad.org <mailto:support@partcad.org>`_."
+msgstr ""
+"Weitere Methoden zur Definition von Teilen folgen bald (z. B. `SDF "
+"<https://github.com/fogleman/sdf>`_). Bitte äußern Sie Ihr Interesse an "
+"der Unterstützung weiterer Formate, indem Sie ein entsprechendes Issue "
+"auf GitHub anlegen oder eine E-Mail an `support@partcad.org "
+"<mailto:support@partcad.org>`_ senden."
+
+#: ../../source/configuration.rst:867
+msgid ""
+"Each part may have a list of parameters that are passed into the scripts "
+"to modify the part. The parameters can be of types ``string``, ``float``,"
+" ``int`` and ``bool``. The parameter values can be restricted by "
+"specifying the list of possible values in ``enum``. The initial parameter"
+" value is set using ``default``."
+msgstr ""
+"Jedes Teil kann eine Liste von Parametern haben, die an die Skripte "
+"übergeben werden, um das Teil zu modifizieren. Die Parameter können vom "
+"Typ ``string``, ``float``, ``int`` und ``bool`` sein. Die Parameterwerte "
+"können eingeschränkt werden, indem die Liste möglicher Werte in ``enum`` "
+"angegeben wird. Der anfängliche Parameterwert wird über ``default`` "
+"festgelegt."
+
+#: ../../source/configuration.rst:885
+msgid ""
+"There are several parameter names that are reserved for values used in "
+"visualization, simulation calculations and, if applicable, manufacturing "
+"(also referred to as ``MCFTT parameters`` using their first letters):"
+msgstr ""
+"Es gibt mehrere Parameternamen, die für Werte reserviert sind, die in der"
+" Visualisierung, bei Simulationsberechnungen und, sofern zutreffend, in "
+"der Fertigung verwendet werden (auch als ``MCFTT-Parameter`` bezeichnet, "
+"nach ihren Anfangsbuchstaben):"
+
+#: ../../source/configuration.rst:889
+msgid "``material``"
+msgstr "``material``"
+
+#: ../../source/configuration.rst:891
+msgid ""
+"Must point at an object of type ``material``. Some of them are defined in"
+" ``//pub/std/manufacturing/material``. When a request is made to a "
+"manufacturing API, a close enough material is selected from the materials"
+" provided by the manufacturer. The responsibility to select the right "
+"material is on the implementation of the manufacturing API (the "
+"``provider`` object in PartCAD)."
+msgstr ""
+"Muss auf ein Objekt vom Typ ``material`` verweisen. Einige davon sind in "
+"``//pub/std/manufacturing/material`` definiert. Wenn eine Anfrage an eine"
+" Fertigungs-API gestellt wird, wird aus den vom Hersteller "
+"bereitgestellten Materialien ein hinreichend passendes Material "
+"ausgewählt. Die Verantwortung für die Auswahl des richtigen Materials "
+"liegt bei der Implementierung der Fertigungs-API (dem ``provider``-Objekt"
+" in PartCAD)."
+
+#: ../../source/configuration.rst:898
+msgid "**Not implemented yet. Use hardcoded values for now.**"
+msgstr "**Noch nicht implementiert. Verwenden Sie vorerst fest codierte Werte.**"
+
+#: ../../source/configuration.rst:900
+msgid "``color``"
+msgstr "``color``"
+
+#: ../../source/configuration.rst:902
+msgid "**Not implemented yet. Use color names for now.**"
+msgstr "**Noch nicht implementiert. Verwenden Sie vorerst Farbnamen.**"
+
+#: ../../source/configuration.rst:904
+msgid "``finish``"
+msgstr "``finish``"
+
+#: ../../source/configuration.rst:906
+msgid "Optional. Can be omitted for no finish."
+msgstr ""
+"Optional. Kann weggelassen werden, wenn keine Oberflächenveredelung "
+"gewünscht ist."
+
+#: ../../source/configuration.rst:908 ../../source/configuration.rst:914
+#: ../../source/configuration.rst:920
+msgid "**Not implemented yet.**"
+msgstr "**Noch nicht implementiert.**"
+
+#: ../../source/configuration.rst:910
+msgid "``texture``"
+msgstr "``texture``"
+
+#: ../../source/configuration.rst:912
+msgid "Optional. Can be omitted for no texture."
+msgstr "Optional. Kann weggelassen werden, wenn keine Textur gewünscht ist."
+
+#: ../../source/configuration.rst:916
+msgid "``tolerance``"
+msgstr "``tolerance``"
+
+#: ../../source/configuration.rst:918
+msgid ""
+"Optional. Can be omitted for a claim to perfect precision during "
+"manufacturing."
+msgstr ""
+"Optional. Kann weggelassen werden, um perfekte Präzision bei der "
+"Fertigung zu beanspruchen."
+
+#: ../../source/configuration.rst:922
+msgid ""
+"If the part has variable MCFTT parameters depending on the surface, then "
+"either this part must be broken down into multiple parts, or the values "
+"must be derived from CAD files/scripts (not implemented yet). In the "
+"latter case the part will not be eligible for manufacturing features, "
+"unless a specific manufacturing service provider recognizes (vendor,SKU) "
+"values and have received corresponding manufacturing instructions out-of-"
+"band."
+msgstr ""
+"Wenn das Teil je nach Oberfläche variable MCFTT-Parameter hat, muss "
+"dieses Teil entweder in mehrere Teile aufgeteilt werden, oder die Werte "
+"müssen aus CAD-Dateien/-Skripten abgeleitet werden (noch nicht "
+"implementiert). Im letzteren Fall kommt das Teil nicht für "
+"Fertigungsfunktionen infrage, es sei denn, ein bestimmter "
+"Fertigungsdienstleister erkennt (vendor,SKU)-Werte und hat entsprechende "
+"Fertigungsanweisungen außerhalb dieses Kanals erhalten."
+
+#: ../../source/configuration.rst:929
+msgid ""
+"The MCFTT parameters are not required and have no impact on parts that "
+"have ``vendor`` and ``sku`` set and that are procured using providers of "
+"the type ``store``."
+msgstr ""
+"Die MCFTT-Parameter sind nicht erforderlich und haben keine Auswirkung "
+"auf Teile, bei denen ``vendor`` und ``sku`` gesetzt sind und die über "
+"Anbieter vom Typ ``store`` beschafft werden."
+
+#: ../../source/configuration.rst:937
+msgid "Assemblies"
+msgstr "Baugruppen"
+
+#: ../../source/configuration.rst:940
+msgid "Declare assemblies"
+msgstr "Baugruppen deklarieren"
+
+#: ../../source/configuration.rst:942
+msgid ""
+"Assemblies are defined using the ``partcad.yaml`` file in the package "
+"folder. The syntax for defining assemblies is as follows:"
+msgstr ""
+"Baugruppen werden über die Datei ``partcad.yaml`` im Paketordner "
+"definiert. Die Syntax zur Definition von Baugruppen ist wie folgt:"
+
+#: ../../source/configuration.rst:960
+msgid ""
+"The ``assy`` type is used to define assemblies in `Assembly YAML` format."
+" The ``path`` parameter specifies the source file path, and the "
+"``parameters`` section allows for defining parameters that can be used "
+"within the assembly. The optional ``offset`` parameter specifies the "
+"location of the assembly using an OCCT Location object. See "
+"\"Implementation Detail\" for more information on the OCCT Location "
+"object."
+msgstr ""
+"Der Typ ``assy`` wird verwendet, um Baugruppen im Format `Assembly YAML` "
+"zu definieren. Der Parameter ``path`` gibt den Pfad der Quelldatei an, "
+"und der Abschnitt ``parameters`` erlaubt die Definition von Parametern, "
+"die innerhalb der Baugruppe verwendet werden können. Der optionale "
+"Parameter ``offset`` gibt die Lage der Baugruppe über ein OCCT-Location-"
+"Objekt an. Siehe „Implementation Detail“ für weitere Informationen zum "
+"OCCT-Location-Objekt."
+
+#: ../../source/configuration.rst:965
+msgid "Here is an example of an assembly definition:"
+msgstr "Hier ist ein Beispiel für eine Baugruppendefinition:"
+
+#: ../../source/configuration.rst:979
+msgid ""
+"In this example, an assembly named ``example_assembly`` is defined with a"
+" parameter ``length`` and an offset."
+msgstr ""
+"In diesem Beispiel wird eine Baugruppe namens ``example_assembly`` mit "
+"einem Parameter ``length`` und einem Versatz definiert."
+
+#: ../../source/configuration.rst:982
+msgid "Assembly YAML"
+msgstr "Assembly-YAML"
+
+#: ../../source/configuration.rst:984
+msgid "Here is an example of an assembly defined using `Assembly YAML`:"
+msgstr "Hier ist ein Beispiel für eine mit `Assembly YAML` definierte Baugruppe:"
+
+#: ../../source/configuration.rst:1015
+msgid ""
+"The example above shows an assembly created using ``Assembly YAML``. "
+"Other methods to define assemblies are coming soon (e.g. using "
+"``CadQuery`` or ``build123d``). The assembly file syntax is described in "
+"the ``Assembly YAML`` section of this documentation."
+msgstr ""
+"Das obige Beispiel zeigt eine mit ``Assembly YAML`` erstellte Baugruppe. "
+"Weitere Methoden zur Definition von Baugruppen folgen bald (z. B. mit "
+"``CadQuery`` oder ``build123d``). Die Syntax der Assembly-Datei wird im "
+"Abschnitt ``Assembly YAML`` dieser Dokumentation beschrieben."
+
+#: ../../source/configuration.rst:1022
+msgid ""
+"It is also possible to declare assemblies by referencing other assemblies"
+" that are already defined elsewhere. Unfortunately, ``enrich`` "
+"(documented in the `Parts` section) is not yet implemented for "
+"assemblies."
+msgstr ""
+"Es ist auch möglich, Baugruppen zu deklarieren, indem auf andere "
+"Baugruppen verwiesen wird, die bereits an anderer Stelle definiert sind. "
+"Leider ist ``enrich`` (dokumentiert im Abschnitt `Parts`) für Baugruppen "
+"noch nicht implementiert."
+
+#: ../../source/configuration.rst
+msgid "existing assembly."
+msgstr "vorhandenen Baugruppe."
+
+#: ../../source/configuration.rst:1041
+msgid "Providers"
+msgstr "Anbieter"
+
+#: ../../source/configuration.rst:1043
+msgid "Providers are declared in ``partcad.yaml`` using the following syntax:"
+msgstr "Anbieter werden in ``partcad.yaml`` mit folgender Syntax deklariert:"
+
+#: ../../source/configuration.rst:1058
+msgid ""
+"``enrich`` providers are just references to other providers with some "
+"parameters modified to specific values."
+msgstr ""
+"``enrich``-Anbieter sind lediglich Verweise auf andere Anbieter, bei "
+"denen einige Parameter auf bestimmte Werte geändert wurden."
+
+#: ../../source/configuration.rst:1061
+msgid ""
+"``store`` and ``manufacturer`` providers are implemented as Python "
+"scripts. These scripts are invoked using the ``runpy`` module which "
+"allows to pass input as values of global objects. The outputs are also "
+"extracted from the value of global objects."
+msgstr ""
+"``store``- und ``manufacturer``-Anbieter werden als Python-Skripte "
+"implementiert. Diese Skripte werden über das Modul ``runpy`` aufgerufen, "
+"das es erlaubt, Eingaben als Werte globaler Objekte zu übergeben. Die "
+"Ausgaben werden ebenfalls aus dem Wert globaler Objekte extrahiert."
+
+#: ../../source/configuration.rst:1066
+msgid ""
+"The input is passed as the dictionary ``request``. The output is "
+"extracted from the dictionary ``output``"
+msgstr ""
+"Die Eingabe wird als Dictionary ``request`` übergeben. Die Ausgabe wird "
+"aus dem Dictionary ``output`` extrahiert"
+
+#: ../../source/configuration.rst:1070
+msgid "Store"
+msgstr "Store"
+
+#: ../../source/configuration.rst:1072
+msgid "``store`` providers use the following input and output values:"
+msgstr "``store``-Anbieter verwenden die folgenden Eingabe- und Ausgabewerte:"
+
+#: ../../source/configuration.rst:1074 ../../source/configuration.rst:1121
+msgid "`request[\"parameters\"]`: The configuration parameters of the provider."
+msgstr "`request[\"parameters\"]`: Die Konfigurationsparameter des Anbieters."
+
+#: ../../source/configuration.rst:1075 ../../source/configuration.rst:1122
+msgid "`request[\"api\"]`: The API method called."
+msgstr "`request[\"api\"]`: Die aufgerufene API-Methode."
+
+#: ../../source/configuration.rst:1077 ../../source/configuration.rst:1124
+msgid "`request[\"api\"] == \"caps\"`"
+msgstr "`request[\"api\"] == \"caps\"`"
+
+#: ../../source/configuration.rst:1079
+msgid ""
+"Get capabilities of this provider. Currently PartCAD does not use "
+"capabilities for ``store`` providers."
+msgstr ""
+"Ruft die Fähigkeiten dieses Anbieters ab. Derzeit verwendet PartCAD keine"
+" Fähigkeiten für ``store``-Anbieter."
+
+#: ../../source/configuration.rst:1082
+msgid "`output`: no output is expected"
+msgstr "`output`: es wird keine Ausgabe erwartet"
+
+#: ../../source/configuration.rst:1084
+msgid "`request[\"api\"] == \"avail\"`"
+msgstr "`request[\"api\"] == \"avail\"`"
+
+#: ../../source/configuration.rst:1086
+msgid "Check availability of the specific part."
+msgstr "Prüft die Verfügbarkeit des betreffenden Teils."
+
+#: ../../source/configuration.rst:1088
+msgid "`request[\"vendor\"]`: the vendor of the part"
+msgstr "`request[\"vendor\"]`: der Hersteller des Teils"
+
+#: ../../source/configuration.rst:1089
+msgid "`request[\"sku\"]`: the SKU of the part"
+msgstr "`request[\"sku\"]`: die SKU des Teils"
+
+#: ../../source/configuration.rst:1090
+msgid "`request[\"count\"]`: the requested quantity of the parts"
+msgstr "`request[\"count\"]`: die angeforderte Stückzahl der Teile"
+
+#: ../../source/configuration.rst:1091
+msgid "`request[\"count_per_sku\"]`: the known number of parts per SKU"
+msgstr "`request[\"count_per_sku\"]`: die bekannte Anzahl Teile pro SKU"
+
+#: ../../source/configuration.rst:1092
+msgid "`output[\"available\"]`: boolean, whether it is available in this store"
+msgstr ""
+"`output[\"available\"]`: boolescher Wert, ob es in diesem Store verfügbar"
+" ist"
+
+#: ../../source/configuration.rst:1094 ../../source/configuration.rst:1140
+msgid "`request[\"api\"] == \"quote\"`"
+msgstr "`request[\"api\"] == \"quote\"`"
+
+#: ../../source/configuration.rst:1096 ../../source/configuration.rst:1142
+msgid ""
+"Get a quote for the specific cart of parts. Quote API is the core of the "
+"provider. It is expected to return the price of a cart."
+msgstr ""
+"Holt ein Angebot für den betreffenden Warenkorb an Teilen ein. Die Quote-"
+"API ist der Kern des Anbieters. Es wird erwartet, dass sie den Preis "
+"eines Warenkorbs zurückgibt."
+
+#: ../../source/configuration.rst:1100 ../../source/configuration.rst:1146
+msgid "`request[\"cart\"][\"parts\"]`: the dictionary of parts"
+msgstr "`request[\"cart\"][\"parts\"]`: das Dictionary der Teile"
+
+#: ../../source/configuration.rst:1101
+msgid "`request[\"cart\"][\"parts\"][<id>][\"vendor\"]`: the vendor of the part"
+msgstr "`request[\"cart\"][\"parts\"][<id>][\"vendor\"]`: der Hersteller des Teils"
+
+#: ../../source/configuration.rst:1102
+msgid "`request[\"cart\"][\"parts\"][<id>][\"sku\"]`: the SKU of the part"
+msgstr "`request[\"cart\"][\"parts\"][<id>][\"sku\"]`: die SKU des Teils"
+
+#: ../../source/configuration.rst:1103
+msgid ""
+"`request[\"cart\"][\"parts\"][<id>][\"count\"]`: the requested quantity "
+"of the parts"
+msgstr ""
+"`request[\"cart\"][\"parts\"][<id>][\"count\"]`: die angeforderte "
+"Stückzahl der Teile"
+
+#: ../../source/configuration.rst:1104
+msgid ""
+"`request[\"cart\"][\"parts\"][<id>][\"count_per_sku\"]`: the known number"
+" of parts per SKU"
+msgstr ""
+"`request[\"cart\"][\"parts\"][<id>][\"count_per_sku\"]`: die bekannte "
+"Anzahl Teile pro SKU"
+
+#: ../../source/configuration.rst:1105 ../../source/configuration.rst:1149
+msgid "`output[\"price\"]`: the total price of the cart"
+msgstr "`output[\"price\"]`: der Gesamtpreis des Warenkorbs"
+
+#: ../../source/configuration.rst:1106 ../../source/configuration.rst:1150
+msgid "`output[\"cartId\"]`: the id of the cart (to be used for the order later)"
+msgstr ""
+"`output[\"cartId\"]`: die ID des Warenkorbs (später für die Bestellung zu"
+" verwenden)"
+
+#: ../../source/configuration.rst:1108 ../../source/configuration.rst:1152
+msgid "`request[\"api\"] == \"order\"`"
+msgstr "`request[\"api\"] == \"order\"`"
+
+#: ../../source/configuration.rst:1110 ../../source/configuration.rst:1154
+msgid ""
+"Order the specific quote. Order API does not need to be implemented as "
+"there is no infrastructure for payments yet."
+msgstr ""
+"Bestellt das betreffende Angebot. Die Order-API muss nicht implementiert "
+"werden, da es noch keine Infrastruktur für Zahlungen gibt."
+
+#: ../../source/configuration.rst:1114 ../../source/configuration.rst:1158
+msgid "`request[\"cartId\"]`: the id of the cart to be purchased"
+msgstr "`request[\"cartId\"]`: die ID des zu kaufenden Warenkorbs"
+
+#: ../../source/configuration.rst:1117
+msgid "Manufacturer"
+msgstr "Manufacturer"
+
+#: ../../source/configuration.rst:1119
+msgid "``manufacturer`` providers use the following input and output values:"
+msgstr ""
+"``manufacturer``-Anbieter verwenden die folgenden Eingabe- und "
+"Ausgabewerte:"
+
+#: ../../source/configuration.rst:1126
+msgid "Get capabilities of this provider."
+msgstr "Ruft die Fähigkeiten dieses Anbieters ab."
+
+#: ../../source/configuration.rst:1128
+msgid "`output[\"materials\"]`: the dictionary of supported materials"
+msgstr "`output[\"materials\"]`: das Dictionary der unterstützten Materialien"
+
+#: ../../source/configuration.rst:1138
+msgid "`output[\"format\"]`: the list of supported formats (e.g. `[\"step\"]`)"
+msgstr ""
+"`output[\"format\"]`: die Liste der unterstützten Formate (z. B. "
+"`[\"step\"]`)"
+
+#: ../../source/configuration.rst:1147
+msgid ""
+"`request[\"cart\"][\"parts\"][<id>][\"format\"]`: the format of the "
+"binary (e.g. `\"step\"`)"
+msgstr ""
+"`request[\"cart\"][\"parts\"][<id>][\"format\"]`: das Format der "
+"Binärdaten (z. B. `\"step\"`)"
+
+#: ../../source/configuration.rst:1148
+msgid "`request[\"cart\"][\"parts\"][<id>][\"binary\"]`: the geometry data"
+msgstr "`request[\"cart\"][\"parts\"][<id>][\"binary\"]`: die Geometriedaten"
+
+#: ../../source/configuration.rst:1164
+msgid "Repositories"
+msgstr "Repositories"
+
+#: ../../source/configuration.rst:1166
+msgid ""
+"A repository plugin serves the contents of a package: its objects, its "
+"child packages and its metadata. It is what backs an ``external`` "
+"dependency (see `External packages`_)."
+msgstr ""
+"Ein Repository-Plugin stellt die Inhalte eines Pakets bereit: seine "
+"Objekte, seine Unterpakete und seine Metadaten. Es ist das, was eine "
+"``external``-Abhängigkeit unterstützt (siehe `External packages`_)."
+
+#: ../../source/configuration.rst:1170
+msgid "Repositories are declared in ``partcad.yaml`` using the following syntax:"
+msgstr "Repositories werden in ``partcad.yaml`` mit folgender Syntax deklariert:"
+
+#: ../../source/configuration.rst:1184
+msgid ""
+"``enrich`` repositories are references to other repositories with some "
+"parameters modified to specific values."
+msgstr ""
+"``enrich``-Repositories sind Verweise auf andere Repositories, bei denen "
+"einige Parameter auf bestimmte Werte geändert wurden."
+
+#: ../../source/configuration.rst:1187
+msgid ""
+"``basic`` repositories are implemented as Python scripts, invoked the "
+"same way as provider scripts (via ``runpy``, with the input in the global"
+" ``request`` and the output in the global ``output``). A repository "
+"script answers a single, generic key/value request:"
+msgstr ""
+"``basic``-Repositories werden als Python-Skripte implementiert, die auf "
+"dieselbe Weise wie Anbieter-Skripte aufgerufen werden (über ``runpy``, "
+"mit der Eingabe im globalen ``request`` und der Ausgabe im globalen "
+"``output``). Ein Repository-Skript beantwortet eine einzige, generische "
+"Schlüssel/Wert-Anfrage:"
+
+#: ../../source/configuration.rst:1192
+msgid "`request[\"api\"] == \"get\"`"
+msgstr "`request[\"api\"] == \"get\"`"
+
+#: ../../source/configuration.rst:1193
+msgid "`request[\"key\"]`: the key being requested"
+msgstr "`request[\"key\"]`: der angeforderte Schlüssel"
+
+#: ../../source/configuration.rst:1194
+msgid ""
+"`output[\"result\"]`: the value stored under that key (or ``null`` if "
+"unknown)"
+msgstr ""
+"`output[\"result\"]`: der unter diesem Schlüssel gespeicherte Wert (oder "
+"``null``, falls unbekannt)"
+
+#: ../../source/configuration.rst:1196
+msgid ""
+"The keys address every kind of data uniformly, so serving a new kind of "
+"object or a new piece of metadata needs no new API:"
+msgstr ""
+"Die Schlüssel sprechen jede Art von Daten einheitlich an, sodass das "
+"Bereitstellen einer neuen Art von Objekt oder eines neuen Metadaten-"
+"Elements keine neue API erfordert:"
+
+#: ../../source/configuration.rst:1199
+#, python-brace-format
+msgid ""
+"``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}`` "
+"(kinds are ``sketch``, ``part``, ``assembly``, ``interface``, "
+"``provider``, ``repository``)"
+msgstr ""
+"``objects/<kind>`` -- alle Objekte einer Art, als ``{name: config, ...}``"
+" (Arten sind ``sketch``, ``part``, ``assembly``, ``interface``, "
+"``provider``, ``repository``)"
+
+#: ../../source/configuration.rst:1202
+msgid ""
+"``objects/<kind>/<name>`` -- a single object's config, fetched without "
+"listing the whole repository"
+msgstr ""
+"``objects/<kind>/<name>`` -- die Konfiguration eines einzelnen Objekts, "
+"abgerufen ohne das gesamte Repository aufzulisten"
+
+#: ../../source/configuration.rst:1204
+msgid "``deps`` -- the names of the child packages"
+msgstr "``deps`` -- die Namen der Unterpakete"
+
+#: ../../source/configuration.rst:1205
+msgid ""
+"``meta`` -- package-level properties (``desc``, ``render``, "
+"``manufacturable``, ...)"
+msgstr ""
+"``meta`` -- Eigenschaften auf Paketebene (``desc``, ``render``, "
+"``manufacturable``, ...)"
+
+#: ../../source/configuration.rst:1207
+msgid ""
+"``files/<path>`` -- the base64-encoded content of a file an object "
+"references by ``path``. A plugin-backed package has no source tree, so a "
+"file-backed object's file is fetched from the plugin and materialized "
+"into the package's cache directory when the object is built."
+msgstr ""
+"``files/<path>`` -- der Base64-kodierte Inhalt einer Datei, auf die ein "
+"Objekt über ``path`` verweist. Ein von einem Plugin unterstütztes Paket "
+"hat keinen Quellbaum, daher wird die Datei eines dateibasierten Objekts "
+"vom Plugin abgerufen und im Cache-Verzeichnis des Pakets materialisiert, "
+"wenn das Objekt gebaut wird."
+
+#: ../../source/configuration.rst:1212
+msgid ""
+"For a hierarchy, a child package's requests are prefixed with its "
+"``subfolder``: a child in ``motors`` asks for ``motors/objects/part``, "
+"``motors/deps`` and so on, all served by the same script."
+msgstr ""
+"Bei einer Hierarchie werden die Anfragen eines Unterpakets mit seinem "
+"``subfolder`` vorangestellt: Ein Kind in ``motors`` fragt "
+"``motors/objects/part``, ``motors/deps`` und so weiter an, alle "
+"bereitgestellt vom selben Skript."
+
+#: ../../source/configuration.rst:1216
+msgid ""
+"Responses are cached per key (in memory and on disk), so a repository "
+"that is slow or remote is queried as little as possible. See "
+"``examples/plugin_repository_basic``, ``examples/plugin_repository_full``"
+" (an HTTP-backed repository) and ``examples/plugin_repository_tree`` (a "
+"hierarchy)."
+msgstr ""
+"Antworten werden pro Schlüssel zwischengespeichert (im Speicher und auf "
+"der Festplatte), sodass ein langsames oder entferntes Repository so "
+"selten wie möglich abgefragt wird. Siehe "
+"``examples/plugin_repository_basic``, ``examples/plugin_repository_full``"
+" (ein HTTP-basiertes Repository) und ``examples/plugin_repository_tree`` "
+"(eine Hierarchie)."

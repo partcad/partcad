@@ -1,0 +1,381 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/cli.rst:2
+msgid "CLI command reference"
+msgstr "CLI-Befehlsreferenz"
+
+#: ../../source/cli.rst:4
+msgid ""
+"This page lists every command in the PartCAD command line interface. Both"
+" ``pc`` and ``partcad`` invoke the same tool. Run ``pc <command> --help``"
+" at any time to see the full, up-to-date options for a command."
+msgstr ""
+"Diese Seite listet alle Befehle der PartCAD-Befehlszeilenschnittstelle "
+"auf. Sowohl ``pc`` als auch ``partcad`` rufen dasselbe Werkzeug auf. "
+"Führen Sie jederzeit ``pc <command> --help`` aus, um die vollständigen, "
+"aktuellen Optionen eines Befehls zu sehen."
+
+#: ../../source/cli.rst:7
+msgid ""
+"Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-"
+"text logs), ``--offline``, ``--threads-max``, and ``-p PATH`` (select the"
+" package), apply to every command."
+msgstr ""
+"Allgemeine Optionen wie ``-v``/``-q`` (Ausführlichkeit), ``--no-ansi`` "
+"(Klartext-Protokolle), ``--offline``, ``--threads-max`` und ``-p PATH`` "
+"(Paket auswählen) gelten für jeden Befehl."
+
+#: ../../source/cli.rst:12
+msgid "Host commands"
+msgstr "Host-Befehle"
+
+#: ../../source/cli.rst:14
+msgid "``pc version``"
+msgstr "``pc version``"
+
+#: ../../source/cli.rst:15
+msgid "Display the versions of the PartCAD Python module and CLI, then exit."
+msgstr ""
+"Zeigt die Versionen des PartCAD-Python-Moduls und der CLI an und beendet "
+"sich dann."
+
+#: ../../source/cli.rst:17
+msgid "``pc config``"
+msgstr "``pc config``"
+
+#: ../../source/cli.rst:18
+msgid "Show the current user configuration."
+msgstr "Zeigt die aktuelle Benutzerkonfiguration an."
+
+#: ../../source/cli.rst:20
+msgid "``pc system``"
+msgstr "``pc system``"
+
+#: ../../source/cli.rst:21
+msgid "Manage PartCAD's system-wide state and settings:"
+msgstr "Verwaltet den systemweiten Zustand und die Einstellungen von PartCAD:"
+
+#: ../../source/cli.rst:23
+msgid ""
+"``pc system status`` — Display the state of the internal data used by "
+"PartCAD, including the location of the local cache."
+msgstr ""
+"``pc system status`` — Zeigt den Zustand der internen Daten an, die von "
+"PartCAD verwendet werden, einschließlich des Speicherorts des lokalen "
+"Caches."
+
+#: ../../source/cli.rst:25
+msgid ""
+"``pc system reset`` — Reset all internal state maintained by PartCAD, for"
+" example to clear a corrupted cache."
+msgstr ""
+"``pc system reset`` — Setzt den gesamten von PartCAD verwalteten internen "
+"Zustand zurück, zum Beispiel um einen beschädigten Cache zu leeren."
+
+#: ../../source/cli.rst:27
+msgid ""
+"``pc system set`` — Set system-wide settings, such as the telemetry type,"
+" environment, and Sentry DSN."
+msgstr ""
+"``pc system set`` — Legt systemweite Einstellungen fest, etwa den "
+"Telemetrietyp, die Umgebung und den Sentry-DSN."
+
+#: ../../source/cli.rst:28
+msgid ""
+"``pc system telemetry`` — Inspect or clear locally stored telemetry data "
+"(``info``, ``clear``)."
+msgstr ""
+"``pc system telemetry`` — Zeigt lokal gespeicherte Telemetriedaten an "
+"oder löscht sie (``info``, ``clear``)."
+
+#: ../../source/cli.rst:32
+msgid "Package commands"
+msgstr "Paketbefehle"
+
+#: ../../source/cli.rst:34
+msgid "``pc init``"
+msgstr "``pc init``"
+
+#: ../../source/cli.rst:35
+msgid ""
+"Create a new PartCAD package (a ``partcad.yaml`` file) in the current "
+"directory. Use ``-i`` for interactive mode, and options such as "
+"``--desc``, ``--url``, and ``--manufacturable`` to prefill package "
+"metadata."
+msgstr ""
+"Erstellt ein neues PartCAD-Paket (eine ``partcad.yaml``-Datei) im "
+"aktuellen Verzeichnis. Verwenden Sie ``-i`` für den interaktiven Modus "
+"sowie Optionen wie ``--desc``, ``--url`` und ``--manufacturable``, um "
+"Paket-Metadaten vorab auszufüllen."
+
+#: ../../source/cli.rst:38
+msgid "``pc install``"
+msgstr "``pc install``"
+
+#: ../../source/cli.rst:39
+msgid "Download and set up all packages imported by the current package."
+msgstr ""
+"Lädt alle vom aktuellen Paket importierten Pakete herunter und richtet "
+"sie ein."
+
+#: ../../source/cli.rst:41
+msgid "``pc update``"
+msgstr "``pc update``"
+
+#: ../../source/cli.rst:42
+msgid "Force update all imported packages to their latest versions."
+msgstr ""
+"Erzwingt die Aktualisierung aller importierten Pakete auf ihre neuesten "
+"Versionen."
+
+#: ../../source/cli.rst:44
+msgid "``pc lint``"
+msgstr "``pc lint``"
+
+#: ../../source/cli.rst:45
+msgid ""
+"Run linting checks on the files within packages. Use ``-r`` to check "
+"imported packages recursively and ``-f`` to run only checks whose name "
+"starts with a given prefix."
+msgstr ""
+"Führt Lint-Prüfungen für die Dateien innerhalb von Paketen aus. Verwenden "
+"Sie ``-r``, um importierte Pakete rekursiv zu prüfen, und ``-f``, um nur "
+"Prüfungen auszuführen, deren Name mit einem bestimmten Präfix beginnt."
+
+#: ../../source/cli.rst:50
+msgid "Object commands"
+msgstr "Objektbefehle"
+
+#: ../../source/cli.rst:52
+msgid "``pc list``"
+msgstr "``pc list``"
+
+#: ../../source/cli.rst:53
+msgid ""
+"List components. Subcommands select what to list: ``all``, ``parts``, "
+"``sketches``, ``assemblies``, ``interfaces``, ``mates``, and "
+"``packages``."
+msgstr ""
+"Listet Komponenten auf. Unterbefehle bestimmen, was aufgelistet wird: "
+"``all``, ``parts``, ``sketches``, ``assemblies``, ``interfaces``, "
+"``mates`` und ``packages``."
+
+#: ../../source/cli.rst:56
+msgid "``pc add``"
+msgstr "``pc add``"
+
+#: ../../source/cli.rst:57
+msgid ""
+"Add an object to a package. Subcommands: ``dep`` (a dependency), "
+"``sketch``, ``part``, and ``assembly``."
+msgstr ""
+"Fügt einem Paket ein Objekt hinzu. Unterbefehle: ``dep`` (eine "
+"Abhängigkeit), ``sketch``, ``part`` und ``assembly``."
+
+#: ../../source/cli.rst:59
+msgid "``pc import``"
+msgstr "``pc import``"
+
+#: ../../source/cli.rst:60
+msgid ""
+"Import an existing object into a package. Subcommands: ``part`` (import "
+"an existing part and optionally convert its format) and ``assembly`` "
+"(import an assembly from a file, creating the parts and an Assembly YAML "
+"file)."
+msgstr ""
+"Importiert ein vorhandenes Objekt in ein Paket. Unterbefehle: ``part`` "
+"(importiert ein vorhandenes Teil und konvertiert optional dessen Format) "
+"und ``assembly`` (importiert eine Baugruppe aus einer Datei und erstellt "
+"dabei die Teile sowie eine Assembly-YAML-Datei)."
+
+#: ../../source/cli.rst:64
+msgid "``pc test``"
+msgstr "``pc test``"
+
+#: ../../source/cli.rst:65
+msgid ""
+"Run tests on a part, assembly, or scene. Use ``-r`` to test imported "
+"packages recursively, ``-f`` to filter by name prefix, and "
+"``-s``/``-i``/``-a``/``-S`` to indicate a sketch, interface, assembly, or"
+" scene."
+msgstr ""
+"Führt Tests für ein Teil, eine Baugruppe oder eine Szene aus. Verwenden "
+"Sie ``-r``, um importierte Pakete rekursiv zu testen, ``-f``, um nach "
+"Namenspräfix zu filtern, und ``-s``/``-i``/``-a``/``-S``, um eine "
+"Skizze, ein Interface, eine Baugruppe oder eine Szene anzugeben."
+
+#: ../../source/cli.rst:68
+msgid "``pc inspect``"
+msgstr "``pc inspect``"
+
+#: ../../source/cli.rst:69
+msgid ""
+"View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) "
+"description instead of a visual one, and ``-p <name>=<value>`` to set "
+"parameters."
+msgstr ""
+"Zeigt ein Teil, eine Baugruppe oder eine Szene visuell an. Verwenden Sie "
+"``-V`` für eine verbale (textuelle) statt einer visuellen Beschreibung, "
+"und ``-p <name>=<value>``, um Parameter festzulegen."
+
+#: ../../source/cli.rst:72
+msgid "``pc info``"
+msgstr "``pc info``"
+
+#: ../../source/cli.rst:73
+msgid ""
+"Show detailed information about a part, assembly, or scene, including its"
+" parameters."
+msgstr ""
+"Zeigt detaillierte Informationen zu einem Teil, einer Baugruppe oder "
+"einer Szene an, einschließlich ihrer Parameter."
+
+#: ../../source/cli.rst:75
+msgid "``pc convert``"
+msgstr "``pc convert``"
+
+#: ../../source/cli.rst:76
+msgid ""
+"Convert parts or sketches to another format and update their type in the "
+"package. Subcommands: ``part`` and ``sketch``."
+msgstr ""
+"Konvertiert Teile oder Skizzen in ein anderes Format und aktualisiert "
+"ihren Typ im Paket. Unterbefehle: ``part`` und ``sketch``."
+
+#: ../../source/cli.rst:79
+msgid "``pc export``"
+msgstr "``pc export``"
+
+#: ../../source/cli.rst:80
+msgid ""
+"Export a 3D view of parts, assemblies, or scenes. Choose the format with "
+"``-t``: ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, "
+"``gltf``, or ``iges``. Use ``-O`` to set the output directory and ``-r`` "
+"to export recursively."
+msgstr ""
+"Exportiert eine 3D-Ansicht von Teilen, Baugruppen oder Szenen. Wählen Sie "
+"das Format mit ``-t``: ``step``, ``brep``, ``stl``, ``3mf``, "
+"``threejs``, ``obj``, ``gltf`` oder ``iges``. Verwenden Sie ``-O``, um "
+"das Ausgabeverzeichnis festzulegen, und ``-r``, um rekursiv zu "
+"exportieren."
+
+#: ../../source/cli.rst:84
+msgid "``pc render``"
+msgstr "``pc render``"
+
+#: ../../source/cli.rst:85
+msgid ""
+"Render a 2D projection of parts, assemblies, or scenes onto a plane. "
+"Choose the format with ``-t``: ``svg``, ``png``, or ``readme``."
+msgstr ""
+"Rendert eine 2D-Projektion von Teilen, Baugruppen oder Szenen auf eine "
+"Ebene. Wählen Sie das Format mit ``-t``: ``svg``, ``png`` oder "
+"``readme``."
+
+#: ../../source/cli.rst:90
+msgid "Workflow commands"
+msgstr "Workflow-Befehle"
+
+#: ../../source/cli.rst:92
+msgid "``pc ai``"
+msgstr "``pc ai``"
+
+#: ../../source/cli.rst:93
+msgid ""
+"AI-powered workflows. The ``regenerate`` subcommand regenerates a sketch,"
+" part, or assembly from its description using a configured AI model."
+msgstr ""
+"KI-gestützte Workflows. Der Unterbefehl ``regenerate`` erzeugt eine "
+"Skizze, ein Teil oder eine Baugruppe anhand ihrer Beschreibung mithilfe "
+"eines konfigurierten KI-Modells neu."
+
+#: ../../source/cli.rst:96
+msgid "``pc supply``"
+msgstr "``pc supply``"
+
+#: ../../source/cli.rst:97
+msgid "Manage the supply chain of the current project:"
+msgstr "Verwaltet die Lieferkette des aktuellen Projekts:"
+
+#: ../../source/cli.rst:99
+msgid "``pc supply caps`` — Show the capabilities of a provider."
+msgstr "``pc supply caps`` — Zeigt die Fähigkeiten eines Anbieters an."
+
+#: ../../source/cli.rst:100
+msgid "``pc supply find`` — Find suppliers."
+msgstr "``pc supply find`` — Sucht nach Lieferanten."
+
+#: ../../source/cli.rst:101
+msgid "``pc supply quote`` — Get a quote from suppliers."
+msgstr "``pc supply quote`` — Holt ein Angebot von Lieferanten ein."
+
+#: ../../source/cli.rst:102
+msgid "``pc supply order`` — Place an order with suppliers."
+msgstr "``pc supply order`` — Gibt eine Bestellung bei Lieferanten auf."
+
+#: ../../source/cli.rst:106
+msgid "Other commands"
+msgstr "Weitere Befehle"
+
+#: ../../source/cli.rst:108
+msgid "``pc adhoc``"
+msgstr "``pc adhoc``"
+
+#: ../../source/cli.rst:109
+msgid ""
+"Ad-hoc operations that run on the fly without creating or configuring a "
+"package. Subcommands: ``convert`` (convert a part or sketch to another "
+"format without updating its type) and ``generate`` (generate an AI-"
+"powered part without creating a package)."
+msgstr ""
+"Ad-hoc-Operationen, die spontan ausgeführt werden, ohne ein Paket zu "
+"erstellen oder zu konfigurieren. Unterbefehle: ``convert`` (konvertiert "
+"ein Teil oder eine Skizze in ein anderes Format, ohne dessen Typ zu "
+"aktualisieren) und ``generate`` (erzeugt ein KI-gestütztes Teil, ohne ein "
+"Paket zu erstellen)."
+
+#: ../../source/cli.rst:113
+msgid "``pc healthcheck``"
+msgstr "``pc healthcheck``"
+
+#: ../../source/cli.rst:114
+msgid ""
+"Check the host system for known issues. Use ``--dry-run`` to list the "
+"available checks, ``--filters`` to run only checks with the given tags, "
+"and ``--fix`` to attempt automatic fixes."
+msgstr ""
+"Prüft das Host-System auf bekannte Probleme. Verwenden Sie ``--dry-run``, "
+"um die verfügbaren Prüfungen aufzulisten, ``--filters``, um nur "
+"Prüfungen mit den angegebenen Tags auszuführen, und ``--fix``, um "
+"automatische Korrekturen zu versuchen."
+
+#: ../../source/cli.rst:117
+msgid "``pc search``"
+msgstr "``pc search``"
+
+#: ../../source/cli.rst:118
+msgid ""
+"Search for objects by keyword. Subcommands: ``all``, ``parts``, "
+"``sketches``, ``assemblies``, ``interfaces``, and ``packages``."
+msgstr ""
+"Sucht Objekte anhand eines Stichworts. Unterbefehle: ``all``, ``parts``, "
+"``sketches``, ``assemblies``, ``interfaces`` und ``packages``."

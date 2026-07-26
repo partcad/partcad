@@ -1,0 +1,460 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 21:23+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/design.rst:2
+msgid "Design"
+msgstr "设计"
+
+#: ../../source/design.rst:8
+msgid "Standards and conventions"
+msgstr "标准与约定"
+
+#: ../../source/design.rst:11
+msgid "Packages"
+msgstr "包"
+
+#: ../../source/design.rst:13
+msgid "All data in PartCAD is bundled into 'packages'."
+msgstr "PartCAD 中的所有数据都被捆绑到“包”中。"
+
+#: ../../source/design.rst:15
+msgid ""
+"Packages are organized in a hierarchical structure where some packages "
+"may define \"dependencies\" that become \"child\" packages. The top-level"
+" package is called \"//\". If a package called \"//package\" has a "
+"dependency called \"sub-package\" then such a sub-package will be called "
+"\"//package/sub-package\"."
+msgstr ""
+"包以层级结构组织，其中某些包可以定义“依赖项”，这些依赖项会成为“子”包。顶层包称为“//”。如果一个名为“//package”的包有一个名为"
+"“sub-package”的依赖项，那么这样的子包将被称为“//package/sub-package”。"
+
+#: ../../source/design.rst:21
+msgid ""
+"Each package is described using the configuration file ``partcad.yaml`` "
+"placed in the package folder."
+msgstr "每个包都由放置在包目录中的配置文件 ``partcad.yaml`` 来描述。"
+
+#: ../../source/design.rst:25
+msgid "Sketches"
+msgstr "草图"
+
+#: ../../source/design.rst:27
+msgid ""
+"PartCAD uses 2D sketches to create 3D models (e.g. via `extrude` or "
+"`sweep`) and to maintain various metadata (such as the geometry of "
+"interfaces between parts, arbitrary part metadata like camera view angles"
+" and so on)."
+msgstr ""
+"PartCAD 使用 2D 草图来创建 3D 模型（例如通过 `extrude` 或 `sweep` "
+"），并维护各种元数据（例如零件之间接口的几何形状，以及诸如相机视角之类的任意零件元数据等）。"
+
+#: ../../source/design.rst:31
+msgid "Basic shapes"
+msgstr "基本形状"
+
+#: ../../source/design.rst:33
+msgid "Outer shape: `circle`, `rectangle`, `square`"
+msgstr "外部形状： `circle` 、 `rectangle` 、 `square`"
+
+#: ../../source/design.rst:34
+msgid "Optional inner shape: `circle`, `rectangle`, `square`"
+msgstr "可选的内部形状： `circle` 、 `rectangle` 、 `square`"
+
+#: ../../source/design.rst:36 ../../source/design.rst:65
+msgid "Files"
+msgstr "文件"
+
+#: ../../source/design.rst:38
+msgid "DXF"
+msgstr "DXF"
+
+#: ../../source/design.rst:39
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/design.rst:41 ../../source/design.rst:73
+msgid "Scripts"
+msgstr "脚本"
+
+#: ../../source/design.rst:43 ../../source/design.rst:77
+msgid "`build123d <https://github.com/gumyr/build123d>`_"
+msgstr "`build123d <https://github.com/gumyr/build123d>`_"
+
+#: ../../source/design.rst:44 ../../source/design.rst:76
+msgid "`CadQuery <https://github.com/CadQuery/cadquery>`_"
+msgstr "`CadQuery <https://github.com/CadQuery/cadquery>`_"
+
+#: ../../source/design.rst:47
+msgid "Interfaces"
+msgstr "接口"
+
+#: ../../source/design.rst:49
+msgid ""
+"PartCAD uses interfaces to define how parts and assemblies connect to "
+"each other."
+msgstr "PartCAD 使用接口来定义零件和装配体之间如何相互连接。"
+
+#: ../../source/design.rst:51
+msgid ""
+"Each part may implement one or more interfaces, one or more instance of "
+"each. Interfaces may hierarchically inherit ports and other properties "
+"from each other. The information about compatibility between interfaces "
+"(mating) is optionally maintained as well."
+msgstr "每个零件都可以实现一个或多个接口，每个接口可以有一个或多个实例。接口之间可以按层级相互继承端口和其他属性。接口之间的兼容性信息（配合关系）也可以选择性地进行维护。"
+
+#: ../../source/design.rst:56
+msgid ""
+"Whenever possible, PartCAD will be able to place parts and assemblies "
+"together with no coordinates provided by the user, based on the defined "
+"ports, interfaces and mating."
+msgstr "在可能的情况下，PartCAD 能够根据已定义的端口、接口和配合关系，在用户不提供任何坐标的情况下将零件和装配体组合到一起。"
+
+#: ../../source/design.rst:61
+msgid "Parts"
+msgstr "零件"
+
+#: ../../source/design.rst:63
+msgid "PartCAD has an evergrowing list of ways to define the part model:"
+msgstr "PartCAD 定义零件模型的方式在不断增加，目前包括："
+
+#: ../../source/design.rst:67
+msgid "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
+msgstr "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
+
+#: ../../source/design.rst:68
+msgid "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
+msgstr "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
+
+#: ../../source/design.rst:69
+msgid "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
+msgstr "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
+
+#: ../../source/design.rst:70
+msgid "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
+msgstr "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
+
+#: ../../source/design.rst:71
+msgid "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
+msgstr "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
+
+#: ../../source/design.rst:75
+msgid "`OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_"
+msgstr "`OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_"
+
+#: ../../source/design.rst:78
+msgid "`sdf <https://github.com/fogleman/sdf>`_"
+msgstr "`sdf <https://github.com/fogleman/sdf>`_"
+
+#: ../../source/design.rst:80
+msgid "AI-generated scripts"
+msgstr "AI 生成的脚本"
+
+#: ../../source/design.rst:82
+msgid "OpenSCAD"
+msgstr "OpenSCAD"
+
+#: ../../source/design.rst:83
+msgid "CadQuery"
+msgstr "CadQuery"
+
+#: ../../source/design.rst:84
+msgid "build123d"
+msgstr "build123d"
+
+#: ../../source/design.rst:87
+msgid "Assemblies"
+msgstr "装配体"
+
+#: ../../source/design.rst:89
+msgid ""
+"Assemblies are parametrized instructions on how to put parts and other "
+"assemblies together."
+msgstr "装配体是关于如何将零件和其他装配体组合到一起的参数化说明。"
+
+#: ../../source/design.rst:92
+msgid ""
+"PartCAD is expected to have an ever-growing list of ways to define "
+"assemblies using existing parts. However, at the moment, only one way is "
+"supported. It is called ASSY: assembly YAML. The idea behind ASSY is to "
+"create a simplistic way to enumerate parts, define their parameters and "
+"define how parts connect."
+msgstr ""
+"预计 PartCAD 使用现有零件定义装配体的方式会不断增加。不过，目前仅支持一种方式，称为 ASSY：assembly YAML。ASSY "
+"背后的理念是提供一种极其简单的方式来枚举零件、定义它们的参数并定义零件之间如何连接。"
+
+#: ../../source/design.rst:100
+msgid "Scenes"
+msgstr "场景"
+
+#: ../../source/design.rst:102
+msgid ""
+"PartCAD does not yet implement scenes. But the idea is to be able to "
+"reproduce the same features as worlds in Gazebo to the extent that "
+"PartCAD scenes can be exported to and simulated in Gazebo, but without "
+"using XML while creating the scene."
+msgstr ""
+"PartCAD 尚未实现场景功能。但其设想是能够重现与 Gazebo 中的世界（world）相同的特性，使 PartCAD 场景可以导出到 "
+"Gazebo 中并在其中进行仿真，同时在创建场景时无需使用 XML。"
+
+#: ../../source/design.rst:108
+msgid "Monorepos"
+msgstr "单体仓库（Monorepo）"
+
+#: ../../source/design.rst:110
+msgid ""
+"When PartCAD is initialized, the current folder and its ``partcad.yaml`` "
+"become the `current` package, but not the `root` package. The root "
+"package is discovered by traversing the parent directories for as long as"
+" there is another ``partcad.yaml`` found there."
+msgstr ""
+"当 PartCAD 初始化时，当前目录及其 ``partcad.yaml`` 会成为 `current` （当前）包，但不会成为 `root` "
+"（根）包。根包是通过向上遍历父目录来发现的，只要在其中还能找到另一个 ``partcad.yaml`` ，就继续向上查找。"
+
+#: ../../source/design.rst:115
+msgid ""
+"This allows to run PartCAD tools from any sub-directory in a monorepo "
+"project while maintaining the same meaning of relative and absolute "
+"paths."
+msgstr "这使得你可以在单体仓库项目的任意子目录中运行 PartCAD 工具，同时保持相对路径和绝对路径的含义不变。"
+
+#: ../../source/design.rst:119
+msgid "Paths"
+msgstr "路径"
+
+#: ../../source/design.rst:121
+msgid ""
+"PartCAD uses package paths to identify packages and parts declared in "
+"them."
+msgstr "PartCAD 使用包路径来标识包以及在其中声明的零件。"
+
+#: ../../source/design.rst:123
+msgid ""
+"The current package has the path ``\"\"`` or ``\".\"``. The root package "
+"has the path ``\"//\"``. For any package ``\"<package-path>\"``, each "
+"sub-directory containing ``partcad.yaml`` and each ``import``-ed "
+"dependency becomes ``\"<package-path>/<sub-package>\"``."
+msgstr ""
+"当前包的路径为 ``\"\"`` 或 ``\".\"`` 。根包的路径为 ``\"//\"`` 。对于任意包 ``\"<package-"
+"path>\"`` ，其中每个包含 ``partcad.yaml`` 的子目录、以及每个通过 ``import`` 导入的依赖项，都会成为 "
+"``\"<package-path>/<sub-package>\"`` 。"
+
+#: ../../source/design.rst:130
+msgid "Absolute vs relative"
+msgstr "绝对路径与相对路径"
+
+#: ../../source/design.rst:132
+msgid ""
+"The absolute package path is the path from the root package to the "
+"package. If the path starts with ``\"//\"`` then it is an absolute path."
+msgstr "绝对包路径是从根包到该包的路径。如果路径以 ``\"//\"`` 开头，那么它就是绝对路径。"
+
+#: ../../source/design.rst:135
+msgid ""
+"The relative package path is the path from the current package to the "
+"package. If the path does not start with ``\"//\"`` then it is a relative"
+" path. Sometimes it might help to disambiguate the relative path by "
+"prepending ``\"./\"``."
+msgstr ""
+"相对包路径是从当前包到该包的路径。如果路径不以 ``\"//\"`` 开头，那么它就是相对路径。有时在前面加上 ``\"./\"`` "
+"有助于消除相对路径的歧义。"
+
+#: ../../source/design.rst:140
+msgid "Multiple packages"
+msgstr "多个包"
+
+#: ../../source/design.rst:142
+msgid ""
+"Some PartCAD commands and interfaces allow referencing multiple packages "
+"at once. ``\"<package-path>/\\*\"`` is a reference to all sub-packages in"
+" ``\"<package-path>\"``."
+msgstr ""
+"某些 PartCAD 命令和接口允许一次性引用多个包。 ``\"<package-path>/\\*\"`` 表示对 ``\"<package-"
+"path>\"`` 中所有子包的引用。"
+
+#: ../../source/design.rst:145
+msgid ""
+"``\"<package-path>/...\"`` is a reference to ``\"<package-path>\"`` and "
+"to all of its sub-packages."
+msgstr "``\"<package-path>/...\"`` 表示对 ``\"<package-path>\"`` 及其所有子包的引用。"
+
+#: ../../source/design.rst:149
+msgid "Object IDs"
+msgstr "对象 ID"
+
+#: ../../source/design.rst:151
+msgid ""
+"PartCAD packages contain objects of different types: *sketches*, *parts*,"
+" *assemblies*, *scenes*, *interfaces*, *providers* and so on. All of them"
+" need to get referenced."
+msgstr ""
+"PartCAD 包中包含不同类型的对象： *草图* 、 *零件* 、 *装配体* 、 *场景* 、 *接口* 、 *提供方* "
+"等等。所有这些对象都需要被引用。"
+
+#: ../../source/design.rst:156
+msgid "Single object"
+msgstr "单个对象"
+
+#: ../../source/design.rst:158
+msgid ""
+"Each object has a unique name within the package (across all object "
+"types). The object can be globally identified using ``\"<package-path"
+">:<object-name>\"``."
+msgstr ""
+"每个对象在包内（跨所有对象类型）都有一个唯一的名称。该对象可以使用 ``\"<package-path>:<object-name>\"`` "
+"进行全局标识。"
+
+#: ../../source/design.rst:161
+msgid ""
+"An attempt to reference an object using the object-name alone is "
+"considered a reference to the object in the current package."
+msgstr "如果尝试仅使用对象名称来引用一个对象，则会被视为对当前包中该对象的引用。"
+
+#: ../../source/design.rst:165
+msgid "Multiple objects"
+msgstr "多个对象"
+
+#: ../../source/design.rst:167
+msgid ""
+"Some PartCAD commands and interfaces allow referencing multiple objects "
+"at once. ``\"<single-or-multiple-package-path>/:\\*\"`` is a reference to"
+" all objects in ``\"<single-or-multiple-package-path>\"``."
+msgstr ""
+"某些 PartCAD 命令和接口允许一次性引用多个对象。 ``\"<single-or-multiple-package-"
+"path>/:\\*\"`` 表示对 ``\"<single-or-multiple-package-path>\"`` 中所有对象的引用。"
+
+#: ../../source/design.rst:173
+msgid "Parametrized objects"
+msgstr "参数化对象"
+
+#: ../../source/design.rst:175
+msgid ""
+"Some objects (such as *sketches*, *parts*, *assemblies*, *interfaces* and"
+" *providers*) may have parameters specified within the object ID to "
+"identify an instantiation of the object with the given parameters: "
+"``\"<package-path>:<object-name>;param1=value1,param2=value2\"``."
+msgstr ""
+"某些对象（例如 *草图* 、 *零件* 、 *装配体* 、 *接口* 和 *提供方* ）可以在对象 ID "
+"中指定参数，以标识带有给定参数的对象实例： ``\"<package-path>:<object-"
+"name>;param1=value1,param2=value2\"`` 。"
+
+#: ../../source/design.rst:192
+msgid "Objects in a cart"
+msgstr "购物车中的对象"
+
+#: ../../source/design.rst:194
+msgid ""
+"Whenever an object (a *part* or an *assembly*) is used for manufacturing "
+"or ordering from a store, the object ID may optionally contain the "
+"quantity: ``\"<package-path>:<object-"
+"name>;param1=value1,param2=value2#<quantity>\"``."
+msgstr ""
+"每当一个对象（一个 *零件* 或一个 *装配体* ）被用于制造或从商店订购时，其对象 ID 可以选择性地包含数量： ``\"<package-"
+"path>:<object-name>;param1=value1,param2=value2#<quantity>\"`` 。"
+
+#: ../../source/design.rst:207
+msgid "The public repository"
+msgstr "公共仓库"
+
+#: ../../source/design.rst:209
+msgid ""
+"The public PartCAD repository is created and maintained by the community "
+"based on the PartCAD standards and conventions. It is hosted on `GitHub "
+"<https://github.com/partcad/partcad-index>`_."
+msgstr ""
+"公共 PartCAD 仓库由社区依据 PartCAD 标准与约定创建和维护。它托管在 `GitHub "
+"<https://github.com/partcad/partcad-index>`_ 上。"
+
+#: ../../source/design.rst:213
+msgid ""
+"The top levels of the package hierarchy are expected to be maintained by "
+"the PartCAD community. Lower levels of the hierarchy are expected to be "
+"maintained by vendors and other communities. PartCAD community does not "
+"aim to achieve the uniqueness of parts and assemblies. Moreover, everyone"
+" is invited to provide their alternative models as long as they provide a"
+" different level of model quality or different level of package quality "
+"management processes, and as long the package data properly reflects the "
+"quality that the maintainer provides and commits to maintain. This way "
+"PartCAD users have a choice of which model to use based on their specific"
+" needs."
+msgstr ""
+"包层级结构的顶层部分预计将由 PartCAD 社区维护。层级中较低的部分则预计由供应商和其他社区维护。PartCAD "
+"社区并不追求让零件和装配体保持唯一。此外，只要能够提供不同层次的模型质量或不同层次的包质量管理流程，并且只要包数据能够如实反映维护者所提供并承诺维护的质量，就欢迎任何人提供他们自己的替代模型。这样一来，PartCAD"
+" 用户就可以根据自身的具体需求来选择使用哪个模型。"
+
+#: ../../source/design.rst:226
+msgid "Tools"
+msgstr "工具"
+
+#: ../../source/design.rst:228
+msgid ""
+"PartCAD tools can operate with public and private repositories for as "
+"long as they are maintained following the PartCAD standards and "
+"conventions."
+msgstr "只要公共和私有仓库遵循 PartCAD 标准与约定进行维护，PartCAD 工具就可以对其进行操作。"
+
+#: ../../source/design.rst:232
+msgid "Command line tools"
+msgstr "命令行工具"
+
+#: ../../source/design.rst:234
+msgid ""
+"PartCAD CLI tools get installed using the PyPI module ``partcad-cli``. "
+"The main tool is called ``pc``. The CLI tools are supposed to provide the"
+" complete set of PartCAD features."
+msgstr ""
+"PartCAD 的 CLI 工具通过 PyPI 模块 ``partcad-cli`` 安装。主工具称为 ``pc`` 。这些 CLI 工具旨在提供"
+" PartCAD 的完整功能集。"
+
+#: ../../source/design.rst:239
+msgid "Visual Studio Code extension"
+msgstr "Visual Studio Code 扩展"
+
+#: ../../source/design.rst:241
+msgid "The PartCAD extension for ``vscode`` is designed to be the primary tool."
+msgstr "面向 ``vscode`` 的 PartCAD 扩展被设计为主要工具。"
+
+#: ../../source/design.rst:246
+msgid "Libraries and frameworks"
+msgstr "库和框架"
+
+#: ../../source/design.rst:249
+msgid "Python"
+msgstr "Python"
+
+#: ../../source/design.rst:251
+msgid ""
+"The `partcad` Python module is the first PartCAD library. Its development"
+" is prioritized due to the popularity and the value proposition of such "
+"Python frameworks such as CadQuery and build123d."
+msgstr ""
+"`partcad` Python 模块是第一个 PartCAD 库。由于 CadQuery 和 build123d 等 Python "
+"框架的流行及其价值主张，它的开发被优先考虑。"
+
+#: ../../source/design.rst:256
+msgid "Other languages"
+msgstr "其他语言"
+
+#: ../../source/design.rst:258
+msgid ""
+"PartCAD does not aim to stop at supporting Python. Native libraries in "
+"other languages are planned and all contributors wishing to join the "
+"project are welcome."
+msgstr "PartCAD 并不打算止步于支持 Python。我们计划提供其他语言的原生库，并欢迎所有希望加入本项目的贡献者。"

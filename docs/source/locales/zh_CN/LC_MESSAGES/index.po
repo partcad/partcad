@@ -1,0 +1,58 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/index.rst:22
+msgid "Contents:"
+msgstr "目录："
+
+#: ../../source/index.rst:3
+msgid "PartCAD"
+msgstr "PartCAD"
+
+#: ../../source/index.rst:5
+msgid ""
+"`PartCAD <https://github.com/partcad/partcad>`_ is the standard for "
+"documenting manufacturable physical products. It comes with a set of "
+"tools to maintain product information and to facilitate efficient and "
+"effective workflows at all product lifecycle phases."
+msgstr "`PartCAD <https://github.com/partcad/partcad>`_ 是记录可制造实体产品的标准。它提供了一整套工具，用于维护产品信息，并在产品生命周期的各个阶段实现高效且有效的工作流程。"
+
+#: ../../source/index.rst:8
+msgid ""
+"PartCAD is more than just a traditional CAD tool for drawing. In fact, "
+"it’s **not for drawing at all**. The letters “CAD” in PartCAD stand for "
+"“computer-aided design” in a more generic sense, where “design” stands "
+"for the process of getting from an idea to **a clear and deterministic "
+"specification of a manufacturable physical product** using a computer "
+"(including the use of AI models). While PartCAD started as **the first "
+"package manager for hardware**, it is now the **next-generation CAD** "
+"that can turn a single visionary individual into a one person "
+"corporation, or make one future Product Manager as productive (**and much"
+" faster!**) as 10 corporate engineering departments of the past."
+msgstr "PartCAD 不仅仅是一款用于绘图的传统 CAD 工具。事实上，它**根本不是用来绘图的**。PartCAD 中的“CAD”三个字母代表更广义的“计算机辅助设计”，其中“设计”指的是借助计算机（包括使用 AI 模型）将一个创意转化为**一份清晰而确定的、可制造实体产品的规格说明**的过程。虽然 PartCAD 起初是**首个面向硬件的包管理器**，但如今它已成为**新一代 CAD**，能够让一位有远见的个人变身为一人公司，或让未来的一名产品经理拥有相当于过去 10 个企业工程部门的生产力（**而且快得多！**）。"
+
+#: ../../source/index.rst:17
+msgid ""
+"PartCAD is constantly evolving, with new features and integrations being "
+"added all the time. `Contact us <https://calendly.com/partcad-"
+"support/30min>`_ **to discuss how PartCAD can revolutionize your product "
+"development process.**"
+msgstr "PartCAD 在不断发展，新功能和新集成持续加入。 `联系我们 <https://calendly.com/partcad-support/30min>`_ **来探讨 PartCAD 如何彻底革新您的产品开发流程。**"

@@ -1,0 +1,530 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 21:23+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/design.rst:2
+msgid "Design"
+msgstr "Design"
+
+#: ../../source/design.rst:8
+msgid "Standards and conventions"
+msgstr "Standards und Konventionen"
+
+#: ../../source/design.rst:11
+msgid "Packages"
+msgstr "Pakete"
+
+#: ../../source/design.rst:13
+msgid "All data in PartCAD is bundled into 'packages'."
+msgstr "Alle Daten in PartCAD werden in „Paketen“ gebündelt."
+
+#: ../../source/design.rst:15
+msgid ""
+"Packages are organized in a hierarchical structure where some packages "
+"may define \"dependencies\" that become \"child\" packages. The top-level"
+" package is called \"//\". If a package called \"//package\" has a "
+"dependency called \"sub-package\" then such a sub-package will be called "
+"\"//package/sub-package\"."
+msgstr ""
+"Pakete sind hierarchisch strukturiert, wobei manche Pakete "
+"„Abhängigkeiten“ (dependencies) definieren können, die zu „Kind“-Paketen "
+"werden. Das oberste Paket heißt „//“. Wenn ein Paket namens „//package“ "
+"eine Abhängigkeit namens „sub-package“ hat, dann heißt dieses Unterpaket "
+"„//package/sub-package“."
+
+#: ../../source/design.rst:21
+msgid ""
+"Each package is described using the configuration file ``partcad.yaml`` "
+"placed in the package folder."
+msgstr ""
+"Jedes Paket wird über die Konfigurationsdatei ``partcad.yaml`` im "
+"Paketordner beschrieben."
+
+#: ../../source/design.rst:25
+msgid "Sketches"
+msgstr "Skizzen"
+
+#: ../../source/design.rst:27
+msgid ""
+"PartCAD uses 2D sketches to create 3D models (e.g. via `extrude` or "
+"`sweep`) and to maintain various metadata (such as the geometry of "
+"interfaces between parts, arbitrary part metadata like camera view angles"
+" and so on)."
+msgstr ""
+"PartCAD verwendet 2D-Skizzen, um 3D-Modelle zu erstellen (z. B. über "
+"`extrude` oder `sweep`) und um verschiedene Metadaten zu pflegen (etwa "
+"die Geometrie von Interfaces zwischen Teilen, beliebige Teil-Metadaten "
+"wie Kamerablickwinkel und so weiter)."
+
+#: ../../source/design.rst:31
+msgid "Basic shapes"
+msgstr "Grundformen"
+
+#: ../../source/design.rst:33
+msgid "Outer shape: `circle`, `rectangle`, `square`"
+msgstr "Äußere Form: `circle`, `rectangle`, `square`"
+
+#: ../../source/design.rst:34
+msgid "Optional inner shape: `circle`, `rectangle`, `square`"
+msgstr "Optionale innere Form: `circle`, `rectangle`, `square`"
+
+#: ../../source/design.rst:36 ../../source/design.rst:65
+msgid "Files"
+msgstr "Dateien"
+
+#: ../../source/design.rst:38
+msgid "DXF"
+msgstr "DXF"
+
+#: ../../source/design.rst:39
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/design.rst:41 ../../source/design.rst:73
+msgid "Scripts"
+msgstr "Skripte"
+
+#: ../../source/design.rst:43 ../../source/design.rst:77
+msgid "`build123d <https://github.com/gumyr/build123d>`_"
+msgstr "`build123d <https://github.com/gumyr/build123d>`_"
+
+#: ../../source/design.rst:44 ../../source/design.rst:76
+msgid "`CadQuery <https://github.com/CadQuery/cadquery>`_"
+msgstr "`CadQuery <https://github.com/CadQuery/cadquery>`_"
+
+#: ../../source/design.rst:47
+msgid "Interfaces"
+msgstr "Interfaces"
+
+#: ../../source/design.rst:49
+msgid ""
+"PartCAD uses interfaces to define how parts and assemblies connect to "
+"each other."
+msgstr ""
+"PartCAD verwendet Interfaces, um festzulegen, wie Teile und Baugruppen "
+"miteinander verbunden werden."
+
+#: ../../source/design.rst:51
+msgid ""
+"Each part may implement one or more interfaces, one or more instance of "
+"each. Interfaces may hierarchically inherit ports and other properties "
+"from each other. The information about compatibility between interfaces "
+"(mating) is optionally maintained as well."
+msgstr ""
+"Jedes Teil kann ein oder mehrere Interfaces implementieren, jeweils mit "
+"einer oder mehreren Instanzen. Interfaces können Ports und andere "
+"Eigenschaften hierarchisch voneinander erben. Optional werden auch "
+"Informationen zur Kompatibilität zwischen Interfaces (Mating) gepflegt."
+
+#: ../../source/design.rst:56
+msgid ""
+"Whenever possible, PartCAD will be able to place parts and assemblies "
+"together with no coordinates provided by the user, based on the defined "
+"ports, interfaces and mating."
+msgstr ""
+"Wann immer möglich, kann PartCAD Teile und Baugruppen anhand der "
+"definierten Ports, Interfaces und Mating-Informationen zusammenfügen, "
+"ohne dass der Nutzer Koordinaten angeben muss."
+
+#: ../../source/design.rst:61
+msgid "Parts"
+msgstr "Teile"
+
+#: ../../source/design.rst:63
+msgid "PartCAD has an evergrowing list of ways to define the part model:"
+msgstr ""
+"PartCAD verfügt über eine stetig wachsende Liste von Möglichkeiten, das "
+"Teilemodell zu definieren:"
+
+#: ../../source/design.rst:67
+msgid "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
+msgstr "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
+
+#: ../../source/design.rst:68
+msgid "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
+msgstr "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
+
+#: ../../source/design.rst:69
+msgid "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
+msgstr "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
+
+#: ../../source/design.rst:70
+msgid "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
+msgstr "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
+
+#: ../../source/design.rst:71
+msgid "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
+msgstr "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
+
+#: ../../source/design.rst:75
+msgid "`OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_"
+msgstr "`OpenSCAD <https://en.wikipedia.org/wiki/OpenSCAD>`_"
+
+#: ../../source/design.rst:78
+msgid "`sdf <https://github.com/fogleman/sdf>`_"
+msgstr "`sdf <https://github.com/fogleman/sdf>`_"
+
+#: ../../source/design.rst:80
+msgid "AI-generated scripts"
+msgstr "KI-generierte Skripte"
+
+#: ../../source/design.rst:82
+msgid "OpenSCAD"
+msgstr "OpenSCAD"
+
+#: ../../source/design.rst:83
+msgid "CadQuery"
+msgstr "CadQuery"
+
+#: ../../source/design.rst:84
+msgid "build123d"
+msgstr "build123d"
+
+#: ../../source/design.rst:87
+msgid "Assemblies"
+msgstr "Baugruppen"
+
+#: ../../source/design.rst:89
+msgid ""
+"Assemblies are parametrized instructions on how to put parts and other "
+"assemblies together."
+msgstr ""
+"Baugruppen sind parametrisierte Anweisungen dazu, wie Teile und andere "
+"Baugruppen zusammengesetzt werden."
+
+#: ../../source/design.rst:92
+msgid ""
+"PartCAD is expected to have an ever-growing list of ways to define "
+"assemblies using existing parts. However, at the moment, only one way is "
+"supported. It is called ASSY: assembly YAML. The idea behind ASSY is to "
+"create a simplistic way to enumerate parts, define their parameters and "
+"define how parts connect."
+msgstr ""
+"Es wird erwartet, dass PartCAD eine stetig wachsende Liste von "
+"Möglichkeiten erhält, Baugruppen aus vorhandenen Teilen zu definieren. "
+"Derzeit wird jedoch nur eine Methode unterstützt. Sie heißt ASSY: "
+"Assembly-YAML. Die Idee hinter ASSY ist es, eine einfache Möglichkeit zu "
+"schaffen, Teile aufzulisten, ihre Parameter festzulegen und zu "
+"definieren, wie die Teile verbunden werden."
+
+#: ../../source/design.rst:100
+msgid "Scenes"
+msgstr "Szenen"
+
+#: ../../source/design.rst:102
+msgid ""
+"PartCAD does not yet implement scenes. But the idea is to be able to "
+"reproduce the same features as worlds in Gazebo to the extent that "
+"PartCAD scenes can be exported to and simulated in Gazebo, but without "
+"using XML while creating the scene."
+msgstr ""
+"PartCAD implementiert Szenen noch nicht. Die Idee ist jedoch, dieselben "
+"Funktionen wie „Welten“ (worlds) in Gazebo nachzubilden, sodass PartCAD-"
+"Szenen nach Gazebo exportiert und dort simuliert werden können, ohne bei "
+"der Erstellung der Szene XML verwenden zu müssen."
+
+#: ../../source/design.rst:108
+msgid "Monorepos"
+msgstr "Monorepos"
+
+#: ../../source/design.rst:110
+msgid ""
+"When PartCAD is initialized, the current folder and its ``partcad.yaml`` "
+"become the `current` package, but not the `root` package. The root "
+"package is discovered by traversing the parent directories for as long as"
+" there is another ``partcad.yaml`` found there."
+msgstr ""
+"Wenn PartCAD initialisiert wird, werden der aktuelle Ordner und seine "
+"``partcad.yaml`` zum `current`-Paket, jedoch nicht zum `root`-Paket. Das "
+"Root-Paket wird ermittelt, indem die übergeordneten Verzeichnisse "
+"durchlaufen werden, solange dort eine weitere ``partcad.yaml`` gefunden "
+"wird."
+
+#: ../../source/design.rst:115
+msgid ""
+"This allows to run PartCAD tools from any sub-directory in a monorepo "
+"project while maintaining the same meaning of relative and absolute "
+"paths."
+msgstr ""
+"Dies ermöglicht es, PartCAD-Werkzeuge aus jedem Unterverzeichnis eines "
+"Monorepo-Projekts heraus auszuführen, wobei die Bedeutung relativer und "
+"absoluter Pfade gleich bleibt."
+
+#: ../../source/design.rst:119
+msgid "Paths"
+msgstr "Pfade"
+
+#: ../../source/design.rst:121
+msgid ""
+"PartCAD uses package paths to identify packages and parts declared in "
+"them."
+msgstr ""
+"PartCAD verwendet Paketpfade, um Pakete und die darin deklarierten Teile "
+"zu identifizieren."
+
+#: ../../source/design.rst:123
+msgid ""
+"The current package has the path ``\"\"`` or ``\".\"``. The root package "
+"has the path ``\"//\"``. For any package ``\"<package-path>\"``, each "
+"sub-directory containing ``partcad.yaml`` and each ``import``-ed "
+"dependency becomes ``\"<package-path>/<sub-package>\"``."
+msgstr ""
+"Das aktuelle Paket hat den Pfad ``\"\"`` oder ``\".\"``. Das Root-Paket "
+"hat den Pfad ``\"//\"``. Für jedes Paket ``\"<package-path>\"`` wird "
+"jedes Unterverzeichnis, das ``partcad.yaml`` enthält, sowie jede per "
+"``import`` eingebundene Abhängigkeit zu ``\"<package-path>/<sub-"
+"package>\"``."
+
+#: ../../source/design.rst:130
+msgid "Absolute vs relative"
+msgstr "Absolut vs. relativ"
+
+#: ../../source/design.rst:132
+msgid ""
+"The absolute package path is the path from the root package to the "
+"package. If the path starts with ``\"//\"`` then it is an absolute path."
+msgstr ""
+"Der absolute Paketpfad ist der Pfad vom Root-Paket zum Paket. Beginnt der"
+" Pfad mit ``\"//\"``, handelt es sich um einen absoluten Pfad."
+
+#: ../../source/design.rst:135
+msgid ""
+"The relative package path is the path from the current package to the "
+"package. If the path does not start with ``\"//\"`` then it is a relative"
+" path. Sometimes it might help to disambiguate the relative path by "
+"prepending ``\"./\"``."
+msgstr ""
+"Der relative Paketpfad ist der Pfad vom aktuellen Paket zum Paket. "
+"Beginnt der Pfad nicht mit ``\"//\"``, handelt es sich um einen relativen"
+" Pfad. Manchmal kann es helfen, den relativen Pfad durch Voranstellen von"
+" ``\"./\"`` eindeutig zu machen."
+
+#: ../../source/design.rst:140
+msgid "Multiple packages"
+msgstr "Mehrere Pakete"
+
+#: ../../source/design.rst:142
+msgid ""
+"Some PartCAD commands and interfaces allow referencing multiple packages "
+"at once. ``\"<package-path>/\\*\"`` is a reference to all sub-packages in"
+" ``\"<package-path>\"``."
+msgstr ""
+"Manche PartCAD-Befehle und -Schnittstellen erlauben es, mehrere Pakete "
+"gleichzeitig zu referenzieren. ``\"<package-path>/\\*\"`` ist ein Verweis"
+" auf alle Unterpakete in ``\"<package-path>\"``."
+
+#: ../../source/design.rst:145
+msgid ""
+"``\"<package-path>/...\"`` is a reference to ``\"<package-path>\"`` and "
+"to all of its sub-packages."
+msgstr ""
+"``\"<package-path>/...\"`` ist ein Verweis auf ``\"<package-path>\"`` und"
+" alle seine Unterpakete."
+
+#: ../../source/design.rst:149
+msgid "Object IDs"
+msgstr "Objekt-IDs"
+
+#: ../../source/design.rst:151
+msgid ""
+"PartCAD packages contain objects of different types: *sketches*, *parts*,"
+" *assemblies*, *scenes*, *interfaces*, *providers* and so on. All of them"
+" need to get referenced."
+msgstr ""
+"PartCAD-Pakete enthalten Objekte verschiedener Typen: *sketches*, "
+"*parts*, *assemblies*, *scenes*, *interfaces*, *providers* und so weiter."
+" Alle müssen referenziert werden können."
+
+#: ../../source/design.rst:156
+msgid "Single object"
+msgstr "Einzelnes Objekt"
+
+#: ../../source/design.rst:158
+msgid ""
+"Each object has a unique name within the package (across all object "
+"types). The object can be globally identified using ``\"<package-path"
+">:<object-name>\"``."
+msgstr ""
+"Jedes Objekt hat einen eindeutigen Namen innerhalb des Pakets (über alle "
+"Objekttypen hinweg). Das Objekt kann global mit ``\"<package-path"
+">:<object-name>\"`` identifiziert werden."
+
+#: ../../source/design.rst:161
+msgid ""
+"An attempt to reference an object using the object-name alone is "
+"considered a reference to the object in the current package."
+msgstr ""
+"Der Versuch, ein Objekt nur über den Objektnamen zu referenzieren, gilt "
+"als Verweis auf das Objekt im aktuellen Paket."
+
+#: ../../source/design.rst:165
+msgid "Multiple objects"
+msgstr "Mehrere Objekte"
+
+#: ../../source/design.rst:167
+msgid ""
+"Some PartCAD commands and interfaces allow referencing multiple objects "
+"at once. ``\"<single-or-multiple-package-path>/:\\*\"`` is a reference to"
+" all objects in ``\"<single-or-multiple-package-path>\"``."
+msgstr ""
+"Manche PartCAD-Befehle und -Schnittstellen erlauben es, mehrere Objekte "
+"gleichzeitig zu referenzieren. ``\"<single-or-multiple-package-"
+"path>/:\\*\"`` ist ein Verweis auf alle Objekte in ``\"<single-or-"
+"multiple-package-path>\"``."
+
+#: ../../source/design.rst:173
+msgid "Parametrized objects"
+msgstr "Parametrisierte Objekte"
+
+#: ../../source/design.rst:175
+msgid ""
+"Some objects (such as *sketches*, *parts*, *assemblies*, *interfaces* and"
+" *providers*) may have parameters specified within the object ID to "
+"identify an instantiation of the object with the given parameters: "
+"``\"<package-path>:<object-name>;param1=value1,param2=value2\"``."
+msgstr ""
+"Manche Objekte (wie *sketches*, *parts*, *assemblies*, *interfaces* und "
+"*providers*) können Parameter innerhalb der Objekt-ID angeben, um eine "
+"Instanziierung des Objekts mit den gegebenen Parametern zu "
+"identifizieren: ``\"<package-path>:<object-"
+"name>;param1=value1,param2=value2\"``."
+
+#: ../../source/design.rst:192
+msgid "Objects in a cart"
+msgstr "Objekte im Warenkorb"
+
+#: ../../source/design.rst:194
+msgid ""
+"Whenever an object (a *part* or an *assembly*) is used for manufacturing "
+"or ordering from a store, the object ID may optionally contain the "
+"quantity: ``\"<package-path>:<object-"
+"name>;param1=value1,param2=value2#<quantity>\"``."
+msgstr ""
+"Wann immer ein Objekt (ein *part* oder eine *assembly*) für die Fertigung"
+" oder Bestellung aus einem Shop verwendet wird, kann die Objekt-ID "
+"optional die Menge enthalten: ``\"<package-path>:<object-"
+"name>;param1=value1,param2=value2#<quantity>\"``."
+
+#: ../../source/design.rst:207
+msgid "The public repository"
+msgstr "Das öffentliche Repository"
+
+#: ../../source/design.rst:209
+msgid ""
+"The public PartCAD repository is created and maintained by the community "
+"based on the PartCAD standards and conventions. It is hosted on `GitHub "
+"<https://github.com/partcad/partcad-index>`_."
+msgstr ""
+"Das öffentliche PartCAD-Repository wird von der Community auf Basis der "
+"PartCAD-Standards und -Konventionen erstellt und gepflegt. Es wird auf "
+"`GitHub <https://github.com/partcad/partcad-index>`_ gehostet."
+
+#: ../../source/design.rst:213
+msgid ""
+"The top levels of the package hierarchy are expected to be maintained by "
+"the PartCAD community. Lower levels of the hierarchy are expected to be "
+"maintained by vendors and other communities. PartCAD community does not "
+"aim to achieve the uniqueness of parts and assemblies. Moreover, everyone"
+" is invited to provide their alternative models as long as they provide a"
+" different level of model quality or different level of package quality "
+"management processes, and as long the package data properly reflects the "
+"quality that the maintainer provides and commits to maintain. This way "
+"PartCAD users have a choice of which model to use based on their specific"
+" needs."
+msgstr ""
+"Es wird erwartet, dass die oberen Ebenen der Pakethierarchie von der "
+"PartCAD-Community gepflegt werden. Niedrigere Ebenen der Hierarchie "
+"sollen von Anbietern und anderen Communities gepflegt werden. Die "
+"PartCAD-Community strebt keine Eindeutigkeit von Teilen und Baugruppen "
+"an. Vielmehr ist jeder eingeladen, alternative Modelle bereitzustellen, "
+"solange sie eine andere Qualitätsstufe des Modells oder ein anderes "
+"Niveau der Paketqualitätsmanagementprozesse bieten und solange die "
+"Paketdaten die Qualität, die der Maintainer bereitstellt und sich zu "
+"pflegen verpflichtet, korrekt widerspiegeln. So haben PartCAD-Nutzer die "
+"Wahl, welches Modell sie je nach ihren spezifischen Bedürfnissen "
+"verwenden."
+
+#: ../../source/design.rst:226
+msgid "Tools"
+msgstr "Werkzeuge"
+
+#: ../../source/design.rst:228
+msgid ""
+"PartCAD tools can operate with public and private repositories for as "
+"long as they are maintained following the PartCAD standards and "
+"conventions."
+msgstr ""
+"PartCAD-Werkzeuge können mit öffentlichen und privaten Repositories "
+"arbeiten, solange diese gemäß den PartCAD-Standards und -Konventionen "
+"gepflegt werden."
+
+#: ../../source/design.rst:232
+msgid "Command line tools"
+msgstr "Befehlszeilenwerkzeuge"
+
+#: ../../source/design.rst:234
+msgid ""
+"PartCAD CLI tools get installed using the PyPI module ``partcad-cli``. "
+"The main tool is called ``pc``. The CLI tools are supposed to provide the"
+" complete set of PartCAD features."
+msgstr ""
+"PartCAD-CLI-Werkzeuge werden über das PyPI-Modul ``partcad-cli`` "
+"installiert. Das Hauptwerkzeug heißt ``pc``. Die CLI-Werkzeuge sollen den"
+" vollständigen Funktionsumfang von PartCAD bereitstellen."
+
+#: ../../source/design.rst:239
+msgid "Visual Studio Code extension"
+msgstr "Visual-Studio-Code-Erweiterung"
+
+#: ../../source/design.rst:241
+msgid "The PartCAD extension for ``vscode`` is designed to be the primary tool."
+msgstr "Die PartCAD-Erweiterung für ``vscode`` ist als primäres Werkzeug gedacht."
+
+#: ../../source/design.rst:246
+msgid "Libraries and frameworks"
+msgstr "Bibliotheken und Frameworks"
+
+#: ../../source/design.rst:249
+msgid "Python"
+msgstr "Python"
+
+#: ../../source/design.rst:251
+msgid ""
+"The `partcad` Python module is the first PartCAD library. Its development"
+" is prioritized due to the popularity and the value proposition of such "
+"Python frameworks such as CadQuery and build123d."
+msgstr ""
+"Das Python-Modul `partcad` ist die erste PartCAD-Bibliothek. Ihre "
+"Entwicklung wird priorisiert, aufgrund der Beliebtheit und des "
+"Nutzenversprechens von Python-Frameworks wie CadQuery und build123d."
+
+#: ../../source/design.rst:256
+msgid "Other languages"
+msgstr "Andere Sprachen"
+
+#: ../../source/design.rst:258
+msgid ""
+"PartCAD does not aim to stop at supporting Python. Native libraries in "
+"other languages are planned and all contributors wishing to join the "
+"project are welcome."
+msgstr ""
+"PartCAD will sich nicht auf die Unterstützung von Python beschränken. "
+"Native Bibliotheken in anderen Sprachen sind geplant, und alle "
+"Mitwirkenden, die sich dem Projekt anschließen möchten, sind willkommen."

@@ -1,0 +1,328 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/use_cases.rst:2
+msgid "Use Cases"
+msgstr "使用场景"
+
+#: ../../source/use_cases.rst:4
+msgid ""
+"PartCAD provides a public repository of parts and assemblies, and various"
+" tools and frameworks to operate with those parts and assemblies. "
+"Depending on particular goals, different ways of interacting with PartCAD"
+" tools and data may be desired. Below is a list of some common use cases."
+msgstr "PartCAD 提供了一个公共的零件和装配体仓库，以及用于操作这些零件和装配体的各种工具和框架。根据具体目标的不同，你可能会希望以不同的方式与 PartCAD 的工具和数据进行交互。下面列出了一些常见的使用场景。"
+
+#: ../../source/use_cases.rst:15
+msgid "Develop CAD models faster"
+msgstr "更快地开发 CAD 模型"
+
+#: ../../source/use_cases.rst:17
+msgid ""
+"PartCAD VSCode Extension is a powerful tool to develop code-CAD "
+"(OpenSCAD, CadQuery, build123d and sdf) models faster. It provides a rich"
+" set of features to help you develop models:"
+msgstr "PartCAD VSCode 扩展是一款强大的工具，可帮助你更快地开发代码化 CAD（OpenSCAD、CadQuery、build123d 和 sdf）模型。它提供了一整套丰富的功能来帮助你开发模型："
+
+#: ../../source/use_cases.rst:20
+msgid ":ref:`caching` of intermediate and final results of all model compilations"
+msgstr "对所有模型编译的中间结果和最终结果进行 :ref:`caching`"
+
+#: ../../source/use_cases.rst:21
+msgid "Render-on-save (including for OpenSCAD)"
+msgstr "保存时渲染（包括对 OpenSCAD 而言）"
+
+#: ../../source/use_cases.rst:25
+msgid "Browse available models"
+msgstr "浏览可用的模型"
+
+#: ../../source/use_cases.rst:28
+msgid "Online"
+msgstr "在线"
+
+#: ../../source/use_cases.rst:30
+msgid ""
+"The web UI to browse the public PartCAD repository is available at "
+"`partcad.org <https://partcad.org/>`_."
+msgstr "用于浏览公共 PartCAD 仓库的 Web 界面可在 `partcad.org <https://partcad.org/>`_ 访问。"
+
+#: ../../source/use_cases.rst:34
+msgid "Visual Studio Code extension"
+msgstr "Visual Studio Code 扩展"
+
+#: ../../source/use_cases.rst:36
+msgid ""
+"The PartCAD extension is `available "
+"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ "
+"in VS Code extension marketplace."
+msgstr "PartCAD 扩展在 VS Code 扩展市场中 `可获取 <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ 。"
+
+#: ../../source/use_cases.rst:41
+msgid "Command line tools"
+msgstr "命令行工具"
+
+#: ../../source/use_cases.rst:43
+msgid ""
+"Whether you consider publishing new CAD models or consuming already "
+"existing ones, it makes sense to browse what's already available."
+msgstr "无论你是打算发布新的 CAD 模型，还是使用已有的模型，先浏览一下已经可用的内容都是有意义的。"
+
+#: ../../source/use_cases.rst:46
+msgid ""
+"The PartCAD's integration into WebAssembly is not yet completed and, "
+"thus, there is currently no public website where you can browse the "
+"public PartCAD repository."
+msgstr "PartCAD 与 WebAssembly 的集成尚未完成，因此目前还没有可供浏览公共 PartCAD 仓库的公开网站。"
+
+#: ../../source/use_cases.rst:50
+msgid "The command line tools are the easiest way to browse parts:"
+msgstr "命令行工具是浏览零件的最简便方式："
+
+#: ../../source/use_cases.rst:87
+msgid ""
+"The last command displays the chosen part in ``OCP CAD Viewer`` view in "
+"Visual Studio Code. There is currently no support for ``cq-server``. "
+"Please, let `support@partcad.org <mailto:support@partcad.org>`_ know if "
+"there is any other tool we should support."
+msgstr "最后一条命令会在 Visual Studio Code 的 ``OCP CAD Viewer`` 视图中显示所选的零件。目前尚不支持 ``cq-server`` 。如果还有其他我们应当支持的工具，请告知 `support@partcad.org <mailto:support@partcad.org>`_ 。"
+
+#: ../../source/use_cases.rst:95
+msgid "Render projections"
+msgstr "渲染投影"
+
+#: ../../source/use_cases.rst:97
+msgid ""
+"The result of 2D projection of individual parts, assemblies and scenes "
+"onto a plane (3D to 2D) can be rendered to an image in any of the "
+"following formats:"
+msgstr "将单个零件、装配体和场景投影到平面上（从 3D 到 2D）所得到的 2D 投影结果，可以渲染为以下任意一种格式的图像："
+
+#: ../../source/use_cases.rst:100
+msgid "Vector images"
+msgstr "矢量图像"
+
+#: ../../source/use_cases.rst:102
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/use_cases.rst:104
+msgid "Raster images"
+msgstr "光栅图像"
+
+#: ../../source/use_cases.rst:106
+msgid "PNG"
+msgstr "PNG"
+
+#: ../../source/use_cases.rst:111
+msgid "Export models"
+msgstr "导出模型"
+
+#: ../../source/use_cases.rst:113
+msgid ""
+"Individual parts, assemblies and scenes can also can be exported into 3D "
+"model file formats, including:"
+msgstr "单个零件、装配体和场景还可以导出为 3D 模型文件格式，包括："
+
+#: ../../source/use_cases.rst:116
+msgid "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
+msgstr "`STEP <https://en.wikipedia.org/wiki/ISO_10303>`_"
+
+#: ../../source/use_cases.rst:117
+msgid "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
+msgstr "`BREP <https://en.wikipedia.org/wiki/Boundary_representation>`_"
+
+#: ../../source/use_cases.rst:118
+msgid "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
+msgstr "`STL <https://en.wikipedia.org/wiki/STL_(file_format)>`_"
+
+#: ../../source/use_cases.rst:119
+msgid "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
+msgstr "`3MF <https://en.wikipedia.org/wiki/3D_Manufacturing_Format>`_"
+
+#: ../../source/use_cases.rst:120
+msgid "`ThreeJS <https://en.wikipedia.org/wiki/Three.js>`_"
+msgstr "`ThreeJS <https://en.wikipedia.org/wiki/Three.js>`_"
+
+#: ../../source/use_cases.rst:121
+msgid "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
+msgstr "`OBJ <https://en.wikipedia.org/wiki/Wavefront_.obj_file>`_"
+
+#: ../../source/use_cases.rst:122
+msgid "`GLTF <https://en.wikipedia.org/wiki/GlTF>`_"
+msgstr "`GLTF <https://en.wikipedia.org/wiki/GlTF>`_"
+
+#: ../../source/use_cases.rst:123
+msgid "`IGES <https://en.wikipedia.org/wiki/IGES>`_"
+msgstr "`IGES <https://en.wikipedia.org/wiki/IGES>`_"
+
+#: ../../source/use_cases.rst:125
+msgid ""
+"Expect more output formats to be added to the list of supported export "
+"formats in the future."
+msgstr "预计未来还会有更多输出格式被加入到受支持的导出格式列表中。"
+
+#: ../../source/use_cases.rst:136
+msgid "Consume models"
+msgstr "使用模型"
+
+#: ../../source/use_cases.rst:139
+msgid "CAD Design GUIs"
+msgstr "CAD 设计图形界面"
+
+#: ../../source/use_cases.rst:141
+msgid ""
+"You can use models from the public PartCAD repository in a CAD Design "
+"GUI, such as FreeCAD or its paid alternatives. PartCAD plugins for these "
+"apps are not yet available. For now, export the models to STEP or 3MF "
+"files and import those files into the CAD Design GUI of your choice."
+msgstr "你可以在 CAD 设计图形界面（例如 FreeCAD 或其付费替代品）中使用来自公共 PartCAD 仓库的模型。针对这些应用的 PartCAD 插件目前尚不可用。就目前而言，请先将模型导出为 STEP 或 3MF 文件，再将这些文件导入到你所选择的 CAD 设计图形界面中。"
+
+#: ../../source/use_cases.rst:153
+msgid "Python: CadQuery"
+msgstr "Python：CadQuery"
+
+#: ../../source/use_cases.rst:155
+msgid ""
+"Here are some examples of how to fetch PartCAD models from within a "
+"``CadQuery`` script:"
+msgstr "下面是一些示例，演示如何在 ``CadQuery`` 脚本中获取 PartCAD 模型："
+
+#: ../../source/use_cases.rst:181
+msgid "Python: build123d"
+msgstr "Python：build123d"
+
+#: ../../source/use_cases.rst:183
+msgid ""
+"Here are some examples of how to fetch PartCAD models from within a "
+"``build123d`` script:"
+msgstr "下面是一些示例，演示如何在 ``build123d`` 脚本中获取 PartCAD 模型："
+
+#: ../../source/use_cases.rst:209
+msgid "Python: any format"
+msgstr "Python：任意格式"
+
+#: ../../source/use_cases.rst:211
+msgid ""
+"``pc.get_part_cadquery()`` and ``pc.get_part_build123d()`` above are thin"
+" aliases for the general conversion API, which returns the result in "
+"memory for any supported format instead of writing an output file:"
+msgstr "上面的 ``pc.get_part_cadquery()`` 和 ``pc.get_part_build123d()`` 是通用转换 API 的简单别名，对于任何受支持的格式，它都会在内存中返回结果，而不是写出一个输出文件："
+
+#: ../../source/use_cases.rst:227
+msgid ""
+"The supported part types are ``build123d`` and ``cadquery``, which return"
+" the CAD library's own object, plus the serialized formats ``3mf``, "
+"``brep``, ``dxf``, ``gltf``, ``iges``, ``obj``, ``step``, ``stl``, "
+"``svg`` and ``threejs``. Formats that are textual by definition "
+"(``step``, ``iges``, ``brep``, ``obj``, ``threejs``, ``svg``, ``dxf``) "
+"are returned as ``str``; formats that are or can be binary (``stl``, "
+"``3mf``, ``gltf``) are returned as ``bytes``. The return type depends "
+"only on the requested part type, never on the export options."
+msgstr "受支持的零件类型有 ``build123d`` 和 ``cadquery`` （它们返回相应 CAD 库自己的对象），以及序列化格式 ``3mf`` 、 ``brep`` 、 ``dxf`` 、 ``gltf`` 、 ``iges`` 、 ``obj`` 、 ``step`` 、 ``stl`` 、 ``svg`` 和 ``threejs`` 。本质上属于文本的格式（ ``step`` 、 ``iges`` 、 ``brep`` 、 ``obj`` 、 ``threejs`` 、 ``svg`` 、 ``dxf`` ）会以 ``str`` 形式返回；本身是或可能是二进制的格式（ ``stl`` 、 ``3mf`` 、 ``gltf`` ）则以 ``bytes`` 形式返回。返回类型仅取决于所请求的零件类型，而与导出选项无关。"
+
+#: ../../source/use_cases.rst:236
+msgid ""
+"``pc.convert_assembly()`` and ``pc.convert_sketch()`` do the same for "
+"assemblies and sketches, and ``Shape.convert()`` is available directly on"
+" any part, sketch or assembly object."
+msgstr "``pc.convert_assembly()`` 和 ``pc.convert_sketch()`` 对装配体和草图执行同样的操作，而 ``Shape.convert()`` 可直接在任意零件、草图或装配体对象上调用。"
+
+#: ../../source/use_cases.rst:241
+msgid "Python"
+msgstr "Python"
+
+#: ../../source/use_cases.rst:266
+msgid "shell"
+msgstr "shell"
+
+#: ../../source/use_cases.rst:284
+msgid "Produce models"
+msgstr "制作模型"
+
+#: ../../source/use_cases.rst:287
+msgid "Part: Files"
+msgstr "零件：文件"
+
+#: ../../source/use_cases.rst:289
+msgid ""
+"One way to define parts in PartCAD is by providing a file in any of the "
+"currently supported formats: STEP, BREP, STL, 3MF, OBJ. There is no "
+"intention to limit the list of file formats supported. Contribute support"
+" of your favorite file format (ideally, implicitly, by adding the "
+"corresponding support to build123d)."
+msgstr "在 PartCAD 中定义零件的一种方式，是提供一个当前受支持格式的文件：STEP、BREP、STL、3MF、OBJ。我们无意限制受支持文件格式的范围。欢迎你为自己喜爱的文件格式贡献支持（最好是间接地，通过为 build123d 添加相应的支持来实现）。"
+
+#: ../../source/use_cases.rst:310
+msgid "Part: CAD scripts"
+msgstr "零件：CAD 脚本"
+
+#: ../../source/use_cases.rst:312
+msgid ""
+"Another way to define parts is by using CAD scripting technologies such "
+"as OpenSCAD. This is the only CAD scripting language supported at the "
+"moment. The fundamental difference from CAD files listed above is the "
+"availability of parameters. However OpenSCAD parameters are not yet "
+"supported."
+msgstr "定义零件的另一种方式，是使用诸如 OpenSCAD 之类的 CAD 脚本技术。这是目前唯一受支持的 CAD 脚本语言。它与上面列出的 CAD 文件的根本区别在于可以使用参数。不过，OpenSCAD 参数目前尚不受支持。"
+
+#: ../../source/use_cases.rst:326
+msgid "Part: Python scripts"
+msgstr "零件：Python 脚本"
+
+#: ../../source/use_cases.rst:328
+msgid ""
+"The most powerful way to define parts is by using modeling frameworks "
+"such as CadQuery and build123d. PartCAD uses CQGI to load models (in "
+"other words: intercepts `show_object()` calls)."
+msgstr "定义零件最强大的方式，是使用诸如 CadQuery 和 build123d 之类的建模框架。PartCAD 使用 CQGI 来加载模型（换句话说：拦截 `show_object()` 调用）。"
+
+#: ../../source/use_cases.rst:342
+msgid "Part: AI-generated"
+msgstr "零件：AI 生成"
+
+#: ../../source/use_cases.rst:344
+msgid ""
+"PartCAD can generate CadQuery and OpenSCAD scripts using GenAI models "
+"from Google and OpenAI. This is the fastest way to bootstrap most "
+"designs. Empty the generated file and iteratively improve the prompts "
+"until the desired script functionality is achieved. Alternatively, drop "
+"the AI parameters and continue improving the script manually."
+msgstr "PartCAD 可以使用来自 Google 和 OpenAI 的 GenAI 模型来生成 CadQuery 和 OpenSCAD 脚本。这是为大多数设计打基础的最快方式。清空生成的文件，并反复改进提示词，直到脚本实现所需的功能为止。或者，你也可以去掉 AI 参数，继续手动改进脚本。"
+
+#: ../../source/use_cases.rst:366
+msgid "The following configuration is required:"
+msgstr "需要进行如下配置："
+
+#: ../../source/use_cases.rst:375
+msgid "Assembly"
+msgstr "装配体"
+
+#: ../../source/use_cases.rst:404
+msgid "Publish packages"
+msgstr "发布包"
+
+#: ../../source/use_cases.rst:406
+msgid ""
+"It's very simple to publish your package to the public PartCAD "
+"repository. First, publish your package as a repo on GitHub. Then create "
+"a pull request in `the public PartCAD repo <https://github.com/partcad"
+"/partcad-index>`_ to add a reference to your package."
+msgstr "将你的包发布到公共 PartCAD 仓库非常简单。首先，将你的包作为一个仓库发布到 GitHub 上。然后在 `公共 PartCAD 仓库 <https://github.com/partcad/partcad-index>`_ 中创建一个 pull request，以添加对你的包的引用。"

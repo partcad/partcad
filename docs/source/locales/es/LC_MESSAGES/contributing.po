@@ -1,0 +1,1356 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 20:49+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: es\n"
+"Language-Team: es <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/contributing.rst:2
+msgid "Contributing"
+msgstr "Contribuir"
+
+#: ../../source/contributing.rst:4
+msgid ""
+"Everyone can contribute to the development of PartCAD, which lowers the "
+"entry barrier to the design and manufacturing world and speeds up "
+"innovation for humanity."
+msgstr ""
+"Todos pueden contribuir al desarrollo de PartCAD, lo que reduce la "
+"barrera de entrada al mundo del diseño y la fabricación y acelera la "
+"innovación para la humanidad."
+
+#: ../../source/contributing.rst:8
+msgid "Find below some of the ways to contribute."
+msgstr "A continuación encontrará algunas formas de contribuir."
+
+#: ../../source/contributing.rst:12
+msgid "Why contributing?"
+msgstr "¿Por qué contribuir?"
+
+#: ../../source/contributing.rst:14
+msgid ""
+"By improving PartCAD itself, you can improve the framework and platform "
+"capabilities for all of its users, no matter whether they are using "
+"public packages or working on hermetic private repositories."
+msgstr ""
+"Al mejorar PartCAD en sí, puede mejorar las capacidades del marco de "
+"trabajo y la plataforma para todos sus usuarios, sin importar si están "
+"usando paquetes públicos o trabajando en repositorios privados "
+"herméticos."
+
+#: ../../source/contributing.rst:20
+msgid "What to contribute?"
+msgstr "¿Qué aportar?"
+
+#: ../../source/contributing.rst:23
+msgid "Ideas and Feedback"
+msgstr "Ideas y comentarios"
+
+#: ../../source/contributing.rst:25
+msgid ""
+"Share your ideas and feedback using `PartCAD's Discord server "
+"<https://discord.gg/h5qhbHtygj>`_."
+msgstr ""
+"Comparta sus ideas y comentarios usando el `servidor de Discord de "
+"PartCAD <https://discord.gg/h5qhbHtygj>`_."
+
+#: ../../source/contributing.rst:29
+msgid "Develop Features"
+msgstr "Desarrollar funcionalidades"
+
+#: ../../source/contributing.rst:31
+msgid ""
+"All PartCAD software components are present in `the PartCAD's main Github"
+" repository <https://github.com/partcad/partcad/>`_. All pull requests "
+"are welcome."
+msgstr ""
+"Todos los componentes de software de PartCAD están presentes en `el "
+"repositorio principal de GitHub de PartCAD "
+"<https://github.com/partcad/partcad/>`_. Todas las pull requests son "
+"bienvenidas."
+
+#: ../../source/contributing.rst:35
+msgid ""
+"If you need help deciding what could be the best project for you to work "
+"on, engage with the community on `PartCAD's Discord server "
+"<https://discord.gg/h5qhbHtygj>`_"
+msgstr ""
+"Si necesita ayuda para decidir cuál podría ser el mejor proyecto en el "
+"que trabajar, interactúe con la comunidad en el `servidor de Discord de "
+"PartCAD <https://discord.gg/h5qhbHtygj>`_"
+
+#: ../../source/contributing.rst:40
+msgid "Spread The Word"
+msgstr "Difundir la palabra"
+
+#: ../../source/contributing.rst:42
+msgid ""
+"You can make a huge impact on lots of people by simply creating a simple "
+"post or a basic video tutorial for PartCAD in your social media accounts."
+" It is very much appreciated."
+msgstr ""
+"Puede tener un impacto enorme en muchas personas simplemente creando una "
+"publicación sencilla o un tutorial en video básico sobre PartCAD en sus "
+"redes sociales. Se agradece mucho."
+
+#: ../../source/contributing.rst:47
+msgid "PartCAD Public Repository"
+msgstr "Repositorio público de PartCAD"
+
+#: ../../source/contributing.rst:49
+msgid ""
+"Besides main PartCAD software components, you can contribute to the "
+"community by publishing design data as well as pluggable software modules"
+" to PartCAD Public Repository."
+msgstr ""
+"Además de los componentes principales del software de PartCAD, puede "
+"contribuir a la comunidad publicando datos de diseño así como módulos de "
+"software conectables en el repositorio público de PartCAD."
+
+#: ../../source/contributing.rst:53
+msgid "Assemblies"
+msgstr "Ensamblajes"
+
+#: ../../source/contributing.rst:55
+msgid ""
+"Migrate your products to PartCAD by creating and publishing Assembly YAML"
+" files for your products. Eliminate the need to develop and maintain a "
+"custom way to store and to publish assembly instructions and bills of "
+"materials. Enable the use or your assemblies in other PartCAD projects."
+msgstr ""
+"Migre sus productos a PartCAD creando y publicando archivos Assembly YAML"
+" para sus productos. Elimine la necesidad de desarrollar y mantener una "
+"forma personalizada de almacenar y publicar instrucciones de ensamblaje y"
+" listas de materiales. Permita el uso de sus ensamblajes en otros "
+"proyectos de PartCAD."
+
+#: ../../source/contributing.rst:60
+msgid ""
+"Start by creating a package (in a dedicated git repository) for all "
+"products by your company or community. Then add parametrized assembly "
+"declarations to the package."
+msgstr ""
+"Comience creando un paquete (en un repositorio git dedicado) para todos "
+"los productos de su empresa o comunidad. Luego agregue declaraciones de "
+"ensamblaje parametrizadas al paquete."
+
+#: ../../source/contributing.rst:64
+msgid ""
+"The best way to write Assembly YAML files is to use the PartCAD VS Code "
+"extension and its code completion features. Select the part you want to "
+"add in the explorer view on the left. Then, in the Assembly YAML file "
+"editor, start typing ``- part:`` (including the trailing space) as if you"
+" were adding a new part to the assembly. After you type ``- pa``, a code "
+"completion suggestion appears that adds the complete YAML block for the "
+"selected part."
+msgstr ""
+"La mejor manera de escribir archivos Assembly YAML es usar la extensión "
+"de PartCAD para VS Code y sus funcionalidades de autocompletado de "
+"código. Seleccione la pieza que desea agregar en la vista del explorador "
+"a la izquierda. Luego, en el editor de archivos Assembly YAML, empiece a "
+"escribir ``- part:`` (incluyendo el espacio final) como si estuviera "
+"agregando una nueva pieza al ensamblaje. Después de escribir ``- pa``, "
+"aparece una sugerencia de autocompletado de código que agrega el bloque "
+"YAML completo para la pieza seleccionada."
+
+#: ../../source/contributing.rst:73
+msgid "Parts"
+msgstr "Piezas"
+
+#: ../../source/contributing.rst:75
+msgid ""
+"Publish your parts in the PartCAD Public Repository to enable their use "
+"(and purchase if applicable) by other PartCAD users."
+msgstr ""
+"Publique sus piezas en el repositorio público de PartCAD para permitir su"
+" uso (y compra si corresponde) por parte de otros usuarios de PartCAD."
+
+#: ../../source/contributing.rst:78
+msgid ""
+"Start by creating a package (in a dedicated git repository) for all parts"
+" and assemblies created by your company or community, if you didn't do "
+"that yet. Then add part declarations to the package."
+msgstr ""
+"Comience creando un paquete (en un repositorio git dedicado) para todas "
+"las piezas y ensamblajes creados por su empresa o comunidad, si aún no lo"
+" ha hecho. Luego agregue declaraciones de piezas al paquete."
+
+#: ../../source/contributing.rst:83
+msgid ""
+"If CAD files already exist for these parts, then you should probably "
+"start by using those CAD files first. You can always migrate to Code-CAD "
+"technologies (such as OpenSCAD, CadQuery, build123d or sdf) later. "
+"However you might want to host the CAD files separately from the "
+"package's git repository (and have PartCAD fetch them using `fileFrom: "
+"url`, even if they are hosted in another git repository) so that you do "
+"not blow up the repository size and slow your projects down in perpetuity"
+" by a temporary use of legacy CAD files."
+msgstr ""
+"Si ya existen archivos CAD para estas piezas, probablemente debería "
+"comenzar usando primero esos archivos CAD. Siempre puede migrar más tarde"
+" a tecnologías Code-CAD (como OpenSCAD, CadQuery, build123d o sdf). Sin "
+"embargo, es posible que desee alojar los archivos CAD por separado del "
+"repositorio git del paquete (y que PartCAD los obtenga usando `fileFrom: "
+"url`, incluso si están alojados en otro repositorio git) para no inflar "
+"el tamaño del repositorio ni ralentizar sus proyectos a perpetuidad por "
+"el uso temporal de archivos CAD heredados."
+
+#: ../../source/contributing.rst:92
+msgid ""
+"After that declare the location of ports. This will enable connecting "
+"parts to each other, instead of placing them using absolute and relative "
+"coordinates and ensuring they remain properly co-located using finger-"
+"crossing guarantees. Whenever possible, use interfaces and mating "
+"declarations instead of pure ports, so that it's easier for PartCAD "
+"(including AIs using PartCAD) to determine which parts are meant to be "
+"connected to which parts, and how exactly they need to be connected."
+msgstr ""
+"Después de eso, declare la ubicación de los puertos. Esto permitirá "
+"conectar piezas entre sí, en lugar de colocarlas usando coordenadas "
+"absolutas y relativas y asegurando que permanezcan correctamente "
+"colocalizadas mediante garantías \"a ver si sale bien\". Siempre que sea "
+"posible, use interfaces y declaraciones de acoplamiento en lugar de "
+"puertos puros, para que sea más fácil para PartCAD (incluidas las IAs que"
+" usan PartCAD) determinar qué piezas están destinadas a conectarse con "
+"qué piezas, y cómo exactamente deben conectarse."
+
+#: ../../source/contributing.rst:102
+msgid "Interfaces"
+msgstr "Interfaces"
+
+#: ../../source/contributing.rst:104
+msgid ""
+"The most challenging step of adding parts is to declare all the ports. "
+"This effort can be significantly reduced for all PartCAD users globally "
+"by extending the library of standard interfaces."
+msgstr ""
+"El paso más desafiante al agregar piezas es declarar todos los puertos. "
+"Este esfuerzo se puede reducir significativamente para todos los usuarios"
+" de PartCAD a nivel global ampliando la biblioteca de interfaces "
+"estándar."
+
+#: ../../source/contributing.rst:108
+msgid ""
+"Does your part have a port of the kind also found in many other parts? "
+"Consider declaring a reusable interface."
+msgstr ""
+"¿Su pieza tiene un puerto del tipo que también se encuentra en muchas "
+"otras piezas? Considere declarar una interfaz reutilizable."
+
+#: ../../source/contributing.rst:112
+msgid "Providers"
+msgstr "Proveedores"
+
+#: ../../source/contributing.rst:114
+msgid ""
+"Advertise your online store and manufacturing services by integrating "
+"your API with PartCAD."
+msgstr ""
+"Promocione su tienda en línea y sus servicios de fabricación integrando "
+"su API con PartCAD."
+
+#: ../../source/contributing.rst:117
+msgid ""
+"Decide which one is more appropriate for your business: ``store`` or "
+"``manufacturer``. Then see an existing provider implementation of that "
+"kind as a reference. Alternatively, reach out to the PartCAD team to get "
+"help with the implementation. Be at the forefront of the next industrial "
+"revolution together with PartCAD!"
+msgstr ""
+"Decida cuál es más apropiado para su negocio: ``store`` o "
+"``manufacturer``. Luego consulte una implementación de proveedor "
+"existente de ese tipo como referencia. Alternativamente, comuníquese con "
+"el equipo de PartCAD para obtener ayuda con la implementación. ¡Esté a la"
+" vanguardia de la próxima revolución industrial junto con PartCAD!"
+
+#: ../../source/contributing.rst:124
+msgid "Help a Friend"
+msgstr "Ayude a un amigo"
+
+#: ../../source/contributing.rst:126
+msgid ""
+"Do you know an opensource project that maintains assembly instructions or"
+" doing something else that can be radically improved by using PartCAD? Do"
+" you know a business that uses legacy tools and struggles to scale "
+"collaboration in the era of Git? Do you know a local additive "
+"manufacturing shop that can use more local customers? Do you know a "
+"collection of parts that the community can really benefit from if only "
+"these parts and corresponding assembly ideas were easily discoverable?"
+msgstr ""
+"¿Conoce un proyecto de código abierto que mantiene instrucciones de "
+"ensamblaje o hace algo más que se podría mejorar radicalmente usando "
+"PartCAD? ¿Conoce una empresa que usa herramientas obsoletas y batalla "
+"para escalar la colaboración en la era de Git? ¿Conoce un taller local de"
+" fabricación aditiva que podría beneficiarse de más clientes locales? "
+"¿Conoce una colección de piezas de la que la comunidad realmente se "
+"beneficiaría si estas piezas y las ideas de ensamblaje correspondientes "
+"fueran fácilmente localizables?"
+
+#: ../../source/contributing.rst:135
+msgid "Help them migrate to PartCAD!"
+msgstr "¡Ayúdelos a migrar a PartCAD!"
+
+#: ../../source/contributing.rst:139
+msgid "How to contribute?"
+msgstr "¿Cómo contribuir?"
+
+#: ../../source/contributing.rst:144
+msgid "Environment"
+msgstr "Entorno"
+
+#: ../../source/contributing.rst:146
+msgid ""
+"Our team is using `Visual Studio Code`_ and `Docker`_ which boosts "
+"software development by providing a powerful, customizable editor and "
+"ensuring consistent environments with containerization."
+msgstr ""
+"Nuestro equipo usa `Visual Studio Code`_ y `Docker`_, lo que impulsa el "
+"desarrollo de software al proporcionar un editor potente y personalizable"
+" y garantizar entornos consistentes mediante la contenerización."
+
+#: ../../source/contributing.rst:150
+msgid ""
+"VS Code's rich extensions and debugging tools integrate seamlessly with "
+"Docker, allowing developers to write, test, and debug code within "
+"containers."
+msgstr ""
+"Las ricas extensiones y herramientas de depuración de VS Code se integran"
+" perfectamente con Docker, permitiendo a los desarrolladores escribir, "
+"probar y depurar código dentro de contenedores."
+
+#: ../../source/contributing.rst:153
+msgid ""
+"This setup eliminates environment inconsistencies, accelerates "
+"development, and improves team collaboration."
+msgstr ""
+"Esta configuración elimina las inconsistencias de entorno, acelera el "
+"desarrollo y mejora la colaboración en equipo."
+
+#: ../../source/contributing.rst:156
+msgid "Docker"
+msgstr "Docker"
+
+#: ../../source/contributing.rst:158
+msgid ""
+"`Docker`_ helps build, share, run, and verify applications anywhere — "
+"without tedious environment configuration or management. There are two "
+"main options how to setup Docker."
+msgstr ""
+"`Docker`_ ayuda a construir, compartir, ejecutar y verificar aplicaciones"
+" en cualquier lugar — sin tediosas configuraciones o gestión de entornos."
+" Hay dos opciones principales para configurar Docker."
+
+#: ../../source/contributing.rst:161
+msgid ""
+"If you do not have previous experience with Docker, then here is good "
+"place to start:"
+msgstr ""
+"Si no tiene experiencia previa con Docker, este es un buen lugar para "
+"empezar:"
+
+#: ../../source/contributing.rst:163
+msgid "`Docker Docs - Get Started`_"
+msgstr "`Docker Docs - Get Started`_"
+
+#: ../../source/contributing.rst:166
+msgid "Engine"
+msgstr "Engine"
+
+#: ../../source/contributing.rst:168
+msgid ""
+"If your primary development system is Linux then you can install Docker "
+"daemon directly on your host, see `Install`_ for more details on how to "
+"install it in the distribution you're using. Minimum required versions:"
+msgstr ""
+"Si su sistema de desarrollo principal es Linux, puede instalar el daemon "
+"de Docker directamente en su host; consulte `Install`_ para más detalles "
+"sobre cómo instalarlo en la distribución que esté usando. Versiones "
+"mínimas requeridas:"
+
+#: ../../source/contributing.rst:171
+msgid "Docker Engine: v27.4.0 or higher"
+msgstr "Docker Engine: v27.4.0 o superior"
+
+#: ../../source/contributing.rst:172
+msgid "Docker Desktop for Mac/Windows: 4.37.1 or higher"
+msgstr "Docker Desktop para Mac/Windows: 4.37.1 o superior"
+
+#: ../../source/contributing.rst:176
+msgid ""
+"*`Docker Engine`_ is an open source containerization technology for "
+"building and containerizing your applications. Docker Engine acts as a "
+"client-server application with:*"
+msgstr ""
+"*`Docker Engine`_ es una tecnología de contenerización de código abierto "
+"para construir y contenerizar sus aplicaciones. Docker Engine actúa como "
+"una aplicación cliente-servidor con:*"
+
+#: ../../source/contributing.rst:179
+msgid "A server with a long-running daemon process `dockerd`_."
+msgstr "Un servidor con un proceso daemon de larga duración `dockerd`_."
+
+#: ../../source/contributing.rst:180
+msgid ""
+"APIs which specify interfaces that programs can use to talk to and "
+"instruct the Docker daemon."
+msgstr ""
+"APIs que especifican interfaces que los programas pueden usar para "
+"comunicarse con el daemon de Docker e instruirlo."
+
+#: ../../source/contributing.rst:181
+msgid "A command line interface (CLI) client `Docker`_."
+msgstr "Un cliente de interfaz de línea de comandos (CLI) `Docker`_."
+
+#: ../../source/contributing.rst:183
+msgid ""
+"The CLI uses `Docker APIs`_ to control or interact with the Docker daemon"
+" through scripting or direct CLI commands. Many other Docker applications"
+" use the underlying API and CLI. The daemon creates and manages Docker "
+"objects, such as images, containers, networks, and volumes."
+msgstr ""
+"La CLI usa `Docker APIs`_ para controlar o interactuar con el daemon de "
+"Docker mediante scripting o comandos directos de la CLI. Muchas otras "
+"aplicaciones de Docker usan la API y la CLI subyacentes. El daemon crea y"
+" gestiona objetos de Docker, como imágenes, contenedores, redes y "
+"volúmenes."
+
+#: ../../source/contributing.rst:187
+msgid "For more details, see `Docker Architecture`_."
+msgstr "Para más detalles, consulte `Docker Architecture`_."
+
+#: ../../source/contributing.rst:190
+msgid "Desktop"
+msgstr "Desktop"
+
+#: ../../source/contributing.rst:192
+msgid ""
+"If you're working on macOS or Windows, you can still install Engine, but "
+"that would require managing a local Linux VM. Docker Desktop provides a "
+"convenient solution and handles the required virtualization for you:"
+msgstr ""
+"Si trabaja en macOS o Windows, todavía puede instalar Engine, pero eso "
+"requeriría gestionar una VM local de Linux. Docker Desktop proporciona "
+"una solución conveniente y gestiona la virtualización requerida por "
+"usted:"
+
+#: ../../source/contributing.rst:195
+msgid "`Install on Mac`_"
+msgstr "`Install on Mac`_"
+
+#: ../../source/contributing.rst:196
+msgid "`Install on Windows`_"
+msgstr "`Install on Windows`_"
+
+#: ../../source/contributing.rst:200
+msgid ""
+"*`Docker Desktop` is a one-click-install application for your Mac, Linux,"
+" or Windows environment that lets you build, share, and run containerized"
+" applications and microservices.*"
+msgstr ""
+"*`Docker Desktop` es una aplicación de instalación con un solo clic para "
+"su entorno Mac, Linux o Windows que le permite construir, compartir y "
+"ejecutar aplicaciones y microservicios contenerizados.*"
+
+#: ../../source/contributing.rst:203
+msgid ""
+"A screenshot of Docker Desktop's user interface, showing the "
+"\"Containers\" tab."
+msgstr ""
+"Una captura de pantalla de la interfaz de usuario de Docker Desktop, "
+"mostrando la pestaña \"Containers\"."
+
+#: ../../source/contributing.rst:209
+msgid "Visual Studio Code"
+msgstr "Visual Studio Code"
+
+#: ../../source/contributing.rst:211
+msgid ""
+"VS Code available for macOS, Linux, and Windows, has extensible "
+"architecture and has rich customization and integration options. Here is "
+"good place to get familiar with it:"
+msgstr ""
+"VS Code, disponible para macOS, Linux y Windows, tiene una arquitectura "
+"extensible y ricas opciones de personalización e integración. Este es un "
+"buen lugar para familiarizarse con él:"
+
+#: ../../source/contributing.rst:214
+msgid "`Setting up Visual Studio Code`_"
+msgstr "`Setting up Visual Studio Code`_"
+
+#: ../../source/contributing.rst:218
+msgid ""
+"*Visual Studio Code combines the simplicity of a source code editor with "
+"powerful developer tooling, like IntelliSense code completion and "
+"debugging.*"
+msgstr ""
+"*Visual Studio Code combina la simplicidad de un editor de código fuente "
+"con potentes herramientas de desarrollo, como el autocompletado de código"
+" IntelliSense y la depuración.*"
+
+#: ../../source/contributing.rst:221
+msgid ""
+"*First and foremost, it is an editor that gets out of your way. The "
+"delightfully frictionless edit-build-debug cycle means less time fiddling"
+" with your environment, and more time executing on your ideas.*"
+msgstr ""
+"*Ante todo, es un editor que no se interpone en su camino. El ciclo de "
+"edición-compilación-depuración, agradablemente sin fricciones, significa "
+"menos tiempo dedicado a ajustar su entorno, y más tiempo ejecutando sus "
+"ideas.*"
+
+#: ../../source/contributing.rst:224
+msgid ""
+"A screenshot of a Visual Studio Code environment. The terminal window "
+"shows a behave command being executed to test BDD (Behavior-Driven "
+"Development) scenarios for a PartCAD project."
+msgstr ""
+"Una captura de pantalla de un entorno de Visual Studio Code. La ventana "
+"de terminal muestra un comando behave siendo ejecutado para probar "
+"escenarios BDD (Behavior-Driven Development) de un proyecto de PartCAD."
+
+#: ../../source/contributing.rst:230
+msgid "Dev Containers"
+msgstr "Dev Containers"
+
+#: ../../source/contributing.rst:232
+msgid ""
+"VS Code also provides seamless integration with Docker for managing "
+"environments by supporting `Dev Containers`_ specification."
+msgstr ""
+"VS Code también proporciona una integración perfecta con Docker para "
+"gestionar entornos mediante el soporte de la especificación `Dev "
+"Containers`_."
+
+#: ../../source/contributing.rst:237
+msgid ""
+"_The Visual Studio Code Dev Containers extension lets you use a container"
+" as a full-featured development environment. It allows you to open any "
+"folder inside (or mounted into) a container and take advantage of Visual "
+"Studio Code's full feature set. A `devcontainer.json`_ file in your "
+"project tells VS Code how to access (or create) a development container "
+"with a well-defined tool and runtime stack. This container can be used to"
+" run an application or to separate tools, libraries, or runtimes needed "
+"for working with a codebase._"
+msgstr ""
+"_La extensión Dev Containers de Visual Studio Code le permite usar un "
+"contenedor como un entorno de desarrollo completo. Le permite abrir "
+"cualquier carpeta dentro de (o montada en) un contenedor y aprovechar "
+"todo el conjunto de funcionalidades de Visual Studio Code. Un archivo "
+"`devcontainer.json`_ en su proyecto le indica a VS Code cómo acceder a (o"
+" crear) un contenedor de desarrollo con un conjunto bien definido de "
+"herramientas y tiempo de ejecución. Este contenedor se puede usar para "
+"ejecutar una aplicación o para separar herramientas, bibliotecas o "
+"tiempos de ejecución necesarios para trabajar con una base de código._"
+
+#: ../../source/contributing.rst:243
+msgid "Following docs section provides good overview of available features:"
+msgstr ""
+"La siguiente sección de la documentación ofrece una buena visión general "
+"de las funcionalidades disponibles:"
+
+#: ../../source/contributing.rst:245
+msgid "`Developing inside a Container`_"
+msgstr "`Developing inside a Container`_"
+
+#: ../../source/contributing.rst:263
+msgid "Quick Start"
+msgstr "Inicio rápido"
+
+#: ../../source/contributing.rst:267
+msgid ""
+"Following tutorial assumes that you have previous experience with both "
+"`VS Code`_ and `Docker`_ or have read `Environment`_ first."
+msgstr ""
+"El siguiente tutorial asume que tiene experiencia previa tanto con `VS "
+"Code`_ como con `Docker`_, o que ha leído primero `Environment`_."
+
+#: ../../source/contributing.rst:270
+msgid ""
+"Overall process starting from setting up environment till merging changes"
+" in default branch is the following:"
+msgstr ""
+"El proceso general, desde la configuración del entorno hasta la fusión de"
+" cambios en la rama predeterminada, es el siguiente:"
+
+#: ../../source/contributing.rst:272
+msgid "Clone Git Repository."
+msgstr "Clonar el repositorio Git."
+
+#: ../../source/contributing.rst:273
+msgid "Install Python Dependencies."
+msgstr "Instalar las dependencias de Python."
+
+#: ../../source/contributing.rst:274
+msgid "Activate Virtual Environment."
+msgstr "Activar el entorno virtual."
+
+#: ../../source/contributing.rst:275
+msgid "Make Changes in Source Files."
+msgstr "Hacer cambios en los archivos fuente."
+
+#: ../../source/contributing.rst:276
+msgid "Run Tests."
+msgstr "Ejecutar las pruebas."
+
+#: ../../source/contributing.rst:277
+msgid "Commit & Push Changes."
+msgstr "Confirmar y subir los cambios."
+
+#: ../../source/contributing.rst:278
+msgid "Open Pull Request."
+msgstr "Abrir una pull request."
+
+#: ../../source/contributing.rst:279
+msgid "Meet PR Merge Criteria."
+msgstr "Cumplir los criterios de fusión de la PR."
+
+#: ../../source/contributing.rst:282
+msgid "Retrieve the Source Code"
+msgstr "Obtener el código fuente"
+
+#: ../../source/contributing.rst:284
+msgid ""
+"Due to variations in Docker setup across operating systems, this step has"
+" distinct best practices. Please follow the section for your OS below. "
+"Once you have cloned the repository, VS Code will start the Dev "
+"Container."
+msgstr ""
+"Debido a las variaciones en la configuración de Docker entre sistemas "
+"operativos, este paso tiene mejores prácticas distintas. Siga la sección "
+"correspondiente a su sistema operativo a continuación. Una vez que haya "
+"clonado el repositorio, VS Code iniciará el Dev Container."
+
+#: ../../source/contributing.rst:287
+msgid ""
+"The last time we've measured, the size of base Docker Image with all "
+"system-level dependencies baked in is 2.83 GB, main highlights are:"
+msgstr ""
+"La última vez que lo medimos, el tamaño de la imagen base de Docker con "
+"todas las dependencias a nivel de sistema incorporadas es de 2.83 GB; los"
+" aspectos principales son:"
+
+#: ../../source/contributing.rst:289
+msgid "APT Packages: 770.56 MB"
+msgstr "Paquetes APT: 770.56 MB"
+
+#: ../../source/contributing.rst:290
+msgid "Git: 423.87 MB"
+msgstr "Git: 423.87 MB"
+
+#: ../../source/contributing.rst:291
+msgid "Python: 411.28 MB"
+msgstr "Python: 411.28 MB"
+
+#: ../../source/contributing.rst:292
+msgid "Common Utils: 251.11 MB"
+msgstr "Utilidades comunes: 251.11 MB"
+
+#: ../../source/contributing.rst:293
+msgid "Debian (Bookworm): 116.56 MB"
+msgstr "Debian (Bookworm): 116.56 MB"
+
+#: ../../source/contributing.rst:296
+msgid "Mac & Windows"
+msgstr "Mac y Windows"
+
+#: ../../source/contributing.rst:300
+msgid ""
+"Since macOS and Windows run containers in a VM, \"`bind`_\" mounts are "
+"not as fast as using the container's filesystem directly. Fortunately, "
+"Docker has the concept of a local \"`named volume`_\" that can act like "
+"the container's filesystem but survives container rebuilds. This makes it"
+" ideal for storing package folders like ``node_modules``, data folders, "
+"or output folders like ``build`` where write performance is critical."
+msgstr ""
+"Dado que macOS y Windows ejecutan contenedores en una VM, los montajes "
+"\"`bind`_\" no son tan rápidos como usar directamente el sistema de "
+"archivos del contenedor. Afortunadamente, Docker tiene el concepto de un "
+"\"`named volume`_\" local que puede actuar como el sistema de archivos "
+"del contenedor pero sobrevive a las reconstrucciones del contenedor. Esto"
+" lo hace ideal para almacenar carpetas de paquetes como ``node_modules``,"
+" carpetas de datos, o carpetas de salida como ``build`` donde el "
+"rendimiento de escritura es crítico."
+
+#: ../../source/contributing.rst:305
+msgid ""
+"In order to have optimal performance use the following documentation, but"
+" when prompted to provide GitHub repository name use ``partcad/partcad`` "
+"to clone our main repository:"
+msgstr ""
+"Para obtener un rendimiento óptimo, use la siguiente documentación, pero "
+"cuando se le pida proporcionar el nombre del repositorio de GitHub, use "
+"``partcad/partcad`` para clonar nuestro repositorio principal:"
+
+#: ../../source/contributing.rst:308
+msgid "`Open a Git repository or GitHub PR in an isolated container volume`_"
+msgstr "`Open a Git repository or GitHub PR in an isolated container volume`_"
+
+#: ../../source/contributing.rst:311
+msgid "Linux"
+msgstr "Linux"
+
+#: ../../source/contributing.rst:313
+msgid ""
+"Since Linux can run Docker Engine directly on your host system, you can "
+"use the following documentation to bootstrap environment."
+msgstr ""
+"Dado que Linux puede ejecutar Docker Engine directamente en su sistema "
+"host, puede usar la siguiente documentación para inicializar el entorno."
+
+#: ../../source/contributing.rst:316
+msgid "`Open an existing folder in a container`_"
+msgstr "`Open an existing folder in a container`_"
+
+#: ../../source/contributing.rst:319
+msgid "Without VS Code: Dev Containers CLI"
+msgstr "Sin VS Code: Dev Containers CLI"
+
+#: ../../source/contributing.rst:321
+msgid ""
+"If you do not use VS Code — or you are automating the workflow, for "
+"example from a coding agent — you can enter the same environment from a "
+"terminal with the `Dev Containers CLI`_. It reads the same "
+"``.devcontainer/devcontainer.json``, so you get the same image, features,"
+" mounts, and lifecycle commands the VS Code extension would give you."
+msgstr ""
+"Si no usa VS Code — o está automatizando el flujo de trabajo, por ejemplo"
+" desde un agente de programación — puede entrar al mismo entorno desde "
+"una terminal con `Dev Containers CLI`_. Lee el mismo "
+"``.devcontainer/devcontainer.json``, por lo que obtiene la misma imagen, "
+"funcionalidades, montajes y comandos de ciclo de vida que le daría la "
+"extensión de VS Code."
+
+#: ../../source/contributing.rst:325
+msgid ""
+"Start the environment from the repository root on your host. The first "
+"run is slow while features are installed:"
+msgstr ""
+"Inicie el entorno desde la raíz del repositorio en su host. La primera "
+"ejecución es lenta mientras se instalan las funcionalidades:"
+
+#: ../../source/contributing.rst:331
+msgid "Then run any command inside it:"
+msgstr "Luego ejecute cualquier comando dentro de él:"
+
+#: ../../source/contributing.rst:337
+msgid ""
+"The project virtual environment is not activated automatically and "
+"``pytest``, ``pc``, and ``partcad`` are not on ``$PATH``, so prefix "
+"project commands with ``poetry run``:"
+msgstr ""
+"El entorno virtual del proyecto no se activa automáticamente y "
+"``pytest``, ``pc`` y ``partcad`` no están en ``$PATH``, por lo que debe "
+"anteponer ``poetry run`` a los comandos del proyecto:"
+
+#: ../../source/contributing.rst:346
+msgid ""
+"``poetry.toml`` sets ``in-project = true``, so the virtual environment "
+"lives at ``./.venv`` inside the bind-mounted workspace and is shared "
+"between your host and the container. If you run ``poetry`` on both sides,"
+" each will rebuild ``.venv`` because the interpreter paths recorded in it"
+" are only valid on one side. Keep Python work on one side."
+msgstr ""
+"``poetry.toml`` establece ``in-project = true``, por lo que el entorno "
+"virtual reside en ``./.venv`` dentro del espacio de trabajo montado por "
+"bind y se comparte entre su host y el contenedor. Si ejecuta ``poetry`` "
+"en ambos lados, cada uno reconstruirá ``.venv`` porque las rutas del "
+"intérprete registradas en él solo son válidas en un lado. Mantenga el "
+"trabajo de Python en un solo lado."
+
+#: ../../source/contributing.rst:351
+msgid "Committing from the CLI"
+msgstr "Confirmar cambios desde la CLI"
+
+#: ../../source/contributing.rst:353
+msgid ""
+"Run ``git commit`` **inside** the environment. That is where ``pre-"
+"commit`` is installed, by the ``postStartCommand`` declared in "
+"``.devcontainer/devcontainer.json``:"
+msgstr ""
+"Ejecute ``git commit`` **dentro** del entorno. Ahí es donde se instala "
+"``pre-commit``, mediante el ``postStartCommand`` declarado en "
+"``.devcontainer/devcontainer.json``:"
+
+#: ../../source/contributing.rst:360
+msgid ""
+"If you commit on the host instead, the commit fails with ``` `pre-commit`"
+" not found ```. The ``.git/hooks/pre-commit`` script is generated by "
+"``pre-commit install`` running inside the container, so it refers to an "
+"interpreter path that only exists there. Re-run the commit inside the "
+"environment rather than bypassing the hooks with ``--no-verify``."
+msgstr ""
+"Si en cambio confirma los cambios en el host, la confirmación falla con "
+"``` `pre-commit` not found ```. El script ``.git/hooks/pre-commit`` es "
+"generado por ``pre-commit install`` ejecutándose dentro del contenedor, "
+"por lo que hace referencia a una ruta de intérprete que solo existe ahí. "
+"Vuelva a ejecutar la confirmación dentro del entorno en lugar de omitir "
+"los hooks con ``--no-verify``."
+
+#: ../../source/contributing.rst:364
+msgid ""
+"The VS Code extension copies your host git identity into the container, "
+"but the CLI does not, and anything written to the container's home "
+"directory is lost when the container is recreated. If the commit fails "
+"with ``Author identity unknown``, set the identity repo-locally — "
+"``.git/config`` lives in the bind-mounted workspace, so it survives "
+"container recreates and is never committed:"
+msgstr ""
+"La extensión de VS Code copia la identidad de git de su host al "
+"contenedor, pero la CLI no lo hace, y todo lo que se escriba en el "
+"directorio home del contenedor se pierde cuando el contenedor se recrea. "
+"Si la confirmación falla con ``Author identity unknown``, establezca la "
+"identidad de forma local al repositorio — ``.git/config`` reside en el "
+"espacio de trabajo montado por bind, por lo que sobrevive a las "
+"recreaciones del contenedor y nunca se confirma:"
+
+#: ../../source/contributing.rst:376
+msgid ""
+"Do not mount your host ``~/.gitconfig`` into the container to solve this."
+" If it contains ``url.*.insteadOf`` rules that rewrite "
+"``https://github.com/`` to SSH — a common setup — the ``git-lfs`` "
+"feature's post-create step will attempt SSH, find no key inside the "
+"container, and fail the entire ``up``."
+msgstr ""
+"No monte su ``~/.gitconfig`` del host en el contenedor para resolver "
+"esto. Si contiene reglas ``url.*.insteadOf`` que reescriben "
+"``https://github.com/`` a SSH — una configuración común — el paso "
+"posterior a la creación de la funcionalidad ``git-lfs`` intentará SSH, no"
+" encontrará ninguna clave dentro del contenedor, y hará fallar todo el "
+"``up``."
+
+#: ../../source/contributing.rst:380
+msgid ""
+"If you sign your commits, note that the VS Code extension forwards your "
+"GPG agent automatically but the CLI does not — the container will have "
+"your public key but no private key, and the commit fails to sign. Forward"
+" the agent's extra socket when starting the environment, which keeps your"
+" private key on the host:"
+msgstr ""
+"Si firma sus confirmaciones, tenga en cuenta que la extensión de VS Code "
+"reenvía su agente GPG automáticamente, pero la CLI no lo hace — el "
+"contenedor tendrá su clave pública pero no la privada, y la firma de la "
+"confirmación fallará. Reenvíe el socket adicional del agente al iniciar "
+"el entorno, lo que mantiene su clave privada en el host:"
+
+#: ../../source/contributing.rst:389
+msgid ""
+"Then point the container's agent socket at the forwarded one. Note the "
+"socket lives under ``/run/user/$(id -u)/gnupg/``, not ``~/.gnupg/``:"
+msgstr ""
+"Luego apunte el socket del agente del contenedor al reenviado. Tenga en "
+"cuenta que el socket reside en ``/run/user/$(id -u)/gnupg/``, no en "
+"``~/.gnupg/``:"
+
+#: ../../source/contributing.rst:400
+msgid "Install Dependencies"
+msgstr "Instalar dependencias"
+
+#: ../../source/contributing.rst:402
+msgid "We are using `Poetry`_ to manage dependencies and virtual environments."
+msgstr "Usamos `Poetry`_ para gestionar dependencias y entornos virtuales."
+
+#: ../../source/contributing.rst:406
+msgid ""
+"Poetry is a tool for dependency management and packaging in Python. It "
+"allows you to declare the libraries your project depends on and it will "
+"manage (install/update) them for you. Poetry offers a lockfile to ensure "
+"repeatable installs, and can build your project for distribution."
+msgstr ""
+"Poetry es una herramienta para la gestión de dependencias y el "
+"empaquetado en Python. Le permite declarar las bibliotecas de las que "
+"depende su proyecto y se encargará de gestionarlas "
+"(instalarlas/actualizarlas) por usted. Poetry ofrece un archivo de "
+"bloqueo para garantizar instalaciones repetibles, y puede compilar su "
+"proyecto para distribución."
+
+#: ../../source/contributing.rst:410
+msgid ""
+"Once the Dev Container is started, open a shell session in the Terminal "
+"view of VS Code. The current working directory will be "
+"``/workspaces/partcad`` containing the source files. To install Python "
+"packages, run the following:"
+msgstr ""
+"Una vez que el Dev Container se inicia, abra una sesión de shell en la "
+"vista de terminal de VS Code. El directorio de trabajo actual será "
+"``/workspaces/partcad``, que contiene los archivos fuente. Para instalar "
+"los paquetes de Python, ejecute lo siguiente:"
+
+#: ../../source/contributing.rst:417
+msgid ""
+"It will create virtual environment in ``.venv/`` directory and download "
+"about 1.5 GB dependencies. Once all dependencies are downloaded Poetry "
+"will also install current package in editable mode, and you will see the "
+"following:"
+msgstr ""
+"Esto creará un entorno virtual en el directorio ``.venv/`` y descargará "
+"aproximadamente 1.5 GB de dependencias. Una vez descargadas todas las "
+"dependencias, Poetry también instalará el paquete actual en modo "
+"editable, y verá lo siguiente:"
+
+#: ../../source/contributing.rst:425
+msgid "Activate Environment"
+msgstr "Activar el entorno"
+
+#: ../../source/contributing.rst:427
+msgid ""
+"In order to update your ``$PATH`` and be able to run commandline tools "
+"such as ``pytest`` you need to activate virtual environment:"
+msgstr ""
+"Para actualizar su ``$PATH`` y poder ejecutar herramientas de línea de "
+"comandos como ``pytest``, necesita activar el entorno virtual:"
+
+#: ../../source/contributing.rst:434
+msgid "or"
+msgstr "o"
+
+#: ../../source/contributing.rst:440
+msgid ""
+"After that you will be able to run ``pc``, for example ``pc version``, "
+"which will output something along the lines:"
+msgstr ""
+"Después de eso podrá ejecutar ``pc``, por ejemplo ``pc version``, que "
+"mostrará algo parecido a:"
+
+#: ../../source/contributing.rst:448
+msgid "Make Changes"
+msgstr "Hacer cambios"
+
+#: ../../source/contributing.rst:450
+msgid ""
+"Make the changes through Visual Studio Code how you would do for any "
+"other project."
+msgstr ""
+"Haga los cambios a través de Visual Studio Code como lo haría para "
+"cualquier otro proyecto."
+
+#: ../../source/contributing.rst:453
+msgid "Manual Tests"
+msgstr "Pruebas manuales"
+
+#: ../../source/contributing.rst:455
+msgid ""
+"To test functionality of the Python core module, use corresponding "
+"command line interface (CLI) commands."
+msgstr ""
+"Para probar la funcionalidad del módulo central de Python, use los "
+"comandos correspondientes de la interfaz de línea de comandos (CLI)."
+
+#: ../../source/contributing.rst:457
+msgid ""
+"To test CLI functionality, simply type commands in a shell session in the"
+" Terminal view of the VSCode where the development takes place."
+msgstr ""
+"Para probar la funcionalidad de la CLI, simplemente escriba comandos en "
+"una sesión de shell en la vista de terminal de VSCode donde se realiza el"
+" desarrollo."
+
+#: ../../source/contributing.rst:459
+msgid ""
+"To test VSCode plugin, run the following commands in a shell session in "
+"the Terminal view before restarting the VSCode:"
+msgstr ""
+"Para probar el plugin de VSCode, ejecute los siguientes comandos en una "
+"sesión de shell en la vista de terminal antes de reiniciar VSCode:"
+
+#: ../../source/contributing.rst:468
+msgid ""
+"To test the Python core module using the VSCode plugin, click the "
+"`Restart PartCAD` icon in the PartCAD's `Context` view after each change."
+msgstr ""
+"Para probar el módulo central de Python usando el plugin de VSCode, haga "
+"clic en el ícono `Restart PartCAD` en la vista `Context` de PartCAD "
+"después de cada cambio."
+
+#: ../../source/contributing.rst:472
+msgid ""
+"If you are developing inside the PartCAD Dev container using PartCAD "
+"VSCode extension, and are seeing this:"
+msgstr ""
+"Si está desarrollando dentro del Dev Container de PartCAD usando la "
+"extensión de PartCAD para VSCode, y ve esto:"
+
+#: ../../source/contributing.rst:478
+msgid ""
+"then you are likely to have Git configured to use SSH creds to access "
+"GitHub, while the SSH creds are not available in the Dev container."
+msgstr ""
+"entonces es probable que tenga Git configurado para usar credenciales SSH"
+" para acceder a GitHub, mientras que las credenciales SSH no están "
+"disponibles en el Dev Container."
+
+#: ../../source/contributing.rst:481
+msgid ""
+"This could be fixed by running ``ssh-add`` on the host and confirmed by "
+"running ``ssh-add -l`` inside the container."
+msgstr ""
+"Esto se puede solucionar ejecutando ``ssh-add`` en el host y confirmarse "
+"ejecutando ``ssh-add -l`` dentro del contenedor."
+
+#: ../../source/contributing.rst:484
+msgid ""
+"To test documentation changes, run the following command before "
+"navigating your favorite VSCode browser extension to `./docs/build/html`:"
+msgstr ""
+"Para probar cambios en la documentación, ejecute el siguiente comando "
+"antes de navegar con su extensión de navegador favorita de VSCode a "
+"`./docs/build/html`:"
+
+#: ../../source/contributing.rst:490
+msgid ""
+"Alternatively, run the following command before navigating your favorite "
+"VSCode browser extension to `127.0.0.1:8000`:"
+msgstr ""
+"Alternativamente, ejecute el siguiente comando antes de navegar con su "
+"extensión de navegador favorita de VSCode a `127.0.0.1:8000`:"
+
+#: ../../source/contributing.rst:497
+msgid "Automated Tests"
+msgstr "Pruebas automatizadas"
+
+#: ../../source/contributing.rst:500
+msgid "Pytest"
+msgstr "Pytest"
+
+#: ../../source/contributing.rst:502
+msgid ""
+"PartCAD uses ``pytest`` for unit testing, where a particular piece of "
+"code or feature is tested."
+msgstr ""
+"PartCAD usa ``pytest`` para pruebas unitarias, donde se prueba una pieza "
+"particular de código o funcionalidad."
+
+#: ../../source/contributing.rst:504
+msgid ""
+"If you `activated virtual environment`_ you can just run ``pytest`` from "
+"a bash session in the Terminal view of VSCode."
+msgstr ""
+"Si `activated virtual environment`_, simplemente puede ejecutar "
+"``pytest`` desde una sesión bash en la vista de terminal de VSCode."
+
+#: ../../source/contributing.rst:506
+msgid ""
+"You can also use VS Code's built-in **Testing** integration to run and "
+"debug tests via the UI. To set this up:"
+msgstr ""
+"También puede usar la integración **Testing** integrada de VS Code para "
+"ejecutar y depurar pruebas a través de la interfaz. Para configurar esto:"
+
+#: ../../source/contributing.rst:508
+msgid "Open the Command Palette (``Ctrl+Shift+P`` or ``Cmd+Shift+P``)"
+msgstr "Abra la paleta de comandos (``Ctrl+Shift+P`` o ``Cmd+Shift+P``)"
+
+#: ../../source/contributing.rst:509
+msgid "Run ``Python: Select Interpreter``"
+msgstr "Ejecute ``Python: Select Interpreter``"
+
+#: ../../source/contributing.rst:510
+msgid "Select ``('.venv': Poetry) .venv/bin/python`` from the list"
+msgstr "Seleccione ``('.venv': Poetry) .venv/bin/python`` de la lista"
+
+#: ../../source/contributing.rst:512
+msgid ""
+"You also can run ``pytest`` without activating environment via Poetry, "
+"for example:"
+msgstr ""
+"También puede ejecutar ``pytest`` sin activar el entorno mediante Poetry,"
+" por ejemplo:"
+
+#: ../../source/contributing.rst:518
+msgid ""
+"The tests for the core module are located in the ``./partcad/tests`` "
+"directory. The tests for the CLI module are located in the ``./partcad-"
+"cli/tests`` directory. The tests for the LSP server of VSCode plugin are "
+"located in the ``./partcad-ide-vscode/src/test/python_tests`` directory."
+msgstr ""
+"Las pruebas del módulo central se encuentran en el directorio "
+"``./partcad/tests``. Las pruebas del módulo de la CLI se encuentran en el"
+" directorio ``./partcad-cli/tests``. Las pruebas del servidor LSP del "
+"plugin de VSCode se encuentran en el directorio ``./partcad-ide-"
+"vscode/src/test/python_tests``."
+
+#: ../../source/contributing.rst:523
+msgid "Behave"
+msgstr "Behave"
+
+#: ../../source/contributing.rst:525
+msgid ""
+"PartCAD uses ``behave`` for integration testing, where a part of the "
+"system is tested as a whole."
+msgstr ""
+"PartCAD usa ``behave`` para pruebas de integración, donde se prueba una "
+"parte del sistema como un todo."
+
+#: ../../source/contributing.rst:527
+msgid ""
+"To run tests using ``behave``, execute the following command in an "
+"activated environment:"
+msgstr ""
+"Para ejecutar pruebas usando ``behave``, ejecute el siguiente comando en "
+"un entorno activado:"
+
+#: ../../source/contributing.rst:533
+msgid ""
+"Feature definitions and step implementations are located in the "
+"``./features`` directory."
+msgstr ""
+"Las definiciones de features y las implementaciones de pasos se "
+"encuentran en el directorio ``./features``."
+
+#: ../../source/contributing.rst:536
+msgid "Commit & Push Changes"
+msgstr "Confirmar y subir cambios"
+
+#: ../../source/contributing.rst:538
+msgid ""
+"You can commit changes from either terminal or VS Code UI which will "
+"trigger local git hooks managed by ``pre-commit`` to enforce coding "
+"standards and catch some of the problems early."
+msgstr ""
+"Puede confirmar cambios ya sea desde la terminal o desde la interfaz de "
+"VS Code, lo que activará los hooks locales de git gestionados por ``pre-"
+"commit`` para hacer cumplir los estándares de codificación y detectar "
+"algunos problemas de forma temprana."
+
+#: ../../source/contributing.rst:542
+msgid "pre-commit"
+msgstr "pre-commit"
+
+#: ../../source/contributing.rst:546
+msgid ""
+"`pre-commit`_ is a framework for managing and maintaining multi-language "
+"pre-commit hooks."
+msgstr ""
+"`pre-commit`_ es un marco de trabajo para gestionar y mantener hooks de "
+"pre-commit multilenguaje."
+
+#: ../../source/contributing.rst:548
+msgid ""
+"Configuration file is located at ``.devcontainer/.pre-commit-"
+"config.yaml`` where you can see all supported hooks."
+msgstr ""
+"El archivo de configuración se encuentra en ``.devcontainer/.pre-commit-"
+"config.yaml``, donde puede ver todos los hooks admitidos."
+
+#: ../../source/contributing.rst:550
+msgid ""
+"In rare cases, you might need to temporarily disable hooks. There are two"
+" options:"
+msgstr ""
+"En casos excepcionales, podría necesitar deshabilitar temporalmente los "
+"hooks. Hay dos opciones:"
+
+#: ../../source/contributing.rst:552
+msgid "Use `temporarily disable hooks`_ to skip specific individual hooks"
+msgstr ""
+"Use `temporarily disable hooks`_ para omitir hooks individuales "
+"específicos"
+
+#: ../../source/contributing.rst:553
+msgid "Use `git commit --no-verify`_ to skip all hooks at once"
+msgstr "Use `git commit --no-verify`_ para omitir todos los hooks a la vez"
+
+#: ../../source/contributing.rst:555
+msgid "Remember: These hooks are required to pass in CI before PR merge."
+msgstr "Recuerde: estos hooks deben pasar en CI antes de fusionar la PR."
+
+#: ../../source/contributing.rst:559
+msgid ""
+"While you can remove local git hooks completely, be aware that: 1. Your "
+"PR will be blocked from merging until all hook checks pass in CI 2. "
+"You'll miss early feedback that could prevent CI failures 3. You may need"
+" to make additional commits to fix issues that hooks would have caught "
+"locally"
+msgstr ""
+"Aunque puede eliminar por completo los hooks locales de git, tenga en "
+"cuenta que: 1. Su PR quedará bloqueada para fusionarse hasta que todas "
+"las comprobaciones de los hooks pasen en CI 2. Se perderá la "
+"retroalimentación temprana que podría evitar fallos en CI 3. Es posible "
+"que necesite hacer confirmaciones adicionales para corregir problemas que"
+" los hooks habrían detectado localmente"
+
+#: ../../source/contributing.rst:564
+msgid "Option 1: Using pre-commit (recommended)"
+msgstr "Opción 1: Usar pre-commit (recomendado)"
+
+#: ../../source/contributing.rst:573
+msgid "Option 2: Manual removal (use with caution):"
+msgstr "Opción 2: Eliminación manual (usar con precaución):"
+
+#: ../../source/contributing.rst:588
+msgid "Open Pull Request"
+msgstr "Abrir una pull request"
+
+#: ../../source/contributing.rst:590
+msgid ""
+"There are multiple options how PR could be opened, please refer to the "
+"following to choose option which works best for you."
+msgstr ""
+"Hay varias opciones sobre cómo se puede abrir una PR; consulte lo "
+"siguiente para elegir la opción que mejor le funcione."
+
+#: ../../source/contributing.rst:593
+msgid "`Creating a pull request`_"
+msgstr "`Creating a pull request`_"
+
+#: ../../source/contributing.rst:594
+msgid "`GitHub Pull Requests in Visual Studio Code`_"
+msgstr "`GitHub Pull Requests in Visual Studio Code`_"
+
+#: ../../source/contributing.rst:597
+msgid "Meet PR Merge Criteria"
+msgstr "Cumplir los criterios de fusión de la PR"
+
+#: ../../source/contributing.rst:599
+msgid ""
+"Depending on files changed in PR you might need to get required checks to"
+" pass first and get reviews from owners or maintainers, following are "
+"related GH docs:"
+msgstr ""
+"Según los archivos cambiados en la PR, es posible que primero necesite "
+"que pasen las comprobaciones requeridas y obtener revisiones de los "
+"propietarios o mantenedores; a continuación se encuentra la documentación"
+" relacionada de GH:"
+
+#: ../../source/contributing.rst:602
+msgid "`About Status Checks`_"
+msgstr "`About Status Checks`_"
+
+#: ../../source/contributing.rst:603
+msgid "`Required reviews`_"
+msgstr "`Required reviews`_"
+
+#: ../../source/contributing.rst:606
+msgid "Implementation Details"
+msgstr "Detalles de implementación"
+
+#: ../../source/contributing.rst:608
+msgid "The following information is useful for PartCAD contributors."
+msgstr "La siguiente información es útil para los colaboradores de PartCAD."
+
+#: ../../source/contributing.rst:613
+msgid "Coordinates / Location"
+msgstr "Coordenadas / ubicación"
+
+#: ../../source/contributing.rst:615
+msgid ""
+"PartCAD uses OpenCASCADE Location objects (TopLoc_Location) to represent "
+"locations of objects in 3D space."
+msgstr ""
+"PartCAD usa objetos Location de OpenCASCADE (TopLoc_Location) para "
+"representar ubicaciones de objetos en el espacio 3D."
+
+#: ../../source/contributing.rst:621
+msgid "The above list represents a location with the following components:"
+msgstr "La lista anterior representa una ubicación con los siguientes componentes:"
+
+#: ../../source/contributing.rst:623
+msgid ""
+"``[1, 2, 3]``: Translation or offset (in millimeters) along the X, Y, and"
+" Z axes"
+msgstr ""
+"``[1, 2, 3]``: Traslación o desplazamiento (en milímetros) a lo largo de "
+"los ejes X, Y y Z"
+
+#: ../../source/contributing.rst:624
+msgid "``[4, 5, 6]``: The X, Y and Z sizes of the vector to rotate around"
+msgstr "``[4, 5, 6]``: Los tamaños X, Y y Z del vector alrededor del cual rotar"
+
+#: ../../source/contributing.rst:625
+msgid "``70``: The angle of rotation around the above vector"
+msgstr "``70``: El ángulo de rotación alrededor del vector anterior"
+
+#: ../../source/contributing.rst:629
+msgid "Internal geometry representation"
+msgstr "Representación interna de geometría"
+
+#: ../../source/contributing.rst:631
+msgid ""
+"PartCAD maintains parts as OpenCASCADE objects. Similar to ``wrapped`` "
+"objects found in ``CadQuery`` and ``build123d``."
+msgstr ""
+"PartCAD mantiene las piezas como objetos de OpenCASCADE. Similar a los "
+"objetos ``wrapped`` que se encuentran en ``CadQuery`` y ``build123d``."
+
+#: ../../source/contributing.rst:635
+msgid "Parallelism"
+msgstr "Paralelismo"
+
+#: ../../source/contributing.rst:637
+msgid "Asynchronous at heart"
+msgstr "Asíncrono en esencia"
+
+#: ../../source/contributing.rst:639
+msgid ""
+"PartCAD is designed to run most of its logic as coroutines in the "
+"asyncio's event loop."
+msgstr ""
+"PartCAD está diseñado para ejecutar la mayor parte de su lógica como "
+"corrutinas en el bucle de eventos de asyncio."
+
+#: ../../source/contributing.rst:641
+msgid "Threads for the muscle"
+msgstr "Hilos para la fuerza bruta"
+
+#: ../../source/contributing.rst:643
+msgid ""
+"There is a separate thread pool created for long-running procedures that "
+"are CPU intensive. The number of threads matches the number of CPU cores "
+"minus 1 (if there is more than 1)."
+msgstr ""
+"Existe un grupo de hilos (thread pool) separado creado para "
+"procedimientos de larga duración que consumen muchos recursos de CPU. El "
+"número de hilos coincide con el número de núcleos de CPU menos 1 (si hay "
+"más de 1)."
+
+#: ../../source/contributing.rst:646
+msgid ""
+"Coroutines can spawn tasks on the thread pool. Tasks on the thread pool "
+"can't call coroutines that use asyncio.Lock()."
+msgstr ""
+"Las corrutinas pueden generar tareas en el grupo de hilos. Las tareas en "
+"el grupo de hilos no pueden llamar a corrutinas que usen asyncio.Lock()."
+
+#: ../../source/contributing.rst:648
+msgid "Digest external code properly"
+msgstr "Procesar correctamente el código externo"
+
+#: ../../source/contributing.rst:650
+msgid ""
+"Separate processes are spawned (optionally, in a sandboxed environment) "
+"to process third-party CAD-as-code parts and assemblies. One thread is "
+"consumed in the thread pool to wait for each such process to complete (to"
+" cap the number of CPU cores occupied)."
+msgstr ""
+"Se generan procesos separados (opcionalmente, en un entorno aislado) para"
+" procesar piezas y ensamblajes CAD-as-code de terceros. Se consume un "
+"hilo del grupo de hilos para esperar a que cada uno de esos procesos "
+"termine (para limitar el número de núcleos de CPU ocupados)."
+
+#: ../../source/contributing.rst:653
+msgid "Friendly face"
+msgstr "Cara amigable"
+
+#: ../../source/contributing.rst:655
+msgid ""
+"To make it apparent to external users, all externally visible coroutines "
+"have names that end with \"_async\". Each such coroutine is accompanied "
+"by a synchronous wrapper (which does not have \"_async\" in its name)."
+msgstr ""
+"Para que sea evidente para los usuarios externos, todas las corrutinas "
+"visibles externamente tienen nombres que terminan en \"_async\". Cada una"
+" de esas corrutinas va acompañada de un wrapper síncrono (que no tiene "
+"\"_async\" en su nombre)."

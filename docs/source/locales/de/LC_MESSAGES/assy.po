@@ -1,0 +1,120 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 20:49+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/assy.rst:2
+msgid "Assembly YAML"
+msgstr "Assembly-YAML"
+
+#: ../../source/assy.rst:6
+msgid "Introduction"
+msgstr "Einführung"
+
+#: ../../source/assy.rst:8
+msgid ""
+"Assembly YAML is an approach to define assemblies using a simple YAML "
+"file. This file format was introduced in PartCAD for the first time."
+msgstr ""
+"Assembly-YAML ist ein Ansatz zur Definition von Baugruppen mithilfe einer"
+" einfachen YAML-Datei. Dieses Dateiformat wurde erstmals in PartCAD "
+"eingeführt."
+
+#: ../../source/assy.rst:13
+msgid "Syntax"
+msgstr "Syntax"
+
+#: ../../source/assy.rst:15
+msgid ""
+"Each Assembly YAML (ASSY) file is a YAML file consisting of a tree of "
+"nodes. Each node is either a reference to an external part, a reference "
+"to an external assembly, or a container for such references."
+msgstr ""
+"Jede Assembly-YAML-Datei (ASSY) ist eine YAML-Datei, die aus einem Baum "
+"von Knoten besteht. Jeder Knoten ist entweder ein Verweis auf ein "
+"externes Teil, ein Verweis auf eine externe Baugruppe oder ein Container "
+"für solche Verweise."
+
+#: ../../source/assy.rst:20
+msgid "Containers"
+msgstr "Container"
+
+#: ../../source/assy.rst:22
+msgid ""
+"The top-level node of an ASSY file is a container node. The container "
+"nodes have the following syntax:"
+msgstr ""
+"Der oberste Knoten einer ASSY-Datei ist ein Container-Knoten. Die "
+"Container-Knoten haben folgende Syntax:"
+
+#: ../../source/assy.rst:37
+msgid "Parts"
+msgstr "Teile"
+
+#: ../../source/assy.rst:39
+msgid ""
+"The following syntax is used to create a node that places a part in the "
+"assembly:"
+msgstr ""
+"Die folgende Syntax wird verwendet, um einen Knoten zu erstellen, der ein"
+" Teil in der Baugruppe platziert:"
+
+#: ../../source/assy.rst:59
+msgid ""
+"One and only one method for placing the object is acceptable. Therefore "
+"the sections `location`, `connectPorts` and `connect` are mutually "
+"exclusive. Both `connectPorts` and `connect` are used to connect parts to"
+" each other by matching their ports. `connect` is universal, while "
+"`connectPorts` is specific to connecting with ports and without interface"
+" mating."
+msgstr ""
+"Nur eine einzige Methode zur Platzierung des Objekts ist zulässig. Daher "
+"schließen sich die Abschnitte `location`, `connectPorts` und `connect` "
+"gegenseitig aus. Sowohl `connectPorts` als auch `connect` werden "
+"verwendet, um Teile durch Abgleich ihrer Ports miteinander zu verbinden. "
+"`connect` ist universell einsetzbar, während `connectPorts` speziell für "
+"die Verbindung über Ports ohne Interface-Mating gedacht ist."
+
+#: ../../source/assy.rst:64
+msgid ""
+"The `with` and `to` fields are used to specify the names of interfaces. "
+"Where `with` is the interface of the part that is getting added to the "
+"assembly, and `to` is the interface of the part that is already in the "
+"assembly. The `withInstance` and `toInstance` fields are used to specify "
+"the names of interface instances. The `withPort` and `toPort` fields are "
+"used to specify the names of ports."
+msgstr ""
+"Die Felder `with` und `to` dienen zur Angabe der Namen von Interfaces. "
+"Dabei ist `with` das Interface des Teils, das der Baugruppe hinzugefügt "
+"wird, und `to` das Interface des Teils, das sich bereits in der Baugruppe"
+" befindet. Die Felder `withInstance` und `toInstance` dienen zur Angabe "
+"der Namen von Interface-Instanzen. Die Felder `withPort` und `toPort` "
+"dienen zur Angabe der Namen von Ports."
+
+#: ../../source/assy.rst:71
+msgid "Assemblies"
+msgstr "Baugruppen"
+
+#: ../../source/assy.rst:73
+msgid ""
+"The following syntax is used to create a node that places an assembly in "
+"the assembly:"
+msgstr ""
+"Die folgende Syntax wird verwendet, um einen Knoten zu erstellen, der "
+"eine Baugruppe in der Baugruppe platziert:"

@@ -1,0 +1,59 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ru\n"
+"Language-Team: ru <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/index.rst:22
+msgid "Contents:"
+msgstr "Содержание:"
+
+#: ../../source/index.rst:3
+msgid "PartCAD"
+msgstr "PartCAD"
+
+#: ../../source/index.rst:5
+msgid ""
+"`PartCAD <https://github.com/partcad/partcad>`_ is the standard for "
+"documenting manufacturable physical products. It comes with a set of "
+"tools to maintain product information and to facilitate efficient and "
+"effective workflows at all product lifecycle phases."
+msgstr "`PartCAD <https://github.com/partcad/partcad>`_ — это стандарт для документирования производимых физических продуктов. Он поставляется с набором инструментов для сопровождения информации о продукте и для организации эффективных и результативных рабочих процессов на всех этапах жизненного цикла продукта."
+
+#: ../../source/index.rst:8
+msgid ""
+"PartCAD is more than just a traditional CAD tool for drawing. In fact, "
+"it’s **not for drawing at all**. The letters “CAD” in PartCAD stand for "
+"“computer-aided design” in a more generic sense, where “design” stands "
+"for the process of getting from an idea to **a clear and deterministic "
+"specification of a manufacturable physical product** using a computer "
+"(including the use of AI models). While PartCAD started as **the first "
+"package manager for hardware**, it is now the **next-generation CAD** "
+"that can turn a single visionary individual into a one person "
+"corporation, or make one future Product Manager as productive (**and much"
+" faster!**) as 10 corporate engineering departments of the past."
+msgstr "PartCAD — это больше, чем традиционный CAD-инструмент для черчения. На самом деле он **вообще не предназначен для черчения**. Буквы «CAD» в названии PartCAD означают «computer-aided design» (автоматизированное проектирование) в более широком смысле, где «design» (проектирование) обозначает процесс перехода от идеи к **чёткой и детерминированной спецификации производимого физического продукта** с помощью компьютера (в том числе с использованием моделей ИИ). Хотя PartCAD начинался как **первый менеджер пакетов для аппаратного обеспечения**, теперь это **CAD нового поколения**, который способен превратить одного дальновидного человека в корпорацию из одного сотрудника или сделать одного будущего менеджера продукта настолько же продуктивным (**и намного более быстрым!**), как 10 корпоративных инженерных отделов прошлого."
+
+#: ../../source/index.rst:17
+msgid ""
+"PartCAD is constantly evolving, with new features and integrations being "
+"added all the time. `Contact us <https://calendly.com/partcad-"
+"support/30min>`_ **to discuss how PartCAD can revolutionize your product "
+"development process.**"
+msgstr "PartCAD постоянно развивается, новые возможности и интеграции добавляются всё время. `Свяжитесь с нами <https://calendly.com/partcad-support/30min>`_ **чтобы обсудить, как PartCAD может революционизировать процесс разработки вашего продукта.**"

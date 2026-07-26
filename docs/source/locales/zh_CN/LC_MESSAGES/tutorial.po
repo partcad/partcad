@@ -1,0 +1,575 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 20:49+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/tutorial.rst:2
+msgid "Tutorial"
+msgstr "教程"
+
+#: ../../source/tutorial.rst:6
+msgid "Command Line"
+msgstr "命令行"
+
+#: ../../source/tutorial.rst:9 ../../source/tutorial.rst:281
+msgid "Create a package"
+msgstr "创建一个包"
+
+#: ../../source/tutorial.rst:11
+msgid "First, the current directory needs to be initialized as a PartCAD package."
+msgstr "首先，需要将当前目录初始化为一个 PartCAD 包。"
+
+#: ../../source/tutorial.rst:18
+msgid ""
+"If there is no ``-p`` flag passed to ``pc init`` then the dependency on "
+"the public PartCAD repository is added automatically."
+msgstr "如果没有向 ``pc init`` 传入 ``-p`` 标志，那么会自动添加对公共 PartCAD 仓库的依赖。"
+
+#: ../../source/tutorial.rst:21
+msgid ""
+"Alternatively, manually create ``partcad.yaml`` with the following "
+"content:"
+msgstr "或者，手动创建 ``partcad.yaml`` ，内容如下："
+
+#: ../../source/tutorial.rst:32
+msgid ""
+"Now launch ``pc list`` to see the list of packages currently available in"
+" the public PartCAD repository."
+msgstr "现在运行 ``pc list`` ，即可查看公共 PartCAD 仓库中当前可用的包列表。"
+
+#: ../../source/tutorial.rst:41
+msgid "Manage dependencies"
+msgstr "管理依赖"
+
+#: ../../source/tutorial.rst:43
+msgid ""
+"PartCAD has to be provided with a configuration file which may declare "
+"parts and assemblies, but also declares all repositories that PartCAD is "
+"allowed to query."
+msgstr "必须为 PartCAD 提供一个配置文件，该文件既可以声明零件和装配体，也会声明所有允许 PartCAD 查询的仓库。"
+
+#: ../../source/tutorial.rst:46
+msgid ""
+"PartCAD has no implicit dependencies built-in, so a dependency on the "
+"public PartCAD repository needs to be added if PartCAD is supposed to "
+"query it."
+msgstr "PartCAD 没有内置任何隐式依赖，因此如果希望 PartCAD 查询公共 PartCAD 仓库，就需要添加对它的依赖。"
+
+#: ../../source/tutorial.rst:50
+msgid ""
+"In the newly created package, comment out the \"pub\" dependency (prepend"
+" ``#``) and see how the output of ``pc list`` changes."
+msgstr "在新创建的包中，注释掉“pub”依赖（在前面加上 ``#`` ），然后观察 ``pc list`` 的输出会如何变化。"
+
+#: ../../source/tutorial.rst:54
+msgid "Add a part"
+msgstr "添加一个零件"
+
+#: ../../source/tutorial.rst:56
+msgid "Let's add a part defined using an OpenSCAD script."
+msgstr "让我们添加一个使用 OpenSCAD 脚本定义的零件。"
+
+#: ../../source/tutorial.rst:58
+msgid "First, create the OpenSCAD script which defines a cube of size 10mm."
+msgstr "首先，创建一个 OpenSCAD 脚本，用于定义一个尺寸为 10mm 的立方体。"
+
+#: ../../source/tutorial.rst:65
+msgid "Now let's add a declaration of this part to ``partcad.yaml``."
+msgstr "现在，让我们把这个零件的声明添加到 ``partcad.yaml`` 中。"
+
+#: ../../source/tutorial.rst:72
+msgid "Import an existing part"
+msgstr "导入一个已有的零件"
+
+#: ../../source/tutorial.rst:74
+msgid ""
+"The `pc import part` command allows you to import an existing part into a"
+" PartCAD project. You can also specify a target format to convert the "
+"part upon import."
+msgstr "`pc import part` 命令允许你将一个已有的零件导入到 PartCAD 项目中。你还可以指定一个目标格式，以便在导入时转换该零件。"
+
+#: ../../source/tutorial.rst:77
+msgid "Basic import:"
+msgstr "基本导入："
+
+#: ../../source/tutorial.rst:84
+msgid "Import and convert to STL:"
+msgstr "导入并转换为 STL："
+
+#: ../../source/tutorial.rst:91
+msgid "Provide an optional description:"
+msgstr "提供一个可选的描述："
+
+#: ../../source/tutorial.rst:97
+msgid "Example log output:"
+msgstr "示例日志输出："
+
+#: ../../source/tutorial.rst:108
+msgid "The imported part is added to the project directory."
+msgstr "导入的零件会被添加到项目目录中。"
+
+#: ../../source/tutorial.rst:109
+msgid "If a target format is specified, the part is converted automatically."
+msgstr "如果指定了目标格式，该零件会被自动转换。"
+
+#: ../../source/tutorial.rst:113 ../../source/tutorial.rst:308
+msgid "Inspect the part"
+msgstr "检视零件"
+
+#: ../../source/tutorial.rst:115
+msgid "Once a part is created, it can be inspected in ``OCP CAD Viewer``."
+msgstr "零件一旦创建完成，就可以在 ``OCP CAD Viewer`` 中对其进行检视。"
+
+#: ../../source/tutorial.rst:122
+msgid "Export the part"
+msgstr "导出零件"
+
+#: ../../source/tutorial.rst:124
+msgid "Now the part can be exported:"
+msgstr "现在可以导出该零件："
+
+#: ../../source/tutorial.rst:132
+msgid "Convert a Part"
+msgstr "转换零件"
+
+#: ../../source/tutorial.rst:134
+msgid ""
+"The `pc convert part` command converts a part or assembly within a "
+"package into another format. It updates the type of the part if the "
+"format changes."
+msgstr "`pc convert part` 命令可将包内的某个零件或装配体转换为另一种格式。如果格式发生变化，它会更新该零件的类型。"
+
+#: ../../source/tutorial.rst:138 ../../source/tutorial.rst:196
+msgid "Usage:"
+msgstr "用法："
+
+#: ../../source/tutorial.rst:155 ../../source/tutorial.rst:213
+msgid "Options:"
+msgstr "选项："
+
+#: ../../source/tutorial.rst:157
+msgid "``-t``, ``--target-format``: Output format (e.g., step, stl, obj, etc.)"
+msgstr "``-t`` 、 ``--target-format`` ：输出格式（例如 step、stl、obj 等）"
+
+#: ../../source/tutorial.rst:158 ../../source/tutorial.rst:216
+msgid "``-P``, ``--package``: Package name (default is current directory)"
+msgstr "``-P`` 、 ``--package`` ：包名称（默认为当前目录）"
+
+#: ../../source/tutorial.rst:159
+msgid "``-O``, ``--output-dir``: Directory to save output files"
+msgstr "``-O`` 、 ``--output-dir`` ：用于保存输出文件的目录"
+
+#: ../../source/tutorial.rst:160
+msgid "``--dry-run``: Simulate the conversion process without modifying any files"
+msgstr "``--dry-run`` ：模拟转换过程，但不修改任何文件"
+
+#: ../../source/tutorial.rst:163 ../../source/tutorial.rst:221
+msgid "Supported formats:"
+msgstr "受支持的格式："
+
+#: ../../source/tutorial.rst:164
+msgid "STEP"
+msgstr "STEP"
+
+#: ../../source/tutorial.rst:165
+msgid "BREP"
+msgstr "BREP"
+
+#: ../../source/tutorial.rst:166
+msgid "STL"
+msgstr "STL"
+
+#: ../../source/tutorial.rst:167
+msgid "3MF"
+msgstr "3MF"
+
+#: ../../source/tutorial.rst:168
+msgid "ThreeJS (JSON)"
+msgstr "ThreeJS（JSON）"
+
+#: ../../source/tutorial.rst:169
+msgid "OBJ"
+msgstr "OBJ"
+
+#: ../../source/tutorial.rst:170
+msgid "glTF (JSON)"
+msgstr "glTF（JSON）"
+
+#: ../../source/tutorial.rst:171
+msgid "IGES"
+msgstr "IGES"
+
+#: ../../source/tutorial.rst:174 ../../source/tutorial.rst:226
+msgid "Special behavior:"
+msgstr "特殊行为："
+
+#: ../../source/tutorial.rst:176
+msgid ""
+"If the part is of type **`enrich`** or **`alias`**, the `-t` option is "
+"optional. In this case, the system automatically resolves the original "
+"format and converts to it:"
+msgstr ""
+"如果零件的类型是 **`enrich`** 或 **`alias`** ，则 `-t` "
+"选项是可选的。在这种情况下，系统会自动解析出原始格式并将其转换为该格式："
+
+#: ../../source/tutorial.rst:185
+msgid ""
+"The part must be declared in the `partcad.yaml` file. If the output "
+"format is not supported or missing for non-`enrich`/`alias`, the command "
+"will fail."
+msgstr ""
+"该零件必须在 `partcad.yaml` 文件中声明。对于非 `enrich` / `alias` "
+"类型，如果输出格式不受支持或缺失，则该命令将失败。"
+
+#: ../../source/tutorial.rst:190
+msgid "Convert a Sketch"
+msgstr "转换草图"
+
+#: ../../source/tutorial.rst:192
+msgid ""
+"The `pc convert sketch` command converts a sketch (e.g., SVG or DXF) to "
+"another supported format. This command updates the sketch type in the "
+"project if applicable."
+msgstr "`pc convert sketch` 命令可将草图（例如 SVG 或 DXF）转换为另一种受支持的格式。如果适用，该命令会更新项目中草图的类型。"
+
+#: ../../source/tutorial.rst:215
+msgid "``-t``, ``--target-format``: Output format (`svg` or `dxf`)"
+msgstr "``-t`` 、 ``--target-format`` ：输出格式（ `svg` 或 `dxf` ）"
+
+#: ../../source/tutorial.rst:217
+msgid "``-O``, ``--output-dir``: Output folder for the converted sketch"
+msgstr "``-O`` 、 ``--output-dir`` ：转换后草图的输出文件夹"
+
+#: ../../source/tutorial.rst:218
+msgid "``--dry-run``: Perform a dry-run (no files are created or modified)"
+msgstr "``--dry-run`` ：执行一次试运行（不会创建或修改任何文件）"
+
+#: ../../source/tutorial.rst:222
+msgid "SVG"
+msgstr "SVG"
+
+#: ../../source/tutorial.rst:223
+msgid "DXF"
+msgstr "DXF"
+
+#: ../../source/tutorial.rst:228
+msgid ""
+"If the sketch is of type **`enrich`** or **`alias`**, the `-t` argument "
+"is optional. The system will convert it to the original underlying format"
+" automatically:"
+msgstr "如果草图的类型是 **`enrich`** 或 **`alias`** ，则 `-t` 参数是可选的。系统会自动将其转换为原始的底层格式："
+
+#: ../../source/tutorial.rst:237
+msgid ""
+"The sketch must be listed in `partcad.yaml` and marked as a sketch. If "
+"the format is not supported or the resolution fails, the command will "
+"return an error."
+msgstr "该草图必须在 `partcad.yaml` 中列出并被标记为草图。如果格式不受支持，或解析失败，则该命令会返回一个错误。"
+
+#: ../../source/tutorial.rst:241
+msgid "Reset partcad"
+msgstr "重置 partcad"
+
+#: ../../source/tutorial.rst:243
+msgid ""
+"PartCAD maintains an internal state to keep track of dependencies of a "
+"project. This state can be reset using the command below."
+msgstr "PartCAD 会维护一个内部状态，用于跟踪项目的依赖。可以使用下面的命令来重置该状态。"
+
+#: ../../source/tutorial.rst:251
+msgid "VS Code Extension"
+msgstr "VS Code 扩展"
+
+#: ../../source/tutorial.rst:254
+msgid "Start new workspace"
+msgstr "新建工作区"
+
+#: ../../source/tutorial.rst:256
+msgid "Open Visual Studio Code and create a new empty workspace."
+msgstr "打开 Visual Studio Code，创建一个新的空工作区。"
+
+#: ../../source/tutorial.rst:259
+msgid "Activate Python"
+msgstr "激活 Python"
+
+#: ../../source/tutorial.rst:261
+msgid ""
+"If necessary, install the Python extension. Activate a Python environment"
+" (3.10 or above)."
+msgstr "如有必要，请安装 Python 扩展。激活一个 Python 环境（3.10 或更高版本）。"
+
+#: ../../source/tutorial.rst:265
+msgid "Install the extension"
+msgstr "安装该扩展"
+
+#: ../../source/tutorial.rst:267
+msgid ""
+"Install the `PartCAD "
+"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ "
+"extension from the VS Code marketplace."
+msgstr ""
+"从 VS Code 市场安装 `PartCAD "
+"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ "
+"扩展。"
+
+#: ../../source/tutorial.rst:272
+msgid "Install PartCAD"
+msgstr "安装 PartCAD"
+
+#: ../../source/tutorial.rst:274
+msgid ""
+"Switch to the PartCAD workbench (look for the PartCAD logo at the left "
+"edge of the screen). There is the PartCAD Explorer view on the left. "
+"Click ``Install PartCAD`` in the Explorer view if this button is shown to"
+" install PartCAD in the activated Python environment."
+msgstr ""
+"切换到 PartCAD 工作台（在屏幕左侧边缘查找 PartCAD 标志）。左侧会有 PartCAD Explorer 视图。如果 "
+"Explorer 视图中显示了 ``Install PartCAD`` 按钮，请点击它，以便在已激活的 Python 环境中安装 PartCAD。"
+
+#: ../../source/tutorial.rst:283
+msgid ""
+"Once PartCAD is initialized, it won't detect any PartCAD package in the "
+"empty workspace. Click ``Initialize Package`` to create ``partcad.yaml``."
+msgstr ""
+"PartCAD 初始化完成后，在空工作区中它不会检测到任何 PartCAD 包。点击 ``Initialize Package`` 来创建 "
+"``partcad.yaml`` 。"
+
+#: ../../source/tutorial.rst:288
+msgid "Browse"
+msgstr "浏览"
+
+#: ../../source/tutorial.rst:290
+msgid ""
+"Browse the imported packages in the Explorer view. Click on the parts and"
+" assemblies to see them in the ``OCP CAD Viewer`` view that will appear "
+"on the right."
+msgstr "在 Explorer 视图中浏览已导入的包。点击零件和装配体，即可在右侧出现的 ``OCP CAD Viewer`` 视图中查看它们。"
+
+#: ../../source/tutorial.rst:294
+msgid ""
+"For example, navigate to ``//pub/std/metric/cqwarehouse`` and click on "
+"some part (e.g. ``fastener/hexhead-din931``). The PartCAD Inspector view "
+"displays the part parameters. The parameter values can be changed and the"
+" part gets redrawn on ``Update``."
+msgstr ""
+"例如，导航到 ``//pub/std/metric/cqwarehouse`` 并点击某个零件（例如 ``fastener/hexhead-"
+"din931`` ）。PartCAD Inspector 视图会显示该零件的参数。这些参数值可以修改，点击 ``Update`` "
+"后零件会被重新绘制。"
+
+#: ../../source/tutorial.rst:300
+msgid "Create a part"
+msgstr "创建一个零件"
+
+#: ../../source/tutorial.rst:302
+msgid ""
+"Click ``Add a CAD script`` in the Explorer view toolbar. Select "
+"``build123d`` from the dropdown list. Then select ``Example 3: Bead`` as "
+"the template to use. An editor view with the newly created script will be"
+" shown."
+msgstr ""
+"在 Explorer 视图工具栏中点击 ``Add a CAD script`` 。从下拉列表中选择 ``build123d`` 。然后选择 "
+"``Example 3: Bead`` 作为要使用的模板。随后会显示一个包含新创建脚本的编辑器视图。"
+
+#: ../../source/tutorial.rst:310
+msgid ""
+"When you edit Python or OpenSCAD files that are used in the current "
+"PartCAD package, saving the file makes it displayed automatically. Press "
+"``Save`` (Ctrl-S or Cmd-S) to save the script and trigger an automatic "
+"inspection of the part. The ``OCP CAD Viewer`` view will appear on the "
+"right."
+msgstr ""
+"当你编辑当前 PartCAD 包中使用的 Python 或 OpenSCAD 文件时，保存文件会使其自动显示。按 ``Save`` （Ctrl-S"
+" 或 Cmd-S）保存脚本，并触发对该零件的自动检视。 ``OCP CAD Viewer`` 视图会出现在右侧。"
+
+#: ../../source/tutorial.rst:316
+msgid "Import parts"
+msgstr "导入零件"
+
+#: ../../source/tutorial.rst:318
+msgid ""
+"In case you want to use existing PartCAD parts in the design of your "
+"part, then follow the following steps."
+msgstr "如果你想在自己零件的设计中使用已有的 PartCAD 零件，请按照以下步骤操作。"
+
+#: ../../source/tutorial.rst:321
+msgid ""
+"First, select the part you want to use in the PartCAD Explorer view. "
+"Then, add the following to the ``build123d`` script created during the "
+"previous steps of this tutorial:"
+msgstr ""
+"首先，在 PartCAD Explorer 视图中选择你想使用的零件。然后，将以下内容添加到本教程前面步骤中创建的 ``build123d`` "
+"脚本中："
+
+#: ../../source/tutorial.rst:331
+msgid ""
+"Please, note, that after \"``pc.get_\"`` a code completion suggestion "
+"appears. Use the suggested code completion option to insert the code that"
+" adds the selected part to this ``build123d`` script."
+msgstr ""
+"请注意，在 \"``pc.get_\"`` 之后会出现一个代码补全建议。请使用建议的代码补全选项，插入将所选零件添加到此 "
+"``build123d`` 脚本中的代码。"
+
+#: ../../source/tutorial.rst:335
+msgid "Here is an example of how to use the newly added solid:"
+msgstr "下面是一个如何使用新添加的实体（solid）的示例："
+
+#: ../../source/tutorial.rst:346
+msgid "Import an Assembly"
+msgstr "导入一个装配体"
+
+#: ../../source/tutorial.rst:348
+msgid ""
+"The ``pc import assembly`` command allows you to import an assembly from "
+"a STEP file. This command automatically parses the STEP file, extracts "
+"individual parts, and creates an assembly YAML file that records each "
+"part along with its transformation data."
+msgstr ""
+"``pc import assembly`` 命令允许你从 STEP 文件导入一个装配体。该命令会自动解析 STEP "
+"文件，提取出各个零件，并创建一个 assembly YAML 文件，记录每个零件及其变换数据。"
+
+#: ../../source/tutorial.rst:353
+msgid "Usage"
+msgstr "用法"
+
+#: ../../source/tutorial.rst:361
+msgid "Functionality"
+msgstr "功能"
+
+#: ../../source/tutorial.rst:363
+msgid ""
+"**File Parsing:** The command first attempts to parse the STEP file using"
+" an XDE-based approach. If no parts are found via XDE, it falls back to a"
+" classic STEP parsing method."
+msgstr ""
+"**文件解析：** 该命令首先尝试使用基于 XDE 的方法来解析 STEP 文件。如果通过 XDE 未找到任何零件，它会回退到经典的 STEP "
+"解析方法。"
+
+#: ../../source/tutorial.rst:367
+msgid ""
+"**Duplicate Filtering:** Unique parts are identified by comparing the "
+"geometric data and applied transformations. Duplicate entries are "
+"discarded based on a composite key of shape identifier and "
+"transformation."
+msgstr "**去重过滤：** 通过比较几何数据和所施加的变换来识别唯一的零件。会根据由形状标识符和变换构成的复合键来丢弃重复的条目。"
+
+#: ../../source/tutorial.rst:371
+msgid ""
+"**Part Extraction:** Each unique SOLID is saved as a separate STEP file "
+"in a dedicated subfolder. The transformation (translation and rotation) "
+"of each part is recorded and later used in the assembly."
+msgstr ""
+"**零件提取：** 每个唯一的 SOLID 都会作为一个单独的 STEP "
+"文件保存在专门的子文件夹中。每个零件的变换（平移和旋转）都会被记录下来，稍后在装配体中使用。"
+
+#: ../../source/tutorial.rst:375
+msgid ""
+"**Assembly Creation:** An assembly YAML file is generated, linking the "
+"parts (by file name) with their transformation data. This YAML file is "
+"then added to the project, finalizing the assembly import."
+msgstr ""
+"**装配体创建：** 会生成一个 assembly YAML 文件，将各个零件（通过文件名）与它们的变换数据关联起来。随后，这个 YAML "
+"文件会被添加到项目中，从而完成装配体的导入。"
+
+#: ../../source/tutorial.rst:380
+msgid "Example Log Output"
+msgstr "示例日志输出"
+
+#: ../../source/tutorial.rst:391
+msgid "Notes"
+msgstr "注意事项"
+
+#: ../../source/tutorial.rst:393
+msgid ""
+"The STEP file must contain more than one SOLID to be considered an "
+"assembly."
+msgstr "STEP 文件必须包含多于一个 SOLID，才会被视为一个装配体。"
+
+#: ../../source/tutorial.rst:394
+msgid ""
+"If the file does not represent an assembly (i.e. only a single SOLID is "
+"found), the command will raise an error."
+msgstr "如果该文件并不表示一个装配体（即只找到一个 SOLID），则该命令将抛出一个错误。"
+
+#: ../../source/tutorial.rst:395
+msgid ""
+"The transformation data is recorded as a combination of translation and "
+"rotation (axis and angle), enabling precise placement of each part within"
+" the assembly."
+msgstr "变换数据以平移和旋转（轴和角度）的组合形式记录，从而能够将每个零件精确地放置在装配体内。"
+
+#: ../../source/tutorial.rst:399
+msgid "Create an assembly"
+msgstr "创建一个装配体"
+
+#: ../../source/tutorial.rst:401
+msgid ""
+"This is what PartCAD (or, at least, its VS Code Extension) is actually "
+"for."
+msgstr "这正是 PartCAD（或者至少是它的 VS Code 扩展）真正的用途所在。"
+
+#: ../../source/tutorial.rst:403
+msgid ""
+"Click ``Add an assembly file to the current package`` in the PartCAD "
+"Explorer view. After that select an existing assembly file (`*.assy`) or "
+"enter a filename for the new file to be created."
+msgstr ""
+"在 PartCAD Explorer 视图中点击 ``Add an assembly file to the current package`` "
+"。之后，选择一个已有的装配体文件（ `*.assy` ），或者为将要创建的新文件输入一个文件名。"
+
+#: ../../source/tutorial.rst:407
+msgid ""
+"ASSY (Assembly YAML) files use the YAML syntax. The list of parts has to "
+"be added as children under the ``links`` node. Here is how an empty "
+"assembly file looks like:"
+msgstr ""
+"ASSY（Assembly YAML）文件使用 YAML 语法。零件列表必须作为子项添加到 ``links`` "
+"节点之下。下面是一个空装配体文件的样子："
+
+#: ../../source/tutorial.rst:416
+msgid "Add a part to the assembly"
+msgstr "向装配体添加一个零件"
+
+#: ../../source/tutorial.rst:418
+msgid ""
+"Select the desired part or assembly in PartCAD Explorer. After that "
+"navigate to the next line under \"``links:``\" and type \"- pa\" (which "
+"is what you do when you want to add a child item with the name \"part\") "
+"and, then, select the code completion suggestion from PartCAD."
+msgstr ""
+"在 PartCAD Explorer 中选择所需的零件或装配体。之后，将光标移动到 \"``links:``\" 下方的下一行，输入 \"- "
+"pa\"（当你想添加一个名为 \"part\" 的子项时，就是这样操作的），然后从 PartCAD 提供的代码补全建议中进行选择。"
+
+#: ../../source/tutorial.rst:426
+msgid "This will add the selected part or assembly to the assembly file."
+msgstr "这会将所选的零件或装配体添加到装配体文件中。"
+
+#: ../../source/tutorial.rst:432
+msgid "Inspect the assembly"
+msgstr "检视装配体"
+
+#: ../../source/tutorial.rst:434
+msgid ""
+"When you edit ASSY files in the current PartCAD package, the assembly is "
+"displayed automatically on save. Press ``Save`` (Ctrl-S or Cmd-S) to save"
+" the assembly file and trigger an automatic inspection of the assembly. "
+"The ``OCP CAD Viewer`` view will appear on the right if it's not open "
+"yet."
+msgstr ""
+"当你编辑当前 PartCAD 包中的 ASSY 文件时，保存时装配体会自动显示。按 ``Save`` （Ctrl-S 或 "
+"Cmd-S）保存装配体文件，并触发对该装配体的自动检视。如果 ``OCP CAD Viewer`` 视图尚未打开，它会出现在右侧。"

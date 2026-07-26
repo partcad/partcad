@@ -1,0 +1,78 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: es\n"
+"Language-Team: es <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/index.rst:22
+msgid "Contents:"
+msgstr "Contenido:"
+
+#: ../../source/index.rst:3
+msgid "PartCAD"
+msgstr "PartCAD"
+
+#: ../../source/index.rst:5
+msgid ""
+"`PartCAD <https://github.com/partcad/partcad>`_ is the standard for "
+"documenting manufacturable physical products. It comes with a set of "
+"tools to maintain product information and to facilitate efficient and "
+"effective workflows at all product lifecycle phases."
+msgstr ""
+"`PartCAD <https://github.com/partcad/partcad>`_ es el estándar para "
+"documentar productos físicos manufacturables. Incluye un conjunto de "
+"herramientas para mantener la información del producto y facilitar flujos "
+"de trabajo eficientes y efectivos en todas las fases del ciclo de vida del "
+"producto."
+
+#: ../../source/index.rst:8
+msgid ""
+"PartCAD is more than just a traditional CAD tool for drawing. In fact, "
+"it’s **not for drawing at all**. The letters “CAD” in PartCAD stand for "
+"“computer-aided design” in a more generic sense, where “design” stands "
+"for the process of getting from an idea to **a clear and deterministic "
+"specification of a manufacturable physical product** using a computer "
+"(including the use of AI models). While PartCAD started as **the first "
+"package manager for hardware**, it is now the **next-generation CAD** "
+"that can turn a single visionary individual into a one person "
+"corporation, or make one future Product Manager as productive (**and much"
+" faster!**) as 10 corporate engineering departments of the past."
+msgstr ""
+"PartCAD es más que una herramienta CAD tradicional de dibujo. De hecho, "
+"**no sirve para dibujar en absoluto**. Las letras “CAD” en PartCAD "
+"significan “diseño asistido por computadora” en un sentido más genérico, "
+"donde “diseño” representa el proceso de pasar de una idea a **una "
+"especificación clara y determinista de un producto físico manufacturable**"
+" usando una computadora (incluyendo el uso de modelos de IA). Aunque "
+"PartCAD comenzó como **el primer gestor de paquetes para hardware**, ahora"
+" es el **CAD de nueva generación** que puede convertir a una sola persona "
+"visionaria en una corporación unipersonal, o hacer que un futuro Product "
+"Manager sea tan productivo (**¡y mucho más rápido!**) como 10 "
+"departamentos de ingeniería corporativa del pasado."
+
+#: ../../source/index.rst:17
+msgid ""
+"PartCAD is constantly evolving, with new features and integrations being "
+"added all the time. `Contact us <https://calendly.com/partcad-"
+"support/30min>`_ **to discuss how PartCAD can revolutionize your product "
+"development process.**"
+msgstr ""
+"PartCAD está en constante evolución, y continuamente se añaden nuevas "
+"funcionalidades e integraciones. `Contáctenos <https://calendly.com/"
+"partcad-support/30min>`_ **para conversar sobre cómo PartCAD puede "
+"revolucionar su proceso de desarrollo de productos.**"

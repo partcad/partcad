@@ -238,7 +238,7 @@ The CLI tools are supposed to provide the complete set of PartCAD features.
 Visual Studio Code extension
 ============================
 
-PartCAD extension for ``vscode`` is designed to be the primary tool to
+The PartCAD extension for ``vscode`` is designed to be the primary tool.
 
 
 ========================
