@@ -96,7 +96,13 @@ runs:
         python-version: ${{ matrix.python-version }}
         activate-environment: test
         auto-activate-base: false
-        use-only-tar-bz2: true
+        # NB: 'use-only-tar-bz2' is deliberately NOT set. conda-forge publishes
+        # its core runtime libraries (notably 'libstdcxx', which carries the
+        # actual libstdc++.so.6) only in the newer '.conda' format now. Forcing
+        # tar.bz2 pulled just the tiny 'libstdcxx-ng' metapackage without the
+        # real library, so the env fell back to the runner's system libstdc++ --
+        # too old for CXXABI_1.3.15 on ubuntu-22.04. See the libstdcxx-ng
+        # request in the env-create step below.
         pkgs-dirs: ${{ format('~/conda_pkgs_dir_{0}', matrix.python-version) }}
 
     # - uses: mamba-org/setup-micromamba@v2
