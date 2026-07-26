@@ -187,8 +187,8 @@ msgid ""
 "from ``store``-s and ``manufacturer``-s."
 msgstr ""
 "In Zukunft wird PartCAD ``assembler`` unterstützen, der anhand von "
-"Montageanweisungen und mit von ``store``-s und ``manufacturer``-s "
-"bestellten Teilen eine Baugruppe erzeugen soll."
+"Montageanweisungen und mit Teilen, die bei ``store``- und "
+"``manufacturer``-Anbietern bestellt wurden, eine Baugruppe erzeugen soll."
 
 #: ../../source/features.rst:82
 msgid ""

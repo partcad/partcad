@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 20:49+0000\n"
+"POT-Creation-Date: 2026-07-26 21:23+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -428,7 +428,7 @@ msgid "Visual Studio Code extension"
 msgstr "Visual Studio Code 扩展"
 
 #: ../../source/design.rst:241
-msgid "PartCAD extension for ``vscode`` is designed to be the primary tool."
+msgid "The PartCAD extension for ``vscode`` is designed to be the primary tool."
 msgstr "面向 ``vscode`` 的 PartCAD 扩展被设计为主要工具。"
 
 #: ../../source/design.rst:246

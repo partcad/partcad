@@ -54,7 +54,7 @@ msgstr ""
 
 #: ../../source/contributing.rst:20
 msgid "What to contribute?"
-msgstr "¿Qué contribuir?"
+msgstr "¿Qué aportar?"
 
 #: ../../source/contributing.rst:23
 msgid "Ideas and Feedback"

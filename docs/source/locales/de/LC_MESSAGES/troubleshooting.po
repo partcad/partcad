@@ -165,7 +165,7 @@ msgid ""
 "instructions on how to use this extension."
 msgstr ""
 "Der empfohlene Weg, PartCAD zu nutzen, ist die Verwendung der Visual-"
-"Studio-Erweiterung namens ``PartCAD``. Folgen Sie der "
+"Studio-Code-Erweiterung namens ``PartCAD``. Folgen Sie der "
 "Erweiterungsdokumentation für Anweisungen zur Nutzung dieser Erweiterung."
 
 #: ../../source/troubleshooting.rst:80

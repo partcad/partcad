@@ -1049,7 +1049,7 @@ msgid ""
 "If you `activated virtual environment`_ you can just run ``pytest`` from "
 "a bash session in the Terminal view of VSCode."
 msgstr ""
-"Wenn Sie die `activated virtual environment`_ haben, können Sie einfach "
+"Wenn Sie die `activated virtual environment`_ aktiviert haben, können Sie einfach "
 "``pytest`` aus einer Bash-Sitzung in der Terminal-Ansicht von VSCode "
 "ausführen."
 
