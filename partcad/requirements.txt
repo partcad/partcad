@@ -1,6 +1,6 @@
-cadquery-ocp==7.7.2
-ocpsvg==0.3.4
-build123d==0.8.0
+cadquery-ocp==7.9.3.1.1
+ocpsvg==0.6.0
+build123d==0.11.1
 # sdf-fork  # installed on demand into the sandbox runtime (see part_factory_sdf.py)
 pyyaml>=6.0.1
 pygit2>=1.15.0
@@ -12,9 +12,9 @@ requests
 aiofiles
 aiohttp
 vyper-config==1.2.1
-sentry-sdk[opentelemetry]==2.22.0
-async-lru==2.0.4
-filelock==3.17.0
+sentry-sdk[opentelemetry]==2.66.0
+async-lru==2.3.0
+filelock==3.32.0
 docker>=7.1.0
 jsonschema>=4.23.0
 psutil>=6.1.1

@@ -720,8 +720,9 @@ The following models are recommended for use:
 +----------+----------------------------+
 | Provider | Model                      |
 +==========+============================+
-| google   | - gemini-1.5-pro (default) |
-|          | - gemini-1.5-flash         |
+| google   | - gemini-2.5-pro (default) |
+|          | - gemini-2.5-flash         |
+|          | - gemini-3.5-flash         |
 +----------+----------------------------+
 | openai   | - gpt-4o (default)         |
 |          | - gpt-4o-mini              |

@@ -55,8 +55,11 @@ jobs:
             platform: macos-arm64
           - os: windows-latest
             platform: windows-x86_64
-          # No linux arm64 bundle: cadquery-ocp 7.7.2 publishes no aarch64
-          # Linux wheel, so there is nothing to freeze there.
+          # No linux arm64 bundle yet. This used to be impossible - cadquery-ocp
+          # 7.7.2 published no aarch64 Linux wheel - but 7.9.3.1.1 does, so the
+          # blocker is gone and adding an "ubuntu-24.04-arm" entry here is now
+          # only a question of runner budget.
+          # TODO(clairbee): add the linux-arm64 bundle.
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
 
@@ -67,9 +70,13 @@ jobs:
         uses: actions/setup-python@v7
         with:
           # The bundle embeds this interpreter, so this is the Python version
-          # every user of the standalone tools ends up running. It matches the
-          # version the wheels are published from in "deploy.yml".
-          python-version: "3.11"
+          # every user of the standalone tools ends up running. It is the newest
+          # version PartCAD supports: a standalone user cannot change it after
+          # the fact the way someone installing the wheels can, so shipping the
+          # oldest supported interpreter would leave them on it for the life of
+          # the bundle. Deliberately ahead of the wheels in "deploy.yml", which
+          # publish from 3.13.
+          python-version: "3.14"
 
       - name: Install system prerequisites
         if: runner.os == 'Linux'
@@ -80,7 +87,7 @@ jobs:
         run: dev-tools/pyinstaller/build.sh
 
       - name: Upload the bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: partcad-standalone-${{ matrix.platform }}
           path: |

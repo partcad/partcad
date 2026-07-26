@@ -2,9 +2,12 @@ version: 2
 
 # Set the OS, Python version and other tools you might need
 build:
-  os: ubuntu-22.04
+  # Newest Ubuntu LTS image Read the Docs offers (it also has ubuntu-26.04,
+  # which is not an LTS-aligned target for us yet).
+  os: ubuntu-24.04
   tools:
-    python: "3.12"
+    # Matches the pinned interpreter used by the other docs/packaging jobs.
+    python: "3.13"
   jobs:
     post_checkout:
       # Download and uncompress the binary

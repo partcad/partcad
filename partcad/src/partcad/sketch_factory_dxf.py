@@ -17,6 +17,7 @@ from .sketch_factory_python import SketchFactoryPython
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 import ocp_serialize
 
+from . import sandbox_versions
 from . import telemetry
 
 
@@ -31,10 +32,12 @@ class SketchFactoryDxf(SketchFactoryPython):
             python_version = source_project.python_version
             if python_version is None:
                 # Stay one step ahead of the minimum required Python version
-                python_version = "3.11"
-            if python_version == "3.12" or python_version == "3.10":
-                # Switching Python version to 3.11 to avoid compatibility issues with CadQuery
-                python_version = "3.11"
+                python_version = sandbox_versions.DEFAULT_PYTHON_VERSION
+            # CadQuery has no release for Python 3.10, so a package that asks
+            # for it still gets rendered on the oldest interpreter it supports.
+            python_version = sandbox_versions.at_least(
+                python_version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY
+            )
             super().__init__(
                 ctx,
                 source_project,
@@ -79,8 +82,8 @@ class SketchFactoryDxf(SketchFactoryPython):
                 request["label"] = sketch.name
                 request_serialized = ocp_serialize.serialize(request)
 
-                await self.runtime.ensure_async("cadquery-ocp==7.7.2")
-                await self.runtime.ensure_async("cadquery==2.5.2")
+                await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+                await self.runtime.ensure_async(sandbox_versions.CADQUERY)
                 command = [
                     wrapper_path,
                     os.path.abspath(self.path),

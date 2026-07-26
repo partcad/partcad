@@ -115,12 +115,16 @@ class AiOllama(AiContentProcessor):
 
         candidates = []
         for _ in range(options_num):
+            response = None
             retry = True
-            while retry == True:
+            while retry:
                 retry = False
                 try:
+                    # `Options` has no `tokens` field: pydantic silently dropped
+                    # it, so the limit was never applied. `num_predict` is the
+                    # output token limit.
                     options = ollama.Options(
-                        tokens=tokens,
+                        num_predict=tokens,
                         num_thread=ollama_num_thread,
                         top_p=top_p,
                         top_k=top_k,
@@ -140,7 +144,7 @@ class AiOllama(AiContentProcessor):
                     pc_logging.error("Failed to connect to Ollama. Is it running?")
                     retry = True
                     time.sleep(15)
-                except ollama._types.ResponseError as e:
+                except ollama.ResponseError as e:
                     pc_logging.exception(e)
                     pc_logging.error("Failed to generate with Ollama: %s" % str(e))
                     pc_logging.warning(f"Consider running 'ollama run {model}' first...")

@@ -27,11 +27,11 @@
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {
       "installDirectlyFromGitHubRelease": true,
-      "version": "2.63.2"
+      "version": "2.96.0"
     },
     "ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
-      "jqVersion": "1.7.1",
-      "yqVersion": "4.44.6",
+      "jqVersion": "1.8.2",
+      "yqVersion": "4.53.3",
       "gojqVersion": "none",
       "xqVersion": "none",
       "jaqVersion": "none"
@@ -39,14 +39,14 @@
     "ghcr.io/devcontainers/features/git-lfs:1": {
       "autoPull": true,
       "installDirectlyFromGitHubRelease": true,
-      "version": "3.6.0"
+      "version": "3.7.1"
     },
     // "ghcr.io/devcontainers/features/node:1": {
     //   "version": "1.6.1",
     //   "nodeGypDependencies": true
     // },
     "ghcr.io/devcontainers-community/npm-features/typescript:1": {
-      "version": "5.7.3"
+      "version": "6.0.3"
     }
   },
   "customizations": {

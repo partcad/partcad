@@ -27,6 +27,7 @@ from . import logging as pc_logging
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 import ocp_serialize
 
+from . import sandbox_versions
 from . import telemetry
 
 
@@ -36,10 +37,7 @@ class SketchFactoryBuild123d(SketchFactoryPython):
         python_version = source_project.python_version
         if python_version is None:
             # Stay one step ahead of the minimum required Python version
-            python_version = "3.11"
-        if python_version == "3.12" or python_version == "3.10":
-            # Switching Python version to 3.11 to avoid compatibility issues with build123d
-            python_version = "3.11"
+            python_version = sandbox_versions.DEFAULT_PYTHON_VERSION
         with pc_logging.Action("InitBuild123d", target_project.name, config["name"]):
             super().__init__(
                 ctx,
@@ -88,23 +86,25 @@ class SketchFactoryBuild123d(SketchFactoryPython):
             request_serialized = ocp_serialize.serialize(request)
 
             await self.runtime.ensure_async(
-                "ocp-tessellate==3.0.9",
+                sandbox_versions.OCP_TESSELLATE,
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "cadquery-ocp==7.7.2",
+                sandbox_versions.OCPSVG,
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "ocpsvg==0.3.4",
+                sandbox_versions.TYPING_EXTENSIONS,
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "typing_extensions==4.12.2",
+                sandbox_versions.BUILD123D,
                 session=self.session,
             )
+            # Last: re-asserts the VTK-enabled OCP that build123d's
+            # 'cadquery-ocp-novtk' dependency has just replaced.
             await self.runtime.ensure_async(
-                "build123d==0.8.0",
+                sandbox_versions.CADQUERY_OCP,
                 session=self.session,
             )
             cwd = self.project.config_dir

@@ -1,3 +1,5 @@
 # Google AI
-google.generativeai
-Pillow
+# `google-generativeai` (import google.generativeai) is deprecated and replaced
+# by the unified Google Gen AI SDK `google-genai` (from google import genai).
+google-genai>=2.13,<3
+Pillow>=12,<13

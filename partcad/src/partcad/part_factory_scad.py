@@ -17,6 +17,7 @@ from . import logging as pc_logging
 from . import telemetry, wrapper
 from .healthcheck.openscad import find_executable as find_openscad_executable
 from .part_factory_file import PartFactoryFile
+from . import sandbox_versions
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 import ocp_serialize
@@ -138,7 +139,7 @@ def _build_render_args(scad_executable, stl_path, source_path, config):
 @telemetry.instrument()
 class PartFactoryScad(PartFactoryFile):
     # The sandboxed runtime used to keep build123d out of the main process
-    PYTHON_SANDBOX_VERSION = "3.11"
+    PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
         with pc_logging.Action("InitOpenSCAD", target_project.name, config["name"]):
@@ -230,11 +231,13 @@ class PartFactoryScad(PartFactoryFile):
                 request["label"] = part.name
                 request_serialized = ocp_serialize.serialize(request)
 
-                await self.runtime.ensure_async("ocp-tessellate==3.0.9")
-                await self.runtime.ensure_async("typing_extensions==4.12.2")
-                await self.runtime.ensure_async("cadquery-ocp==7.7.2")
-                await self.runtime.ensure_async("ocpsvg==0.3.4")
-                await self.runtime.ensure_async("build123d==0.8.0")
+                await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE)
+                await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS)
+                await self.runtime.ensure_async(sandbox_versions.OCPSVG)
+                await self.runtime.ensure_async(sandbox_versions.BUILD123D)
+                # Last: re-asserts the VTK-enabled OCP that build123d's
+                # 'cadquery-ocp-novtk' dependency has just replaced.
+                await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
 
                 command = [
                     wrapper_path,

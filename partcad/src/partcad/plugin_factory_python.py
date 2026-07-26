@@ -19,6 +19,7 @@ from .runtime_python import PythonRuntime
 
 from . import wrapper
 from . import logging as pc_logging
+from . import sandbox_versions
 from . import telemetry
 
 
@@ -52,10 +53,10 @@ class PluginFactoryPython(PluginFactoryFile):
             python_version = self.project.python_version
         if python_version is None:
             # Stay one step ahead of the minimum required Python version
-            python_version = "3.11"
-        if python_version == "3.12" or python_version == "3.10":
-            # Downgrading Python version to 3.11 to minimize compatibility issues
-            python_version = "3.11"
+            python_version = sandbox_versions.DEFAULT_PYTHON_VERSION
+        # A provider script may use either CadQuery or build123d, so it takes
+        # the stricter of the two floors.
+        python_version = sandbox_versions.at_least(python_version, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY)
 
         self.runtime = self.ctx.get_python_runtime(python_version)
         self.session = self.runtime.get_session(source_project.name)
@@ -131,27 +132,27 @@ class PluginFactoryPython(PluginFactoryFile):
             # TODO-200: Create a version resolution mechanism that can handle dependency conflicts
             # TODO-201: Implement a version update strategy for security patches
             await self.runtime.ensure_async(
-                "ocp-tessellate==3.0.9",
+                sandbox_versions.OCP_TESSELLATE,
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "nlopt==2.9.1",
+                sandbox_versions.NLOPT,
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "cadquery==2.5.2",
+                sandbox_versions.CADQUERY,
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "numpy==2.2.1",
+                sandbox_versions.NUMPY,
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "typing_extensions==4.12.2",
+                sandbox_versions.TYPING_EXTENSIONS,
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "cadquery-ocp==7.7.2",
+                sandbox_versions.CADQUERY_OCP,
                 session=self.session,
             )
             cwd = self.project.config_dir

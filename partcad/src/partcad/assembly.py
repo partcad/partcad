@@ -25,6 +25,21 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 import ocp_serialize
 
 
+def get_wrapped_or_none(shape):
+    """Return a build123d shape's TopoDS object, or None if it has none.
+
+    build123d 0.11 turned 'Shape.wrapped' into a property that asserts the
+    shape was actually built, so reading it on a child that failed raises a
+    bare AssertionError naming neither the assembly nor the child. Reading the
+    attribute the property guards keeps the "is it missing?" question
+    answerable; older releases, where 'wrapped' is a plain attribute, still
+    work through the fallback.
+    """
+    if hasattr(shape, "_wrapped"):
+        return shape._wrapped
+    return getattr(shape, "wrapped", None)
+
+
 class AssemblyChild:
     def __init__(self, item, name=None, location=None):
         self.item = item
@@ -76,7 +91,7 @@ class Assembly(ShapeWithAi):
         async def per_child(child):
             # TODO(clairbee): use topods objects here
             item = await child.item.convert("build123d", ctx)
-            if item is None or item.wrapped is None:
+            if item is None or get_wrapped_or_none(item) is None:
                 # convert("build123d") hands back a Solid whose 'wrapped' is None
                 # when the shape could not be built, most often because the wrapper
                 # process died before producing any output. Copying or compounding

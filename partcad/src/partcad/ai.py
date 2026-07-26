@@ -22,14 +22,18 @@ from .user_config import user_config
 supported_models = [
     "gpt-3.5-turbo",
     "gpt-4",
-    "gpt-4-vision-preview",
     "gpt-4o",
     "gpt-4o-mini",
-    "o1-*",
-    "gemini-pro",
-    "gemini-pro-vision",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
+    "gpt-4.1*",
+    "gpt-5*",
+    "o3*",
+    "o4*",
+    # Gemini 1.x and the original "gemini-pro"/"gemini-pro-vision" aliases have
+    # been retired by Google. Match the live 2.x/3.x families by pattern so new
+    # point releases do not need a code change.
+    "gemini-2.*",
+    "gemini-3.*",
+    "gemini-*-latest",
     "llama3.*",
     "codellama*",
     "codegemma*",
@@ -37,6 +41,12 @@ supported_models = [
     "deepseek-coder*",
     "codestral*",
 ]
+
+# The model used when the user picked a provider but not a model.
+# Keep in sync with `shape_ai.py` and `docs/source/configuration.rst`.
+DEFAULT_GOOGLE_MODEL = "gemini-2.5-pro"
+DEFAULT_OPENAI_MODEL = "gpt-4o"
+DEFAULT_OLLAMA_MODEL = "llama3.1:70b"
 
 
 @telemetry.instrument()
@@ -63,19 +73,11 @@ class Ai(AiGoogle, AiOpenAI, AiOllama):
                         provider = "google"
 
                 if provider == "google":
-                    # if len(image_filenames) > 0:
-                    #     model = "gemini-pro-vision"
-                    # else:
-                    #     model = "gemini-pro"
-                    model = "gemini-1.5-pro"
+                    model = DEFAULT_GOOGLE_MODEL
                 elif provider == "openai":
-                    # if len(image_filenames) > 0:
-                    #     model = "gpt-4o"
-                    # else:
-                    #     model = "gpt-4o"
-                    model = "gpt-4o"
+                    model = DEFAULT_OPENAI_MODEL
                 elif provider == "ollama":
-                    model = "llama3.1:70b"
+                    model = DEFAULT_OLLAMA_MODEL
                 else:
                     error = "Provider %s is not supported" % provider
                     pc_logging.error(error)

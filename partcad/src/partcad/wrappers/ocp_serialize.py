@@ -75,9 +75,25 @@ import sys
 from io import BytesIO
 from typing import Any
 
+# Must come before OCP. VTK, which the OCP build we use links against, bundles
+# its own older copy of expat under the standard XML_* names, and once that is
+# loaded the standard library's pyexpat resolves against it and fails with
+# "undefined symbol: XML_SetReparseDeferralEnabled". Importing pyexpat first
+# pins it to the right library. Sandbox wrappers reach OCP through this module,
+# so this is where the ordering has to be established for them.
+import pyexpat  # noqa: F401
+
 import OCP
-import OCP.BRep
-import OCP.BRepTools
+
+# The submodules have to be imported by name. In OCP 7.9 a bare "import OCP"
+# leaves 'OCP.TopoDS' and friends as unpopulated placeholders, so reaching
+# 'OCP.TopoDS.TopoDS.Vertex_s' through the package alone raises AttributeError.
+# Importing each submodule materializes it; the dotted references below then
+# resolve as they always did.
+import OCP.BRep  # noqa: F401
+import OCP.BRepTools  # noqa: F401
+import OCP.TopAbs  # noqa: F401
+import OCP.TopoDS  # noqa: F401
 
 
 downcast_LUT = {

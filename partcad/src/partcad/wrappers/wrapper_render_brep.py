@@ -5,6 +5,13 @@ import os
 import sys
 
 # from OCP.BRep import BRep_Builder
+# Pinned before the CAD imports below, which load OCP and with it VTK's
+# bundled copy of expat: see the note in ocp_serialize. Without this the
+# standard library's pyexpat binds to VTK's older expat and any later
+# xml.dom use (build123d 0.11 imports IPython, which does exactly that)
+# dies with an undefined-symbol ImportError.
+import pyexpat  # noqa: F401
+
 from OCP.BRepTools import BRepTools
 from OCP.TopoDS import TopoDS_Shape
 

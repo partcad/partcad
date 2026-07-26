@@ -122,7 +122,10 @@ SETUPTOOLS_BOUND="setuptools<82"
 if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   echo "==> Installing build dependencies"
   "${PYTHON}" -m pip install --upgrade pip wheel "${SETUPTOOLS_BOUND}"
-  "${PYTHON}" -m pip install "pyinstaller>=6.11" "${SETUPTOOLS_BOUND}"
+  # PyInstaller only learned about Python 3.14 in 6.15; older releases cap
+  # themselves at "<3.14" and would refuse to install on the interpreter the
+  # bundle is built with.
+  "${PYTHON}" -m pip install "pyinstaller>=6.15" "${SETUPTOOLS_BOUND}"
 
   # `partcad-cli` declares its license by a path inside its own directory, but
   # the file itself only exists in the repository root. The wheel build in
@@ -260,7 +263,7 @@ REQUIRED = {
     "ocp_vscode": "`pc inspect` (needs Python 3.11 or newer)",
     "openai": "the OpenAI provider",
     "ollama": "the Ollama provider",
-    "google.generativeai": "the Google Gemini provider",
+    "google.genai": "the Google Gemini provider",
     "ruff.__main__": "`pc lint` of Python files",
 }
 

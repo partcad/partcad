@@ -85,14 +85,22 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Python Environment
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/pypoetry
             .venv
-          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
+          # Prefix bumped to -v2- to abandon the incrementally-built caches.
+          # The old restore-keys fallback ('devcontainer-poetry-') served a
+          # .venv that had been carried forward and patched across many lock
+          # changes on this branch; behave then segfaulted at startup while
+          # loading the OCP/VTK native stack, in a way that never reproduced
+          # from a freshly built .venv. This forces a clean rebuild for the
+          # current lock (there is no -v2- cache yet) and only ever restores
+          # -v2- caches afterwards.
+          key: devcontainer-poetry-v2-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            devcontainer-poetry-
+            devcontainer-poetry-v2-
 
       - name: "Run: poetry install"
         uses: devcontainers/ci@v0.3
@@ -121,7 +129,9 @@ jobs:
   pytest:
     name: "Run: pytest"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # 30 -> 45: the larger OCP 7.9 / build123d 0.11 install per sandbox, in
+    # line with the "Pytest" job in test.yml.
+    timeout-minutes: 45
     needs: poetry-install
     permissions:
       # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
@@ -142,15 +152,23 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Python Environment
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/pypoetry
             .venv
           # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
-          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
+          # Prefix bumped to -v2- to abandon the incrementally-built caches.
+          # The old restore-keys fallback ('devcontainer-poetry-') served a
+          # .venv that had been carried forward and patched across many lock
+          # changes on this branch; behave then segfaulted at startup while
+          # loading the OCP/VTK native stack, in a way that never reproduced
+          # from a freshly built .venv. This forces a clean rebuild for the
+          # current lock (there is no -v2- cache yet) and only ever restores
+          # -v2- caches afterwards.
+          key: devcontainer-poetry-v2-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            devcontainer-poetry-
+            devcontainer-poetry-v2-
 
       - name: Run PyTest
         uses: devcontainers/ci@v0.3
@@ -197,7 +215,7 @@ jobs:
 
       - name: Publish Allure Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pytest-allure-report
           path: allure-report/
@@ -223,7 +241,7 @@ jobs:
   #         password: ${{ secrets.GITHUB_TOKEN }}
 
   #     - name: Cache pre-commit dependencies
-  #       uses: actions/cache@v4
+  #       uses: actions/cache@v6
   #       with:
   #         path: |
   #           .pre-commit
@@ -249,7 +267,10 @@ jobs:
     name: "Run: behave"
     runs-on: ubuntu-24.04
 
-    timeout-minutes: 60
+    # 60 -> 90: this dev-container behave run was hitting the 60-minute budget
+    # on the new stack. The 'test.yml' Behave jobs (native, not containerized)
+    # get a larger bump because they also cover Windows and macOS.
+    timeout-minutes: 90
 
     needs: poetry-install
     permissions:
@@ -271,14 +292,22 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Python Environment
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/pypoetry
             .venv
-          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
+          # Prefix bumped to -v2- to abandon the incrementally-built caches.
+          # The old restore-keys fallback ('devcontainer-poetry-') served a
+          # .venv that had been carried forward and patched across many lock
+          # changes on this branch; behave then segfaulted at startup while
+          # loading the OCP/VTK native stack, in a way that never reproduced
+          # from a freshly built .venv. This forces a clean rebuild for the
+          # current lock (there is no -v2- cache yet) and only ever restores
+          # -v2- caches afterwards.
+          key: devcontainer-poetry-v2-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            devcontainer-poetry-
+            devcontainer-poetry-v2-
 
       # For Windows only, use PowerShell to set the SSH agent service in the manual launch mode
       - name: Set SSH Agent Service to Manual
@@ -339,7 +368,7 @@ jobs:
 
       - name: Publish Allure Report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: behave-allure-report
           path: allure-report/
@@ -380,7 +409,7 @@ jobs:
   #         password: ${{ secrets.GITHUB_TOKEN }}
 
   #     # - name: Cache Python Environment
-  #     #   uses: actions/cache@v4
+  #     #   uses: actions/cache@v6
   #     #   with:
   #     #     path: |
   #     #       ~/.cache/pypoetry
@@ -420,7 +449,7 @@ jobs:
 
   #     # - name: Publish Allure Report
   #     #   if: always()
-  #     #   uses: actions/upload-artifact@v4
+  #     #   uses: actions/upload-artifact@v7
   #     #   with:
   #     #     name: pytest-allure-report
   #     #     path: allure-report/
@@ -451,15 +480,23 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache Python Environment
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/pypoetry
             .venv
           # TODO: @alexanderilyin: Consider including devcontainer.json in the hash
-          key: devcontainer-poetry-${{ hashFiles('poetry.lock') }}
+          # Prefix bumped to -v2- to abandon the incrementally-built caches.
+          # The old restore-keys fallback ('devcontainer-poetry-') served a
+          # .venv that had been carried forward and patched across many lock
+          # changes on this branch; behave then segfaulted at startup while
+          # loading the OCP/VTK native stack, in a way that never reproduced
+          # from a freshly built .venv. This forces a clean rebuild for the
+          # current lock (there is no -v2- cache yet) and only ever restores
+          # -v2- caches afterwards.
+          key: devcontainer-poetry-v2-${{ hashFiles('poetry.lock') }}
           restore-keys: |
-            devcontainer-poetry-
+            devcontainer-poetry-v2-
 
       - name: Run Acceptance Tests
         uses: devcontainers/ci@v0.3

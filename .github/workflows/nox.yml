@@ -16,8 +16,13 @@ jobs:
   build:
     strategy:
       matrix:
+        # ubuntu-24.04 is still the newest generally available Ubuntu LTS
+        # runner image (ubuntu-26.04 is preview only), so this stays pinned.
         os: [ubuntu-24.04]
-        python-version: ["3.12"]
+        # Single pinned Python for this build-only job. Kept at 3.13 rather
+        # than the newest supported 3.14 so that a brand new interpreter
+        # cannot break packaging of the extension on its own.
+        python-version: ["3.13"]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
