@@ -83,6 +83,27 @@ poetry run pytest partcad partcad-cli -x -p no:error-for-skips -p no:warnings --
 poetry run behave                                                                        # integration tests (./features)
 ```
 
+`behave` gives each scenario a private `$HOME`, so it would start with a cold PartCAD cache every time. The suite
+avoids that by building one internal state directory up front — the `//pub` clone plus the conda sandbox — and
+copying it per scenario via `PC_INTERNAL_STATE_DIR`. The first run builds it (~10 min, ~3.5 GB); later runs reuse
+it. Build or rebuild it explicitly with `poetry run python -m features.seed`, relocate it with
+`PARTCAD_BEHAVE_DIR`, and delete that directory to force a rebuild. A scenario that needs a cold cache — one
+asserting that `pc install` clones, or that the state directory is at the default `$HOME/.partcad` — must be
+tagged `@cold-state`. See `features/seed.py`.
+
+The build resumes rather than starting over, which is what lets CI cache the expensive parts. It caches the git
+clones and the object cache (plus `.seed-exports.json`, the manifest saying which exports are already covered)
+but **not** the conda sandbox — ~2.3 GB of the 3.5 GB, against a ~70s rebuild, and GitHub allows only 10 GB of
+cache per repository. `.seeded` is likewise not cached: were it restored without the sandbox, the build would be
+skipped and every scenario would build a sandbox inside its own throwaway copy. A restored-cache build takes
+~90s instead of ~10 min.
+
+CI parallelises the suite by sharding it across jobs (`BEHAVE_SHARDS` in `test.yml`, split by
+`dev-tools/behave_shard.py`), so each job runs plain serial `behave` over a slice of the feature files. Locally,
+`.devcontainer/behave_hook.sh` instead uses `behavex` to parallelise within one machine. `behavex` does **not**
+read the `tags` setting from `behave.ini`, so pass the exclusions yourself or `@ai` scenarios silently start
+running: `poetry run behavex features -t '~@ai' --parallel-processes=4 --parallel-scheme=feature`.
+
 Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
 
 ### Packaging

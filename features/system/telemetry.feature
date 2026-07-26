@@ -7,7 +7,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-@cli
+# @cold-state: `pc system set` writes to `<internalStateDir>/config.yaml` while
+# UserConfig reads `$HOME/.partcad/config.yaml`. Those are the same file only
+# while internalStateDir is at its default, so pointing the suite's shared state
+# directory elsewhere would stop these scenarios reading back what they just
+# wrote. They need the default location, and they do not touch the caches the
+# shared directory exists to warm.
+@cli @cold-state
 Feature: `pc system telemetry` and `pc system set telemetry` commands
 
   Background: Initialize Private PartCAD project
