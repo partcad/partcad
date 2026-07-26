@@ -68,12 +68,7 @@ export class PartcadItem extends vscode.TreeItem {
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectPackage',
-                arguments: [
-                    { name, pkg, config, itemPath },
-                    {
-                        /*params*/
-                    },
-                ],
+                arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
             };
         } else if (itemType === ITEM_TYPE_SKETCH) {
             this.iconPath = {
@@ -84,12 +79,7 @@ export class PartcadItem extends vscode.TreeItem {
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectSketch',
-                arguments: [
-                    { name, pkg, config, itemPath },
-                    {
-                        /*params*/
-                    },
-                ],
+                arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
             };
         } else if (itemType === ITEM_TYPE_INTERFACE) {
             this.iconPath = {
@@ -100,12 +90,7 @@ export class PartcadItem extends vscode.TreeItem {
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectInterface',
-                arguments: [
-                    { name, pkg, config, itemPath },
-                    {
-                        /*params*/
-                    },
-                ],
+                arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
             };
         } else if (itemType === ITEM_TYPE_ASSEMBLY) {
             this.iconPath = {
@@ -116,12 +101,7 @@ export class PartcadItem extends vscode.TreeItem {
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectAssembly',
-                arguments: [
-                    { name, pkg, config, itemPath },
-                    {
-                        /*params*/
-                    },
-                ],
+                arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
             };
         } else {
             if (config.type === 'alias') {
@@ -143,12 +123,7 @@ export class PartcadItem extends vscode.TreeItem {
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectPart',
-                arguments: [
-                    { name, pkg, config, itemPath },
-                    {
-                        /*params*/
-                    },
-                ],
+                arguments: [{ name, pkg, config, itemPath }, {/*params*/}],
             };
         }
     }

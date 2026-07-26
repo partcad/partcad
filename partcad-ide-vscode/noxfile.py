@@ -59,10 +59,21 @@ def _get_package_data(package):
 
 
 def _update_npm_packages(session: nox.Session) -> None:
+    # Packages deliberately excluded from the "float to latest" update below.
+    # Each is held back for a concrete compatibility reason; lifting any of these
+    # requires the corresponding code/toolchain migration, so do it on purpose.
     pinned = {
+        # Tied to the minimum supported VS Code engine in package.json.
         "vscode-languageclient",
         "@types/vscode",
         "@types/node",
+        # eslint 10 raises the Node engine requirement and the config is written
+        # for the eslint 9 flat-config API (eslint.config.js). Stay on the 9.x line.
+        "eslint",
+        # @typescript-eslint 8 only supports "typescript >=4.8.4 <6.1.0", while the
+        # latest published TypeScript is the 7.x native port. Keep TypeScript on 5.x
+        # until typescript-eslint supports the newer compiler.
+        "typescript",
     }
     package_json_path = pathlib.Path(__file__).parent / "package.json"
     package_json = json.loads(package_json_path.read_text(encoding="utf-8"))
