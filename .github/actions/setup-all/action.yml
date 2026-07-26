@@ -159,18 +159,26 @@ runs:
         . ~/.bash_profile
         . .github/actions/setup-all/mamba-create-retry.sh
         # conda-forge's ICU 78 (loaded through _sqlite3, which build123d imports
-        # via IPython) links a libstdc++ that provides CXXABI_1.3.15 -- only a
-        # modern libstdcxx-ng carries it. Without libstdcxx-ng in the env there
-        # is no libstdc++.so.6 alongside it, so the loader falls back to the
-        # runner's system copy; on older images (ubuntu-22.04) that copy lacks
-        # CXXABI_1.3.15 and "import build123d" dies importing sqlite3. Request it
-        # explicitly (it is a Linux-only package).
+        # via IPython) links a libstdc++ that provides CXXABI_1.3.15. Two things
+        # are needed so that resolves on the older runner images (ubuntu-22.04),
+        # whose *system* libstdc++ predates that symbol:
+        #   1. Pull a modern libstdcxx into the env (libstdcxx-ng is Linux-only).
         EXTRA_CONDA_PKGS=""
         if [ "${RUNNER_OS}" = "Linux" ]; then
           EXTRA_CONDA_PKGS="libstdcxx-ng"
         fi
         mamba_create_retry -n ${{ env.ENV_PATH }} python=${{ matrix.python-version }} poetry ${EXTRA_CONDA_PKGS}
         mamba activate ${{ env.ENV_PATH }}
+        #   2. Make that env libstdc++ win at load time. conda does not touch
+        #      LD_LIBRARY_PATH, so libicui18n otherwise binds to the system
+        #      /lib/x86_64-linux-gnu/libstdc++.so.6. Drop in an activation hook
+        #      that prepends $CONDA_PREFIX/lib on every activation of this env.
+        if [ "${RUNNER_OS}" = "Linux" ]; then
+          mkdir -p "${CONDA_PREFIX}/etc/conda/activate.d"
+          printf '%s\n' 'export LD_LIBRARY_PATH="$CONDA_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"' \
+            > "${CONDA_PREFIX}/etc/conda/activate.d/zzz-partcad-libstdcxx.sh"
+          export LD_LIBRARY_PATH="${CONDA_PREFIX}/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        fi
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip
         python -m pip install --upgrade wheel mypy setuptools packaging jaraco.functools
