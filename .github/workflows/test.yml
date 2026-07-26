@@ -384,11 +384,12 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    # 30 -> 60: this job renders the examples, so it populates sandboxes harder
-    # than "Examples (All)" and felt the larger OCP 7.9 install the most.
-    # Measured: ubuntu 24-31 min, Windows 38-50 min -- Windows straddled the
-    # 45-minute step (some passed at ~44 min, others timed out), so raise it.
-    timeout-minutes: 60
+    # 30 -> 75: this job renders the examples, so it populates sandboxes harder
+    # than "Examples (All)" and felt the larger OCP 7.9 install the most; the SDF
+    # examples (#461) then added marching-cubes render time on top. Measured with
+    # both: ubuntu 24-32 min, Windows ~55 min and climbing -- 60 min was still
+    # cancelling the slowest Windows cells, so give it real headroom.
+    timeout-minutes: 75
 
     steps:
       - uses: actions/checkout@v7
@@ -440,9 +441,10 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    # 30 -> 60: same larger install as the other example jobs; matches the
-    # "Examples (PartCAD)" budget so Windows does not straddle the timeout.
-    timeout-minutes: 60
+    # 30 -> 75: same larger install (plus the SDF examples) as the other example
+    # jobs; matches the "Examples (PartCAD)" budget so Windows does not straddle
+    # the timeout.
+    timeout-minutes: 75
 
     steps:
       - uses: actions/checkout@v7
