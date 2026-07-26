@@ -1,0 +1,282 @@
+//
+// PartCAD, 2026
+//
+// Licensed under Apache License, Version 2.0.
+//
+// The backend abstraction the extension talks to. Two implementations satisfy
+// the same small interface the extension uses (notifications + lifecycle):
+//
+//   * LspBackend     - the legacy Python language server (unchanged behavior),
+//                      selected by the `partcad.backend: "python"` setting.
+//   * JsonRpcBackend - the standalone `partcad-json-rpc` service over stdio,
+//                      the default. It registers the same `partcad.*` commands
+//                      the LSP client used to auto-register, translating each to
+//                      the CLI-shaped JSON-RPC method, and routes the service's
+//                      notifications back under the legacy `?/partcad/*` names so
+//                      the extension's handlers are unchanged.
+//
+
+import * as cp from 'child_process';
+import * as vscode from 'vscode';
+import { Disposable } from 'vscode';
+import { LanguageClient } from 'vscode-languageclient/node';
+import {
+    createMessageConnection,
+    MessageConnection,
+    StreamMessageReader,
+    StreamMessageWriter,
+} from 'vscode-jsonrpc/node';
+
+import { traceError, traceInfo } from './log/logging';
+import { ensureServiceExecutable } from './provision';
+import { getBackendFromSetting, setBackendSetting } from './settings';
+import { restartServer } from './server';
+
+/** The subset of the language client the extension depends on. */
+export interface PartcadBackend {
+    onNotification(method: string, handler: (params: any) => void): Disposable;
+    setTrace(value: any): Promise<void>;
+    isRunning(): boolean;
+    stop(): Promise<void>;
+}
+
+// The extension subscribes and the legacy server published under this prefix.
+const NOTIFICATION_PREFIX = '?/partcad/';
+
+/** Wraps the legacy LanguageClient so it satisfies PartcadBackend. */
+class LspBackend implements PartcadBackend {
+    constructor(public readonly client: LanguageClient) {}
+
+    onNotification(method: string, handler: (params: any) => void): Disposable {
+        return this.client.onNotification(method, handler);
+    }
+    setTrace(value: any): Promise<void> {
+        return this.client.setTrace(value);
+    }
+    isRunning(): boolean {
+        return this.client.isRunning();
+    }
+    stop(): Promise<void> {
+        return this.client.stop();
+    }
+}
+
+/** Talks to the standalone `partcad-json-rpc` service over framed stdio. */
+class JsonRpcBackend implements PartcadBackend {
+    private readonly proc: cp.ChildProcessWithoutNullStreams;
+    private readonly connection: MessageConnection;
+    private readonly handlers = new Map<string, ((params: any) => void)[]>();
+    private readonly commandDisposables: Disposable[] = [];
+    private running = false;
+
+    constructor(
+        execPath: string,
+        args: string[],
+        cwd: string,
+        env: NodeJS.ProcessEnv,
+        private readonly outputChannel: vscode.LogOutputChannel,
+    ) {
+        traceInfo(`PartCAD service: launching ${execPath} ${args.join(' ')}`);
+        this.proc = cp.spawn(execPath, args, { cwd, env }) as cp.ChildProcessWithoutNullStreams;
+        this.proc.stderr.on('data', (d: Buffer) => this.outputChannel.append(d.toString()));
+        this.proc.on('exit', (code) => {
+            this.running = false;
+            traceInfo(`PartCAD service: process exited with code ${code}`);
+        });
+
+        this.connection = createMessageConnection(
+            new StreamMessageReader(this.proc.stdout),
+            new StreamMessageWriter(this.proc.stdin),
+        );
+        // A star handler receives every notification the service emits.
+        this.connection.onNotification((method: string, params: any) => this.fire(method, params));
+        this.connection.onError((e) => traceError(`PartCAD service connection error: ${JSON.stringify(e)}`));
+        this.connection.listen();
+        this.running = true;
+
+        this.registerServerCommands();
+    }
+
+    private fire(event: string, params: any): void {
+        for (const handler of this.handlers.get(event) ?? []) {
+            try {
+                handler(params);
+            } catch (e) {
+                traceError(`PartCAD notification handler for '${event}' failed: ${e}`);
+            }
+        }
+    }
+
+    onNotification(method: string, handler: (params: any) => void): Disposable {
+        // The extension subscribes with the legacy "?/partcad/<event>" names;
+        // the service emits bare "<event>" names.
+        const event = method.startsWith(NOTIFICATION_PREFIX) ? method.slice(NOTIFICATION_PREFIX.length) : method;
+        const list = this.handlers.get(event) ?? [];
+        list.push(handler);
+        this.handlers.set(event, list);
+        return new Disposable(() => {
+            const current = this.handlers.get(event);
+            if (current) {
+                const i = current.indexOf(handler);
+                if (i >= 0) {
+                    current.splice(i, 1);
+                }
+            }
+        });
+    }
+
+    async setTrace(_value: any): Promise<void> {
+        // The service has no LSP trace level; logging verbosity is a launch flag.
+    }
+
+    isRunning(): boolean {
+        return this.running;
+    }
+
+    async stop(): Promise<void> {
+        this.running = false;
+        this.commandDisposables.forEach((d) => d.dispose());
+        this.commandDisposables.length = 0;
+        try {
+            this.connection.dispose();
+        } catch {
+            // ignore
+        }
+        try {
+            this.proc.kill();
+        } catch {
+            // ignore
+        }
+    }
+
+    private send(method: string, params: any): Promise<any> {
+        return Promise.resolve(this.connection.sendRequest(method, params));
+    }
+
+    /**
+     * Register the `partcad.*` commands the extension invokes, mapping each to
+     * the CLI-shaped JSON-RPC method with translated parameters. This replaces
+     * what the LanguageClient's ExecuteCommandFeature did for the LSP backend.
+     */
+    private registerServerCommands(): void {
+        const reg = (name: string, fn: (...args: any[]) => Thenable<any>) => {
+            this.commandDisposables.push(vscode.commands.registerCommand(name, fn));
+        };
+
+        reg('partcad.showPart', (a) => this.send('inspect.part', { package: a.pkg, name: a.name, params: a.params }));
+        reg('partcad.showSketch', (a) =>
+            this.send('inspect.sketch', { package: a.pkg, name: a.name, params: a.params }),
+        );
+        reg('partcad.showInterface', (a) =>
+            this.send('inspect.interface', { package: a.pkg, name: a.name, params: a.params }),
+        );
+        reg('partcad.showAssembly', (a) =>
+            this.send('inspect.assembly', { package: a.pkg, name: a.name, params: a.params }),
+        );
+        reg('partcad.regeneratePartCb', (a) =>
+            this.send('ai.regenerate', { package: a.pkg, name: a.name, config: a.config }),
+        );
+        reg('partcad.changePartCb', (a) => this.send('ai.change', { package: a.pkg, name: a.name, config: a.config }));
+        reg('partcad.exportPart', (type, path, pkg, name, params) =>
+            this.send('export.part', { type, path, package: pkg, name, params }),
+        );
+        reg('partcad.exportAssembly', (type, path, pkg, name, params) =>
+            this.send('export.assembly', { type, path, package: pkg, name, params }),
+        );
+        reg('partcad.addPartReal', (a) =>
+            this.send('add.part', { kind: a.kind, path: a.path, package: a.packageName, config: a.config }),
+        );
+        reg('partcad.addAssemblyReal', (a) =>
+            this.send('add.assembly', { kind: a.kind, path: a.path, package: a.packageName }),
+        );
+        reg('partcad.packagePath', (a) => this.send('package.path', { package: a.packageName, callback: a.callback }));
+        reg('partcad.inspectFile', (path) => this.send('inspect.file', { path: typeof path === 'string' ? path : '' }));
+        reg('partcad.testReal', (a) => this.send('test', { package: a.packageName, object: a.objectName }));
+        reg('partcad.getStats', () => this.send('info', {}));
+        reg('partcad.promptResponse', (a) => this.send('prompt.respond', { response: a.response }));
+        reg('partcad.activate', () => this.send('activate', {}));
+        reg('partcad.initPackage', (p) => this.send('init', { path: typeof p === 'string' ? p : '' }));
+        reg('partcad.loadPackage', (p) => this.send('package.load', { path: typeof p === 'string' ? p : '' }));
+        reg('partcad.refresh', () => this.send('package.refresh', {}));
+        reg('partcad.loadPackageContents', (name) =>
+            this.send('list.all', { name: typeof name === 'string' ? name : '//' }),
+        );
+        // Bootstrapping the Python module is meaningless for the frozen service:
+        // it already carries PartCAD. Report success so the extension's install
+        // flow advances straight to activation.
+        reg('partcad.install', async () => this.fire('installed', undefined));
+        reg('partcad.reinstall', async () => this.fire('installed', undefined));
+    }
+}
+
+function serviceArgs(serverId: string): string[] {
+    const config = vscode.workspace.getConfiguration(serverId);
+    const args: string[] = [];
+    const verbosity = config.get<string>('verbosity') ?? 'info';
+    if (verbosity === 'debug') {
+        args.push('--verbose');
+    } else if (verbosity === 'error') {
+        args.push('--quiet');
+    }
+    const google = config.get<string>('googleApiKey');
+    if (google) {
+        args.push('--google-api-key', google);
+    }
+    const openai = config.get<string>('openaiApiKey');
+    if (openai) {
+        args.push('--openai-api-key', openai);
+    }
+    const sandbox = config.get<string>('pythonSandbox');
+    if (sandbox) {
+        args.push('--python-sandbox', sandbox);
+    }
+    if ((config.get<string>('forceUpdate') ?? 'false') === 'true') {
+        args.push('--force-update');
+    }
+    return args;
+}
+
+/**
+ * (Re)start the configured backend. Returns undefined if it could not start;
+ * when the user declines the service download, the backend setting is switched
+ * to "python" (which re-triggers startup through the configuration-change path).
+ */
+export async function restartBackend(
+    serverId: string,
+    serverName: string,
+    outputChannel: vscode.LogOutputChannel,
+    context: vscode.ExtensionContext,
+    existing: PartcadBackend | undefined,
+): Promise<PartcadBackend | undefined> {
+    if (getBackendFromSetting(serverId) === 'service') {
+        if (existing) {
+            try {
+                await existing.stop();
+            } catch (e) {
+                traceError(`Failed to stop the previous backend: ${e}`);
+            }
+        }
+        const execPath = await ensureServiceExecutable(context, serverId);
+        if (!execPath) {
+            traceInfo('PartCAD: service download declined; switching to the Python backend.');
+            await setBackendSetting(serverId, 'python');
+            return undefined;
+        }
+        const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+        return new JsonRpcBackend(execPath, serviceArgs(serverId), cwd, { ...process.env }, outputChannel);
+    }
+
+    // Python / legacy LSP backend.
+    let previousClient: LanguageClient | undefined;
+    if (existing instanceof LspBackend) {
+        previousClient = existing.client;
+    } else if (existing) {
+        try {
+            await existing.stop();
+        } catch (e) {
+            traceError(`Failed to stop the previous backend: ${e}`);
+        }
+    }
+    const client = await restartServer(serverId, serverName, outputChannel, previousClient);
+    return client ? new LspBackend(client) : undefined;
+}

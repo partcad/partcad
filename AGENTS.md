@@ -12,6 +12,11 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
   The CLI interface to most of `partcad` functionality.
 
+* [partcad-service-json-rpc](./partcad-service-json-rpc/AGENTS.md):
+
+  A JSON-RPC service (`partcad-json-rpc` executable) exposing `partcad` functionality over stdin/stdout or
+  HTTP, with methods that mirror `partcad-cli`. It is the default backend for `partcad-ide-vscode`.
+
 * [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality.

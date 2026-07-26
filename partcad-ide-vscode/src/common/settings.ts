@@ -1,7 +1,13 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-import { ConfigurationChangeEvent, ConfigurationScope, WorkspaceConfiguration, WorkspaceFolder } from 'vscode';
+import {
+    ConfigurationChangeEvent,
+    ConfigurationScope,
+    ConfigurationTarget,
+    WorkspaceConfiguration,
+    WorkspaceFolder,
+} from 'vscode';
 import { getInterpreterDetails } from './python';
 import { getConfiguration, getWorkspaceFolders } from './vscodeapi';
 
@@ -51,6 +57,26 @@ function resolveVariables(value: string[], workspace?: WorkspaceFolder): string[
 export function getInterpreterFromSetting(namespace: string, scope?: ConfigurationScope) {
     const config = getConfiguration(namespace, scope);
     return config.get<string[]>('interpreter');
+}
+
+export function getBackendFromSetting(namespace: string, scope?: ConfigurationScope): string {
+    const config = getConfiguration(namespace, scope);
+    return config.get<string>('backend') ?? 'service';
+}
+
+export function getServicePathFromSetting(namespace: string, scope?: ConfigurationScope): string {
+    const config = getConfiguration(namespace, scope);
+    return config.get<string>('servicePath') ?? '';
+}
+
+export function getServiceDownloadRepositoryFromSetting(namespace: string, scope?: ConfigurationScope): string {
+    const config = getConfiguration(namespace, scope);
+    return config.get<string>('serviceDownloadRepository') ?? 'partcad/partcad';
+}
+
+export async function setBackendSetting(namespace: string, value: string): Promise<void> {
+    const config = getConfiguration(namespace);
+    await config.update('backend', value, ConfigurationTarget.Global);
 }
 
 export function getPackagePathFromSetting(namespace: string, scope?: ConfigurationScope) {
@@ -139,6 +165,9 @@ export async function getGlobalSettings(namespace: string, includeInterpreter?: 
 
 export function checkIfConfigurationChanged(e: ConfigurationChangeEvent, namespace: string): boolean {
     const settings = [
+        `${namespace}.backend`,
+        `${namespace}.servicePath`,
+        `${namespace}.serviceDownloadRepository`,
         `${namespace}.pythonSandbox`,
         `${namespace}.telemetry`,
         `${namespace}.verbosity`,

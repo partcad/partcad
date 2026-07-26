@@ -1,0 +1,31 @@
+[project]
+name = "partcad-service-json-rpc"
+version = "0.7.146"
+description = "JSON-RPC service interface to PartCAD"
+readme = "README.md"
+keywords = ["cad", "json-rpc", "partcad", "service", "ide"]
+requires-python = ">=3.10,<3.13"
+license = {file = "LICENSE.txt"}
+authors = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+maintainers = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+dynamic = ["dependencies"]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+partcad-json-rpc = "partcad_service_json_rpc.__main__:main"
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project.urls]
+Homepage = "https://github.com/partcad/partcad"
+Issues = "https://github.com/partcad/partcad/issues"
