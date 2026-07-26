@@ -1,0 +1,83 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ru\n"
+"Language-Team: ru <LL@li.org>\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/intro.rst:2
+msgid "Introduction"
+msgstr "Введение"
+
+#: ../../source/intro.rst:6
+msgid "Background"
+msgstr "Предыстория"
+
+#: ../../source/intro.rst:8
+msgid ""
+"PartCAD was initially just an internal library in the `OpenVMP project "
+"<https://github.com/openvmp/openvmp>`_ to maintain the blueprints of "
+"OpenVMP robots in a way that allows reconfiguring the blueprints based on"
+" the specific needs (parameters), and allows to maintain the bill of "
+"materials and all the necessary data to purchase the required parts."
+msgstr "Изначально PartCAD был всего лишь внутренней библиотекой в `проекте OpenVMP <https://github.com/openvmp/openvmp>`_ для сопровождения чертежей роботов OpenVMP так, чтобы можно было переконфигурировать чертежи в соответствии с конкретными потребностями (параметрами), а также вести спецификацию материалов и все необходимые данные для закупки требуемых деталей."
+
+#: ../../source/intro.rst:14
+msgid ""
+"The OpenVMP project has surfaced the need for an open source Product "
+"Lifecycle Management (PLM) system that would use Git for collaboration on"
+" the designs themselves, the supplementary documentation and supplier "
+"information (and integration). To address that need PartCAD was published"
+" as a standalone framework to be used by any project."
+msgstr "Проект OpenVMP выявил потребность в системе управления жизненным циклом продукта (PLM) с открытым исходным кодом, которая использовала бы Git для совместной работы над самими проектами, сопутствующей документацией и информацией о поставщиках (и их интеграцией). Чтобы удовлетворить эту потребность, PartCAD был опубликован как самостоятельный фреймворк для использования в любом проекте."
+
+#: ../../source/intro.rst:23
+msgid "Overview"
+msgstr "Обзор"
+
+#: ../../source/intro.rst:25
+msgid "PartCAD can be perceived as consisting of four parts:"
+msgstr "PartCAD можно представить как состоящий из четырёх частей:"
+
+#: ../../source/intro.rst:27
+msgid "PartCAD standards and conventions on how to maintain product information"
+msgstr "Стандарты и соглашения PartCAD о том, как вести информацию о продукте"
+
+#: ../../source/intro.rst:29
+msgid ""
+"The public repository of products created and maintained by the community"
+" based on the PartCAD standards and conventions"
+msgstr "Публичный репозиторий продуктов, создаваемых и сопровождаемых сообществом на основе стандартов и соглашений PartCAD"
+
+#: ../../source/intro.rst:32
+msgid ""
+"Tools that operate with public and private repositories for as long as "
+"they are maintained following the PartCAD standards and conventions"
+msgstr "Инструменты, работающие с публичными и приватными репозиториями, при условии что те сопровождаются в соответствии со стандартами и соглашениями PartCAD"
+
+#: ../../source/intro.rst:35
+msgid ""
+"Libraries and frameworks to programmatically interact with product "
+"information in public and private PartCAD repositories"
+msgstr "Библиотеки и фреймворки для программного взаимодействия с информацией о продукте в публичных и приватных репозиториях PartCAD"
+
+#: ../../source/intro.rst:38
+msgid ""
+"Detailed documentation on all of the above can be found in the 'Design' "
+"section."
+msgstr "Подробную документацию по всему вышеперечисленному можно найти в разделе «Проектирование»."

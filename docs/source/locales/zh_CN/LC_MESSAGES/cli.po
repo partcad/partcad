@@ -1,0 +1,310 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/cli.rst:2
+msgid "CLI command reference"
+msgstr "CLI 命令参考"
+
+#: ../../source/cli.rst:4
+msgid ""
+"This page lists every command in the PartCAD command line interface. Both"
+" ``pc`` and ``partcad`` invoke the same tool. Run ``pc <command> --help``"
+" at any time to see the full, up-to-date options for a command."
+msgstr "本页列出了 PartCAD 命令行界面中的每一条命令。 ``pc`` 和 ``partcad`` 都会调用同一个工具。你可以随时运行 ``pc <command> --help`` ，查看某条命令完整且最新的选项。"
+
+#: ../../source/cli.rst:7
+msgid ""
+"Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-"
+"text logs), ``--offline``, ``--threads-max``, and ``-p PATH`` (select the"
+" package), apply to every command."
+msgstr "一些通用选项适用于每一条命令，例如 ``-v`` / ``-q`` （详细程度）、 ``--no-ansi`` （纯文本日志）、 ``--offline`` 、 ``--threads-max`` 以及 ``-p PATH`` （选择包）。"
+
+#: ../../source/cli.rst:12
+msgid "Host commands"
+msgstr "主机命令"
+
+#: ../../source/cli.rst:14
+msgid "``pc version``"
+msgstr "``pc version``"
+
+#: ../../source/cli.rst:15
+msgid "Display the versions of the PartCAD Python module and CLI, then exit."
+msgstr "显示 PartCAD Python 模块和 CLI 的版本，然后退出。"
+
+#: ../../source/cli.rst:17
+msgid "``pc config``"
+msgstr "``pc config``"
+
+#: ../../source/cli.rst:18
+msgid "Show the current user configuration."
+msgstr "显示当前的用户配置。"
+
+#: ../../source/cli.rst:20
+msgid "``pc system``"
+msgstr "``pc system``"
+
+#: ../../source/cli.rst:21
+msgid "Manage PartCAD's system-wide state and settings:"
+msgstr "管理 PartCAD 的系统级状态和设置："
+
+#: ../../source/cli.rst:23
+msgid ""
+"``pc system status`` — Display the state of the internal data used by "
+"PartCAD, including the location of the local cache."
+msgstr "``pc system status`` — 显示 PartCAD 所使用的内部数据的状态，包括本地缓存的位置。"
+
+#: ../../source/cli.rst:25
+msgid ""
+"``pc system reset`` — Reset all internal state maintained by PartCAD, for"
+" example to clear a corrupted cache."
+msgstr "``pc system reset`` — 重置 PartCAD 维护的所有内部状态，例如用于清除已损坏的缓存。"
+
+#: ../../source/cli.rst:27
+msgid ""
+"``pc system set`` — Set system-wide settings, such as the telemetry type,"
+" environment, and Sentry DSN."
+msgstr "``pc system set`` — 设置系统级设置，例如遥测类型、环境和 Sentry DSN。"
+
+#: ../../source/cli.rst:28
+msgid ""
+"``pc system telemetry`` — Inspect or clear locally stored telemetry data "
+"(``info``, ``clear``)."
+msgstr "``pc system telemetry`` — 检查或清除本地存储的遥测数据（ ``info`` 、 ``clear`` ）。"
+
+#: ../../source/cli.rst:32
+msgid "Package commands"
+msgstr "包命令"
+
+#: ../../source/cli.rst:34
+msgid "``pc init``"
+msgstr "``pc init``"
+
+#: ../../source/cli.rst:35
+msgid ""
+"Create a new PartCAD package (a ``partcad.yaml`` file) in the current "
+"directory. Use ``-i`` for interactive mode, and options such as "
+"``--desc``, ``--url``, and ``--manufacturable`` to prefill package "
+"metadata."
+msgstr "在当前目录中创建一个新的 PartCAD 包（一个 ``partcad.yaml`` 文件）。使用 ``-i`` 进入交互模式，并可使用 ``--desc`` 、 ``--url`` 、 ``--manufacturable`` 等选项来预填充包的元数据。"
+
+#: ../../source/cli.rst:38
+msgid "``pc install``"
+msgstr "``pc install``"
+
+#: ../../source/cli.rst:39
+msgid "Download and set up all packages imported by the current package."
+msgstr "下载并设置当前包所导入的全部包。"
+
+#: ../../source/cli.rst:41
+msgid "``pc update``"
+msgstr "``pc update``"
+
+#: ../../source/cli.rst:42
+msgid "Force update all imported packages to their latest versions."
+msgstr "强制将所有已导入的包更新到其最新版本。"
+
+#: ../../source/cli.rst:44
+msgid "``pc lint``"
+msgstr "``pc lint``"
+
+#: ../../source/cli.rst:45
+msgid ""
+"Run linting checks on the files within packages. Use ``-r`` to check "
+"imported packages recursively and ``-f`` to run only checks whose name "
+"starts with a given prefix."
+msgstr "对包内的文件运行代码检查（lint）。使用 ``-r`` 递归检查已导入的包，使用 ``-f`` 仅运行名称以指定前缀开头的检查。"
+
+#: ../../source/cli.rst:50
+msgid "Object commands"
+msgstr "对象命令"
+
+#: ../../source/cli.rst:52
+msgid "``pc list``"
+msgstr "``pc list``"
+
+#: ../../source/cli.rst:53
+msgid ""
+"List components. Subcommands select what to list: ``all``, ``parts``, "
+"``sketches``, ``assemblies``, ``interfaces``, ``mates``, and "
+"``packages``."
+msgstr "列出组件。子命令用于选择要列出的内容： ``all`` 、 ``parts`` 、 ``sketches`` 、 ``assemblies`` 、 ``interfaces`` 、 ``mates`` 和 ``packages`` 。"
+
+#: ../../source/cli.rst:56
+msgid "``pc add``"
+msgstr "``pc add``"
+
+#: ../../source/cli.rst:57
+msgid ""
+"Add an object to a package. Subcommands: ``dep`` (a dependency), "
+"``sketch``, ``part``, and ``assembly``."
+msgstr "向包中添加一个对象。子命令： ``dep`` （依赖项）、 ``sketch`` 、 ``part`` 和 ``assembly`` 。"
+
+#: ../../source/cli.rst:59
+msgid "``pc import``"
+msgstr "``pc import``"
+
+#: ../../source/cli.rst:60
+msgid ""
+"Import an existing object into a package. Subcommands: ``part`` (import "
+"an existing part and optionally convert its format) and ``assembly`` "
+"(import an assembly from a file, creating the parts and an Assembly YAML "
+"file)."
+msgstr "将一个已有对象导入到包中。子命令： ``part`` （导入一个已有零件，并可选择转换其格式）和 ``assembly`` （从文件导入一个装配体，同时创建相应的零件和一个 Assembly YAML 文件）。"
+
+#: ../../source/cli.rst:64
+msgid "``pc test``"
+msgstr "``pc test``"
+
+#: ../../source/cli.rst:65
+msgid ""
+"Run tests on a part, assembly, or scene. Use ``-r`` to test imported "
+"packages recursively, ``-f`` to filter by name prefix, and "
+"``-s``/``-i``/``-a``/``-S`` to indicate a sketch, interface, assembly, or"
+" scene."
+msgstr "对零件、装配体或场景运行测试。使用 ``-r`` 递归测试已导入的包，使用 ``-f`` 按名称前缀过滤，并使用 ``-s`` / ``-i`` / ``-a`` / ``-S`` 分别表示草图、接口、装配体或场景。"
+
+#: ../../source/cli.rst:68
+msgid "``pc inspect``"
+msgstr "``pc inspect``"
+
+#: ../../source/cli.rst:69
+msgid ""
+"View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) "
+"description instead of a visual one, and ``-p <name>=<value>`` to set "
+"parameters."
+msgstr "以可视化方式查看零件、装配体或场景。使用 ``-V`` 可获得文字（文本）描述而非可视化视图，使用 ``-p <name>=<value>`` 来设置参数。"
+
+#: ../../source/cli.rst:72
+msgid "``pc info``"
+msgstr "``pc info``"
+
+#: ../../source/cli.rst:73
+msgid ""
+"Show detailed information about a part, assembly, or scene, including its"
+" parameters."
+msgstr "显示关于零件、装配体或场景的详细信息，包括其参数。"
+
+#: ../../source/cli.rst:75
+msgid "``pc convert``"
+msgstr "``pc convert``"
+
+#: ../../source/cli.rst:76
+msgid ""
+"Convert parts or sketches to another format and update their type in the "
+"package. Subcommands: ``part`` and ``sketch``."
+msgstr "将零件或草图转换为另一种格式，并在包中更新它们的类型。子命令： ``part`` 和 ``sketch`` 。"
+
+#: ../../source/cli.rst:79
+msgid "``pc export``"
+msgstr "``pc export``"
+
+#: ../../source/cli.rst:80
+msgid ""
+"Export a 3D view of parts, assemblies, or scenes. Choose the format with "
+"``-t``: ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, "
+"``gltf``, or ``iges``. Use ``-O`` to set the output directory and ``-r`` "
+"to export recursively."
+msgstr "导出零件、装配体或场景的 3D 视图。使用 ``-t`` 选择格式： ``step`` 、 ``brep`` 、 ``stl`` 、 ``3mf`` 、 ``threejs`` 、 ``obj`` 、 ``gltf`` 或 ``iges`` 。使用 ``-O`` 设置输出目录，使用 ``-r`` 递归导出。"
+
+#: ../../source/cli.rst:84
+msgid "``pc render``"
+msgstr "``pc render``"
+
+#: ../../source/cli.rst:85
+msgid ""
+"Render a 2D projection of parts, assemblies, or scenes onto a plane. "
+"Choose the format with ``-t``: ``svg``, ``png``, or ``readme``."
+msgstr "将零件、装配体或场景的 2D 投影渲染到一个平面上。使用 ``-t`` 选择格式： ``svg`` 、 ``png`` 或 ``readme`` 。"
+
+#: ../../source/cli.rst:90
+msgid "Workflow commands"
+msgstr "工作流命令"
+
+#: ../../source/cli.rst:92
+msgid "``pc ai``"
+msgstr "``pc ai``"
+
+#: ../../source/cli.rst:93
+msgid ""
+"AI-powered workflows. The ``regenerate`` subcommand regenerates a sketch,"
+" part, or assembly from its description using a configured AI model."
+msgstr "由 AI 驱动的工作流。 ``regenerate`` 子命令使用配置好的 AI 模型，根据描述重新生成草图、零件或装配体。"
+
+#: ../../source/cli.rst:96
+msgid "``pc supply``"
+msgstr "``pc supply``"
+
+#: ../../source/cli.rst:97
+msgid "Manage the supply chain of the current project:"
+msgstr "管理当前项目的供应链："
+
+#: ../../source/cli.rst:99
+msgid "``pc supply caps`` — Show the capabilities of a provider."
+msgstr "``pc supply caps`` — 显示某个提供方的能力。"
+
+#: ../../source/cli.rst:100
+msgid "``pc supply find`` — Find suppliers."
+msgstr "``pc supply find`` — 查找供应商。"
+
+#: ../../source/cli.rst:101
+msgid "``pc supply quote`` — Get a quote from suppliers."
+msgstr "``pc supply quote`` — 从供应商处获取报价。"
+
+#: ../../source/cli.rst:102
+msgid "``pc supply order`` — Place an order with suppliers."
+msgstr "``pc supply order`` — 向供应商下订单。"
+
+#: ../../source/cli.rst:106
+msgid "Other commands"
+msgstr "其他命令"
+
+#: ../../source/cli.rst:108
+msgid "``pc adhoc``"
+msgstr "``pc adhoc``"
+
+#: ../../source/cli.rst:109
+msgid ""
+"Ad-hoc operations that run on the fly without creating or configuring a "
+"package. Subcommands: ``convert`` (convert a part or sketch to another "
+"format without updating its type) and ``generate`` (generate an AI-"
+"powered part without creating a package)."
+msgstr "无需创建或配置包即可即时运行的临时性操作。子命令： ``convert`` （将零件或草图转换为另一种格式，但不更新其类型）和 ``generate`` （在不创建包的情况下由 AI 生成一个零件）。"
+
+#: ../../source/cli.rst:113
+msgid "``pc healthcheck``"
+msgstr "``pc healthcheck``"
+
+#: ../../source/cli.rst:114
+msgid ""
+"Check the host system for known issues. Use ``--dry-run`` to list the "
+"available checks, ``--filters`` to run only checks with the given tags, "
+"and ``--fix`` to attempt automatic fixes."
+msgstr "检查主机系统是否存在已知问题。使用 ``--dry-run`` 列出可用的检查项，使用 ``--filters`` 仅运行带有指定标签的检查，使用 ``--fix`` 尝试自动修复。"
+
+#: ../../source/cli.rst:117
+msgid "``pc search``"
+msgstr "``pc search``"
+
+#: ../../source/cli.rst:118
+msgid ""
+"Search for objects by keyword. Subcommands: ``all``, ``parts``, "
+"``sketches``, ``assemblies``, ``interfaces``, and ``packages``."
+msgstr "按关键字搜索对象。子命令： ``all`` 、 ``parts`` 、 ``sketches`` 、 ``assemblies`` 、 ``interfaces`` 和 ``packages`` 。"

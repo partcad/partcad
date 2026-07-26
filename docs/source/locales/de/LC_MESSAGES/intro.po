@@ -1,0 +1,103 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: de\n"
+"Language-Team: de <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/intro.rst:2
+msgid "Introduction"
+msgstr "Einführung"
+
+#: ../../source/intro.rst:6
+msgid "Background"
+msgstr "Hintergrund"
+
+#: ../../source/intro.rst:8
+msgid ""
+"PartCAD was initially just an internal library in the `OpenVMP project "
+"<https://github.com/openvmp/openvmp>`_ to maintain the blueprints of "
+"OpenVMP robots in a way that allows reconfiguring the blueprints based on"
+" the specific needs (parameters), and allows to maintain the bill of "
+"materials and all the necessary data to purchase the required parts."
+msgstr ""
+"PartCAD war zunächst nur eine interne Bibliothek im `OpenVMP-Projekt "
+"<https://github.com/openvmp/openvmp>`_, um die Baupläne von OpenVMP-"
+"Robotern so zu pflegen, dass sie sich anhand konkreter Anforderungen "
+"(Parameter) neu konfigurieren lassen, und um die Stückliste sowie alle "
+"notwendigen Daten für die Beschaffung der benötigten Teile zu verwalten."
+
+#: ../../source/intro.rst:14
+msgid ""
+"The OpenVMP project has surfaced the need for an open source Product "
+"Lifecycle Management (PLM) system that would use Git for collaboration on"
+" the designs themselves, the supplementary documentation and supplier "
+"information (and integration). To address that need PartCAD was published"
+" as a standalone framework to be used by any project."
+msgstr ""
+"Das OpenVMP-Projekt machte den Bedarf an einem Open-Source-System für "
+"Product-Lifecycle-Management (PLM) deutlich, das Git für die "
+"Zusammenarbeit an den Entwürfen selbst, der ergänzenden Dokumentation und "
+"den Lieferanteninformationen (samt Integration) nutzt. Um diesen Bedarf "
+"zu decken, wurde PartCAD als eigenständiges Framework veröffentlicht, das "
+"von jedem Projekt genutzt werden kann."
+
+#: ../../source/intro.rst:23
+msgid "Overview"
+msgstr "Überblick"
+
+#: ../../source/intro.rst:25
+msgid "PartCAD can be perceived as consisting of four parts:"
+msgstr "PartCAD lässt sich als aus vier Teilen bestehend betrachten:"
+
+#: ../../source/intro.rst:27
+msgid "PartCAD standards and conventions on how to maintain product information"
+msgstr ""
+"PartCAD-Standards und -Konventionen zur Pflege von Produktinformationen"
+
+#: ../../source/intro.rst:29
+msgid ""
+"The public repository of products created and maintained by the community"
+" based on the PartCAD standards and conventions"
+msgstr ""
+"Das öffentliche Repository der Produkte, die von der Community auf Basis "
+"der PartCAD-Standards und -Konventionen erstellt und gepflegt werden"
+
+#: ../../source/intro.rst:32
+msgid ""
+"Tools that operate with public and private repositories for as long as "
+"they are maintained following the PartCAD standards and conventions"
+msgstr ""
+"Werkzeuge, die mit öffentlichen und privaten Repositories arbeiten, "
+"solange diese gemäß den PartCAD-Standards und -Konventionen gepflegt "
+"werden"
+
+#: ../../source/intro.rst:35
+msgid ""
+"Libraries and frameworks to programmatically interact with product "
+"information in public and private PartCAD repositories"
+msgstr ""
+"Bibliotheken und Frameworks für den programmatischen Zugriff auf "
+"Produktinformationen in öffentlichen und privaten PartCAD-Repositories"
+
+#: ../../source/intro.rst:38
+msgid ""
+"Detailed documentation on all of the above can be found in the 'Design' "
+"section."
+msgstr ""
+"Detaillierte Dokumentation zu allen genannten Punkten befindet sich im "
+"Abschnitt „Design“."

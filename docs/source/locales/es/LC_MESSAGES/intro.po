@@ -1,0 +1,104 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: es\n"
+"Language-Team: es <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/intro.rst:2
+msgid "Introduction"
+msgstr "Introducción"
+
+#: ../../source/intro.rst:6
+msgid "Background"
+msgstr "Antecedentes"
+
+#: ../../source/intro.rst:8
+msgid ""
+"PartCAD was initially just an internal library in the `OpenVMP project "
+"<https://github.com/openvmp/openvmp>`_ to maintain the blueprints of "
+"OpenVMP robots in a way that allows reconfiguring the blueprints based on"
+" the specific needs (parameters), and allows to maintain the bill of "
+"materials and all the necessary data to purchase the required parts."
+msgstr ""
+"PartCAD fue inicialmente solo una biblioteca interna del `proyecto OpenVMP"
+" <https://github.com/openvmp/openvmp>`_ para mantener los planos de los "
+"robots OpenVMP de una manera que permitiera reconfigurar los planos según "
+"las necesidades específicas (parámetros), y que permitiera mantener la "
+"lista de materiales y todos los datos necesarios para comprar las piezas "
+"requeridas."
+
+#: ../../source/intro.rst:14
+msgid ""
+"The OpenVMP project has surfaced the need for an open source Product "
+"Lifecycle Management (PLM) system that would use Git for collaboration on"
+" the designs themselves, the supplementary documentation and supplier "
+"information (and integration). To address that need PartCAD was published"
+" as a standalone framework to be used by any project."
+msgstr ""
+"El proyecto OpenVMP puso de manifiesto la necesidad de un sistema de "
+"gestión del ciclo de vida del producto (PLM) de código abierto que "
+"utilizara Git para la colaboración en los propios diseños, la "
+"documentación complementaria y la información (e integración) de "
+"proveedores. Para atender esa necesidad, PartCAD se publicó como un marco "
+"de trabajo independiente que puede usar cualquier proyecto."
+
+#: ../../source/intro.rst:23
+msgid "Overview"
+msgstr "Resumen general"
+
+#: ../../source/intro.rst:25
+msgid "PartCAD can be perceived as consisting of four parts:"
+msgstr "PartCAD puede entenderse como compuesto de cuatro partes:"
+
+#: ../../source/intro.rst:27
+msgid "PartCAD standards and conventions on how to maintain product information"
+msgstr ""
+"Los estándares y convenciones de PartCAD sobre cómo mantener la "
+"información del producto"
+
+#: ../../source/intro.rst:29
+msgid ""
+"The public repository of products created and maintained by the community"
+" based on the PartCAD standards and conventions"
+msgstr ""
+"El repositorio público de productos creados y mantenidos por la comunidad"
+" con base en los estándares y convenciones de PartCAD"
+
+#: ../../source/intro.rst:32
+msgid ""
+"Tools that operate with public and private repositories for as long as "
+"they are maintained following the PartCAD standards and conventions"
+msgstr ""
+"Herramientas que operan con repositorios públicos y privados siempre que "
+"se mantengan siguiendo los estándares y convenciones de PartCAD"
+
+#: ../../source/intro.rst:35
+msgid ""
+"Libraries and frameworks to programmatically interact with product "
+"information in public and private PartCAD repositories"
+msgstr ""
+"Bibliotecas y marcos de trabajo para interactuar programáticamente con la"
+" información de productos en repositorios de PartCAD públicos y privados"
+
+#: ../../source/intro.rst:38
+msgid ""
+"Detailed documentation on all of the above can be found in the 'Design' "
+"section."
+msgstr ""
+"La documentación detallada de todo lo anterior se puede encontrar en la "
+"sección 'Diseño'."

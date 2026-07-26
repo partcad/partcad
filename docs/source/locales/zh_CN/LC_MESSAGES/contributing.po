@@ -1,0 +1,1035 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/contributing.rst:2
+msgid "Contributing"
+msgstr "贡献"
+
+#: ../../source/contributing.rst:4
+msgid ""
+"Everyone can contribute to the development of PartCAD, which lowers the "
+"entry barrier to the design and manufacturing world and speeds up "
+"innovation for humanity."
+msgstr "每个人都可以为 PartCAD 的开发做出贡献，这会降低进入设计与制造领域的门槛，并加速全人类的创新。"
+
+#: ../../source/contributing.rst:8
+msgid "Find below some of the ways to contribute."
+msgstr "下面列出了一些做出贡献的方式。"
+
+#: ../../source/contributing.rst:12
+msgid "Why contributing?"
+msgstr "为什么要贡献？"
+
+#: ../../source/contributing.rst:14
+msgid ""
+"By improving PartCAD itself, you can improve the framework and platform "
+"capabilities for all of its users, no matter whether they are using "
+"public packages or working on hermetic private repositories."
+msgstr "通过改进 PartCAD 本身，你可以为它的所有用户提升框架和平台的能力，无论他们使用的是公共包，还是在封闭的私有仓库中工作。"
+
+#: ../../source/contributing.rst:20
+msgid "What to contribute?"
+msgstr "可以贡献什么？"
+
+#: ../../source/contributing.rst:23
+msgid "Ideas and Feedback"
+msgstr "想法与反馈"
+
+#: ../../source/contributing.rst:25
+msgid ""
+"Share your ideas and feedback using `PartCAD's Discord server "
+"<https://discord.gg/h5qhbHtygj>`_."
+msgstr "通过 `PartCAD 的 Discord 服务器 <https://discord.gg/h5qhbHtygj>`_ 分享你的想法和反馈。"
+
+#: ../../source/contributing.rst:29
+msgid "Develop Features"
+msgstr "开发功能"
+
+#: ../../source/contributing.rst:31
+msgid ""
+"All PartCAD software components are present in `the PartCAD's main Github"
+" repository <https://github.com/partcad/partcad/>`_. All pull requests "
+"are welcome."
+msgstr "所有 PartCAD 软件组件都存放在 `PartCAD 的主 Github 仓库 <https://github.com/partcad/partcad/>`_ 中。欢迎提交任何 pull request。"
+
+#: ../../source/contributing.rst:35
+msgid ""
+"If you need help deciding what could be the best project for you to work "
+"on, engage with the community on `PartCAD's Discord server "
+"<https://discord.gg/h5qhbHtygj>`_"
+msgstr "如果你在决定最适合自己参与的项目时需要帮助，请在 `PartCAD 的 Discord 服务器 <https://discord.gg/h5qhbHtygj>`_ 上与社区互动"
+
+#: ../../source/contributing.rst:40
+msgid "Spread The Word"
+msgstr "帮助宣传"
+
+#: ../../source/contributing.rst:42
+msgid ""
+"You can make a huge impact on lots of people by simply creating a simple "
+"post or a basic video tutorial for PartCAD in your social media accounts."
+" It is very much appreciated."
+msgstr "只需在你的社交媒体账号上为 PartCAD 发布一篇简单的帖子或制作一个基础的视频教程，你就能对许多人产生巨大的影响。我们对此非常感激。"
+
+#: ../../source/contributing.rst:47
+msgid "PartCAD Public Repository"
+msgstr "PartCAD 公共仓库"
+
+#: ../../source/contributing.rst:49
+msgid ""
+"Besides main PartCAD software components, you can contribute to the "
+"community by publishing design data as well as pluggable software modules"
+" to PartCAD Public Repository."
+msgstr "除了 PartCAD 的主要软件组件之外，你还可以通过向 PartCAD 公共仓库发布设计数据以及可插拔的软件模块来为社区做出贡献。"
+
+#: ../../source/contributing.rst:53
+msgid "Assemblies"
+msgstr "装配体"
+
+#: ../../source/contributing.rst:55
+msgid ""
+"Migrate your products to PartCAD by creating and publishing Assembly YAML"
+" files for your products. Eliminate the need to develop and maintain a "
+"custom way to store and to publish assembly instructions and bills of "
+"materials. Enable the use or your assemblies in other PartCAD projects."
+msgstr "通过为你的产品创建并发布 Assembly YAML 文件，将你的产品迁移到 PartCAD。这样就无需再开发和维护一套自定义的方式来存储和发布装配说明与物料清单。让你的装配体能够在其他 PartCAD 项目中被使用。"
+
+#: ../../source/contributing.rst:60
+msgid ""
+"Start by creating a package (in a dedicated git repository) for all "
+"products by your company or community. Then add parametrized assembly "
+"declarations to the package."
+msgstr "首先，为你公司或社区的所有产品创建一个包（放在一个专门的 git 仓库中）。然后向该包中添加参数化的装配体声明。"
+
+#: ../../source/contributing.rst:64
+msgid ""
+"The best way to write Assembly YAML files is to use the PartCAD VS Code "
+"extension and its code completion features. Select the part you want to "
+"add in the explorer view on the left. Then, in the Assembly YAML file "
+"editor, start typing ``- part:`` (including the trailing space) as if you"
+" were adding a new part to the assembly. After you type ``- pa``, a code "
+"completion suggestion appears that adds the complete YAML block for the "
+"selected part."
+msgstr "编写 Assembly YAML 文件的最佳方式，是使用 PartCAD VS Code 扩展及其代码补全功能。在左侧的资源管理器视图中选择你想添加的零件。然后，在 Assembly YAML 文件编辑器中，像要向装配体添加一个新零件那样，开始输入 ``- part:`` （包括结尾的空格）。当你输入 ``- pa`` 之后，会出现一个代码补全建议，用于为所选零件添加完整的 YAML 块。"
+
+#: ../../source/contributing.rst:73
+msgid "Parts"
+msgstr "零件"
+
+#: ../../source/contributing.rst:75
+msgid ""
+"Publish your parts in the PartCAD Public Repository to enable their use "
+"(and purchase if applicable) by other PartCAD users."
+msgstr "将你的零件发布到 PartCAD 公共仓库，让其他 PartCAD 用户能够使用（如适用，还能购买）它们。"
+
+#: ../../source/contributing.rst:78
+msgid ""
+"Start by creating a package (in a dedicated git repository) for all parts"
+" and assemblies created by your company or community, if you didn't do "
+"that yet. Then add part declarations to the package."
+msgstr "如果你还没有这样做，请首先为你公司或社区创建的所有零件和装配体创建一个包（放在一个专门的 git 仓库中）。然后向该包中添加零件声明。"
+
+#: ../../source/contributing.rst:83
+msgid ""
+"If CAD files already exist for these parts, then you should probably "
+"start by using those CAD files first. You can always migrate to Code-CAD "
+"technologies (such as OpenSCAD, CadQuery, build123d or sdf) later. "
+"However you might want to host the CAD files separately from the "
+"package's git repository (and have PartCAD fetch them using `fileFrom: "
+"url`, even if they are hosted in another git repository) so that you do "
+"not blow up the repository size and slow your projects down in perpetuity"
+" by a temporary use of legacy CAD files."
+msgstr "如果这些零件已经存在对应的 CAD 文件，那么你或许应该先从使用这些 CAD 文件开始。你随时可以在之后迁移到代码化 CAD 技术（例如 OpenSCAD、CadQuery、build123d 或 sdf）。不过，你可能会希望把 CAD 文件与包的 git 仓库分开托管（并让 PartCAD 使用 `fileFrom: url` 来获取它们，即使它们托管在另一个 git 仓库中），这样就不会因为临时使用遗留的 CAD 文件而让仓库体积暴增，并从此长期拖慢你的项目。"
+
+#: ../../source/contributing.rst:92
+msgid ""
+"After that declare the location of ports. This will enable connecting "
+"parts to each other, instead of placing them using absolute and relative "
+"coordinates and ensuring they remain properly co-located using finger-"
+"crossing guarantees. Whenever possible, use interfaces and mating "
+"declarations instead of pure ports, so that it's easier for PartCAD "
+"(including AIs using PartCAD) to determine which parts are meant to be "
+"connected to which parts, and how exactly they need to be connected."
+msgstr "在此之后，声明各端口的位置。这样就能够将零件相互连接起来，而不是使用绝对坐标和相对坐标来放置它们、再靠碰运气来保证它们始终正确地处于相对位置。只要有可能，就使用接口和配合声明，而不是单纯的端口，这样 PartCAD（包括使用 PartCAD 的各种 AI）就更容易判断哪些零件应当与哪些零件连接，以及它们究竟需要如何连接。"
+
+#: ../../source/contributing.rst:102
+msgid "Interfaces"
+msgstr "接口"
+
+#: ../../source/contributing.rst:104
+msgid ""
+"The most challenging step of adding parts is to declare all the ports. "
+"This effort can be significantly reduced for all PartCAD users globally "
+"by extending the library of standard interfaces."
+msgstr "添加零件时最具挑战性的一步，是声明所有的端口。通过扩展标准接口库，可以为全球所有 PartCAD 用户大幅减少这方面的工作量。"
+
+#: ../../source/contributing.rst:108
+msgid ""
+"Does your part have a port of the kind also found in many other parts? "
+"Consider declaring a reusable interface."
+msgstr "你的零件是否有一种在许多其他零件中也能见到的端口？可以考虑声明一个可复用的接口。"
+
+#: ../../source/contributing.rst:112
+msgid "Providers"
+msgstr "提供方"
+
+#: ../../source/contributing.rst:114
+msgid ""
+"Advertise your online store and manufacturing services by integrating "
+"your API with PartCAD."
+msgstr "通过将你的 API 与 PartCAD 集成，来推广你的在线商店和制造服务。"
+
+#: ../../source/contributing.rst:117
+msgid ""
+"Decide which one is more appropriate for your business: ``store`` or "
+"``manufacturer``. Then see an existing provider implementation of that "
+"kind as a reference. Alternatively, reach out to the PartCAD team to get "
+"help with the implementation. Be at the forefront of the next industrial "
+"revolution together with PartCAD!"
+msgstr "先确定哪一种更适合你的业务： ``store`` 还是 ``manufacturer`` 。然后参考一个该类型的现有提供方实现作为参照。或者，你也可以联系 PartCAD 团队，以获得实现方面的帮助。与 PartCAD 一起，站在下一次工业革命的最前沿！"
+
+#: ../../source/contributing.rst:124
+msgid "Help a Friend"
+msgstr "帮助朋友"
+
+#: ../../source/contributing.rst:126
+msgid ""
+"Do you know an opensource project that maintains assembly instructions or"
+" doing something else that can be radically improved by using PartCAD? Do"
+" you know a business that uses legacy tools and struggles to scale "
+"collaboration in the era of Git? Do you know a local additive "
+"manufacturing shop that can use more local customers? Do you know a "
+"collection of parts that the community can really benefit from if only "
+"these parts and corresponding assembly ideas were easily discoverable?"
+msgstr "你是否知道某个维护装配说明的开源项目，或是在做其他一些通过使用 PartCAD 就能得到根本性改善的事情？你是否知道某家仍在使用遗留工具、在 Git 时代难以扩展协作规模的企业？你是否知道某家本地的增材制造工坊，它需要更多本地客户？你是否知道某一批零件，只要这些零件及相应的装配思路能够被轻松发现，社区就能真正从中受益？"
+
+#: ../../source/contributing.rst:135
+msgid "Help them migrate to PartCAD!"
+msgstr "帮助他们迁移到 PartCAD！"
+
+#: ../../source/contributing.rst:139
+msgid "How to contribute?"
+msgstr "如何贡献？"
+
+#: ../../source/contributing.rst:144
+msgid "Environment"
+msgstr "环境"
+
+#: ../../source/contributing.rst:146
+msgid ""
+"Our team is using `Visual Studio Code`_ and `Docker`_ which boosts "
+"software development by providing a powerful, customizable editor and "
+"ensuring consistent environments with containerization."
+msgstr "我们的团队使用 `Visual Studio Code`_ 和 `Docker`_ ，它们通过提供一个强大且可自定义的编辑器，并借助容器化确保环境的一致性，从而大幅提升软件开发效率。"
+
+#: ../../source/contributing.rst:150
+msgid ""
+"VS Code's rich extensions and debugging tools integrate seamlessly with "
+"Docker, allowing developers to write, test, and debug code within "
+"containers."
+msgstr "VS Code 丰富的扩展和调试工具与 Docker 无缝集成，让开发者能够在容器内编写、测试和调试代码。"
+
+#: ../../source/contributing.rst:153
+msgid ""
+"This setup eliminates environment inconsistencies, accelerates "
+"development, and improves team collaboration."
+msgstr "这样的配置消除了环境不一致的问题，加快了开发速度，并改善了团队协作。"
+
+#: ../../source/contributing.rst:156
+msgid "Docker"
+msgstr "Docker"
+
+#: ../../source/contributing.rst:158
+msgid ""
+"`Docker`_ helps build, share, run, and verify applications anywhere — "
+"without tedious environment configuration or management. There are two "
+"main options how to setup Docker."
+msgstr "`Docker`_ 帮助你在任何地方构建、共享、运行和验证应用程序——无需繁琐的环境配置或管理。设置 Docker 主要有两种方式。"
+
+#: ../../source/contributing.rst:161
+msgid ""
+"If you do not have previous experience with Docker, then here is good "
+"place to start:"
+msgstr "如果你此前没有使用 Docker 的经验，那么这里是一个不错的起点："
+
+#: ../../source/contributing.rst:163
+msgid "`Docker Docs - Get Started`_"
+msgstr "`Docker Docs - Get Started`_"
+
+#: ../../source/contributing.rst:166
+msgid "Engine"
+msgstr "Engine"
+
+#: ../../source/contributing.rst:168
+msgid ""
+"If your primary development system is Linux then you can install Docker "
+"daemon directly on your host, see `Install`_ for more details on how to "
+"install it in the distribution you're using. Minimum required versions:"
+msgstr "如果你的主要开发系统是 Linux，那么你可以直接在主机上安装 Docker 守护进程，有关如何在你所使用的发行版中安装它的更多细节，请参见 `Install`_ 。最低版本要求："
+
+#: ../../source/contributing.rst:171
+msgid "Docker Engine: v27.4.0 or higher"
+msgstr "Docker Engine：v27.4.0 或更高版本"
+
+#: ../../source/contributing.rst:172
+msgid "Docker Desktop for Mac/Windows: 4.37.1 or higher"
+msgstr "适用于 Mac/Windows 的 Docker Desktop：4.37.1 或更高版本"
+
+#: ../../source/contributing.rst:176
+msgid ""
+"*`Docker Engine`_ is an open source containerization technology for "
+"building and containerizing your applications. Docker Engine acts as a "
+"client-server application with:*"
+msgstr "*`Docker Engine`_ 是一种开源的容器化技术，用于构建你的应用程序并将其容器化。Docker Engine 作为一个客户端-服务器应用程序运行，包含以下部分：*"
+
+#: ../../source/contributing.rst:179
+msgid "A server with a long-running daemon process `dockerd`_."
+msgstr "一个带有长时间运行的守护进程 `dockerd`_ 的服务器。"
+
+#: ../../source/contributing.rst:180
+msgid ""
+"APIs which specify interfaces that programs can use to talk to and "
+"instruct the Docker daemon."
+msgstr "一组 API，规定了程序可用来与 Docker 守护进程通信并向其发出指令的接口。"
+
+#: ../../source/contributing.rst:181
+msgid "A command line interface (CLI) client `Docker`_."
+msgstr "一个命令行界面（CLI）客户端 `Docker`_ 。"
+
+#: ../../source/contributing.rst:183
+msgid ""
+"The CLI uses `Docker APIs`_ to control or interact with the Docker daemon"
+" through scripting or direct CLI commands. Many other Docker applications"
+" use the underlying API and CLI. The daemon creates and manages Docker "
+"objects, such as images, containers, networks, and volumes."
+msgstr "CLI 使用 `Docker APIs`_ ，通过脚本或直接的 CLI 命令来控制 Docker 守护进程或与之交互。许多其他 Docker 应用程序都使用底层的 API 和 CLI。守护进程负责创建和管理 Docker 对象，例如镜像、容器、网络和卷。"
+
+#: ../../source/contributing.rst:187
+msgid "For more details, see `Docker Architecture`_."
+msgstr "有关更多细节，请参见 `Docker Architecture`_ 。"
+
+#: ../../source/contributing.rst:190
+msgid "Desktop"
+msgstr "Desktop"
+
+#: ../../source/contributing.rst:192
+msgid ""
+"If you're working on macOS or Windows, you can still install Engine, but "
+"that would require managing a local Linux VM. Docker Desktop provides a "
+"convenient solution and handles the required virtualization for you:"
+msgstr "如果你在 macOS 或 Windows 上工作，你仍然可以安装 Engine，但那需要你管理一个本地的 Linux 虚拟机。Docker Desktop 提供了一个便捷的解决方案，并为你处理所需的虚拟化："
+
+#: ../../source/contributing.rst:195
+msgid "`Install on Mac`_"
+msgstr "`Install on Mac`_"
+
+#: ../../source/contributing.rst:196
+msgid "`Install on Windows`_"
+msgstr "`Install on Windows`_"
+
+#: ../../source/contributing.rst:200
+msgid ""
+"*`Docker Desktop` is a one-click-install application for your Mac, Linux,"
+" or Windows environment that lets you build, share, and run containerized"
+" applications and microservices.*"
+msgstr "*`Docker Desktop` 是一款适用于你的 Mac、Linux 或 Windows 环境的一键安装应用程序，它让你可以构建、共享和运行容器化的应用程序与微服务。*"
+
+#: ../../source/contributing.rst:203
+msgid ""
+"A screenshot of Docker Desktop's user interface, showing the "
+"\"Containers\" tab."
+msgstr "Docker Desktop 用户界面的截图，显示的是“Containers”标签页。"
+
+#: ../../source/contributing.rst:209
+msgid "Visual Studio Code"
+msgstr "Visual Studio Code"
+
+#: ../../source/contributing.rst:211
+msgid ""
+"VS Code available for macOS, Linux, and Windows, has extensible "
+"architecture and has rich customization and integration options. Here is "
+"good place to get familiar with it:"
+msgstr "VS Code 可用于 macOS、Linux 和 Windows，它具有可扩展的架构，以及丰富的自定义和集成选项。下面是熟悉它的好去处："
+
+#: ../../source/contributing.rst:214
+msgid "`Setting up Visual Studio Code`_"
+msgstr "`Setting up Visual Studio Code`_"
+
+#: ../../source/contributing.rst:218
+msgid ""
+"*Visual Studio Code combines the simplicity of a source code editor with "
+"powerful developer tooling, like IntelliSense code completion and "
+"debugging.*"
+msgstr "*Visual Studio Code 将源代码编辑器的简洁性与强大的开发者工具（例如 IntelliSense 代码补全和调试）结合在了一起。*"
+
+#: ../../source/contributing.rst:221
+msgid ""
+"*First and foremost, it is an editor that gets out of your way. The "
+"delightfully frictionless edit-build-debug cycle means less time fiddling"
+" with your environment, and more time executing on your ideas.*"
+msgstr "*首先也是最重要的，它是一款不会碍手碍脚的编辑器。令人愉悦的、毫无摩擦的“编辑-构建-调试”循环，意味着你花在摆弄环境上的时间更少，而把想法付诸实现的时间更多。*"
+
+#: ../../source/contributing.rst:224
+msgid ""
+"A screenshot of a Visual Studio Code environment. The terminal window "
+"shows a behave command being executed to test BDD (Behavior-Driven "
+"Development) scenarios for a PartCAD project."
+msgstr "一个 Visual Studio Code 环境的截图。终端窗口中显示正在执行一条 behave 命令，用于测试某个 PartCAD 项目的 BDD（行为驱动开发，Behavior-Driven Development）场景。"
+
+#: ../../source/contributing.rst:230
+msgid "Dev Containers"
+msgstr "Dev Containers"
+
+#: ../../source/contributing.rst:232
+msgid ""
+"VS Code also provides seamless integration with Docker for managing "
+"environments by supporting `Dev Containers`_ specification."
+msgstr "VS Code 还通过支持 `Dev Containers`_ 规范，为管理环境提供了与 Docker 的无缝集成。"
+
+#: ../../source/contributing.rst:237
+msgid ""
+"_The Visual Studio Code Dev Containers extension lets you use a container"
+" as a full-featured development environment. It allows you to open any "
+"folder inside (or mounted into) a container and take advantage of Visual "
+"Studio Code's full feature set. A `devcontainer.json`_ file in your "
+"project tells VS Code how to access (or create) a development container "
+"with a well-defined tool and runtime stack. This container can be used to"
+" run an application or to separate tools, libraries, or runtimes needed "
+"for working with a codebase._"
+msgstr "_Visual Studio Code Dev Containers 扩展让你可以将一个容器用作功能齐全的开发环境。它允许你打开容器内部（或挂载到容器中）的任意文件夹，并充分利用 Visual Studio Code 的全部功能。项目中的 `devcontainer.json`_ 文件会告诉 VS Code 如何访问（或创建）一个具有明确定义的工具与运行时栈的开发容器。这个容器可以用来运行应用程序，或用来隔离处理某个代码库所需的工具、库或运行时。_"
+
+#: ../../source/contributing.rst:243
+msgid "Following docs section provides good overview of available features:"
+msgstr "下面的文档章节很好地概述了可用的功能："
+
+#: ../../source/contributing.rst:245
+msgid "`Developing inside a Container`_"
+msgstr "`Developing inside a Container`_"
+
+#: ../../source/contributing.rst:263
+msgid "Quick Start"
+msgstr "快速开始"
+
+#: ../../source/contributing.rst:267
+msgid ""
+"Following tutorial assumes that you have previous experience with both "
+"`VS Code`_ and `Docker`_ or have read `Environment`_ first."
+msgstr "下面的教程假定你此前已经有使用 `VS Code`_ 和 `Docker`_ 的经验，或者已经先阅读了 `Environment`_ 。"
+
+#: ../../source/contributing.rst:270
+msgid ""
+"Overall process starting from setting up environment till merging changes"
+" in default branch is the following:"
+msgstr "从搭建环境到将更改合并进默认分支的整个流程如下："
+
+#: ../../source/contributing.rst:272
+msgid "Clone Git Repository."
+msgstr "克隆 Git 仓库。"
+
+#: ../../source/contributing.rst:273
+msgid "Install Python Dependencies."
+msgstr "安装 Python 依赖。"
+
+#: ../../source/contributing.rst:274
+msgid "Activate Virtual Environment."
+msgstr "激活虚拟环境。"
+
+#: ../../source/contributing.rst:275
+msgid "Make Changes in Source Files."
+msgstr "在源文件中进行更改。"
+
+#: ../../source/contributing.rst:276
+msgid "Run Tests."
+msgstr "运行测试。"
+
+#: ../../source/contributing.rst:277
+msgid "Commit & Push Changes."
+msgstr "提交并推送更改。"
+
+#: ../../source/contributing.rst:278
+msgid "Open Pull Request."
+msgstr "创建 Pull Request。"
+
+#: ../../source/contributing.rst:279
+msgid "Meet PR Merge Criteria."
+msgstr "满足 PR 合并标准。"
+
+#: ../../source/contributing.rst:282
+msgid "Retrieve the Source Code"
+msgstr "获取源代码"
+
+#: ../../source/contributing.rst:284
+msgid ""
+"Due to variations in Docker setup across operating systems, this step has"
+" distinct best practices. Please follow the section for your OS below. "
+"Once you have cloned the repository, VS Code will start the Dev "
+"Container."
+msgstr "由于不同操作系统上 Docker 的安装配置各有差异，这一步骤有各自不同的最佳实践。请遵循下面适用于你操作系统的章节。克隆仓库之后，VS Code 会启动 Dev Container。"
+
+#: ../../source/contributing.rst:287
+msgid ""
+"The last time we've measured, the size of base Docker Image with all "
+"system-level dependencies baked in is 2.83 GB, main highlights are:"
+msgstr "我们上次测量时，内置了所有系统级依赖的基础 Docker 镜像大小为 2.83 GB，主要构成如下："
+
+#: ../../source/contributing.rst:289
+msgid "APT Packages: 770.56 MB"
+msgstr "APT 软件包：770.56 MB"
+
+#: ../../source/contributing.rst:290
+msgid "Git: 423.87 MB"
+msgstr "Git：423.87 MB"
+
+#: ../../source/contributing.rst:291
+msgid "Python: 411.28 MB"
+msgstr "Python：411.28 MB"
+
+#: ../../source/contributing.rst:292
+msgid "Common Utils: 251.11 MB"
+msgstr "通用工具：251.11 MB"
+
+#: ../../source/contributing.rst:293
+msgid "Debian (Bookwork): 116.56 MB"
+msgstr "Debian（Bookwork）：116.56 MB"
+
+#: ../../source/contributing.rst:296
+msgid "Mac & Windows"
+msgstr "Mac 和 Windows"
+
+#: ../../source/contributing.rst:300
+msgid ""
+"Since macOS and Windows run containers in a VM, \"`bind`_\" mounts are "
+"not as fast as using the container's filesystem directly. Fortunately, "
+"Docker has the concept of a local \"`named volume`_\" that can act like "
+"the container's filesystem but survives container rebuilds. This makes it"
+" ideal for storing package folders like ``node_modules``, data folders, "
+"or output folders like ``build`` where write performance is critical."
+msgstr "由于 macOS 和 Windows 在虚拟机（VM）中运行容器，因此 \"`bind`_\" 挂载不像直接使用容器的文件系统那样快。所幸，Docker 提供了本地 \"`named volume`_\" 的概念，它可以像容器的文件系统一样工作，但能在容器重建后依然保留。这使它非常适合用来存放诸如 ``node_modules`` 之类的包目录、数据目录，或像 ``build`` 这样对写入性能要求很高的输出目录。"
+
+#: ../../source/contributing.rst:305
+msgid ""
+"In order to have optimal performance use the following documentation, but"
+" when prompted to provide GitHub repository name use ``partcad/partcad`` "
+"to clone our main repository:"
+msgstr "为获得最佳性能，请参考下面的文档，但当系统提示你提供 GitHub 仓库名称时，请使用 ``partcad/partcad`` 来克隆我们的主仓库："
+
+#: ../../source/contributing.rst:308
+msgid "`Open a Git repository or GitHub PR in an isolated container volume`_"
+msgstr "`Open a Git repository or GitHub PR in an isolated container volume`_"
+
+#: ../../source/contributing.rst:311
+msgid "Linux"
+msgstr "Linux"
+
+#: ../../source/contributing.rst:313
+msgid ""
+"Since Linux can run Docker Engine directly on your host system, you can "
+"use the following documentation to bootstrap environment."
+msgstr "由于 Linux 可以直接在你的主机系统上运行 Docker Engine，因此你可以参考下面的文档来搭建环境。"
+
+#: ../../source/contributing.rst:316
+msgid "`Open an existing folder in a container`_"
+msgstr "`Open an existing folder in a container`_"
+
+#: ../../source/contributing.rst:319
+msgid "Without VS Code: Dev Containers CLI"
+msgstr "不使用 VS Code：Dev Containers CLI"
+
+#: ../../source/contributing.rst:321
+msgid ""
+"If you do not use VS Code — or you are automating the workflow, for "
+"example from a coding agent — you can enter the same environment from a "
+"terminal with the `Dev Containers CLI`_. It reads the same "
+"``.devcontainer/devcontainer.json``, so you get the same image, features,"
+" mounts, and lifecycle commands the VS Code extension would give you."
+msgstr "如果你不使用 VS Code——或者你正在自动化整个工作流，例如通过某个编码智能体——你可以使用 `Dev Containers CLI`_ 从终端进入同一个环境。它读取的是同一个 ``.devcontainer/devcontainer.json`` ，因此你会得到与 VS Code 扩展所提供的相同的镜像、功能（features）、挂载和生命周期命令。"
+
+#: ../../source/contributing.rst:325
+msgid ""
+"Start the environment from the repository root on your host. The first "
+"run is slow while features are installed:"
+msgstr "在你主机上的仓库根目录中启动该环境。首次运行时，由于要安装各项功能（features），速度会比较慢："
+
+#: ../../source/contributing.rst:331
+msgid "Then run any command inside it:"
+msgstr "然后在其中运行任意命令："
+
+#: ../../source/contributing.rst:337
+msgid ""
+"The project virtual environment is not activated automatically and "
+"``pytest``, ``pc``, and ``partcad`` are not on ``$PATH``, so prefix "
+"project commands with ``poetry run``:"
+msgstr "项目的虚拟环境不会被自动激活，并且 ``pytest`` 、 ``pc`` 和 ``partcad`` 都不在 ``$PATH`` 中，因此请在项目命令前加上 ``poetry run`` 前缀："
+
+#: ../../source/contributing.rst:346
+msgid ""
+"``poetry.toml`` sets ``in-project = true``, so the virtual environment "
+"lives at ``./.venv`` inside the bind-mounted workspace and is shared "
+"between your host and the container. If you run ``poetry`` on both sides,"
+" each will rebuild ``.venv`` because the interpreter paths recorded in it"
+" are only valid on one side. Keep Python work on one side."
+msgstr "``poetry.toml`` 设置了 ``in-project = true`` ，因此虚拟环境位于绑定挂载的工作区内的 ``./.venv`` 处，并在你的主机和容器之间共享。如果你在两侧都运行 ``poetry`` ，那么每一侧都会重建 ``.venv`` ，因为其中记录的解释器路径只在一侧有效。请将 Python 相关的工作保持在同一侧进行。"
+
+#: ../../source/contributing.rst:351
+msgid "Committing from the CLI"
+msgstr "从 CLI 提交"
+
+#: ../../source/contributing.rst:353
+msgid ""
+"Run ``git commit`` **inside** the environment. That is where ``pre-"
+"commit`` is installed, by the ``postStartCommand`` declared in "
+"``.devcontainer/devcontainer.json``:"
+msgstr "在环境 **内部** 运行 ``git commit`` 。 ``pre-commit`` 就是在那里安装的，由 ``.devcontainer/devcontainer.json`` 中声明的 ``postStartCommand`` 来完成安装："
+
+#: ../../source/contributing.rst:360
+msgid ""
+"If you commit on the host instead, the commit fails with ``` `pre-commit`"
+" not found ```. The ``.git/hooks/pre-commit`` script is generated by "
+"``pre-commit install`` running inside the container, so it refers to an "
+"interpreter path that only exists there. Re-run the commit inside the "
+"environment rather than bypassing the hooks with ``--no-verify``."
+msgstr "如果你在主机上提交，提交会失败并报出 ``` `pre-commit` not found ``` 。 ``.git/hooks/pre-commit`` 脚本是由在容器内运行的 ``pre-commit install`` 生成的，因此它引用的解释器路径只存在于容器中。请在环境内重新运行提交，而不是用 ``--no-verify`` 绕过这些钩子。"
+
+#: ../../source/contributing.rst:364
+msgid ""
+"The VS Code extension copies your host git identity into the container, "
+"but the CLI does not, and anything written to the container's home "
+"directory is lost when the container is recreated. If the commit fails "
+"with ``Author identity unknown``, set the identity repo-locally — "
+"``.git/config`` lives in the bind-mounted workspace, so it survives "
+"container recreates and is never committed:"
+msgstr "VS Code 扩展会把你主机上的 git 身份复制到容器中，但 CLI 不会，而且写入容器主目录的任何内容都会在容器被重建时丢失。如果提交失败并报出 ``Author identity unknown`` ，请在仓库本地设置该身份——``.git/config`` 位于绑定挂载的工作区中，因此它能够在容器重建后依然保留，并且永远不会被提交："
+
+#: ../../source/contributing.rst:376
+msgid ""
+"Do not mount your host ``~/.gitconfig`` into the container to solve this."
+" If it contains ``url.*.insteadOf`` rules that rewrite "
+"``https://github.com/`` to SSH — a common setup — the ``git-lfs`` "
+"feature's post-create step will attempt SSH, find no key inside the "
+"container, and fail the entire ``up``."
+msgstr "不要为了解决这个问题而把你主机上的 ``~/.gitconfig`` 挂载到容器中。如果它包含将 ``https://github.com/`` 重写为 SSH 的 ``url.*.insteadOf`` 规则（这是一种常见的配置），那么 ``git-lfs`` 功能的 post-create 步骤会尝试使用 SSH，在容器内找不到密钥，从而使整个 ``up`` 失败。"
+
+#: ../../source/contributing.rst:380
+msgid ""
+"If you sign your commits, note that the VS Code extension forwards your "
+"GPG agent automatically but the CLI does not — the container will have "
+"your public key but no private key, and the commit fails to sign. Forward"
+" the agent's extra socket when starting the environment, which keeps your"
+" private key on the host:"
+msgstr "如果你会对提交进行签名，请注意，VS Code 扩展会自动转发你的 GPG agent，但 CLI 不会——容器中会有你的公钥但没有私钥，因此提交会签名失败。请在启动环境时转发 agent 的额外套接字（extra socket），这样可以让你的私钥留在主机上："
+
+#: ../../source/contributing.rst:389
+msgid ""
+"Then point the container's agent socket at the forwarded one. Note the "
+"socket lives under ``/run/user/$(id -u)/gnupg/``, not ``~/.gnupg/``:"
+msgstr "然后将容器的 agent 套接字指向被转发的那个。请注意，该套接字位于 ``/run/user/$(id -u)/gnupg/`` 之下，而不是 ``~/.gnupg/`` ："
+
+#: ../../source/contributing.rst:400
+msgid "Install Dependencies"
+msgstr "安装依赖"
+
+#: ../../source/contributing.rst:402
+msgid "We are using `Poetry`_ to manage dependencies and virtual environments."
+msgstr "我们使用 `Poetry`_ 来管理依赖和虚拟环境。"
+
+#: ../../source/contributing.rst:406
+msgid ""
+"Poetry is a tool for dependency management and packaging in Python. It "
+"allows you to declare the libraries your project depends on and it will "
+"manage (install/update) them for you. Poetry offers a lockfile to ensure "
+"repeatable installs, and can build your project for distribution."
+msgstr "Poetry 是一款用于 Python 依赖管理和打包的工具。它允许你声明项目所依赖的库，并会为你管理（安装/更新）这些库。Poetry 提供了锁文件以确保可重复的安装，并且可以构建你的项目以供分发。"
+
+#: ../../source/contributing.rst:410
+msgid ""
+"Once the Dev Container is started, open a shell session in the Terminal "
+"view of VS Code. The current working directory will be "
+"``/workspaces/partcad`` containing the source files. To install Python "
+"packages, run the following:"
+msgstr "Dev Container 启动后，在 VS Code 的终端视图中打开一个 shell 会话。当前工作目录会是包含源文件的 ``/workspaces/partcad`` 。要安装 Python 软件包，请运行以下命令："
+
+#: ../../source/contributing.rst:417
+msgid ""
+"It will create virtual environment in ``.venv/`` directory and download "
+"about 1.5 GB dependencies. Once all dependencies are downloaded Poetry "
+"will also install current package in editable mode, and you will see the "
+"following:"
+msgstr "它会在 ``.venv/`` 目录中创建虚拟环境，并下载约 1.5 GB 的依赖。所有依赖下载完成后，Poetry 还会以可编辑模式安装当前包，然后你会看到如下内容："
+
+#: ../../source/contributing.rst:425
+msgid "Activate Environment"
+msgstr "激活环境"
+
+#: ../../source/contributing.rst:427
+msgid ""
+"In order to update your ``$PATH`` and be able to run commandline tools "
+"such as ``pytest`` you need to activate virtual environment:"
+msgstr "为了更新你的 ``$PATH`` 并能够运行诸如 ``pytest`` 之类的命令行工具，你需要激活虚拟环境："
+
+#: ../../source/contributing.rst:434
+msgid "or"
+msgstr "或者"
+
+#: ../../source/contributing.rst:440
+msgid ""
+"After that you will be able to run ``pc``, for example ``pc version``, "
+"which will output something along the lines:"
+msgstr "之后你就可以运行 ``pc`` 了，例如 ``pc version`` ，它会输出类似如下的内容："
+
+#: ../../source/contributing.rst:448
+msgid "Make Changes"
+msgstr "进行更改"
+
+#: ../../source/contributing.rst:450
+msgid ""
+"Make the changes through Visual Studio Code how you would do for any "
+"other project."
+msgstr "像对待任何其他项目一样，通过 Visual Studio Code 进行更改。"
+
+#: ../../source/contributing.rst:453
+msgid "Manual Tests"
+msgstr "手动测试"
+
+#: ../../source/contributing.rst:455
+msgid ""
+"To test functionality of the Python core module, use corresponding "
+"command line interface (CLI) commands."
+msgstr "要测试 Python 核心模块的功能，请使用相应的命令行界面（CLI）命令。"
+
+#: ../../source/contributing.rst:457
+msgid ""
+"To test CLI functionality, simply type commands in a shell session in the"
+" Terminal view of the VSCode where the development takes place."
+msgstr "要测试 CLI 功能，只需在进行开发的 VSCode 终端视图的 shell 会话中输入命令即可。"
+
+#: ../../source/contributing.rst:459
+msgid ""
+"To test VSCode plugin, run the following commands in a shell session in "
+"the Terminal view before restarting the VSCode:"
+msgstr "要测试 VSCode 插件，请在重启 VSCode 之前，在终端视图的 shell 会话中运行以下命令："
+
+#: ../../source/contributing.rst:468
+msgid ""
+"To test the Python core module using the VSCode plugin, click the "
+"`Restart PartCAD` icon in the PartCAD's `Context` view after each change."
+msgstr "要使用 VSCode 插件测试 Python 核心模块，请在每次更改后，点击 PartCAD 的 `Context` 视图中的 `Restart PartCAD` 图标。"
+
+#: ../../source/contributing.rst:472
+msgid ""
+"If you are developing inside the PartCAD Dev container using PartCAD "
+"VSCode extension, and are seeing this:"
+msgstr "如果你正在使用 PartCAD VSCode 扩展在 PartCAD Dev 容器内进行开发，并且看到了这样的情况："
+
+#: ../../source/contributing.rst:478
+msgid ""
+"then you are likely to have Git configured to use SSH creds to access "
+"GitHub, while the SSH creds are not available in the Dev container."
+msgstr "那么你很可能把 Git 配置成了使用 SSH 凭据来访问 GitHub，而这些 SSH 凭据在 Dev 容器中并不可用。"
+
+#: ../../source/contributing.rst:481
+msgid ""
+"This could be fixed by running ``ssh-add`` on the host and confirmed by "
+"running ``ssh-add -l`` inside the container."
+msgstr "可以通过在主机上运行 ``ssh-add`` 来解决这个问题，并通过在容器内运行 ``ssh-add -l`` 来确认。"
+
+#: ../../source/contributing.rst:484
+msgid ""
+"To test documentation changes, run the following command before "
+"navigating your favorite VSCode browser extension to `./docs/build/html`:"
+msgstr "要测试文档方面的更改，请在用你惯用的 VSCode 浏览器扩展打开 `./docs/build/html` 之前，运行以下命令："
+
+#: ../../source/contributing.rst:490
+msgid ""
+"Alternatively, run the following command before navigating your favorite "
+"VSCode browser extension to `127.0.0.1:8000`:"
+msgstr "或者，请在用你惯用的 VSCode 浏览器扩展打开 `127.0.0.1:8000` 之前，运行以下命令："
+
+#: ../../source/contributing.rst:497
+msgid "Automated Tests"
+msgstr "自动化测试"
+
+#: ../../source/contributing.rst:500
+msgid "Pytest"
+msgstr "Pytest"
+
+#: ../../source/contributing.rst:502
+msgid ""
+"PartCAD uses ``pytest`` for unit testing, where a particular piece of "
+"code or feature is tested."
+msgstr "PartCAD 使用 ``pytest`` 进行单元测试，即对某一段特定的代码或功能进行测试。"
+
+#: ../../source/contributing.rst:504
+msgid ""
+"If you `activated virtual environment`_ you can just run ``pytest`` from "
+"a bash session in the Terminal view of VSCode."
+msgstr "如果你已经 `activated virtual environment`_ ，那么只需在 VSCode 终端视图的 bash 会话中运行 ``pytest`` 即可。"
+
+#: ../../source/contributing.rst:506
+msgid ""
+"You can also use VS Code's built-in **Testing** integration to run and "
+"debug tests via the UI. To set this up:"
+msgstr "你也可以使用 VS Code 内置的 **Testing** 集成，通过界面来运行和调试测试。要进行如下设置："
+
+#: ../../source/contributing.rst:508
+msgid "Open the Command Palette (``Ctrl+Shift+P`` or ``Cmd+Shift+P``)"
+msgstr "打开命令面板（ ``Ctrl+Shift+P`` 或 ``Cmd+Shift+P`` ）"
+
+#: ../../source/contributing.rst:509
+msgid "Run ``Python: Select Interpreter``"
+msgstr "运行 ``Python: Select Interpreter``"
+
+#: ../../source/contributing.rst:510
+msgid "Select ``('.venv': Poetry) .venv/bin/python`` from the list"
+msgstr "从列表中选择 ``('.venv': Poetry) .venv/bin/python``"
+
+#: ../../source/contributing.rst:512
+msgid ""
+"You also can run ``pytest`` without activating environment via Poetry, "
+"for example:"
+msgstr "你也可以不激活环境，通过 Poetry 来运行 ``pytest`` ，例如："
+
+#: ../../source/contributing.rst:518
+msgid ""
+"The tests for the core module are located in the ``./partcad/tests`` "
+"directory. The tests for the CLI module are located in the ``./partcad-"
+"cli/tests`` directory. The tests for the LSP server of VSCode plugin are "
+"located in the ``./partcad-ide-vscode/src/test/python_tests`` directory."
+msgstr "核心模块的测试位于 ``./partcad/tests`` 目录中。CLI 模块的测试位于 ``./partcad-cli/tests`` 目录中。VSCode 插件的 LSP 服务器的测试位于 ``./partcad-ide-vscode/src/test/python_tests`` 目录中。"
+
+#: ../../source/contributing.rst:523
+msgid "Behave"
+msgstr "Behave"
+
+#: ../../source/contributing.rst:525
+msgid ""
+"PartCAD uses ``behave`` for integration testing, where a part of the "
+"system is tested as a whole."
+msgstr "PartCAD 使用 ``behave`` 进行集成测试，即将系统的某个部分作为一个整体来测试。"
+
+#: ../../source/contributing.rst:527
+msgid ""
+"To run tests using ``behave``, execute the following command in an "
+"activated environment:"
+msgstr "要使用 ``behave`` 运行测试，请在已激活的环境中执行以下命令："
+
+#: ../../source/contributing.rst:533
+msgid ""
+"Feature definitions and step implementations are located in the "
+"``./features`` directory."
+msgstr "功能定义和步骤实现位于 ``./features`` 目录中。"
+
+#: ../../source/contributing.rst:536
+msgid "Commit & Push Changes"
+msgstr "提交并推送更改"
+
+#: ../../source/contributing.rst:538
+msgid ""
+"You can commit changes from either terminal or VS Code UI which will "
+"trigger local git hooks managed by ``pre-commit`` to enforce coding "
+"standards and catch some of the problems early."
+msgstr "你可以从终端或 VS Code 界面提交更改，这会触发由 ``pre-commit`` 管理的本地 git 钩子，以强制执行编码规范并尽早发现一些问题。"
+
+#: ../../source/contributing.rst:542
+msgid "pre-commit"
+msgstr "pre-commit"
+
+#: ../../source/contributing.rst:546
+msgid ""
+"`pre-commit`_ is a framework for managing and maintaining multi-language "
+"pre-commit hooks."
+msgstr "`pre-commit`_ 是一个用于管理和维护多语言 pre-commit 钩子的框架。"
+
+#: ../../source/contributing.rst:548
+msgid ""
+"Configuration file is located at ``.devcontainer/.pre-commit-"
+"config.yaml`` where you can see all supported hooks."
+msgstr "配置文件位于 ``.devcontainer/.pre-commit-config.yaml`` ，你可以在其中看到所有受支持的钩子。"
+
+#: ../../source/contributing.rst:550
+msgid ""
+"In rare cases, you might need to temporarily disable hooks. There are two"
+" options:"
+msgstr "在少数情况下，你可能需要临时禁用钩子。有两种选择："
+
+#: ../../source/contributing.rst:552
+msgid "Use `temporarily disable hooks`_ to skip specific individual hooks"
+msgstr "使用 `temporarily disable hooks`_ 来跳过特定的单个钩子"
+
+#: ../../source/contributing.rst:553
+msgid "Use `git commit --no-verify`_ to skip all hooks at once"
+msgstr "使用 `git commit --no-verify`_ 来一次性跳过所有钩子"
+
+#: ../../source/contributing.rst:555
+msgid "Remember: These hooks are required to pass in CI before PR merge."
+msgstr "请记住：在 PR 合并之前，这些钩子必须在 CI 中通过。"
+
+#: ../../source/contributing.rst:559
+msgid ""
+"While you can remove local git hooks completely, be aware that: 1. Your "
+"PR will be blocked from merging until all hook checks pass in CI 2. "
+"You'll miss early feedback that could prevent CI failures 3. You may need"
+" to make additional commits to fix issues that hooks would have caught "
+"locally"
+msgstr "虽然你可以完全移除本地的 git 钩子，但请注意：1. 在所有钩子检查于 CI 中通过之前，你的 PR 将被阻止合并；2. 你会错过本可以避免 CI 失败的早期反馈；3. 你可能需要额外提交若干次来修复那些钩子原本会在本地捕获的问题。"
+
+#: ../../source/contributing.rst:564
+msgid "Option 1: Using pre-commit (recommended)"
+msgstr "选项 1：使用 pre-commit（推荐）"
+
+#: ../../source/contributing.rst:573
+msgid "Option 2: Manual removal (use with caution):"
+msgstr "选项 2：手动移除（请谨慎使用）："
+
+#: ../../source/contributing.rst:588
+msgid "Open Pull Request"
+msgstr "创建 Pull Request"
+
+#: ../../source/contributing.rst:590
+msgid ""
+"There are multiple options how PR could be opened, please refer to the "
+"following to choose option which works best for you."
+msgstr "创建 PR 有多种方式，请参考下面的内容来选择最适合你的方式。"
+
+#: ../../source/contributing.rst:593
+msgid "`Creating a pull request`_"
+msgstr "`Creating a pull request`_"
+
+#: ../../source/contributing.rst:594
+msgid "`GitHub Pull Requests in Visual Studio Code`_"
+msgstr "`GitHub Pull Requests in Visual Studio Code`_"
+
+#: ../../source/contributing.rst:597
+msgid "Meet PR Merge Criteria"
+msgstr "满足 PR 合并标准"
+
+#: ../../source/contributing.rst:599
+msgid ""
+"Depending on files changed in PR you might need to get required checks to"
+" pass first and get reviews from owners or maintainers, following are "
+"related GH docs:"
+msgstr "根据 PR 中所更改的文件，你可能需要先让必需的检查通过，并获得所有者或维护者的评审，下面是相关的 GitHub 文档："
+
+#: ../../source/contributing.rst:602
+msgid "`About Status Checks`_"
+msgstr "`About Status Checks`_"
+
+#: ../../source/contributing.rst:603
+msgid "`Required reviews`_"
+msgstr "`Required reviews`_"
+
+#: ../../source/contributing.rst:606
+msgid "Implementation Details"
+msgstr "实现细节"
+
+#: ../../source/contributing.rst:608
+msgid "The following information is useful for PartCAD contributors."
+msgstr "以下信息对 PartCAD 贡献者很有用。"
+
+#: ../../source/contributing.rst:613
+msgid "Coordinates / Location"
+msgstr "坐标 / 位置"
+
+#: ../../source/contributing.rst:615
+msgid ""
+"PartCAD uses OpenCASCADE Location objects (TopLoc_Location) to represent "
+"locations of objects in 3D space."
+msgstr "PartCAD 使用 OpenCASCADE 的 Location 对象（TopLoc_Location）来表示对象在 3D 空间中的位置。"
+
+#: ../../source/contributing.rst:621
+msgid "The above list represents a location with the following components:"
+msgstr "上面的列表表示一个位置，包含以下几个组成部分："
+
+#: ../../source/contributing.rst:623
+msgid ""
+"``[1, 2, 3]``: Translation or offset (in millimeters) along the X, Y, and"
+" Z axes"
+msgstr "``[1, 2, 3]`` ：沿 X、Y、Z 轴的平移或偏移（单位为毫米）"
+
+#: ../../source/contributing.rst:624
+msgid "``[4, 5, 6]``: The X, Y and Z sizes of the vector to rotate around"
+msgstr "``[4, 5, 6]`` ：绕之旋转的向量的 X、Y、Z 分量大小"
+
+#: ../../source/contributing.rst:625
+msgid "``70``: The angle of rotation around the above vector"
+msgstr "``70`` ：绕上述向量旋转的角度"
+
+#: ../../source/contributing.rst:629
+msgid "Internal geometry representation"
+msgstr "内部几何表示"
+
+#: ../../source/contributing.rst:631
+msgid ""
+"PartCAD maintains parts as OpenCASCADE objects. Similar to ``wrapped`` "
+"objects found in ``CadQuery`` and ``build123d``."
+msgstr "PartCAD 将零件维护为 OpenCASCADE 对象。类似于 ``CadQuery`` 和 ``build123d`` 中的 ``wrapped`` 对象。"
+
+#: ../../source/contributing.rst:635
+msgid "Parallelism"
+msgstr "并行"
+
+#: ../../source/contributing.rst:637
+msgid "Asynchronous at heart"
+msgstr "以异步为核心"
+
+#: ../../source/contributing.rst:639
+msgid ""
+"PartCAD is designed to run most of its logic as coroutines in the "
+"asyncio's event loop."
+msgstr "PartCAD 被设计为将其大部分逻辑作为协程在 asyncio 的事件循环中运行。"
+
+#: ../../source/contributing.rst:641
+msgid "Threads for the muscle"
+msgstr "用线程来承担繁重工作"
+
+#: ../../source/contributing.rst:643
+msgid ""
+"There is a separate thread pool created for long-running procedures that "
+"are CPU intensive. The number of threads matches the number of CPU cores "
+"minus 1 (if there is more than 1)."
+msgstr "会为那些长时间运行且 CPU 密集的过程创建一个单独的线程池。线程数等于 CPU 核心数减 1（如果核心数大于 1）。"
+
+#: ../../source/contributing.rst:646
+msgid ""
+"Coroutines can spawn tasks on the thread pool. Tasks on the thread pool "
+"can't call coroutines that use asyncio.Lock()."
+msgstr "协程可以在线程池上派生任务。线程池上的任务不能调用使用了 asyncio.Lock() 的协程。"
+
+#: ../../source/contributing.rst:648
+msgid "Digest external code properly"
+msgstr "妥善处理外部代码"
+
+#: ../../source/contributing.rst:650
+msgid ""
+"Separate processes are spawned (optionally, in a sandboxed environment) "
+"to process third-party CAD-as-code parts and assemblies. One thread is "
+"consumed in the thread pool to wait for each such process to complete (to"
+" cap the number of CPU cores occupied)."
+msgstr "会派生出单独的进程（可选地在沙箱环境中）来处理第三方的代码化 CAD 零件和装配体。线程池中会占用一个线程来等待每一个这样的进程完成（以便限制所占用的 CPU 核心数量）。"
+
+#: ../../source/contributing.rst:653
+msgid "Friendly face"
+msgstr "友好的外观"
+
+#: ../../source/contributing.rst:655
+msgid ""
+"To make it apparent to external users, all externally visible coroutines "
+"have names that end with \"_async\". Each such coroutine is accompanied "
+"by a synchronous wrapper (which does not have \"_async\" in its name)."
+msgstr "为了让外部用户一目了然，所有对外可见的协程的名称都以 \"_async\" 结尾。每一个这样的协程都配有一个同步包装器（其名称中不含 \"_async\"）。"

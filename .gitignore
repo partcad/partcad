@@ -26,6 +26,8 @@ allure-report/
 allure-results/
 behave-results/
 docs/build
+# Compiled gettext catalogs — Sphinx auto-builds these from the .po files at build time
+docs/source/locales/**/*.mo
 docs/mkdocs/site/
 output
 pc-test-results/

@@ -1,0 +1,82 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2024, PartCAD
+# This file is distributed under the same license as the PartCAD package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PartCAD \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/intro.rst:2
+msgid "Introduction"
+msgstr "简介"
+
+#: ../../source/intro.rst:6
+msgid "Background"
+msgstr "背景"
+
+#: ../../source/intro.rst:8
+msgid ""
+"PartCAD was initially just an internal library in the `OpenVMP project "
+"<https://github.com/openvmp/openvmp>`_ to maintain the blueprints of "
+"OpenVMP robots in a way that allows reconfiguring the blueprints based on"
+" the specific needs (parameters), and allows to maintain the bill of "
+"materials and all the necessary data to purchase the required parts."
+msgstr "PartCAD 最初只是 `OpenVMP 项目 <https://github.com/openvmp/openvmp>`_ 中的一个内部库，用于维护 OpenVMP 机器人的设计蓝图，使其能够根据具体需求（参数）重新配置蓝图，并维护物料清单以及采购所需零件所需的全部数据。"
+
+#: ../../source/intro.rst:14
+msgid ""
+"The OpenVMP project has surfaced the need for an open source Product "
+"Lifecycle Management (PLM) system that would use Git for collaboration on"
+" the designs themselves, the supplementary documentation and supplier "
+"information (and integration). To address that need PartCAD was published"
+" as a standalone framework to be used by any project."
+msgstr "OpenVMP 项目凸显出对一套开源产品生命周期管理（PLM）系统的需求，该系统会使用 Git 来协作完成设计本身、辅助文档以及供应商信息（及其集成）。为满足这一需求，PartCAD 作为一个可供任何项目使用的独立框架发布。"
+
+#: ../../source/intro.rst:23
+msgid "Overview"
+msgstr "概述"
+
+#: ../../source/intro.rst:25
+msgid "PartCAD can be perceived as consisting of four parts:"
+msgstr "PartCAD 可以看作由以下四个部分组成："
+
+#: ../../source/intro.rst:27
+msgid "PartCAD standards and conventions on how to maintain product information"
+msgstr "关于如何维护产品信息的 PartCAD 标准与约定"
+
+#: ../../source/intro.rst:29
+msgid ""
+"The public repository of products created and maintained by the community"
+" based on the PartCAD standards and conventions"
+msgstr "由社区依据 PartCAD 标准与约定创建和维护的公共产品仓库"
+
+#: ../../source/intro.rst:32
+msgid ""
+"Tools that operate with public and private repositories for as long as "
+"they are maintained following the PartCAD standards and conventions"
+msgstr "只要公共和私有仓库遵循 PartCAD 标准与约定进行维护，即可对其进行操作的工具"
+
+#: ../../source/intro.rst:35
+msgid ""
+"Libraries and frameworks to programmatically interact with product "
+"information in public and private PartCAD repositories"
+msgstr "用于以编程方式与公共和私有 PartCAD 仓库中的产品信息进行交互的库和框架"
+
+#: ../../source/intro.rst:38
+msgid ""
+"Detailed documentation on all of the above can be found in the 'Design' "
+"section."
+msgstr "关于上述所有内容的详细文档，可在“设计”一节中找到。"
