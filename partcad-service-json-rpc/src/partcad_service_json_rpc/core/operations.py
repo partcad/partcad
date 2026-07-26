@@ -14,6 +14,7 @@ silently no-op when none is loaded, exactly as the legacy server did.
 """
 
 import os
+import uuid
 
 from packaging.specifiers import SpecifierSet
 
@@ -374,6 +375,39 @@ def info(session, params):
 def prompt_respond(session, params):
     """Deliver a response to a pending interactive prompt."""
     session.provide_prompt_response(params["response"] + os.linesep)
+    return None
+
+
+# ---- telemetry -------------------------------------------------------------
+
+
+def telemetry_start(session, params):
+    """Start a telemetry span and return its id.
+
+    A thin client (the CLI) brackets a command in a span so the daemon's
+    telemetry subsystem reports it upstream. Attributes are coerced to strings,
+    matching how the CLI has always tagged its top-level span.
+    """
+    pc = session.ensure_partcad()
+    pc.telemetry.once()
+    attributes = {k: str(v) for k, v in (params.get("attributes") or {}).items()}
+    span = pc.telemetry.tracer.start_span(params["name"], attributes=attributes)
+    span_id = uuid.uuid4().hex
+    session.spans[span_id] = span
+    return {"span": span_id}
+
+
+def telemetry_end(session, params):
+    """End a previously started telemetry span."""
+    span = session.spans.pop(params.get("span"), None)
+    if span is None:
+        return None
+    trace = session.partcad.telemetry.trace
+    if params.get("status") == "error":
+        span.set_status(trace.Status(trace.StatusCode.ERROR, params.get("message")))
+        if params.get("message"):
+            span.set_attribute("error", params["message"])
+    span.end()
     return None
 
 

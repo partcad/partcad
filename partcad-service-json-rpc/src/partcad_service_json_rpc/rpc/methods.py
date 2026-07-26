@@ -36,6 +36,8 @@ _OPERATIONS = {
     "info": operations.info,
     "activate": operations.activate,
     "prompt.respond": operations.prompt_respond,
+    "telemetry.start": operations.telemetry_start,
+    "telemetry.end": operations.telemetry_end,
 }
 
 

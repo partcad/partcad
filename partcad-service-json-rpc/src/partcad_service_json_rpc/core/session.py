@@ -41,6 +41,9 @@ class Session:
         self._load_lock = threading.RLock()
         self._prompt_queue: "queue.Queue[str]" = queue.Queue()
 
+        # Active telemetry spans, keyed by the id handed back to clients.
+        self.spans: dict = {}
+
         # Log streaming (opt-in via start_log_stream()).
         self._log_read = None
         self._log_write = None
@@ -109,6 +112,12 @@ class Session:
         self._log_thread = None
 
     # ---- partcad lifecycle --------------------------------------------------
+
+    def ensure_partcad(self):
+        """Import PartCAD once if it has not been loaded yet, and return it."""
+        if self.partcad is None:
+            self.load_partcad()
+        return self.partcad
 
     def load_partcad(self) -> None:
         """Import (or reload) ``partcad`` and apply the session settings.
