@@ -1,0 +1,71 @@
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""Tests for the DaemonClient (request/response + notification delivery)."""
+
+import os
+import socket
+import threading
+import time
+
+import pytest
+
+from partcad_service_json_rpc.client import DaemonClient, DaemonError
+from partcad_service_json_rpc.core import events
+from partcad_service_json_rpc.core.session import Session
+from partcad_service_json_rpc.transport.socket_server import SocketServer
+
+if not hasattr(socket, "AF_UNIX"):
+    pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
+
+
+def _serve(tmp_path, registry):
+    path = str(tmp_path / "socket")
+    server = SocketServer(Session(), registry)
+    threading.Thread(target=server.serve_unix, args=(path,), daemon=True).start()
+    for _ in range(200):
+        if os.path.exists(path):
+            break
+        time.sleep(0.01)
+    return server, path
+
+
+def test_client_call_returns_result(tmp_path):
+    server, path = _serve(tmp_path, {"ping": lambda s, p: {"echo": p}})
+    try:
+        client = DaemonClient(path)
+        assert client.call("ping", {"x": 1}) == {"echo": {"x": 1}}
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_client_delivers_notifications_before_result(tmp_path):
+    def go(session, params):
+        session.emitter.emit(events.INFO, "working")
+        session.emitter.emit(events.ITEMS, {"name": "//"})
+        return "done"
+
+    server, path = _serve(tmp_path, {"go": go})
+    try:
+        seen = []
+        client = DaemonClient(path)
+        result = client.call("go", {}, on_event=lambda m, p: seen.append((m, p)))
+        assert result == "done"
+        assert seen == [(events.INFO, "working"), (events.ITEMS, {"name": "//"})]
+        client.close()
+    finally:
+        server.stop()
+
+
+def test_client_raises_daemon_error_on_error_response(tmp_path):
+    server, path = _serve(tmp_path, {})  # rpc.discover exists; "nope" does not
+    try:
+        client = DaemonClient(path)
+        with pytest.raises(DaemonError):
+            client.call("nope")
+        client.close()
+    finally:
+        server.stop()

@@ -5,11 +5,13 @@
 #
 """The ``partcad-json-rpc`` executable.
 
-Serves PartCAD over JSON-RPC 2.0. By default it serves over stdin/stdout with
-LSP-style framing; ``--http [ADDR]`` serves over HTTP instead (JSON-RPC at
-``/rpc`` and a Server-Sent-Events notification stream at ``/events``; no auth).
-The option names mirror ``partcad-cli`` globals so the service is driven the way
-the CLI is.
+Serves PartCAD over JSON-RPC 2.0. By default it runs the per-workspace **socket
+daemon**: it prints the socket path to stdout and, if none is running, starts a
+detached daemon serving a warm context. ``--stdio`` serves over stdin/stdout
+(LSP-style framing) in the foreground; ``--http [ADDR]`` serves over HTTP
+(JSON-RPC at ``/rpc``, notifications over SSE at ``/events``; no auth). The
+option names mirror ``partcad-cli`` globals so the service is driven the way the
+CLI is.
 """
 
 import argparse
@@ -29,14 +31,19 @@ def build_parser() -> argparse.ArgumentParser:
         description="JSON-RPC service interface to PartCAD.",
     )
     parser.add_argument("--version", action="version", version=f"partcad-json-rpc {__version__}")
+    # Channel selection (default: the per-workspace socket daemon).
+    parser.add_argument("--socket", action="store_true", help="Use the per-workspace socket daemon (default).")
+    parser.add_argument("--stdio", action="store_true", help="Serve over stdin/stdout in the foreground.")
     parser.add_argument(
         "--http",
         nargs="?",
         const=DEFAULT_HTTP_ADDRESS,
         default=None,
         metavar="ADDR",
-        help="Serve over HTTP at ADDR (default %s) instead of stdin/stdout." % DEFAULT_HTTP_ADDRESS,
+        help="Serve over HTTP at ADDR (default %s) in the foreground." % DEFAULT_HTTP_ADDRESS,
     )
+    # Internal: serve a specific named pipe (used by the detached Windows child).
+    parser.add_argument("--serve-pipe", default=None, help=argparse.SUPPRESS)
     # Output options (mirror `pc --verbose/--quiet`).
     parser.add_argument("-v", "--verbose", action="store_true", help="Increase logging verbosity.")
     parser.add_argument("-q", "--quiet", action="store_true", help="Decrease logging verbosity.")
@@ -85,21 +92,38 @@ def parse_host_port(address: str) -> tuple[str, int]:
     return "127.0.0.1", int(address)
 
 
+def _build_session(args: argparse.Namespace) -> Session:
+    session = Session(settings=build_settings(args))
+    session.start_log_stream()
+    return session
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
-    session = Session(settings=build_settings(args))
-    registry = build_registry()
+
+    # Internal: the detached Windows child serves a specific named pipe.
+    if args.serve_pipe is not None:  # pragma: no cover - Windows only
+        from .win_pipe import serve_pipe
+
+        serve_pipe(_build_session(args), build_registry(), args.serve_pipe)
+        return 0
 
     if args.http is not None:
-        from .transport.http import (
-            serve_http,  # imported lazily to keep stdio startup light
-        )
+        from .transport.http import serve_http  # imported lazily to keep startup light
 
         host, port = parse_host_port(args.http)
-        serve_http(session, registry, host, port)
-    else:
-        session.start_log_stream()
-        serve_stdio(session, registry)
+        serve_http(_build_session(args), build_registry(), host, port)
+        return 0
+
+    if args.stdio:
+        serve_stdio(_build_session(args), build_registry())
+        return 0
+
+    # Default: the per-workspace socket daemon. The session is built only in the
+    # daemon child (after fork), so the fast path (a live daemon) stays cheap.
+    from . import daemon
+
+    daemon.ensure_daemon(lambda: _build_session(args))
     return 0
 
 

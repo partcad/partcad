@@ -8,10 +8,13 @@ this directory (`partcad-ide-vscode/`).
 
 The extension talks to PartCAD through a backend selected by the `partcad.backend` setting:
 
-- `service` (default) — runs the standalone `partcad-json-rpc` executable (from
-  [`partcad-service-json-rpc`](../partcad-service-json-rpc)) over stdio; no Python environment required. On
-  first use it looks for an existing standalone install, then offers to download one; declining switches the
-  setting to `python`. See `src/common/backend.ts` and `src/common/provision.ts`.
+- `service` (default) — uses the standalone `partcad-json-rpc` executable (from
+  [`partcad-service-json-rpc`](../partcad-service-json-rpc)); no Python environment required. On first use it
+  looks for an existing standalone install, then offers to download one; declining switches the setting to
+  `python`. By default it connects over the per-workspace socket **daemon** (`partcad.serviceChannel: socket`):
+  it runs the launcher, reads the printed socket path, and connects; `partcad.serviceChannel: stdio` runs a
+  dedicated process over stdin/stdout instead. "Restart PartCAD"/reset sends `daemon.stop` to tear down the
+  warm context. See `src/common/backend.ts` and `src/common/provision.ts`.
 - `python` — the legacy path: a Python LSP server bundled under `./bundled/tool`, launched with a discovered
   Python interpreter. Behavior is unchanged from previous versions.
 

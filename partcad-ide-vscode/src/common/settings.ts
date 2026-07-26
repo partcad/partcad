@@ -69,6 +69,11 @@ export function getServicePathFromSetting(namespace: string, scope?: Configurati
     return config.get<string>('servicePath') ?? '';
 }
 
+export function getServiceChannelFromSetting(namespace: string, scope?: ConfigurationScope): string {
+    const config = getConfiguration(namespace, scope);
+    return config.get<string>('serviceChannel') ?? 'socket';
+}
+
 export function getServiceDownloadRepositoryFromSetting(namespace: string, scope?: ConfigurationScope): string {
     const config = getConfiguration(namespace, scope);
     return config.get<string>('serviceDownloadRepository') ?? 'partcad/partcad';
@@ -167,6 +172,7 @@ export function checkIfConfigurationChanged(e: ConfigurationChangeEvent, namespa
     const settings = [
         `${namespace}.backend`,
         `${namespace}.servicePath`,
+        `${namespace}.serviceChannel`,
         `${namespace}.serviceDownloadRepository`,
         `${namespace}.pythonSandbox`,
         `${namespace}.telemetry`,

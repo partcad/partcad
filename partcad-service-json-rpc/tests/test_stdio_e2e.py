@@ -22,7 +22,7 @@ def test_module_serves_rpc_discover_over_stdio():
     write_message(request, {"jsonrpc": "2.0", "id": 1, "method": "rpc.discover", "params": {}})
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "partcad_service_json_rpc"],
+        [sys.executable, "-m", "partcad_service_json_rpc", "--stdio"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         env=env,

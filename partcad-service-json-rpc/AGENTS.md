@@ -5,9 +5,11 @@ JSON-RPC 2.0 interface whose methods mirror `partcad-cli` actions. Source: `./sr
 Tests: `./tests`. Part of the shared Poetry workspace rooted at the repo root — depends on the `partcad` package
 in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
 
-The service serves over stdin/stdout by default (LSP-style `Content-Length` framing, bidirectional) and,
-optionally, over HTTP (`--http [ADDR]`: JSON-RPC at `POST /rpc`, notifications over Server-Sent Events at
-`GET /events`; no auth yet). The `partcad-ide-vscode` extension launches it as its default backend.
+By default the service runs a per-workspace **daemon** holding a warm PartCAD context, served over an AF_UNIX
+socket at `~/.partcad/workspaces/<hash>/socket` (a named pipe on Windows). `--stdio` serves one foreground
+connection over stdin/stdout, and `--http [ADDR]` serves JSON-RPC at `POST /rpc` with notifications over
+Server-Sent Events at `GET /events` (no auth yet). The `partcad-ide-vscode` extension and the `pc` CLI are both
+clients of the daemon.
 
 ## Layout
 
@@ -16,9 +18,13 @@ optionally, over HTTP (`--http [ADDR]`: JSON-RPC at `POST /rpc`, notifications o
   `operations.py` (the operation functions).
 - `rpc/` — `dispatcher.py` (JSON-RPC 2.0 parse/dispatch/error mapping) and `methods.py` (the CLI-shaped method
   registry; `rpc.discover` returns the catalog).
-- `transport/` — `framing.py` (Content-Length codec), `stdio.py` (default), `http.py` (optional HTTP+SSE).
-- `__main__.py` — the `partcad-json-rpc` entry point: CLI-style flags mirroring `pc` globals, transport
-  selection.
+- `transport/` — `framing.py` (Content-Length codec), `stdio.py`, `socket_server.py` (threaded AF_UNIX server,
+  the daemon's transport), `http.py` (optional HTTP+SSE).
+- `daemon.py` — workspace root discovery, hashing, socket path, liveness (`rpc.discover` probe), stale recovery,
+  double-fork/detach, `daemon.stop`. `win_pipe.py` — the Windows named-pipe counterpart (untested on POSIX/CI).
+- `client.py` — `DaemonClient` and `start_daemon`, used by the CLI (and any Python caller) to reach the daemon.
+- `__main__.py` — the `partcad-json-rpc` entry point: channel selection (`--socket` default, `--stdio`,
+  `--http`) and CLI-style flags mirroring `pc` globals.
 
 ## Setup
 

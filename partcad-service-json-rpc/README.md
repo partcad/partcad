@@ -6,20 +6,33 @@ executable, which exposes PartCAD functionality over a JSON-RPC 2.0 interface wh
 
 ## Transports
 
-- **stdin/stdout (default):** JSON-RPC 2.0 with LSP-style `Content-Length` framing, bidirectional so the server
-  can push notifications (logs, progress, package contents, interactive prompts).
+- **socket / daemon (default):** a per-workspace background daemon holds a warm PartCAD context and serves it
+  over an AF_UNIX socket at `~/.partcad/workspaces/<hash>/socket` (a named pipe on Windows). Running
+  `partcad-json-rpc` finds the workspace root, prints the socket path, and — if no live daemon is found — starts
+  a detached one. Multiple clients (the VS Code extension, `pc` invocations, additional windows) share the one
+  warm context. `daemon.stop` (or `pc daemon stop`) terminates it.
+- **stdin/stdout:** `partcad-json-rpc --stdio` serves one connection over stdin/stdout in the foreground
+  (LSP-style `Content-Length` framing, bidirectional) — no daemon.
 - **HTTP (optional):** `partcad-json-rpc --http [HOST:PORT]` (default `127.0.0.1:8017`) serves JSON-RPC at
   `POST /rpc` and streams notifications over Server-Sent Events at `GET /events`. No authentication yet.
+
+The daemon serializes operations across connections and routes each request's notifications back to the
+connection that made it.
 
 ## Usage
 
 ```bash
-# Default: serve over stdin/stdout (what the VS Code extension launches).
+# Default: ensure the per-workspace daemon and print its socket path.
 partcad-json-rpc
+
+# Serve one connection over stdin/stdout (what a client can spawn directly).
+partcad-json-rpc --stdio
 
 # Serve over HTTP instead.
 partcad-json-rpc --http 127.0.0.1:8017
 ```
+
+The `pc` CLI manages the daemon with `pc daemon start` and `pc daemon stop`.
 
 Global flags mirror the `pc` CLI (`--verbose`/`--quiet`, `--offline`, `--force-update`, `--google-api-key`,
 `--openai-api-key`, `--python-sandbox`).

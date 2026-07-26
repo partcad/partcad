@@ -370,8 +370,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             partcadExplorer?.clearItems();
             await partcadInspector?.clear();
 
-            // reload the context
-            await vscode.commands.executeCommand('partcad.activate');
+            if (getBackendFromSetting(serverId) === 'service') {
+                // Terminate the shared daemon so its warm context is torn down,
+                // then start a fresh daemon, reconnect, and reactivate.
+                await lsClient?.stopDaemon?.();
+                await handleRestartServer(serverId, serverName, outputChannel);
+            } else {
+                // Python backend: reload the context in the running server.
+                await vscode.commands.executeCommand('partcad.activate');
+            }
         }),
         registerCommand(`partcad.update`, async () => {
             await vscode.commands.executeCommand('setContext', 'partcad.activated', false);

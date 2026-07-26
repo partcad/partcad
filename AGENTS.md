@@ -14,8 +14,10 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
 * [partcad-service-json-rpc](./partcad-service-json-rpc/AGENTS.md):
 
-  A JSON-RPC service (`partcad-json-rpc` executable) exposing `partcad` functionality over stdin/stdout or
-  HTTP, with methods that mirror `partcad-cli`. It is the default backend for `partcad-ide-vscode`.
+  A JSON-RPC service (`partcad-json-rpc` executable) exposing `partcad` functionality with methods that mirror
+  `partcad-cli`. By default it runs a per-workspace background **daemon** (a warm context served over a socket /
+  Windows named pipe); it can also serve over stdin/stdout or HTTP. It is the default backend for
+  `partcad-ide-vscode`, and the `pc` CLI manages it via `pc daemon start`/`stop`.
 
 * [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
 

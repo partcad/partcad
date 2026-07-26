@@ -4,6 +4,11 @@ CLI interface (`pc` / `partcad` commands) to most `partcad` core functionality. 
 `./src/partcad_cli`. Tests: `./tests`. Part of the shared Poetry workspace rooted at the repo root — depends on
 the `partcad` package in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
 
+`pc daemon start` / `pc daemon stop` manage the per-workspace background daemon from
+[`partcad-service-json-rpc`](../partcad-service-json-rpc) (a client helper, `partcad_service_json_rpc.client`,
+backs them). Migrating the rest of the CLI onto that daemon (so command bodies stop importing `partcad`) is
+in-progress follow-up work.
+
 ## Setup
 
 All commands on this page run **inside the dev container**, not on the host — see "Where commands run" in the

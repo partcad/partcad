@@ -8,15 +8,20 @@
 //
 //   * LspBackend     - the legacy Python language server (unchanged behavior),
 //                      selected by the `partcad.backend: "python"` setting.
-//   * JsonRpcBackend - the standalone `partcad-json-rpc` service over stdio,
-//                      the default. It registers the same `partcad.*` commands
-//                      the LSP client used to auto-register, translating each to
-//                      the CLI-shaped JSON-RPC method, and routes the service's
-//                      notifications back under the legacy `?/partcad/*` names so
-//                      the extension's handlers are unchanged.
+//   * JsonRpcBackend - the standalone `partcad-json-rpc` service, the default.
+//                      It connects over the per-workspace socket daemon by
+//                      default (run the launcher, read the printed socket path,
+//                      connect), or over stdio when `partcad.serviceChannel` is
+//                      "stdio". Either way it registers the same `partcad.*`
+//                      commands the LSP client used to auto-register, translating
+//                      each to the CLI-shaped JSON-RPC method, and routes the
+//                      service's notifications back under the legacy
+//                      `?/partcad/*` names so the extension's handlers are
+//                      unchanged.
 //
 
 import * as cp from 'child_process';
+import * as net from 'net';
 import * as vscode from 'vscode';
 import { Disposable } from 'vscode';
 import { LanguageClient } from 'vscode-languageclient/node';
@@ -29,7 +34,7 @@ import {
 
 import { traceError, traceInfo } from './log/logging';
 import { ensureServiceExecutable } from './provision';
-import { getBackendFromSetting, setBackendSetting } from './settings';
+import { getBackendFromSetting, getServiceChannelFromSetting, setBackendSetting } from './settings';
 import { restartServer } from './server';
 
 /** The subset of the language client the extension depends on. */
@@ -38,6 +43,8 @@ export interface PartcadBackend {
     setTrace(value: any): Promise<void>;
     isRunning(): boolean;
     stop(): Promise<void>;
+    /** Terminate the shared daemon (socket channel only); no-op otherwise. */
+    stopDaemon?(): Promise<void>;
 }
 
 // The extension subscribes and the legacy server published under this prefix.
@@ -61,39 +68,24 @@ class LspBackend implements PartcadBackend {
     }
 }
 
-/** Talks to the standalone `partcad-json-rpc` service over framed stdio. */
+/** Talks to the standalone `partcad-json-rpc` service over a framed connection. */
 class JsonRpcBackend implements PartcadBackend {
-    private readonly proc: cp.ChildProcessWithoutNullStreams;
-    private readonly connection: MessageConnection;
     private readonly handlers = new Map<string, ((params: any) => void)[]>();
     private readonly commandDisposables: Disposable[] = [];
     private running = false;
 
     constructor(
-        execPath: string,
-        args: string[],
-        cwd: string,
-        env: NodeJS.ProcessEnv,
+        private readonly connection: MessageConnection,
+        private readonly cleanup: () => void,
         private readonly outputChannel: vscode.LogOutputChannel,
     ) {
-        traceInfo(`PartCAD service: launching ${execPath} ${args.join(' ')}`);
-        this.proc = cp.spawn(execPath, args, { cwd, env }) as cp.ChildProcessWithoutNullStreams;
-        this.proc.stderr.on('data', (d: Buffer) => this.outputChannel.append(d.toString()));
-        this.proc.on('exit', (code) => {
-            this.running = false;
-            traceInfo(`PartCAD service: process exited with code ${code}`);
-        });
-
-        this.connection = createMessageConnection(
-            new StreamMessageReader(this.proc.stdout),
-            new StreamMessageWriter(this.proc.stdin),
-        );
-        // A star handler receives every notification the service emits.
         this.connection.onNotification((method: string, params: any) => this.fire(method, params));
         this.connection.onError((e) => traceError(`PartCAD service connection error: ${JSON.stringify(e)}`));
+        this.connection.onClose(() => {
+            this.running = false;
+        });
         this.connection.listen();
         this.running = true;
-
         this.registerServerCommands();
     }
 
@@ -134,6 +126,8 @@ class JsonRpcBackend implements PartcadBackend {
     }
 
     async stop(): Promise<void> {
+        // Close only this client's connection; the shared daemon keeps running so
+        // other windows/CLI invocations for the workspace stay served.
         this.running = false;
         this.commandDisposables.forEach((d) => d.dispose());
         this.commandDisposables.length = 0;
@@ -142,10 +136,14 @@ class JsonRpcBackend implements PartcadBackend {
         } catch {
             // ignore
         }
+        this.cleanup();
+    }
+
+    async stopDaemon(): Promise<void> {
         try {
-            this.proc.kill();
+            await this.connection.sendRequest('daemon.stop', {});
         } catch {
-            // ignore
+            // The daemon closes the connection as it exits; ignore.
         }
     }
 
@@ -236,6 +234,69 @@ function serviceArgs(serverId: string): string[] {
     return args;
 }
 
+/** Run the launcher and resolve with the socket/pipe path it prints. */
+function runLauncher(execPath: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<string> {
+    return new Promise((resolve, reject) => {
+        cp.execFile(execPath, args, { cwd, env }, (err, stdout, stderr) => {
+            if (err) {
+                reject(new Error(`partcad-json-rpc launcher failed: ${err.message}: ${stderr}`));
+                return;
+            }
+            const line = stdout.split(/\r?\n/).find((l) => l.trim().length > 0);
+            if (!line) {
+                reject(new Error('partcad-json-rpc launcher did not print a socket path'));
+                return;
+            }
+            resolve(line.trim());
+        });
+    });
+}
+
+async function connectSocket(
+    execPath: string,
+    args: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+    outputChannel: vscode.LogOutputChannel,
+): Promise<JsonRpcBackend> {
+    const socketPath = await runLauncher(execPath, ['--socket', ...args], cwd, env);
+    traceInfo(`PartCAD service: connecting to daemon at ${socketPath}`);
+    const socket: net.Socket = await new Promise((resolve, reject) => {
+        const s = net.connect(socketPath);
+        s.once('connect', () => resolve(s));
+        s.once('error', reject);
+    });
+    const connection = createMessageConnection(new StreamMessageReader(socket), new StreamMessageWriter(socket));
+    return new JsonRpcBackend(connection, () => socket.destroy(), outputChannel);
+}
+
+function connectStdio(
+    execPath: string,
+    args: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+    outputChannel: vscode.LogOutputChannel,
+): JsonRpcBackend {
+    traceInfo(`PartCAD service: launching ${execPath} --stdio`);
+    const proc = cp.spawn(execPath, ['--stdio', ...args], { cwd, env }) as cp.ChildProcessWithoutNullStreams;
+    proc.stderr.on('data', (d: Buffer) => outputChannel.append(d.toString()));
+    const connection = createMessageConnection(
+        new StreamMessageReader(proc.stdout),
+        new StreamMessageWriter(proc.stdin),
+    );
+    return new JsonRpcBackend(
+        connection,
+        () => {
+            try {
+                proc.kill();
+            } catch {
+                // ignore
+            }
+        },
+        outputChannel,
+    );
+}
+
 /**
  * (Re)start the configured backend. Returns undefined if it could not start;
  * when the user declines the service download, the backend setting is switched
@@ -263,7 +324,17 @@ export async function restartBackend(
             return undefined;
         }
         const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-        return new JsonRpcBackend(execPath, serviceArgs(serverId), cwd, { ...process.env }, outputChannel);
+        const args = serviceArgs(serverId);
+        const env = { ...process.env };
+        try {
+            if (getServiceChannelFromSetting(serverId) === 'stdio') {
+                return connectStdio(execPath, args, cwd, env, outputChannel);
+            }
+            return await connectSocket(execPath, args, cwd, env, outputChannel);
+        } catch (e) {
+            traceError(`Failed to start the PartCAD service: ${e}`);
+            return undefined;
+        }
     }
 
     // Python / legacy LSP backend.

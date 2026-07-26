@@ -106,7 +106,7 @@ option_groups = [
 command_groups = [
     {
         "name": "Host commands",
-        "commands": ["version", "config", "system"],
+        "commands": ["version", "config", "system", "daemon"],
     },
     {
         "name": "Package commands",
