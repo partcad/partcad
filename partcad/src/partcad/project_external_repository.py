@@ -8,6 +8,7 @@
 #
 
 import asyncio
+import concurrent.futures
 import json
 import threading
 
@@ -68,6 +69,9 @@ class ProjectExternalRepository(ProjectPlugin):
         self._cache = cache
         self._request_cache: dict[str, object] = {}
         self._request_lock = threading.Lock()
+        # Objects are instantiated once, lazily, after enumeration (see
+        # 'ensure_enumerated_async'); this guards against doing it twice.
+        self._objects_instantiated = False
         super().__init__(ctx, name, path, config_obj=config_obj, inherited_config=inherited_config)
 
     def request(self, key: str, handler):
@@ -183,16 +187,29 @@ class ProjectExternalRepository(ProjectPlugin):
         """Synchronous fetch, for accessors reached outside an event loop.
 
         Returns the cached value if present (so this never blocks once the async
-        traversal has warmed the cache); otherwise it bridges to the async fetch.
-        Bridging is only safe outside a running loop, which holds for the CLI
-        entry points; inside the loop, enumeration is warmed via
-        'ensure_enumerated_async' so this path stays a cache hit.
+        traversal has warmed the cache). On a miss it bridges to the async
+        fetch. The bridge is normally 'asyncio.run', but a synchronous accessor
+        can also be reached from *within* a running loop (e.g. 'render_async'
+        calls the synchronous 'get_part', which reaches here through
+        'object_configs'). Nesting 'asyncio.run' in that case raises; instead the
+        coroutine is completed on a worker thread, so the accessor stays usable
+        from both contexts even when the cache was not pre-warmed.
         """
         scoped = self._scope(key)
         with self._request_lock:
             if scoped in self._request_cache:
                 return self._request_cache[scoped]
-        return asyncio.run(self.get_data_async(key))
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No loop is running: bridge directly.
+            return asyncio.run(self.get_data_async(key))
+
+        # A loop is already running in this thread: run the fetch to completion
+        # on a separate thread to avoid nesting event loops.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(lambda: asyncio.run(self.get_data_async(key))).result()
 
     async def ensure_enumerated_async(self):
         """Warm the metadata, object and dependency caches from the repository.
@@ -213,6 +230,36 @@ class ProjectExternalRepository(ProjectPlugin):
                 )
         # Warm 'deps' too, so the synchronous 'dependencies()' is a cache hit.
         await self.get_data_async("deps")
+
+        # The object configs are now known, so instantiate the objects into the
+        # eager 'parts'/'sketches'/'assemblies' dictionaries the synchronous
+        # consumers read, honoring the promise made where this is awaited (see
+        # Context._process_project) that downstream 'list'/render/export observe
+        # a populated package. 'ProjectPlugin' deferred this (its
+        # '_instantiate_objects' is a no-op) because nothing was known at
+        # construction. Geometry stays lazy - only the factories are created.
+        if not self._objects_instantiated:
+            self._objects_instantiated = True
+            self._instantiate_enumerated()
+
+    def _instantiate_enumerated(self):
+        """Instantiate the enumerated objects into the eager object dicts.
+
+        Each object is created independently and defensively: one that cannot be
+        built (e.g. an unsupported type, or a file-backed object whose file is
+        absent) is skipped with a warning instead of hiding every other object
+        from a 'list'. Geometry is not built here - only the factories.
+        """
+        for kind, getter in (
+            ("sketch", self.get_sketch),
+            ("part", self.get_part),
+            ("assembly", self.get_assembly),
+        ):
+            for name in self.object_names(kind):
+                try:
+                    getter(name)
+                except Exception as e:
+                    pc_logging.warning("%s: could not instantiate %s '%s': %s" % (self.name, kind, name, e))
 
     async def _materialize_meta_async(self):
         """Fill package-level metadata from the repository.
