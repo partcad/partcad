@@ -803,8 +803,13 @@ class Project(project_config.Configuration):
                     pc_logging.error("Failed to instantiate a non-parametrized object %s" % object_name)
                 return objects[object_name]
 
-            # This object has params (part_name != result_name)
-            if not base_object_name in objects:
+            # This object has params (part_name != result_name). Only the base
+            # object's *config* is needed to derive the parametrized variant
+            # (see 'object_configs[base_object_name]' below), so check the
+            # enumerable configs rather than the instantiated 'objects' dict -
+            # a plugin-backed package enumerates lazily and may not have
+            # instantiated the base yet.
+            if base_object_name not in object_configs:
                 pc_logging.error(
                     "Base object '%s' not found in '%s'",
                     base_object_name,
