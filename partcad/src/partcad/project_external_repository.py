@@ -8,13 +8,13 @@
 #
 
 import asyncio
-import concurrent.futures
 import json
 import threading
 
 from .cache_hash import CacheHash
 from .project import OBJECT_KINDS
 from .project_plugin import ProjectPlugin
+from .sync_threads import threadpool_manager
 from . import logging as pc_logging
 
 # Distinguishes "no cached value" from a cached value of None.
@@ -207,9 +207,10 @@ class ProjectExternalRepository(ProjectPlugin):
             return asyncio.run(self.get_data_async(key))
 
         # A loop is already running in this thread: run the fetch to completion
-        # on a separate thread to avoid nesting event loops.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(lambda: asyncio.run(self.get_data_async(key))).result()
+        # on the shared, otel-context-preserving executor to avoid nesting event
+        # loops (a raw ThreadPoolExecutor would drop the tracing context).
+        future = threadpool_manager.unconstrained_executor.submit(lambda: asyncio.run(self.get_data_async(key)))
+        return future.result()
 
     async def ensure_enumerated_async(self):
         """Warm the metadata, object and dependency caches from the repository.

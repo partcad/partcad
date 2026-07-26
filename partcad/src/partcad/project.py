@@ -809,7 +809,7 @@ class Project(project_config.Configuration):
             # enumerable configs rather than the instantiated 'objects' dict -
             # a plugin-backed package enumerates lazily and may not have
             # instantiated the base yet.
-            if not base_object_name in object_configs:
+            if base_object_name not in object_configs:
                 pc_logging.error(
                     "Base object '%s' not found in '%s'",
                     base_object_name,
