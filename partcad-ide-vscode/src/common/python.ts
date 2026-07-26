@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-/* eslint-disable @typescript-eslint/naming-convention */
 import { commands, Disposable, Event, EventEmitter, Uri } from 'vscode';
 import { traceError, traceInfo, traceLog } from './log/logging';
 import { PythonExtension, ResolvedEnvironment } from '@vscode/python-extension';
@@ -30,7 +29,10 @@ export async function initializePython(disposables: Disposable[]): Promise<void>
         if (api) {
             disposables.push(
                 api.environments.onDidChangeActiveEnvironmentPath((e) => {
-                    onDidChangePythonInterpreterEvent.fire({ path: [e.path], resource: e.resource?.uri });
+                    // e.resource is a Resource (Uri | WorkspaceFolder | undefined). Normalize it
+                    // to a Uri: a WorkspaceFolder exposes one via .uri, a Uri already is one.
+                    const resource = e.resource && 'uri' in e.resource ? e.resource.uri : e.resource;
+                    onDidChangePythonInterpreterEvent.fire({ path: [e.path], resource });
                 }),
             );
 
