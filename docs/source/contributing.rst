@@ -534,9 +534,12 @@ Feature definitions and step implementations are located in the ``./features`` d
 
 Every scenario runs ``pc`` against its own private ``$HOME``, which would otherwise mean a cold PartCAD cache
 each time: re-cloning the ``//pub`` index and rebuilding the conda sandbox that script parts run in. Instead the
-suite builds that state once, in a temporary directory, and hands each scenario a copy of it through
-``PC_INTERNAL_STATE_DIR``. The copy is deleted when the scenario ends, so scenarios stay independent - a scenario
-is free to write to, or corrupt, the state it was given.
+suite builds that state once, in a temporary directory, and points each scenario at its own state directory
+through ``PC_INTERNAL_STATE_DIR``. The ``cache``, ``git`` and ``external`` subdirectories are copied per scenario
+and deleted when it ends, so a scenario is free to write to them. The conda sandbox is shared through a link
+rather than copied: it holds 36k of the seed's 39k files, and copying it cost about 133 seconds per scenario on a
+Windows runner against two on Linux. PartCAD locks the sandbox across processes, and behave runs scenarios
+serially within a CI shard, so sharing it matches what happens on a developer's own machine.
 
 The first run builds the seed and takes around ten minutes; later runs reuse it. To build it ahead of time, or to
 rebuild it after changing what it covers:

@@ -85,7 +85,11 @@ poetry run behave                                                               
 
 `behave` gives each scenario a private `$HOME`, so it would start with a cold PartCAD cache every time. The suite
 avoids that by building one internal state directory up front — the `//pub` clone plus the conda sandbox — and
-copying it per scenario via `PC_INTERNAL_STATE_DIR`. The first run builds it (~10 min, ~3.5 GB); later runs reuse
+pointing each scenario at its own via `PC_INTERNAL_STATE_DIR`. Each scenario gets a private copy of the `cache`,
+`git` and `external` subdirectories (~2.8k files, ~0.6s) and **shares** the conda sandbox through a link: the
+sandbox is 36k of the seed's 39k files, and copying it cost ~133s per scenario on a Windows runner against ~2s
+on Linux, which was killing those jobs at the 60-minute cap. PartCAD locks the sandbox across processes, and
+behave is serial within a CI shard, so sharing it is what a developer's own machine does anyway. The first run builds it (~10 min, ~3.5 GB); later runs reuse
 it. Build or rebuild it explicitly with `poetry run python -m features.seed`, relocate it with
 `PARTCAD_BEHAVE_DIR`, and delete that directory to force a rebuild. A scenario that needs a cold cache — one
 asserting that `pc install` clones, or that the state directory is at the default `$HOME/.partcad` — must be

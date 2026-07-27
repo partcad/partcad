@@ -88,6 +88,11 @@ _SEED_MARKER = os.path.join(SEED_ROOT, ".seeded")
 # the two are only meaningful together.
 _EXPORTS_MANIFEST = os.path.join(SEED_STATE_DIR, ".seed-exports.json")
 
+# The parts of the state directory each scenario gets a private copy of: the
+# caches it may write to and would otherwise have to refill. Everything else in
+# there is either shared (the sandbox, see provision) or scenario-irrelevant.
+_COPIED_SUBDIRS = ("cache", "git", "external")
+
 # The sandbox the script parts run in.
 _SANDBOX_DIR = os.path.join(SEED_STATE_DIR, "sandbox")
 
@@ -463,21 +468,80 @@ def ensure_seed(env: dict):
         return SEED_STATE_DIR
 
 
-def provision(destination: str) -> str:
-    """Copy the seed to `destination` and return it, for one scenario's use."""
-    # shutil.copytree walks the ~27k files in Python; `cp -a` does the same work
-    # in one process and measurably faster, which is worth having on the path
-    # that runs once per scenario. Windows has no `cp`, so it falls back.
+def _copy_dir(source: str, destination: str) -> None:
+    """Copy one directory. `cp -a` beats shutil.copytree, which walks in Python."""
     if platform.system() == "Windows":
-        shutil.copytree(SEED_STATE_DIR, destination, symlinks=True)
+        shutil.copytree(source, destination, symlinks=True)
     else:
-        os.makedirs(os.path.dirname(destination), exist_ok=True)
-        subprocess.run(["cp", "-a", SEED_STATE_DIR, destination], check=True)
+        subprocess.run(["cp", "-a", source, destination], check=True)
+
+
+def _link_dir(source: str, destination: str) -> None:
+    """Point `destination` at `source` without copying it.
+
+    A directory symlink on Windows needs either administrator rights or
+    Developer Mode, neither of which a hosted runner offers, so it gets a
+    junction instead - `mklink /J` is a cmd builtin and needs no privileges on
+    NTFS. Everywhere else a symlink does.
+    """
+    if platform.system() == "Windows":
+        subprocess.run(["cmd", "/c", "mklink", "/J", destination, source], check=True, capture_output=True)
+    else:
+        os.symlink(source, destination, target_is_directory=True)
+
+
+def provision(destination: str) -> str:
+    """Give one scenario a state directory of its own, and return it.
+
+    Only the package and object caches are copied. The conda sandbox is shared
+    through a link, because copying it is what made this unaffordable: it is
+    36k of the seed's 39k files, and on a Windows runner copying the whole seed
+    cost ~133s per scenario against ~2s on Linux - more than an hour per shard,
+    which is why those jobs were being killed at the 60 minute cap. Copying the
+    directories below is ~2.8k files and half a second.
+
+    Sharing the sandbox is safe for the way CI runs the suite: behave is serial
+    within a shard, so one scenario uses it at a time, and it is what a
+    developer's own machine does anyway - PartCAD locks it across processes
+    (see the FileLocks in runtime_python_conda.py). It does mean a scenario that
+    corrupted the sandbox would affect later ones in the same job, and that
+    concurrent workers under `behavex --parallel-processes` share it; the
+    scenarios that care about a cold or private state directory are tagged
+    @cold-state and get no copy at all.
+    """
+    os.makedirs(destination, exist_ok=True)
+
+    # 'tar' is deliberately not here: nothing in the seed produces one today, so
+    # copying it would be a no-op, and a scenario that does use a tar dependency
+    # simply downloads it as it did before.
+    for name in _COPIED_SUBDIRS:
+        source = os.path.join(SEED_STATE_DIR, name)
+        if os.path.isdir(source):
+            _copy_dir(source, os.path.join(destination, name))
+
+    # Without this the scenario would find no sandbox under its own state
+    # directory and build a fresh 2.3 GB one, which is the cost this whole
+    # module exists to remove.
+    sandbox = os.path.join(SEED_STATE_DIR, "sandbox")
+    if os.path.isdir(sandbox):
+        _link_dir(sandbox, os.path.join(destination, "sandbox"))
+
     return destination
 
 
 def release(destination: str) -> None:
     """Delete a scenario's copy. Never fails the scenario it belongs to."""
+    # The sandbox is a link to the shared one, so remove it as a link first:
+    # rmtree would otherwise follow it on the platforms where it is a junction
+    # and delete the seed's sandbox along with the scenario's copy.
+    sandbox = os.path.join(destination, "sandbox")
+    try:
+        if os.path.islink(sandbox):
+            os.unlink(sandbox)
+        elif os.path.isdir(sandbox):
+            os.rmdir(sandbox)  # an empty junction point on Windows
+    except OSError:
+        pass
     shutil.rmtree(destination, ignore_errors=True)
 
 
