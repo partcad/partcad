@@ -88,7 +88,7 @@ jobs:
           cp LICENSE.txt apache20.svg README.md partcad-cli
           cp LICENSE.txt partcad-service-json-rpc
           # Install partcad-utils (pinned by partcad) before installing partcad.
-          python -m pip install --no-index --find-links=partcad-utils/dist partcad-utils
+          python -m pip install --find-links=partcad-utils/dist partcad-utils
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
           # Build the JSON-RPC service wheel too; partcad-cli pins it.
@@ -103,7 +103,7 @@ jobs:
           . ~/.bash_profile
           mamba activate ${{ format('env-test-build-{0}', matrix.python-version) }}
           # Install partcad-utils first (pinned by partcad/cli/service, not on PyPI).
-          python -m pip install --no-index --find-links=partcad-utils/dist partcad-utils
+          python -m pip install --find-links=partcad-utils/dist partcad-utils
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
           # Install the service before partcad-cli, which pins it.
