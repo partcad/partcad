@@ -76,6 +76,10 @@ jobs:
           . ~/.bashrc
           . ~/.bash_profile
           mamba activate env-build
+          # Build the shared partcad-utils wheel first; partcad (and the CLI and
+          # the service) pin it, and it is not on PyPI.
+          cp LICENSE.txt partcad-utils
+          (cd partcad-utils && python -m build)
           cp LICENSE.txt apache20.svg partcad
           (cd partcad && python -m build)
           mamba deactivate
@@ -83,6 +87,8 @@ jobs:
           mamba activate env-build-cli
           cp LICENSE.txt apache20.svg README.md partcad-cli
           cp LICENSE.txt partcad-service-json-rpc
+          # Install partcad-utils (pinned by partcad) before installing partcad.
+          python -m pip install --no-index --find-links=partcad-utils/dist partcad-utils
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
           # Build the JSON-RPC service wheel too; partcad-cli pins it.
@@ -96,6 +102,8 @@ jobs:
           . ~/.bashrc
           . ~/.bash_profile
           mamba activate ${{ format('env-test-build-{0}', matrix.python-version) }}
+          # Install partcad-utils first (pinned by partcad/cli/service, not on PyPI).
+          python -m pip install --no-index --find-links=partcad-utils/dist partcad-utils
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
           # Install the service before partcad-cli, which pins it.

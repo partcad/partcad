@@ -410,6 +410,14 @@ class UserConfig(vyper.Vyper):
         self.bind_env("internalStateDir", "PC_INTERNAL_STATE_DIR")
         self.internal_state_dir = self.get_string("internalStateDir")
 
+        # option: logLevel
+        # description: verbosity of the daemon's persistent rotating log file,
+        #              independent of what any connected client requests
+        # values: [debug | info | warning | error | critical]
+        # default: debug (full detail)
+        self.bind_env("logLevel", "PC_LOG_LEVEL")
+        self.log_level = self.get_string("logLevel")
+
         # option: forceUpdate
         # description: update all repositories even if they are fresh
         # values: [True | False]

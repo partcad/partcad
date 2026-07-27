@@ -17,6 +17,43 @@ __version__: str = "0.7.158"
 # at import time and so trips over this on the way in.
 import pyexpat  # noqa: F401
 
+# The shared lightweight utilities (logging, telemetry, user config) live in the
+# standalone `partcad_utils` package, so the thin CLI/daemon clients can import
+# them without pulling in the CAD kernel. Alias them back under the `partcad.*`
+# namespace *before* any submodule below does `from . import logging` /
+# `from . import telemetry` / `from .user_config import ...`, so every existing
+# import resolves to the very same module object — shared mutable state such as
+# `logging.had_errors` and `logging.ops` included (a plain re-export would fork
+# those globals).
+import sys as _sys
+import partcad_utils.logging  # noqa: F401,E402
+import partcad_utils.logging_ansi_terminal  # noqa: F401,E402
+import partcad_utils.logging_remote_server  # noqa: F401,E402
+import partcad_utils.logging_remote_client  # noqa: F401,E402
+import partcad_utils.telemetry  # noqa: F401,E402
+import partcad_utils.telemetry_none  # noqa: F401,E402
+import partcad_utils.telemetry_sentry  # noqa: F401,E402
+import partcad_utils.utils  # noqa: F401,E402
+import partcad_utils.user_config  # noqa: F401,E402
+
+for _n in (
+    "logging",
+    "logging_ansi_terminal",
+    "logging_remote_server",
+    "logging_remote_client",
+    "telemetry",
+    "telemetry_none",
+    "telemetry_sentry",
+    "utils",
+    "user_config",
+):
+    _mod = _sys.modules["partcad_utils." + _n]
+    _sys.modules["partcad." + _n] = _mod
+    # Also expose it as an attribute of the `partcad` package, so `partcad.<n>`
+    # resolves even when nothing does `from . import <n>` below. (`user_config`
+    # is re-bound to the config *instance* by a later explicit import.)
+    globals()[_n] = _mod
+
 from . import telemetry
 
 telemetry.init(__version__)

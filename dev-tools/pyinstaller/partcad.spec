@@ -128,6 +128,12 @@ datas += [
 hiddenimports += collect_submodules("partcad")
 hiddenimports += command_modules()
 
+# The shared lightweight utilities (logging, telemetry, user config). `partcad`
+# aliases these back under its own namespace, and the thin CLI/service clients
+# import them directly (some, like the telemetry backends, only by name), so
+# collect the whole package.
+hiddenimports += collect_submodules("partcad_utils")
+
 # The JSON-RPC service (`partcad-json-rpc`). Its HTTP transport imports aiohttp
 # lazily, inside a function that is only reached in HTTP mode, so PyInstaller's
 # static analysis does not see it; name it (and the service package) explicitly.
@@ -192,6 +198,7 @@ else:
 
 # The version PartCAD reports and sends with telemetry.
 add_metadata("partcad")
+add_metadata("partcad-utils")
 add_metadata("partcad-cli")
 add_metadata("partcad-service-json-rpc")
 

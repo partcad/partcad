@@ -41,8 +41,6 @@ _OPERATIONS = {
     "ensure_loaded": operations.ensure_loaded,
     "install": operations.install,
     "update": operations.update,
-    "telemetry.start": operations.telemetry_start,
-    "telemetry.end": operations.telemetry_end,
 }
 
 

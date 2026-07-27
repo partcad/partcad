@@ -16,6 +16,7 @@ import sentry_sdk.session
 import yaml
 
 import partcad as pc
+import partcad_utils.logging_remote_client as logging_remote_client
 from partcad_cli.click.loader import Loader
 from partcad_cli.click.cli_context import CliContext
 
@@ -369,12 +370,12 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             else:
                 setattr(pc.user_config, attrib, value)
 
-    # Initialize logging before using telemetry, as telemetry may use logging
-    if no_ansi:
-        logging.getLogger("partcad").propagate = True
-        logging.basicConfig()
-    else:
-        pc.logging_ansi_terminal.init()
+    # Initialize logging before using telemetry, as telemetry may use logging.
+    # The remote-log client wraps logging_ansi_terminal (ANSI) or a plain stderr
+    # handler (--no-ansi); it is the same renderer the migrated commands feed
+    # their daemon-forwarded log events into, so in-process and thin-client
+    # commands render identically.
+    logging_remote_client.init(want_ansi=not no_ansi)
 
     if quiet:
         pc.logging.setLevel(logging.CRITICAL + 1)
@@ -410,11 +411,8 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
 
         atexit.register(telemetry_atexit)
 
-        if no_ansi:
-            logging.getLogger("partcad").propagate = True
-            logging.basicConfig()
-        else:
-            pc.logging_ansi_terminal.init()
+        # (Logging was already initialized above; init() is idempotent.)
+        logging_remote_client.init(want_ansi=not no_ansi)
 
         if quiet:
             pc.logging.setLevel(logging.CRITICAL + 1)
@@ -504,8 +502,7 @@ cli.context_settings = {
 def process_result(click_ctx: click.Context, result, verbose, quiet, no_ansi, path, **kwargs):
     global cli_span
 
-    if not no_ansi:
-        pc.logging_ansi_terminal.fini()
+    logging_remote_client.fini()
 
     # Abort if there was at least one error reported during the execution time.
     # `result` is needed for the case when the command was not correct.

@@ -15,6 +15,7 @@ CLI is.
 """
 
 import argparse
+import os
 import sys
 
 from . import __version__
@@ -92,9 +93,12 @@ def parse_host_port(address: str) -> tuple[str, int]:
     return "127.0.0.1", int(address)
 
 
-def _build_session(args: argparse.Namespace) -> Session:
+def _build_session(args: argparse.Namespace, log_dir: str = None) -> Session:
     session = Session(settings=build_settings(args))
-    session.start_log_stream()
+    # The per-workspace daemon keeps a rotating log file next to its socket; the
+    # foreground channels (stdio/HTTP) stream to the client without a file.
+    log_file = os.path.join(log_dir, "partcad.log") if log_dir else None
+    session.start_remote_log(log_file=log_file)
     return session
 
 
@@ -123,7 +127,7 @@ def main(argv=None) -> int:
     # daemon child (after fork), so the fast path (a live daemon) stays cheap.
     from . import daemon
 
-    daemon.ensure_daemon(lambda: _build_session(args))
+    daemon.ensure_daemon(lambda wdir: _build_session(args, wdir))
     return 0
 
 

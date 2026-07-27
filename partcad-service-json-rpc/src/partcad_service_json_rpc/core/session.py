@@ -12,18 +12,30 @@ receive a session and never touch a protocol library, so the same operations
 run under the JSON-RPC transports and under the legacy LSP adapter.
 """
 
-import base64
 import copy
 import importlib
 import logging
-import os
 import queue
 import sys
 import threading
 
-from .events import TERMINAL, EventEmitter
+from .events import EventEmitter
 
-_LOG_BUFSIZE = 4096
+_LEVELS = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
+    "warn": logging.WARNING,
+    "error": logging.ERROR,
+    "critical": logging.CRITICAL,
+}
+
+
+def _resolve_level(name, default):
+    """Map a user_config log-level name onto a ``logging`` level int."""
+    if not name:
+        return default
+    return _LEVELS.get(str(name).lower(), default)
 
 
 class Session:
@@ -41,14 +53,15 @@ class Session:
         self._load_lock = threading.RLock()
         self._prompt_queue: "queue.Queue[str]" = queue.Queue()
 
-        # Active telemetry spans, keyed by the id handed back to clients.
-        self.spans: dict = {}
-
-        # Log streaming (opt-in via start_log_stream()).
-        self._log_read = None
+        # Legacy LSP log streaming: an externally-owned ANSI write stream, bound
+        # via bind_log_stream() (the bundled VS Code LSP adapter uses this).
         self._log_write = None
-        self._log_thread = None
-        self._log_die = False
+
+        # Remote structured-log forwarding, opt-in via start_remote_log(), used
+        # by the JSON-RPC transports (socket daemon, stdio, HTTP).
+        self._use_remote_log = False
+        self._log_file = None
+        self._log_file_level = None
 
     # ---- interactive prompts ------------------------------------------------
 
@@ -63,21 +76,27 @@ class Session:
 
     # ---- log streaming ------------------------------------------------------
 
-    def start_log_stream(self) -> None:
-        """Route PartCAD's ANSI terminal logger to TERMINAL events.
+    def start_remote_log(self, log_file: str = None, file_level=None) -> None:
+        """Forward PartCAD's logs to the connected client as structured events.
 
-        Cross-platform: a background thread does a blocking read on the pipe and
-        forwards each chunk, base64-encoded, exactly as the legacy LSP server
-        did over the ``?/partcad/terminal`` notification.
+        Used by the JSON-RPC transports. Log records and process/action markers
+        travel over the notification channel (the same reliable path as RPC
+        responses, which is what makes this work inside the frozen bundle where
+        the old ANSI pipe did not), and, if ``log_file`` is given, are also teed
+        into a rotating file. ``file_level`` overrides the file verbosity;
+        otherwise it comes from ``user_config`` (default: full detail).
         """
-        if self._log_thread is not None:
-            return
-        read_fd, write_fd = os.pipe()
-        self._log_read = os.fdopen(read_fd, "rb", buffering=0)
-        self._log_write = os.fdopen(write_fd, "w", buffering=1)
-        self._log_die = False
-        self._log_thread = threading.Thread(target=self._pump_log, name="partcad-json-rpc-log", daemon=True)
-        self._log_thread.start()
+        self._use_remote_log = True
+        self._log_file = log_file
+        self._log_file_level = file_level
+
+    def _log_hook(self, event) -> None:
+        """Route one structured log event to the current client via the emitter.
+
+        The emitter's sink is (re)bound per request, so events reach whichever
+        client is currently being served and are dropped between requests.
+        """
+        self.emitter.emit("log", event)
 
     @property
     def log_write_stream(self):
@@ -88,28 +107,9 @@ class Session:
 
         The legacy VS Code LSP adapter owns its own log pipe and reader thread
         (set up before this session exists, so install-time output can stream);
-        it binds that write stream here instead of calling start_log_stream().
+        it binds that write stream here instead of using start_remote_log().
         """
         self._log_write = write_stream
-
-    def _pump_log(self) -> None:
-        while not self._log_die:
-            chunk = self._log_read.read(_LOG_BUFSIZE)
-            if not chunk:
-                break
-            chunk = chunk.replace(b"\n", b"\r\n")
-            self.emitter.emit(TERMINAL, {"line": base64.b64encode(chunk).decode()})
-
-    def stop_log_stream(self) -> None:
-        self._log_die = True
-        if self._log_write is not None:
-            try:
-                self._log_write.close()
-            except Exception:  # pylint: disable=broad-except
-                pass
-        if self._log_thread is not None and self._log_thread.is_alive():
-            self._log_thread.join(timeout=1.0)
-        self._log_thread = None
 
     # ---- partcad lifecycle --------------------------------------------------
 
@@ -173,5 +173,14 @@ class Session:
             elif verbosity == "error":
                 logging.getLogger("partcad").setLevel(logging.ERROR)
 
-            if self._log_write is not None:
+            if self._use_remote_log:
+                level = self._log_file_level
+                if level is None:
+                    level = _resolve_level(getattr(user_config, "log_level", None), logging.DEBUG)
+                self.partcad.logging_remote_server.init(
+                    hook=self._log_hook,
+                    log_file=self._log_file,
+                    file_level=level,
+                )
+            elif self._log_write is not None:
                 self.partcad.logging_ansi_terminal.init(stream=self._log_write)

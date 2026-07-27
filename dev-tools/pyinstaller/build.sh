@@ -127,13 +127,18 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   # bundle is built with.
   "${PYTHON}" -m pip install "pyinstaller>=6.15" "${SETUPTOOLS_BOUND}"
 
-  # `partcad-cli` and `partcad-service-json-rpc` each declare their license by a
-  # path inside their own directory, but the file itself only exists in the
-  # repository root. The wheel build in "deploy.yml" copies it the same way.
+  # `partcad-cli`, `partcad-service-json-rpc`, and `partcad-utils` each declare
+  # their license by a path inside their own directory, but the file itself only
+  # exists in the repository root. The wheel build in "deploy.yml" copies it the
+  # same way.
   cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-cli/"
   cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-service-json-rpc/"
+  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-utils/"
 
   echo "==> Installing PartCAD from this checkout"
+  # The shared partcad-utils is installed first: partcad (and the CLI/service)
+  # pin it, and it is not on PyPI, so it must come from this checkout.
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-utils" "${SETUPTOOLS_BOUND}"
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras that the wheels leave to the user are all built in.
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint]" "${SETUPTOOLS_BOUND}"

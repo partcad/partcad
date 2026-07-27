@@ -96,7 +96,9 @@ def ensure_daemon(
     """Ensure a daemon serves the workspace and return (and print) its socket path.
 
     On POSIX, starts a detached daemon when none is alive. ``build_session`` is a
-    zero-arg callable returning the warm :class:`Session` the daemon serves.
+    callable taking the workspace directory and returning the warm
+    :class:`Session` the daemon serves (the directory is where its rotating log
+    file lives).
     """
     root = root_path or determine_root_path()
     sock = socket_path(root)
@@ -147,7 +149,7 @@ def _serve_detached(server_sock: socket.socket, sock: str, wdir: str, build_sess
     _redirect_std_fds(os.path.join(wdir, "daemon.log"))
     _write_pid(wdir)
 
-    session = build_session()
+    session = build_session(wdir)
     server = SocketServer(session, build_registry(), on_shutdown=lambda: _cleanup(wdir))
 
     def _terminate(_signum, _frame):

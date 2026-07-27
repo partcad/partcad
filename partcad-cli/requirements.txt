@@ -1,3 +1,4 @@
+partcad-utils==0.7.146
 click==8.4.2
 ocp_vscode
 partcad==0.7.158

@@ -274,6 +274,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
                     terminalEmitter.fire(atob(message.line));
                 }),
+                // The JSON-RPC service/daemon backend forwards structured log
+                // events (plain records and process/action markers) instead of
+                // pre-rendered ANSI. Render the log records as level-prefixed
+                // lines in the same terminal; the process/action markers only
+                // drive the CLI's ANSI progress footer, and the meaningful lines
+                // (including "DONE: ...") already arrive as 'log' records.
+                lsClient.onNotification('?/partcad/log', async (event: any) => {
+                    if (!terminalEmitter || !event || event.kind !== 'log') {
+                        return;
+                    }
+
+                    if (
+                        getReopenTerminalFromSetting(serverId) === 'true' &&
+                        partcadTerminal !== undefined &&
+                        !vscode.window.terminals.includes(partcadTerminal)
+                    ) {
+                        partcadTerminal.dispose();
+                        partcadTerminal = terminalInit(context, terminalEmitter);
+                    }
+                    if (getPopupTerminalFromSetting(serverId) === 'true' && partcadTerminal !== undefined) {
+                        partcadTerminal.show(true);
+                    }
+
+                    const level = event.levelname || 'INFO';
+                    terminalEmitter.fire(`${level}: ${event.message ?? ''}\r\n`);
+                }),
                 lsClient.onNotification(`?/partcad/execute`, async ({ command, args }) => {
                     await vscode.commands.executeCommand(command, ...args);
                 }),

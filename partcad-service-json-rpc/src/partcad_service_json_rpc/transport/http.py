@@ -79,6 +79,9 @@ def build_app(session, registry) -> web.Application:
 
 
 def serve_http(session, registry, host: str, port: int) -> None:
-    """Serve the JSON-RPC service over HTTP until interrupted."""
-    session.start_log_stream()
+    """Serve the JSON-RPC service over HTTP until interrupted.
+
+    The session already has remote-log forwarding started by ``_build_session``;
+    its ``log`` events are delivered to clients over the SSE channel.
+    """
     web.run_app(build_app(session, registry), host=host, port=port, print=None)
