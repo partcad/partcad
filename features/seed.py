@@ -531,17 +531,35 @@ def provision(destination: str) -> str:
 
 def release(destination: str) -> None:
     """Delete a scenario's copy. Never fails the scenario it belongs to."""
-    # The sandbox is a link to the shared one, so remove it as a link first:
-    # rmtree would otherwise follow it on the platforms where it is a junction
-    # and delete the seed's sandbox along with the scenario's copy.
+    # The sandbox here is a link to the shared one, and detaching it before the
+    # delete is a safety requirement rather than tidiness. shutil.rmtree does not
+    # follow POSIX symlinks, but a Windows junction is a mount-point reparse
+    # point that os.path.islink() reports as False and scandir can report as a
+    # real directory - so an rmtree that reached one could walk through it and
+    # delete the seed's sandbox, wrecking every later scenario in the job.
+    #
+    # os.rmdir removes a junction without touching what it points at, which is
+    # why the isdir branch is safe and is the one that runs on Windows.
     sandbox = os.path.join(destination, "sandbox")
     try:
         if os.path.islink(sandbox):
             os.unlink(sandbox)
         elif os.path.isdir(sandbox):
-            os.rmdir(sandbox)  # an empty junction point on Windows
-    except OSError:
-        pass
+            os.rmdir(sandbox)
+    except OSError as error:
+        # Leaving a scenario's directory behind costs disk. Deleting it with the
+        # link still in place could cost the seed, so the leak is the better bug:
+        # this is louder than a leak deserves precisely because it should not
+        # happen, and the alternative is silent and unrecoverable.
+        logger.warning(
+            "seed: could not detach the shared sandbox at %s (%s); leaving %s in place rather than "
+            "risking a delete that follows the link into the seed",
+            sandbox,
+            error,
+            destination,
+        )
+        return
+
     shutil.rmtree(destination, ignore_errors=True)
 
 
