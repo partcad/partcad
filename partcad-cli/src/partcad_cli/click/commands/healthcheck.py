@@ -6,8 +6,7 @@
 
 import rich_click as click
 
-import partcad as pc
-from ..cli_context import CliContext
+from ..service import run
 
 
 @click.command(help="Perform a health check of the host system to identify known issues.")
@@ -26,6 +25,10 @@ from ..cli_context import CliContext
     help="Attempt to fix any issues found",
 )
 @click.pass_obj
-def cli(cli_ctx: CliContext, filters: str, fix: bool, dry_run: bool) -> None:
-    with pc.telemetry.set_context(cli_ctx.otel_context):
-        pc.healthcheck.tests.run_healthchecks(filters=filters, fix=fix, dry_run=dry_run)
+def cli(cli_ctx, filters: str, fix: bool, dry_run: bool) -> None:
+    run(
+        cli_ctx,
+        "healthcheck",
+        {"filters": filters, "fix": fix, "dry_run": dry_run},
+        span_name="healthcheck",
+    )

@@ -387,6 +387,17 @@ def version(session, params):
     return {"partcad": pc.__version__}
 
 
+def healthcheck(session, params):
+    """Run host health checks, streaming their output as log events."""
+    pc = session.ensure_partcad()
+    pc.healthcheck.tests.run_healthchecks(
+        filters=params.get("filters"),
+        fix=params.get("fix", False),
+        dry_run=params.get("dry_run", False),
+    )
+    return {}
+
+
 # ---- telemetry -------------------------------------------------------------
 
 

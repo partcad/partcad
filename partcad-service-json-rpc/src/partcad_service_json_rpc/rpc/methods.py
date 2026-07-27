@@ -37,6 +37,7 @@ _OPERATIONS = {
     "activate": operations.activate,
     "prompt.respond": operations.prompt_respond,
     "version": operations.version,
+    "healthcheck": operations.healthcheck,
     "telemetry.start": operations.telemetry_start,
     "telemetry.end": operations.telemetry_end,
 }
