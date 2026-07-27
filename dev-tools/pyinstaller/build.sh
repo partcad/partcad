@@ -147,13 +147,12 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   # no longer a dependency - the bundle would then need no in-process CAD either.
   "${PYTHON}" -m pip install \
     "cadquery-ocp==7.9.3.1.1" "build123d==0.11.1" "ocpsvg==0.6.0" "${SETUPTOOLS_BOUND}"
-  # This satisfies the `partcad==<version>` pin of `partcad-cli` with the local
-  # build rather than with the release on PyPI.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-cli" "${SETUPTOOLS_BOUND}"
-  # The JSON-RPC service is the third executable in the bundle; installing it
-  # here from the checkout satisfies its `partcad==<version>` pin with the local
-  # build too.
+  # The JSON-RPC service (the bundle's third executable) is installed before
+  # partcad-cli: the CLI pins partcad-service-json-rpc, which is not on PyPI, so
+  # it must be satisfied from this checkout. Both pins (partcad, and the service)
+  # resolve to the local builds this way.
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-service-json-rpc" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-cli" "${SETUPTOOLS_BOUND}"
 fi
 
 ###############################################  OPENSCAD  ###################################################

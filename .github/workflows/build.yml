@@ -82,8 +82,11 @@ jobs:
 
           mamba activate env-build-cli
           cp LICENSE.txt apache20.svg README.md partcad-cli
+          cp LICENSE.txt partcad-service-json-rpc
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
+          # Build the JSON-RPC service wheel too; partcad-cli pins it.
+          (cd partcad-service-json-rpc && python -m build)
           (cd partcad-cli && python -m build)
           mamba deactivate
 
@@ -95,6 +98,9 @@ jobs:
           mamba activate ${{ format('env-test-build-{0}', matrix.python-version) }}
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
+          # Install the service before partcad-cli, which pins it.
+          python -m pip install -r partcad-service-json-rpc/requirements.txt
+          python -m pip install --no-index --find-links=partcad-service-json-rpc/dist partcad-service-json-rpc
           python -m pip install -r partcad-cli/requirements.txt
           python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli
           mamba deactivate
