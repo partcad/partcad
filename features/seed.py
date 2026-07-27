@@ -17,9 +17,14 @@ This module builds that state once, in `SEED_ROOT`, and hands every scenario a
 copy of it. The copy is what keeps the scenarios independent: a scenario may
 write to its state directory (populate the cache, re-clone at a different
 revision, corrupt it on purpose) without any of it reaching the seed or the next
-scenario. Copying ~3.5 GB costs ~2.2s, against the minutes the cold
-build costs, and the copy is deleted when the scenario ends so at most
-`--parallel-processes` of them exist at a time.
+scenario. Copying ~3.5 GB costs ~2.2s, against the minutes the cold build costs,
+and the copy is deleted when the scenario ends - so one exists at a time under
+plain `behave`, and one per worker under `behavex --parallel-processes`.
+
+Seeding is an optimization, never a precondition: if it cannot be done - a runner
+that cannot reach github.com, most often - `ensure_seed` says so and returns
+None, and every scenario falls back to the cold `$HOME/.partcad` it used before
+this existed.
 
 The seed is built by `ensure_seed()`, which is safe to call from every behavex
 worker at once: an inter-process lock serializes them and a marker file written
@@ -36,6 +41,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import time
 
 from filelock import FileLock
 
@@ -154,6 +160,18 @@ _LIST_TIMEOUT = 1800
 _SANDBOX_TIMEOUT = 1800
 _EXPORT_TIMEOUT = 300
 
+# Attempts per seeding step, and the base backoff between them (multiplied by
+# the attempt number). Cloning the index and solving a conda environment both
+# reach the network, and hosted runners lose connections to github.com often
+# enough that one attempt is not a fair test of whether seeding is possible.
+_ATTEMPTS = 3
+_RETRY_DELAY = 10
+
+
+class SeedError(Exception):
+    """A seeding step could not be completed, after retrying."""
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -200,8 +218,33 @@ def _save_manifest(done: set) -> None:
         json.dump(sorted(done), manifest)
 
 
+def _run_step(label: str, argv: list, cwd: str, env: dict, timeout: int) -> None:
+    """Run one seeding command, retrying before giving up.
+
+    The steps that matter here reach the network - cloning the whole public
+    index, and solving a conda environment - and hosted runners drop
+    connections to github.com often enough that a single attempt is not a fair
+    test of whether seeding is possible.
+    """
+    detail = "no attempt made"
+    for attempt in range(1, _ATTEMPTS + 1):
+        try:
+            result = _run(argv, cwd, env, timeout)
+            if result.returncode == 0:
+                return
+            stderr = (result.stderr or "").strip()
+            detail = stderr.splitlines()[-1] if stderr else f"exit status {result.returncode}"
+        except subprocess.TimeoutExpired:
+            detail = f"timed out after {timeout}s"
+        if attempt < _ATTEMPTS:
+            delay = _RETRY_DELAY * attempt
+            logger.warning("seed: %s failed (%s); retrying in %ds", label, detail, delay)
+            time.sleep(delay)
+    raise SeedError(f"{label} failed after {_ATTEMPTS} attempts: {detail}")
+
+
 def _build(env: dict) -> None:
-    """Populate `SEED_STATE_DIR`. Raises if the parts that must work do not."""
+    """Populate `SEED_STATE_DIR`. Raises SeedError if a required step will not run."""
     os.makedirs(_SEED_PROJECT_DIR, exist_ok=True)
     os.makedirs(SEED_STATE_DIR, exist_ok=True)
     output_dir = os.path.join(SEED_ROOT, "output")
@@ -215,16 +258,18 @@ def _build(env: dict) -> None:
     # overwrite, so a resumed build has to skip it rather than treat the refusal
     # as a failure.
     if not os.path.exists(os.path.join(_SEED_PROJECT_DIR, "partcad.yaml")):
-        result = _run(_pc_command("init"), _SEED_PROJECT_DIR, build_env, _EXPORT_TIMEOUT)
-        if result.returncode != 0:
-            raise RuntimeError(f"seed: 'pc init' failed ({result.returncode}):\n{result.stderr}")
+        _run_step("'pc init'", _pc_command("init"), _SEED_PROJECT_DIR, build_env, _EXPORT_TIMEOUT)
 
     # Resolving every package in the index is what fills the git cache, and it
     # is the single most valuable thing the seed does: it is the work that was
     # previously repeated by every scenario that touched a `//pub` object.
-    result = _run(_pc_command("list", "all", "-r"), _SEED_PROJECT_DIR, build_env, _LIST_TIMEOUT)
-    if result.returncode != 0:
-        raise RuntimeError(f"seed: 'pc list all -r' failed ({result.returncode}):\n{result.stderr}")
+    _run_step(
+        "'pc list all -r'",
+        _pc_command("list", "all", "-r"),
+        _SEED_PROJECT_DIR,
+        build_env,
+        _LIST_TIMEOUT,
+    )
 
     # The sandbox used to appear as a side effect of the first script part
     # exported. It gets its own step now, because the loop below skips exports a
@@ -234,13 +279,13 @@ def _build(env: dict) -> None:
         # Whatever a previous attempt left is not repairable by conda, and half
         # an environment is worse than none, so it goes before trying again.
         shutil.rmtree(_SANDBOX_DIR, ignore_errors=True)
-        args = ["export", "-t", "stl", "-O", output_dir, _SANDBOX_TRIGGER]
-        try:
-            result = _run(_pc_command(*args), _SEED_PROJECT_DIR, build_env, _SANDBOX_TIMEOUT)
-        except subprocess.TimeoutExpired as timeout:
-            raise RuntimeError(f"seed: building the sandbox timed out after {_SANDBOX_TIMEOUT}s") from timeout
-        if result.returncode != 0:
-            raise RuntimeError(f"seed: building the sandbox failed ({result.returncode}):\n{result.stderr}")
+        _run_step(
+            "building the sandbox",
+            _pc_command("export", "-t", "stl", "-O", output_dir, _SANDBOX_TRIGGER),
+            _SEED_PROJECT_DIR,
+            build_env,
+            _SANDBOX_TIMEOUT,
+        )
         with open(_SANDBOX_MARKER, "w", encoding="utf-8") as marker:
             marker.write("ok\n")
 
@@ -286,8 +331,15 @@ def _build(env: dict) -> None:
         )
 
 
-def ensure_seed(env: dict) -> str:
-    """Return the seeded state directory, building it if it is not there yet.
+def ensure_seed(env: dict):
+    """Return the seeded state directory, or None if it could not be built.
+
+    None is a supported outcome, not an error: the seed is an optimization, so a
+    runner that cannot reach github.com should still run the suite - each
+    scenario falling back to the cold `$HOME/.partcad` it used before this
+    existed. Correct, and much slower. Raising instead would turn one dropped
+    connection into a failure of every sharded behave job, which is exactly what
+    it did the first time this ran on the macOS runners.
 
     Safe to call concurrently: behavex starts one behave per worker and each
     runs `before_all`, so the first caller builds while the others wait on the
@@ -305,9 +357,18 @@ def ensure_seed(env: dict) -> str:
         # CI it is a restored cache and discarding it would defeat the point.
         # Every step in `_build` is individually resumable: PartCAD's own guard
         # file makes a half-finished clone re-clone, the sandbox is rebuilt
-        # unless its directory is there, and the manifest records exports one at
-        # a time. Delete BASE_DIR to force a genuinely clean rebuild.
-        _build(env)
+        # unless its success marker is there, and the manifest records exports
+        # one at a time. Delete BASE_DIR to force a genuinely clean rebuild.
+        try:
+            _build(env)
+        except SeedError as error:
+            logger.warning("seed: %s", error)
+            logger.warning(
+                "seed: continuing WITHOUT a shared state directory - every scenario will start from a cold "
+                "cache, which is correct but much slower. This is usually a runner that cannot reach "
+                "github.com; re-run the job."
+            )
+            return None
 
         with open(_SEED_MARKER, "w", encoding="utf-8") as marker:
             marker.write("ok\n")
@@ -346,4 +407,8 @@ if __name__ == "__main__":
     from features.environment import subprocess_env  # noqa: E402
     from features.seed import ensure_seed as ensure  # noqa: E402
 
-    print(ensure(subprocess_env()))
+    seeded = ensure(subprocess_env())
+    # Exit 0 either way. A CI step that fails here would take the whole sharded
+    # behave job with it over what is only a lost optimization; the warning
+    # ensure_seed logs is what says the run will be slow.
+    print(seeded if seeded else "not seeded")

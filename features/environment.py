@@ -111,7 +111,12 @@ def before_scenario(context: Context, scenario) -> None:
     # the seed instead of `$HOME/.partcad`. A step that sets
     # PC_INTERNAL_STATE_DIR explicitly runs after this hook and overwrites it,
     # which is what the scenarios exercising `--internal-state-dir` rely on.
-    if COLD_STATE_TAG not in scenario.effective_tags:
+    #
+    # `seed_state_dir` is None when the seed could not be built - see
+    # ensure_seed. Then this does nothing and the scenario runs against the cold
+    # `$HOME/.partcad` in its temporary home, which is what it did before the
+    # seed existed: slower, but the same scenario.
+    if context.seed_state_dir and COLD_STATE_TAG not in scenario.effective_tags:
         state_dir = os.path.join(SCENARIO_STATE_ROOT, f"state-{os.getpid()}-{uuid.uuid4().hex[:8]}")
         provision(state_dir)
         context.state_dir = state_dir
