@@ -153,12 +153,21 @@ ASSEMBLY_OBJECTS = (
 _SANDBOX_TRIGGER = "//pub/examples/partcad/produce_part_cadquery_primitive:cube"
 
 # No single seeding command should be able to wedge a CI run. Cloning the whole
-# index is the long pole, so the budget is generous; an export that has not
-# finished in five minutes is stuck, not slow. The sandbox gets its own budget
-# because it is solving a conda environment, not exporting geometry.
-_LIST_TIMEOUT = 1800
-_SANDBOX_TIMEOUT = 1800
+# index is the long pole; an export that has not finished in five minutes is
+# stuck, not slow. The sandbox gets its own allowance because it is solving a
+# conda environment, not exporting geometry.
+_LIST_TIMEOUT = 900
+_SANDBOX_TIMEOUT = 900
 _EXPORT_TIMEOUT = 300
+
+# Wall-clock budget for the whole of seeding, retries included.
+#
+# Per-command timeouts alone do not bound this: three attempts at two 900s steps
+# is 45 minutes before the exports even start, which on a runner with flaky
+# connectivity would eat a 60 minute job by itself. Every phase is therefore
+# given whatever is left of this and no more, and once it is gone seeding stops
+# and the suite runs unseeded rather than the job being killed.
+_SEED_BUDGET = int(os.environ.get("PARTCAD_BEHAVE_SEED_BUDGET", "1500"))
 
 # Attempts per seeding step, and the base backoff between them (multiplied by
 # the attempt number). Cloning the index and solving a conda environment both
@@ -166,6 +175,14 @@ _EXPORT_TIMEOUT = 300
 # enough that one attempt is not a fair test of whether seeding is possible.
 _ATTEMPTS = 3
 _RETRY_DELAY = 10
+
+# Wall-clock budget for the export phase as a whole. It exists because a CI job
+# has a deadline the seed shares with the suite it is meant to speed up: on a
+# Windows runner the unbounded phase took 32 of the job's 60 minutes and the
+# suite was killed before finishing. Exports are resumable through the manifest,
+# so a budget defers work rather than dropping it. Overridable for a machine that
+# would rather pay once and be done.
+_EXPORT_BUDGET = int(os.environ.get("PARTCAD_BEHAVE_EXPORT_BUDGET", "600"))
 
 
 class SeedError(Exception):
@@ -218,26 +235,50 @@ def _save_manifest(done: set) -> None:
         json.dump(sorted(done), manifest)
 
 
-def _run_step(label: str, argv: list, cwd: str, env: dict, timeout: int) -> None:
-    """Run one seeding command, retrying before giving up.
+def _budget_left(deadline: float, label: str) -> float:
+    """Seconds left of the overall seeding budget, or raise if it is spent."""
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise SeedError(f"the {_SEED_BUDGET}s seeding budget was spent before {label} could run")
+    return left
+
+
+def _run_step(label: str, argv: list, cwd: str, env: dict, allowance: int, deadline: float) -> None:
+    """Run one seeding command, retrying until it works or the budget is gone.
 
     The steps that matter here reach the network - cloning the whole public
-    index, and solving a conda environment - and hosted runners drop
-    connections to github.com often enough that a single attempt is not a fair
-    test of whether seeding is possible.
+    index, and solving a conda environment - and hosted runners drop connections
+    to github.com often enough that a single attempt is not a fair test of
+    whether seeding is possible.
+
+    Every attempt is clamped to whatever is left of the overall deadline, not
+    just to this step's own allowance. Clamping only to the allowance would let
+    three attempts at a 900s step run for 45 minutes, which is the whole point of
+    having a budget.
+
+    Each step is timed and logged: seeding runs on machines an order of magnitude
+    apart in speed, and without per-phase numbers a slow job says only that the
+    whole thing took half an hour.
     """
+    started = time.monotonic()
     detail = "no attempt made"
     for attempt in range(1, _ATTEMPTS + 1):
+        timeout = min(allowance, _budget_left(deadline, label))
         try:
             result = _run(argv, cwd, env, timeout)
             if result.returncode == 0:
+                logger.info("seed: %s took %.0fs", label, time.monotonic() - started)
                 return
             stderr = (result.stderr or "").strip()
             detail = stderr.splitlines()[-1] if stderr else f"exit status {result.returncode}"
         except subprocess.TimeoutExpired:
-            detail = f"timed out after {timeout}s"
+            detail = f"timed out after {timeout:.0f}s"
         if attempt < _ATTEMPTS:
             delay = _RETRY_DELAY * attempt
+            # Sleeping past the deadline only to be refused by the clamp above
+            # wastes time the suite could be using.
+            if time.monotonic() + delay >= deadline:
+                raise SeedError(f"{label} failed ({detail}) and the seeding budget is spent")
             logger.warning("seed: %s failed (%s); retrying in %ds", label, detail, delay)
             time.sleep(delay)
     raise SeedError(f"{label} failed after {_ATTEMPTS} attempts: {detail}")
@@ -253,12 +294,23 @@ def _build(env: dict) -> None:
     build_env = dict(env)
     build_env["PC_INTERNAL_STATE_DIR"] = SEED_STATE_DIR
 
+    # Everything below shares this deadline, so that seeding costs a job a
+    # bounded amount no matter how badly the network behaves.
+    deadline = time.monotonic() + _SEED_BUDGET
+
     # `pc init` writes a package whose only dependency is `//pub`, so the
     # recursive list below walks the public index and nothing else. It refuses to
     # overwrite, so a resumed build has to skip it rather than treat the refusal
     # as a failure.
     if not os.path.exists(os.path.join(_SEED_PROJECT_DIR, "partcad.yaml")):
-        _run_step("'pc init'", _pc_command("init"), _SEED_PROJECT_DIR, build_env, _EXPORT_TIMEOUT)
+        _run_step(
+            "'pc init'",
+            _pc_command("init"),
+            _SEED_PROJECT_DIR,
+            build_env,
+            _EXPORT_TIMEOUT,
+            deadline,
+        )
 
     # Resolving every package in the index is what fills the git cache, and it
     # is the single most valuable thing the seed does: it is the work that was
@@ -269,6 +321,7 @@ def _build(env: dict) -> None:
         _SEED_PROJECT_DIR,
         build_env,
         _LIST_TIMEOUT,
+        deadline,
     )
 
     # The sandbox used to appear as a side effect of the first script part
@@ -285,6 +338,7 @@ def _build(env: dict) -> None:
             _SEED_PROJECT_DIR,
             build_env,
             _SANDBOX_TIMEOUT,
+            deadline,
         )
         with open(_SANDBOX_MARKER, "w", encoding="utf-8") as marker:
             marker.write("ok\n")
@@ -292,9 +346,26 @@ def _build(env: dict) -> None:
     # Exporting fills the object cache. Individual combinations are allowed to
     # fail: not every type can be expressed in every format, and a type that
     # cannot be exported today should leave the suite slower, not broken.
+    #
+    # The phase is also time-boxed, because it is the one part of the seed whose
+    # cost scales with how much it covers, and it is the least valuable per
+    # second: the clone and the sandbox above are what stop every scenario
+    # repeating minutes of work, while these only pre-warm objects some scenarios
+    # then export again. Unbounded, it took 32 of a Windows job's 60 allowed
+    # minutes and left too little for the suite, so the job was killed.
+    #
+    # Stopping early is not giving up. Each success is recorded in the manifest
+    # as it happens, and CI caches the manifest with the objects it describes, so
+    # the next run resumes where this one stopped and the coverage converges over
+    # a few runs instead of being paid all at once.
     done = _load_manifest()
     failures = []
     skipped = 0
+    exported = 0
+    remaining = 0
+    # Whichever runs out first: the phase's own budget, or what is left of the
+    # overall one after cloning and building the sandbox.
+    export_deadline = min(time.monotonic() + _EXPORT_BUDGET, deadline)
     for kind, objects in (("part", PART_OBJECTS), ("assembly", ASSEMBLY_OBJECTS)):
         for type_name, object_path in objects:
             for export_format in EXPORT_FORMATS:
@@ -302,12 +373,16 @@ def _build(env: dict) -> None:
                 if entry in done:
                     skipped += 1
                     continue
+                if time.monotonic() >= export_deadline:
+                    remaining += 1
+                    continue
                 args = ["export", "-t", export_format, "-O", output_dir]
                 if kind == "assembly":
                     args.append("-a")
                 args.append(object_path)
                 try:
-                    result = _run(_pc_command(*args), _SEED_PROJECT_DIR, build_env, _EXPORT_TIMEOUT)
+                    export_timeout = min(_EXPORT_TIMEOUT, max(1, export_deadline - time.monotonic()))
+                    result = _run(_pc_command(*args), _SEED_PROJECT_DIR, build_env, export_timeout)
                     rc = result.returncode
                 except subprocess.TimeoutExpired:
                     rc = "timeout"
@@ -316,19 +391,30 @@ def _build(env: dict) -> None:
                     # end, so an interrupted build still shortens the next one.
                     done.add(entry)
                     _save_manifest(done)
+                    exported += 1
                 else:
                     failures.append(f"{kind} {type_name} -> {export_format} ({rc})")
 
-    if skipped:
-        logger.info("seed: %d exports already covered by the restored object cache", skipped)
+    total = (len(PART_OBJECTS) + len(ASSEMBLY_OBJECTS)) * len(EXPORT_FORMATS)
+    logger.info(
+        "seed: exports - %d done now, %d already cached, %d deferred, %d failed (of %d)",
+        exported,
+        skipped,
+        remaining,
+        len(failures),
+        total,
+    )
+
+    if remaining:
+        logger.info(
+            "seed: the %ds export budget ran out with %d left; they stay cold until a later run picks "
+            "them up from the manifest",
+            _EXPORT_BUDGET,
+            remaining,
+        )
 
     if failures:
-        logger.info(
-            "seed: %d of %d exports did not succeed; those combinations stay cold: %s",
-            len(failures),
-            (len(PART_OBJECTS) + len(ASSEMBLY_OBJECTS)) * len(EXPORT_FORMATS),
-            ", ".join(failures),
-        )
+        logger.info("seed: these combinations stay cold: %s", ", ".join(failures))
 
 
 def ensure_seed(env: dict):

@@ -99,6 +99,8 @@ it for conda and pip, so anything cached here evicts those and makes every other
 cached either: restored without the sandbox, the build would be skipped and every scenario would build a sandbox
 inside its own throwaway copy.
 
+Seeding is bounded, because it shares a CI job's deadline with the suite it exists to speed up — unbounded, it took 32 of a Windows job's 60 minutes and the suite was killed. The whole of it gets `PARTCAD_BEHAVE_SEED_BUDGET` seconds (default 1500) and the export phase gets `PARTCAD_BEHAVE_EXPORT_BUDGET` (default 600); exports left over are deferred, not dropped, and a later run picks them up from the manifest. If the budget runs out before the seed is usable, the suite runs unseeded rather than the job failing.
+
 CI parallelises the suite by sharding it across jobs (`BEHAVE_SHARDS` in `test.yml`, split by
 `dev-tools/behave_shard.py`), so each job runs plain serial `behave` over a slice of the feature files. Locally,
 `.devcontainer/behave_hook.sh` instead uses `behavex` to parallelise within one machine. `behavex` does **not**
