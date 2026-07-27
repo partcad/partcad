@@ -40,7 +40,11 @@ class Test(ABC):
     async def test_cached(self, tests_to_run: list["Test"], ctx, shape, test_ctx: dict = {}) -> bool:
         is_cacheable = shape.get_cacheable()
         if is_cacheable:
-            cache_key = f"test.{self.name}"
+            # The manufacturability tests depend on `manufacturable`, which is
+            # not part of shape.hash; fold it into the cache key so that flipping
+            # the flag invalidates any previously cached result.
+            manufacturable = int(bool(getattr(shape, "is_manufacturable", True)))
+            cache_key = f"test.{self.name}.manufacturable={manufacturable}"
             cached_results = await ctx.cache_tests.read_data_async(shape.hash, [cache_key])
             cached_bytes = cached_results.get(cache_key, [])
             if cached_bytes and len(cached_bytes) != 0:
