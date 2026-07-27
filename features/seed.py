@@ -529,6 +529,41 @@ def provision(destination: str) -> str:
     return destination
 
 
+def sandbox_venvs() -> set:
+    """The per-project virtual environments currently inside the shared sandbox.
+
+    PartCAD builds one of these per project that runs a script part, as
+    `<sandbox>/<runtime>/v-env-<hash>` (runtime_python.py). While each scenario
+    copied the sandbox they died with the copy; now that it is shared they would
+    accumulate for the length of the run, which is how a Windows job ran out of
+    disk after 65 scenarios. Snapshotting them after seeding and removing what
+    appears later restores the old lifetime without restoring the old cost.
+    """
+    found = set()
+    sandbox = os.path.join(SEED_STATE_DIR, "sandbox")
+    if not os.path.isdir(sandbox):
+        return found
+    try:
+        for runtime in os.scandir(sandbox):
+            if not runtime.is_dir():
+                continue
+            for entry in os.scandir(runtime.path):
+                if entry.is_dir() and entry.name.startswith("v-env-"):
+                    found.add(entry.path)
+    except OSError:
+        # Worth no more than it costs: a snapshot that cannot be taken means
+        # nothing gets pruned, which is the behaviour before this existed.
+        pass
+    return found
+
+
+def prune_sandbox_venvs(baseline: set) -> None:
+    """Remove venvs the seed did not leave behind, keeping the seed's own."""
+    for path in sandbox_venvs() - baseline:
+        shutil.rmtree(path, ignore_errors=True)
+        logger.debug("seed: pruned scenario venv %s from the shared sandbox", path)
+
+
 def release(destination: str) -> None:
     """Delete a scenario's copy. Never fails the scenario it belongs to."""
     # The sandbox here is a link to the shared one, and detaching it before the

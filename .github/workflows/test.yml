@@ -362,6 +362,13 @@ jobs:
           export PYTHONIOENCODING=utf-8
 
           python -m features.seed
+
+          # The headroom the suite starts with. A Windows shard ran out of disk
+          # partway through and the failure arrived as an unwritable log file,
+          # with nothing to say how close it had been, so this is here to make
+          # the next one diagnosable rather than inferred.
+          echo "Disk after seeding:"
+          df -h . || true
           mamba deactivate
 
       - name: Test with behave
