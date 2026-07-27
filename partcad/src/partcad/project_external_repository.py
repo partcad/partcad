@@ -12,7 +12,6 @@ import json
 import threading
 
 from .cache_hash import CacheHash
-from .project import OBJECT_KINDS
 from .project_plugin import ProjectPlugin
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
@@ -69,9 +68,15 @@ class ProjectExternalRepository(ProjectPlugin):
         self._cache = cache
         self._request_cache: dict[str, object] = {}
         self._request_lock = threading.Lock()
-        # Objects are instantiated once, lazily, after enumeration (see
-        # 'ensure_enumerated_async'); this guards against doing it twice.
+        # Objects are instantiated once, lazily, the first time this package's
+        # 'parts'/'sketches'/'assemblies' are accessed (see '_lazy_objects').
+        # '_instantiating' is the reentrancy guard so factories can write into
+        # the backing dicts during instantiation without re-triggering it.
+        self._parts = {}
+        self._sketches = {}
+        self._assemblies = {}
         self._objects_instantiated = False
+        self._instantiating = False
         super().__init__(ctx, name, path, config_obj=config_obj, inherited_config=inherited_config)
 
     def request(self, key: str, handler):
@@ -213,43 +218,30 @@ class ProjectExternalRepository(ProjectPlugin):
         return future.result()
 
     async def ensure_enumerated_async(self):
-        """Warm the metadata, object and dependency caches from the repository.
+        """Warm the package's structure (metadata and child list) from the plugin.
 
-        Called from the async import traversal so that the synchronous accessors
-        (object_configs, dependencies, desc, ...) reached later only ever hit the
-        cache and never bridge to async from within a running loop.
+        Called from the async import traversal. Only the cheap, package-level
+        data is warmed here: 'meta' (so 'desc' etc. are known) and 'deps' (so the
+        child packages can be discovered). The objects of a package (parts,
+        sketches, assemblies) are NOT enumerated here: doing so eagerly for every
+        package makes loading a large repository (thousands of parts across many
+        sub-packages) prohibitively expensive. They are enumerated lazily, per
+        package, the first time that package's objects are actually accessed (see
+        the 'parts'/'sketches'/'assemblies' properties below).
         """
         await self._materialize_meta_async()
-        for kind in OBJECT_KINDS:
-            if self._object_configs.get(kind) is None:
-                configs = await self.get_data_async("objects/" + kind)
-                # Apply the same augmentation as '_enumerate_object_configs';
-                # this async warm-up runs first, so skipping it would leave the
-                # configs untagged for file materialization.
-                self._object_configs[kind] = (
-                    {name: self._augment(config) for name, config in configs.items()} if configs else {}
-                )
-        # Warm 'deps' too, so the synchronous 'dependencies()' is a cache hit.
+        # Warm 'deps' so the synchronous 'dependencies()' is a cache hit.
         await self.get_data_async("deps")
 
-        # The object configs are now known, so instantiate the objects into the
-        # eager 'parts'/'sketches'/'assemblies' dictionaries the synchronous
-        # consumers read, honoring the promise made where this is awaited (see
-        # Context._process_project) that downstream 'list'/render/export observe
-        # a populated package. 'ProjectPlugin' deferred this (its
-        # '_instantiate_objects' is a no-op) because nothing was known at
-        # construction. Geometry stays lazy - only the factories are created.
-        if not self._objects_instantiated:
-            self._objects_instantiated = True
-            self._instantiate_enumerated()
-
     def _instantiate_enumerated(self):
-        """Instantiate the enumerated objects into the eager object dicts.
+        """Instantiate this package's enumerated objects into the eager dicts.
 
-        Each object is created independently and defensively: one that cannot be
-        built (e.g. an unsupported type, or a file-backed object whose file is
-        absent) is skipped with a warning instead of hiding every other object
-        from a 'list'. Geometry is not built here - only the factories.
+        Runs at most once, the first time a consumer reads 'parts'/'sketches'/
+        'assemblies' (see those properties). Each object is created
+        independently and defensively: one that cannot be built (an unsupported
+        type, a file-backed object whose file is absent) is skipped with a
+        warning instead of hiding every other object from a 'list'. Geometry is
+        not built here - only the factories.
         """
         for kind, getter in (
             ("sketch", self.get_sketch),
@@ -261,6 +253,49 @@ class ProjectExternalRepository(ProjectPlugin):
                     getter(name)
                 except Exception as e:
                     pc_logging.warning("%s: could not instantiate %s '%s': %s" % (self.name, kind, name, e))
+
+    def _lazy_objects(self):
+        """Instantiate the enumerated objects on first access, once."""
+        if self._objects_instantiated or self._instantiating:
+            return
+        self._instantiating = True
+        try:
+            self._instantiate_enumerated()
+            self._objects_instantiated = True
+        finally:
+            self._instantiating = False
+
+    # The eager object dictionaries the synchronous consumers (the CLI 'list'
+    # commands, render, export, get_*) read. They are populated lazily, per
+    # package, so that loading a large repository does not enumerate every
+    # sub-package's objects up front. The reentrancy guard lets the factories
+    # write into the backing dict during instantiation without re-triggering.
+    @property
+    def parts(self):
+        self._lazy_objects()
+        return self._parts
+
+    @parts.setter
+    def parts(self, value):
+        self._parts = value
+
+    @property
+    def sketches(self):
+        self._lazy_objects()
+        return self._sketches
+
+    @sketches.setter
+    def sketches(self, value):
+        self._sketches = value
+
+    @property
+    def assemblies(self):
+        self._lazy_objects()
+        return self._assemblies
+
+    @assemblies.setter
+    def assemblies(self, value):
+        self._assemblies = value
 
     async def _materialize_meta_async(self):
         """Fill package-level metadata from the repository.

@@ -452,23 +452,17 @@ class Context:
                     result = self._get_project_recursive(next_project, import_list)
                     return result
         else:
-            # Otherwise, iterate all subfolders and check if any of them are packages
-            if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
-                dependencies = project.config_obj["dependencies"]
-                # TODO(clairbee): revisit if this code path is needed when the
-                #                 user explicitly asked for a particular package
-                # if not project.config_obj.get("isRoot", False):
-                #     filtered = filter(
-                #         lambda x: "onlyInRoot" not in dependencies[x]
-                #         or not dependencies[x]["onlyInRoot"],
-                #         dependencies,
-                #     )
-                #     dependencies = list(filtered)
+            # Resolve a declared child dependency. Go through the 'dependencies()'
+            # accessor rather than 'config_obj' directly so that a plugin-backed
+            # package's children - reported by its repository instead of a
+            # 'dependencies' section on disk - are resolvable here too.
+            dependencies = project.dependencies()
+            if dependencies:
                 for prj_name in dependencies:
                     pc_logging.debug(f"Checking the dependency: {prj_name} vs {next_import}...")
                     if prj_name != next_import:
                         continue
-                    prj_conf = project.config_obj["dependencies"][prj_name]
+                    prj_conf = dependencies[prj_name]
                     if prj_conf.get("onlyInRoot", False):
                         next_project_path = "//" + prj_name
                     pc_logging.debug(f"Loading the dependency: {next_project_path}...")

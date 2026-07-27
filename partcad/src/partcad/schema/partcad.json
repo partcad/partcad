@@ -380,6 +380,20 @@
               },
               "required": ["type"],
               "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "A part built by a package-defined partType (its 'type' references a partType). partType-specific properties are allowed.",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "parameters": { "$ref": "#/definitions/shape-parameter" }
+              },
+              "required": ["type"],
+              "additionalProperties": true
             }
           ]
         }
@@ -650,6 +664,22 @@
             "parameters": { "$ref": "#/definitions/shape-parameter"}
           },
           "required": ["type"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "partTypes": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "type": "object",
+          "properties": {
+            "kind": { "type": "string", "enum": ["wrapper"] },
+            "desc": { "type": "string", "maxLength": 1000 },
+            "path": { "type": "string", "minLength": 1 },
+            "pythonRequirements": { "type": "array", "items": { "type": "string" } }
+          },
           "additionalProperties": false
         }
       },

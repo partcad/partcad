@@ -50,10 +50,20 @@ def test_request_memoizes_by_key():
 def test_construction_defers_everything():
     ctx = pc.Context("examples")
     repo, fake = _make_repo(ctx, {"objects/part": {"bolt": {"type": "step"}}})
-    # Nothing enumerated or instantiated at construction.
+    # Nothing is enumerated, instantiated or fetched at construction: not the
+    # object configs, and not even a single request to the repository.
     assert repo._object_configs["part"] is None
-    assert repo.parts == {}
     assert fake.keys == []
+
+
+def test_accessing_parts_enumerates_lazily():
+    # Objects are enumerated the first time a package's 'parts' are accessed,
+    # not eagerly at load, so a large repository stays cheap to import.
+    ctx = pc.Context("examples")
+    repo, fake = _make_repo(ctx, {"objects/part": {"bolt": {"type": "step"}}})
+    assert fake.keys == []
+    _ = repo.parts  # first access triggers enumeration
+    assert "objects/part" in fake.keys
 
 
 def test_enumeration_is_lazy_and_cached():
