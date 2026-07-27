@@ -91,12 +91,13 @@ it. Build or rebuild it explicitly with `poetry run python -m features.seed`, re
 asserting that `pc install` clones, or that the state directory is at the default `$HOME/.partcad` — must be
 tagged `@cold-state`. See `features/seed.py`.
 
-The build resumes rather than starting over, which is what lets CI cache the expensive parts. It caches the git
-clones and the object cache (plus `.seed-exports.json`, the manifest saying which exports are already covered)
-but **not** the conda sandbox — ~2.3 GB of the 3.5 GB, against a ~70s rebuild, and GitHub allows only 10 GB of
-cache per repository. `.seeded` is likewise not cached: were it restored without the sandbox, the build would be
-skipped and every scenario would build a sandbox inside its own throwaway copy. A restored-cache build takes
-~90s instead of ~10 min.
+The build resumes rather than starting over, which is what lets CI cache the part worth caching: the object
+cache and `.seed-exports.json`, the manifest saying which exports are already covered. That is ~2 MB standing in
+for ~7.5 min of exports. The conda sandbox (~2.3 GB, ~70s to rebuild) and the git clones (~1.2 GB, ~90s) are
+deliberately **not** cached — GitHub allows 10 GB of cache per repository and this repo already uses ~8.9 GB of
+it for conda and pip, so anything cached here evicts those and makes every other job slower. `.seeded` is not
+cached either: restored without the sandbox, the build would be skipped and every scenario would build a sandbox
+inside its own throwaway copy.
 
 CI parallelises the suite by sharding it across jobs (`BEHAVE_SHARDS` in `test.yml`, split by
 `dev-tools/behave_shard.py`), so each job runs plain serial `behave` over a slice of the feature files. Locally,

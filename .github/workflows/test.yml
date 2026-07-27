@@ -315,38 +315,33 @@ jobs:
       # re-cloning //pub and rebuilding a ~2.3 GB conda sandbox. features/seed.py
       # builds that state once and hands each scenario a copy (see there).
       #
-      # The seed is ~3.5 GB, but GitHub allows 10 GB of cache per repository
-      # across every cache in it - including the conda and pip entries from
-      # setup-all - and this job has 24 cells. Caching all of it everywhere would
-      # ask for ~84 GB and evict everything else, so only the parts worth a slot
-      # are cached.
+      # The seed is ~3.5 GB, and GitHub allows 10 GB of cache per repository
+      # across every cache in it. This repo already sits at ~8.9 GB of that from
+      # the conda and pip entries in setup-all, so anything cached here comes
+      # straight out of their budget: go over and the LRU evicts them, and every
+      # job in the workflow gets slower to make this one faster.
       #
-      # The conda sandbox is ~2.3 GB of the seed and is deliberately not cached:
-      # it is the largest part, the least portable, and it rebuilds in ~70s.
-      # Leaving it out is also why '.seeded' is not cached - see features/seed.py.
-      - name: Cache the seed's git clones
-        uses: actions/cache@v6
-        with:
-          # ~1.2 GB, and its content depends on neither the Python version nor
-          # the shard, so one entry per OS instead of one per cell: three, not
-          # 24. A stale restore is harmless - 'pc list all -r' fetches whatever
-          # moved upstream.
-          path: ~/.partcad-behave/seed/state/git
-          key: ${{ runner.os }}-pcseed-git-${{ env.VERSION }}-${{ hashFiles('features/seed.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pcseed-git-${{ env.VERSION }}-
-            ${{ runner.os }}-pcseed-git-
-
+      # Only the object cache is therefore cached, and it earns its place by a
+      # wide margin. The two parts left out:
+      #
+      #  * the conda sandbox, ~2.3 GB, rebuilt in ~70s - the largest and least
+      #    portable part of the seed for the smallest saving. Leaving it out is
+      #    also why '.seeded' is not cached; see features/seed.py.
+      #  * the git clones, ~1.2 GB (834 MB compressed, measured). Caching those
+      #    on the first run took the repo to 9.69 GB with only Linux saved; all
+      #    three OSes would have been ~2.5 GB and over the limit. They buy back
+      #    only the ~90s clone, because 'pc list all -r' has to run and check the
+      #    index either way.
       - name: Cache the seed's object cache
         uses: actions/cache@v6
         with:
-          # A couple of megabytes holding the result of ~120 exports, which is
-          # ~7.5 minutes of work - by far the best value per byte here. Shared
-          # across shards for the same OS/Python, since every shard seeds the
-          # same objects. No restore-keys: the manifest tells the build which
-          # exports to skip, so accepting one written against a different PartCAD
-          # version would skip exports whose cache entries no longer apply,
-          # quietly giving up the warm cache instead of rebuilding it.
+          # ~2 MB holding the result of ~120 exports, which is ~7.5 minutes of
+          # work: three orders of magnitude better value per byte than either of
+          # the above. Shared across shards for the same OS/Python, since every
+          # shard seeds the same objects. No restore-keys: the manifest tells the
+          # build which exports to skip, so accepting one written against a
+          # different PartCAD version would skip exports whose cache entries no
+          # longer apply, quietly giving up the warm cache instead of rebuilding.
           path: |
             ~/.partcad-behave/seed/state/cache
             ~/.partcad-behave/seed/state/.seed-exports.json

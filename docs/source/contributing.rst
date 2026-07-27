@@ -549,9 +549,11 @@ Both the seed and the live copies sit under ``~/.partcad-behave``; set ``PARTCAD
 Deleting that directory forces a rebuild.
 
 The build resumes instead of starting over: it skips the exports recorded in ``state/.seed-exports.json`` and
-rebuilds the conda sandbox only if it is missing. That is what lets CI cache the git clones and the object cache
-without caching the ~2.3 GB sandbox, which rebuilds in about 70 seconds and would otherwise consume most of the
-10 GB of cache GitHub allows a repository. A build that starts from a restored cache takes about 90 seconds.
+rebuilds the conda sandbox only if a success marker says it finished. That is what lets CI cache the object
+cache alone - about 2 MB standing in for some seven minutes of exports - and rebuild the rest. Neither the
+~2.3 GB conda sandbox nor the ~1.2 GB of git clones is cached: GitHub allows a repository 10 GB of cache in
+total, this one already uses close to 9 GB of that for conda and pip, and evicting those to speed up one job
+would slow down every other.
 
 Scenarios that assert on cold-cache behaviour - that ``pc install`` reports cloning, or that the state directory
 sits at its default ``$HOME/.partcad`` - must be tagged ``@cold-state``. That leaves ``PC_INTERNAL_STATE_DIR``
