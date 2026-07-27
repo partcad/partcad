@@ -14,6 +14,7 @@ operation's log/terminal events to the local streams, and returns the result.
 
 import base64
 import logging
+import os
 import sys
 
 import rich_click as click
@@ -38,11 +39,13 @@ def _render(method, params) -> None:
             pass
 
 
-def run(cli_ctx, method: str, params: dict = None, span_name: str = None):
+def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_context: bool = False):
     """Execute ``method`` on the daemon, wrapped in a telemetry span.
 
-    Returns the operation result. Raises ``click.ClickException`` (so the CLI
-    exits non-zero with a clean message) if the daemon reports an error.
+    When ``needs_context`` is set, the workspace context is loaded (once, warm)
+    before the operation. Returns the operation result. Raises
+    ``click.ClickException`` (so the CLI exits non-zero with a clean message) if
+    the daemon reports an error.
     """
     conn = _client.connect()
     span = None
@@ -51,6 +54,8 @@ def run(cli_ctx, method: str, params: dict = None, span_name: str = None):
             "telemetry.start",
             {"name": span_name or method, "attributes": {"action": "cli " + method}},
         ).get("span")
+        if needs_context:
+            conn.call("ensure_loaded", {"path": os.getcwd()}, on_event=_render)
         result = conn.call(method, params or {}, on_event=_render)
         conn.call("telemetry.end", {"span": span})
         return result

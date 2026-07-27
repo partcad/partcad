@@ -398,6 +398,44 @@ def healthcheck(session, params):
     return {}
 
 
+def ensure_loaded(session, params):
+    """Load the workspace context once (idempotent), warming the daemon.
+
+    A thin client calls this before commands that need a package context; the
+    shared daemon then reuses the same warm context for later commands.
+    """
+    pc = session.ensure_partcad()
+    if session.partcad_ctx is None:
+        session.partcad_ctx = pc.init(params.get("path") or os.getcwd(), user_config=pc.user_config)
+    return {"loaded": session.partcad_ctx is not None}
+
+
+def install(session, params):
+    """Download and set up all imported packages."""
+    ctx = session.partcad_ctx
+    if ctx is None:
+        return None
+    with session.partcad.logging.Process("Install", "this"):
+        ctx.user_config.force_update = True
+        ctx.get_all_packages()
+        if ctx.stats_git_ops:
+            session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
+    return {}
+
+
+def update(session, params):
+    """Force update all imported packages to their latest versions."""
+    ctx = session.partcad_ctx
+    if ctx is None:
+        return None
+    ctx.user_config.force_update = True
+    packages = list(ctx.get_all_packages())
+    if ctx.stats_git_ops:
+        session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
+    session.emitter.info("Successfully updated %d packages" % len(packages))
+    return {"count": len(packages)}
+
+
 # ---- telemetry -------------------------------------------------------------
 
 
@@ -465,7 +503,7 @@ def init(session, params):
             path = os.path.join(path, "partcad.yaml")
         if session.partcad.create_package(path):
             session.partcad_ctx = session.partcad.init(path)
-            if session.partcad_ctx and not session.partcad_ctx.broken:
+            if session.partcad_ctx and not getattr(session.partcad_ctx, "broken", False):
                 session.emitter.emit(
                     events.PACKAGE_LOADED,
                     {"configPath": session.partcad_ctx.config_path, "root": session.partcad_ctx.name},
@@ -494,7 +532,7 @@ def package_load(session, params):
         path = params.get("path") or os.getcwd()
         session.package_path = path
         session.partcad_ctx = session.partcad.init(path)
-        if session.partcad_ctx.broken:
+        if getattr(session.partcad_ctx, "broken", False):
             raise Exception("Package YAML file is not found")
         session.emitter.emit(
             events.PACKAGE_LOADED,
@@ -505,7 +543,7 @@ def package_load(session, params):
         session.emitter.signal(events.NEEDS_UPDATE)
     except Exception as e:  # pylint: disable=broad-except
         session.emitter.signal(events.PACKAGE_LOAD_FAILED)
-        if session.partcad_ctx and not session.partcad_ctx.broken:
+        if session.partcad_ctx and not getattr(session.partcad_ctx, "broken", False):
             session.emitter.error("Failed to load package: %s" % e)
     return None
 
