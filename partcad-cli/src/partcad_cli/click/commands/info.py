@@ -5,10 +5,8 @@
 #
 
 import rich_click as click
-from pprint import pformat
 
-import partcad as pc
-from ..cli_context import CliContext
+from ..service import run
 
 
 # TODO-94: @alexanderilyin: Replace -i, -a, -s, -S with --type; https://stackoverflow.com/a/37491504/25671117
@@ -66,47 +64,18 @@ from ..cli_context import CliContext
 )
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to show"
 @click.pass_obj
-def cli(cli_ctx: CliContext, package, interface, assembly, sketch, scene, object, params):  # , path
-    with pc.telemetry.set_context(cli_ctx.otel_context):
-        ctx: pc.Context = cli_ctx.get_partcad_context()
-
-        param_dict = {}
-        if params is not None:
-            for kv in params:
-                k, v = kv.split("=")
-                param_dict[k] = v
-
-        # Without an object name, show information about the current package
-        # (or the one selected via '-P') instead of crashing on a missing name.
-        if object is None:
-            package_name = ctx.resolve_package_path(package)
-            package_obj = ctx.get_project(package_name)
-            if not package_obj:
-                pc.logging.error(f"Package {package_name} is not found")
-                return
-            info = package_obj.info()
-            for k, v in info.items():
-                pc.logging.info(f"INFO: {k}: {pformat(v)}")
-            return
-
-        package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object)
-        path = f"{package}:{object}"
-
-        obj: pc.Shape
-        if assembly:
-            obj = ctx.get_assembly(path, params=params)
-        elif interface:
-            obj = ctx.get_interface(path)
-        elif sketch:
-            obj = ctx.get_sketch(path, params=params)
-        else:
-            obj = ctx.get_part(path, params=params)
-
-        if obj is None:
-            pc.logging.error(f"Object {path} not found")
-        else:
-            # TODO: call normalize config method for updating the parameters
-            pc.logging.info(f"CONFIGURATION: {pformat(obj.config)}")
-            info = obj.info()
-            for k, v in info.items():
-                pc.logging.info(f"INFO: {k}: {pformat(v)}")
+def cli(cli_ctx, package, interface, assembly, sketch, scene, object, params):
+    run(
+        cli_ctx,
+        "info.object",
+        {
+            "package": package,
+            "interface": interface,
+            "assembly": assembly,
+            "sketch": sketch,
+            "scene": scene,
+            "object": object,
+            "params": list(params),
+        },
+        needs_context=True,
+    )

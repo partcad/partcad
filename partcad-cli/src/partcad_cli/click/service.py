@@ -38,21 +38,36 @@ def _on_event(method, params) -> None:
         _remote_client.handle({"kind": "log", "levelno": _LEVELS[method], "message": message})
 
 
+# PartCAD-specific error code: partcad.yaml could not be parsed (mirrors
+# operations.INVALID_CONFIG). Rendered like the legacy in-process CLI did.
+_INVALID_CONFIG = -32001
+
+
 def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_context: bool = False):
     """Execute ``method`` on the daemon, wrapped in a client-side telemetry span.
 
-    When ``needs_context`` is set, the workspace context is loaded (once, warm)
-    before the operation. Returns the operation result. Raises
-    ``click.ClickException`` (so the CLI exits non-zero with a clean message) if
-    the daemon reports an error.
+    When ``needs_context`` is set, a context is created (or reused) on the daemon
+    for this workspace's URL and its id is passed to the operation. Returns the
+    operation result. Raises ``click.ClickException`` (so the CLI exits non-zero
+    with a clean message) if the daemon reports an error.
     """
     conn = _client.connect()
     try:
         with _telemetry.start_as_current_span(span_name or method, attributes={"action": "cli " + method}):
+            call_params = dict(params or {})
             if needs_context:
-                conn.call("ensure_loaded", {"path": os.getcwd()}, on_event=_on_event)
-            return conn.call(method, params or {}, on_event=_on_event)
+                # -p/--path (a partcad.yaml or directory), else the current dir,
+                # as a file:// URL. The daemon persists the context and returns
+                # its id, which context-aware operations carry.
+                path = getattr(cli_ctx, "path", None) or os.getcwd()
+                url = "file://" + os.path.abspath(path)
+                result = conn.call("context.create", {"url": url}, on_event=_on_event)
+                call_params["context"] = result.get("context")
+            return conn.call(method, call_params, on_event=_on_event)
     except _client.DaemonError as e:
+        if getattr(e, "code", None) == _INVALID_CONFIG:
+            # Match the legacy get_partcad_context behavior.
+            raise click.ClickException("Invalid configuration file")
         raise click.ClickException(str(e))
     finally:
         conn.close()

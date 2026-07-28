@@ -494,7 +494,11 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 raise click.Abort from e
 
         # Pass everything the commands might need through the context object
-        ctx.obj = CliContext(otel_context=pc_telemetry.context.get_current(), get_partcad_context=get_partcad_context)
+        ctx.obj = CliContext(
+            otel_context=pc_telemetry.context.get_current(),
+            get_partcad_context=get_partcad_context,
+            path=path,
+        )
 
 
 cli.context_settings = {

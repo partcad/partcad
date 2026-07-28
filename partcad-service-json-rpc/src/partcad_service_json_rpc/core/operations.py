@@ -13,11 +13,34 @@ is normalized to named JSON-RPC params. Operations that require a loaded context
 silently no-op when none is loaded, exactly as the legacy server did.
 """
 
+import hashlib
 import os
+from urllib.parse import urlparse
 
+import yaml
 from packaging.specifiers import SpecifierSet
 
 from . import events
+from ..rpc.dispatcher import JsonRpcError
+
+# PartCAD-specific JSON-RPC error code: a partcad.yaml could not be parsed. The
+# CLI turns this into its "Invalid configuration file" message + exit code.
+INVALID_CONFIG = -32001
+
+
+def _ctx(session, params):
+    """Return the context this request operates on.
+
+    Context-aware operations carry a ``context`` id (from ``context.create``);
+    the daemon persists these indefinitely. When absent (e.g. the VS Code
+    extension's single-context flow), fall back to the session's default
+    context.
+    """
+    context_id = params.get("context")
+    if context_id is not None:
+        return session.contexts.get(context_id)
+    return session.partcad_ctx
+
 
 _PART_AI_PROPERTIES = [
     "type",
@@ -40,7 +63,7 @@ def _qualified(package: str, name: str) -> str:
 
 def inspect_part(session, params):
     """Instantiate and show a part in the connected CAD viewer."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package, name = params["package"], params["name"]
@@ -54,7 +77,7 @@ def inspect_part(session, params):
 
 def inspect_sketch(session, params):
     """Instantiate and show a sketch."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package, name = params["package"], params["name"]
@@ -68,7 +91,7 @@ def inspect_sketch(session, params):
 
 def inspect_interface(session, params):
     """Instantiate and show an interface."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package, name = params["package"], params["name"]
@@ -82,7 +105,7 @@ def inspect_interface(session, params):
 
 def inspect_assembly(session, params):
     """Instantiate and show an assembly."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package, name = params["package"], params["name"]
@@ -96,7 +119,7 @@ def inspect_assembly(session, params):
 
 def inspect_file(session, params):
     """Find the object defined by a file path and ask the client to inspect it."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     path = params.get("path", "")
@@ -153,7 +176,7 @@ def _inspect_by_path(session, path):
 
 def export_part(session, params):
     """Render a part to a file."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package, name = params["package"], params["name"]
@@ -167,7 +190,7 @@ def export_part(session, params):
 
 def export_assembly(session, params):
     """Render an assembly to a file."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package, name = params["package"], params["name"]
@@ -199,7 +222,7 @@ def _apply_ai_config(project, part_name, config):
 
 def ai_regenerate(session, params):
     """Regenerate an AI-authored part with an updated config, then show it."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package, name = params["package"], params["name"]
@@ -220,7 +243,7 @@ def ai_regenerate(session, params):
 
 def ai_change(session, params):
     """Apply a natural-language change to an AI-authored part, then show it."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package, name = params["package"], params["name"]
@@ -245,7 +268,7 @@ def ai_change(session, params):
 
 def add_part(session, params):
     """Add a part to a package from an existing file."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     kind, path, package = params["kind"], params["path"], params["package"]
@@ -259,7 +282,7 @@ def add_part(session, params):
 
 def add_assembly(session, params):
     """Add an assembly to a package from an existing file."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     kind, path, package = params["kind"], params["path"], params["package"]
@@ -275,7 +298,7 @@ def add_assembly(session, params):
 
 def package_path(session, params):
     """Resolve a package's directory and hand it back to a client callback."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package = params["package"]
@@ -302,7 +325,7 @@ def package_path(session, params):
 
 def test(session, params):
     """Run PartCAD tests for a package or a single object."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     package = params["package"]
@@ -340,7 +363,7 @@ def test(session, params):
 
 def info(session, params):
     """Report package statistics (the getStats operation)."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     cwd = os.getcwd()
@@ -371,6 +394,55 @@ def info(session, params):
     return None
 
 
+def info_object(session, params):
+    """Show detailed information about a part, assembly, interface, or sketch.
+
+    Ported verbatim from the CLI `info` command: with no object name it reports
+    the package's info, otherwise the object's configuration and info. Output is
+    emitted through PartCAD logging so it renders exactly as before.
+    """
+    from pprint import pformat
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    package = params.get("package")
+    object_name = params.get("object")
+    param_list = list(params.get("params") or [])
+
+    if object_name is None:
+        package_name = ctx.resolve_package_path(package)
+        package_obj = ctx.get_project(package_name)
+        if not package_obj:
+            pc.logging.error("Package %s is not found" % package_name)
+            return None
+        for k, v in package_obj.info().items():
+            pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
+        return None
+
+    package, object_name = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object_name)
+    path = "%s:%s" % (package, object_name)
+
+    if params.get("assembly"):
+        obj = ctx.get_assembly(path, params=param_list)
+    elif params.get("interface"):
+        obj = ctx.get_interface(path)
+    elif params.get("sketch"):
+        obj = ctx.get_sketch(path, params=param_list)
+    else:
+        obj = ctx.get_part(path, params=param_list)
+
+    if obj is None:
+        pc.logging.error("Object %s not found" % path)
+    else:
+        pc.logging.info("CONFIGURATION: %s" % pformat(obj.config))
+        for k, v in obj.info().items():
+            pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
+    return None
+
+
 def prompt_respond(session, params):
     """Deliver a response to a pending interactive prompt."""
     session.provide_prompt_response(params["response"] + os.linesep)
@@ -397,11 +469,56 @@ def healthcheck(session, params):
     return {}
 
 
+def _url_to_path(url: str) -> str:
+    """Resolve a context URL to a local filesystem path.
+
+    Only ``file://`` (and a bare path, treated as file://) is supported today —
+    always the case for the CLI and the VS Code extension.
+    TODO: extend to https:// and git URLs (fetch/clone into the sandbox, then
+    load the resulting local directory).
+    """
+    parsed = urlparse(url)
+    if parsed.scheme == "file":
+        return parsed.path
+    if parsed.scheme == "":
+        return url
+    raise JsonRpcError(INVALID_CONFIG, "Unsupported context URL scheme: %s" % (parsed.scheme,))
+
+
+def context_create(session, params):
+    """Create (or reuse) a PartCAD context for a repository URL; return its id.
+
+    The daemon persists contexts indefinitely, keyed by a deterministic id of
+    the resolved root, so later commands reuse the warm context by passing the
+    returned id back as ``context``. An unparseable ``partcad.yaml`` surfaces as
+    the ``INVALID_CONFIG`` error, which the CLI renders as "Invalid configuration
+    file".
+    TODO: expire contexts (evict idle/old ones) so the registry does not grow
+    without bound.
+    """
+    pc = session.ensure_partcad()
+    url = params.get("url") or ("file://" + os.getcwd())
+    path = _url_to_path(url)
+    root = os.path.abspath(path)
+    context_id = hashlib.sha256(root.encode("utf-8")).hexdigest()[:16]
+
+    if context_id not in session.contexts:
+        try:
+            session.contexts[context_id] = pc.init(path, user_config=pc.user_config)
+        except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
+            raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)})
+
+    # Keep the most recently created context as the session default so the
+    # extension's context-less operations continue to work.
+    session.partcad_ctx = session.contexts[context_id]
+    return {"context": context_id}
+
+
 def ensure_loaded(session, params):
     """Load the workspace context once (idempotent), warming the daemon.
 
-    A thin client calls this before commands that need a package context; the
-    shared daemon then reuses the same warm context for later commands.
+    The legacy single-context entry point (still used by the VS Code extension).
+    New CLI commands use ``context.create`` + a ``context`` id instead.
     """
     pc = session.ensure_partcad()
     if session.partcad_ctx is None:
@@ -411,7 +528,7 @@ def ensure_loaded(session, params):
 
 def install(session, params):
     """Download and set up all imported packages."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     with session.partcad.logging.Process("Install", "this"):
@@ -424,7 +541,7 @@ def install(session, params):
 
 def update(session, params):
     """Force update all imported packages to their latest versions."""
-    ctx = session.partcad_ctx
+    ctx = _ctx(session, params)
     if ctx is None:
         return None
     ctx.user_config.force_update = True
@@ -546,6 +663,65 @@ def list_all(session, params):
         session.emitter.signal(events.NEEDS_UPDATE)
     except Exception as e:  # pylint: disable=broad-except
         session.emitter.error("Failed to load package contents: %s" % e)
+    return None
+
+
+# The four object kinds `pc list <kind>` renders identically (name + description
+# table, optional package column when recursive). One operation serves all four;
+# the CLI passes the kind. Output is emitted verbatim through PartCAD's logger so
+# it renders exactly as the old in-process command did.
+_LIST_LABELS = {
+    "parts": "PartCAD parts",
+    "sketches": "PartCAD sketches",
+    "assemblies": "PartCAD assemblies",
+    "interfaces": "PartCAD interfaces",
+}
+
+
+def list_objects(session, params):
+    """List a package's parts, sketches, assemblies, or interfaces."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    kind = params.get("kind", "parts")
+    recursive = params.get("recursive", False)
+
+    package = ctx.resolve_package_path(params.get("package", "."))
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+    package = package_obj.name  # '//' may resolve to a differently-named package
+
+    with pc.logging.Process("List" + kind.capitalize(), package):
+        count = 0
+        if recursive:
+            # `list interfaces` walks every package; the others only those with content.
+            has_stuff = kind != "interfaces"
+            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=has_stuff)]
+        else:
+            packages = [package]
+
+        output = _LIST_LABELS.get(kind, "PartCAD objects") + ":\n"
+        for project_name in packages:
+            project = ctx.projects[project_name]
+            for name, obj in getattr(project, kind).items():
+                line = "\t"
+                if recursive:
+                    line += "%s" % project_name + " " + " " * (35 - len(project_name))
+                line += "%s" % name + " " + " " * (35 - len(name))
+                desc = obj.desc if obj.desc is not None else ""
+                desc = desc.replace("\n", "\n" + " " * (84 if recursive else 44))
+                line += "%s" % desc
+                output += line + "\n"
+                count += 1
+
+        if count > 0:
+            output += "Total: %d\n" % count
+        else:
+            output += "\t<none>\n"
+        pc.logging.info(output)
     return None
 
 

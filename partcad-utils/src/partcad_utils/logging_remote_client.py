@@ -22,6 +22,7 @@ through ``ops`` under ANSI and dropped in plain mode.
 import logging
 import sys
 
+from . import logging as _pc_logging
 from . import logging_ansi_terminal
 from .logging import ops
 from .logging_remote_server import PC_EVENTS
@@ -58,9 +59,14 @@ def handle(event: dict) -> None:
     """Render one structured event forwarded by the server."""
     kind = event.get("kind")
     if kind == "log":
+        levelno = event.get("levelno", logging.INFO)
+        # Mirror the in-process error tracking: an error forwarded from the daemon
+        # must make the CLI exit non-zero (command.py checks logging.had_errors).
+        if levelno >= logging.ERROR:
+            _pc_logging.had_errors = True
         # Pass the message as an argument so any '%' in it is never treated as a
         # format specifier.
-        logging.getLogger("partcad").log(event.get("levelno", logging.INFO), "%s", event.get("message", ""))
+        logging.getLogger("partcad").log(levelno, "%s", event.get("message", ""))
     elif kind in PC_EVENTS:
         if _want_ansi:
             getattr(ops, kind)(event.get("op"), event.get("package"), event.get("item"))

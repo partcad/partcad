@@ -50,6 +50,12 @@ class Session:
         self.partcad_ctx = None
         self.package_path = None
 
+        # Context registry: context id -> PartCAD context, created by
+        # context.create(url) and persisted indefinitely so later commands reuse
+        # the warm context by passing the id back.
+        # TODO: expire contexts (evict idle/old ones) so this never grows unbounded.
+        self.contexts: dict = {}
+
         self._load_lock = threading.RLock()
         self._prompt_queue: "queue.Queue[str]" = queue.Queue()
 
