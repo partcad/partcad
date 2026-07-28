@@ -1,0 +1,127 @@
+name: AI Agent Skills — Release
+
+# Publishes the symlink-free (Windows-safe) `pc` plugin when a release tag is
+# pushed. Create and push the tag from a clean tree with:
+#
+#     claude plugin tag ai-agents/claude --push
+#
+# which validates that plugin.json and the marketplace entry agree, then creates
+# `pc--v<version>` and pushes it — firing this workflow.
+#
+# CREDENTIALS: no Anthropic credentials and no user-managed secrets. `claude
+# plugin validate` runs offline; publishing uses only the automatic GITHUB_TOKEN
+# that GitHub Actions injects (no PAT, no stored secret).
+
+on:
+  push:
+    tags:
+      - "pc--v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish, e.g. pc--v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ai-agents-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      DISABLE_AUTOUPDATER: "1"
+      DISABLE_TELEMETRY: "1"
+      DISABLE_ERROR_REPORTING: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code CLI (no login required)
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Resolve tag and verify version agrees with plugin.json
+        id: v
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          case "$TAG" in
+            pc--v*) ;;
+            *) echo "::error::Tag '$TAG' does not match pc--v*"; exit 1 ;;
+          esac
+          TAG_VER="${TAG#pc--v}"
+          MANIFEST_VER="$(node -p "require('./ai-agents/claude/.claude-plugin/plugin.json').version")"
+          if [ "$TAG_VER" != "$MANIFEST_VER" ]; then
+            echo "::error::Tag version ($TAG_VER) != plugin.json version ($MANIFEST_VER)"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$TAG_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Validate catalog and plugin
+        run: |
+          claude plugin validate .
+          claude plugin validate ai-agents/claude
+
+      - name: Materialize symlink-free artifact
+        run: ai-agents/scripts/materialize.sh
+
+      - name: Assert the artifact is symlink-free
+        run: |
+          if find ai-agents/.build -type l | grep -q .; then
+            echo "::error::Materialized artifact still contains symlinks"
+            find ai-agents/.build -type l
+            exit 1
+          fi
+          test -f ai-agents/.build/marketplace/pc/skills/init/SKILL.md
+
+      - name: Publish symlink-free marketplace to the plugin-dist branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ART="$PWD/ai-agents/.build/marketplace"
+          TAG="${{ steps.v.outputs.tag }}"
+          tmp="$(mktemp -d)"
+          mkdir -p "$tmp/.claude-plugin"
+          cp "$ART/.claude-plugin/marketplace.json" "$tmp/.claude-plugin/"
+          cp -R "$ART/pc" "$tmp/"
+          cd "$tmp"
+          git init -q
+          git checkout -q -b plugin-dist
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "Publish pc plugin $TAG"
+          git push -f \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            plugin-dist
+
+      - name: Create GitHub Release with the plugin archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.v.outputs.tag }}"
+          VER="${{ steps.v.outputs.version }}"
+          REPO="$GITHUB_REPOSITORY"
+          cat > "$RUNNER_TEMP/notes.md" <<'EOF'
+          Symlink-free PartCAD Claude plugin `pc` v__VER__.
+
+          **Install**
+          - Marketplace branch (recommended, always latest):
+            - `/plugin marketplace add __REPO__@plugin-dist`
+            - `/plugin install pc@partcad`
+          - Direct archive (immutable, Windows-safe):
+            - `claude --plugin-url https://github.com/__REPO__/releases/download/__TAG__/pc.zip`
+          EOF
+          sed -i "s|__VER__|${VER}|g; s|__REPO__|${REPO}|g; s|__TAG__|${TAG}|g" "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" ai-agents/.build/marketplace/pc.zip \
+            --repo "$REPO" --title "pc v${VER}" --notes-file "$RUNNER_TEMP/notes.md" \
+          || { gh release edit "$TAG" --repo "$REPO" --notes-file "$RUNNER_TEMP/notes.md"; \
+               gh release upload "$TAG" ai-agents/.build/marketplace/pc.zip --repo "$REPO" --clobber; }

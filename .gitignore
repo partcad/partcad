@@ -32,3 +32,5 @@ pc-test-results/
 pytest-results/
 test-results/
 *.code-workspace
+# Materialized (symlink-free) plugin artifact produced by ai-agents/scripts/materialize.sh
+/ai-agents/.build
