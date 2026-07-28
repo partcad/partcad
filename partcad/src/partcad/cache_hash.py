@@ -13,18 +13,37 @@ import struct
 
 from . import logging as pc_logging
 
+# The format of what the caches store, mixed into every hash so that a change
+# to it moves every entry to a new key instead of letting an old entry be read
+# back under the new rules. Nothing is deleted: the stale files stay on disk
+# until the cache is cleaned, they are simply never looked up again.
+#
+# Bump this whenever the bytes behind a cache key change meaning:
+#   1: BREP payloads are zstd-compressed before being base64-encoded
+#      (see wrappers/ocp_serialize.py).
+VERSION = 1
+
+# What the version contributes to a hash. Namespaced so that it cannot be
+# confused with the data hashed after it.
+_VERSION_TAG = ("partcad-cache-v%d" % VERSION).encode()
+
 
 class CacheHash:
     def __init__(self, name: str, algo="md5", hasher=None, cache=False):
         self.name = name
         self.is_empty = True
         self.is_used = False
+        # Set before the early return below: get() walks this list, and it is
+        # reached with caching disabled too (a disabled hash still answers
+        # None, it just never hashes anything).
+        self.dependencies = []
         if not cache:
             # Caching is disabled, no initialization needed
             self.hasher = None
             return
 
         if hasher != None:
+            # Continues a hash that already carries the version below
             self.hasher = hasher.copy()
         else:
             if algo == "md5":
@@ -36,7 +55,10 @@ class CacheHash:
             else:
                 raise ValueError(f"Unknown hash algorithm: {algo}")
 
-        self.dependencies = []
+            # Every hash starts from the cache format version. Deliberately not
+            # a touch(): the version alone is not data to cache, so a hash that
+            # got nothing else must still report itself as empty.
+            self.hasher.update(_VERSION_TAG)
 
     def touch(self):
         if self.is_used:

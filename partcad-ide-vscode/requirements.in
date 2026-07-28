@@ -36,6 +36,9 @@ filelock==3.17.0
 docker>=7.1.0
 jsonschema>=4.23.0
 psutil>=6.1.1
+# zstd for the BREP payloads partcad's wrapper protocol and shape cache carry.
+# Python 3.14 has the same module in the standard library as 'compression.zstd'.
+backports.zstd>=1.6.0; python_version < "3.14"
 
 # partcad[lint] — ruff backs 'pc lint', which the extension exposes
 ruff>=0.11.8

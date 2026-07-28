@@ -409,7 +409,7 @@ version = "1.6.0"
 description = "Backport of compression.zstd"
 optional = false
 python-versions = "<3.14,>=3.10"
-groups = ["main", "dev"]
+groups = ["main", "dev", "partcad"]
 markers = "python_version < \"3.14\""
 files = [
     {file = "backports_zstd-1.6.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:73000459db113a658c4fb0510100ef0e79137b5828bf957b7709aacae4eb1b87"},
@@ -8822,4 +8822,4 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "ce5ec74c99b051e76d8d697aebd361a257a8cedc44902e213518bafdce8033cb"
+content-hash = "bd4ea39a232b3f2c0ba2f9b4f757b1b9e7014901164ae576bd9377b7949569b8"

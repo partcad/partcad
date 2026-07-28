@@ -60,7 +60,7 @@ license:
 # format implemented at the bottom of this module:
 #
 # * A single shape is an object {"name", "label", "brep"} where "brep" is the
-#   base64 of the bytes 'BRepTools.Write_s' produces.
+#   base64 of the zstd-compressed bytes 'BRepTools.Write_s' produces.
 # * An assembly is {"name", "label", "assembly": [...]} whose array holds child
 #   shape- or sub-assembly-objects; it decodes to a TopoDS_Compound.
 # * The request and response envelopes are ordinary JSON objects that carry such
@@ -90,6 +90,21 @@ import pyexpat  # noqa: F401
 # triggers _ensure_ocp() first.
 OCP = None
 downcast_LUT = None
+
+try:
+    # Python 3.14 and newer carry zstd in the standard library.
+    from compression.zstd import compress as _zstd_compress
+    from compression.zstd import decompress as _zstd_decompress
+except ImportError:
+    try:
+        # Below 3.14, the very same module, backported. PartCAD depends on it
+        # and installs it into every sandbox (see sandbox_versions.ZSTD), so
+        # both ends of the pipe produce and read the same frames.
+        from backports.zstd import compress as _zstd_compress
+        from backports.zstd import decompress as _zstd_decompress
+    except ImportError:
+        _zstd_compress = None
+        _zstd_decompress = None
 
 
 def _ensure_ocp():
@@ -166,6 +181,27 @@ KEY_BYTES = "__bytes__"
 # [[tx,ty,tz], [ax,ay,az], angle] form, applied when the object is decoded.
 KEY_LOCATION = "location"
 
+# What 'BRepTools.Write_s' produces is verbose ASCII, and it is by far the
+# largest thing that either travels the wrapper pipe or lands in the shape
+# cache. Compressing it before the base64 (which inflates whatever it is given
+# by another third) is what keeps both affordable.
+#
+# Level 3 is zstd's own default: on this data the levels above it cost several
+# times the CPU for a few percent of size, and the payload is on its way to a
+# subprocess or a disk either way.
+ZSTD_LEVEL = 3
+
+# The zstd frame header, used to tell a compressed payload from a plain one.
+# Sniffing it rather than declaring the encoding in the JSON keeps the format
+# unchanged, and it cannot collide with a raw payload: BREP always begins with
+# its own ASCII header ("DBRep_DrawableShape" or "CASCADE Topology").
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+
+# Whether the "no zstd here" warning has already been issued. It applies to
+# every payload, and the interesting case is a wrapper writing it once per
+# process rather than once per shape.
+_zstd_warned = False
+
 
 def _warn(message: str) -> None:
     """Report a lossy conversion to stderr (the sandboxed wrappers have no logger)."""
@@ -173,6 +209,40 @@ def _warn(message: str) -> None:
         sys.stderr.write("ocp_serialize: %s\n" % message)
     except Exception:
         pass
+
+
+def _compress(data: bytes) -> bytes:
+    """Compress BREP bytes, or pass them through where zstd is unavailable.
+
+    Every environment PartCAD provisions has zstd, so the fallback is for an
+    environment somebody else assembled. Uncompressed output stays readable
+    everywhere, because '_decompress()' recognizes both forms.
+    """
+    if _zstd_compress is None:
+        global _zstd_warned
+        if not _zstd_warned:
+            _zstd_warned = True
+            _warn("zstd is not available, leaving BREP payloads uncompressed")
+        return data
+
+    return _zstd_compress(data, ZSTD_LEVEL)
+
+
+def _decompress(data: bytes) -> bytes:
+    """Inverse of '_compress()', also accepting a payload that was never compressed."""
+    if not data.startswith(ZSTD_MAGIC):
+        # Written either by a peer without zstd or by a PartCAD older than the
+        # compression - the shape cache is versioned (see cache_hash.VERSION)
+        # and no longer serves those entries, but the pipe can still carry one.
+        return data
+
+    if _zstd_decompress is None:
+        raise RuntimeError(
+            "Received a zstd-compressed BREP payload, but zstd is not available here. "
+            "On Python below 3.14 it comes from the 'backports.zstd' package."
+        )
+
+    return _zstd_decompress(data)
 
 
 def shape_to_brep(shape) -> bytes:
@@ -194,11 +264,11 @@ def shape_from_brep(data: bytes):
 
 
 def _brep_b64(shape) -> str:
-    return base64.b64encode(shape_to_brep(shape)).decode("ascii")
+    return base64.b64encode(_compress(shape_to_brep(shape))).decode("ascii")
 
 
 def _shape_from_b64(brep_b64: str):
-    return shape_from_brep(base64.b64decode(brep_b64))
+    return shape_from_brep(_decompress(base64.b64decode(brep_b64)))
 
 
 def compound_of(shapes):

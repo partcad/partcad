@@ -23,3 +23,6 @@ filelock==3.32.0
 docker>=7.1.0
 jsonschema>=4.23.0
 psutil>=6.1.1
+# zstd for the BREP payloads the wrapper protocol and the shape cache carry.
+# 3.14 has it as 'compression.zstd'; this is a backport of that same module.
+backports.zstd>=1.6.0; python_version < "3.14"

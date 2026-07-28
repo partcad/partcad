@@ -144,6 +144,13 @@ add_package("ocpsvg")
 # ordinary extension modules.)
 add_package("lib3mf")
 
+# zstd for the BREP payloads of the wrapper protocol and the shape cache. The
+# bundle is frozen with 3.11 (see build.sh), which has no 'compression.zstd', so
+# the backport is what it actually imports. It lives under the 'backports'
+# namespace package, which PyInstaller does not follow into on its own.
+if sys.version_info < (3, 14):
+    add_package("backports.zstd")
+
 # Data-driven packages: they resolve resources or plugins at runtime, so their
 # non-Python files have to travel with them.
 add_package("jsonschema")
