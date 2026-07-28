@@ -1,0 +1,5 @@
+# Every shape section is present but empty (null), exactly as `pc init` leaves
+# them in a fresh package. Enumeration must treat a null section as empty.
+sketches:
+parts:
+assemblies:

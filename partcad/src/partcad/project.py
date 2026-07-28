@@ -1197,7 +1197,9 @@ class Project(project_config.Configuration):
 
     def _enumerate_shapes(self, sketches, interfaces, parts, assemblies):
         def get_keys(name):
-            return list(self.config_obj.get(name, {}).keys()) if name in self.config_obj else []
+            # A section that is present but empty (e.g. `sketches:` with no
+            # entries, as `pc init` writes it) parses as None; treat it as {}.
+            return list((self.config_obj.get(name) or {}).keys()) if name in self.config_obj else []
 
         sketches = sketches or get_keys("sketches")
         # interfaces = sketches or get_keys("interfaces")

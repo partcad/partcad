@@ -1,0 +1,8 @@
+# A null `sketches:`/`assemblies:` section next to a populated `parts:` section
+# — the state produced by `pc init` followed by `pc add part`.
+sketches:
+parts:
+  cube:
+    type: cadquery
+    path: cube.py
+assemblies:
