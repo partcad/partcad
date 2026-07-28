@@ -196,3 +196,27 @@ def test_report_dependency_conflicts_silent_when_consistent(tmp_path, monkeypatc
     runtime.report_dependency_conflicts(0, "", "", path=str(tmp_path))
 
     assert recorded == []
+
+
+def test_session_deps_start_with_zstd(tmp_path):
+    """A v-env has to install zstd itself.
+
+    "python -m venv" without --system-site-packages leaves the v-env blind to
+    what the sandbox around it has installed, so a wrapper running there could
+    not read the compressed BREP the host sends it.
+    """
+    runtime = _bare_runtime(tmp_path / "sandbox")
+    runtime.version = "3.11"
+
+    session = PythonRuntime.get_session(runtime, "//some:package")
+
+    assert session["deps"] == [sandbox_versions.ZSTD]
+    # Seeding the list must not by itself demand that a v-env be created.
+    assert session["dirty"] is False
+
+
+def test_session_deps_skip_zstd_where_the_stdlib_has_it(tmp_path):
+    runtime = _bare_runtime(tmp_path / "sandbox")
+    runtime.version = "3.14"
+
+    assert PythonRuntime.get_session(runtime, "//some:package")["deps"] == []

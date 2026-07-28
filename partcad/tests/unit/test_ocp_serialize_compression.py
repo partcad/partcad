@@ -11,6 +11,8 @@ import json
 import os
 import sys
 
+import pytest
+
 import partcad as pc
 
 from OCP.BRepGProp import BRepGProp
@@ -94,3 +96,38 @@ def test_serialized_response_round_trips():
 
     assert response["success"] is True
     assert abs(_volume(response["shape"]) - _volume(box)) < 1e-6
+
+
+def test_encoding_falls_back_when_zstd_is_missing(monkeypatch, capsys):
+    """An environment without zstd still produces a readable payload."""
+    monkeypatch.setattr(ocp_serialize, "_zstd_compress", None)
+    monkeypatch.setattr(ocp_serialize, "_zstd_warned", False)
+    box = _box()
+
+    encoded = ocp_serialize.encode_shape(box)
+    payload = base64.b64decode(encoded["brep"])
+
+    assert not payload.startswith(ocp_serialize.ZSTD_MAGIC)
+    # Still the BREP an older PartCAD would have written, and still decodable.
+    assert abs(_volume(ocp_serialize.decode_shape(encoded)) - _volume(box)) < 1e-6
+    assert "zstd is not available" in capsys.readouterr().err
+
+
+def test_the_fallback_warns_once_per_process(monkeypatch, capsys):
+    """One warning per process, not one per shape."""
+    monkeypatch.setattr(ocp_serialize, "_zstd_compress", None)
+    monkeypatch.setattr(ocp_serialize, "_zstd_warned", False)
+
+    for _ in range(3):
+        ocp_serialize.encode_shape(_box())
+
+    assert capsys.readouterr().err.count("zstd is not available") == 1
+
+
+def test_decoding_a_compressed_payload_without_zstd_says_what_is_missing(monkeypatch):
+    """The one case that cannot degrade: a compressed payload and no zstd."""
+    encoded = ocp_serialize.encode_shape(_box())
+    monkeypatch.setattr(ocp_serialize, "_zstd_decompress", None)
+
+    with pytest.raises(RuntimeError, match="backports.zstd"):
+        ocp_serialize.decode_shape(encoded)

@@ -858,10 +858,26 @@ class PythonRuntime(runtime.Runtime):
         """Create a context to describe the venv environment in case it is needed"""
         name_hash = hashlib.sha256(name.encode()).hexdigest()[:16]
         venv_path = os.path.join(self.path, "v-env-" + name_hash)
+
+        # A v-env is created by "python -m venv" without --system-site-packages,
+        # so it does not see what the sandbox around it has installed: zstd has
+        # to be listed here to reach one. Without it a wrapper running in a
+        # v-env cannot read the compressed BREP the host sends it (see
+        # wrappers/ocp_serialize).
+        #
+        # Seeded directly rather than through ensure*(session=...), because that
+        # would also mark the session dirty and so force a v-env to be built for
+        # every package that has any Python requirements of its own. This way
+        # the dependency only materializes in v-envs that were going to exist.
+        deps = []
+        zstd = sandbox_versions.zstd_requirement(self.version)
+        if zstd:
+            deps.append(zstd)
+
         return {
             "name": name,
             "hash": name_hash,
             "path": venv_path,
             "dirty": False,
-            "deps": [],
+            "deps": deps,
         }
