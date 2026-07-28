@@ -290,6 +290,16 @@ jobs:
     # Windows). 60m leaves generous margin for the slowest shard.
     timeout-minutes: 60
 
+    env:
+      # Where features/seed.py keeps the shared state directory and the
+      # per-scenario copies. It defaults to $HOME, which on a Windows runner is
+      # C: - the OS disk, and the one that filled up and took a shard down with
+      # an unwritable log file. runner.temp is on the same volume as the
+      # workspace, which the runner reported as 147 GB free against C:'s
+      # handful, and is cleaned between jobs. Set for every OS so there is one
+      # path to reason about rather than a Windows special case.
+      PARTCAD_BEHAVE_DIR: ${{ runner.temp }}/partcad-behave
+
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
@@ -343,8 +353,8 @@ jobs:
           # different PartCAD version would skip exports whose cache entries no
           # longer apply, quietly giving up the warm cache instead of rebuilding.
           path: |
-            ~/.partcad-behave/seed/state/cache
-            ~/.partcad-behave/seed/state/.seed-exports.json
+            ${{ runner.temp }}/partcad-behave/seed/state/cache
+            ${{ runner.temp }}/partcad-behave/seed/state/.seed-exports.json
           key: ${{ runner.os }}-py${{ matrix.python-version }}-pcseed-obj-${{ env.VERSION }}-${{ hashFiles('features/seed.py') }}
 
       # Kept out of the test step so that cloning //pub and building the conda
@@ -365,10 +375,12 @@ jobs:
 
           # The headroom the suite starts with. A Windows shard ran out of disk
           # partway through and the failure arrived as an unwritable log file,
-          # with nothing to say how close it had been, so this is here to make
-          # the next one diagnosable rather than inferred.
-          echo "Disk after seeding:"
-          df -h . || true
+          # with nothing to say how close it had been. Report the volume the
+          # seed is actually on, not the working directory: the first version of
+          # this measured the workspace, said 147 GB free, and missed that the
+          # seed was filling a different and much smaller disk.
+          echo "Disk where the seed lives:"
+          df -h "$PARTCAD_BEHAVE_DIR" || df -h . || true
           mamba deactivate
 
       - name: Test with behave
