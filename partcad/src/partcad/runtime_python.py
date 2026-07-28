@@ -294,7 +294,7 @@ class PythonRuntime(runtime.Runtime):
         if zstd:
             self.ensure_onced_locked(zstd)
 
-    async def ensure_zstd_async_onced_locked(self):
+    async def ensure_zstd_onced_locked_async(self):
         """Asynchronous counterpart of ensure_zstd_onced_locked()."""
         zstd = sandbox_versions.zstd_requirement(self.version)
         if zstd:
@@ -327,7 +327,7 @@ class PythonRuntime(runtime.Runtime):
     async def once_async(self):
         async with self.async_lock():
             with self.sync_lock_install():
-                await self.ensure_zstd_async_onced_locked()
+                await self.ensure_zstd_onced_locked_async()
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     await self.ensure_async_onced_locked(sandbox_versions.OCP_TESSELLATE)

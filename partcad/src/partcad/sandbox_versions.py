@@ -116,6 +116,14 @@ def zstd_requirement(python_version: str) -> str | None:
     Installing the backport where 'compression.zstd' exists would be harmless
     but pointless: the backport declares Python < 3.14, so pip would fail to
     resolve it and take the whole sandbox initialization down with it.
+
+    Decided from the version alone, deliberately. A 3.14 interpreter built
+    without libzstd would have no 'compression.zstd' either, but probing for it
+    here would ask the wrong Python -- this runs in the PartCAD process, and the
+    answer is about the sandbox interpreter. Nor would knowing help: the
+    backport refuses to install on 3.14, so there would be nothing to install in
+    its place. Such a sandbox instead fails where it is unambiguous, in
+    wrappers/ocp_serialize, with a message naming what is missing.
     """
     if is_at_least(python_version, MIN_PYTHON_VERSION_ZSTD_STDLIB):
         return None

@@ -42,7 +42,7 @@ class CacheHash:
             self.hasher = None
             return
 
-        if hasher != None:
+        if hasher is not None:
             # Continues a hash that already carries the version below
             self.hasher = hasher.copy()
         else:
