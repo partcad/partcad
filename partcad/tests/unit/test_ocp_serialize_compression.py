@@ -129,5 +129,5 @@ def test_decoding_a_compressed_payload_without_zstd_says_what_is_missing(monkeyp
     encoded = ocp_serialize.encode_shape(_box())
     monkeypatch.setattr(ocp_serialize, "_zstd_decompress", None)
 
-    with pytest.raises(RuntimeError, match="backports.zstd"):
+    with pytest.raises(RuntimeError, match=r"backports\.zstd"):
         ocp_serialize.decode_shape(encoded)
