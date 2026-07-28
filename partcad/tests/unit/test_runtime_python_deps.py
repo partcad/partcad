@@ -5,6 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import asyncio
 import os
 import pathlib
 import re
@@ -220,3 +221,43 @@ def test_session_deps_skip_zstd_where_the_stdlib_has_it(tmp_path):
     runtime.version = "3.14"
 
     assert PythonRuntime.get_session(runtime, "//some:package")["deps"] == []
+
+
+def _record_ensures(runtime, monkeypatch):
+    """Capture what a runtime asks to be installed, without installing it."""
+    requested = []
+    monkeypatch.setattr(
+        type(runtime),
+        "ensure_onced_locked",
+        lambda self, package, **kwargs: requested.append(package),
+        raising=False,
+    )
+
+    async def ensure_async_onced_locked(self, package, **kwargs):
+        requested.append(package)
+
+    monkeypatch.setattr(type(runtime), "ensure_async_onced_locked", ensure_async_onced_locked, raising=False)
+    return requested
+
+
+def test_ensure_zstd_installs_the_backport(tmp_path, monkeypatch):
+    """Both once() paths have to provision zstd, not just the asynchronous one."""
+    runtime = _bare_runtime(tmp_path / "sandbox")
+    runtime.version = "3.11"
+    requested = _record_ensures(runtime, monkeypatch)
+
+    PythonRuntime.ensure_zstd_onced_locked(runtime)
+    asyncio.run(PythonRuntime.ensure_zstd_onced_locked_async(runtime))
+
+    assert requested == [sandbox_versions.ZSTD, sandbox_versions.ZSTD]
+
+
+def test_ensure_zstd_installs_nothing_where_the_stdlib_has_it(tmp_path, monkeypatch):
+    runtime = _bare_runtime(tmp_path / "sandbox")
+    runtime.version = "3.14"
+    requested = _record_ensures(runtime, monkeypatch)
+
+    PythonRuntime.ensure_zstd_onced_locked(runtime)
+    asyncio.run(PythonRuntime.ensure_zstd_onced_locked_async(runtime))
+
+    assert requested == []
