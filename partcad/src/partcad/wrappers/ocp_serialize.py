@@ -92,17 +92,16 @@ OCP = None
 downcast_LUT = None
 
 try:
-    # Python 3.14 and newer carry zstd in the standard library.
-    from compression.zstd import compress as _zstd_compress
-    from compression.zstd import decompress as _zstd_decompress
+    # Python 3.14 and newer carry zstd in the standard library. One statement,
+    # so that the branch not taken on this interpreter is a single line.
+    from compression.zstd import compress as _zstd_compress, decompress as _zstd_decompress
 except ImportError:
     try:
         # Below 3.14, the very same module, backported. PartCAD depends on it
         # and installs it into every sandbox (see sandbox_versions.ZSTD), so
         # both ends of the pipe produce and read the same frames.
-        from backports.zstd import compress as _zstd_compress
-        from backports.zstd import decompress as _zstd_decompress
-    except ImportError:
+        from backports.zstd import compress as _zstd_compress, decompress as _zstd_decompress
+    except ImportError:  # pragma: no cover - no zstd at all, see _compress()
         _zstd_compress = None
         _zstd_decompress = None
 
