@@ -175,6 +175,11 @@ sphinx-autobuild = [
 # 'cadquery-ocp-proxy'; 'cadquery-ocp' and the 'cadquery-ocp-novtk' that
 # build123d depends on are both thin wrappers over it, so they coexist.
 cadquery-ocp = "7.9.3.1.1"
+# 'build123d' and 'ocpsvg' are NOT wheel runtime dependencies any more - the
+# wheel declares them under the optional 'cad' extra (partcad/requirements-cad.txt),
+# since the core only needs build123d for the opt-in convert("build123d") API.
+# They stay in this dev group so the monorepo test suite, which exercises that
+# API, has them installed.
 ocpsvg = "0.6.0"
 build123d = "0.11.1"
 pyyaml = ">=6.0.1"

@@ -9,6 +9,7 @@
 #
 
 import asyncio
+import os
 import pytest
 import sys
 
@@ -17,6 +18,9 @@ from OCP.TopoDS import TopoDS_Iterator
 
 import partcad as pc
 from partcad.assembly import Assembly, AssemblyChild
+
+sys.path.append(os.path.join(os.path.dirname(pc.__file__), "wrappers"))
+import ocp_serialize  # noqa: E402
 
 
 def test_assembly_primitive():
@@ -111,9 +115,13 @@ class _SlowChild:
         self.name = name
         self.delay = delay
 
-    async def convert(self, part_type, ctx=None):
+    async def get_wrapped(self, ctx=None):
         await asyncio.sleep(self.delay)
-        return b3d.Solid.make_box(1.0, 1.0, 1.0)
+        # Assembly now fetches child shapes as BREP envelopes, not build123d
+        # objects, so hand back the envelope of a unit box.
+        return ocp_serialize.encode_shape(
+            b3d.Solid.make_box(1.0, 1.0, 1.0).wrapped, name=self.name, label=self.name
+        )
 
 
 def _child_offsets(wrapped):

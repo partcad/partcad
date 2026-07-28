@@ -7,17 +7,12 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import os
-import sys
-
 from .cache import Cache
 from .cache_hash import CacheHash
 from .shape import Shape
 from .utils import total_size
+from . import shape_envelope
 from . import telemetry
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
 
 # The on-disk shape cache used to be pickled. That worked only because the
 # wrapper protocol installed OCP 'copyreg' handlers as a global side effect -
@@ -46,7 +41,7 @@ class ShapeCache(Cache):
                 # else:
                 serialization = self.serialization
                 if serialization == SERIALIZATION_JSON:
-                    data = ocp_serialize.dumps(value).encode("utf-8")
+                    data = shape_envelope.dumps(value).encode("utf-8")
                 elif serialization == SERIALIZATION_BREP:
                     data = Shape.to_brep(value)
                 else:
@@ -112,7 +107,7 @@ class ShapeCache(Cache):
             serialization = self.serialization
             if serialization == SERIALIZATION_JSON:
                 try:
-                    obj = ocp_serialize.loads(data)
+                    obj = shape_envelope.loads(data)
                 except:
                     results[key] = None
                     in_memory[key] = False

@@ -2,10 +2,6 @@ import os
 import threading
 import time
 import sys
-from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
-from OCP.gp import gp_Pnt
-from OCP.TopoDS import TopoDS_Compound
-from OCP.BRep import BRep_Builder
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 from . import wrapper
@@ -41,6 +37,10 @@ class PartFactoryObj(PartFactoryFile):
         with pc_logging.Action("OBJ", part.project_name, part.name):
             file_size = os.path.getsize(self.path)
             do_subprocess = self._should_use_subprocess(file_size)
+
+            # In-process OBJ handling (Tier 2): OCP imported lazily so this
+            # module stays off the 'import partcad' OCP path.
+            from OCP.TopoDS import TopoDS_Compound
 
             # Load shape via subprocess or direct method
             if do_subprocess:
@@ -82,6 +82,9 @@ class PartFactoryObj(PartFactoryFile):
         """
         time.sleep(0.0001)  # Brief pause for thread synchronization
         try:
+            from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+            from OCP.gp import gp_Pnt
+
             vertices = []
             faces = []
 
@@ -167,6 +170,9 @@ class PartFactoryObj(PartFactoryFile):
         """
         Convert a list of TopoDS_Face objects into a TopoDS_Compound.
         """
+        from OCP.BRep import BRep_Builder
+        from OCP.TopoDS import TopoDS_Compound
+
         builder = BRep_Builder()
         compound = TopoDS_Compound()
         builder.MakeCompound(compound)

@@ -7,22 +7,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from OCP.gp import (
-    gp_Circ,
-    gp_Ax2,
-    gp_Pnt,
-    gp_Dir,
-)
-from OCP.BRepBuilderAPI import (
-    BRepBuilderAPI_MakeEdge,
-    BRepBuilderAPI_MakeWire,
-    BRepBuilderAPI_MakeFace,
-    BRepBuilderAPI_MakePolygon,
-)
-from OCP.ShapeFix import (
-    ShapeFix_Face,
-)
-
+# OCP is imported lazily inside the methods that build geometry (Tier 2), so
+# this module stays off the 'import partcad' OCP path.
 from .sketch_factory import SketchFactory
 from . import logging as pc_logging
 from . import telemetry
@@ -42,6 +28,9 @@ class Circle:
             self.radius = config.get("radius", 0.0)
 
     def to_wire(self):
+        from OCP.gp import gp_Circ, gp_Ax2, gp_Pnt, gp_Dir
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
+
         c = gp_Circ(
             gp_Ax2(
                 gp_Pnt(self.x, self.y, 0),
@@ -69,6 +58,9 @@ class Square:
             self.side = config.get("side", 0.0)
 
     def to_wire(self):
+        from OCP.gp import gp_Pnt
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon
+
         polygon = BRepBuilderAPI_MakePolygon(
             gp_Pnt(
                 self.x + self.side / 2.0,
@@ -111,6 +103,9 @@ class Rect:
             self.side_y = config.get("side-y", 0.0)
 
     def to_wire(self):
+        from OCP.gp import gp_Pnt
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon
+
         polygon = BRepBuilderAPI_MakePolygon(
             gp_Pnt(
                 self.x + self.side_x / 2.0,
@@ -199,6 +194,9 @@ class SketchFactoryBasic(SketchFactory):
             shape = None
 
             try:
+                from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+                from OCP.ShapeFix import ShapeFix_Face
+
                 # Get the outer wire
                 outer_wire = None
                 if not self.outer_circle is None:

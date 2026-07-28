@@ -7,12 +7,9 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
-import copy
 import os
 import sys
 import typing
-
-import build123d as b3d
 
 from . import telemetry
 from .geom import Location
@@ -21,23 +18,20 @@ from .shape_ai import ShapeWithAi
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
+# This module is on the 'import partcad' path, so it imports neither build123d
+# nor OCP at module scope. The assembly compound is composed with OCCT directly
+# (via the sandbox codec 'ocp_serialize'), which is imported lazily - only when
+# an assembly is actually built or serialized, never at import time.
+_WRAPPERS_DIR = os.path.join(os.path.dirname(__file__), "wrappers")
 
 
-def get_wrapped_or_none(shape):
-    """Return a build123d shape's TopoDS object, or None if it has none.
+def _ocp_serialize():
+    """Import the OCP-backed shape codec lazily (keeps OCP off the import path)."""
+    if _WRAPPERS_DIR not in sys.path:
+        sys.path.append(_WRAPPERS_DIR)
+    import ocp_serialize
 
-    build123d 0.11 turned 'Shape.wrapped' into a property that asserts the
-    shape was actually built, so reading it on a child that failed raises a
-    bare AssertionError naming neither the assembly nor the child. Reading the
-    attribute the property guards keeps the "is it missing?" question
-    answerable; older releases, where 'wrapped' is a plain attribute, still
-    work through the fallback.
-    """
-    if hasattr(shape, "_wrapped"):
-        return shape._wrapped
-    return getattr(shape, "wrapped", None)
+    return ocp_serialize
 
 
 class AssemblyChild:
@@ -87,17 +81,21 @@ class Assembly(ShapeWithAi):
             return await self._get_shape_real(ctx)
 
     async def _get_shape_real(self, ctx):
+        ocp_serialize = _ocp_serialize()
+
         @telemetry.start_as_current_span_async("Assembly._get_shape_real.per_child")
         async def per_child(child):
-            # TODO(clairbee): use topods objects here
-            item = await child.item.convert("build123d", ctx)
-            if item is None or get_wrapped_or_none(item) is None:
-                # convert("build123d") hands back a Solid whose 'wrapped' is None
-                # when the shape could not be built, most often because the wrapper
-                # process died before producing any output. Copying or compounding
-                # such an object fails deep inside build123d with an AttributeError
-                # that names neither this assembly nor the child that is missing,
-                # so report which child failed here instead.
+            # get_wrapped() hands back the child's BREP envelope (or None when the
+            # shape could not be built). Decode it to a live TopoDS and compose
+            # the compound with OCCT directly - the core no longer routes through
+            # build123d to fetch child shapes, so building an assembly needs only
+            # cadquery-ocp, not build123d.
+            envelope = await child.item.get_wrapped(ctx)
+            if envelope is None:
+                # A child whose shape is missing, most often because its wrapper
+                # process died before producing any output. Report which child
+                # failed here, rather than let it surface as an opaque failure
+                # deeper in the compound assembly.
                 child_name = "%s:%s" % (
                     getattr(child.item, "project_name", "<unknown>"),
                     getattr(child.item, "name", "<unknown>"),
@@ -109,16 +107,15 @@ class Assembly(ShapeWithAi):
                 )
                 self.error(msg)
                 raise Exception(msg)
-            if child.name is not None or child.location is not None:
-                item = copy.copy(item)
-                if child.name is not None:
-                    item.label = child.name
-                if child.location is not None:
-                    # 'item' is a build123d object while 'child.location' is a pc.Location
-                    # (see geom.py). build123d's Shape.locate() only reads '.wrapped', which
-                    # both types expose as a TopLoc_Location, so no conversion is needed here.
-                    item.locate(child.location)
-            return item
+            shape = ocp_serialize.decode_shape(envelope)
+            if child.location is not None:
+                # 'child.location.wrapped' is a TopLoc_Location (both pc.Location
+                # and build123d's Location expose it); 'Located' places the child
+                # at that absolute location. Labels are metadata that the flat
+                # compound cannot carry - they survive in the cached tree instead
+                # (see get_cache_value/_serialize_children).
+                shape = shape.Located(child.location.wrapped)
+            return shape
 
         if len(self.children) == 0:
             pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
@@ -133,15 +130,11 @@ class Assembly(ShapeWithAi):
         # identical runs.
         child_shapes = list(await asyncio.gather(*tasks))
 
-        compound = b3d.Compound(children=child_shapes)
-        if not self.name is None:
-            compound.label = self.name
-        if not self.location is None:
-            compound.locate(self.location)
-        return compound.wrapped
-        # return copy.copy(
-        #     shape
-        # )  # TODO(clairbee): fix this for the case when the parts are made with cadquery
+        compound = ocp_serialize.compound_of(child_shapes)
+        root = self._root_location()
+        if root is not None:
+            compound = compound.Located(root.wrapped)
+        return compound
 
     def _root_location(self):
         """The assembly's own location as a geom.Location, or None."""
@@ -172,6 +165,7 @@ class Assembly(ShapeWithAi):
         # get_wrapped() would otherwise have skipped instantiation.
         await self.do_instantiate()
 
+        ocp_serialize = _ocp_serialize()
         children = []
         for child in self.children:
             if child.location is None:
@@ -188,9 +182,14 @@ class Assembly(ShapeWithAi):
                 sub = await item._serialize_children(ctx, loc)
                 children.append(ocp_serialize.encode_assembly(sub, name=name, label=label))
             else:
-                shape = await item.get_wrapped(ctx)
-                if shape is None:
+                # get_wrapped() hands back a BREP envelope, not a live shape.
+                # Decode it here to bake in the accumulated world location - this
+                # is the assembly's own in-process OCP use (Tier 1) - then
+                # re-encode the located shape back into the tree.
+                envelope = await item.get_wrapped(ctx)
+                if envelope is None:
                     continue
+                shape = ocp_serialize.decode_shape(envelope)
                 if loc is not None:
                     shape = shape.Located(loc.wrapped)
                 children.append(ocp_serialize.encode_shape(shape, name=name, label=label))
@@ -205,7 +204,7 @@ class Assembly(ShapeWithAi):
         """
         children = await self._serialize_children(ctx, self._root_location())
         name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
-        return ocp_serialize.encode_assembly(children, name=name, label=self.name)
+        return _ocp_serialize().encode_assembly(children, name=name, label=self.name)
 
     async def get_bom(self):
         with self.lock:

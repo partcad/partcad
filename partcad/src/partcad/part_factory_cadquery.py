@@ -8,19 +8,12 @@
 #
 
 import os
-import sys
-
-from OCP.TopoDS import (
-    TopoDS_Builder,
-    TopoDS_Compound,
-)
 
 from .part_factory_python import PartFactoryPython
 from . import wrapper
+from . import transform
+from . import shape_envelope
 from . import logging as pc_logging
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
 
 from . import sandbox_versions
 from . import telemetry
@@ -79,10 +72,10 @@ class PartFactoryCadquery(PartFactoryPython):
             request["patch"] = patch
 
             # Serialize the request
-            with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{ocp_serialize.serialize}"):
+            with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{shape_envelope.serialize}"):
                 request["name"] = "%s:%s" % (part.project_name, part.name)
                 request["label"] = part.name
-                request_serialized = ocp_serialize.serialize(request)
+                request_serialized = shape_envelope.serialize(request)
 
             await self.runtime.ensure_async(
                 sandbox_versions.OCP_TESSELLATE,
@@ -133,7 +126,7 @@ class PartFactoryCadquery(PartFactoryPython):
                     part.error("%s: %s" % (part.name, error_line))
 
             try:
-                result = ocp_serialize.deserialize(response_serialized)
+                result = shape_envelope.deserialize(response_serialized)
                 pc_logging.debug("Response: %s" % result)
             except Exception as e:
                 part.error("Exception while deserializing %s: %s" % (part.name, e))
@@ -152,10 +145,5 @@ class PartFactoryCadquery(PartFactoryPython):
             if len(result["shapes"]) == 1:
                 return result["shapes"][0]
 
-            with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{OCP.TopoDS.TopoDS_Builder}"):
-                builder = TopoDS_Builder()
-                compound = TopoDS_Compound()
-                builder.MakeCompound(compound)
-                for shape in result["shapes"]:
-                    builder.Add(compound, shape)
-            return compound
+            with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{transform.compound}"):
+                return await transform.compound(self.ctx, result["shapes"])

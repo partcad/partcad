@@ -67,5 +67,6 @@ def test_assembly_tree_round_trips_to_the_same_geometry():
     tree = asyncio.run(asm.get_cache_value(ctx, compound))
 
     # Through the JSON the cache stores, the tree decodes to the same geometry.
+    # get_wrapped() returns a BREP envelope now, so decode it before measuring.
     rebuilt = ocp_serialize.decode_shape(json.loads(json.dumps(tree)))
-    assert abs(_volume(rebuilt) - _volume(compound)) < 1e-6
+    assert abs(_volume(rebuilt) - _volume(ocp_serialize.decode_shape(compound))) < 1e-6

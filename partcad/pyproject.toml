@@ -43,6 +43,10 @@ ai = {file = ["requirements-ai.txt"]}
 # Optional linting dependency. `ruff` ships a native executable that is resolved
 # and launched lazily, so it is only required when `pc lint` actually runs.
 lint = {file = ["requirements-lint.txt"]}
+# Optional live-object support: build123d (and its ocpsvg dependency) are only
+# needed for the opt-in convert("build123d") API. Everything else - building,
+# rendering and exporting - happens in sandboxed runtimes.
+cad = {file = ["requirements-cad.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"

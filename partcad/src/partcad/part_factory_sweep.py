@@ -7,9 +7,18 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import os
+import sys
+
 from .part_factory import PartFactory
 from .sketch import Sketch
 from . import logging as pc_logging
+
+# This factory builds the solid in-process, so it needs the sketch as a live
+# shape; get_wrapped() returns a BREP envelope, so decode it with the sandbox
+# codec (OCP is already a dependency of this in-process factory).
+sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
+import ocp_serialize
 
 
 class PartFactorySweep(PartFactory):
@@ -155,7 +164,7 @@ class PartFactorySweep(PartFactory):
                 # TODO(clairbee): Drop the Bezier curve and use the `axis_wire` constructed above, but
                 #                 replace the cut corners with elliptic arcs that connect the edges smoothly
 
-                faces = await self.sketch.get_wrapped(self.ctx)
+                faces = ocp_serialize.decode_shape(await self.sketch.get_wrapped(self.ctx))
 
                 from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipe
                 from OCP.TopExp import TopExp_Explorer

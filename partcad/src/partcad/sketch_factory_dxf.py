@@ -8,14 +8,12 @@
 #
 
 import os
-import sys
 
 from . import wrapper
 from . import logging as pc_logging
 from .sketch_factory_python import SketchFactoryPython
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
+from . import shape_envelope
 
 from . import sandbox_versions
 from . import telemetry
@@ -80,7 +78,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                 }
                 request["name"] = "%s:%s" % (sketch.project_name, sketch.name)
                 request["label"] = sketch.name
-                request_serialized = ocp_serialize.serialize(request)
+                request_serialized = shape_envelope.serialize(request)
 
                 await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
                 await self.runtime.ensure_async(sandbox_versions.CADQUERY)
@@ -100,7 +98,7 @@ class SketchFactoryDxf(SketchFactoryPython):
                     pc_logging.error(errors)
                     raise Exception(errors)
 
-                result = ocp_serialize.deserialize(response_serialized)
+                result = shape_envelope.deserialize(response_serialized)
 
                 if not result["success"]:
                     pc_logging.error(result["exception"])

@@ -83,32 +83,47 @@ from typing import Any
 # so this is where the ordering has to be established for them.
 import pyexpat  # noqa: F401
 
-import OCP
-
-# The submodules have to be imported by name. In OCP 7.9 a bare "import OCP"
-# leaves 'OCP.TopoDS' and friends as unpopulated placeholders, so reaching
-# 'OCP.TopoDS.TopoDS.Vertex_s' through the package alone raises AttributeError.
-# Importing each submodule materializes it; the dotted references below then
-# resolve as they always did.
-import OCP.BRep  # noqa: F401
-import OCP.BRepTools  # noqa: F401
-import OCP.TopAbs  # noqa: F401
-import OCP.TopoDS  # noqa: F401
+# OCP is imported lazily, not at module load: this module is imported by core
+# code (via 'import ocp_serialize') that must not pull OCP into the 'import
+# partcad' path. 'pyexpat' above stays a module-level import so the expat/VTK
+# ordering is still established before OCP is ever loaded, whichever caller
+# triggers _ensure_ocp() first.
+OCP = None
+downcast_LUT = None
 
 
-downcast_LUT = {
-    OCP.TopAbs.TopAbs_VERTEX: OCP.TopoDS.TopoDS.Vertex_s,
-    OCP.TopAbs.TopAbs_EDGE: OCP.TopoDS.TopoDS.Edge_s,
-    OCP.TopAbs.TopAbs_WIRE: OCP.TopoDS.TopoDS.Wire_s,
-    OCP.TopAbs.TopAbs_FACE: OCP.TopoDS.TopoDS.Face_s,
-    OCP.TopAbs.TopAbs_SHELL: OCP.TopoDS.TopoDS.Shell_s,
-    OCP.TopAbs.TopAbs_SOLID: OCP.TopoDS.TopoDS.Solid_s,
-    OCP.TopAbs.TopAbs_COMPOUND: OCP.TopoDS.TopoDS.Compound_s,
-    OCP.TopAbs.TopAbs_COMPSOLID: OCP.TopoDS.TopoDS.CompSolid_s,
-}
+def _ensure_ocp():
+    """Import OCP and build the downcast table on first use."""
+    global OCP, downcast_LUT
+    if OCP is not None:
+        return
+
+    import OCP as _OCP
+
+    # The submodules have to be imported by name. In OCP 7.9 a bare "import OCP"
+    # leaves 'OCP.TopoDS' and friends as unpopulated placeholders, so reaching
+    # 'OCP.TopoDS.TopoDS.Vertex_s' through the package alone raises AttributeError.
+    # Importing each submodule materializes it; the dotted references below then
+    # resolve as they always did.
+    import OCP.BRep  # noqa: F401
+    import OCP.BRepTools  # noqa: F401
+    import OCP.TopAbs  # noqa: F401
+    import OCP.TopoDS  # noqa: F401
+
+    OCP = _OCP
+    downcast_LUT = {
+        _OCP.TopAbs.TopAbs_VERTEX: _OCP.TopoDS.TopoDS.Vertex_s,
+        _OCP.TopAbs.TopAbs_EDGE: _OCP.TopoDS.TopoDS.Edge_s,
+        _OCP.TopAbs.TopAbs_WIRE: _OCP.TopoDS.TopoDS.Wire_s,
+        _OCP.TopAbs.TopAbs_FACE: _OCP.TopoDS.TopoDS.Face_s,
+        _OCP.TopAbs.TopAbs_SHELL: _OCP.TopoDS.TopoDS.Shell_s,
+        _OCP.TopAbs.TopAbs_SOLID: _OCP.TopoDS.TopoDS.Solid_s,
+        _OCP.TopAbs.TopAbs_COMPOUND: _OCP.TopoDS.TopoDS.Compound_s,
+        _OCP.TopAbs.TopAbs_COMPSOLID: _OCP.TopoDS.TopoDS.CompSolid_s,
+    }
 
 
-def shapetype(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopAbs.TopAbs_ShapeEnum:
+def shapetype(obj):
     """Return TopoDS_Shape's TopAbs_ShapeEnum"""
     if obj.IsNull():
         raise ValueError("Null TopoDS_Shape object")
@@ -116,7 +131,7 @@ def shapetype(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopAbs.TopAbs_ShapeEnum:
     return obj.ShapeType()
 
 
-def downcast(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopoDS.TopoDS_Shape:
+def downcast(obj):
     """Downcasts a TopoDS object to suitable specialized type
 
     Args:
@@ -125,6 +140,7 @@ def downcast(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopoDS.TopoDS_Shape:
     Returns:
 
     """
+    _ensure_ocp()
 
     f_downcast: Any = downcast_LUT[shapetype(obj)]
     return_value = f_downcast(obj)
@@ -152,6 +168,7 @@ def _warn(message: str) -> None:
 
 def shape_to_brep(shape) -> bytes:
     """Serialize a TopoDS_Shape into the flat BREP byte array."""
+    _ensure_ocp()
     with BytesIO() as bio:
         OCP.BRepTools.BRepTools.Write_s(shape, bio)
         return bio.getvalue()
@@ -159,6 +176,7 @@ def shape_to_brep(shape) -> bytes:
 
 def shape_from_brep(data: bytes):
     """Deserialize a flat BREP byte array into a downcast TopoDS_Shape."""
+    _ensure_ocp()
     with BytesIO(data) as bio:
         shape = OCP.TopoDS.TopoDS_Shape()
         builder = OCP.BRep.BRep_Builder()
@@ -176,6 +194,7 @@ def _shape_from_b64(brep_b64: str):
 
 def compound_of(shapes):
     """Combine OCCT shapes into a single TopoDS_Compound."""
+    _ensure_ocp()
     result = OCP.TopoDS.TopoDS_Compound()
     builder = OCP.BRep.BRep_Builder()
     builder.MakeCompound(result)
@@ -234,6 +253,7 @@ def encode(obj, name=None, label=None):
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
 
+    _ensure_ocp()
     if isinstance(obj, OCP.TopoDS.TopoDS_Shape):
         return encode_shape(obj, name=name, label=label)
 

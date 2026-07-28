@@ -2,9 +2,6 @@ import os
 import threading
 import time
 import sys
-from OCP.BRep import BRep_Builder
-from OCP.BRepTools import BRepTools
-from OCP.TopoDS import TopoDS_Shape
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 from . import wrapper
@@ -83,6 +80,12 @@ class PartFactoryBrep(PartFactoryFile):
         """
         time.sleep(0.0001)  # Brief pause for thread synchronization
         try:
+            # In-process direct load (Tier 2): OCP imported lazily so this
+            # module stays off the 'import partcad' OCP path.
+            from OCP.BRep import BRep_Builder
+            from OCP.BRepTools import BRepTools
+            from OCP.TopoDS import TopoDS_Shape
+
             shape = TopoDS_Shape()
             builder = BRep_Builder()
             brep_tools = BRepTools()

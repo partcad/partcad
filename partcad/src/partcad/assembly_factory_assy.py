@@ -13,8 +13,6 @@ import fnmatch
 import os
 import yaml
 
-from OCP.gp import gp_Trsf
-
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
 from .assembly_factory_file import AssemblyFactoryFile

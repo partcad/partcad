@@ -1,0 +1,7 @@
+# Optional 'cad' extra: the live build123d object API (convert("build123d") /
+# get_part_build123d / Context.get_part_build123d). The core does not need
+# build123d otherwise - it builds and exports shapes in sandboxed runtimes.
+# 'ocpsvg' is pulled in transitively by build123d; it is pinned here to match
+# the version the render sandboxes use.
+build123d==0.11.1
+ocpsvg==0.6.0

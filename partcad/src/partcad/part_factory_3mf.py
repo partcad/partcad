@@ -8,7 +8,6 @@
 #
 
 import os
-import sys
 
 from . import sandbox_versions
 from . import telemetry
@@ -16,8 +15,7 @@ from . import wrapper
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
+from . import shape_envelope
 
 
 @telemetry.instrument()
@@ -51,7 +49,7 @@ class PartFactory3mf(PartFactoryFile):
             request = {"fallback_import_stl": False}
             request["name"] = "%s:%s" % (part.project_name, part.name)
             request["label"] = part.name
-            request_serialized = ocp_serialize.serialize(request)
+            request_serialized = shape_envelope.serialize(request)
 
             await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE)
             await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS)
@@ -78,7 +76,7 @@ class PartFactory3mf(PartFactoryFile):
                 pc_logging.error(errors)
                 raise Exception(errors)
 
-            result = ocp_serialize.deserialize(response_serialized)
+            result = shape_envelope.deserialize(response_serialized)
 
             if not result["success"]:
                 pc_logging.error(result["exception"])

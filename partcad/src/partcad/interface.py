@@ -20,13 +20,9 @@ from . import logging as pc_logging
 from .utils import resolve_resource_path
 from . import telemetry
 
-from OCP.gp import (
-    gp_Trsf,
-    gp_Ax1,
-    gp_Pnt,
-    gp_Dir,
-    gp_Vec,
-)
+# OCP is not imported at module scope: this module is on the 'import partcad'
+# path, and only the two viewer/parameter paths below actually need OCCT, which
+# import it lazily.
 
 
 @telemetry.instrument()
@@ -192,6 +188,11 @@ class InterfaceParameter:
             pc_logging.warning("Parameter %s: value below minimum: %f" % (self.name, value))
         if self.max is not None and value > self.max:
             pc_logging.warning("Parameter %s: value above maximum: %f" % (self.name, value))
+
+        # The freedom-of-movement offset is an OCCT gp_Trsf: it is composed with
+        # other gp_Trsf in the assembly connection logic. Imported lazily so this
+        # module stays OCP-free at import time.
+        from OCP.gp import gp_Trsf, gp_Ax1, gp_Pnt, gp_Dir, gp_Vec
 
         trsf = gp_Trsf()
         if self.type == PARAM_MOVE:
@@ -397,15 +398,10 @@ class Interface:
                         if port.location is None:
                             port_location = instance_location
                         else:
-                            trsf = port.location.wrapped.Transformation()
-                            # pc_logging.debug(
-                            #     "Instance location: %s" % instance_location
-                            # )
-                            trsf.PreMultiply(instance_location.wrapped.Transformation())
-                            port_location = Location(trsf)
-                            # pc_logging.debug(
-                            #     "Result location: %s" % port_location
-                            # )
+                            # The inherited port sits at the instance's location
+                            # composed with the port's own: apply the port first,
+                            # then the instance. Pure-Python composition, no OCP.
+                            port_location = instance_location * port.location
                         # pc_logging.debug(
                         #     "Inherited port from %s to %s at %s: %s"
                         #     % (
@@ -499,6 +495,15 @@ class Interface:
         return info
 
     async def get_components(self, ctx):
+        # This is a viewer-only path (Interface.show); the sketch components are
+        # BREP envelopes, so decode them to live shapes to locate and display.
+        # Lazy import keeps the module OCP-free at import time.
+        import os
+        import sys
+
+        sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
+        import ocp_serialize
+
         components = []
         for port in self.get_ports().values():
             components.append(port.location)
@@ -510,7 +515,8 @@ class Interface:
                     if isinstance(component, list):
                         component = move_components(component)
                     else:
-                        component = component.Located(port.location.wrapped)
+                        shape = ocp_serialize.decode_shape(component)
+                        component = shape.Located(port.location.wrapped)
                     return component
 
                 def move_components(components):

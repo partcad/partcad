@@ -10,16 +10,6 @@
 import os
 import sys
 
-from OCP.gp import gp_Ax1
-from OCP.TopoDS import (
-    TopoDS_Builder,
-    TopoDS_Compound,
-    TopoDS_Edge,
-    TopoDS_Wire,
-    TopoDS_Face,
-)
-from OCP.TopLoc import TopLoc_Location
-
 from .sketch_factory_python import SketchFactoryPython
 from . import wrapper
 from . import logging as pc_logging
@@ -151,6 +141,18 @@ class SketchFactoryBuild123d(SketchFactoryPython):
                 return None
             if len(result["shapes"]) == 0:
                 return None
+
+            # In-process compound assembly (Tier 2): OCP is imported lazily so
+            # this module stays off the 'import partcad' OCP path.
+            from OCP.gp import gp_Ax1
+            from OCP.TopoDS import (
+                TopoDS_Builder,
+                TopoDS_Compound,
+                TopoDS_Edge,
+                TopoDS_Wire,
+                TopoDS_Face,
+            )
+            from OCP.TopLoc import TopLoc_Location
 
             builder = TopoDS_Builder()
             compound = TopoDS_Compound()
