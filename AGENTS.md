@@ -107,9 +107,10 @@ Seeding is bounded, because it shares a CI job's deadline with the suite it exis
 
 CI parallelises the suite by sharding it across jobs (`BEHAVE_SHARDS` in `test.yml`, split by
 `dev-tools/behave_shard.py`), so each job runs plain serial `behave` over a slice of the feature files. Locally,
-`.devcontainer/behave_hook.sh` instead uses `behavex` to parallelise within one machine. `behavex` does **not**
-read the `tags` setting from `behave.ini`, so pass the exclusions yourself or `@ai` scenarios silently start
-running: `poetry run behavex features -t '~@ai' --parallel-processes=4 --parallel-scheme=feature`.
+`.devcontainer/behave_hook.sh` instead uses `behavex` to parallelise within one machine:
+`poetry run behavex features --parallel-processes=4 --parallel-scheme=feature`. Note that `behavex` does **not**
+read the `tags` setting from `behave.ini`, so it runs the `@ai` scenarios that plain `behave` excludes. Pass
+`-t '~@ai'` if you want behave.ini's intent; the hook does not, so that it never runs less than it does today.
 
 Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
 

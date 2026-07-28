@@ -564,12 +564,14 @@ unset for them, so they see an empty state directory in their temporary ``$HOME`
 
 CI parallelises the suite by sharding it across jobs, so each job runs plain serial ``behave`` over a slice of the
 feature files. Locally, ``.devcontainer/behave_hook.sh`` instead parallelises within one machine using
-``behavex``. Note that ``behavex`` does not read the ``tags`` setting from ``behave.ini``, so its exclusions have
-to be passed explicitly:
+``behavex``:
 
 .. code-block:: bash
 
-    $ poetry run behavex features -t '~@ai' --parallel-processes=4 --parallel-scheme=feature
+    $ poetry run behavex features --parallel-processes=4 --parallel-scheme=feature
+
+Note that ``behavex`` does not read the ``tags`` setting from ``behave.ini``, so it runs the ``@ai`` scenarios
+that plain ``behave`` excludes. Pass ``-t '~@ai'`` if you want behave.ini's intent applied.
 
 Commit & Push Changes
 ---------------------

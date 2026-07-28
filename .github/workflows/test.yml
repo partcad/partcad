@@ -290,16 +290,6 @@ jobs:
     # Windows). 60m leaves generous margin for the slowest shard.
     timeout-minutes: 60
 
-    env:
-      # Where features/seed.py keeps the shared state directory and the
-      # per-scenario copies. It defaults to $HOME, which on a Windows runner is
-      # C: - the OS disk, and the one that filled up and took a shard down with
-      # an unwritable log file. runner.temp is on the same volume as the
-      # workspace, which the runner reported as 147 GB free against C:'s
-      # handful, and is cleaned between jobs. Set for every OS so there is one
-      # path to reason about rather than a Windows special case.
-      PARTCAD_BEHAVE_DIR: ${{ runner.temp }}/partcad-behave
-
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-all
@@ -319,6 +309,23 @@ jobs:
         uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY_RO }}
+
+      # features/seed.py keeps its state directory under $HOME by default. On a
+      # Windows runner that is C:\Users\runneradmin - the OS disk, and the one
+      # that filled up and took a shard down with an unwritable log file, while
+      # the runner reported 147 GB free on D:. Pin it to the large volume.
+      #
+      # Resolved in a step rather than the job's 'env:' because the runner
+      # context is not available there - setting it at job level is a workflow
+      # error that fails the run before any job starts.
+      - name: Choose where the behave seed lives
+        shell: bash -el {0}
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "PARTCAD_BEHAVE_DIR=D:/partcad-behave" >> "$GITHUB_ENV"
+          else
+            echo "PARTCAD_BEHAVE_DIR=${RUNNER_TEMP}/partcad-behave" >> "$GITHUB_ENV"
+          fi
 
       # Every scenario gets a private $HOME, and PartCAD roots its whole on-disk
       # state at $HOME/.partcad, so each one used to start with a cold cache:
@@ -353,8 +360,8 @@ jobs:
           # different PartCAD version would skip exports whose cache entries no
           # longer apply, quietly giving up the warm cache instead of rebuilding.
           path: |
-            ${{ runner.temp }}/partcad-behave/seed/state/cache
-            ${{ runner.temp }}/partcad-behave/seed/state/.seed-exports.json
+            ${{ env.PARTCAD_BEHAVE_DIR }}/seed/state/cache
+            ${{ env.PARTCAD_BEHAVE_DIR }}/seed/state/.seed-exports.json
           key: ${{ runner.os }}-py${{ matrix.python-version }}-pcseed-obj-${{ env.VERSION }}-${{ hashFiles('features/seed.py') }}
 
       # Kept out of the test step so that cloning //pub and building the conda
