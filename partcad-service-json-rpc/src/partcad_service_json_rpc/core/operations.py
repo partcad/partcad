@@ -549,65 +549,6 @@ def list_all(session, params):
     return None
 
 
-# The four object kinds `pc list <kind>` renders identically (name + description
-# table, optional package column when recursive). One operation serves all four;
-# the CLI passes the kind. Output is emitted verbatim through PartCAD's logger so
-# it renders exactly as the old in-process command did.
-_LIST_LABELS = {
-    "parts": "PartCAD parts",
-    "sketches": "PartCAD sketches",
-    "assemblies": "PartCAD assemblies",
-    "interfaces": "PartCAD interfaces",
-}
-
-
-def list_objects(session, params):
-    """List a package's parts, sketches, assemblies, or interfaces."""
-    ctx = session.partcad_ctx
-    if ctx is None:
-        return None
-    pc = session.partcad
-    kind = params.get("kind", "parts")
-    recursive = params.get("recursive", False)
-
-    package = ctx.resolve_package_path(params.get("package", "."))
-    package_obj = ctx.get_project(package)
-    if not package_obj:
-        pc.logging.error("Package %s is not found" % package)
-        return None
-    package = package_obj.name  # '//' may resolve to a differently-named package
-
-    with pc.logging.Process("List" + kind.capitalize(), package):
-        count = 0
-        if recursive:
-            # `list interfaces` walks every package; the others only those with content.
-            has_stuff = kind != "interfaces"
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=has_stuff)]
-        else:
-            packages = [package]
-
-        output = _LIST_LABELS.get(kind, "PartCAD objects") + ":\n"
-        for project_name in packages:
-            project = ctx.projects[project_name]
-            for name, obj in getattr(project, kind).items():
-                line = "\t"
-                if recursive:
-                    line += "%s" % project_name + " " + " " * (35 - len(project_name))
-                line += "%s" % name + " " + " " * (35 - len(name))
-                desc = obj.desc if obj.desc is not None else ""
-                desc = desc.replace("\n", "\n" + " " * (84 if recursive else 44))
-                line += "%s" % desc
-                output += line + "\n"
-                count += 1
-
-        if count > 0:
-            output += "Total: %d\n" % count
-        else:
-            output += "\t<none>\n"
-        pc.logging.info(output)
-    return None
-
-
 def _load_package_contents(session, name="//"):
     ctx = session.partcad_ctx
     with session.partcad.logging.Process("Load", name):

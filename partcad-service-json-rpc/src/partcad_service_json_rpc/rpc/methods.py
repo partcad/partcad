@@ -32,7 +32,6 @@ _OPERATIONS = {
     "package.refresh": operations.package_refresh,
     "init": operations.init,
     "list.all": operations.list_all,
-    "list.objects": operations.list_objects,
     "test": operations.test,
     "info": operations.info,
     "activate": operations.activate,
