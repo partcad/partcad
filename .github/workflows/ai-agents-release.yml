@@ -37,7 +37,7 @@ jobs:
       DISABLE_TELEMETRY: "1"
       DISABLE_ERROR_REPORTING: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
