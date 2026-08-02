@@ -100,4 +100,12 @@ class PartFactorySdf(PartFactoryPython):
             if len(shapes) == 1:
                 return shapes[0]
 
-            return await transform.compound(self.ctx, shapes)
+            # Compounding now runs in a sandbox (transform.compound spawns a
+            # runtime and raises on any failure), so it can fail where the old
+            # in-process TopoDS_Compound could not. Keep this method's contract:
+            # report via part.error() and return None instead of raising.
+            try:
+                return await transform.compound(self.ctx, shapes)
+            except Exception as e:
+                part.error("Failed to compound SDF shapes: %s" % e)
+                return None

@@ -126,11 +126,13 @@ def import_assy_action(
     assy_name = Path(top_data["name"]).name
     assy_file_path = output_folder / f"{assy_name}.assy"
 
-    # Prepare .assy file data
+    # Prepare .assy file data. When the STEP root is a single part rather than an
+    # assembly, reference it as the sole link - otherwise the part is registered
+    # but never linked and the .assy comes out empty, silently losing the import.
     assembly_data = {
         "name": top_data["name"].replace("\\", "/"),
         "description": config.get("desc", ""),
-        "links": top_data.get("links", []) if top_data["type"] == "assembly" else [],
+        "links": top_data["links"] if top_data["type"] == "assembly" else [top_data],
     }
 
     # Save assembly data to YAML format

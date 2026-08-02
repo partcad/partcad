@@ -153,4 +153,9 @@ def deserialize(data) -> object:
             if candidate:
                 line = candidate
                 break
+    if not line:
+        # A wrapper can exit 0 having written nothing (no result and no stderr),
+        # which slips past the exit-code and stderr checks in the callers. Say so
+        # here rather than letting loads() raise a bare, contextless JSONDecodeError.
+        raise ValueError("the wrapper produced no output to deserialize (empty response)")
     return loads(line)

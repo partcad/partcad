@@ -58,8 +58,12 @@ class PartFactoryObj(PartFactoryFile):
 
             response = shape_envelope.deserialize(response_serialized)
             if not response.get("success", False):
-                pc_logging.error(response["exception"])
-                raise PartFactoryError(response["exception"])
+                message = response.get("exception") or (
+                    "the OBJ wrapper reported failure without a message for '%s:%s'"
+                    % (part.project_name, part.name)
+                )
+                pc_logging.error(message)
+                raise PartFactoryError(message)
 
             self.ctx.stats_parts_instantiated += 1
             return response["shape"]

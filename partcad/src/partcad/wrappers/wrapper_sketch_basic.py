@@ -123,6 +123,10 @@ def process(request):
 
     config = request["config"]
     outer_wire = _outer_wire(config)
+    if outer_wire is None:
+        # BRepBuilderAPI_MakeFace(None, ...) fails deep inside pybind11 with an
+        # opaque overload error; name the actual problem instead.
+        raise ValueError("Cannot build a sketch face: the config names no supported outer shape")
 
     face_builder = BRepBuilderAPI_MakeFace(outer_wire, True)
     for inner_wire in _inner_wires(config):

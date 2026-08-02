@@ -110,8 +110,12 @@ def _ensure_ocp():
     import OCP.TopAbs  # noqa: F401
     import OCP.TopoDS  # noqa: F401
 
-    OCP = _OCP
-    downcast_LUT = {
+    # Build the table into a local first, then publish 'downcast_LUT' before
+    # 'OCP'. The guard above returns as soon as 'OCP is not None', so a second
+    # thread that sees OCP published must also see a fully-built table - otherwise
+    # its downcast() would find downcast_LUT still None and raise. (PartCAD runs
+    # CPU-heavy work in a thread pool, so concurrent first use is reachable.)
+    lut = {
         _OCP.TopAbs.TopAbs_VERTEX: _OCP.TopoDS.TopoDS.Vertex_s,
         _OCP.TopAbs.TopAbs_EDGE: _OCP.TopoDS.TopoDS.Edge_s,
         _OCP.TopAbs.TopAbs_WIRE: _OCP.TopoDS.TopoDS.Wire_s,
@@ -121,6 +125,8 @@ def _ensure_ocp():
         _OCP.TopAbs.TopAbs_COMPOUND: _OCP.TopoDS.TopoDS.Compound_s,
         _OCP.TopAbs.TopAbs_COMPSOLID: _OCP.TopoDS.TopoDS.CompSolid_s,
     }
+    downcast_LUT = lut
+    OCP = _OCP
 
 
 def shapetype(obj):

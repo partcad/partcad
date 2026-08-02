@@ -489,17 +489,23 @@ class Interface:
         sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
         import ocp_serialize
 
+        from . import shape_envelope
+
         components = []
         for port in self.get_ports().values():
             components.append(port.location)
             if port.sketch is not None:
                 sketch_components = list(await port.sketch.get_components(ctx))
 
-                def move_component(component, move_components):
-                    nonlocal port
+                # 'port' is bound as a default so the closure captures this
+                # iteration's value (not the loop's last), the same guard
+                # Shape.show_async() uses: only decode actual shape envelopes and
+                # pass anything else (e.g. a nested list already handled above,
+                # or a bare location) through untouched.
+                def move_component(component, move_components, port=port):
                     if isinstance(component, list):
                         component = move_components(component)
-                    else:
+                    elif shape_envelope.is_shape_envelope(component):
                         shape = ocp_serialize.decode_shape(component)
                         component = shape.Located(port.location.wrapped)
                     return component

@@ -50,6 +50,9 @@ import wrapper_common
 # signature -> path of the STEP file written for the first shape with it. A later
 # shape whose signature matches reuses that file rather than writing a new one.
 _shape_cache = {}
+# Paths already written, so a distinct geometry that happens to share a STEP label
+# with an earlier one gets a fresh file instead of overwriting it.
+_used_files = set()
 
 
 def get_label_name(label: TDF_Label, default="Unnamed") -> str:
@@ -290,6 +293,15 @@ def flatten_assembly_tree(node, output_folder: str, precision: int):
         # separator a STEP label carried is dropped from the file on disk.
         file_safe_name = os.path.basename(node_name)
         part_file = os.path.join(output_folder, f"{file_safe_name}.step")
+        # STEP assemblies often repeat component names across different geometry.
+        # If this name's file is already taken by another signature, pick a fresh
+        # one so the second shape does not overwrite the first's file (which would
+        # silently give the first part the second's geometry).
+        suffix = 1
+        while part_file in _used_files:
+            part_file = os.path.join(output_folder, f"{file_safe_name}_{suffix}.step")
+            suffix += 1
+        _used_files.add(part_file)
         save_shape_to_step(zeroed_shape, part_file)
         _shape_cache[signature] = part_file
 
@@ -309,6 +321,7 @@ def process(request):
     precision = request.get("precision", 5)
 
     _shape_cache.clear()
+    _used_files.clear()
 
     root_nodes = parse_assembly_tree(assembly_file, file_type)
     if not root_nodes or all(node is None for node in root_nodes):
