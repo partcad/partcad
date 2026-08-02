@@ -170,15 +170,16 @@ sphinx-autobuild = [
 ]
 
 [tool.poetry.group.partcad.dependencies]
-# cadquery-ocp, build123d and ocpsvg are NOT hard wheel runtime dependencies:
-# the wheel declares them under the optional 'cad' extra
-# (partcad/requirements-cad.txt), because the core builds/renders/exports every
-# shape in sandboxed runtimes and only needs a CAD library in-process for the
-# opt-in convert()/show()/'pc import assembly' features. They stay in this dev
-# group so the monorepo test suite, which exercises those features, has them
-# installed. In OCP 7.9 the native library moved into 'cadquery-ocp-proxy';
-# 'cadquery-ocp' and the 'cadquery-ocp-novtk' that build123d depends on are both
-# thin wrappers over it, so they coexist.
+# cadquery-ocp, build123d and ocpsvg are NOT wheel runtime dependencies at all:
+# the published 'partcad' wheel declares no CAD dependency, because the core
+# builds/renders/exports every shape - and reads STEP assemblies, and converts
+# files - in sandboxed runtimes, and only needs a CAD library in-process for the
+# opt-in convert("build123d"/"cadquery")/show() live-object features (which warn
+# if it is missing). They stay in this dev group so the monorepo test suite,
+# which exercises those features, has them installed. In OCP 7.9 the native
+# library moved into 'cadquery-ocp-proxy'; 'cadquery-ocp' and the
+# 'cadquery-ocp-novtk' that build123d depends on are both thin wrappers over it,
+# so they coexist.
 cadquery-ocp = "7.9.3.1.1"
 ocpsvg = "0.6.0"
 build123d = "0.11.1"

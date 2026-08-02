@@ -390,22 +390,24 @@ class Shape(ShapeConfiguration):
         # being able to tell that apart and report which shape went missing.
         wrapped = await self.get_wrapped(ctx)
 
-        # get_wrapped() returns a BREP envelope; a live object is what this API
-        # promises, so decode it here. This is one of the few core paths that
-        # legitimately holds a live OCP shape - and only ever alongside the CAD
-        # library the caller asked for, which is why both imports stay lazy.
-        live = None
-        if wrapped is not None:
-            import ocp_serialize
-
-            live = ocp_serialize.decode_shape(wrapped)
-
-        # 'build123d' and 'cadquery' are optional: PartCAD builds and exports
-        # shapes in sandboxed runtimes, so neither is a hard dependency of the
-        # core. Asking convert() for a live object of that flavour opts the
-        # caller in, and needs the library installed ('pip install partcad[cad]'
-        # for build123d, or install cadquery).
+        # 'build123d' and 'cadquery' are NOT dependencies of PartCAD: it builds
+        # and exports every shape in sandboxed runtimes. Handing back a *live*
+        # object of that flavour is the one thing PartCAD cannot do without the
+        # library actually present in the caller's environment - so this path is
+        # only for users who already have it, and OCP (which decodes the BREP)
+        # comes with it. When it is missing, warn naming the expected library and
+        # re-raise, rather than pointing at a PartCAD install extra.
         try:
+            # get_wrapped() returns a BREP envelope; a live object is what this
+            # API promises, so decode it here. This is one of the few core paths
+            # that legitimately holds a live OCP shape, which is why the imports
+            # stay lazy.
+            live = None
+            if wrapped is not None:
+                import ocp_serialize
+
+                live = ocp_serialize.decode_shape(wrapped)
+
             if part_type == "build123d":
                 import build123d as b3d
 
@@ -419,11 +421,13 @@ class Shape(ShapeConfiguration):
             cq_solid.wrapped = live
             return cq_solid
         except ImportError as e:
-            extra = "partcad[cad]" if part_type == "build123d" else "cadquery"
+            pc_logging.warning(
+                "convert('%s') needs the '%s' library, which is not installed. Install it in "
+                "your project to work with PartCAD parts as live '%s' objects." % (part_type, part_type, part_type)
+            )
             raise ImportError(
-                "convert('%s') needs the '%s' library, which is optional and not installed. "
-                "Install it (e.g. 'pip install %s') to get a live %s object."
-                % (part_type, part_type, extra, part_type)
+                "convert('%s') needs the '%s' library, which is not installed. "
+                "Install '%s' to get a live %s object." % (part_type, part_type, part_type, part_type)
             ) from e
 
     async def _convert_to_serialized(self, part_type: str, ctx, **kwargs):
