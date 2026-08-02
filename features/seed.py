@@ -112,6 +112,13 @@ _SANDBOX_DIR = os.path.join(SEED_STATE_DIR, "sandbox")
 # restored cache must not be able to claim a sandbox it does not carry.
 _SANDBOX_MARKER = os.path.join(SEED_ROOT, ".sandbox-built")
 
+# Records a failed attempt so that the other behavex workers, each of which
+# calls ensure_seed, do not queue up to repeat it. Expires, so that a later run
+# is never held back by an old failure - the point is to avoid N workers paying
+# the same doomed budget in one run, not to remember it.
+_SEED_FAILED_MARKER = os.path.join(SEED_ROOT, ".seed-failed")
+_FAILURE_TTL = int(os.environ.get("PARTCAD_BEHAVE_FAILURE_TTL", "900"))
+
 # Kept beside SEED_ROOT rather than inside it, so that discarding a failed seed
 # never deletes the lock the discarding process is holding.
 _SEED_LOCK = SEED_ROOT + ".lock"
@@ -430,6 +437,31 @@ def _build(env: dict) -> None:
         logger.info("seed: these combinations stay cold: %s", ", ".join(failures))
 
 
+def _record_failure(reason: str) -> None:
+    """Note that seeding just failed, so sibling workers do not each retry it."""
+    try:
+        os.makedirs(SEED_ROOT, exist_ok=True)
+        with open(_SEED_FAILED_MARKER, "w", encoding="utf-8") as marker:
+            json.dump({"at": time.time(), "reason": reason}, marker)
+    except OSError:
+        # Only an optimization; failing to record it costs a retry, not
+        # correctness.
+        pass
+
+
+def _recent_failure():
+    """(age, reason) if seeding failed recently enough to trust, else None."""
+    try:
+        with open(_SEED_FAILED_MARKER, encoding="utf-8") as marker:
+            record = json.load(marker)
+        age = time.time() - float(record["at"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if age < 0 or age > _FAILURE_TTL:
+        return None
+    return age, record.get("reason", "unknown")
+
+
 def ensure_seed(env: dict):
     """Return the seeded state directory, or None if it could not be built.
 
@@ -450,6 +482,17 @@ def ensure_seed(env: dict):
         if os.path.exists(_SEED_MARKER):
             return SEED_STATE_DIR
 
+        # A failure just recorded is taken at face value rather than retried.
+        # behavex starts one behave per worker and each calls this, so without
+        # it a seed that cannot be built is attempted once per worker, each
+        # spending the full budget on the same doomed clone. The record expires
+        # so that a later run - a new job, or the developer trying again after
+        # fixing their network - is never held back by an old failure.
+        recorded = _recent_failure()
+        if recorded:
+            logger.warning("seed: not retrying, seeding failed %.0fs ago in this run: %s", recorded[0], recorded[1])
+            return None
+
         logger.info("seed: building the shared PartCAD state directory in %s", SEED_ROOT)
 
         # Whatever is already here is built on rather than discarded, because in
@@ -461,6 +504,7 @@ def ensure_seed(env: dict):
         try:
             _build(env)
         except SeedError as error:
+            _record_failure(str(error))
             logger.warning("seed: %s", error)
             logger.warning(
                 "seed: continuing WITHOUT a shared state directory - every scenario will start from a cold "
@@ -493,15 +537,14 @@ def _link_dir(source: str, destination: str) -> None:
     NTFS. Everywhere else a symlink does.
     """
     if platform.system() == "Windows":
-        # normpath again rather than trusting the caller: a single forward slash
-        # anywhere in these makes cmd read the rest of the path as switches.
-        result = subprocess.run(
-            ["cmd", "/c", "mklink", "/J", os.path.normpath(destination), os.path.normpath(source)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise OSError(f"mklink /J failed ({result.returncode}): {result.stdout.strip()} {result.stderr.strip()}")
+        # _winapi.CreateJunction rather than 'cmd /c mklink /J'. Going through
+        # cmd means cmd re-parses the paths: a forward slash starts a switch
+        # (which is how moving the seed to D: broke every Windows shard), and
+        # '&', '|' or '%VAR%' in a path would be interpreted rather than used.
+        # The API call takes the strings as given.
+        import _winapi  # noqa: PLC0415  # Windows-only, and absent elsewhere
+
+        _winapi.CreateJunction(os.path.normpath(source), os.path.normpath(destination))
     else:
         os.symlink(source, destination, target_is_directory=True)
 
@@ -574,7 +617,15 @@ def sandbox_venvs() -> set:
 
 
 def prune_sandbox_venvs(baseline: set) -> None:
-    """Remove venvs the seed did not leave behind, keeping the seed's own."""
+    """Remove venvs the seed did not leave behind, keeping the seed's own.
+
+    Only safe while this process is the only one using the sandbox, which is why
+    the caller has to say so: the sandbox is shared, so under
+    `behavex --parallel-processes` "a venv that appeared since seeding" may well
+    be one another worker is running a scenario out of right now, and deleting
+    it would fail that scenario for reasons impossible to reproduce. Serial runs
+    - which is how CI shards behave - have no such reader.
+    """
     for path in sandbox_venvs() - baseline:
         shutil.rmtree(path, ignore_errors=True)
         logger.debug("seed: pruned scenario venv %s from the shared sandbox", path)

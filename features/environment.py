@@ -104,6 +104,21 @@ def before_all(context: Context) -> None:
     # scenario adds to it is removed again in after_scenario; see sandbox_venvs.
     context.sandbox_baseline = sandbox_venvs() if context.seed_state_dir else set()
 
+    # Pruning is only safe while this process is the sandbox's only user.
+    # behavex runs several behave processes against the same shared sandbox and
+    # tells each one its worker id, so a worker past the first must leave other
+    # workers' venvs alone: "appeared since seeding" cannot distinguish one this
+    # scenario made from one another worker is running out of right now.
+    # Serial `behave`, which is how CI shards run, has no such reader.
+    worker = str(context.config.userdata.get("worker_id", "0"))
+    context.sandbox_exclusive = worker in ("", "0")
+    if not context.sandbox_exclusive:
+        logging.info(
+            "Parallel worker %s: leaving the shared sandbox alone. Venvs built by scenarios will "
+            "accumulate for this run; that is disk, where pruning them would be a race.",
+            worker,
+        )
+
 
 def before_scenario(context: Context, scenario) -> None:
     # Skipping comes first, and returns: there is no point provisioning a state
@@ -145,6 +160,10 @@ def after_scenario(context: Context, scenario) -> None:
     if state_dir:
         release(state_dir)
         logging.debug("Removed scenario state directory: %s", state_dir)
+
+    # Only when nothing else is using the sandbox; see before_all.
+    if not getattr(context, "sandbox_exclusive", True):
+        return
 
     # The sandbox is shared, so anything this scenario built inside it would
     # otherwise outlive it and accumulate for the whole run.

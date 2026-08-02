@@ -378,7 +378,11 @@ jobs:
           export PYTHONUTF8=1
           export PYTHONIOENCODING=utf-8
 
-          python -m features.seed
+          # '|| true' so the disk report below still runs: the numbers matter
+          # most when seeding has just gone wrong, and features/seed.py already
+          # degrades rather than failing, so a non-zero exit here is unexpected
+          # and worth seeing the disk state for.
+          python -m features.seed || echo "seed step exited non-zero"
 
           # The headroom the suite starts with. A Windows shard ran out of disk
           # partway through and the failure arrived as an unwritable log file,
