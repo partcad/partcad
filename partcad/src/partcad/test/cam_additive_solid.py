@@ -30,23 +30,14 @@ class CamAdditiveSolidTest(Test):
         # TODO(clairbee): Utilize the data provided in the config
 
         # TODO(clairbee): Improve and extend the below
-        # OCP is imported lazily so this module stays off the 'import partcad'
-        # OCP path. get_wrapped() returns a BREP envelope; decode it to the live
-        # shape this in-process analysis needs.
-        import os
-        import sys
-
-        sys.path.append(os.path.join(os.path.dirname(__file__), "..", "wrappers"))
-        import ocp_serialize
-        from OCP.ShapeAnalysis import ShapeAnalysis_FreeBoundsProperties
+        # The manufacturability analysis runs in a sandbox (see cam_analysis), so
+        # this module needs no CAD library.
+        from .cam_analysis import free_bounds_count
 
         envelope = await shape.get_wrapped(ctx)
         if envelope is None:
             return self.failed(shape, "Failed to get the shape")
-        wrapped = ocp_serialize.decode_shape(envelope)
-        fbp = ShapeAnalysis_FreeBoundsProperties(wrapped)
-        fbp.Perform()
-        if fbp.NbFreeBounds() != 0:
+        if await free_bounds_count(ctx, envelope) != 0:
             return self.failed(shape, "The shape is not solid")
 
         return self.passed(shape)
