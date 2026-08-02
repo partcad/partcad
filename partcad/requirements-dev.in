@@ -18,3 +18,12 @@ strip-ansi==0.1.1
 python-jsonrpc-server==0.4.0
 nox==2026.7.11
 nox-poetry==1.2.0
+# The CAD kernel is NOT a runtime dependency of the 'partcad' wheel - the core
+# builds/renders/exports every shape in sandboxed runtimes and carries geometry
+# as BREP-byte envelopes. It is a *test* dependency: several unit tests import
+# OCP/build123d/cadquery directly to verify geometry (test_geom, test_part_compound,
+# test_assembly, test_assembly_serialize, ...), and pytest collection fails without
+# them. Pinned to the versions the sandboxes use (see sandbox_versions.py).
+cadquery-ocp==7.9.3.1.1
+build123d==0.11.1
+ocpsvg==0.6.0
