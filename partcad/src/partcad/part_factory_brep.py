@@ -1,28 +1,16 @@
 import os
-import threading
-import time
-import sys
+
 from .part_factory_file import PartFactoryFile
 from . import logging as pc_logging
 from . import wrapper
-from .exception import FileReadError, PartFactoryError
+from . import shape_envelope
+from .exception import PartFactoryError
 from . import telemetry
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
 
 
 @telemetry.instrument()
 class PartFactoryBrep(PartFactoryFile):
-    # Constants
-    MIN_SIMPLE_INFLIGHT = 1
-    MIN_SUBPROCESS_FILE_SIZE = 64 * 1024  # 64 KB
     PYTHON_SANDBOX_VERSION = "3.10"
-
-    # Shared counters for inflight operations
-    lock = threading.Lock()
-    count_inflight_simple = 0
-    count_inflight_subprocess = 0
 
     def __init__(self, ctx, source_project, target_project, config):
         """
@@ -31,95 +19,30 @@ class PartFactoryBrep(PartFactoryFile):
         with pc_logging.Action("InitBREP", target_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config, extension=".brep")
             self._create(config)
-            self.runtime = None  # Lazy initialization for subprocess runtime
+            self.runtime = None  # Lazy initialization for the sandbox runtime
 
     async def instantiate(self, part):
         """
-        Instantiate a BREP part, either using the main thread or a subprocess.
+        Instantiate a BREP part by reading it in a sandbox wrapper.
+
+        Reading a BREP file needs OCCT, so it happens in a sandboxed runtime -
+        the core process never touches a CAD library. The factory just forwards
+        the resulting BREP envelope.
         """
         await super().instantiate(part)
 
         with pc_logging.Action("BREP", part.project_name, part.name):
-            file_size = os.path.getsize(self.path)
-            do_subprocess = self._should_use_subprocess(file_size)
-
-            # Load shape via subprocess or direct method
-            if do_subprocess:
-                shape = await self._process_brep_subprocess()
-            else:
-                shape = self._load_brep_directly()
-
-            # Update counters
-            with PartFactoryBrep.lock:
-                if do_subprocess:
-                    PartFactoryBrep.count_inflight_subprocess -= 1
-                else:
-                    PartFactoryBrep.count_inflight_simple -= 1
-
-            self.ctx.stats_parts_instantiated += 1
-            return shape
-
-    def _should_use_subprocess(self, file_size):
-        """
-        Determine whether to use a subprocess based on inflight counts and file size.
-        """
-        with PartFactoryBrep.lock:
-            if (
-                PartFactoryBrep.count_inflight_simple < PartFactoryBrep.MIN_SIMPLE_INFLIGHT
-                or file_size < PartFactoryBrep.MIN_SUBPROCESS_FILE_SIZE
-            ):
-                PartFactoryBrep.count_inflight_simple += 1
-                return False
-            else:
-                PartFactoryBrep.count_inflight_subprocess += 1
-                return True
-
-    def _load_brep_directly(self):
-        """
-        Load a BREP file directly in the main thread.
-        """
-        time.sleep(0.0001)  # Brief pause for thread synchronization
-        try:
-            # In-process direct load (Tier 2): OCP imported lazily so this
-            # module stays off the 'import partcad' OCP path.
-            from OCP.BRep import BRep_Builder
-            from OCP.BRepTools import BRepTools
-            from OCP.TopoDS import TopoDS_Shape
-
-            shape = TopoDS_Shape()
-            builder = BRep_Builder()
-            brep_tools = BRepTools()
-
-            if not brep_tools.Read_s(shape, self.path, builder):
-                raise FileReadError(f"Failed to load BREP file: {self.path}")
-
-            return shape
-        except Exception as e:
-            pc_logging.error(f"Error loading BREP file: {e}")
-            raise
-
-    async def _process_brep_subprocess(self):
-        """
-        Process a BREP file using a subprocess for larger files.
-        """
-        # Initialize runtime if not already done
-        if self.runtime is None:
-            pc_logging.debug("Initializing subprocess runtime...")
-            self.runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
             if self.runtime is None:
-                raise RuntimeError("Failed to initialize runtime for subprocess execution.")
-            pc_logging.debug(f"Subprocess runtime initialized: {self.runtime}")
+                self.runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
 
-        wrapper_path = wrapper.get("brep.py")
-        request = {"build_parameters": {}}
+            wrapper_path = wrapper.get("brep.py")
+            request = {
+                "build_parameters": {},
+                "name": "%s:%s" % (part.project_name, part.name),
+                "label": part.name,
+            }
+            request_serialized = shape_envelope.serialize(request)
 
-        # Serialize the request
-        request["name"] = "%s:%s" % (part.project_name, part.name)
-        request["label"] = part.name
-        request_serialized = ocp_serialize.serialize(request)
-
-        # Run the subprocess and handle the response
-        try:
             command = [
                 wrapper_path,
                 os.path.abspath(self.path),
@@ -129,19 +52,16 @@ class PartFactoryBrep(PartFactoryFile):
                 command,
                 request_serialized,
             )
-            if exitcode != 0 and len(errors) == 0:
-                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
-
+            if exitcode != 0 and not errors:
+                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
             if errors:
                 pc_logging.error(errors)
                 raise Exception(errors)
 
-            response = ocp_serialize.deserialize(response_serialized)
+            response = shape_envelope.deserialize(response_serialized)
             if not response.get("success", False):
                 pc_logging.error(response["exception"])
                 raise PartFactoryError(response["exception"])
 
+            self.ctx.stats_parts_instantiated += 1
             return response["shape"]
-        except Exception as e:
-            pc_logging.error(f"Subprocess execution failed: {e}")
-            raise
