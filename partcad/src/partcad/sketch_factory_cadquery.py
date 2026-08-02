@@ -8,14 +8,11 @@
 #
 
 import os
-import sys
 
 from .sketch_factory_python import SketchFactoryPython
 from . import wrapper
+from . import shape_envelope
 from . import logging as pc_logging
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
 
 from . import sandbox_versions
 from . import telemetry
@@ -72,7 +69,8 @@ class SketchFactoryCadquery(SketchFactoryPython):
             # Serialize the request
             request["name"] = "%s:%s" % (sketch.project_name, sketch.name)
             request["label"] = sketch.name
-            request_serialized = ocp_serialize.serialize(request)
+            request["kind"] = "sketch"
+            request_serialized = shape_envelope.serialize(request)
 
             await self.runtime.ensure_async(
                 sandbox_versions.OCP_TESSELLATE,
@@ -121,7 +119,7 @@ class SketchFactoryCadquery(SketchFactoryPython):
                     sketch.error("%s: %s" % (sketch.name, error_line))
 
             try:
-                result = ocp_serialize.deserialize(response_serialized)
+                result = shape_envelope.deserialize(response_serialized)
                 pc_logging.debug("Response: %s" % result)
             except Exception as e:
                 sketch.error("Exception while deserializing %s: %s" % (sketch.name, e))
@@ -133,62 +131,10 @@ class SketchFactoryCadquery(SketchFactoryPython):
 
             self.ctx.stats_sketches_instantiated += 1
 
-            if result["shapes"] is None:
+            # The wrapper compounded the sketch's edges/wires/faces and split out
+            # the components (see wrapper_common.combine); the factory just
+            # forwards the envelope, with no OCP.
+            sketch.components = result.get("components", [])
+            if not sketch.components:
                 return None
-            if len(result["shapes"]) == 0:
-                return None
-            if len(result["shapes"]) == 1:
-                return result["shapes"][0]
-
-            # In-process compound assembly (Tier 2): OCP is imported lazily so
-            # this module stays off the 'import partcad' OCP path.
-            from OCP.gp import gp_Ax1
-            from OCP.TopoDS import (
-                TopoDS_Builder,
-                TopoDS_Compound,
-                TopoDS_Edge,
-                TopoDS_Wire,
-                TopoDS_Face,
-            )
-            from OCP.TopLoc import TopLoc_Location
-
-            builder = TopoDS_Builder()
-            compound = TopoDS_Compound()
-            builder.MakeCompound(compound)
-
-            def process(shapes, components_list):
-                for shape in shapes:
-                    # pc_logging.info("Returned: %s" % type(shape))
-                    try:
-                        if shape is None or isinstance(shape, str):
-                            # pc_logging.info("String: %s" % shape)
-                            continue
-
-                        if isinstance(shape, list):
-                            child_component_list = list()
-                            process(shape, child_component_list)
-                            components_list.append(child_component_list)
-                            continue
-
-                        # TODO(clairbee): add support for the below types
-                        if isinstance(shape, TopLoc_Location) or isinstance(shape, gp_Ax1):
-                            continue
-
-                        if (
-                            isinstance(shape, TopoDS_Edge)
-                            or isinstance(shape, TopoDS_Wire)
-                            or isinstance(shape, TopoDS_Face)
-                        ):
-                            builder.Add(compound, shape)
-                            components_list.append(shape)
-                        elif False:
-                            # TODO(clairbee) Add all metadata types here
-                            components_list.append(shape)
-                        else:
-                            pc_logging.error("Unsupported shape type: %s" % type(shape))
-                    except Exception as e:
-                        pc_logging.error("Error adding shape to compound: %s" % e)
-
-            process(result["shapes"], sketch.components)
-
-            return compound
+            return result["shape"]

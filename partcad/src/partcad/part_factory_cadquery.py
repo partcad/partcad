@@ -11,7 +11,6 @@ import os
 
 from .part_factory_python import PartFactoryPython
 from . import wrapper
-from . import transform
 from . import shape_envelope
 from . import logging as pc_logging
 
@@ -75,6 +74,7 @@ class PartFactoryCadquery(PartFactoryPython):
             with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{shape_envelope.serialize}"):
                 request["name"] = "%s:%s" % (part.project_name, part.name)
                 request["label"] = part.name
+                request["kind"] = "part"
                 request_serialized = shape_envelope.serialize(request)
 
             await self.runtime.ensure_async(
@@ -138,12 +138,10 @@ class PartFactoryCadquery(PartFactoryPython):
 
             self.ctx.stats_parts_instantiated += 1
 
-            if result["shapes"] is None:
+            # The wrapper already compounded the result and split out the
+            # components (see wrapper_common.combine), so the factory just
+            # forwards the envelope - no OCP, no extra round-trip.
+            part.components = result.get("components", [])
+            if not part.components:
                 return None
-            if len(result["shapes"]) == 0:
-                return None
-            if len(result["shapes"]) == 1:
-                return result["shapes"][0]
-
-            with telemetry.start_as_current_span("*PartFactoryCadquery.instantiate.{transform.compound}"):
-                return await transform.compound(self.ctx, result["shapes"])
+            return result["shape"]
