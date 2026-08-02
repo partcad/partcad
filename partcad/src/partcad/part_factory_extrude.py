@@ -7,22 +7,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import os
-import sys
-
 from .part_factory import PartFactory
 from .sketch import Sketch
 from . import logging as pc_logging
-
+from . import wrapper
+from . import shape_envelope
+from . import sandbox_versions
 from . import telemetry
-
-# This factory builds the solid in-process, so it needs the sketch as a live
-# shape; get_wrapped() returns a BREP envelope, so decode it with the sandbox
-# codec. 'ocp_serialize' is import-safe (it imports OCP lazily); the direct OCP
-# imports are made lazily in instantiate() so this module stays off the
-# 'import partcad' OCP path.
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
 
 
 @telemetry.instrument()
@@ -65,23 +56,43 @@ class PartFactoryExtrude(PartFactory):
 
     async def instantiate(self, part):
         with pc_logging.Action("Extrude", part.project_name, part.name):
-            shape = None
             try:
-                from OCP.gp import gp_Vec
-                from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
-
                 self.sketch = self.ctx.get_sketch(self.source_sketch_spec)
+                sketch_env = await self.sketch.get_wrapped(self.ctx)
+                if sketch_env is None:
+                    part.error("%s: %s: the source sketch produced no shape" % (part.project_name, part.name))
+                    return None
 
-                sketch_shape = ocp_serialize.decode_shape(await self.sketch.get_wrapped(self.ctx))
-                maker = BRepPrimAPI_MakePrism(
-                    sketch_shape,
-                    gp_Vec(0.0, 0.0, self.depth),
+                # The extrusion (OCCT BRepPrimAPI) runs in a sandbox: the source
+                # sketch and the resulting solid cross as BREP envelopes, so the
+                # core process never touches a live OCP object.
+                runtime = self.ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
+                await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+
+                wrapper_path = wrapper.get("extrude.py")
+                request = {
+                    "sketch": sketch_env,
+                    "depth": self.depth,
+                    "name": "%s:%s" % (part.project_name, part.name),
+                    "label": part.name,
+                }
+                request_serialized = shape_envelope.serialize(request)
+                exitcode, response_serialized, errors = await runtime.run_async(
+                    [wrapper_path, "extrude"], request_serialized
                 )
-                maker.Build()
-                shape = maker.Shape()
+                if exitcode != 0 and not errors:
+                    errors = "%s: %s: extrude failed with exit code %s" % (part.project_name, part.name, exitcode)
+                if errors:
+                    pc_logging.error(errors)
+                    raise Exception(errors)
+
+                result = shape_envelope.deserialize(response_serialized)
+                if not result["success"]:
+                    part.error("%s: %s" % (part.name, result["exception"]))
+                    return None
+
+                self.ctx.stats_parts_instantiated += 1
+                return result["shape"]
             except Exception as e:
                 pc_logging.exception("Failed to create an extruded part: %s" % e)
-
-            self.ctx.stats_parts_instantiated += 1
-
-            return shape
+                return None

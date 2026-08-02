@@ -7,18 +7,12 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import os
-import sys
-
 from .part_factory import PartFactory
 from .sketch import Sketch
 from . import logging as pc_logging
-
-# This factory builds the solid in-process, so it needs the sketch as a live
-# shape; get_wrapped() returns a BREP envelope, so decode it with the sandbox
-# codec (OCP is already a dependency of this in-process factory).
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
+from . import wrapper
+from . import shape_envelope
+from . import sandbox_versions
 
 
 class PartFactorySweep(PartFactory):
@@ -74,121 +68,46 @@ class PartFactorySweep(PartFactory):
 
     async def instantiate(self, part):
         with pc_logging.Action("Sweep", part.project_name, part.name):
-            shape = None
             try:
                 self.sketch = self.project.ctx.get_sketch(self.source_sketch_spec)
+                sketch_env = await self.sketch.get_wrapped(self.ctx)
+                if sketch_env is None:
+                    part.error("%s: %s: the source sketch produced no shape" % (part.project_name, part.name))
+                    return None
 
-                # Convert path points to TColgp_Array1OfPnt
-                from OCP.TColgp import TColgp_Array1OfPnt
-                from OCP.gp import gp_Pnt
+                # The sweep (Bezier path plus OCCT BRepOffsetAPI_MakePipe) runs in
+                # a sandbox: the source sketch and the swept solid cross as BREP
+                # envelopes and the path is plain data, so the core never touches
+                # a live OCP object.
+                runtime = self.ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
+                await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
 
-                # Decide how many points to create
-                num_points = len(self.axis) + 1 if self.ratio is None else len(self.axis) * 3 - 1
+                wrapper_path = wrapper.get("sweep.py")
+                request = {
+                    "sketch": sketch_env,
+                    "axis": self.axis,
+                    "ratio": self.ratio,
+                    "accumulate": self.accumulate,
+                    "name": "%s:%s" % (part.project_name, part.name),
+                    "label": part.name,
+                }
+                request_serialized = shape_envelope.serialize(request)
+                exitcode, response_serialized, errors = await runtime.run_async(
+                    [wrapper_path, "sweep"], request_serialized
+                )
+                if exitcode != 0 and not errors:
+                    errors = "%s: %s: sweep failed with exit code %s" % (part.project_name, part.name, exitcode)
+                if errors:
+                    pc_logging.error(errors)
+                    raise Exception(errors)
 
-                # Create the array of points
-                points = TColgp_Array1OfPnt(1, num_points)
+                result = shape_envelope.deserialize(response_serialized)
+                if not result["success"]:
+                    part.error("%s: %s" % (part.name, result["exception"]))
+                    return None
 
-                # Set first point
-                points.SetValue(1, gp_Pnt(0, 0, 0))
-
-                # Create the rest of the points
-                xAcc, yAcc, zAcc = 0.0, 0.0, 0.0
-                for i, point in enumerate(self.axis, 1):
-                    x, y, z = point
-
-                    if self.ratio is not None:
-                        if i != 1:
-                            points.SetValue(
-                                3 * i - 2,
-                                gp_Pnt(
-                                    xAcc + x * (1 - self.ratio),
-                                    yAcc + y * (1 - self.ratio),
-                                    zAcc + z * (1 - self.ratio),
-                                ),
-                            )
-                        if i != len(self.axis):
-                            points.SetValue(
-                                3 * i - 1,
-                                gp_Pnt(
-                                    xAcc + x * self.ratio,
-                                    yAcc + y * self.ratio,
-                                    zAcc + z * self.ratio,
-                                ),
-                            )
-                            points.SetValue(3 * i, gp_Pnt(xAcc + x, yAcc + y, zAcc + z))
-                        else:
-                            points.SetValue(3 * i - 1, gp_Pnt(xAcc + x, yAcc + y, zAcc + z))
-                    else:
-                        points.SetValue(i + 1, gp_Pnt(xAcc + x, yAcc + y, zAcc + z))
-
-                    if self.accumulate:
-                        xAcc += x
-                        yAcc += y
-                        zAcc += z
-
-                # Create a Bezier curve through the points
-                from OCP.Geom import Geom_BezierCurve
-                from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
-
-                curve = Geom_BezierCurve(points)
-                edge_maker = BRepBuilderAPI_MakeEdge(curve)
-                edge = edge_maker.Edge()
-                wire_maker = BRepBuilderAPI_MakeWire(edge)
-                self.axis_approx = wire_maker.Wire()
-
-                # # Create a wire through the points (for debugging)
-                # from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
-                # from OCP.BRep import BRep_Tool
-                # wire_maker = BRepBuilderAPI_MakeWire()
-                # for i in range(1, num_points):
-                #     current = i
-                #     next = i + 1
-                #     if self.ratio is not None:
-                #         if i % 3 == 0:
-                #             continue
-                #         if (i + 1) % 3 == 0:
-                #             next = i + 2
-                #     edge_maker = BRepBuilderAPI_MakeEdge(points.Value(current), points.Value(next))
-                #     edge = edge_maker.Edge()
-                #     wire_maker.Add(edge)
-                # self.axis_wire = wire_maker.Wire()
-                # from OCP.TopoDS import TopoDS_Builder, TopoDS_Compound
-                # builder = TopoDS_Builder()
-                # compound = TopoDS_Compound()
-                # builder.MakeCompound(compound)
-                # builder.Add(compound, self.axis_approx)
-                # builder.Add(compound, self.axis_wire)
-                # shape = compound
-
-                # Note: The above code can be used for debugging the curve instead of the below code
-                # TODO(clairbee): Drop the Bezier curve and use the `axis_wire` constructed above, but
-                #                 replace the cut corners with elliptic arcs that connect the edges smoothly
-
-                faces = ocp_serialize.decode_shape(await self.sketch.get_wrapped(self.ctx))
-
-                from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipe
-                from OCP.TopExp import TopExp_Explorer
-                from OCP.TopAbs import TopAbs_FACE
-                from OCP.TopoDS import TopoDS_Builder, TopoDS_Compound
-
-                builder = TopoDS_Builder()
-                compound = TopoDS_Compound()
-                builder.MakeCompound(compound)
-
-                exp = TopExp_Explorer(faces, TopAbs_FACE)
-                while exp.More():
-                    face = exp.Current()
-                    maker = BRepOffsetAPI_MakePipe(self.axis_approx, face)
-                    maker.Build()
-                    shape = maker.Shape()
-                    builder.Add(compound, shape)
-                    exp.Next()
-
-                shape = compound
-
+                self.ctx.stats_parts_instantiated += 1
+                return result["shape"]
             except Exception as e:
                 pc_logging.exception(f"Failed to create a swept part: {e}")
-
-            self.ctx.stats_parts_instantiated += 1
-
-            return shape
+                return None
