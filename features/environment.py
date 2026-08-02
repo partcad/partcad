@@ -104,18 +104,25 @@ def before_all(context: Context) -> None:
     # scenario adds to it is removed again in after_scenario; see sandbox_venvs.
     context.sandbox_baseline = sandbox_venvs() if context.seed_state_dir else set()
 
-    # Pruning is only safe while this process is the sandbox's only user.
-    # behavex runs several behave processes against the same shared sandbox and
-    # tells each one its worker id, so a worker past the first must leave other
-    # workers' venvs alone: "appeared since seeding" cannot distinguish one this
-    # scenario made from one another worker is running out of right now.
-    # Serial `behave`, which is how CI shards run, has no such reader.
-    worker = str(context.config.userdata.get("worker_id", "0"))
-    context.sandbox_exclusive = worker in ("", "0")
+    # Pruning is only safe while this process is the sandbox's only user, so the
+    # test is "is anything else possibly running", not "am I the first worker".
+    # "A venv that appeared since seeding" cannot distinguish one this scenario
+    # built from one another worker is running a scenario out of right now, and
+    # deleting the latter fails that scenario unreproducibly.
+    #
+    # behavex passes a worker id to every behave it starts, 0 for its serial
+    # path and 1..N for its parallel one - but reading that number cannot
+    # separate "serial" from "the worker that happened to be numbered 0", so
+    # its mere presence is what disqualifies pruning. Plain `behave`, which is
+    # how CI runs each shard, passes nothing and is the only case that prunes.
+    # Under behavex the venvs accumulate for the run instead: that costs disk,
+    # where pruning them would cost correctness.
+    worker = context.config.userdata.get("worker_id")
+    context.sandbox_exclusive = worker is None
     if not context.sandbox_exclusive:
         logging.info(
-            "Parallel worker %s: leaving the shared sandbox alone. Venvs built by scenarios will "
-            "accumulate for this run; that is disk, where pruning them would be a race.",
+            "behavex worker %s: leaving the shared sandbox alone, since other workers may be using it. "
+            "Scenario venvs will accumulate for this run.",
             worker,
         )
 
