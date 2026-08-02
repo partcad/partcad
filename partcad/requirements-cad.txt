@@ -1,7 +1,10 @@
-# Optional 'cad' extra: the live build123d object API (convert("build123d") /
-# get_part_build123d / Context.get_part_build123d). The core does not need
-# build123d otherwise - it builds and exports shapes in sandboxed runtimes.
-# 'ocpsvg' is pulled in transitively by build123d; it is pinned here to match
-# the version the render sandboxes use.
+# Optional 'cad' extra: the CAD libraries the core needs only for its opt-in,
+# in-process features - convert("build123d"/"cadquery") and the deprecated
+# get_part_build123d/get_part_cadquery accessors, show() (the OCP CAD Viewer),
+# and 'pc import assembly' (the STEP-CAF reader). Everything else - building,
+# rendering and exporting parts, sketches and assemblies - happens in sandboxed
+# runtimes that install their own copies, so a plain 'pip install partcad' needs
+# none of these. Pinned to the versions the sandboxes use (see sandbox_versions).
+cadquery-ocp==7.9.3.1.1
 build123d==0.11.1
 ocpsvg==0.6.0

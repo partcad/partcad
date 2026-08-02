@@ -1,9 +1,10 @@
-cadquery-ocp==7.9.3.1.1
-# 'build123d' and 'ocpsvg' are no longer hard runtime dependencies: the core
-# imports neither at import time, builds/exports shapes in sandboxed runtimes,
-# and only needs build123d for the opt-in convert("build123d") live-object API.
-# They are available as the 'cad' optional extra (see requirements-cad.txt).
-# 'ocpsvg' is unused by the core entirely (sandboxes install it themselves).
+# No CAD library is a hard runtime dependency of the core any more. PartCAD
+# builds, renders and exports every shape in sandboxed runtimes (which install
+# their own copy - see sandbox_versions), and carries geometry between them as
+# BREP-byte envelopes rather than live OCP objects. cadquery-ocp, build123d and
+# ocpsvg are the optional 'cad' extra (see requirements-cad.txt), needed only by
+# the opt-in in-process features: convert("build123d"/"cadquery"), show() and
+# 'pc import assembly'.
 # sdf-fork  # installed on demand into the sandbox runtime (see part_factory_sdf.py)
 pyyaml>=6.0.1
 pygit2>=1.15.0
