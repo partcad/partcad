@@ -8,7 +8,6 @@
 #
 
 import asyncio
-import math
 import re
 
 import threading
@@ -189,36 +188,22 @@ class InterfaceParameter:
         if self.max is not None and value > self.max:
             pc_logging.warning("Parameter %s: value above maximum: %f" % (self.name, value))
 
-        # The freedom-of-movement offset is an OCCT gp_Trsf: it is composed with
-        # other gp_Trsf in the assembly connection logic. Imported lazily so this
-        # module stays OCP-free at import time.
-        from OCP.gp import gp_Trsf, gp_Ax1, gp_Pnt, gp_Dir, gp_Vec
-
-        trsf = gp_Trsf()
+        # The freedom-of-movement offset is a rigid transform that the assembly
+        # connection logic composes into the connection location. It is a
+        # pc.Location built with pure-Python math - no OCP. A "move" is a pure
+        # translation; a "turn" is a rotation about 'dir' through the origin.
         if self.type == PARAM_MOVE:
             if value != 0:
-                trsf.SetTranslationPart(
-                    gp_Vec(
-                        self.dir[0] * value,
-                        self.dir[1] * value,
-                        self.dir[2] * value,
+                return [
+                    Location(
+                        (self.dir[0] * value, self.dir[1] * value, self.dir[2] * value),
+                        (0, 0, 1),
+                        0,
                     )
-                )
-                return [trsf]
+                ]
         elif self.type == PARAM_TURN:
             if value != 0:
-                trsf.SetRotation(
-                    gp_Ax1(
-                        gp_Pnt(),
-                        gp_Dir(
-                            self.dir[0],
-                            self.dir[1],
-                            self.dir[2],
-                        ),
-                    ),
-                    value * math.pi / 180.0,
-                )
-                return [trsf]
+                return [Location((0, 0, 0), (self.dir[0], self.dir[1], self.dir[2]), value)]
         return []
 
 

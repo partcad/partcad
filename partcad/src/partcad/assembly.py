@@ -7,31 +7,19 @@
 # Licensed under Apache License, Version 2.0.
 
 import asyncio
-import os
-import sys
 import typing
 
 from . import telemetry
+from . import shape_envelope
 from .geom import Location
 from .shape import Shape
 from .shape_ai import ShapeWithAi
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
 
-# This module is on the 'import partcad' path, so it imports neither build123d
-# nor OCP at module scope. The assembly compound is composed with OCCT directly
-# (via the sandbox codec 'ocp_serialize'), which is imported lazily - only when
-# an assembly is actually built or serialized, never at import time.
-_WRAPPERS_DIR = os.path.join(os.path.dirname(__file__), "wrappers")
-
-
-def _ocp_serialize():
-    """Import the OCP-backed shape codec lazily (keeps OCP off the import path)."""
-    if _WRAPPERS_DIR not in sys.path:
-        sys.path.append(_WRAPPERS_DIR)
-    import ocp_serialize
-
-    return ocp_serialize
+# This module needs no CAD library at all: an assembly is built as a nested
+# BREP-envelope object with child placements carried as plain data, and the
+# geometry is only realized (with OCP) later, inside a sandbox wrapper.
 
 
 class AssemblyChild:
@@ -81,21 +69,26 @@ class Assembly(ShapeWithAi):
             return await self._get_shape_real(ctx)
 
     async def _get_shape_real(self, ctx):
-        ocp_serialize = _ocp_serialize()
+        """Build this assembly as a nested BREP-envelope object.
+
+        Rather than decoding children and compounding them into a flat TopoDS in
+        the core process, the assembly is populated incrementally into the same
+        {name, label, assembly: [...]} object the wrappers produce: each child
+        contributes its own envelope plus its placement, carried as plain data
+        (KEY_LOCATION). The geometry-side codec (ocp_serialize.decode_shape)
+        applies the placements only when the tree is finally realized in a
+        sandbox, so building an assembly needs no CAD library in the core at all.
+        This is also what get_wrapped() caches - no separate serialization pass.
+        """
 
         @telemetry.start_as_current_span_async("Assembly._get_shape_real.per_child")
         async def per_child(child):
-            # get_wrapped() hands back the child's BREP envelope (or None when the
-            # shape could not be built). Decode it to a live TopoDS and compose
-            # the compound with OCCT directly - the core no longer routes through
-            # build123d to fetch child shapes, so building an assembly needs only
-            # cadquery-ocp, not build123d.
             envelope = await child.item.get_wrapped(ctx)
             if envelope is None:
                 # A child whose shape is missing, most often because its wrapper
                 # process died before producing any output. Report which child
                 # failed here, rather than let it surface as an opaque failure
-                # deeper in the compound assembly.
+                # later on.
                 child_name = "%s:%s" % (
                     getattr(child.item, "project_name", "<unknown>"),
                     getattr(child.item, "name", "<unknown>"),
@@ -107,34 +100,24 @@ class Assembly(ShapeWithAi):
                 )
                 self.error(msg)
                 raise Exception(msg)
-            shape = ocp_serialize.decode_shape(envelope)
-            if child.location is not None:
-                # 'child.location.wrapped' is a TopLoc_Location (both pc.Location
-                # and build123d's Location expose it); 'Located' places the child
-                # at that absolute location. Labels are metadata that the flat
-                # compound cannot carry - they survive in the cached tree instead
-                # (see get_cache_value/_serialize_children).
-                shape = shape.Located(child.location.wrapped)
-            return shape
+            name, label = self._child_name_label(child)
+            return self._place(envelope, child.location, name, label)
 
         if len(self.children) == 0:
             pc_logging.warning("The assembly %s:%s is empty" % (self.project_name, self.name))
 
+        # Children are built concurrently but collected in declaration order, so
+        # the resulting tree - and every artifact derived from it - is stable
+        # across runs regardless of which child's wrapper happens to finish first.
         tasks = [asyncio.create_task(per_child(child)) for child in self.children]
+        children = list(await asyncio.gather(*tasks))
 
-        # The children are still built concurrently, but they are collected in the
-        # order they are declared in, not in the order the workers happen to finish.
-        # Completion order varies from run to run (a part loaded from a STEP file
-        # finishes long before one built by CadQuery), and it ends up baked into the
-        # resulting compound, making rendered artifacts differ between otherwise
-        # identical runs.
-        child_shapes = list(await asyncio.gather(*tasks))
-
-        compound = ocp_serialize.compound_of(child_shapes)
+        name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
+        envelope = {"name": name, "label": self.name, shape_envelope.KEY_ASSEMBLY: children}
         root = self._root_location()
         if root is not None:
-            compound = compound.Located(root.wrapped)
-        return compound
+            envelope[shape_envelope.KEY_LOCATION] = root.as_packed()
+        return envelope
 
     def _root_location(self):
         """The assembly's own location as a geom.Location, or None."""
@@ -152,59 +135,22 @@ class Assembly(ShapeWithAi):
         label = child.name if child.name is not None else item_name
         return name, label
 
-    async def _serialize_children(self, ctx, parent_location):
-        """The nested shape/assembly objects for this assembly's children.
+    def _place(self, child_env, placement, name, label):
+        """The child's envelope re-stamped for this assembly.
 
-        Locations accumulate down the tree: a child at 'child.location' inside a
-        parent at 'parent_location' sits at 'parent_location * child.location'.
-        Leaf parts carry their fully accumulated world location in the BREP, and
-        sub-assemblies recurse - so the tree decodes back to the same geometry as
-        the flat compound while keeping every name, label and level.
+        The child keeps its own geometry and, if it is a sub-assembly, its own
+        internal location; this assembly's placement of the child is composed
+        onto that (placement first, then the child's own) and carried as data.
         """
-        # Make sure this (sub-)assembly's children are populated - a cache hit on
-        # get_wrapped() would otherwise have skipped instantiation.
-        await self.do_instantiate()
-
-        ocp_serialize = _ocp_serialize()
-        children = []
-        for child in self.children:
-            if child.location is None:
-                loc = parent_location
-            elif parent_location is None:
-                loc = child.location
-            else:
-                loc = parent_location * child.location
-
-            name, label = self._child_name_label(child)
-            item = child.item
-
-            if isinstance(item, Assembly):
-                sub = await item._serialize_children(ctx, loc)
-                children.append(ocp_serialize.encode_assembly(sub, name=name, label=label))
-            else:
-                # get_wrapped() hands back a BREP envelope, not a live shape.
-                # Decode it here to bake in the accumulated world location - this
-                # is the assembly's own in-process OCP use (Tier 1) - then
-                # re-encode the located shape back into the tree.
-                envelope = await item.get_wrapped(ctx)
-                if envelope is None:
-                    continue
-                shape = ocp_serialize.decode_shape(envelope)
-                if loc is not None:
-                    shape = shape.Located(loc.wrapped)
-                children.append(ocp_serialize.encode_shape(shape, name=name, label=label))
-        return children
-
-    async def get_cache_value(self, ctx, shape):
-        """Cache the assembly as its nested tree, not a flat compound.
-
-        The tree preserves the hierarchy - names, labels and sub-assemblies -
-        and decodes back (via ocp_serialize.decode_shape) to a TopoDS_Compound
-        equal to the geometry returned by get_wrapped().
-        """
-        children = await self._serialize_children(ctx, self._root_location())
-        name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
-        return _ocp_serialize().encode_assembly(children, name=name, label=self.name)
+        entry = dict(child_env)
+        entry["name"] = name
+        entry["label"] = label
+        if placement is not None:
+            placement = placement if isinstance(placement, Location) else Location(placement)
+            own = child_env.get(shape_envelope.KEY_LOCATION)
+            composed = placement if own is None else (placement * Location(own))
+            entry[shape_envelope.KEY_LOCATION] = composed.as_packed()
+        return entry
 
     async def get_bom(self):
         with self.lock:

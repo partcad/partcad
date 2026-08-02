@@ -124,10 +124,11 @@ class _SlowChild:
         )
 
 
-def _child_offsets(wrapped):
-    """The X offset of every immediate child of a compound, in compound order."""
+def _child_offsets(envelope):
+    """The X offset of every immediate child of the assembly, in tree order."""
+    compound = ocp_serialize.decode_shape(envelope)
     offsets = []
-    it = TopoDS_Iterator(wrapped)
+    it = TopoDS_Iterator(compound)
     while it.More():
         offsets.append(it.Value().Location().Transformation().TranslationPart().X())
         it.Next()
@@ -135,7 +136,7 @@ def _child_offsets(wrapped):
 
 
 def test_assembly_child_order_is_declaration_order():
-    """Children are compounded in declaration order, not in the order they finish.
+    """Children are placed in declaration order, not in the order they finish.
 
     The children are given decreasing build times, so they always finish in the
     exact reverse of the order they are declared in. Collecting them as they
@@ -148,9 +149,11 @@ def test_assembly_child_order_is_declaration_order():
             AssemblyChild(
                 _SlowChild("child_%d" % i, delay=0.25 - i * 0.05),
                 "child_%d" % i,
-                b3d.Location((x, 0.0, 0.0)),
+                pc.Location((x, 0.0, 0.0), (0, 0, 1), 0),
             )
         )
 
-    wrapped = asyncio.run(assembly._get_shape_real(None))
-    assert _child_offsets(wrapped) == expected
+    # _get_shape_real() now returns the nested assembly envelope; decode it to
+    # a compound to read the child placements back.
+    envelope = asyncio.run(assembly._get_shape_real(None))
+    assert _child_offsets(envelope) == expected

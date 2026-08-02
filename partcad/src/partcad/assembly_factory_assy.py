@@ -758,11 +758,12 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         # TODO(clairbee): Do we need to support this?
                         pc_logging.warning("Peer port auto-detection has failed: %s" % name)
 
-                    turn_around = Location(
-                        (0, 0, 0),
-                        (0.71, 0.71, 0),
-                        180,
-                    ).wrapped.Transformation()
+                    # Pure-Python rigid-transform algebra (geom.Location): the
+                    # connection location is the target part/port placement,
+                    # flipped to face the source, offset by the freedom-of-movement
+                    # parameters, and pulled back by the source port. gp_Trsf.Multiply
+                    # composed left-to-right, which is exactly Location '*'.
+                    turn_around = Location((0, 0, 0), (0.71, 0.71, 0), 180)
 
                     if source_port is not None and target_port is not None:
                         pc_logging.debug(
@@ -775,16 +776,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             )
                         )
 
-                        trsf = target_part_location.wrapped.Transformation()
-                        trsf.Multiply(target_port.location.wrapped.Transformation())
-                        trsf.Multiply(turn_around)
+                        location = target_part_location * target_port.location * turn_around
                         for target_offset in target_offsets:
                             pc_logging.debug("Target offset: %s" % target_offset)
-                            trsf.Multiply(target_offset)
+                            location = location * target_offset
                         for source_offset in source_offsets:
-                            trsf.Multiply(source_offset)
-                        trsf.Multiply(source_port.location.wrapped.Transformation().Inverted())
-                        location = Location(trsf)
+                            location = location * source_offset
+                        location = location * source_port.location.inverse()
                     elif source_port is None and target_port is not None:
                         pc_logging.debug(
                             "Connected %s to %s of %s"
@@ -795,25 +793,18 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                             )
                         )
 
-                        trsf = target_part_location.wrapped.Transformation()
-                        trsf.Multiply(target_port.location.wrapped.Transformation())
-                        trsf.Multiply(turn_around)
+                        location = target_part_location * target_port.location * turn_around
                         for target_offset in target_offsets:
-                            trsf.Multiply(target_offset)
-                        location = Location(trsf)
+                            location = location * target_offset
                     elif source_port is not None and target_port is None:
                         pc_logging.debug("Connected %s of %s to %s" % (connect_with_port, name, connect_to_name))
-                        trsf = target_part_location.wrapped.Transformation()
-                        trsf.Multiply(turn_around)
+                        location = target_part_location * turn_around
                         for source_offset in source_offsets:
-                            trsf.Multiply(source_offset)
-                        trsf.Multiply(source_port.location.wrapped.Transformation().Inverted())
-                        location = Location(trsf)
+                            location = location * source_offset
+                        location = location * source_port.location.inverse()
                     elif source_port is None and target_port is None:
                         pc_logging.debug("Connected %s to %s" % (name, connect_to_name))
-                        trsf = target_part_location.wrapped.Transformation()
-                        trsf.Multiply(turn_around)
-                        location = Location(trsf)
+                        location = target_part_location * turn_around
                     else:
                         pc_logging.error("Not enough data to connect %s" % name)
                         location = Location((0, 0, 0), (0, 0, 1), 0)

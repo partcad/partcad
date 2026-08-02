@@ -156,6 +156,9 @@ def downcast(obj):
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
 KEY_BYTES = "__bytes__"
+# Optional on a shape/assembly object: the placement, as the packed
+# [[tx,ty,tz], [ax,ay,az], angle] form, applied when the object is decoded.
+KEY_LOCATION = "location"
 
 
 def _warn(message: str) -> None:
@@ -225,16 +228,42 @@ def is_assembly_object(obj) -> bool:
     return isinstance(obj, dict) and KEY_ASSEMBLY in obj
 
 
+def _toploc_from_packed(packed):
+    """Build a TopLoc_Location from the packed [[t], [axis], angle] location form."""
+    import math
+
+    from OCP.gp import gp_Trsf, gp_Ax1, gp_Pnt, gp_Dir, gp_Vec
+    from OCP.TopLoc import TopLoc_Location
+
+    t, axis, angle = packed
+    trsf = gp_Trsf()
+    trsf.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(axis[0], axis[1], axis[2])), angle * math.pi / 180.0)
+    trsf.SetTranslationPart(gp_Vec(t[0], t[1], t[2]))
+    return TopLoc_Location(trsf)
+
+
+def _apply_location(shape, packed):
+    """Place 'shape' at the packed location, if one is carried; else return it as is."""
+    if packed is None:
+        return shape
+    return shape.Located(_toploc_from_packed(packed))
+
+
 def decode_shape(obj):
     """Turn a shape or assembly object back into OCCT geometry.
 
     A shape object yields its TopoDS_Shape; an assembly object yields a
-    TopoDS_Compound of its children (recursively). name/label are metadata.
+    TopoDS_Compound of its children (recursively). An optional "location" field
+    carried by either kind is applied here - the core builds the assembly tree
+    with locations as plain data and never places geometry itself, so this is
+    where a child's placement becomes an actual TopLoc. name/label are metadata.
     """
+    _ensure_ocp()
     if is_shape_object(obj):
-        return _shape_from_b64(obj[KEY_BREP])
+        return _apply_location(_shape_from_b64(obj[KEY_BREP]), obj.get(KEY_LOCATION))
     if is_assembly_object(obj):
-        return compound_of(decode_shape(child) for child in obj[KEY_ASSEMBLY])
+        compound = compound_of(decode_shape(child) for child in obj[KEY_ASSEMBLY])
+        return _apply_location(compound, obj.get(KEY_LOCATION))
     raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
 
 
@@ -261,7 +290,11 @@ def encode(obj, name=None, label=None):
         # An already-built shape/assembly object keeps its own metadata verbatim.
         if KEY_BREP in obj or KEY_ASSEMBLY in obj:
             return {
-                key: (value if key in (KEY_BREP, KEY_ASSEMBLY, "name", "label") else encode(value, name, label))
+                key: (
+                    value
+                    if key in (KEY_BREP, KEY_ASSEMBLY, KEY_LOCATION, "name", "label")
+                    else encode(value, name, label)
+                )
                 for key, value in obj.items()
             }
         return {key: encode(value, name, label) for key, value in obj.items()}

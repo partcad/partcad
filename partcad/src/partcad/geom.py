@@ -183,6 +183,16 @@ class Location:
 
         return TopLoc_Location(_build_trsf(self._q, self._t))
 
+    def as_packed(self):
+        """This location as the packed [[tx,ty,tz], [ax,ay,az], angle] form.
+
+        The inverse of Location([t, axis, angle]); used to carry a location as
+        plain data in the BREP envelope (see Assembly), where the geometry-side
+        codec turns it back into a TopLoc_Location.
+        """
+        axis, angle = _quat_to_axis_angle(self._q)
+        return [list(self._t), list(axis), angle]
+
     def inverse(self) -> "Location":
         """Return the location that undoes this one."""
         q_inv = _quat_conj(self._q)

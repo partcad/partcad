@@ -31,6 +31,9 @@ import json
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
 KEY_BYTES = "__bytes__"
+# Optional placement on a shape/assembly object, carried opaquely by the core
+# and turned into a real location by the geometry-side codec (ocp_serialize).
+KEY_LOCATION = "location"
 
 
 def is_shape_object(obj) -> bool:
@@ -71,7 +74,11 @@ def encode(obj, name=None, label=None):
         if KEY_BREP in obj or KEY_ASSEMBLY in obj:
             # An already-built shape/assembly object keeps its metadata verbatim.
             return {
-                key: (value if key in (KEY_BREP, KEY_ASSEMBLY, "name", "label") else encode(value, name, label))
+                key: (
+                    value
+                    if key in (KEY_BREP, KEY_ASSEMBLY, KEY_LOCATION, "name", "label")
+                    else encode(value, name, label)
+                )
                 for key, value in obj.items()
             }
         return {key: encode(value, name, label) for key, value in obj.items()}
