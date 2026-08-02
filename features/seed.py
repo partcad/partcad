@@ -56,7 +56,15 @@ from filelock import FileLock
 # and each would drop multi-gigabyte scenario copies inside the very folder CI
 # archives as an artifact. The home directory is identical in every worker and
 # outside anything that gets uploaded.
-BASE_DIR = os.environ.get("PARTCAD_BEHAVE_DIR") or os.path.join(os.path.expanduser("~"), ".partcad-behave")
+#
+# Normalised, because on Windows this arrives from CI as a POSIX-style path and
+# everything derived from it is then joined with backslashes. Python does not
+# care, but `cmd` does: `mklink /J D:/partcad-behave\state\...` reads the
+# forward-slash segment as a switch and fails, which took out every scenario on
+# every Windows shard until the paths were made consistent.
+BASE_DIR = os.path.normpath(
+    os.environ.get("PARTCAD_BEHAVE_DIR") or os.path.join(os.path.expanduser("~"), ".partcad-behave")
+)
 
 # The seed, built once.
 SEED_ROOT = os.path.join(BASE_DIR, "seed")
@@ -485,7 +493,15 @@ def _link_dir(source: str, destination: str) -> None:
     NTFS. Everywhere else a symlink does.
     """
     if platform.system() == "Windows":
-        subprocess.run(["cmd", "/c", "mklink", "/J", destination, source], check=True, capture_output=True)
+        # normpath again rather than trusting the caller: a single forward slash
+        # anywhere in these makes cmd read the rest of the path as switches.
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", os.path.normpath(destination), os.path.normpath(source)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise OSError(f"mklink /J failed ({result.returncode}): {result.stdout.strip()} {result.stderr.strip()}")
     else:
         os.symlink(source, destination, target_is_directory=True)
 
