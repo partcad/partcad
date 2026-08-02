@@ -222,7 +222,7 @@ jobs:
       # PartCAD runs CAD scripts in a conda sandbox it provisions at runtime, so
       # the bundle still needs conda/mamba on PATH -- the one host prerequisite
       # it does not carry, exactly as for the wheels.
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: conda-incubator/setup-miniconda@v4
         with:
           miniforge-version: 24.11.3-0
           use-mamba: true
