@@ -201,6 +201,20 @@ runs:
         python -m pip install --upgrade ./partcad-cli
         python -m pip install --upgrade -r partcad-cli/requirements-dev.txt
         python -m pip install --upgrade -r partcad-ide-vscode/src/test/python_tests/requirements.txt
+        # Re-assert the VTK-enabled cadquery-ocp LAST. build123d (installed above
+        # via requirements-dev.in) depends on 'cadquery-ocp-novtk', which writes
+        # the very same OCP native module as 'cadquery-ocp' but compiled without
+        # VTK. The two are separate distributions that overwrite each other, and
+        # pip resolves a '-r' file as one dependency graph -- it does NOT honour
+        # the line order in that file -- so which build lands last is undefined.
+        # A novtk/VTK mismatch segfaults the in-process CAD stack on the macOS
+        # runners (the tests that import OCP/build123d/cadquery directly). Force
+        # the VTK build to win, mirroring the sandbox re-assert (CADQUERY_OCP is
+        # installed last there -- see partcad/src/partcad/sandbox_versions.py and
+        # runtime_python.FORCE_REINSTALL_FLAGS). Deliberately WITHOUT '--no-deps':
+        # the VTK-enabled module needs its 'vtk' dependency present to load. The
+        # pin is read back from requirements-dev.in to keep it single-sourced.
+        python -m pip install --force-reinstall "$(grep -E '^cadquery-ocp==' partcad/requirements-dev.in)"
         mamba deactivate
 
         # echo "PC_INTERNAL_STATE_DIR=$(mktemp -d)" >> $GITHUB_ENV

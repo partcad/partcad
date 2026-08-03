@@ -27,3 +27,9 @@ nox-poetry==1.2.0
 cadquery-ocp==7.9.3.1.1
 build123d==0.11.1
 ocpsvg==0.6.0
+# ORDER NOTE: build123d depends on 'cadquery-ocp-novtk', which writes the same
+# OCP native module as 'cadquery-ocp' but without VTK. pip resolves this file as
+# one dependency graph and does NOT honour the line order above, so the CI test
+# env re-asserts the VTK-enabled cadquery-ocp last with '--force-reinstall'
+# (.github/actions/setup-all/action.yml), mirroring the sandbox re-assert in
+# sandbox_versions.py (GUARD_INVALIDATED_BY / CADQUERY_OCP installed last).
