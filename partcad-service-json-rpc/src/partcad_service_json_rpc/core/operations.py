@@ -26,6 +26,10 @@ from ..rpc.dispatcher import JsonRpcError
 # PartCAD-specific JSON-RPC error code: a partcad.yaml could not be parsed. The
 # CLI turns this into its "Invalid configuration file" message + exit code.
 INVALID_CONFIG = -32001
+# A user/usage error (bad argument, object not found, unsupported conversion).
+# The CLI turns this into click.UsageError (exit code 2), matching the old
+# in-process commands.
+USAGE_ERROR = -32002
 
 
 def _ctx(session, params):
@@ -440,6 +444,49 @@ def info_object(session, params):
         pc.logging.info("CONFIGURATION: %s" % pformat(obj.config))
         for k, v in obj.info().items():
             pc.logging.info("INFO: %s: %s" % (k, pformat(v)))
+    return None
+
+
+def adhoc_convert(session, params):
+    """Convert a CAD or sketch file between formats, ad-hoc (no package/context).
+
+    A pure file operation: input/output paths are already absolute (resolved by
+    the CLI against the user's cwd). Missing types are inferred from extensions.
+    """
+    from pathlib import Path
+
+    pc = session.ensure_partcad()
+    kind = params.get("kind", "part")
+    if kind == "part":
+        from partcad.shape import PART_EXTENSION_MAPPING as mapping
+        from partcad.adhoc.convert import convert_cad_file as convert_fn
+    else:
+        from partcad.shape import SKETCH_EXTENSION_MAPPING as mapping
+        from partcad.adhoc.convert import convert_sketch_file as convert_fn
+
+    input_path = Path(params["input_filename"])
+    output_filename = params.get("output_filename")
+    output_path = Path(output_filename) if output_filename else None
+
+    ext_to_type = {".%s" % v: k for k, v in mapping.items()}
+    input_type = params.get("input_type") or ext_to_type.get(input_path.suffix.lower())
+    output_type = params.get("output_type") or (ext_to_type.get(output_path.suffix.lower()) if output_path else None)
+
+    if not input_type:
+        pc.logging.error("Cannot infer input type. Please specify --input explicitly.")
+        return None
+    if not output_type:
+        pc.logging.error("Cannot infer output type. Please specify --output explicitly.")
+        return None
+    if output_path is None:
+        output_path = input_path.with_suffix(".%s" % mapping[output_type])
+
+    try:
+        pc.logging.info("Converting %s (%s) to %s (%s)..." % (input_path, input_type, output_path, output_type))
+        convert_fn(str(input_path), input_type, str(output_path), output_type)
+        pc.logging.info("Conversion complete: %s" % output_path)
+    except Exception as e:  # pylint: disable=broad-except
+        pc.logging.error("Error during conversion: %s" % e)
     return None
 
 
@@ -946,6 +993,106 @@ def search_objects(session, params):
         else:
             output += "\t<none>\n"
     pc.logging.info(output)
+    return None
+
+
+def render_objects(session, params):
+    """Render/export parts, assemblies, sketches, or interfaces to files.
+
+    Backs both `pc export` (3D formats) and `pc render` (2D projections); the CLI
+    passes the ``format`` and the ``label`` ("Export"/"Render"). ``output_dir``,
+    when given, is resolved to an absolute path by the CLI so it lands in the
+    user's working directory (the daemon runs elsewhere).
+    """
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+    package = package_obj.name
+
+    fmt = params.get("format")
+    output_dir = params.get("output_dir")
+    object_name = params.get("object")
+
+    with pc.logging.Process(params.get("label", "Render"), package):
+        ctx.option_create_dirs = params.get("create_dirs", False)
+        if params.get("recursive"):
+            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+        else:
+            packages = [package]
+
+        for package in packages:
+            if object_name is not None:
+                package, object_name = pc.utils.resolve_resource_path(package, object_name)
+
+            if object_name is None:
+                ctx.render(project_path=package, format=fmt, output_dir=output_dir)
+            else:
+                sketches, interfaces, parts, assemblies = [], [], [], []
+                if params.get("sketch"):
+                    sketches.append(object_name)
+                elif params.get("interface"):
+                    interfaces.append(object_name)
+                elif params.get("assembly"):
+                    assemblies.append(object_name)
+                else:
+                    parts.append(object_name)
+                prj = ctx.get_project(package)
+                prj.render(
+                    sketches=sketches,
+                    interfaces=interfaces,
+                    parts=parts,
+                    assemblies=assemblies,
+                    format=fmt,
+                    output_dir=output_dir,
+                )
+    return None
+
+
+def convert_object(session, params):
+    """Convert a part or sketch to another format and update its type."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    kind = params.get("kind", "part")
+    object_name = params["object_name"]
+    target_format = params.get("target_format")
+    output_dir = params.get("output_dir")
+    dry_run = params.get("dry_run", False)
+
+    if kind == "part":
+        package = ctx.resolve_package_path(params.get("package") or ".")
+    else:
+        package = params.get("package") if params.get("package") is not None else "."
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        raise JsonRpcError(USAGE_ERROR, "Failed to retrieve the project.")
+
+    from partcad.actions.part import convert_part_action
+    from partcad.actions.sketch import convert_sketch_action
+
+    if kind == "part":
+        action = convert_part_action
+        starting_msg = "Starting conversion: '%s' -> '%s', dry_run=%s" % (object_name, target_format, dry_run)
+        done_msg = "Conversion of '%s' completed." % object_name
+    else:
+        action = convert_sketch_action
+        starting_msg = "Starting sketch conversion: '%s' -> '%s', dry_run=%s" % (object_name, target_format, dry_run)
+        done_msg = "Sketch conversion of '%s' completed." % object_name
+
+    pc.logging.info(starting_msg)
+    try:
+        action(package_obj, object_name, target_format, output_dir=output_dir, dry_run=dry_run)
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e))
+    pc.logging.info(done_msg)
     return None
 
 

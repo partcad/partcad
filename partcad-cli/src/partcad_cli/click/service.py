@@ -38,9 +38,10 @@ def _on_event(method, params) -> None:
         _remote_client.handle({"kind": "log", "levelno": _LEVELS[method], "message": message})
 
 
-# PartCAD-specific error code: partcad.yaml could not be parsed (mirrors
-# operations.INVALID_CONFIG). Rendered like the legacy in-process CLI did.
+# PartCAD-specific error codes (mirror operations.INVALID_CONFIG/USAGE_ERROR),
+# rendered like the legacy in-process CLI did.
 _INVALID_CONFIG = -32001
+_USAGE_ERROR = -32002
 
 
 def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_context: bool = False):
@@ -65,9 +66,13 @@ def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_
                 call_params["context"] = result.get("context")
             return conn.call(method, call_params, on_event=_on_event)
     except _client.DaemonError as e:
-        if getattr(e, "code", None) == _INVALID_CONFIG:
+        code = getattr(e, "code", None)
+        if code == _INVALID_CONFIG:
             # Match the legacy get_partcad_context behavior.
             raise click.ClickException("Invalid configuration file")
+        if code == _USAGE_ERROR:
+            # Match commands that raised click.UsageError (exit code 2).
+            raise click.UsageError(str(e))
         raise click.ClickException(str(e))
     finally:
         conn.close()
