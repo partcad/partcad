@@ -70,7 +70,11 @@ def combine(shapes, kind):
     process; it now happens here so the core never touches a live OCP object.
     'kind' picks the rule:
       - "sketch": keep only the 1D/2D geometry (edges/wires/faces) - a sketch is
-        made of those - both in the compound and as components.
+        made of those - both in the compound and as components. A compound that
+        wraps such geometry is descended into rather than dropped: cadquery and
+        build123d routinely hand a sketch back as a compound of faces (cadquery
+        2.8's Workplane.placeSketch is one), and discarding it would leave the
+        sketch empty.
       - "part" (default): every shape is a component, and everything except bare
         edges/wires/faces goes into the compound.
     Nested lists are walked and preserved in the components tree. Returns
@@ -96,14 +100,22 @@ def combine(shapes, kind):
                 continue
             if not isinstance(shape, OCP.TopoDS.TopoDS_Shape) or shape.IsNull():
                 continue
-            is_lower = shape.ShapeType() in lower_dim
+            shape_type = shape.ShapeType()
             if kind == "sketch":
-                if is_lower:
+                if shape_type == OCP.TopAbs.TopAbs_COMPOUND:
+                    # Descend into the compound and keep the edges/wires/faces it
+                    # holds, instead of discarding the whole wrapper.
+                    iterator = OCP.TopoDS.TopoDS_Iterator(shape)
+                    while iterator.More():
+                        walk([iterator.Value()], out)
+                        iterator.Next()
+                    continue
+                if shape_type in lower_dim:
                     out.append(shape)
                     builder.Add(compound, shape)
             else:
                 out.append(shape)
-                if not is_lower:
+                if shape_type not in lower_dim:
                     builder.Add(compound, shape)
 
     walk(shapes, components)
