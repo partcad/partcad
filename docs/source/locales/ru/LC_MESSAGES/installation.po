@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 20:49+0000\n"
+"POT-Creation-Date: 2026-08-03 15:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -87,7 +87,7 @@ msgstr ""
 msgid "The commands and options supported by PartCAD CLI:"
 msgstr "Команды и параметры, поддерживаемые PartCAD CLI:"
 
-#: ../../source/installation.rst:87
+#: ../../source/installation.rst:86
 msgid ""
 "Common options apply to every command, including ``-v``/``-q`` to raise "
 "or lower verbosity, ``--no-ansi`` for plain-text logs, and ``-p PATH`` to"
@@ -100,15 +100,15 @@ msgstr ""
 "``partcad.yaml`` или каталога, который его содержит). Выполните ``pc "
 "<command> --help``, чтобы увидеть параметры любой команды."
 
-#: ../../source/installation.rst:91
+#: ../../source/installation.rst:90
 msgid "For a full command reference, see :doc:`cli`."
 msgstr "Полный справочник команд см. в :doc:`cli`."
 
-#: ../../source/installation.rst:98
+#: ../../source/installation.rst:97
 msgid "Standalone command line tools (no Python)"
 msgstr "Автономные инструменты командной строки (без Python)"
 
-#: ../../source/installation.rst:100
+#: ../../source/installation.rst:99
 msgid ""
 "The standalone build is the same ``pc`` and ``partcad`` commands, "
 "packaged with their own Python interpreter and every dependency they "
@@ -124,7 +124,7 @@ msgstr ""
 "держать на нужной версии и нечему сломаться в следующий раз, когда "
 "какой-то другой инструмент обновит Python."
 
-#: ../../source/installation.rst:105
+#: ../../source/installation.rst:104
 msgid ""
 "Use it if Python is not installed, if the Python that is installed "
 "belongs to the operating system and should be left alone, or if PartCAD "
@@ -137,15 +137,15 @@ msgstr ""
 "программирования. Вместо этого используйте wheel-пакеты, если хотите "
 "выполнять ``import partcad`` из собственных скриптов."
 
-#: ../../source/installation.rst:110
+#: ../../source/installation.rst:109
 msgid "Install"
 msgstr "Установка"
 
-#: ../../source/installation.rst:112
+#: ../../source/installation.rst:111
 msgid "On Linux and MacOS:"
 msgstr "В Linux и MacOS:"
 
-#: ../../source/installation.rst:118
+#: ../../source/installation.rst:117
 msgid ""
 "That downloads the bundle for the current operating system and "
 "architecture from the latest `GitHub release "
@@ -165,7 +165,7 @@ msgstr ""
 "``PATH``, установщик сообщает об этом и печатает строку, которую нужно "
 "добавить."
 
-#: ../../source/installation.rst:124
+#: ../../source/installation.rst:123
 msgid ""
 "The bundle is around 875MB unpacked and 290MB to download on Linux, "
 "somewhat less on MacOS and Windows. Most of it is the OpenCASCADE "
@@ -177,7 +177,7 @@ msgstr ""
 "геометрическое ядро OpenCASCADE, которое wheel-пакеты также загружают, "
 "просто во время ``pip install``."
 
-#: ../../source/installation.rst:127
+#: ../../source/installation.rst:126
 msgid ""
 "Supported platforms are Linux on x86_64, and MacOS on Apple silicon. "
 "Windows is covered by the ``.zip`` archive under :ref:`manual "
@@ -187,88 +187,88 @@ msgstr ""
 "Windows охватывается ``.zip``-архивом в разделе :ref:`ручная установка "
 "<standalone-manual>`."
 
-#: ../../source/installation.rst:131
+#: ../../source/installation.rst:130
 msgid "Options"
 msgstr "Параметры"
 
-#: ../../source/installation.rst:133
+#: ../../source/installation.rst:132
 msgid "Options go after ``sh -s --``:"
 msgstr "Параметры указываются после ``sh -s --``:"
 
-#: ../../source/installation.rst:148
+#: ../../source/installation.rst:147
 msgid "Option"
 msgstr "Параметр"
 
-#: ../../source/installation.rst:148
+#: ../../source/installation.rst:147
 msgid "Environment variable"
 msgstr "Переменная окружения"
 
-#: ../../source/installation.rst:148
+#: ../../source/installation.rst:147
 msgid "Default"
 msgstr "По умолчанию"
 
-#: ../../source/installation.rst:150
+#: ../../source/installation.rst:149
 msgid "``--version <version>``"
 msgstr "``--version <version>``"
 
-#: ../../source/installation.rst:150
+#: ../../source/installation.rst:149
 msgid "``PARTCAD_VERSION``"
 msgstr "``PARTCAD_VERSION``"
 
-#: ../../source/installation.rst:150
+#: ../../source/installation.rst:149
 msgid "the latest release"
 msgstr "последний релиз"
 
-#: ../../source/installation.rst:151
+#: ../../source/installation.rst:150
 msgid "``--install-dir <dir>``"
 msgstr "``--install-dir <dir>``"
 
-#: ../../source/installation.rst:151
+#: ../../source/installation.rst:150
 msgid "``PARTCAD_INSTALL_DIR``"
 msgstr "``PARTCAD_INSTALL_DIR``"
 
-#: ../../source/installation.rst:151
+#: ../../source/installation.rst:150
 #, python-brace-format
 msgid "``${XDG_DATA_HOME:-~/.local/share}/partcad``"
 msgstr "``${XDG_DATA_HOME:-~/.local/share}/partcad``"
 
-#: ../../source/installation.rst:152
+#: ../../source/installation.rst:151
 msgid "``--bin-dir <dir>``"
 msgstr "``--bin-dir <dir>``"
 
-#: ../../source/installation.rst:152
+#: ../../source/installation.rst:151
 msgid "``PARTCAD_BIN_DIR``"
 msgstr "``PARTCAD_BIN_DIR``"
 
-#: ../../source/installation.rst:152
+#: ../../source/installation.rst:151
 msgid "``~/.local/bin``"
 msgstr "``~/.local/bin``"
 
-#: ../../source/installation.rst:153
+#: ../../source/installation.rst:152
 msgid "``--base-url <url>``"
 msgstr "``--base-url <url>``"
 
-#: ../../source/installation.rst:153
+#: ../../source/installation.rst:152
 msgid "``PARTCAD_BASE_URL``"
 msgstr "``PARTCAD_BASE_URL``"
 
-#: ../../source/installation.rst:153
+#: ../../source/installation.rst:152
 msgid "the GitHub release for the version"
 msgstr "релиз на GitHub для данной версии"
 
-#: ../../source/installation.rst:154
+#: ../../source/installation.rst:153
 msgid "``--repository <owner/name>``"
 msgstr "``--repository <owner/name>``"
 
-#: ../../source/installation.rst:154
+#: ../../source/installation.rst:153
 msgid "``PARTCAD_REPOSITORY``"
 msgstr "``PARTCAD_REPOSITORY``"
 
-#: ../../source/installation.rst:154
+#: ../../source/installation.rst:153
 msgid "``partcad/partcad``"
 msgstr "``partcad/partcad``"
 
-#: ../../source/installation.rst:157
+#: ../../source/installation.rst:156
 msgid ""
 "Installing several versions side by side is fine: each one unpacks into "
 "its own directory, and the last install wins the ``pc`` and ``partcad`` "
@@ -278,17 +278,17 @@ msgstr ""
 "распаковывается в свой каталог, а последняя установка получает ссылки "
 "``pc`` и ``partcad``. Установка уже установленной версии заменяет её."
 
-#: ../../source/installation.rst:161
+#: ../../source/installation.rst:160
 msgid "Upgrade and uninstall"
 msgstr "Обновление и удаление"
 
-#: ../../source/installation.rst:163
+#: ../../source/installation.rst:162
 msgid "Upgrading is installing again: re-run the same command."
 msgstr ""
 "Обновление — это повторная установка: просто выполните ту же команду ещё "
 "раз."
 
-#: ../../source/installation.rst:169
+#: ../../source/installation.rst:168
 msgid ""
 "Uninstalling removes the bundle and the two links, and only the links "
 "that point at the bundle, so a ``pc`` installed from a wheel is left "
@@ -300,11 +300,11 @@ msgstr ""
 "остаётся нетронутым. Кэш и конфигурация PartCAD в ``~/.partcad`` "
 "сохраняются; удалите и этот каталог, чтобы не осталось ничего."
 
-#: ../../source/installation.rst:174
+#: ../../source/installation.rst:173
 msgid "Installing a development build"
 msgstr "Установка сборки для разработки"
 
-#: ../../source/installation.rst:176
+#: ../../source/installation.rst:175
 msgid ""
 "The installer is a file in the repository, so any branch, tag, or pull "
 "request has its own copy of it, and the URL selects which one runs. To "
@@ -315,13 +315,13 @@ msgstr ""
 " Чтобы установить, используя скрипт в том виде, в каком он существует в "
 "ветке ``devel``:"
 
-#: ../../source/installation.rst:183
+#: ../../source/installation.rst:182
 msgid "For a pull request, use the branch it comes from, or its head commit:"
 msgstr ""
 "Для pull request используйте ветку, из которой он происходит, или его "
 "head-коммит:"
 
-#: ../../source/installation.rst:191
+#: ../../source/installation.rst:190
 msgid ""
 "The URL only decides which *installer* runs. By default that installer "
 "still downloads the bundle of the latest release, because bundles are "
@@ -340,7 +340,7 @@ msgstr ""
 "standalone-<platform>``, распакуйте его и укажите установщику каталог, "
 "содержащий архив."
 
-#: ../../source/installation.rst:203
+#: ../../source/installation.rst:202
 msgid ""
 "``--base-url`` accepts any URL, so a bundle published anywhere else (an "
 "internal mirror, a file server) installs the same way."
@@ -349,11 +349,11 @@ msgstr ""
 "где-либо ещё (внутреннее зеркало, файловый сервер), устанавливается точно"
 " так же."
 
-#: ../../source/installation.rst:209
+#: ../../source/installation.rst:208
 msgid "Manual installation"
 msgstr "Ручная установка"
 
-#: ../../source/installation.rst:211
+#: ../../source/installation.rst:210
 msgid ""
 "The archives are attached to every `GitHub release "
 "<https://github.com/partcad/partcad/releases>`_ next to the wheels, "
@@ -363,19 +363,19 @@ msgstr ""
 "<https://github.com/partcad/partcad/releases>`_ рядом с wheel-пакетами, "
 "вместе с файлом ``.sha256`` для каждого:"
 
-#: ../../source/installation.rst:214
+#: ../../source/installation.rst:213
 msgid "``partcad-<version>-linux-x86_64.tar.gz``"
 msgstr "``partcad-<version>-linux-x86_64.tar.gz``"
 
-#: ../../source/installation.rst:215
+#: ../../source/installation.rst:214
 msgid "``partcad-<version>-macos-arm64.tar.gz``"
 msgstr "``partcad-<version>-macos-arm64.tar.gz``"
 
-#: ../../source/installation.rst:216
+#: ../../source/installation.rst:215
 msgid "``partcad-<version>-windows-x86_64.zip``"
 msgstr "``partcad-<version>-windows-x86_64.zip``"
 
-#: ../../source/installation.rst:218
+#: ../../source/installation.rst:217
 msgid ""
 "Each one unpacks into a single ``partcad/`` directory holding ``pc``, "
 "``partcad``, and everything they need. Put that directory anywhere and "
@@ -389,7 +389,7 @@ msgstr ""
 "Windows распакуйте ``.zip`` и добавьте полученный каталог в ``PATH`` -- "
 "установщика в виде shell-скрипта для Windows нет."
 
-#: ../../source/installation.rst:229
+#: ../../source/installation.rst:228
 msgid ""
 "On MacOS, downloading the archive with a browser marks it as quarantined,"
 " and Gatekeeper then refuses to run the unpacked commands. Installing "
@@ -402,25 +402,24 @@ msgstr ""
 "``curl`` позволяет этого избежать. Чтобы снять пометку постфактум: "
 "``xattr -dr com.apple.quarantine <directory>``."
 
-#: ../../source/installation.rst:234
+#: ../../source/installation.rst:233
 msgid "What is included, and what is not"
 msgstr "Что включено, а что нет"
 
-#: ../../source/installation.rst:236
+#: ../../source/installation.rst:235
+#, fuzzy
 msgid ""
 "The bundle carries everything the wheels would install, including the "
-"optional extras that the wheels leave to the user: all the AI providers "
-"(``ai-google``, ``ai-openai``, ``ai-ollama``) and the Python linter "
+"optional extras that the wheels leave to the user: the Python linter "
 "(``lint``). A frozen bundle cannot be extended afterwards, so it ships "
 "complete."
 msgstr ""
 "Бандл несёт всё, что установили бы wheel-пакеты, включая необязательные "
 "дополнения (extras), которые wheel-пакеты оставляют на усмотрение "
-"пользователя: все ИИ-провайдеры (``ai-google``, ``ai-openai``, ``ai-"
-"ollama``) и линтер Python (``lint``). Замороженный бандл нельзя расширить"
+"пользователя: линтер Python (``lint``). Замороженный бандл нельзя расширить"
 " впоследствии, поэтому он поставляется полным."
 
-#: ../../source/installation.rst:240
+#: ../../source/installation.rst:239
 msgid ""
 "On Linux and Windows it also carries **OpenSCAD**, which PartCAD runs as "
 "an external program to build ``.scad`` parts. The bundled copy is used in"
@@ -434,7 +433,7 @@ msgstr ""
 "чтобы бандл вёл себя одинаково везде, а не зависел от того, какая версия "
 "оказалась на конкретном хосте. Два следствия, о которых стоит знать:"
 
-#: ../../source/installation.rst:245
+#: ../../source/installation.rst:244
 msgid ""
 "A newer OpenSCAD installed on the machine is *not* used by default. To "
 "use the host's OpenSCAD instead of the bundled one, pass ``--ignore-"
@@ -448,7 +447,7 @@ msgstr ""
 "``IGNORE_BUNDLED_OPENSCAD=1`` в окружении. (За пределами автономной "
 "сборки встроенного OpenSCAD нет, поэтому этот параметр ничего не делает.)"
 
-#: ../../source/installation.rst:248
+#: ../../source/installation.rst:247
 msgid ""
 "On Linux the bundled OpenSCAD is the upstream AppImage, which resolves a "
 "few libraries from the host (``libGL``, ``libX11``, ``libxcb``, "
@@ -466,7 +465,7 @@ msgstr ""
 "передайте ``--ignore-bundled-openscad``, чтобы вернуться к OpenSCAD "
 "хоста, если он у вас есть."
 
-#: ../../source/installation.rst:254
+#: ../../source/installation.rst:253
 msgid ""
 "The macOS bundle carries no OpenSCAD: the last OpenSCAD release predates "
 "Apple silicon and ships an Intel-only build, which would quietly require "
@@ -477,7 +476,7 @@ msgstr ""
 " потребовала бы Rosetta 2. В macOS установите OpenSCAD самостоятельно, и "
 "PartCAD будет его использовать."
 
-#: ../../source/installation.rst:258
+#: ../../source/installation.rst:257
 msgid ""
 "Two other things are deliberately not in the bundle, because PartCAD runs"
 " them as external programs rather than importing them, exactly as the "
@@ -487,11 +486,11 @@ msgstr ""
 " их как внешние программы, а не импортирует, точно так же, как это делают"
 " wheel-пакеты:"
 
-#: ../../source/installation.rst:261
+#: ../../source/installation.rst:260
 msgid "**git**, used to fetch package repositories."
 msgstr "**git**, используемый для получения репозиториев пакетов."
 
-#: ../../source/installation.rst:262
+#: ../../source/installation.rst:261
 msgid ""
 "**conda** (or **mamba**), used to build the sandbox in which PartCAD runs"
 " CAD scripts."
@@ -499,13 +498,13 @@ msgstr ""
 "**conda** (или **mamba**), используемый для построения песочницы, в "
 "которой PartCAD запускает CAD-скрипты."
 
-#: ../../source/installation.rst:264
+#: ../../source/installation.rst:263
 msgid "Run ``pc healthcheck`` to see what is missing on the current machine."
 msgstr ""
 "Выполните ``pc healthcheck``, чтобы увидеть, чего не хватает на текущей "
 "машине."
 
-#: ../../source/installation.rst:266
+#: ../../source/installation.rst:265
 msgid ""
 "The bundle provides the command line tools only. The ``partcad`` Python "
 "module for CAD-as-code scripts is a wheel: ``python -m pip install -U "
@@ -515,11 +514,11 @@ msgstr ""
 "``partcad`` для скриптов CAD-as-code — это wheel-пакет: ``python -m pip "
 "install -U partcad``."
 
-#: ../../source/installation.rst:272
+#: ../../source/installation.rst:271
 msgid "Latest Development Version of PartCAD"
 msgstr "Последняя версия PartCAD для разработки"
 
-#: ../../source/installation.rst:274
+#: ../../source/installation.rst:273
 msgid ""
 "You can install the latest development version of PartCAD from the "
 "``devel`` branch on `PartCAD <https://github.com/partcad/partcad>`_. "
@@ -533,19 +532,19 @@ msgstr ""
 "``setuptools`` и ``wheel`` обновлены, затем следуйте приведённым ниже "
 "инструкциям, чтобы установить основной модуль и инструмент CLI."
 
-#: ../../source/installation.rst:279
+#: ../../source/installation.rst:278
 msgid "**Install or upgrade the Core Python Module**"
 msgstr "**Установка или обновление основного Python-модуля**"
 
-#: ../../source/installation.rst:285
+#: ../../source/installation.rst:284
 msgid "**Install or upgrade the CLI**"
 msgstr "**Установка или обновление CLI**"
 
-#: ../../source/installation.rst:293
+#: ../../source/installation.rst:292
 msgid "Python module"
 msgstr "Python-модуль"
 
-#: ../../source/installation.rst:295
+#: ../../source/installation.rst:294
 msgid ""
 "PartCAD provides Python modules that can be used in CAD as code scripts "
 "(such as ``CadQuery``, ``build123d`` and ``sdf``). It's a dependency of "
@@ -556,38 +555,11 @@ msgstr ""
 "Это зависимость ``partcad-cli``, поэтому обычно его не нужно "
 "устанавливать отдельно."
 
-#: ../../source/installation.rst:309
-msgid "AI providers"
-msgstr "ИИ-провайдеры"
-
-#: ../../source/installation.rst:311
-msgid ""
-"The SDKs of the supported AI providers are optional. Install the extra "
-"that matches the provider you intend to use, either on ``partcad-cli``:"
-msgstr ""
-"SDK поддерживаемых ИИ-провайдеров являются необязательными. Установите "
-"дополнение (extra), соответствующее провайдеру, который вы намерены "
-"использовать, либо для ``partcad-cli``:"
-
-#: ../../source/installation.rst:321
-msgid "or on ``partcad`` itself, using the same extra names:"
-msgstr "либо для самого ``partcad``, используя те же имена дополнений:"
-
-#: ../../source/installation.rst:327
-msgid ""
-"Without the matching extra, using an AI provider fails with an error "
-"naming the package to install. Everything else in PartCAD works without "
-"them."
-msgstr ""
-"Без соответствующего дополнения использование ИИ-провайдера завершается "
-"ошибкой с указанием пакета, который нужно установить. Всё остальное в "
-"PartCAD работает и без них."
-
-#: ../../source/installation.rst:332
+#: ../../source/installation.rst:308
 msgid "Linting"
 msgstr "Линтинг"
 
-#: ../../source/installation.rst:334
+#: ../../source/installation.rst:310
 msgid ""
 "The linter used by ``pc lint`` to check Python files is optional. Install"
 " the ``lint`` extra to enable it, either on ``partcad-cli``:"
@@ -596,11 +568,11 @@ msgstr ""
 "необязательным. Установите дополнение ``lint``, чтобы включить его, либо "
 "для ``partcad-cli``:"
 
-#: ../../source/installation.rst:341
+#: ../../source/installation.rst:317
 msgid "or on ``partcad`` itself, using the same extra name:"
 msgstr "либо для самого ``partcad``, используя то же имя дополнения:"
 
-#: ../../source/installation.rst:347
+#: ../../source/installation.rst:323
 msgid ""
 "Without the extra, linting Python files reports an error naming the "
 "package to install. Everything else in PartCAD, including linting of YAML"
@@ -610,11 +582,11 @@ msgstr ""
 "пакета, который нужно установить. Всё остальное в PartCAD, включая "
 "линтинг YAML-файлов, работает и без него."
 
-#: ../../source/installation.rst:353
+#: ../../source/installation.rst:329
 msgid "Visual Studio Code extension"
 msgstr "Расширение для Visual Studio Code"
 
-#: ../../source/installation.rst:355
+#: ../../source/installation.rst:331
 msgid ""
 "This extension is available through the VS Code marketplace. The "
 "corresponding marketplace page is `here "
@@ -624,11 +596,11 @@ msgstr ""
 "страница маркетплейса находится `здесь "
 "<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_."
 
-#: ../../source/installation.rst:360
+#: ../../source/installation.rst:336
 msgid "Public PartCAD repository"
 msgstr "Публичный репозиторий PartCAD"
 
-#: ../../source/installation.rst:362
+#: ../../source/installation.rst:338
 msgid ""
 "The public PartCAD repository is hosted at `GitHub "
 "<https://github.com/partcad/partcad-index>`_. If necessary, PartCAD tools"
@@ -642,7 +614,7 @@ msgstr ""
 " всех других требуемых репозиториев и пакетов. Никаких ручных действий "
 "для его `установки` не требуется."
 
-#: ../../source/installation.rst:366
+#: ../../source/installation.rst:342
 msgid ""
 "However, if you suspect that something is wrong with locally cached "
 "files, use ``pc system status`` to investigate and to determine the "

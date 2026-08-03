@@ -66,19 +66,6 @@ option_groups = [
         "options": ["--force-update", "--offline", "--internal-state-dir"],
     },
     {
-        "name": "API keys",
-        "options": ["--google-api-key", "--openai-api-key"],
-    },
-    {
-        "name": "Generative design options",
-        "options": [
-            "--max-geometric-modeling",
-            "--max-model-generation",
-            "--max-script-correction",
-            "--ollama-num-thread",
-        ],
-    },
-    {
         "name": "Sandbox options",
         "options": ["--python-sandbox", "--ignore-bundled-openscad"],
     },
@@ -131,7 +118,7 @@ command_groups = [
     },
     {
         "name": "Workflow commands",
-        "commands": ["ai", "supply"],
+        "commands": ["supply"],
     },
     {
         "name": "Other commands",
@@ -267,48 +254,6 @@ click.rich_click.COMMAND_GROUPS = {
     help="Operate in offline mode, without any repo updates",
 )
 @click.option(
-    "--google-api-key",
-    type=str,
-    default=None,
-    show_envvar=True,
-    help="GOOGLE API key for AI services",
-)
-@click.option(
-    "--openai-api-key",
-    type=str,
-    default=None,
-    show_envvar=True,
-    help="OPENAI API key for AI services",
-)
-@click.option(
-    "--ollama-num-thread",
-    type=int,
-    default=None,
-    show_envvar=True,
-    help="Number of CPU threads Ollama should utilize",
-)
-@click.option(
-    "--max-geometric-modeling",
-    type=int,
-    default=None,
-    show_envvar=True,
-    help="Maximum number of attempts for geometric modeling",
-)
-@click.option(
-    "--max-model-generation",
-    type=int,
-    default=None,
-    show_envvar=True,
-    help="Maximum number of attempts for CAD script generation",
-)
-@click.option(
-    "--max-script-correction",
-    type=int,
-    default=None,
-    show_envvar=True,
-    help="Maximum number of attempts to incrementally fix the ai generated script if it's not working",
-)
-@click.option(
     "--telemetry-type",
     type=click.Choice(["none", "sentry"]),
     show_envvar=True,
@@ -403,12 +348,6 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
         ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
         ("PC_FORCE_UPDATE", "force_update"),
         ("PC_OFFLINE", "offline"),
-        ("PC_GOOGLE_API_KEY", "google_api_key"),
-        ("PC_OPENAI_API_KEY", "openai_api_key"),
-        ("PC_OLLAMA_NUM_THREAD", "ollama_num_thread"),
-        ("PC_MAX_GEOMETRIC_MODELING", "max_geometric_modeling"),
-        ("PC_MAX_MODEL_GENERATION", "max_model_generation"),
-        ("PC_MAX_SCRIPT_CORRECTION", "max_script_correction"),
         ("PC_TELEMETRY_TYPE", "telemetry_type"),
         ("PC_TELEMETRY_ENV", "telemetry_env"),
         ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),
@@ -498,12 +437,6 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
             ("PC_FORCE_UPDATE", "force_update"),
             ("PC_OFFLINE", "offline"),
-            ("PC_GOOGLE_API_KEY", "google_api_key"),
-            ("PC_OPENAI_API_KEY", "openai_api_key"),
-            ("PC_OLLAMA_NUM_THREAD", "ollama_num_thread"),
-            ("PC_MAX_GEOMETRIC_MODELING", "max_geometric_modeling"),
-            ("PC_MAX_MODEL_GENERATION", "max_model_generation"),
-            ("PC_MAX_SCRIPT_CORRECTION", "max_script_correction"),
             ("PC_TELEMETRY_TYPE", "telemetry_type"),
             ("PC_TELEMETRY_ENV", "telemetry_env"),
             ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),

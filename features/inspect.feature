@@ -78,34 +78,6 @@ Feature: `pc inspect` command
     | package | part |
     | /produce_part_3mf | cube |
 
-  @ai @build123d
-  Examples: Part: build123d [AI]
-    | package | part |
-    | /produce_part_ai_build123d | cube |
-    | /produce_part_ai_build123d | prism |
-    | /produce_part_ai_build123d | tetrahedron |
-
-  @ai @cadquery
-  Examples: Part: CadQuery [AI]
-    | package | part |
-    | /produce_part_ai_cadquery | cube |
-    | /produce_part_ai_cadquery | prism |
-    | /produce_part_ai_cadquery | tetrahedron |
-
-  @ai @openscad
-  Examples: Part: OpenSCAD [AI]
-    | package | part |
-    | /produce_part_ai_openscad | cube |
-    | /produce_part_ai_openscad | prism |
-    | /produce_part_ai_openscad | tetrahedron |
-
-  @ai @sdf
-  Examples: Part: sdf [AI]
-    | package | part |
-    | /produce_part_ai_sdf | cube |
-    | /produce_part_ai_sdf | prism |
-    | /produce_part_ai_sdf | tetrahedron |
-
   @build123d
   Examples: Part: build123d
     | package | part |

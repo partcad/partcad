@@ -9,11 +9,11 @@
 
 import typing
 
-from .shape_ai import ShapeWithAi
+from .shape import Shape
 from .sync_threads import threadpool_manager
 
 
-class Sketch(ShapeWithAi):
+class Sketch(Shape):
     path: typing.Optional[str] = None
 
     def __init__(self, project_name: str, config: dict = {}) -> None:

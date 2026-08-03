@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 20:49+0000\n"
+"POT-Creation-Date: 2026-08-03 15:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -79,7 +79,7 @@ msgstr ""
 msgid "The commands and options supported by PartCAD CLI:"
 msgstr "PartCAD CLI 所支持的命令和选项："
 
-#: ../../source/installation.rst:87
+#: ../../source/installation.rst:86
 msgid ""
 "Common options apply to every command, including ``-v``/``-q`` to raise "
 "or lower verbosity, ``--no-ansi`` for plain-text logs, and ``-p PATH`` to"
@@ -90,15 +90,15 @@ msgstr ""
 "，以及用于选择包（一个 ``partcad.yaml`` 文件或包含该文件的目录）的 ``-p PATH`` 。运行 ``pc <command>"
 " --help`` 即可查看任意命令的选项。"
 
-#: ../../source/installation.rst:91
+#: ../../source/installation.rst:90
 msgid "For a full command reference, see :doc:`cli`."
 msgstr "有关完整的命令参考，请参见 :doc:`cli` 。"
 
-#: ../../source/installation.rst:98
+#: ../../source/installation.rst:97
 msgid "Standalone command line tools (no Python)"
 msgstr "独立命令行工具（无需 Python）"
 
-#: ../../source/installation.rst:100
+#: ../../source/installation.rst:99
 msgid ""
 "The standalone build is the same ``pc`` and ``partcad`` commands, "
 "packaged with their own Python interpreter and every dependency they "
@@ -111,7 +111,7 @@ msgstr ""
 "解释器以及所需的每一项依赖打包在了一起。它不会向任何 Python 环境中安装任何东西，因为整个过程根本不涉及 Python "
 "环境：没有需要激活的环境，没有需要保持在正确版本的东西，下次某个其他工具升级 Python 时也不会有任何东西被破坏。"
 
-#: ../../source/installation.rst:105
+#: ../../source/installation.rst:104
 msgid ""
 "Use it if Python is not installed, if the Python that is installed "
 "belongs to the operating system and should be left alone, or if PartCAD "
@@ -121,15 +121,15 @@ msgstr ""
 "如果没有安装 Python，或者已安装的 Python 属于操作系统、不应去动它，又或者对你来说 PartCAD "
 "只是一个要运行的工具而非用于编程的库，那么就使用它。如果你想在自己的脚本中 ``import partcad`` ，则应改用 wheel 包。"
 
-#: ../../source/installation.rst:110
+#: ../../source/installation.rst:109
 msgid "Install"
 msgstr "安装"
 
-#: ../../source/installation.rst:112
+#: ../../source/installation.rst:111
 msgid "On Linux and MacOS:"
 msgstr "在 Linux 和 MacOS 上："
 
-#: ../../source/installation.rst:118
+#: ../../source/installation.rst:117
 msgid ""
 "That downloads the bundle for the current operating system and "
 "architecture from the latest `GitHub release "
@@ -144,7 +144,7 @@ msgstr ""
 "``pc`` 和 ``partcad`` 链接到 ``~/.local/bin`` 。系统上的其他任何内容都不会被改动，也不会要求 "
 "``sudo`` 权限。如果 ``~/.local/bin`` 不在你的 ``PATH`` 中，安装程序会告知这一点，并打印出需要添加的那一行。"
 
-#: ../../source/installation.rst:124
+#: ../../source/installation.rst:123
 msgid ""
 "The bundle is around 875MB unpacked and 290MB to download on Linux, "
 "somewhat less on MacOS and Windows. Most of it is the OpenCASCADE "
@@ -154,7 +154,7 @@ msgstr ""
 "在 Linux 上，该捆绑包解压后约为 875MB，下载大小约为 290MB，在 MacOS 和 Windows 上略小一些。其中大部分是 "
 "OpenCASCADE 几何内核，wheel 包同样会下载它，只不过是在 ``pip install`` 时下载。"
 
-#: ../../source/installation.rst:127
+#: ../../source/installation.rst:126
 msgid ""
 "Supported platforms are Linux on x86_64, and MacOS on Apple silicon. "
 "Windows is covered by the ``.zip`` archive under :ref:`manual "
@@ -163,88 +163,88 @@ msgstr ""
 "受支持的平台为 x86_64 架构上的 Linux，以及 Apple 芯片上的 MacOS。Windows 则由 :ref:`手动安装 "
 "<standalone-manual>` 一节中的 ``.zip`` 归档文件来覆盖。"
 
-#: ../../source/installation.rst:131
+#: ../../source/installation.rst:130
 msgid "Options"
 msgstr "选项"
 
-#: ../../source/installation.rst:133
+#: ../../source/installation.rst:132
 msgid "Options go after ``sh -s --``:"
 msgstr "选项写在 ``sh -s --`` 之后："
 
-#: ../../source/installation.rst:148
+#: ../../source/installation.rst:147
 msgid "Option"
 msgstr "选项"
 
-#: ../../source/installation.rst:148
+#: ../../source/installation.rst:147
 msgid "Environment variable"
 msgstr "环境变量"
 
-#: ../../source/installation.rst:148
+#: ../../source/installation.rst:147
 msgid "Default"
 msgstr "默认值"
 
-#: ../../source/installation.rst:150
+#: ../../source/installation.rst:149
 msgid "``--version <version>``"
 msgstr "``--version <version>``"
 
-#: ../../source/installation.rst:150
+#: ../../source/installation.rst:149
 msgid "``PARTCAD_VERSION``"
 msgstr "``PARTCAD_VERSION``"
 
-#: ../../source/installation.rst:150
+#: ../../source/installation.rst:149
 msgid "the latest release"
 msgstr "最新发布版本"
 
-#: ../../source/installation.rst:151
+#: ../../source/installation.rst:150
 msgid "``--install-dir <dir>``"
 msgstr "``--install-dir <dir>``"
 
-#: ../../source/installation.rst:151
+#: ../../source/installation.rst:150
 msgid "``PARTCAD_INSTALL_DIR``"
 msgstr "``PARTCAD_INSTALL_DIR``"
 
-#: ../../source/installation.rst:151
+#: ../../source/installation.rst:150
 #, python-brace-format
 msgid "``${XDG_DATA_HOME:-~/.local/share}/partcad``"
 msgstr "``${XDG_DATA_HOME:-~/.local/share}/partcad``"
 
-#: ../../source/installation.rst:152
+#: ../../source/installation.rst:151
 msgid "``--bin-dir <dir>``"
 msgstr "``--bin-dir <dir>``"
 
-#: ../../source/installation.rst:152
+#: ../../source/installation.rst:151
 msgid "``PARTCAD_BIN_DIR``"
 msgstr "``PARTCAD_BIN_DIR``"
 
-#: ../../source/installation.rst:152
+#: ../../source/installation.rst:151
 msgid "``~/.local/bin``"
 msgstr "``~/.local/bin``"
 
-#: ../../source/installation.rst:153
+#: ../../source/installation.rst:152
 msgid "``--base-url <url>``"
 msgstr "``--base-url <url>``"
 
-#: ../../source/installation.rst:153
+#: ../../source/installation.rst:152
 msgid "``PARTCAD_BASE_URL``"
 msgstr "``PARTCAD_BASE_URL``"
 
-#: ../../source/installation.rst:153
+#: ../../source/installation.rst:152
 msgid "the GitHub release for the version"
 msgstr "对应版本的 GitHub 发布版本"
 
-#: ../../source/installation.rst:154
+#: ../../source/installation.rst:153
 msgid "``--repository <owner/name>``"
 msgstr "``--repository <owner/name>``"
 
-#: ../../source/installation.rst:154
+#: ../../source/installation.rst:153
 msgid "``PARTCAD_REPOSITORY``"
 msgstr "``PARTCAD_REPOSITORY``"
 
-#: ../../source/installation.rst:154
+#: ../../source/installation.rst:153
 msgid "``partcad/partcad``"
 msgstr "``partcad/partcad``"
 
-#: ../../source/installation.rst:157
+#: ../../source/installation.rst:156
 msgid ""
 "Installing several versions side by side is fine: each one unpacks into "
 "its own directory, and the last install wins the ``pc`` and ``partcad`` "
@@ -253,15 +253,15 @@ msgstr ""
 "并排安装多个版本是没有问题的：每个版本都会解压到各自的目录中，而最后一次安装会赢得 ``pc`` 和 ``partcad`` "
 "链接的指向。安装一个已经安装过的版本会将其替换。"
 
-#: ../../source/installation.rst:161
+#: ../../source/installation.rst:160
 msgid "Upgrade and uninstall"
 msgstr "升级与卸载"
 
-#: ../../source/installation.rst:163
+#: ../../source/installation.rst:162
 msgid "Upgrading is installing again: re-run the same command."
 msgstr "升级就是再安装一次：重新运行相同的命令即可。"
 
-#: ../../source/installation.rst:169
+#: ../../source/installation.rst:168
 msgid ""
 "Uninstalling removes the bundle and the two links, and only the links "
 "that point at the bundle, so a ``pc`` installed from a wheel is left "
@@ -271,11 +271,11 @@ msgstr ""
 "卸载会移除该捆绑包和那两个链接，但只会移除指向该捆绑包的链接，因此从 wheel 包安装的 ``pc`` 不会受影响。位于 "
 "``~/.partcad`` 中的 PartCAD 缓存和配置会被保留；如果想不留下任何残余，也请一并删除该目录。"
 
-#: ../../source/installation.rst:174
+#: ../../source/installation.rst:173
 msgid "Installing a development build"
 msgstr "安装开发版本"
 
-#: ../../source/installation.rst:176
+#: ../../source/installation.rst:175
 msgid ""
 "The installer is a file in the repository, so any branch, tag, or pull "
 "request has its own copy of it, and the URL selects which one runs. To "
@@ -284,11 +284,11 @@ msgstr ""
 "安装程序是仓库中的一个文件，因此任何分支、标签或 pull request 都拥有它各自的副本，而 URL 决定了运行的是哪一个。要使用 "
 "``devel`` 分支上现有的脚本进行安装："
 
-#: ../../source/installation.rst:183
+#: ../../source/installation.rst:182
 msgid "For a pull request, use the branch it comes from, or its head commit:"
 msgstr "对于 pull request，请使用它所来自的分支，或其头部提交（head commit）："
 
-#: ../../source/installation.rst:191
+#: ../../source/installation.rst:190
 msgid ""
 "The URL only decides which *installer* runs. By default that installer "
 "still downloads the bundle of the latest release, because bundles are "
@@ -304,17 +304,17 @@ msgstr ""
 " 上打开该次运行，下载 ``partcad-standalone-<platform>`` "
 "制品，将其解压，然后让安装程序指向存放该归档文件的目录。"
 
-#: ../../source/installation.rst:203
+#: ../../source/installation.rst:202
 msgid ""
 "``--base-url`` accepts any URL, so a bundle published anywhere else (an "
 "internal mirror, a file server) installs the same way."
 msgstr "``--base-url`` 接受任意 URL，因此发布在其他任何位置（内部镜像、文件服务器）的捆绑包也能以同样的方式安装。"
 
-#: ../../source/installation.rst:209
+#: ../../source/installation.rst:208
 msgid "Manual installation"
 msgstr "手动安装"
 
-#: ../../source/installation.rst:211
+#: ../../source/installation.rst:210
 msgid ""
 "The archives are attached to every `GitHub release "
 "<https://github.com/partcad/partcad/releases>`_ next to the wheels, "
@@ -324,19 +324,19 @@ msgstr ""
 "<https://github.com/partcad/partcad/releases>`_ 中，并且每个归档文件都附带一个 "
 "``.sha256`` 文件："
 
-#: ../../source/installation.rst:214
+#: ../../source/installation.rst:213
 msgid "``partcad-<version>-linux-x86_64.tar.gz``"
 msgstr "``partcad-<version>-linux-x86_64.tar.gz``"
 
-#: ../../source/installation.rst:215
+#: ../../source/installation.rst:214
 msgid "``partcad-<version>-macos-arm64.tar.gz``"
 msgstr "``partcad-<version>-macos-arm64.tar.gz``"
 
-#: ../../source/installation.rst:216
+#: ../../source/installation.rst:215
 msgid "``partcad-<version>-windows-x86_64.zip``"
 msgstr "``partcad-<version>-windows-x86_64.zip``"
 
-#: ../../source/installation.rst:218
+#: ../../source/installation.rst:217
 msgid ""
 "Each one unpacks into a single ``partcad/`` directory holding ``pc``, "
 "``partcad``, and everything they need. Put that directory anywhere and "
@@ -348,7 +348,7 @@ msgstr ""
 "以及它们所需的一切。你可以把该目录放在任何位置并从中运行命令，或者将其添加到 ``PATH`` 中。在 Windows 上，请解压 "
 "``.zip`` 并将解压得到的目录添加到 ``PATH`` 中 —— Windows 没有 shell 脚本安装程序。"
 
-#: ../../source/installation.rst:229
+#: ../../source/installation.rst:228
 msgid ""
 "On MacOS, downloading the archive with a browser marks it as quarantined,"
 " and Gatekeeper then refuses to run the unpacked commands. Installing "
@@ -359,23 +359,22 @@ msgstr ""
 " ``install.sh`` 安装，或使用 ``curl`` 下载，可以避免这一问题。若要事后清除该标记： ``xattr -dr "
 "com.apple.quarantine <directory>`` 。"
 
-#: ../../source/installation.rst:234
+#: ../../source/installation.rst:233
 msgid "What is included, and what is not"
 msgstr "包含哪些内容，不包含哪些内容"
 
-#: ../../source/installation.rst:236
+#: ../../source/installation.rst:235
+#, fuzzy
 msgid ""
 "The bundle carries everything the wheels would install, including the "
-"optional extras that the wheels leave to the user: all the AI providers "
-"(``ai-google``, ``ai-openai``, ``ai-ollama``) and the Python linter "
+"optional extras that the wheels leave to the user: the Python linter "
 "(``lint``). A frozen bundle cannot be extended afterwards, so it ships "
 "complete."
 msgstr ""
-"该捆绑包携带了 wheel 包会安装的一切内容，包括那些 wheel 包留给用户自行选择的可选附加项（extras）：所有 AI 提供方（ "
-"``ai-google`` 、 ``ai-openai`` 、 ``ai-ollama`` ）以及 Python 代码检查器（ ``lint`` "
+"该捆绑包携带了 wheel 包会安装的一切内容，包括那些 wheel 包留给用户自行选择的可选附加项（extras）：Python 代码检查器（ ``lint`` "
 "）。冻结的捆绑包在事后无法再扩展，因此它以完整的形式发布。"
 
-#: ../../source/installation.rst:240
+#: ../../source/installation.rst:239
 msgid ""
 "On Linux and Windows it also carries **OpenSCAD**, which PartCAD runs as "
 "an external program to build ``.scad`` parts. The bundled copy is used in"
@@ -387,7 +386,7 @@ msgstr ""
 "``.scad`` 零件。相比机器上已安装的任何 "
 "OpenSCAD，会优先使用捆绑的这一份，这样捆绑包在任何地方的行为都保持一致，而不取决于某台主机恰好安装了哪个版本。有两点后果值得了解："
 
-#: ../../source/installation.rst:245
+#: ../../source/installation.rst:244
 msgid ""
 "A newer OpenSCAD installed on the machine is *not* used by default. To "
 "use the host's OpenSCAD instead of the bundled one, pass ``--ignore-"
@@ -399,7 +398,7 @@ msgstr ""
 "``--ignore-bundled-openscad`` ，或在环境中设置 ``IGNORE_BUNDLED_OPENSCAD=1`` "
 "。（在独立构建版本之外并不存在捆绑的 OpenSCAD，因此该选项不起任何作用。）"
 
-#: ../../source/installation.rst:248
+#: ../../source/installation.rst:247
 msgid ""
 "On Linux the bundled OpenSCAD is the upstream AppImage, which resolves a "
 "few libraries from the host (``libGL``, ``libX11``, ``libxcb``, "
@@ -414,7 +413,7 @@ msgstr ""
 "``harfbuzz`` ）。桌面环境的安装通常具备这些库；而精简过的容器或最小化的服务器可能没有，此时捆绑的 OpenSCAD 将无法启动 ——"
 " 如果你有主机上的 OpenSCAD，可以传入 ``--ignore-bundled-openscad`` 来回退到它。"
 
-#: ../../source/installation.rst:254
+#: ../../source/installation.rst:253
 msgid ""
 "The macOS bundle carries no OpenSCAD: the last OpenSCAD release predates "
 "Apple silicon and ships an Intel-only build, which would quietly require "
@@ -423,28 +422,28 @@ msgstr ""
 "macOS 的捆绑包不携带 OpenSCAD：OpenSCAD 的最后一个发布版本早于 Apple 芯片，只提供仅支持 Intel "
 "的构建，这会悄悄地需要 Rosetta 2。在 macOS 上，请自行安装 OpenSCAD，PartCAD 便会使用它。"
 
-#: ../../source/installation.rst:258
+#: ../../source/installation.rst:257
 msgid ""
 "Two other things are deliberately not in the bundle, because PartCAD runs"
 " them as external programs rather than importing them, exactly as the "
 "wheels do:"
 msgstr "还有另外两样东西是故意不放进捆绑包的，因为 PartCAD 是将它们作为外部程序来运行、而不是导入它们，这与 wheel 包的做法完全相同："
 
-#: ../../source/installation.rst:261
+#: ../../source/installation.rst:260
 msgid "**git**, used to fetch package repositories."
 msgstr "**git** ，用于获取包仓库。"
 
-#: ../../source/installation.rst:262
+#: ../../source/installation.rst:261
 msgid ""
 "**conda** (or **mamba**), used to build the sandbox in which PartCAD runs"
 " CAD scripts."
 msgstr "**conda** （或 **mamba** ），用于构建 PartCAD 运行 CAD 脚本所在的沙箱。"
 
-#: ../../source/installation.rst:264
+#: ../../source/installation.rst:263
 msgid "Run ``pc healthcheck`` to see what is missing on the current machine."
 msgstr "运行 ``pc healthcheck`` 可以查看当前机器上缺少了哪些东西。"
 
-#: ../../source/installation.rst:266
+#: ../../source/installation.rst:265
 msgid ""
 "The bundle provides the command line tools only. The ``partcad`` Python "
 "module for CAD-as-code scripts is a wheel: ``python -m pip install -U "
@@ -453,11 +452,11 @@ msgstr ""
 "该捆绑包仅提供命令行工具。用于代码化 CAD 脚本的 ``partcad`` Python 模块是一个 wheel 包： ``python -m "
 "pip install -U partcad`` 。"
 
-#: ../../source/installation.rst:272
+#: ../../source/installation.rst:271
 msgid "Latest Development Version of PartCAD"
 msgstr "PartCAD 的最新开发版本"
 
-#: ../../source/installation.rst:274
+#: ../../source/installation.rst:273
 msgid ""
 "You can install the latest development version of PartCAD from the "
 "``devel`` branch on `PartCAD <https://github.com/partcad/partcad>`_. "
@@ -469,19 +468,19 @@ msgstr ""
 "PartCAD 的最新开发版本。首先，创建一个隔离的 Python 环境，并确保 ``pip`` 、 ``setuptools`` 和 "
 "``wheel`` 均已升级，然后按照下面的说明安装核心模块和 CLI 工具。"
 
-#: ../../source/installation.rst:279
+#: ../../source/installation.rst:278
 msgid "**Install or upgrade the Core Python Module**"
 msgstr "**安装或升级核心 Python 模块**"
 
-#: ../../source/installation.rst:285
+#: ../../source/installation.rst:284
 msgid "**Install or upgrade the CLI**"
 msgstr "**安装或升级 CLI**"
 
-#: ../../source/installation.rst:293
+#: ../../source/installation.rst:292
 msgid "Python module"
 msgstr "Python 模块"
 
-#: ../../source/installation.rst:295
+#: ../../source/installation.rst:294
 msgid ""
 "PartCAD provides Python modules that can be used in CAD as code scripts "
 "(such as ``CadQuery``, ``build123d`` and ``sdf``). It's a dependency of "
@@ -490,36 +489,11 @@ msgstr ""
 "PartCAD 提供了可在代码化 CAD 脚本（例如 ``CadQuery`` 、 ``build123d`` 和 ``sdf`` ）中使用的 "
 "Python 模块。它是 ``partcad-cli`` 的一个依赖，因此通常不需要单独安装。"
 
-#: ../../source/installation.rst:309
-msgid "AI providers"
-msgstr "AI 提供方"
-
-#: ../../source/installation.rst:311
-msgid ""
-"The SDKs of the supported AI providers are optional. Install the extra "
-"that matches the provider you intend to use, either on ``partcad-cli``:"
-msgstr ""
-"受支持的各 AI 提供方的 SDK 是可选的。请安装与你打算使用的提供方相匹配的附加项（extra），既可以安装到 ``partcad-cli``"
-" 上："
-
-#: ../../source/installation.rst:321
-msgid "or on ``partcad`` itself, using the same extra names:"
-msgstr "也可以使用相同的附加项名称，安装到 ``partcad`` 本身上："
-
-#: ../../source/installation.rst:327
-msgid ""
-"Without the matching extra, using an AI provider fails with an error "
-"naming the package to install. Everything else in PartCAD works without "
-"them."
-msgstr ""
-"如果没有安装相匹配的附加项，使用某个 AI 提供方时会失败，并报出需要安装哪个包的错误。PartCAD "
-"中的其他一切功能在没有它们的情况下也都能正常工作。"
-
-#: ../../source/installation.rst:332
+#: ../../source/installation.rst:308
 msgid "Linting"
 msgstr "代码检查（Linting）"
 
-#: ../../source/installation.rst:334
+#: ../../source/installation.rst:310
 msgid ""
 "The linter used by ``pc lint`` to check Python files is optional. Install"
 " the ``lint`` extra to enable it, either on ``partcad-cli``:"
@@ -527,11 +501,11 @@ msgstr ""
 "``pc lint`` 用于检查 Python 文件的代码检查器是可选的。请安装 ``lint`` 附加项来启用它，既可以安装到 "
 "``partcad-cli`` 上："
 
-#: ../../source/installation.rst:341
+#: ../../source/installation.rst:317
 msgid "or on ``partcad`` itself, using the same extra name:"
 msgstr "也可以使用相同的附加项名称，安装到 ``partcad`` 本身上："
 
-#: ../../source/installation.rst:347
+#: ../../source/installation.rst:323
 msgid ""
 "Without the extra, linting Python files reports an error naming the "
 "package to install. Everything else in PartCAD, including linting of YAML"
@@ -540,11 +514,11 @@ msgstr ""
 "如果没有安装该附加项，对 Python 文件进行代码检查时会报出需要安装哪个包的错误。PartCAD 中的其他一切功能（包括对 YAML "
 "文件的代码检查）在没有它的情况下也都能正常工作。"
 
-#: ../../source/installation.rst:353
+#: ../../source/installation.rst:329
 msgid "Visual Studio Code extension"
 msgstr "Visual Studio Code 扩展"
 
-#: ../../source/installation.rst:355
+#: ../../source/installation.rst:331
 msgid ""
 "This extension is available through the VS Code marketplace. The "
 "corresponding marketplace page is `here "
@@ -553,11 +527,11 @@ msgstr ""
 "此扩展可通过 VS Code 市场获取。对应的市场页面在 `此处 "
 "<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ 。"
 
-#: ../../source/installation.rst:360
+#: ../../source/installation.rst:336
 msgid "Public PartCAD repository"
 msgstr "公共 PartCAD 仓库"
 
-#: ../../source/installation.rst:362
+#: ../../source/installation.rst:338
 msgid ""
 "The public PartCAD repository is hosted at `GitHub "
 "<https://github.com/partcad/partcad-index>`_. If necessary, PartCAD tools"
@@ -568,7 +542,7 @@ msgstr ""
 "公共 PartCAD 仓库托管在 `GitHub <https://github.com/partcad/partcad-index>`_ "
 "上。必要时，PartCAD 工具会自动获取该仓库以及所有其他所需仓库和包的内容。无需任何手动操作即可 `安装` 它。"
 
-#: ../../source/installation.rst:366
+#: ../../source/installation.rst:342
 msgid ""
 "However, if you suspect that something is wrong with locally cached "
 "files, use ``pc system status`` to investigate and to determine the "

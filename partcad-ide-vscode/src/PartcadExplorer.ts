@@ -45,8 +45,6 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         this.packages = {};
 
         vscode.commands.registerCommand('partcad.inspectSource', (item) => this.inspectSource(item));
-        vscode.commands.registerCommand('partcad.regeneratePart', (item) => this.regeneratePart(item));
-        vscode.commands.registerCommand('partcad.changePart', (item) => this.changePart(item));
 
         vscode.commands.registerCommand(`partcad.exportToSVG`, (item) => this.exportToSVG(item));
         vscode.commands.registerCommand(`partcad.exportToPNG`, (item) => this.exportToPNG(item));
@@ -60,7 +58,6 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
         vscode.commands.registerCommand(`partcad.test`, (item) => this.test(item));
 
-        vscode.commands.registerCommand(`partcad.genPartItem`, (item) => this.genPart(item));
         vscode.commands.registerCommand(`partcad.addPartItem`, (item) => this.addPart(item));
         vscode.commands.registerCommand(`partcad.addAssemblyItem`, (item) => this.addAssembly(item));
     }
@@ -77,20 +74,6 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                 objectName: item.name,
             });
         }
-    }
-
-    public async genPart(item: PartcadItem) {
-        let packageName = this.root;
-        if (item.itemType === ITEM_TYPE_PACKAGE) {
-            packageName = item.name;
-        } else if (item.itemType !== ITEM_TYPE_NONE) {
-            packageName = item.pkg;
-        }
-
-        await vscode.commands.executeCommand('partcad.packagePath', {
-            packageName: packageName,
-            callback: 'partcad.genPart2',
-        });
     }
 
     public async addPart(item: PartcadItem) {
@@ -129,14 +112,6 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             });
             await vscode.commands.executeCommand('partcad.inspectFile', item.itemPath);
         }
-    }
-
-    public async regeneratePart(item: PartcadItem) {
-        await vscode.commands.executeCommand('partcad.regeneratePartCb', { pkg: item.pkg, name: item.name });
-    }
-
-    public async changePart(item: PartcadItem) {
-        await vscode.commands.executeCommand('partcad.changePartCb', { pkg: item.pkg, name: item.name });
     }
 
     clearItems() {

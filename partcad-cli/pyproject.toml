@@ -34,10 +34,6 @@ dependencies = {file = ["requirements.txt"]}
 
 # Pass-through extras: they pull in the matching `partcad` extra.
 [tool.setuptools.dynamic.optional-dependencies]
-ai-google = {file = ["requirements-ai-google.txt"]}
-ai-openai = {file = ["requirements-ai-openai.txt"]}
-ai-ollama = {file = ["requirements-ai-ollama.txt"]}
-ai = {file = ["requirements-ai.txt"]}
 lint = {file = ["requirements-lint.txt"]}
 
 [project.urls]

@@ -213,20 +213,6 @@ def test_part_example_sdf():
     assert wrapped is not None
 
 
-def test_part_example_ai_sdf():
-    """Instantiate a part from the example: produce_part_ai_sdf.
-
-    The example ships a checked-in SDF script, so this exercises the ai-sdf
-    factory without contacting an AI provider.
-    """
-    ctx = pc.init("examples")
-    cube = ctx.get_part("//produce_part_ai_sdf:cube")
-    assert cube is not None
-
-    wrapped = asyncio.run(cube.get_wrapped(ctx))
-    assert wrapped is not None
-
-
 def test_part_example_build123d_primitive():
     """Instantiate all parts from the example: part_build123d_primitive"""
     ctx = pc.init("examples")

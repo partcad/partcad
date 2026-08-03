@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"POT-Creation-Date: 2026-08-03 15:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -79,8 +79,8 @@ msgid ""
 "``pc system status`` — Display the state of the internal data used by "
 "PartCAD, including the location of the local cache."
 msgstr ""
-"``pc system status`` — Muestra el estado de los datos internos usados "
-"por PartCAD, incluida la ubicación de la caché local."
+"``pc system status`` — Muestra el estado de los datos internos usados por"
+" PartCAD, incluida la ubicación de la caché local."
 
 #: ../../source/cli.rst:25
 msgid ""
@@ -132,9 +132,7 @@ msgstr "``pc install``"
 
 #: ../../source/cli.rst:39
 msgid "Download and set up all packages imported by the current package."
-msgstr ""
-"Descarga y configura todos los paquetes importados por el paquete "
-"actual."
+msgstr "Descarga y configura todos los paquetes importados por el paquete actual."
 
 #: ../../source/cli.rst:41
 msgid "``pc update``"
@@ -202,10 +200,10 @@ msgid ""
 "(import an assembly from a file, creating the parts and an Assembly YAML "
 "file)."
 msgstr ""
-"Importa un objeto existente a un paquete. Subcomandos: ``part`` (importa"
-" una pieza existente y opcionalmente convierte su formato) y "
-"``assembly`` (importa un ensamblaje desde un archivo, creando las piezas"
-" y un archivo Assembly YAML)."
+"Importa un objeto existente a un paquete. Subcomandos: ``part`` (importa "
+"una pieza existente y opcionalmente convierte su formato) y ``assembly`` "
+"(importa un ensamblaje desde un archivo, creando las piezas y un archivo "
+"Assembly YAML)."
 
 #: ../../source/cli.rst:64
 msgid "``pc test``"
@@ -274,8 +272,8 @@ msgid ""
 msgstr ""
 "Exporta una vista 3D de piezas, ensamblajes o escenas. Elija el formato "
 "con ``-t``: ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, "
-"``gltf``, o ``iges``. Use ``-O`` para establecer el directorio de salida"
-" y ``-r`` para exportar de forma recursiva."
+"``gltf``, o ``iges``. Use ``-O`` para establecer el directorio de salida "
+"y ``-r`` para exportar de forma recursiva."
 
 #: ../../source/cli.rst:84
 msgid "``pc render``"
@@ -294,67 +292,53 @@ msgid "Workflow commands"
 msgstr "Comandos de flujo de trabajo"
 
 #: ../../source/cli.rst:92
-msgid "``pc ai``"
-msgstr "``pc ai``"
-
-#: ../../source/cli.rst:93
-msgid ""
-"AI-powered workflows. The ``regenerate`` subcommand regenerates a sketch,"
-" part, or assembly from its description using a configured AI model."
-msgstr ""
-"Flujos de trabajo impulsados por IA. El subcomando ``regenerate`` "
-"regenera un boceto, pieza o ensamblaje a partir de su descripción usando"
-" un modelo de IA configurado."
-
-#: ../../source/cli.rst:96
 msgid "``pc supply``"
 msgstr "``pc supply``"
 
-#: ../../source/cli.rst:97
+#: ../../source/cli.rst:93
 msgid "Manage the supply chain of the current project:"
 msgstr "Gestiona la cadena de suministro del proyecto actual:"
 
-#: ../../source/cli.rst:99
+#: ../../source/cli.rst:95
 msgid "``pc supply caps`` — Show the capabilities of a provider."
 msgstr "``pc supply caps`` — Muestra las capacidades de un proveedor."
 
-#: ../../source/cli.rst:100
+#: ../../source/cli.rst:96
 msgid "``pc supply find`` — Find suppliers."
 msgstr "``pc supply find`` — Busca proveedores."
 
-#: ../../source/cli.rst:101
+#: ../../source/cli.rst:97
 msgid "``pc supply quote`` — Get a quote from suppliers."
 msgstr "``pc supply quote`` — Obtiene una cotización de los proveedores."
 
-#: ../../source/cli.rst:102
+#: ../../source/cli.rst:98
 msgid "``pc supply order`` — Place an order with suppliers."
 msgstr "``pc supply order`` — Realiza un pedido con los proveedores."
 
-#: ../../source/cli.rst:106
+#: ../../source/cli.rst:102
 msgid "Other commands"
 msgstr "Otros comandos"
 
-#: ../../source/cli.rst:108
+#: ../../source/cli.rst:104
 msgid "``pc adhoc``"
 msgstr "``pc adhoc``"
 
-#: ../../source/cli.rst:109
+#: ../../source/cli.rst:105
+#, fuzzy
 msgid ""
 "Ad-hoc operations that run on the fly without creating or configuring a "
-"package. Subcommands: ``convert`` (convert a part or sketch to another "
-"format without updating its type) and ``generate`` (generate an AI-"
-"powered part without creating a package)."
+"package. Subcommand: ``convert`` (convert a part or sketch to another "
+"format without updating its type)."
 msgstr ""
 "Operaciones ad hoc que se ejecutan al vuelo sin crear ni configurar un "
-"paquete. Subcomandos: ``convert`` (convierte una pieza o boceto a otro "
-"formato sin actualizar su tipo) y ``generate`` (genera una pieza "
-"impulsada por IA sin crear un paquete)."
+"paquete. Subcomando: ``convert`` (convierte una pieza o boceto a otro "
+"formato sin actualizar su tipo)."
 
-#: ../../source/cli.rst:113
+#: ../../source/cli.rst:108
 msgid "``pc healthcheck``"
 msgstr "``pc healthcheck``"
 
-#: ../../source/cli.rst:114
+#: ../../source/cli.rst:109
 msgid ""
 "Check the host system for known issues. Use ``--dry-run`` to list the "
 "available checks, ``--filters`` to run only checks with the given tags, "
@@ -362,14 +346,14 @@ msgid ""
 msgstr ""
 "Comprueba el sistema host en busca de problemas conocidos. Use ``--dry-"
 "run`` para enumerar las comprobaciones disponibles, ``--filters`` para "
-"ejecutar solo las comprobaciones con las etiquetas indicadas, y ``--"
-"fix`` para intentar correcciones automáticas."
+"ejecutar solo las comprobaciones con las etiquetas indicadas, y ``--fix``"
+" para intentar correcciones automáticas."
 
-#: ../../source/cli.rst:117
+#: ../../source/cli.rst:112
 msgid "``pc search``"
 msgstr "``pc search``"
 
-#: ../../source/cli.rst:118
+#: ../../source/cli.rst:113
 msgid ""
 "Search for objects by keyword. Subcommands: ``all``, ``parts``, "
 "``sketches``, ``assemblies``, ``interfaces``, and ``packages``."

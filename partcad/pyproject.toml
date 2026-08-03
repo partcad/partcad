@@ -34,12 +34,6 @@ classifiers = [
 dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.dynamic.optional-dependencies]
-# Optional AI providers. The corresponding SDKs are imported lazily, so they are
-# only required when the matching AI provider is actually used.
-ai-google = {file = ["requirements-ai-google.txt"]}
-ai-openai = {file = ["requirements-ai-openai.txt"]}
-ai-ollama = {file = ["requirements-ai-ollama.txt"]}
-ai = {file = ["requirements-ai.txt"]}
 # Optional linting dependency. `ruff` ships a native executable that is resolved
 # and launched lazily, so it is only required when `pc lint` actually runs.
 lint = {file = ["requirements-lint.txt"]}

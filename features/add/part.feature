@@ -51,19 +51,6 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "1"
     And STDERR should contain "Invalid OpenSCAD syntax"
 
-  @wip @ai-openscad @error
-  Scenario: Handle AI service failure
-    When I run "partcad add part ai-openscad --ai google --desc 'Simple case' 'case.scad'"
-    And the AI service is unavailable
-    Then the command should exit with a status code of "1"
-    And STDERR should contain "AI service unavailable"
-
-  @wip @ai-openscad @error
-  Scenario: Handle invalid AI provider
-    When I run "partcad add part ai-openscad --ai unknown --desc 'Simple case' 'case.scad'"
-    Then the command should exit with a status code of "1"
-    And STDERR should contain "Invalid AI provider"
-
   @wip @scad @error
   Scenario: Reject non-existent SCAD file
     When I run "partcad add part scad nonexistent.scad"
@@ -79,26 +66,6 @@ Feature: `pc add part` command
     When I run "partcad add part scad invalid.scad"
     Then the command should exit with a status code of "1"
     And STDERR should contain "Invalid OpenSCAD syntax"
-
-  @wip @ai-openscad
-  Scenario: Add ai-openscad Part using GoogleAI
-    When I run "partcad add part ai-openscad --ai google --desc 'Pixel phone case of a surprising shape' 'generated-case.scad'"
-    Then the command should exit with a status code of "0"
-    # And a file named "$PWD/partcad.yaml" should have content:
-    And a file named "partcad.yaml" should have YAML content:
-      """
-      private: true
-      pythonVersion: ">=\\d+\\.\\d+"
-      partcad: ">=\\d+\\.\\d+\\.\\d+"
-      dependencies:
-      sketches:
-      parts:
-        generated-case:
-          type: ai-openscad
-          desc: Pixel phone case of a surprising shape
-          provider: google
-      assemblies:
-      """
 
   @cadquery
   Scenario: Add cadquery Part from "example.py" file
@@ -237,25 +204,6 @@ Feature: `pc add part` command
       assemblies:
       """
 
-  @wip @ai-cadquery
-  Scenario: Add ai-cadquery Part using OpenAI
-    When I run "partcad add part ai-cadquery --ai openai --desc 'Custom mechanical part' 'custom_part.py'"
-    Then the command should exit with a status code of "0"
-    And a file named "partcad.yaml" should have YAML content:
-      """
-      private: true
-      pythonVersion: ">=\\d+\\.\\d+"
-      partcad: ">=\\d+\\.\\d+\\.\\d+"
-      dependencies:
-      sketches:
-      parts:
-        custom-part:
-          type: ai-cadquery
-          desc: Custom mechanical part
-          provider: openai
-      assemblies:
-      """
-
   @wip @cadquery @error
   Scenario: Reject invalid CadQuery script
     Given a file named "invalid_cq.py" with content:
@@ -323,13 +271,7 @@ Feature: `pc add part` command
     Then the command should exit with a status code of "1"
     And STDERR should contain "Invalid 3MF file"
 
-  @wip @ai-cadquery @error
-  Scenario: Reject invalid AI-generated CadQuery part
-    When I run "partcad add part ai-cadquery --ai google --desc 'An impossible object that defies physics' 'impossible.py'"
-    Then the command should exit with a status code of "1"
-    And STDERR should contain "Failed to generate CadQuery part"
-
-  @wip @ai-openscad
+  @wip @scad
   Scenario: Add scad part from `test.scad` file
     # TODO-54: @alexanderilyin: Add scad linting
     Given a file named "test.scad" with content:

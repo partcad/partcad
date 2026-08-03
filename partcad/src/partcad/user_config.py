@@ -427,56 +427,6 @@ class UserConfig(vyper.Vyper):
             # An unset or nonsensical value must not turn the bound back off
             self.git_clone_timeout = 180
 
-        # option: googleApiKey
-        # description: GOOGLE API key for AI services
-        # values: <string>
-        # default: None
-        self.bind_env("googleApiKey", "PC_GOOGLE_API_KEY")
-        self.google_api_key = self.get("googleApiKey")
-
-        # option: openaiApiKey
-        # description: OpenAI API key for AI services
-        # values: <string>
-        # default: None
-        self.bind_env("openaiApiKey", "PC_OPENAI_API_KEY")
-        self.openai_api_key = self.get("openaiApiKey")
-
-        # option: ollamaNumThread
-        # description: Ask Ollama to use the given number of CPU threads
-        # values: <integer>
-        # default: None
-        self.ollama_num_thread = None
-        self.bind_env("ollamaNumThread", "PC_OLLAMA_NUM_THREAD")
-        if self.is_set("ollamaNumThread"):
-            self.ollama_num_thread = self.get_int("ollamaNumThread")
-
-        # option: maxGeometricModeling
-        # description: the number of attempts for geometric modelling
-        # values: <integer>
-        # default: None
-        self.max_geometric_modeling = None
-        self.bind_env("maxGeometricModeling", "PC_MAX_GEOMETRIC_MODELING")
-        if self.is_set("maxGeometricModeling"):
-            self.max_geometric_modeling = self.get_int("maxGeometricModeling")
-
-        # option: maxModelGeneration
-        # description: the number of attempts for CAD script generation
-        # values: <integer>
-        # default: None
-        self.max_model_generation = None
-        self.bind_env("maxModelGeneration", "PC_MAX_MODEL_GENERATION")
-        if self.is_set("maxModelGeneration"):
-            self.max_model_generation = self.get_int("maxModelGeneration")
-
-        # option: maxScriptCorrection
-        # description: the number of attempts to incrementally fix the script if it's not working
-        # values: <integer>
-        # default: None
-        self.max_script_correction = None
-        self.bind_env("maxScriptCorrection", "PC_MAX_SCRIPT_CORRECTION")
-        if self.is_set("maxScriptCorrection"):
-            self.max_script_correction = self.get_int("maxScriptCorrection")
-
         # option: telemetry
         # description: Telemetry configuration
         # values: <dict>

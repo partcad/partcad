@@ -115,11 +115,7 @@ export class PartcadItem extends vscode.TreeItem {
                     dark: path.join(__filename, '..', '..', 'resources', 'dark', 'file-binary.svg'),
                 };
             }
-            this.contextValue = config.type.startsWith('ai-')
-                ? 'partWithAI'
-                : itemPath === undefined
-                  ? 'part'
-                  : 'partWithCode';
+            this.contextValue = itemPath === undefined ? 'part' : 'partWithCode';
             this.command = {
                 title: 'Inspect',
                 command: 'partcad.inspectPart',
