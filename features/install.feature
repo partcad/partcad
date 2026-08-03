@@ -38,7 +38,9 @@ Feature: `pc install` command
     Then the command should exit with a status code of "0"
 
   # TODO: Investigate SSH-related hangs in Windows runners
-  @success @pc-init @pc-install @pc-ansi @skip-windows
+  # @requires-network: this clones from github.com; before_scenario in
+  # features/environment.py skips it when the network is unreachable.
+  @success @pc-init @pc-install @pc-ansi @skip-windows @requires-network
   Scenario: Install packages with ssh
     Given environment variable "PC_NO_ANSI" is set to "1"
     And a file named "partcad.yaml" with content:
