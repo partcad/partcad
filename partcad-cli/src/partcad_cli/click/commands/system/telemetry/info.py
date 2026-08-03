@@ -15,7 +15,10 @@ import partcad as pc
 def cli(cli_ctx) -> None:
     with pc.telemetry.set_context(cli_ctx.otel_context):
         with pc.logging.Process("SysTelInfo", "global"):
-            id_path = os.path.join(pc.user_config.internal_state_dir, ".generated_id")
+            # The ID is generated and stored by telemetry_sentry.py under the
+            # user config directory, not under 'internalStateDir'. Looking
+            # anywhere else reports "None" for a user who has one.
+            id_path = os.path.join(pc.user_config.get_config_dir(), ".generated_id")
             if os.path.exists(id_path):
                 with open(id_path, "r") as file:
                     id_value = file.read()

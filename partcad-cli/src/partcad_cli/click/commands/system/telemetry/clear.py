@@ -15,7 +15,10 @@ import partcad as pc
 def cli(cli_ctx) -> None:
     with pc.telemetry.set_context(cli_ctx.otel_context):
         with pc.logging.Process("SysTelClear", "global"):
-            id_path = os.path.join(pc.user_config.internal_state_dir, ".generated_id")
+            # Must match where telemetry_sentry.py writes the ID (the user
+            # config directory), or this command reports success while leaving
+            # the ID that identifies the user in place.
+            id_path = os.path.join(pc.user_config.get_config_dir(), ".generated_id")
             if os.path.exists(id_path):
                 os.unlink(id_path)
                 pc.logging.info(f"Removed telemetry ID file: '{id_path}'")
