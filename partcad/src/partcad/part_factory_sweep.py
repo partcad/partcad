@@ -109,5 +109,6 @@ class PartFactorySweep(PartFactory):
                 self.ctx.stats_parts_instantiated += 1
                 return result["shape"]
             except Exception as e:
+                part.error("%s: %s: failed to create a swept part: %s" % (part.project_name, part.name, e))
                 pc_logging.exception(f"Failed to create a swept part: {e}")
                 return None
