@@ -39,6 +39,23 @@ PYTHON=/tmp/pyi-venv/bin/python dev-tools/pyinstaller/build.sh
 Pass `--no-install` to skip the dependency step when the environment is already prepared, and `--no-archive` to
 stop after the bundle and skip packing it.
 
+On an Apple silicon Mac, build from a **non-conda** interpreter. PartCAD needs conda for the CAD sandbox, so a
+conda `python3` is usually first on `PATH` — and freezing from one produces a bundle that segfaults. `pygit2`
+reads the libgit2 config search path through a variadic C call, which cffi dispatches at run time through
+`_cffi_backend`; the conda-forge cffi 2.x build mis-marshals variadic arguments on Apple arm64 (the PyPI wheel,
+linked against Apple's system libffi, does not). Nothing catches it downstream: the crashing path only runs
+when a clone fails to authenticate and PartCAD retries it with the ambient git config ignored, so the bundle
+passes every check and then crashes for users. `build.sh` refuses to freeze a `_cffi_backend` that is not the
+PyPI build; if it does, either build from a plain `python.org`/`pyenv` interpreter or force the wheel in:
+
+```bash
+python -m pip install --upgrade --force-reinstall --no-deps --only-binary=:all: cffi
+```
+
+CI is not exposed to this — `build-standalone.yml` provisions Python with `actions/setup-python`, which has no
+conda anywhere near it. The same crash in the *wheel*-based CI jobs, whose runners do use conda, is handled
+separately in `.github/actions/setup-all/action.yml`.
+
 The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
 `partcad-<version>-<os>-<arch>.tar.gz` (`.zip` on Windows), and its `.sha256`. The archive name is a contract
 with `install.sh`, which derives the same name from `uname`.
