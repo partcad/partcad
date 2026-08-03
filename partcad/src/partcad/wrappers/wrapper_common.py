@@ -63,6 +63,65 @@ def handle_output(model):
     sys.stdout.flush()
 
 
+def combine(shapes, kind):
+    """Compound the script's result shapes and collect its components.
+
+    This is the filtering the part/sketch factories used to do in the core
+    process; it now happens here so the core never touches a live OCP object.
+    'kind' picks the rule:
+      - "sketch": keep only the 1D/2D geometry (edges/wires/faces) - a sketch is
+        made of those - both in the compound and as components. A compound that
+        wraps such geometry is descended into rather than dropped: cadquery and
+        build123d routinely hand a sketch back as a compound of faces (cadquery
+        2.8's Workplane.placeSketch is one), and discarding it would leave the
+        sketch empty.
+      - "part" (default): every shape is a component, and everything except bare
+        edges/wires/faces goes into the compound.
+    Nested lists are walked and preserved in the components tree. Returns
+    (TopoDS_Compound, components).
+    """
+    import OCP.TopoDS  # noqa: F401
+    import OCP.TopAbs  # noqa: F401
+
+    lower_dim = (OCP.TopAbs.TopAbs_EDGE, OCP.TopAbs.TopAbs_WIRE, OCP.TopAbs.TopAbs_FACE)
+    builder = OCP.TopoDS.TopoDS_Builder()
+    compound = OCP.TopoDS.TopoDS_Compound()
+    builder.MakeCompound(compound)
+    components = []
+
+    def walk(items, out):
+        for shape in items:
+            if shape is None or isinstance(shape, str):
+                continue
+            if isinstance(shape, list):
+                child = []
+                walk(shape, child)
+                out.append(child)
+                continue
+            if not isinstance(shape, OCP.TopoDS.TopoDS_Shape) or shape.IsNull():
+                continue
+            shape_type = shape.ShapeType()
+            if kind == "sketch":
+                if shape_type == OCP.TopAbs.TopAbs_COMPOUND:
+                    # Descend into the compound and keep the edges/wires/faces it
+                    # holds, instead of discarding the whole wrapper.
+                    iterator = OCP.TopoDS.TopoDS_Iterator(shape)
+                    while iterator.More():
+                        walk([iterator.Value()], out)
+                        iterator.Next()
+                    continue
+                if shape_type in lower_dim:
+                    out.append(shape)
+                    builder.Add(compound, shape)
+            else:
+                out.append(shape)
+                if shape_type not in lower_dim:
+                    builder.Add(compound, shape)
+
+    walk(shapes, components)
+    return compound, components
+
+
 def exception_to_str(exc):
     """Normalize an exception for the response envelope.
 

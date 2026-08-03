@@ -8,7 +8,6 @@
 #
 
 import os
-import sys
 import threading
 
 from . import logging as pc_logging
@@ -16,8 +15,7 @@ from . import wrapper
 from .part_factory_file import PartFactoryFile
 from . import telemetry
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
+from . import shape_envelope
 
 
 @telemetry.instrument()
@@ -36,10 +34,10 @@ class PartFactoryStep(PartFactoryFile):
         with pc_logging.Action("STEP", part.project_name, part.name):
             wrapper_path = wrapper.get("step.py")
             request = {"build_parameters": {}}
-            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{ocp_serialize.serialize}"):
+            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{shape_envelope.serialize}"):
                 request["name"] = "%s:%s" % (part.project_name, part.name)
                 request["label"] = part.name
-                request_serialized = ocp_serialize.serialize(request)
+                request_serialized = shape_envelope.serialize(request)
 
             with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{runtime.run_async}"):
                 command = [wrapper_path, os.path.abspath(part.path), os.path.abspath(self.project.config_dir)]
@@ -54,8 +52,8 @@ class PartFactoryStep(PartFactoryFile):
                     pc_logging.error(errors)
                     raise Exception(errors)
 
-            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{ocp_serialize.deserialize}"):
-                result = ocp_serialize.deserialize(response_serialized)
+            with telemetry.start_as_current_span("*PartFactoryStep.instantiate.{shape_envelope.deserialize}"):
+                result = shape_envelope.deserialize(response_serialized)
             if not result["success"]:
                 pc_logging.error(result["exception"])
                 raise Exception(result["exception"])

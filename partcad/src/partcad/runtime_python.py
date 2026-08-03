@@ -319,6 +319,15 @@ class PythonRuntime(runtime.Runtime):
                     await self.ensure_async_onced_locked(sandbox_versions.CADQUERY_OCP)
                     self.initialized = True
 
+    def _subprocess_env(self):
+        """Environment for a spawned sandbox process, or None to inherit ours.
+
+        The base runtime inherits the parent environment unchanged. Subclasses
+        whose interpreter needs help locating its own shared libraries override
+        this (see CondaPythonRuntime).
+        """
+        return None
+
     def run(self, cmd, stdin="", cwd=None, session=None):
         self.once()
         return self.run_onced(cmd, stdin=stdin, cwd=cwd, session=session)
@@ -366,6 +375,7 @@ class PythonRuntime(runtime.Runtime):
                     stderr=subprocess.PIPE,
                     shell=False,
                     encoding="utf-8",
+                    env=self._subprocess_env(),
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
                     cwd=cwd,
                 )
@@ -496,6 +506,7 @@ class PythonRuntime(runtime.Runtime):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     shell=False,
+                    env=self._subprocess_env(),
                     # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
                     cwd=cwd,
                 )

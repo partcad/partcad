@@ -1,6 +1,11 @@
-cadquery-ocp==7.9.3.1.1
-ocpsvg==0.6.0
-build123d==0.11.1
+# No CAD library is a runtime dependency of PartCAD. It builds, renders and
+# exports every shape - and reads STEP assemblies for 'pc import assembly' and
+# converts files for 'pc convert' - in sandboxed runtimes, which install their
+# own copy of the CAD stack (see sandbox_versions), and it carries geometry
+# between them as BREP-byte envelopes rather than live OCP objects. The only
+# things that need a CAD library present in this process are handing back live
+# build123d/cadquery objects (convert("build123d"/"cadquery")) and show(); both
+# are opt-in, import their library lazily, and warn if it is not installed.
 # sdf-fork  # installed on demand into the sandbox runtime (see part_factory_sdf.py)
 pyyaml>=6.0.1
 pygit2>=1.15.0

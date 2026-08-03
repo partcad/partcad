@@ -10,7 +10,6 @@
 import asyncio
 import os
 import subprocess
-import sys
 import tempfile
 
 from . import logging as pc_logging
@@ -19,8 +18,7 @@ from .healthcheck.openscad import find_executable as find_openscad_executable
 from .part_factory_file import PartFactoryFile
 from . import sandbox_versions
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
+from . import shape_envelope
 
 
 def _scad_literal(value):
@@ -229,7 +227,7 @@ class PartFactoryScad(PartFactoryFile):
                 request = {"fallback_import_stl": True}
                 request["name"] = "%s:%s" % (part.project_name, part.name)
                 request["label"] = part.name
-                request_serialized = ocp_serialize.serialize(request)
+                request_serialized = shape_envelope.serialize(request)
 
                 await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE)
                 await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS)
@@ -257,7 +255,7 @@ class PartFactoryScad(PartFactoryFile):
                     return None
 
                 try:
-                    result = ocp_serialize.deserialize(response_serialized)
+                    result = shape_envelope.deserialize(response_serialized)
                 except Exception as e:
                     part.error("%s: %s" % (part.name, e))
                     return None

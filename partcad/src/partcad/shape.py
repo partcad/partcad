@@ -30,8 +30,13 @@ if TYPE_CHECKING:
     from partcad.context import Context
     from partcad.project import Project
 
+# The core carries shapes as opaque BREP envelopes (see shape_envelope), never
+# as live OCP objects. 'wrappers' stays on sys.path so the few code paths that
+# legitimately need a live shape - the single normalization choke point in
+# get_wrapped(), and convert()/show() which hand a live object to a CAD library
+# - can import the OCP codec lazily.
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
+from . import shape_envelope
 
 from . import sandbox_versions
 from . import telemetry
@@ -227,22 +232,27 @@ class Shape(ShapeConfiguration):
 
                 shape = await self.get_shape(ctx)
 
+                # Normalize whatever the factory produced into a BREP envelope so
+                # the rest of the core - caching, offset/scale, the return value -
+                # only ever handles opaque envelopes, never live OCP objects. A
+                # factory that still builds a live shape in-process is encoded
+                # here, at the single choke point; factories that delegate to a
+                # wrapper already return an envelope and pass straight through.
+                shape = self._to_envelope(shape)
+                if self.components:
+                    self.components = [self._component_to_envelope(c) for c in self.components]
+
                 # TODO(clairbee): apply 'offset' and 'scale' during instantiation and
                 #                 apply to both 'wrapped' and 'components'
-                if "offset" in self.config:
-                    import build123d as b3d
+                # 'offset'/'scale' are applied in a sandbox (see transform.py) so
+                # the core does not have to run build123d in-process to do it.
+                if shape is not None and ("offset" in self.config or "scale" in self.config):
+                    from . import transform
 
-                    b3d_solid = b3d.Solid.make_box(1, 1, 1)
-                    b3d_solid.wrapped = shape
-                    b3d_solid.relocate(b3d.Location(*self.config["offset"]))
-                    shape = b3d_solid.wrapped
-                if "scale" in self.config:
-                    import build123d as b3d
-
-                    b3d_solid = b3d.Solid.make_box(1, 1, 1)
-                    b3d_solid.wrapped = shape
-                    b3d_solid = b3d_solid.scale(self.config["scale"])
-                    shape = b3d_solid.wrapped
+                    if "offset" in self.config:
+                        shape = await transform.offset(ctx, shape, self.config["offset"])
+                    if "scale" in self.config:
+                        shape = await transform.scale(ctx, shape, self.config["scale"])
 
                 if cache_hash:
                     if is_cacheable:
@@ -260,6 +270,37 @@ class Shape(ShapeConfiguration):
                     self._wrapped = shape
                 return shape
 
+    def _shape_metadata(self):
+        """The (full_name, label) stamped onto this shape's envelope."""
+        name = getattr(self, "name", None)
+        project = getattr(self, "project_name", None)
+        full_name = ("%s:%s" % (project, name)) if project and name else name
+        label = self.config.get("label", name) if isinstance(self.config, dict) else name
+        return full_name, label
+
+    def _to_envelope(self, shape, name=None, label=None):
+        """Normalize a factory's output into a BREP envelope dict.
+
+        An envelope (or None) passes straight through. A live OCP shape - which
+        only the in-process factories still produce - is encoded here, the one
+        place in the core that touches a live shape. The OCP codec is imported
+        lazily, so a workflow that only uses delegating factories never pulls
+        OCP into the core process.
+        """
+        if shape is None or shape_envelope.is_shape_envelope(shape):
+            return shape
+        import ocp_serialize
+
+        if name is None and label is None:
+            name, label = self._shape_metadata()
+        return ocp_serialize.encode_shape(shape, name=name, label=label)
+
+    def _component_to_envelope(self, component):
+        """Normalize a component (or nested list of components) into envelopes."""
+        if isinstance(component, list):
+            return [self._component_to_envelope(item) for item in component]
+        return self._to_envelope(component)
+
     async def get_cache_value(self, ctx, shape):
         """The value stored in the shape cache under 'self.kind'.
 
@@ -267,14 +308,14 @@ class Shape(ShapeConfiguration):
         Assembly overrides this to store its nested tree so that the hierarchy -
         names, labels and sub-assemblies - survives caching, which a flat
         compound would lose.
+
+        'shape' is already a BREP envelope (get_wrapped normalizes it), so this
+        only restamps the cache's canonical name/label onto it.
         """
         if shape is None:
             return None
-        name = getattr(self, "name", None)
-        project = getattr(self, "project_name", None)
-        full_name = ("%s:%s" % (project, name)) if project and name else name
-        label = self.config.get("label", name) if isinstance(self.config, dict) else name
-        return ocp_serialize.encode_shape(shape, name=full_name, label=label)
+        full_name, label = self._shape_metadata()
+        return shape_envelope.with_metadata(shape, name=full_name, label=label)
 
     async def convert(self, part_type: str, ctx=None, **kwargs):
         """Convert this shape to 'part_type' and return the result in memory.
@@ -349,20 +390,45 @@ class Shape(ShapeConfiguration):
         # being able to tell that apart and report which shape went missing.
         wrapped = await self.get_wrapped(ctx)
 
-        # Keep the CAD libraries out of the module scope: importing them is
-        # expensive and this process is meant to stop depending on them.
-        if part_type == "build123d":
-            import build123d as b3d
+        # 'build123d' and 'cadquery' are NOT dependencies of PartCAD: it builds
+        # and exports every shape in sandboxed runtimes. Handing back a *live*
+        # object of that flavour is the one thing PartCAD cannot do without the
+        # library actually present in the caller's environment - so this path is
+        # only for users who already have it, and OCP (which decodes the BREP)
+        # comes with it. When it is missing, warn naming the expected library and
+        # re-raise, rather than pointing at a PartCAD install extra.
+        try:
+            # get_wrapped() returns a BREP envelope; a live object is what this
+            # API promises, so decode it here. This is one of the few core paths
+            # that legitimately holds a live OCP shape, which is why the imports
+            # stay lazy.
+            live = None
+            if wrapped is not None:
+                import ocp_serialize
 
-            b3d_solid = b3d.Solid.make_box(1, 1, 1)
-            b3d_solid.wrapped = wrapped
-            return b3d_solid
+                live = ocp_serialize.decode_shape(wrapped)
 
-        import cadquery as cq
+            if part_type == "build123d":
+                import build123d as b3d
 
-        cq_solid = cq.Solid.makeBox(1, 1, 1)
-        cq_solid.wrapped = wrapped
-        return cq_solid
+                b3d_solid = b3d.Solid.make_box(1, 1, 1)
+                b3d_solid.wrapped = live
+                return b3d_solid
+
+            import cadquery as cq
+
+            cq_solid = cq.Solid.makeBox(1, 1, 1)
+            cq_solid.wrapped = live
+            return cq_solid
+        except ImportError as e:
+            pc_logging.warning(
+                "convert('%s') needs the '%s' library, which is not installed. Install it in "
+                "your project to work with PartCAD parts as live '%s' objects." % (part_type, part_type, part_type)
+            )
+            raise ImportError(
+                "convert('%s') needs the '%s' library, which is not installed. "
+                "Install '%s' to get a live %s object." % (part_type, part_type, part_type, part_type)
+            ) from e
 
     async def _convert_to_serialized(self, part_type: str, ctx, **kwargs):
         """Export this shape to 'part_type' and return the payload in memory.
@@ -476,8 +542,20 @@ class Shape(ShapeConfiguration):
                         # ocp_vscode.config.status()
                         pc_logging.info('Visualizing in "OCP CAD Viewer"...')
                         # pc_logging.debug(self.shape)
+                        # The viewer needs live OCP objects; get_components()
+                        # returns BREP envelopes, so decode them here (lazily -
+                        # ocp_vscode already brings OCP with it).
+                        import ocp_serialize
+
+                        def _to_live(component):
+                            if isinstance(component, list):
+                                return [_to_live(item) for item in component]
+                            if shape_envelope.is_shape_envelope(component):
+                                return ocp_serialize.decode_shape(component)
+                            return component
+
                         ocp_vscode.show(
-                            *components,
+                            *[_to_live(component) for component in components],
                             progress=None,
                             **show_kwargs,
                         )
@@ -544,8 +622,8 @@ class Shape(ShapeConfiguration):
             "line_weight": line_weight,
             "viewport_origin": viewport_origin,
         }
-        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{ocp_serialize.serialize}"):
-            request_serialized = ocp_serialize.serialize(request)
+        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{shape_envelope.serialize}"):
+            request_serialized = shape_envelope.serialize(request)
 
         # We don't care about customer preferences much here
         # as this is expected to be hermetic.
@@ -569,7 +647,7 @@ class Shape(ShapeConfiguration):
             pc_logging.error(errors)
             raise Exception(errors)
 
-        result = ocp_serialize.deserialize(response_serialized)
+        result = shape_envelope.deserialize(response_serialized)
         if not result["success"]:
             pc_logging.error("RenderSVG failed: %s:%s: %s" % (self.project_name, self.name, result["exception"]))
         if "exception" in result and not result["exception"] is None:
@@ -770,7 +848,7 @@ class Shape(ShapeConfiguration):
                     request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
                     request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
 
-                request_serialized = ocp_serialize.serialize(request)
+                request_serialized = shape_envelope.serialize(request)
 
                 runtime = ctx.get_python_runtime(version="3.11")
 
@@ -808,7 +886,7 @@ class Shape(ShapeConfiguration):
                 # Handle response
                 result = {}
                 try:
-                    result = ocp_serialize.deserialize(cleaned_response)
+                    result = shape_envelope.deserialize(cleaned_response)
                 except Exception as e:
                     pc_logging.error(f"Failed to deserialize response: {e}")
 

@@ -8,12 +8,9 @@
 #
 
 from .test import Test
-from .. import logging as pc_logging
 from ..part import Part
 from ..part_config import PartConfiguration
 from ..part_config_manufacturing import METHOD_FORMING
-
-from OCP.ShapeAnalysis import ShapeAnalysis_FreeBoundsProperties
 
 
 class CamFormingTest(Test):
@@ -31,12 +28,15 @@ class CamFormingTest(Test):
             return self.TEST_PASSED
 
         # TODO(clairbee): Utilize the data provided in the config
-
         # TODO(clairbee): Improve and extend the below
-        wrapped = await shape.get_wrapped(ctx)
-        fbp = ShapeAnalysis_FreeBoundsProperties(wrapped)
-        fbp.Perform()
-        if fbp.NbFreeBounds() != 0:
+        # The manufacturability analysis runs in a sandbox (see cam_analysis), so
+        # this module needs no CAD library.
+        from .cam_analysis import free_bounds_count
+
+        envelope = await shape.get_wrapped(ctx)
+        if envelope is None:
+            return self.failed(shape, "Failed to get the shape")
+        if await free_bounds_count(ctx, envelope) != 0:
             return self.failed(shape, "The shape is not solid")
 
         return self.passed(shape)

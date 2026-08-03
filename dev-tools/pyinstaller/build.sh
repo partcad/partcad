@@ -136,6 +136,16 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras that the wheels leave to the user are all built in.
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[ai,lint]" "${SETUPTOOLS_BOUND}"
+  # The CAD kernel is NOT a dependency of the 'partcad' wheel - the core runs all
+  # CAD in sandboxes. The standalone bundle, however, freezes it in so that 'pc'
+  # works on a machine with no Python: 'show'/'pc inspect' (via ocp_vscode) need
+  # OCP in-process, and the "imported by name" check below refuses to build the
+  # bundle without OCP/build123d/ocp_vscode. Pinned to the sandbox versions (see
+  # partcad/src/partcad/sandbox_versions.py).
+  # TODO(clairbee): drop this CAD install once the OCP CAD Viewer (ocp_vscode) is
+  # no longer a dependency - the bundle would then need no in-process CAD either.
+  "${PYTHON}" -m pip install \
+    "cadquery-ocp==7.9.3.1.1" "build123d==0.11.1" "ocpsvg==0.6.0" "${SETUPTOOLS_BOUND}"
   # This satisfies the `partcad==<version>` pin of `partcad-cli` with the local
   # build rather than with the release on PyPI.
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-cli" "${SETUPTOOLS_BOUND}"

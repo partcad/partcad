@@ -8,24 +8,11 @@
 #
 
 import os
-import sys
-
-from OCP.gp import gp_Ax1
-from OCP.TopoDS import (
-    TopoDS_Builder,
-    TopoDS_Compound,
-    TopoDS_Edge,
-    TopoDS_Wire,
-    TopoDS_Face,
-)
-from OCP.TopLoc import TopLoc_Location
 
 from .part_factory_python import PartFactoryPython
 from . import wrapper
+from . import shape_envelope
 from . import logging as pc_logging
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
 
 from . import sandbox_versions
 from . import telemetry
@@ -81,10 +68,11 @@ class PartFactoryBuild123d(PartFactoryPython):
             request["patch"] = patch
 
             # Serialize the request
-            with telemetry.start_as_current_span("*PartFactoryBuild123d.instantiate.{ocp_serialize.serialize}"):
+            with telemetry.start_as_current_span("*PartFactoryBuild123d.instantiate.{shape_envelope.serialize}"):
                 request["name"] = "%s:%s" % (part.project_name, part.name)
                 request["label"] = part.name
-                request_serialized = ocp_serialize.serialize(request)
+                request["kind"] = "part"
+                request_serialized = shape_envelope.serialize(request)
 
             # TODO: @alexanderilyin: those should be read from the package/part config?
             await self.runtime.ensure_async(
@@ -137,8 +125,7 @@ class PartFactoryBuild123d(PartFactoryPython):
                     part.error(error_line)
 
             try:
-                # pc_logging.error("Response: %s" % response_serialized)
-                result = ocp_serialize.deserialize(response_serialized)
+                result = shape_envelope.deserialize(response_serialized)
             except Exception as e:
                 part.error("Exception while deserializing %s: %s" % (part.name, e))
                 return None
@@ -148,48 +135,11 @@ class PartFactoryBuild123d(PartFactoryPython):
                 return None
 
             self.ctx.stats_parts_instantiated += 1
-            part.components = []
 
-            if result["shapes"] is None:
+            # The wrapper already compounded the result and split out the
+            # components (see wrapper_common.combine), so nothing here touches
+            # OCP - the factory just forwards the envelope.
+            part.components = result.get("components", [])
+            if not part.components:
                 return None
-            if len(result["shapes"]) == 0:
-                return None
-
-            builder = TopoDS_Builder()
-            compound = TopoDS_Compound()
-            builder.MakeCompound(compound)
-
-            @telemetry.start_as_current_span("PartFactoryBuild123d.instantiate.process")
-            def process(shapes, components_list):
-                for shape in shapes:
-                    # pc_logging.info("Returned: %s" % type(shape))
-                    try:
-                        if shape is None or isinstance(shape, str):
-                            # pc_logging.info("String: %s" % shape)
-                            continue
-
-                        if isinstance(shape, list):
-                            child_component_list = list()
-                            process(shape, child_component_list)
-                            components_list.append(child_component_list)
-                            continue
-
-                        # TODO(clairbee): add support for the below types
-                        if isinstance(shape, TopLoc_Location) or isinstance(shape, gp_Ax1):
-                            continue
-
-                        components_list.append(shape)
-
-                        if (
-                            not isinstance(shape, TopoDS_Edge)  # 1D
-                            and not isinstance(shape, TopoDS_Wire)  # 1.5?D
-                            and not isinstance(shape, TopoDS_Face)  # 2D
-                        ):
-                            builder.Add(compound, shape)
-                    except Exception as e:
-                        pc_logging.error("Error adding shape to compound: %s" % e)
-
-            process(result["shapes"], part.components)
-            # pc_logging.info("Created: %s" % type(compound))
-
-            return compound
+            return result["shape"]

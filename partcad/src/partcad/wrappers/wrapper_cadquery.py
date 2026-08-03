@@ -72,10 +72,14 @@ def process(path, request):
             shape = shape.wrapped
         shapes.append(shape)
 
+    # Compound and filter here (see wrapper_common.combine) rather than in the
+    # core process, so the factory just forwards the resulting envelope.
+    compound, components = wrapper_common.combine(shapes, request.get("kind", "part"))
     return {
         "success": build_result.success,
         "exception": wrapper_common.exception_to_str(build_result.exception),
-        "shapes": shapes,
+        "shape": compound,
+        "components": components,
     }
 
 

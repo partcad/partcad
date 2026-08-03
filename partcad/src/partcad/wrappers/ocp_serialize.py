@@ -83,32 +83,53 @@ from typing import Any
 # so this is where the ordering has to be established for them.
 import pyexpat  # noqa: F401
 
-import OCP
-
-# The submodules have to be imported by name. In OCP 7.9 a bare "import OCP"
-# leaves 'OCP.TopoDS' and friends as unpopulated placeholders, so reaching
-# 'OCP.TopoDS.TopoDS.Vertex_s' through the package alone raises AttributeError.
-# Importing each submodule materializes it; the dotted references below then
-# resolve as they always did.
-import OCP.BRep  # noqa: F401
-import OCP.BRepTools  # noqa: F401
-import OCP.TopAbs  # noqa: F401
-import OCP.TopoDS  # noqa: F401
+# OCP is imported lazily, not at module load: this module is imported by core
+# code (via 'import ocp_serialize') that must not pull OCP into the 'import
+# partcad' path. 'pyexpat' above stays a module-level import so the expat/VTK
+# ordering is still established before OCP is ever loaded, whichever caller
+# triggers _ensure_ocp() first.
+OCP = None
+downcast_LUT = None
 
 
-downcast_LUT = {
-    OCP.TopAbs.TopAbs_VERTEX: OCP.TopoDS.TopoDS.Vertex_s,
-    OCP.TopAbs.TopAbs_EDGE: OCP.TopoDS.TopoDS.Edge_s,
-    OCP.TopAbs.TopAbs_WIRE: OCP.TopoDS.TopoDS.Wire_s,
-    OCP.TopAbs.TopAbs_FACE: OCP.TopoDS.TopoDS.Face_s,
-    OCP.TopAbs.TopAbs_SHELL: OCP.TopoDS.TopoDS.Shell_s,
-    OCP.TopAbs.TopAbs_SOLID: OCP.TopoDS.TopoDS.Solid_s,
-    OCP.TopAbs.TopAbs_COMPOUND: OCP.TopoDS.TopoDS.Compound_s,
-    OCP.TopAbs.TopAbs_COMPSOLID: OCP.TopoDS.TopoDS.CompSolid_s,
-}
+def _ensure_ocp():
+    """Import OCP and build the downcast table on first use."""
+    global OCP, downcast_LUT
+    if OCP is not None:
+        return
+
+    import OCP as _OCP
+
+    # The submodules have to be imported by name. In OCP 7.9 a bare "import OCP"
+    # leaves 'OCP.TopoDS' and friends as unpopulated placeholders, so reaching
+    # 'OCP.TopoDS.TopoDS.Vertex_s' through the package alone raises AttributeError.
+    # Importing each submodule materializes it; the dotted references below then
+    # resolve as they always did.
+    import OCP.BRep  # noqa: F401
+    import OCP.BRepTools  # noqa: F401
+    import OCP.TopAbs  # noqa: F401
+    import OCP.TopoDS  # noqa: F401
+
+    # Build the table into a local first, then publish 'downcast_LUT' before
+    # 'OCP'. The guard above returns as soon as 'OCP is not None', so a second
+    # thread that sees OCP published must also see a fully-built table - otherwise
+    # its downcast() would find downcast_LUT still None and raise. (PartCAD runs
+    # CPU-heavy work in a thread pool, so concurrent first use is reachable.)
+    lut = {
+        _OCP.TopAbs.TopAbs_VERTEX: _OCP.TopoDS.TopoDS.Vertex_s,
+        _OCP.TopAbs.TopAbs_EDGE: _OCP.TopoDS.TopoDS.Edge_s,
+        _OCP.TopAbs.TopAbs_WIRE: _OCP.TopoDS.TopoDS.Wire_s,
+        _OCP.TopAbs.TopAbs_FACE: _OCP.TopoDS.TopoDS.Face_s,
+        _OCP.TopAbs.TopAbs_SHELL: _OCP.TopoDS.TopoDS.Shell_s,
+        _OCP.TopAbs.TopAbs_SOLID: _OCP.TopoDS.TopoDS.Solid_s,
+        _OCP.TopAbs.TopAbs_COMPOUND: _OCP.TopoDS.TopoDS.Compound_s,
+        _OCP.TopAbs.TopAbs_COMPSOLID: _OCP.TopoDS.TopoDS.CompSolid_s,
+    }
+    downcast_LUT = lut
+    OCP = _OCP
 
 
-def shapetype(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopAbs.TopAbs_ShapeEnum:
+def shapetype(obj):
     """Return TopoDS_Shape's TopAbs_ShapeEnum"""
     if obj.IsNull():
         raise ValueError("Null TopoDS_Shape object")
@@ -116,7 +137,7 @@ def shapetype(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopAbs.TopAbs_ShapeEnum:
     return obj.ShapeType()
 
 
-def downcast(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopoDS.TopoDS_Shape:
+def downcast(obj):
     """Downcasts a TopoDS object to suitable specialized type
 
     Args:
@@ -125,6 +146,7 @@ def downcast(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopoDS.TopoDS_Shape:
     Returns:
 
     """
+    _ensure_ocp()
 
     f_downcast: Any = downcast_LUT[shapetype(obj)]
     return_value = f_downcast(obj)
@@ -140,6 +162,9 @@ def downcast(obj: OCP.TopoDS.TopoDS_Shape) -> OCP.TopoDS.TopoDS_Shape:
 KEY_BREP = "brep"
 KEY_ASSEMBLY = "assembly"
 KEY_BYTES = "__bytes__"
+# Optional on a shape/assembly object: the placement, as the packed
+# [[tx,ty,tz], [ax,ay,az], angle] form, applied when the object is decoded.
+KEY_LOCATION = "location"
 
 
 def _warn(message: str) -> None:
@@ -152,6 +177,7 @@ def _warn(message: str) -> None:
 
 def shape_to_brep(shape) -> bytes:
     """Serialize a TopoDS_Shape into the flat BREP byte array."""
+    _ensure_ocp()
     with BytesIO() as bio:
         OCP.BRepTools.BRepTools.Write_s(shape, bio)
         return bio.getvalue()
@@ -159,6 +185,7 @@ def shape_to_brep(shape) -> bytes:
 
 def shape_from_brep(data: bytes):
     """Deserialize a flat BREP byte array into a downcast TopoDS_Shape."""
+    _ensure_ocp()
     with BytesIO(data) as bio:
         shape = OCP.TopoDS.TopoDS_Shape()
         builder = OCP.BRep.BRep_Builder()
@@ -176,6 +203,7 @@ def _shape_from_b64(brep_b64: str):
 
 def compound_of(shapes):
     """Combine OCCT shapes into a single TopoDS_Compound."""
+    _ensure_ocp()
     result = OCP.TopoDS.TopoDS_Compound()
     builder = OCP.BRep.BRep_Builder()
     builder.MakeCompound(result)
@@ -206,16 +234,42 @@ def is_assembly_object(obj) -> bool:
     return isinstance(obj, dict) and KEY_ASSEMBLY in obj
 
 
+def _toploc_from_packed(packed):
+    """Build a TopLoc_Location from the packed [[t], [axis], angle] location form."""
+    import math
+
+    from OCP.gp import gp_Trsf, gp_Ax1, gp_Pnt, gp_Dir, gp_Vec
+    from OCP.TopLoc import TopLoc_Location
+
+    t, axis, angle = packed
+    trsf = gp_Trsf()
+    trsf.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(axis[0], axis[1], axis[2])), angle * math.pi / 180.0)
+    trsf.SetTranslationPart(gp_Vec(t[0], t[1], t[2]))
+    return TopLoc_Location(trsf)
+
+
+def _apply_location(shape, packed):
+    """Place 'shape' at the packed location, if one is carried; else return it as is."""
+    if packed is None:
+        return shape
+    return shape.Located(_toploc_from_packed(packed))
+
+
 def decode_shape(obj):
     """Turn a shape or assembly object back into OCCT geometry.
 
     A shape object yields its TopoDS_Shape; an assembly object yields a
-    TopoDS_Compound of its children (recursively). name/label are metadata.
+    TopoDS_Compound of its children (recursively). An optional "location" field
+    carried by either kind is applied here - the core builds the assembly tree
+    with locations as plain data and never places geometry itself, so this is
+    where a child's placement becomes an actual TopLoc. name/label are metadata.
     """
+    _ensure_ocp()
     if is_shape_object(obj):
-        return _shape_from_b64(obj[KEY_BREP])
+        return _apply_location(_shape_from_b64(obj[KEY_BREP]), obj.get(KEY_LOCATION))
     if is_assembly_object(obj):
-        return compound_of(decode_shape(child) for child in obj[KEY_ASSEMBLY])
+        compound = compound_of(decode_shape(child) for child in obj[KEY_ASSEMBLY])
+        return _apply_location(compound, obj.get(KEY_LOCATION))
     raise ValueError("Not a shape or assembly object: %r" % (list(obj) if isinstance(obj, dict) else type(obj)))
 
 
@@ -234,6 +288,7 @@ def encode(obj, name=None, label=None):
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
 
+    _ensure_ocp()
     if isinstance(obj, OCP.TopoDS.TopoDS_Shape):
         return encode_shape(obj, name=name, label=label)
 
@@ -241,7 +296,11 @@ def encode(obj, name=None, label=None):
         # An already-built shape/assembly object keeps its own metadata verbatim.
         if KEY_BREP in obj or KEY_ASSEMBLY in obj:
             return {
-                key: (value if key in (KEY_BREP, KEY_ASSEMBLY, "name", "label") else encode(value, name, label))
+                key: (
+                    value
+                    if key in (KEY_BREP, KEY_ASSEMBLY, KEY_LOCATION, "name", "label")
+                    else encode(value, name, label)
+                )
                 for key, value in obj.items()
             }
         return {key: encode(value, name, label) for key, value in obj.items()}

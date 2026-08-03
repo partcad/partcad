@@ -1,13 +1,10 @@
 import os
-import sys
 
 from .part_factory_python import PartFactoryPython
 from . import logging as pc_logging
 from . import wrapper
-from OCP.TopoDS import TopoDS_Builder, TopoDS_Compound
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-import ocp_serialize
+from . import transform
+from . import shape_envelope
 
 
 class PartFactorySdf(PartFactoryPython):
@@ -53,7 +50,7 @@ class PartFactorySdf(PartFactoryPython):
             # Serialize the request into the wrapper wire format
             request["name"] = "%s:%s" % (part.project_name, part.name)
             request["label"] = part.name
-            request_serialized = ocp_serialize.serialize(request)
+            request_serialized = shape_envelope.serialize(request)
 
             await self.runtime.ensure_async(
                 "sdf-fork",
@@ -87,7 +84,7 @@ class PartFactorySdf(PartFactoryPython):
                         part.error(line)
 
             try:
-                response = ocp_serialize.deserialize(response_serialized)
+                response = shape_envelope.deserialize(response_serialized)
             except Exception as e:
                 part.error(f"Deserialization error: {e}")
                 pc_logging.exception(e)
@@ -103,11 +100,12 @@ class PartFactorySdf(PartFactoryPython):
             if len(shapes) == 1:
                 return shapes[0]
 
-            builder = TopoDS_Builder()
-            compound = TopoDS_Compound()
-            builder.MakeCompound(compound)
-
-            for s in shapes:
-                builder.Add(compound, s)
-
-            return compound
+            # Compounding now runs in a sandbox (transform.compound spawns a
+            # runtime and raises on any failure), so it can fail where the old
+            # in-process TopoDS_Compound could not. Keep this method's contract:
+            # report via part.error() and return None instead of raising.
+            try:
+                return await transform.compound(self.ctx, shapes)
+            except Exception as e:
+                part.error("Failed to compound SDF shapes: %s" % e)
+                return None
