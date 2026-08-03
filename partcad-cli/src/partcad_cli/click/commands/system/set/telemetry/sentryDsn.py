@@ -6,8 +6,7 @@
 
 import rich_click as click
 
-import partcad as pc
-import partcad.actions.config as pc_actions_config
+from .....service import run
 
 
 @click.command(help="Set the Sentry DSN")
@@ -18,13 +17,4 @@ import partcad.actions.config as pc_actions_config
 )
 @click.pass_obj
 def cli(cli_ctx, dsn: str) -> None:
-    with pc.telemetry.set_context(cli_ctx.otel_context):
-        with pc.logging.Process("SysSetTelDsn", "global"):
-            yaml, config = pc_actions_config.system_config_get()
-            if not "telemetry" in config:
-                config["telemetry"] = {}
-
-            config["telemetry"]["sentryDsn"] = dsn
-            pc.logging.info("Sentry DSN set to %s", dsn)
-
-            pc_actions_config.system_config_set(yaml, config)
+    run(cli_ctx, "system.set.telemetry", {"key": "sentryDsn", "value": dsn}, span_name="system set telemetry sentryDsn")

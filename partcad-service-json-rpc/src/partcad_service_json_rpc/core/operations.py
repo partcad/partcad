@@ -490,6 +490,218 @@ def adhoc_convert(session, params):
     return None
 
 
+async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name):
+    import asyncio
+
+    from partcad.test.all import tests as all_tests
+
+    tasks = []
+    tests_to_run = all_tests(pc.user_config.threads_max)
+    if filter_prefix:
+        tests_to_run = list(filter(lambda t: t.name.startswith(filter_prefix), tests_to_run))
+
+    for package in packages:
+        obj = object_name
+        if obj:
+            package, obj = pc.utils.resolve_resource_path(ctx.get_current_project_path(), obj)
+        prj = ctx.get_project(package)
+        if not obj:
+            tasks.append(prj.test_log_wrapper_async(ctx, tests=tests_to_run))
+        elif interface:
+            shape = prj.get_interface(obj)
+            if shape is None:
+                pc.logging.error("%s is not found" % obj)
+            elif not shape.finalized:
+                pc.logging.warning("%s is not finalized" % obj)
+            else:
+                tasks.append(shape.test_async())
+        else:
+            if sketch:
+                shape = prj.get_sketch(obj)
+            elif assembly:
+                shape = prj.get_assembly(obj)
+            else:
+                shape = prj.get_part(obj)
+            if shape is None:
+                pc.logging.error("%s is not found" % obj)
+            elif not shape.finalized:
+                pc.logging.warning("%s is not finalized" % obj)
+            else:
+                tasks.extend([t.test_log_wrapper(tests_to_run, ctx, shape) for t in tests_to_run])
+
+    await asyncio.gather(*tasks)
+
+
+def test_run(session, params):
+    """Run PartCAD tests on a part/assembly/sketch/interface or a whole package."""
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+    package = package_obj.name
+
+    with pc.logging.Process("Test", package):
+        if params.get("recursive"):
+            all_packages = ctx.get_all_packages(parent_name=package)
+            if ctx.stats_git_ops:
+                pc.logging.info("Git operations: %s" % ctx.stats_git_ops)
+            packages = [p["name"] for p in all_packages]
+        else:
+            packages = [package]
+        asyncio.run(
+            _test_async(
+                ctx,
+                pc,
+                packages,
+                params.get("filter"),
+                params.get("sketch"),
+                params.get("interface"),
+                params.get("assembly"),
+                params.get("scene"),
+                params.get("object"),
+            )
+        )
+    return None
+
+
+async def _lint_async(ctx, pc, packages, filter_prefix):
+    import asyncio
+
+    from partcad.lint.all import get_linting_checks
+
+    tasks = []
+    lint_checks = get_linting_checks(pc.user_config.threads_max)
+    if filter_prefix:
+        lint_checks = list(filter(lambda l: l.name.startswith(filter_prefix), lint_checks))
+
+    for package in packages:
+        prj = ctx.get_project(package)
+        tasks.extend([l.lint_log_wrapper(ctx, prj, t) for l in lint_checks for t in l.get_targets(ctx, prj)])
+    await asyncio.gather(*tasks)
+
+
+def lint_run(session, params):
+    """Run linting checks on files within a package (recursively when asked)."""
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    package = ctx.resolve_package_path(params.get("package") or "")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+    package = package_obj.name
+
+    with pc.logging.Process("Lint", package):
+        if params.get("recursive"):
+            all_packages = ctx.get_all_packages(parent_name=package)
+            if ctx.stats_git_ops:
+                pc.logging.info("Git operations: %s" % ctx.stats_git_ops)
+            packages = [p["name"] for p in all_packages]
+        else:
+            packages = [package]
+        asyncio.run(_lint_async(ctx, pc, packages, params.get("filter")))
+    return None
+
+
+def system_reset(session, params):
+    """Reset PartCAD's internal state (cached repos, sandboxes, filesystem cache).
+
+    Because the daemon holds warm contexts that reference these directories, the
+    context registry is cleared too so later commands rebuild from clean state.
+    """
+    import shutil
+
+    pc = session.ensure_partcad()
+    user_config = pc.user_config
+    repo_only = params.get("repo_only", False)
+    sandbox_only = params.get("sandbox_only", False)
+    cache_only = params.get("cache_only", False)
+
+    with pc.logging.Process("Reset", "global"):
+        if repo_only or not (cache_only or sandbox_only):
+            for import_type in ("git", "tar"):
+                cache_dir = os.path.join(user_config.internal_state_dir, import_type)
+                if os.path.exists(cache_dir):
+                    with pc.logging.Action("Repos", import_type):
+                        shutil.rmtree(cache_dir)
+                        pc.logging.info("Removed cached %s dependencies: '%s'" % (import_type, cache_dir))
+
+        if sandbox_only or not (repo_only or cache_only):
+            sandbox_dir = os.path.join(user_config.internal_state_dir, "sandbox")
+            if os.path.exists(sandbox_dir):
+                for subdir in os.listdir(sandbox_dir):
+                    with pc.logging.Action("Sandbox", subdir):
+                        shutil.rmtree(os.path.join(sandbox_dir, subdir))
+                        pc.logging.info("Removed sandbox: '%s'" % subdir)
+
+        if cache_only or not (repo_only or sandbox_only):
+            cache_dir = os.path.join(user_config.internal_state_dir, "cache")
+            if os.path.exists(cache_dir):
+                for subdir in os.listdir(cache_dir):
+                    with pc.logging.Action("cache", subdir):
+                        shutil.rmtree(os.path.join(cache_dir, subdir))
+                        pc.logging.info("Removed cache: '%s'" % subdir)
+
+    # The warm contexts now reference deleted directories; drop them.
+    session.contexts.clear()
+    session.partcad_ctx = None
+    return None
+
+
+def system_status(session, params):
+    """Report PartCAD's version and internal storage usage."""
+    pc = session.ensure_partcad()
+    root = pc.user_config.internal_state_dir
+
+    def _dir_size(path):
+        total = 0
+        for dirpath, _dirnames, filenames in os.walk(path):
+            for name in filenames:
+                fp = os.path.join(dirpath, name)
+                if not os.path.islink(fp):
+                    total += os.path.getsize(fp)
+        return total
+
+    with pc.logging.Process("Status", "global"):
+        pc.logging.info("PartCAD version: %s" % pc.__version__)
+        pc.logging.info("Internal data storage location: %s" % root)
+        if os.path.exists(root):
+            pc.logging.info("Total internal data storage size: %d bytes" % _dir_size(root))
+            for sub in ("git", "tar", "sandbox"):
+                p = os.path.join(root, sub)
+                if os.path.exists(p):
+                    pc.logging.info("Size of '%s': %d bytes" % (sub, _dir_size(p)))
+    return None
+
+
+def system_set_telemetry(session, params):
+    """Set a telemetry configuration value (type/env/sentryDsn) persistently."""
+    pc = session.ensure_partcad()
+    import partcad.actions.config as pc_actions_config
+
+    key = params["key"]  # "type" | "env" | "sentryDsn"
+    value = params["value"]
+    with pc.logging.Process("SysSet", "global"):
+        yaml, config = pc_actions_config.system_config_get()
+        if "telemetry" not in config:
+            config["telemetry"] = {}
+        config["telemetry"][key] = value
+        pc_actions_config.system_config_set(yaml, config)
+        pc.logging.info("Set telemetry.%s = %s" % (key, value))
+    return None
+
+
 def config_show(session, params):
     """Show the effective user configuration."""
     pc = session.ensure_partcad()
