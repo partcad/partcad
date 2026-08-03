@@ -1,8 +1,6 @@
 import rich_click as click
 from click.testing import CliRunner
 
-from partcad.context import Context
-from partcad_cli.click.cli_context import CliContext
 from partcad_cli.click.commands.search.assemblies import cli as search_assemblies
 from partcad_cli.click.commands.search.interfaces import cli as search_interfaces
 from partcad_cli.click.commands.search.packages import cli as search_packages

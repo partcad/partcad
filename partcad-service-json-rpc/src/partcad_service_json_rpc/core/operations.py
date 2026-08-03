@@ -725,6 +725,220 @@ def list_objects(session, params):
     return None
 
 
+def list_packages(session, params):
+    """List imported packages that have at least one sketch, part, or assembly."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    recursive = params.get("recursive", False)
+    package = ctx.resolve_package_path(params.get("package", "."))
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+    package = package_obj.name
+
+    with pc.logging.Process("ListPackages", package):
+        pkg_count = 0
+        if recursive:
+            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+        else:
+            packages = [package]
+
+        output = "PartCAD packages:\n"
+        for project_name in packages:
+            project = ctx.projects[project_name]
+            line = "\t%s" % project_name
+            padding_size = 60 - len(project_name)
+            if padding_size < 4:
+                padding_size = 4
+            line += " " * padding_size
+            desc = project.desc if project.desc is not None else ""
+            if hasattr(project, "url"):
+                desc += "\n%s" % project.url
+            desc = desc.replace("\n", "\n" + " " * 68)
+            line += "%s" % desc
+            output += line + "\n"
+            pkg_count += 1
+
+        if pkg_count < 1:
+            output += "\t<none>\n"
+        pc.logging.info(output)
+    return None
+
+
+def list_providers(session, params):
+    """List available providers."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    recursive = params.get("recursive", False)
+    package = ctx.resolve_package_path(params.get("package", "."))
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+    package = package_obj.name
+
+    with pc.logging.Process("ListProviders", package):
+        provider_kinds = 0
+        if recursive:
+            projects = sorted(p["name"] for p in ctx.get_all_packages(package if package != "." else None))
+        else:
+            projects = [package]
+
+        output = "PartCAD providers:\n"
+        for project_name in projects:
+            if not recursive and package != project_name:
+                continue
+            if (
+                recursive
+                and package != "//"
+                and project_name != package
+                and not project_name.startswith("%s/" % package)
+            ):
+                continue
+            project = ctx.projects[project_name]
+            for provider_name, provider in project.providers.items():
+                line = "\t"
+                if recursive:
+                    line += "%s" % project_name + " " + " " * (35 - len(project_name))
+                line += "%s" % provider_name + " " + " " * (35 - len(provider_name))
+                desc = provider.desc if provider.desc is not None else ""
+                desc = desc.replace("\n", "\n" + " " * (80 if recursive else 44))
+                line += "%s" % desc
+                output += line + "\n"
+                provider_kinds += 1
+
+        if provider_kinds > 0:
+            output += "Total: %d\n" % provider_kinds
+        else:
+            output += "\t<none>\n"
+        pc.logging.info(output)
+    return None
+
+
+def list_mates(session, params):
+    """List available mating interfaces."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    recursive = params.get("recursive", False)
+    package = ctx.resolve_package_path(params.get("package", "."))
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+    package = package_obj.name
+
+    with pc.logging.Process("ListMates", package):
+        mating_kinds = 0
+        if recursive:
+            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package)]
+        else:
+            packages = [package]
+
+        # Instantiate interfaces so the mating data is finalized.
+        for package_name in packages:
+            prj = ctx.projects[package_name]
+            for interface_name in prj.interfaces:
+                prj.get_interface(interface_name).instantiate()
+
+        output = "PartCAD mating interfaces:\n"
+        for source_interface_name in ctx.mates:
+            source_package_name = source_interface_name.split(":")[0]
+            display_source = (
+                source_interface_name if source_package_name != package else source_interface_name.split(":")[1]
+            )
+            for target_interface_name in ctx.mates[source_interface_name]:
+                target_package_name = target_interface_name.split(":")[0]
+                display_target = (
+                    target_interface_name if target_package_name != package else target_interface_name.split(":")[1]
+                )
+                mating = ctx.mates[source_interface_name][target_interface_name]
+                if (
+                    recursive
+                    and not source_package_name.startswith(package)
+                    and not target_package_name.startswith(package)
+                ):
+                    continue
+                if not recursive and source_package_name != package and target_package_name != package:
+                    continue
+                line = "\t"
+                line += "%s" % display_source + " " + " " * (35 - len(display_source))
+                line += "%s" % display_target + " " + " " * (35 - len(display_target))
+                desc = mating.desc if mating.desc is not None else ""
+                desc = desc.replace("\n", "\n\t" + " " * 72)
+                line += "%s" % desc
+                output += line + "\n"
+                mating_kinds += 1
+
+        if mating_kinds > 0:
+            output += "Total: %d mating interfaces\n" % mating_kinds
+        else:
+            output += "\t<none>\n"
+        pc.logging.info(output)
+    return None
+
+
+def search_objects(session, params):
+    """Search parts/sketches/assemblies/interfaces/packages by keyword."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    kind = params.get("kind", "parts")
+    recursive = params.get("recursive", False)
+    keyword = params.get("keyword", "")
+    package = ctx.resolve_package_path(params.get("package", "//"))
+
+    from partcad.actions.shape import search_assemblies, search_interfaces, search_parts, search_sketches
+    from partcad.actions.package import search_packages
+
+    search_fns = {
+        "parts": search_parts,
+        "sketches": search_sketches,
+        "assemblies": search_assemblies,
+        "interfaces": search_interfaces,
+        "packages": search_packages,
+    }
+    search_fn = search_fns.get(kind, search_parts)
+
+    count = 0
+    output = "PartCAD %s with '%s' keyword:\n" % (kind, keyword)
+    with pc.logging.Process("Search" + kind.capitalize(), package):
+        for obj in search_fn(ctx, package, recursive, keyword):
+            if kind == "packages":
+                line = "\t%s" % obj.name
+                padding_size = 60 - len(obj.name)
+                if padding_size < 4:
+                    padding_size = 4
+                line += " " * padding_size
+                desc = obj.desc if obj.desc is not None else ""
+                if obj.config_obj.get("url"):
+                    desc += "\n%s" % obj.config_obj["url"]
+                desc = desc.replace("\n", "\n" + " " * 68)
+                line += "%s" % desc
+            else:
+                line = "\t" + "%s %s" % (obj.project_name, obj.name)
+                line += " " + " " * (84 - len(line))
+                desc = obj.desc if obj.desc is not None else ""
+                desc = desc.replace("\n", "\n\t" + " " * (len(line) - 1))
+                line += "%s" % desc
+            output += line + "\n"
+            count += 1
+
+        if count > 0:
+            output += "Matches: %d\n" % count
+        else:
+            output += "\t<none>\n"
+    pc.logging.info(output)
+    return None
+
+
 def _load_package_contents(session, name="//"):
     ctx = session.partcad_ctx
     with session.partcad.logging.Process("Load", name):
