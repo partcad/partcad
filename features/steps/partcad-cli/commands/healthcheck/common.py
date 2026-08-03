@@ -7,12 +7,21 @@ from click.testing import CliRunner
 from partcad_cli.click.command import cli
 import partcad.logging  as pc_logging
 
-# Click 8.2 removed the 'mix_stderr' argument. It is not needed any more
-# either: a Result now always exposes 'stdout' and 'stderr' separately, which
-# is what passing mix_stderr=False used to buy. Only 'output' changed meaning -
-# it is the two interleaved now rather than stdout alone - and the sole use
-# below is an error message, which is better off with both.
-runner = CliRunner()
+# Capture stdout and stderr separately so the shared assertion steps in
+# features/steps/partcad-cli/commands/version.py can read context.result.stderr
+# (they log it for debugging) without click raising "stderr not separately
+# captured".
+#
+# Click 8.2 removed the 'mix_stderr' argument and a Result now always exposes
+# 'stdout' and 'stderr' separately, which is exactly what mix_stderr=False used
+# to buy. On click < 8.2, however, the default is mix_stderr=True: stderr is
+# folded into stdout and Result.stderr raises, so mix_stderr=False must be
+# passed there. Construct the runner in a way that works on both.
+try:
+    runner = CliRunner(mix_stderr=False)
+except TypeError:
+    # click >= 8.2 no longer accepts (or needs) mix_stderr.
+    runner = CliRunner()
 
 def healthcheck_cli(context, options: List[str] = []):
     patches = []
