@@ -37,6 +37,7 @@ _OPERATIONS = {
     "list.providers": operations.list_providers,
     "list.mates": operations.list_mates,
     "search.objects": operations.search_objects,
+    "config.show": operations.config_show,
     "test": operations.test,
     "info": operations.info,
     "info.object": operations.info_object,

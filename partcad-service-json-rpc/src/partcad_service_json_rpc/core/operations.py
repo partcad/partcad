@@ -443,6 +443,16 @@ def info_object(session, params):
     return None
 
 
+def config_show(session, params):
+    """Show the effective user configuration."""
+    pc = session.ensure_partcad()
+    for key, value in vars(pc.user_config).items():
+        if not callable(value) and key[0] != "_":
+            pc.logging.info("%s: %s" % (key, value))
+    pc.logging.debug("File: %s" % pc.user_config.get_config_dir())
+    return None
+
+
 def prompt_respond(session, params):
     """Deliver a response to a pending interactive prompt."""
     session.provide_prompt_response(params["response"] + os.linesep)
