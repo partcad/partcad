@@ -13,6 +13,7 @@ import importlib
 import os
 import shutil
 import subprocess
+import sys
 import json
 
 from . import runtime_python
@@ -115,6 +116,25 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
     async def async_lock_install(self, session=None):
         with self.global_conda_lock:
             yield
+
+    def _subprocess_env(self):
+        """Make the conda env's own libstdc++ win over the system one (Linux).
+
+        conda-forge's ICU 78 (reached through build123d -> IPython -> sqlite3)
+        links a libstdc++ that provides CXXABI_1.3.15. On older Linux hosts the
+        system libstdc++ predates that symbol, and conda does not touch
+        LD_LIBRARY_PATH, so the loader otherwise binds ICU to the system copy and
+        the import dies. Prepend the env's lib dir (which carries a modern
+        libstdc++ via the libstdcxx-ng install in once_conda_locked_attempt) so
+        it is found first. No-op off Linux, where the parent env is inherited.
+        """
+        if not sys.platform.startswith("linux"):
+            return None
+        env = os.environ.copy()
+        env_lib = os.path.join(self.path, "lib")
+        previous = env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = env_lib + (os.pathsep + previous if previous else "")
+        return env
 
     def once(self):
         with self.sync_lock():
@@ -220,6 +240,15 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         # sees it already satisfied and does not rebuild it.
                         "pycairo",
                     ]
+                    if sys.platform.startswith("linux"):
+                        # conda-forge's ICU 78 (pulled in through build123d ->
+                        # IPython -> sqlite3 -> _sqlite3 -> libicui18n) links a
+                        # libstdc++ that provides CXXABI_1.3.15, newer than the
+                        # system libstdc++ on older Linux hosts (e.g. ubuntu-22.04).
+                        # Ship a modern libstdc++ inside the env so that symbol is
+                        # available; _subprocess_env() then puts the env's lib dir
+                        # on the loader path so it wins. libstdcxx-ng is Linux-only.
+                        args.append("libstdcxx-ng")
                     # Strip user home directory from the path, if any
                     sanitized_args = copy.copy(args)
                     sanitized_args[0] = os.path.join("...", os.path.basename(sanitized_args[0]))
