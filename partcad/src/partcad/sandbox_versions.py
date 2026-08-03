@@ -32,6 +32,20 @@ NLOPT = "nlopt==2.11.0"
 # so this one stays a range and pip picks per interpreter.
 NUMPY = "numpy>=2.2,<3"
 
+# The wrapper protocol compresses the BREP payloads it packs, so a sandbox has
+# to be able to decompress what the host sends it and vice versa (see
+# wrappers/ocp_serialize.py). Python 3.14 has zstd in the standard library as
+# 'compression.zstd'; below that this backport of that very module provides it,
+# so both ends speak identical frames.
+#
+# A lower bound rather than a pin: it is a self-contained backport of a standard
+# library module, nothing else in the sandbox links against it, and what it
+# reads and writes is the zstd frame format itself.
+ZSTD = "backports.zstd>=1.6.0"
+
+# The first Python whose standard library makes ZSTD unnecessary.
+MIN_PYTHON_VERSION_ZSTD_STDLIB = "3.14"
+
 # Only needed by the sandboxes that rasterize or export 2D formats.
 #
 # Deliberately held at the versions this repo already shipped, not bumped to the
@@ -94,3 +108,23 @@ def is_at_least(python_version: str, minimum: str) -> bool:
 def at_least(python_version: str, minimum: str) -> str:
     """Return the newer of two "<major>.<minor>" version strings."""
     return python_version if is_at_least(python_version, minimum) else minimum
+
+
+def zstd_requirement(python_version: str) -> str | None:
+    """What a sandbox has to install for zstd, or None if it already has it.
+
+    Installing the backport where 'compression.zstd' exists would be harmless
+    but pointless: the backport declares Python < 3.14, so pip would fail to
+    resolve it and take the whole sandbox initialization down with it.
+
+    Decided from the version alone, deliberately. A 3.14 interpreter built
+    without libzstd would have no 'compression.zstd' either, but probing for it
+    here would ask the wrong Python -- this runs in the PartCAD process, and the
+    answer is about the sandbox interpreter. Nor would knowing help: the
+    backport refuses to install on 3.14, so there would be nothing to install in
+    its place. Such a sandbox instead fails where it is unambiguous, in
+    wrappers/ocp_serialize, with a message naming what is missing.
+    """
+    if is_at_least(python_version, MIN_PYTHON_VERSION_ZSTD_STDLIB):
+        return None
+    return ZSTD

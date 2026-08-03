@@ -277,6 +277,13 @@ REQUIRED = {
     "ruff.__main__": "`pc lint` of Python files",
 }
 
+# Python 3.14 has zstd in the standard library as 'compression.zstd'; below
+# that PartCAD reads and writes its compressed BREP payloads through this
+# backport of the same module, and a bundle frozen without it cannot decode
+# what a sandbox hands back.
+if sys.version_info < (3, 14):
+    REQUIRED["backports.zstd"] = "the BREP payloads of the wrapper protocol"
+
 broken = []
 for name, used_by in REQUIRED.items():
     try:

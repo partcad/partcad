@@ -23,3 +23,10 @@ filelock==3.32.0
 docker>=7.1.0
 jsonschema>=4.23.0
 psutil>=6.1.1
+# zstd for the BREP payloads the wrapper protocol and the shape cache carry.
+# Not a CAD library, and needed even though the core moves most envelopes
+# around opaquely: it compresses and decompresses them itself wherever it
+# encodes a live shape into one or decodes one back - Shape.get_wrapped(),
+# interfaces and ports, convert()/show().
+# 3.14 has it as 'compression.zstd'; this is a backport of that same module.
+backports.zstd>=1.6.0; python_version < "3.14"

@@ -66,6 +66,22 @@ def test_is_at_least(version, minimum, expected):
     assert sandbox_versions.is_at_least(version, minimum) is expected
 
 
+@pytest.mark.parametrize(
+    "python_version, expected",
+    [
+        # Below 3.14 the backport is what provides 'compression.zstd'...
+        ("3.10", sandbox_versions.ZSTD),
+        ("3.13", sandbox_versions.ZSTD),
+        # ...and from 3.14 the standard library has it, while the backport
+        # refuses to install there at all.
+        ("3.14", None),
+        ("3.15", None),
+    ],
+)
+def test_zstd_requirement(python_version, expected):
+    assert sandbox_versions.zstd_requirement(python_version) == expected
+
+
 def test_cadquery_floor_excludes_the_oldest_supported_python():
     """CadQuery publishes nothing for 3.10, so sandboxes there must skip it."""
     assert not sandbox_versions.is_at_least("3.10", sandbox_versions.MIN_PYTHON_VERSION_CADQUERY)

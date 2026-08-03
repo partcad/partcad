@@ -277,9 +277,33 @@ class PythonRuntime(runtime.Runtime):
         """Lock the runtime and the venv environment for installation of packages"""
         yield
 
+    def ensure_zstd_onced_locked(self):
+        """Install what the sandbox needs to read a compressed BREP payload.
+
+        Every wrapper needs this one, including those that install nothing else:
+        the request the host writes to their stdin carries zstd-compressed BREP
+        (see wrappers/ocp_serialize.py).
+
+        Deliberately outside the "not initialized" check in the callers. That
+        flag is set from the mere existence of the sandbox directory, so a
+        sandbox provisioned by an earlier PartCAD skips that whole block and
+        would never be told about a newly required package. The install guard
+        makes this a single stat() once it has run.
+        """
+        zstd = sandbox_versions.zstd_requirement(self.version)
+        if zstd:
+            self.ensure_onced_locked(zstd)
+
+    async def ensure_zstd_onced_locked_async(self):
+        """Asynchronous counterpart of ensure_zstd_onced_locked()."""
+        zstd = sandbox_versions.zstd_requirement(self.version)
+        if zstd:
+            await self.ensure_async_onced_locked(zstd)
+
     def once(self):
         with self.sync_lock():
             with self.sync_lock_install():
+                self.ensure_zstd_onced_locked()
                 if not self.initialized:
                     # Preinstall the most common packages to avoid race conditions
                     self.ensure_onced_locked(sandbox_versions.OCP_TESSELLATE)
@@ -303,6 +327,7 @@ class PythonRuntime(runtime.Runtime):
     async def once_async(self):
         async with self.async_lock():
             with self.sync_lock_install():
+                await self.ensure_zstd_onced_locked_async()
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
                     await self.ensure_async_onced_locked(sandbox_versions.OCP_TESSELLATE)
@@ -833,10 +858,26 @@ class PythonRuntime(runtime.Runtime):
         """Create a context to describe the venv environment in case it is needed"""
         name_hash = hashlib.sha256(name.encode()).hexdigest()[:16]
         venv_path = os.path.join(self.path, "v-env-" + name_hash)
+
+        # A v-env is created by "python -m venv" without --system-site-packages,
+        # so it does not see what the sandbox around it has installed: zstd has
+        # to be listed here to reach one. Without it a wrapper running in a
+        # v-env cannot read the compressed BREP the host sends it (see
+        # wrappers/ocp_serialize).
+        #
+        # Seeded directly rather than through ensure*(session=...), because that
+        # would also mark the session dirty and so force a v-env to be built for
+        # every package that has any Python requirements of its own. This way
+        # the dependency only materializes in v-envs that were going to exist.
+        deps = []
+        zstd = sandbox_versions.zstd_requirement(self.version)
+        if zstd:
+            deps.append(zstd)
+
         return {
             "name": name,
             "hash": name_hash,
             "path": venv_path,
             "dirty": False,
-            "deps": [],
+            "deps": deps,
         }
