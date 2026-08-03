@@ -15,6 +15,10 @@ on:
 jobs:
   build:
     strategy:
+      # Don't let one OS failing cancel the other: a green Linux run was being
+      # reported as failed only because it was canceled when the macOS job
+      # failed. Keep both statuses independent (matches build.yml).
+      fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest] # windows-latest for some reason doesn't run test suite.
     runs-on: ${{ matrix.os }}
