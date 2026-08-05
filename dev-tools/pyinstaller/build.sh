@@ -299,6 +299,68 @@ if broken:
     sys.exit(1)
 PREFLIGHT
 
+# The other way this build environment can produce a bundle that looks complete
+# and is not: on Apple arm64, `_cffi_backend` has to be the PyPI build.
+#
+# `pygit2` reads the libgit2 config search path through
+# `git_libgit2_opts(GIT_OPT_GET_SEARCH_PATH, level, git_buf *)`, a variadic C
+# call that cffi cannot wrap statically and so dispatches at run time through
+# `_cffi_backend`/libffi. Apple arm64 passes variadic arguments on the stack
+# rather than in registers, and the conda-forge cffi 2.x build mis-marshals them
+# there: libgit2 is handed a garbage pointer to write through and the process
+# segfaults. The PyPI wheel links Apple's system libffi and marshals them
+# correctly, which is why the wheels are unaffected. Distinguishing the two is
+# exactly this: the PyPI build loads '/usr/lib/libffi.dylib', the conda-forge
+# build loads '@rpath/libffi.8.dylib' from its own prefix.
+#
+# CI builds with `actions/setup-python`, so it always gets the PyPI wheel. A
+# developer building on their own Mac is the exposed case: PartCAD needs conda
+# for the CAD sandbox, so a conda `python3` is usually first on PATH, its cffi
+# already satisfies `pygit2`'s floor (so pip leaves it in place), and PyInstaller
+# then freezes both that `_cffi_backend` and the conda `libffi.8.dylib` beside
+# it. The bundle's own CI cannot catch this: the crashing path only runs when a
+# clone fails to authenticate and PartCAD retries it with the ambient git config
+# ignored (`_clone_ignoring_ambient_config` in `partcad/project_factory_git.py`),
+# which no anonymous clone of a public repository reaches. It would ship, and
+# segfault for users only.
+if [ "${PLATFORM}" = "macos-arm64" ]; then
+  echo "==> Checking that _cffi_backend is the PyPI build"
+  # Read with macholib rather than `otool`, so this needs no Xcode command line
+  # tools; PyInstaller depends on macholib, so it is already installed.
+  "${PYTHON}" - <<'CFFI_PROVENANCE'
+import _cffi_backend
+from macholib.MachO import MachO
+from macholib.mach_o import LC_LOAD_DYLIB, LC_LOAD_WEAK_DYLIB
+
+SYSTEM_LIBFFI = "/usr/lib/libffi.dylib"
+
+loaded = []
+for header in MachO(_cffi_backend.__file__).headers:
+    for load_command, _command, data in header.commands:
+        if load_command.cmd in (LC_LOAD_DYLIB, LC_LOAD_WEAK_DYLIB):
+            loaded.append(data.decode("utf-8").rstrip("\0"))
+
+if SYSTEM_LIBFFI not in loaded:
+    print(f"error: '{_cffi_backend.__file__}'")
+    print(f"       does not load {SYSTEM_LIBFFI}, it loads:")
+    print("\n".join(f"         {name}" for name in loaded))
+    print()
+    print("       This is not the PyPI cffi wheel. A conda-forge build mis-marshals")
+    print("       variadic arguments on Apple arm64, which makes pygit2 segfault when")
+    print("       PartCAD retries a clone with the ambient git config ignored -- and")
+    print("       freezing it here would ship that crash to every user of the bundle.")
+    print()
+    print("       Build from a non-conda interpreter, or force the PyPI wheel into")
+    print("       this environment:")
+    print()
+    print("         python -m pip install --upgrade --force-reinstall --no-deps \\")
+    print("             --only-binary=:all: cffi")
+    raise SystemExit(1)
+
+print(f"    {_cffi_backend.__file__} loads {SYSTEM_LIBFFI}")
+CFFI_PROVENANCE
+fi
+
 ################################################  FREEZE  ####################################################
 
 echo "==> Freezing"
