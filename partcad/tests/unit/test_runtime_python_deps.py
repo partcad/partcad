@@ -280,11 +280,42 @@ def test_reconcile_requirement_forces_the_pinned_cad_stack():
 
 
 def test_reconcile_requirement_normalizes_the_distribution_name():
-    """PEP 503 normalization, so an underscore or capitals cannot slip past."""
-    for spelling in ["cadquery_ocp==7.7.2", "CadQuery-OCP==7.7.2", "build123d[ocp]==0.8.0"]:
-        reconciled, superseded = sandbox_versions.reconcile_requirement(spelling)
-        assert superseded == spelling
-        assert reconciled in (sandbox_versions.CADQUERY_OCP, sandbox_versions.BUILD123D)
+    """Full PEP 503 normalization, so no spelling of a pinned name slips past.
+
+    pip accepts '.', '-' and '_' interchangeably and collapses runs of them, so
+    anything less than the whole rule leaves a way to name the pinned CAD stack
+    and still get an arbitrary version installed.
+    """
+    for spelling, expected in [
+        ("cadquery_ocp==7.7.2", sandbox_versions.CADQUERY_OCP),
+        ("CadQuery-OCP==7.7.2", sandbox_versions.CADQUERY_OCP),
+        ("cadquery.ocp==7.7.2", sandbox_versions.CADQUERY_OCP),
+        ("cadquery--ocp==7.7.2", sandbox_versions.CADQUERY_OCP),
+        ("cadquery_.-ocp==7.7.2", sandbox_versions.CADQUERY_OCP),
+        ("OCP_Tessellate==3.0.9", sandbox_versions.OCP_TESSELLATE),
+        ("build123d[ocp]==0.8.0", sandbox_versions.BUILD123D),
+    ]:
+        assert sandbox_versions.reconcile_requirement(spelling) == (expected, spelling)
+
+
+def test_reconcile_requirement_keeps_the_environment_marker():
+    """Only the version is overridden; the caller's condition is preserved.
+
+    Dropping the marker would install the package unconditionally, which is not
+    what a requirement guarded by one asked for.
+    """
+    marked = 'build123d==0.8.0; sys_platform == "linux"'
+    reconciled, superseded = sandbox_versions.reconcile_requirement(marked)
+
+    assert superseded == marked
+    assert reconciled == '%s; sys_platform == "linux"' % sandbox_versions.BUILD123D
+
+
+def test_reconcile_requirement_leaves_a_pinned_requirement_with_a_marker_alone():
+    """Already at the pinned version, marker and all -> nothing to report."""
+    already = '%s; sys_platform == "linux"' % sandbox_versions.BUILD123D
+
+    assert sandbox_versions.reconcile_requirement(already) == (already, None)
 
 
 def test_reconcile_requirement_leaves_everything_else_alone():
