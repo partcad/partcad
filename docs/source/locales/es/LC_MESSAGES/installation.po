@@ -405,7 +405,6 @@ msgid "What is included, and what is not"
 msgstr "Qué se incluye y qué no"
 
 #: ../../source/installation.rst:235
-#, fuzzy
 msgid ""
 "The bundle carries everything the wheels would install, including the "
 "optional extras that the wheels leave to the user: the Python linter "
