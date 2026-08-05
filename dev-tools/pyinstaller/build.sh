@@ -135,7 +135,7 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   echo "==> Installing PartCAD from this checkout"
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras that the wheels leave to the user are all built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[ai,lint]" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint]" "${SETUPTOOLS_BOUND}"
   # The CAD kernel is NOT a dependency of the 'partcad' wheel - the core runs all
   # CAD in sandboxes. The standalone bundle, however, freezes it in so that 'pc'
   # works on a machine with no Python: 'show'/'pc inspect' (via ocp_vscode) need
@@ -271,9 +271,6 @@ REQUIRED = {
     "OCP": "the geometry kernel",
     "build123d": "the geometry kernel",
     "ocp_vscode": "`pc inspect` (needs Python 3.11 or newer)",
-    "openai": "the OpenAI provider",
-    "ollama": "the Ollama provider",
-    "google.genai": "the Google Gemini provider",
     "ruff.__main__": "`pc lint` of Python files",
 }
 

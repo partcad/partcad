@@ -23,7 +23,7 @@ other interpreter.
 
 Build it with ``dev-tools/pyinstaller/build.sh``, which prepares the
 environment this spec expects. To run PyInstaller directly, install ``partcad``
-and ``partcad-cli`` (with their ``ai`` and ``lint`` extras) plus ``pyinstaller``
+and ``partcad-cli`` (with their ``lint`` extra) plus ``pyinstaller``
 into the current environment first, then::
 
     pyinstaller --clean --noconfirm dev-tools/pyinstaller/partcad.spec
@@ -169,13 +169,6 @@ hiddenimports += collect_submodules("opentelemetry")
 # Imported lazily, by name, so that a bundle stays useful without them.
 # `pc inspect` hands the shape to the OCP CAD Viewer.
 add_package("ocp_vscode")
-# AI providers. The wheels leave these to the `ai` extra, but a frozen bundle
-# cannot be extended with pip afterwards, so it carries all of them.
-add_package("openai", include_metadata=True)
-add_package("ollama", include_metadata=True)
-# Import name and distribution name differ, so these are two calls.
-add_package("google.genai")
-add_metadata("google-genai")
 
 # `pc lint` runs the linter as a subprocess. `ruff.__main__.find_ruff_bin()`
 # looks in `sysconfig.get_path("scripts")` first, which inside a frozen bundle
