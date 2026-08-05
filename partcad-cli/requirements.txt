@@ -1,4 +1,4 @@
 click==8.4.2
 ocp_vscode
-partcad==0.7.157
+partcad==0.7.158
 rich-click==1.9.8
