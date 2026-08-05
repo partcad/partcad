@@ -358,12 +358,24 @@ class PythonRuntime(runtime.Runtime):
         return self.run_onced(cmd, stdin=stdin, cwd=cwd, session=session)
 
     def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        if session and session["dirty"]:
-            # The venv environment has to be created
-            venv_created = False
-            with self.sync_lock():
-                if not os.path.exists(session["path"]):
-                    venv_created = True
+        # Hold the venv-scoped lock across BOTH provisioning and execution so a
+        # session's package installs and its interpreter run are one atomic
+        # critical section. Two parts of the same package (e.g. a CadQuery part
+        # and a build123d part) share a session v-env; if the install loop is
+        # left outside this lock, a build123d install -- which pulls
+        # 'cadquery-ocp-novtk' and overwrites the shared OCP native module --
+        # can slip in between another part's CADQUERY_OCP re-assertion and the
+        # moment that part actually runs "import cadquery", leaving it to import
+        # a novtk/half-installed OCP and fail with an unrelated-looking
+        # ImportError (e.g. a missing 'vtkmodules'). The guard bookkeeping makes
+        # the VTK build win once all installs settle, but not necessarily at the
+        # instant a run starts; serializing install+run per v-env closes that
+        # window. See run_async_onced() for the async twin.
+        with self.sync_lock(session):
+            if session and session["dirty"]:
+                # The venv environment has to be created
+                venv_created = not os.path.exists(session["path"])
+                if venv_created:
                     with pc_logging.Action("v-env", self.version, session["name"]):
                         # Create the venv environment
                         pc_logging.debug("Creating venv: %s" % session["path"])
@@ -375,15 +387,18 @@ class PythonRuntime(runtime.Runtime):
                                 session["path"],
                             ]
                         )
-            # Install of the dependencies into the venv environment
-            for dep in session["deps"]:
-                if dep == "partcad":
-                    dep = get_local_partcad_pkg(dep)
-                self.ensure_onced(dep, path=session["path"])
-            if venv_created:
-                self.check_deps_onced_locked(path=session["path"])
+                # Install the dependencies into the venv. We already hold the
+                # venv lock, so use the *_locked ensure and take the install
+                # lock explicitly; the resulting order (venv lock, then the
+                # conda global lock) matches once()/ensure and cannot deadlock.
+                with self.sync_lock_install():
+                    for dep in session["deps"]:
+                        if dep == "partcad":
+                            dep = get_local_partcad_pkg(dep)
+                        self.ensure_onced_locked(dep, path=session["path"])
+                    if venv_created:
+                        self.check_deps_onced_locked(path=session["path"])
 
-        with self.sync_lock(session):
             python_path = self.get_venv_python_path(session, path)
             cmd = [python_path, *self.python_flags, *cmd]
             pc_logging.debug("Running: %s", cmd)
@@ -489,12 +504,24 @@ class PythonRuntime(runtime.Runtime):
         return await self.run_async_onced(cmd, stdin=stdin, cwd=cwd, session=session)
 
     async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        if session and session["dirty"]:
-            # The venv environment has to be created
-            venv_created = False
-            async with self.async_lock():
-                if not os.path.exists(session["path"]):
-                    venv_created = True
+        # Hold the venv-scoped lock across BOTH provisioning and execution so a
+        # session's package installs and its interpreter run are one atomic
+        # critical section. Two parts of the same package (e.g. a CadQuery part
+        # and a build123d part) share a session v-env; if the install loop is
+        # left outside this lock, a build123d install -- which pulls
+        # 'cadquery-ocp-novtk' and overwrites the shared OCP native module --
+        # can slip in between another part's CADQUERY_OCP re-assertion and the
+        # moment that part actually runs "import cadquery", leaving it to import
+        # a novtk/half-installed OCP and fail with an unrelated-looking
+        # ImportError (e.g. a missing 'vtkmodules'). The guard bookkeeping makes
+        # the VTK build win once all installs settle, but not necessarily at the
+        # instant a run starts; serializing install+run per v-env closes that
+        # window.
+        async with self.async_lock(session):
+            if session and session["dirty"]:
+                # The venv environment has to be created
+                venv_created = not os.path.exists(session["path"])
+                if venv_created:
                     with pc_logging.Action("v-env", self.version, session["name"]):
                         # Create the venv environment
                         pc_logging.debug("Creating venv: %s" % session["path"])
@@ -506,16 +533,18 @@ class PythonRuntime(runtime.Runtime):
                                 session["path"],
                             ]
                         )
+                # Install the dependencies into the venv. We already hold the
+                # venv lock, so use the *_locked ensure and take the install
+                # lock explicitly; the resulting order (venv lock, then the
+                # conda global lock) matches once()/ensure and cannot deadlock.
+                with self.sync_lock_install():
+                    for dep in session["deps"]:
+                        if dep == "partcad":
+                            dep = get_local_partcad_pkg(dep)
+                        await self.ensure_async_onced_locked(dep, path=session["path"])
+                    if venv_created:
+                        await self.check_deps_async_onced_locked(path=session["path"])
 
-            # Install of the dependencies into the venv environment
-            for dep in session["deps"]:
-                if dep == "partcad":
-                    dep = get_local_partcad_pkg(dep)
-                await self.ensure_async_onced(dep, path=session["path"])
-            if venv_created:
-                await self.check_deps_async_onced_locked(path=session["path"])
-
-        async with self.async_lock(session):
             python_path = self.get_venv_python_path(session, path)
             cmd = [python_path, *self.python_flags, *cmd]
             pc_logging.debug("Running: %s", cmd)

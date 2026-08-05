@@ -80,6 +80,15 @@ EZDXF = "ezdxf==1.4.4"
 # Every install list in this package therefore ends with CADQUERY_OCP, so the
 # re-assertion happens within the same sequence rather than at some arbitrary
 # later point.
+#
+# The re-assertion makes the VTK build win once a sandbox's installs have all
+# settled, but it does not by itself guarantee the VTK build is the one on disk
+# at the instant an interpreter starts. When a CadQuery part and a build123d
+# part of the same package share a session v-env and render concurrently, a
+# build123d (novtk) install must not slip in between another part's re-assertion
+# and its "import cadquery". runtime_python.run_onced / run_async_onced close
+# that window by serializing a session's installs and its run under one v-env
+# lock.
 GUARD_INVALIDATED_BY = {
     BUILD123D: (CADQUERY_OCP,),
 }
