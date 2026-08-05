@@ -127,11 +127,16 @@ class FakeShape:
 class FakeObject:
     """A part, sketch, assembly or interface as the report operations see it."""
 
-    def __init__(self, name, desc=None, project_name=None, project=None, config=None, info=None):
+    def __init__(self, name, desc=None, project_name=None, project=None, config=None, info=None, path=None):
         self.name = name
         self.desc = desc
         self.config = config if config is not None else ({"desc": desc} if desc else {})
         self._info = dict(info or {})
+        # `Part`, `Sketch` and `Assembly` all declare `path` with a `None`
+        # default, so the attribute is always readable; the factory fills it in
+        # for file-backed objects. Note they do *not* carry `orig_name` as an
+        # attribute - it only ever lands in `.config` - so the fake omits it too.
+        self.path = path
         # Interfaces carry their package as an object (`.project`) and have no
         # `.project_name` at all; the other shapes carry the flat name. Set only
         # what the corresponding real class sets, so a lookup of the wrong one
@@ -409,6 +414,83 @@ def test_export_part_renders_to_filepath_and_signals_export_done():
     )
     assert part.rendered == ("stl", "/tmp/out.stl")
     assert seen[-1] == (events.EXPORT_PART_DONE, None)
+
+
+# ---- inspect by path -------------------------------------------------------
+#
+# `inspect_file` backs the extension's save-triggered live reload: it finds the
+# object a saved file defines, drops every cached instance of it so the client's
+# follow-up inspect rebuilds it, and asks the client to inspect it. The cache
+# keys are what `Project.get_object()` writes: the bare object name, or
+# `"<name>;<param>=<value>,..."` for a parameterized instance.
+
+
+def touch(path):
+    path.write_text("")
+    return str(path)
+
+
+@pytest.mark.parametrize(
+    "kind, extension, command",
+    [
+        ("assemblies", ".assy", "partcad.inspectAssembly"),
+        ("parts", ".py", "partcad.inspectPart"),
+        ("sketches", ".svg", "partcad.inspectSketch"),
+    ],
+)
+def test_inspect_file_evicts_the_saved_object_with_its_parameterized_instances(tmp_path, kind, extension, command):
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    saved = touch(tmp_path / ("bracket" + extension))
+    sibling = touch(tmp_path / ("bracket_v2" + extension))
+    # The base object first: that is the order a package instantiates them in,
+    # and the loops pick the first object whose file is the saved one.
+    project.add(kind, FakeObject("bracket", path=saved))
+    project.add(kind, FakeObject("bracket;size=10", path=saved))
+    project.add(kind, FakeObject("bracket;size=20,thickness=2", path=saved))
+    project.add(kind, FakeObject("bracket_v2", path=sibling))
+    project.add(kind, FakeObject("bracket_mount", path=sibling))
+
+    operations.inspect_file(session, {"path": saved})
+
+    # The saved object and its parameterized instances are gone; the objects
+    # that merely start with the same name are untouched (rebuilding them costs
+    # a re-render each and nothing about them changed).
+    assert sorted(getattr(project, kind)) == ["bracket_mount", "bracket_v2"]
+    assert seen[-1] == (
+        events.EXECUTE,
+        {"command": command, "args": [{"name": "bracket", "pkg": "//"}, {}, True]},
+    )
+
+
+def test_inspect_file_invalidates_the_saved_sketch_before_evicting_it(tmp_path):
+    # Sketches get their model invalidated in place as well, so that anything
+    # still holding the instance (the viewer) does not keep the stale geometry.
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    saved = touch(tmp_path / "outline.svg")
+    outline = FakeObject("outline", path=saved)
+    outline.shape, outline.components = object(), ["stale"]
+    project.add("sketches", outline)
+    project.add("sketches", FakeObject("outline;width=5", path=saved))
+
+    operations.inspect_file(session, {"path": saved})
+
+    assert outline.shape is None
+    assert outline.components == []
+    assert project.sketches == {}
+    assert seen[-1][1]["command"] == "partcad.inspectSketch"
+
+
+def test_inspect_file_without_a_matching_file_changes_nothing(tmp_path):
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    project.add("parts", FakeObject("bracket", path=touch(tmp_path / "bracket.py")))
+
+    operations.inspect_file(session, {"path": touch(tmp_path / "elsewhere.py")})
+
+    assert sorted(project.parts) == ["bracket"]
+    assert seen == []
 
 
 # ---- search ----------------------------------------------------------------

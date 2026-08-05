@@ -500,10 +500,6 @@ def did_open(params: lsp.DidOpenTextDocumentParams) -> None:
 @LSP_SERVER.feature(lsp.TEXT_DOCUMENT_DID_SAVE)
 def did_save(params: lsp.DidSaveTextDocumentParams) -> None:
     """LSP handler for textDocument/didSave request."""
-    session = _active_session()
-    if session is None:
-        return
-
     path = LSP_SERVER.workspace.get_text_document(params.text_document.uri).path
     if path is None:
         return
@@ -515,8 +511,17 @@ def did_save(params: lsp.DidSaveTextDocumentParams) -> None:
         or params.text_document.uri.endswith(".dxf")
         or params.text_document.uri.endswith(".svg")
     ):
+        # Only this branch needs a loaded context: it looks the saved file up
+        # among 'ctx.projects'. Do not gate the whole handler on it.
+        session = _active_session()
+        if session is None:
+            return
         _ops().inspect_file(session, {"path": path})
     elif params.text_document.uri.endswith("partcad.yaml"):
+        # Restarting needs no context, and the case that matters most is the one
+        # where there is none: the package failed to load, and this save is the
+        # user's fix for it. Gating this on a loaded context left them with a
+        # dead extension until they restarted it by hand.
         LSP_SERVER.send_notification("?/partcad/doRestart")
 
 

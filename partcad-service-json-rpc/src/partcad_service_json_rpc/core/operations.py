@@ -126,19 +126,37 @@ def inspect_file(session, params):
     path = params.get("path", "")
     if path == "":
         path = ctx.config_path
-    _inspect_by_path(session, path)
+    _inspect_by_path(session, ctx, path)
     return None
 
 
-def _inspect_by_path(session, path):
-    ctx = session.partcad_ctx
+def _instances_of(objects, name):
+    """The cache keys under which ``name`` (and only ``name``) is instantiated.
+
+    ``Project.get_object()`` keys a parameterized instance as
+    ``"<name>;<param>=<value>,..."`` (see ``result_name`` in
+    ``partcad/src/partcad/project.py``), so ``";"`` is what separates an object
+    from its parameters here; ``":"`` separates a *package* from an object and
+    never appears in these per-project dicts. Matching a bare prefix instead
+    would evict unrelated siblings (``bracket_v2`` when ``bracket`` was saved),
+    and matching ``name + ":"`` would evict no parameterized instance at all.
+
+    Returns a list, not a generator: the caller deletes these from ``objects``.
+    """
+    return [n for n in objects if n == name or n.startswith(name + ";")]
+
+
+def _inspect_by_path(session, ctx, path):
+    # The context comes from the caller: a request carrying a `context` id
+    # must be served by that context, not by whichever one happens to be the
+    # session default.
     with session.partcad.logging.Process("InspectFile", path):
         for prj_name, prj in ctx.projects.items():
             for name, assy in prj.assemblies.items():
                 if hasattr(assy, "orig_name") and assy.name != assy.orig_name:
                     continue
                 if assy.path is not None and os.path.exists(assy.path) and os.path.samefile(assy.path, path):
-                    for paramed in list(filter(lambda n: n.startswith(name), prj.assemblies.keys())):
+                    for paramed in _instances_of(prj.assemblies, name):
                         del prj.assemblies[paramed]
                     session.emitter.emit(
                         events.EXECUTE,
@@ -149,7 +167,7 @@ def _inspect_by_path(session, path):
                 if hasattr(part, "orig_name") and part.name != part.orig_name:
                     continue
                 if part.path is not None and os.path.exists(part.path) and os.path.samefile(part.path, path):
-                    for paramed in list(filter(lambda n: n.startswith(name), prj.parts.keys())):
+                    for paramed in _instances_of(prj.parts, name):
                         del prj.parts[paramed]
                     session.emitter.emit(
                         events.EXECUTE,
@@ -163,7 +181,7 @@ def _inspect_by_path(session, path):
                     if name in prj.sketches:
                         prj.sketches[name].shape = None
                         prj.sketches[name].components = []
-                    for paramed in list(filter(lambda n: n.startswith(name + ":"), prj.sketches.keys())):
+                    for paramed in _instances_of(prj.sketches, name):
                         del prj.sketches[paramed]
                     session.emitter.emit(
                         events.EXECUTE,
