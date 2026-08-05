@@ -20,10 +20,12 @@ Make sure PartCAD is available as `/pc:init` describes.
 
 ```sh
 mkdir -p /tmp/pc-render
-pc render -t png -O /tmp/pc-render <name>       # add -a for an assembly, -s for a sketch
+pc render -t png -O /tmp/pc-render <name>       # a part (default); add -a for an assembly
+pc render -s -t svg -O /tmp/pc-render <name>    # a sketch renders to SVG, not PNG
 ```
 
-View `/tmp/pc-render/<name>.png`.
+View the produced file — `/tmp/pc-render/<name>.png` for a part or assembly,
+`/tmp/pc-render/<name>.svg` for a sketch.
 
 ## 3. Write the description
 

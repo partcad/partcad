@@ -198,9 +198,10 @@ variable for each CLI option.
 
 Note that, these environment variables will be overridden if the CLI option is specified.
 
-For user configurations, the environment variables are of the format ``PC`` followed by the
-configuration option name(in uppercase). For example, to override the ``pythonSandbox`` configuration,
-you would set the environment variable ``PC_PYTHONSANDBOX``.
+For user configurations, the environment variables are of the format ``PC_`` followed by the
+configuration option name in upper snake case (camelCase word boundaries become underscores).
+For example, to override the ``pythonSandbox`` configuration, you would set the environment
+variable ``PC_PYTHON_SANDBOX``.
 
 Note that environment variable names are case-sensitive. Always use uppercase letters
 for the ``PC`` prefix and the rest of the variable name, as shown in the examples above.
