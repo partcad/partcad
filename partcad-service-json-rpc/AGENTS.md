@@ -52,9 +52,9 @@ poetry run partcad-json-rpc --http   # serve on 127.0.0.1:8017 instead
 ## Lint / format
 
 ```bash
-black --check partcad-service-json-rpc
-flake8 partcad-service-json-rpc
-isort --check partcad-service-json-rpc
+poetry run black --check partcad-service-json-rpc
+poetry run flake8 partcad-service-json-rpc
+poetry run isort --check partcad-service-json-rpc
 ```
 
 ## Method surface

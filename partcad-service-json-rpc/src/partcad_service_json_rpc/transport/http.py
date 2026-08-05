@@ -23,7 +23,11 @@ from ..rpc.dispatcher import PARSE_ERROR, Dispatcher
 def build_app(session, registry) -> web.Application:
     """Build the aiohttp application serving the JSON-RPC service."""
     app = web.Application()
-    dispatcher = Dispatcher(registry)
+    # No traceback in HTTP error responses: this transport has no authentication
+    # and can be bound to a non-loopback address, so a caller must not be able to
+    # read server paths and stack frames by provoking an exception. The traceback
+    # is still logged server-side.
+    dispatcher = Dispatcher(registry, include_traceback=False)
     subscribers: set = set()
     state = {"loop": None}
 

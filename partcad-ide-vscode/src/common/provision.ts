@@ -176,18 +176,24 @@ async function downloadAndExtract(
     await downloadFile(url, archivePath);
 
     // The HTTPS transfer is already authenticated; the checksum only guards
-    // against a corrupted download, so a missing checksum is a warning.
+    // against a corrupted download, so an *unavailable* checksum is a warning.
+    // A checksum that is available and does not match is fatal -- it must not
+    // be swallowed here, or a corrupted bundle would be extracted and executed.
+    let expected: string | undefined;
     try {
         const sumPath = `${archivePath}.sha256`;
         await downloadFile(`${url}.sha256`, sumPath);
-        const expected = (await fs.promises.readFile(sumPath, 'utf8')).trim().split(/\s+/)[0];
+        expected = (await fs.promises.readFile(sumPath, 'utf8')).trim().split(/\s+/)[0];
+    } catch (e) {
+        traceInfo(`PartCAD: checksum verification skipped: ${e}`);
+    }
+    if (expected) {
         const actual = await sha256(archivePath);
-        if (expected && expected !== actual) {
+        if (expected !== actual) {
+            await fs.promises.rm(archivePath, { force: true });
             throw new Error('checksum mismatch, the download is corrupted');
         }
         traceInfo('PartCAD: download checksum verified');
-    } catch (e) {
-        traceInfo(`PartCAD: checksum verification skipped: ${e}`);
     }
 
     progress.report({ message: 'extracting...' });

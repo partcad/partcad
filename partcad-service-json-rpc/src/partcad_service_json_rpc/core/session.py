@@ -120,9 +120,18 @@ class Session:
     # ---- partcad lifecycle --------------------------------------------------
 
     def ensure_partcad(self):
-        """Import PartCAD once if it has not been loaded yet, and return it."""
+        """Import PartCAD once if it has not been loaded yet, and return it.
+
+        Double-checked under ``_load_lock`` (an RLock, so the nested
+        ``load_partcad()`` acquisition is fine): the HTTP transport dispatches
+        from a thread pool, so two concurrent requests could both see
+        ``partcad is None`` and both call ``load_partcad()`` -- the second one
+        tearing down and reloading the module while the first is still using it.
+        """
         if self.partcad is None:
-            self.load_partcad()
+            with self._load_lock:
+                if self.partcad is None:
+                    self.load_partcad()
         return self.partcad
 
     def load_partcad(self) -> None:

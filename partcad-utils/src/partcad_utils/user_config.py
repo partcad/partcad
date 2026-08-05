@@ -12,8 +12,9 @@ import importlib._bootstrap_external
 import importlib.machinery
 import importlib.util
 import os
-from pathlib import Path
 import shutil
+from pathlib import Path
+
 import vyper
 
 from . import logging as pc_logging
@@ -415,6 +416,7 @@ class UserConfig(vyper.Vyper):
         #              independent of what any connected client requests
         # values: [debug | info | warning | error | critical]
         # default: debug (full detail)
+        self.set_default("logLevel", "debug")
         self.bind_env("logLevel", "PC_LOG_LEVEL")
         self.log_level = self.get_string("logLevel")
 

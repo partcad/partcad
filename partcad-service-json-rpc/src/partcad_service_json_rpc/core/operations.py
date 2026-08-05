@@ -43,7 +43,14 @@ def _ctx(session, params):
     """
     context_id = params.get("context")
     if context_id is not None:
-        return session.contexts.get(context_id)
+        ctx = session.contexts.get(context_id)
+        if ctx is None:
+            # A stale id (daemon restarted since the client got it, or -- once
+            # the eviction TODO in context_create lands -- an expired context).
+            # Report it rather than no-op silently: the caller cannot otherwise
+            # tell "unknown context" from "nothing to do".
+            raise JsonRpcError(USAGE_ERROR, "Unknown context: %s" % context_id)
+        return ctx
     return session.partcad_ctx
 
 
@@ -774,7 +781,7 @@ def context_create(session, params):
             # disk -- especially after add/import mutate partcad.yaml.
             session.contexts[context_id] = pc.Context(path, user_config=pc.user_config)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
-            raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)})
+            raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)}) from e
 
     # Keep the most recently created context as the session default so the
     # extension's context-less operations continue to work.
@@ -800,8 +807,14 @@ def install(session, params):
     if ctx is None:
         return None
     with session.partcad.logging.Process("Install", "this"):
+        # Restore force_update afterwards: the daemon keeps this context warm,
+        # so leaving it set would make every later command re-fetch everything.
+        saved = ctx.user_config.force_update
         ctx.user_config.force_update = True
-        ctx.get_all_packages()
+        try:
+            ctx.get_all_packages()
+        finally:
+            ctx.user_config.force_update = saved
         if ctx.stats_git_ops:
             session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
     return {}
@@ -812,8 +825,14 @@ def update(session, params):
     ctx = _ctx(session, params)
     if ctx is None:
         return None
+    # As in install(): scope force_update to this call so the warm context does
+    # not stay in force-update mode for every subsequent command.
+    saved = ctx.user_config.force_update
     ctx.user_config.force_update = True
-    packages = list(ctx.get_all_packages())
+    try:
+        packages = list(ctx.get_all_packages())
+    finally:
+        ctx.user_config.force_update = saved
     if ctx.stats_git_ops:
         session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
     session.emitter.info("Successfully updated %d packages" % len(packages))
@@ -1321,8 +1340,11 @@ def _load_package_contents(session, name="//"):
     with session.partcad.logging.Process("Load", name):
         project = ctx.get_project(name)
         if project is None or project.broken:
-            if project is not None and not project.broken:
-                session.emitter.error("Failed to load the package: %s" % name)
+            # The legacy LSP server guarded this message with
+            # `project is not None and not project.broken`, which is
+            # unreachable inside this branch -- the failure signal fired with
+            # no explanation. Report the package that failed to load.
+            session.emitter.error("Failed to load the package: %s" % name)
             session.emitter.signal(events.PACKAGE_LOAD_FAILED)
             return
 

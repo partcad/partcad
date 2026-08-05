@@ -52,31 +52,40 @@ def spawn_pipe_daemon(root_path: str) -> None:
 
 def is_pipe_alive(name: str, timeout: float = 1.0) -> bool:
     """True if a daemon answers rpc.discover on the named pipe."""
+    reply = _pipe_request(name, "rpc.discover", timeout)
+    return isinstance(reply, dict) and reply.get("id") == 0 and "result" in reply
+
+
+def stop_pipe_daemon(name: str, timeout: float = 1.0) -> bool:
+    """Ask the named-pipe daemon to stop. True if it acknowledged.
+
+    The pipe server honors ``STOP_METHOD`` (see ``_PipeProtocol``); this is the
+    client side of it, used by ``daemon.stop_daemon`` on Windows.
+    """
+    reply = _pipe_request(name, STOP_METHOD, timeout)
+    return isinstance(reply, dict) and "result" in reply
+
+
+def _pipe_request(name: str, method: str, timeout: float):
+    """Send one request over the named pipe and return the reply (None on error)."""
     try:
-        import pywintypes  # noqa: F401  (only to detect availability is not needed)
-    except Exception:
-        pass
-    try:
-        return asyncio.run(_probe_pipe(name, timeout))
+        return asyncio.run(_pipe_roundtrip(name, method, timeout))
     except Exception:  # pylint: disable=broad-except
-        return False
+        return None
 
 
-async def _probe_pipe(name: str, timeout: float) -> bool:
+async def _pipe_roundtrip(name: str, method: str, timeout: float):
     loop = asyncio.get_event_loop()
     transport = None
     try:
         # ProactorEventLoop.create_pipe_connection connects to a named pipe.
         reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(reader)
-        transport, _ = await asyncio.wait_for(
-            loop.create_pipe_connection(lambda: protocol, name), timeout=timeout
-        )
+        transport, _ = await asyncio.wait_for(loop.create_pipe_connection(lambda: protocol, name), timeout=timeout)
         writer = asyncio.StreamWriter(transport, protocol, reader, loop)
-        _write_frame(writer, {"jsonrpc": "2.0", "id": 0, "method": "rpc.discover", "params": {}})
+        _write_frame(writer, {"jsonrpc": "2.0", "id": 0, "method": method, "params": {}})
         await writer.drain()
-        message = await asyncio.wait_for(_read_frame(reader), timeout=timeout)
-        return isinstance(message, dict) and message.get("id") == 0 and "result" in message
+        return await asyncio.wait_for(_read_frame(reader), timeout=timeout)
     finally:
         if transport is not None:
             transport.close()

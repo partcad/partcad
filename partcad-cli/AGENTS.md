@@ -5,9 +5,11 @@ CLI interface (`pc` / `partcad` commands) to most `partcad` core functionality. 
 the `partcad` package in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
 
 `pc daemon start` / `pc daemon stop` manage the per-workspace background daemon from
-[`partcad-service-json-rpc`](../partcad-service-json-rpc) (a client helper, `partcad_service_json_rpc.client`,
-backs them). Migrating the rest of the CLI onto that daemon (so command bodies stop importing `partcad`) is
-in-progress follow-up work.
+[`partcad-service-json-rpc`](../partcad-service-json-rpc): `start` goes through
+`partcad_service_json_rpc.client.start_daemon()`, while `stop` calls
+`partcad_service_json_rpc.daemon.stop_daemon()` directly. Most command bodies are now thin clients of that
+daemon (see `click/service.py`); the commands that depend on the client's own working directory or global
+options — `init`, `config`, `add`, `import`, `healthcheck` — deliberately stay in-process.
 
 ## Setup
 

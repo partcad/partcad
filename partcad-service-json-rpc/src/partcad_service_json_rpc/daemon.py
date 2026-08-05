@@ -93,14 +93,28 @@ def ensure_daemon(
     root_path: Optional[str] = None,
     liveness_timeout: float = LIVENESS_TIMEOUT,
 ) -> str:
-    """Ensure a daemon serves the workspace and return (and print) its socket path.
+    """Ensure a daemon serves the workspace and return (and print) its endpoint.
 
-    On POSIX, starts a detached daemon when none is alive. ``build_session`` is a
-    callable taking the workspace directory and returning the warm
-    :class:`Session` the daemon serves (the directory is where its rotating log
-    file lives).
+    On POSIX, starts a detached daemon on a Unix socket when none is alive; on
+    Windows, a named-pipe daemon. ``build_session`` is a callable taking the
+    workspace directory and returning the warm :class:`Session` the daemon
+    serves (the directory is where its rotating log file lives).
     """
     root = root_path or determine_root_path()
+
+    # Windows first: everything below is POSIX-only (fcntl in _flock,
+    # socket.AF_UNIX), so it must not run here -- it used to raise
+    # ModuleNotFoundError before this branch could ever be reached, and the
+    # printed endpoint has to be the pipe the client will connect to.
+    if os.name == "nt":  # pragma: no cover - exercised only on Windows
+        from .win_pipe import is_pipe_alive, pipe_name, spawn_pipe_daemon
+
+        pipe = pipe_name(root)
+        if not is_pipe_alive(pipe, liveness_timeout):
+            spawn_pipe_daemon(root)
+        print(pipe, flush=True)
+        return pipe
+
     sock = socket_path(root)
     wdir = os.path.dirname(sock)
     os.makedirs(wdir, exist_ok=True)
@@ -120,13 +134,6 @@ def ensure_daemon(
         os.chmod(sock, 0o600)
         server_sock.listen(64)
         print(sock, flush=True)
-
-    if os.name == "nt":  # pragma: no cover - exercised only on Windows
-        from .win_pipe import spawn_pipe_daemon
-
-        server_sock.close()
-        spawn_pipe_daemon(root)
-        return sock
 
     _serve_detached(server_sock, sock, wdir, build_session)
     return sock
@@ -185,8 +192,15 @@ def _cleanup(wdir: str) -> None:
 
 
 def stop_daemon(root_path: Optional[str] = None, timeout: float = LIVENESS_TIMEOUT) -> bool:
-    """Ask the workspace daemon to stop. Returns True if one was contacted."""
+    """Ask the workspace daemon to stop. True only if it acknowledged the stop."""
     root = root_path or determine_root_path()
+
+    # As in ensure_daemon: the AF_UNIX path below does not exist on Windows.
+    if os.name == "nt":  # pragma: no cover - exercised only on Windows
+        from .win_pipe import pipe_name, stop_pipe_daemon
+
+        return stop_pipe_daemon(pipe_name(root), timeout)
+
     sock = socket_path(root)
     if not is_alive(sock, timeout):
         return False
@@ -196,8 +210,10 @@ def stop_daemon(root_path: Optional[str] = None, timeout: float = LIVENESS_TIMEO
         client.connect(sock)
         stream = client.makefile("rwb")
         write_message(stream, {"jsonrpc": "2.0", "id": 0, "method": "daemon.stop", "params": {}})
-        read_message(stream)
-        return True
+        # Report success only on an acknowledged stop, so the CLI does not
+        # claim "stopped" for a daemon that never answered.
+        reply = read_message(stream)
+        return isinstance(reply, dict) and "result" in reply
     except OSError:
         return False
     finally:

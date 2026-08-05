@@ -280,6 +280,16 @@ function connectStdio(
     traceInfo(`PartCAD service: launching ${execPath} --stdio`);
     const proc = cp.spawn(execPath, ['--stdio', ...args], { cwd, env }) as cp.ChildProcessWithoutNullStreams;
     proc.stderr.on('data', (d: Buffer) => outputChannel.append(d.toString()));
+    // Without an 'error' listener, a failed launch (ENOENT/EACCES) is emitted
+    // asynchronously as an uncaught exception in the extension host rather than
+    // a logged failure. 'exit' covers the service dying after a successful spawn.
+    proc.on('error', (err: Error) => {
+        traceError(`PartCAD service: failed to launch ${execPath}: ${err.message}`);
+        outputChannel.appendLine(`PartCAD service failed to launch: ${err.message}`);
+    });
+    proc.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
+        traceInfo(`PartCAD service exited (code=${code}, signal=${signal})`);
+    });
     const connection = createMessageConnection(
         new StreamMessageReader(proc.stdout),
         new StreamMessageWriter(proc.stdin),

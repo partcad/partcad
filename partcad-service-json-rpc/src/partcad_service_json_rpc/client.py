@@ -74,7 +74,11 @@ class DaemonClient:
         """Send a request; forward notifications to ``on_event`` until the response."""
         self._next_id += 1
         request_id = self._next_id
-        write_message(self._write, {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params or {}})
+        # Only default when params is absent: an explicit [] or {} is a valid
+        # (empty positional / empty named) parameter list and must be preserved.
+        request = {"jsonrpc": "2.0", "id": request_id, "method": method}
+        request["params"] = {} if params is None else params
+        write_message(self._write, request)
         while True:
             message = read_message(self._read)
             if message is None:
