@@ -1034,9 +1034,6 @@ class Project(project_config.Configuration):
             "cadquery": "py",
             "build123d": "py",
             "sdf": "py",
-            "ai-cadquery": "py",
-            "ai-sdf": "py",
-            "ai-openscad": "scad",
         }
         return self._add_component(
             kind,
@@ -1360,12 +1357,9 @@ class Project(project_config.Configuration):
                         config["type"] == "cadquery"
                         or config["type"] == "build123d"
                         or config["type"] == "sdf"
-                        or config["type"] == "ai-cadquery"
-                        or config["type"] == "ai-build123d"
-                        or config["type"] == "ai-sdf"
                     ):
                         path += ".py"
-                    elif config["type"] == "openscad" or config["type"] == "ai-openscad":
+                    elif config["type"] == "openscad":
                         path += ".scad"
                     else:
                         path += "." + config["type"]

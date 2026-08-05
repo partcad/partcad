@@ -234,43 +234,6 @@ Feature: `pc lint` command
     When I run "pc lint"
     Then the command should exit with a status code of "0"
 
-  @success
-  Scenario: Part with provider, model, and AI-related fields
-    Given a file named "partcad.yaml" with content:
-      """
-      parts:
-        aiBlock:
-          type: ai-cadquery
-          provider: openai
-          model: gpt-4
-          tokens: 256
-          temperature: 0.7
-          top_p: 0.95
-          top_k: 40
-          desc: Generate a 3D model of a cube
-      """
-    When I run "pc lint"
-    Then the command should exit with a status code of "0"
-
-  @failure
-  Scenario: Part with invalid top_p value
-    Given a file named "partcad.yaml" with content:
-      """
-      parts:
-        gen:
-          type: ai-build123d
-          provider: openai
-          model: gpt-4
-          tokens: 256
-          temperature: 0.7
-          top_p: 1.95
-          top_k: 40
-          desc: Generate a 3D model of a cube
-      """
-    When I run "pc lint"
-    Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.parts.gen.top_p: 1.95 is greater than the maximum of 1.0"
-
   @failure
   Scenario: Parameters with invalid nested enum in providers
     Given a file named "partcad.yaml" with content:

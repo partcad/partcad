@@ -625,8 +625,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|sdf|ai-openscad|ai-cadquery|ai-build123d|step|brep|stl|3mf|extrude|sweep>
-      desc: <(optional) textual description, also used by AI>
+      type: <openscad|cadquery|build123d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
+      desc: <(optional) textual description>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       # ... type-specific options ...
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
@@ -690,59 +690,6 @@ Define parts with CodeCAD scripts using the following syntax:
 |                                                                                      |     cube:                 |                                                                                                                         |
 |                                                                                      |       type: scad          |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
-
-AI Generated CAD Scripts
-------------------------
-
-Generate OpenSCAD, CadQuery or build123d scripts with Generative AI using the following syntax:
-
-.. code-block:: yaml
-
-  parts:
-    <part name>:
-      desc: <(optional) The detailed description to be used in the model generation prompt>
-      requirements: <(optional) The list of requirements to be used in the model generation prompt>
-      type: <ai-openscad|ai-cadquery|ai-build123d>
-      provider: <google|openai|ollama, the model provider to use>
-      model: <(optional) the model to use>
-      tokens: <(optional) the limit of token context>
-      temperature: <(optional) the temperature LLM parameter>
-      top_p: <(optional) the top_p LLM parameter>
-      top_k: <(optional, openai|ollama) the top_k LLM parameter>
-
-Place the detailed description of the part in the ``desc`` field.
-Provide as much information as possible through the :ref:`requirements` field,
-using ``INCLUDE(<filename>)`` or ``DOWNLOAD(<url>)`` to add supported
-file formats to the prompt either from a file in the package folder or from a URL.
-
-The following models are recommended for use:
-
-+----------+----------------------------+
-| Provider | Model                      |
-+==========+============================+
-| google   | - gemini-2.5-pro (default) |
-|          | - gemini-2.5-flash         |
-|          | - gemini-3.5-flash         |
-+----------+----------------------------+
-| openai   | - gpt-4o (default)         |
-|          | - gpt-4o-mini              |
-+----------+----------------------------+
-| ollama   | - llama-3.1:8b             |
-|          | - llama-3.1:70b (default)  |
-|          | - llama-3.1:405b           |
-+----------+----------------------------+
-
-+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
-| Example                   | Result                                                                                                                  |
-+===========================+=========================================================================================================================+
-| .. code-block:: yaml      | .. image:: https://github.com/partcad/partcad/blob/main/examples/produce_part_ai_cadquery/cube.svg?raw=true             |
-|                           |   :width: 128                                                                                                           |
-|   parts:                  |                                                                                                                         |
-|     cube:                 |                                                                                                                         |
-|       type: ai-cadquery   |                                                                                                                         |
-|       provider: google    |                                                                                                                         |
-|       desc: A cube        |                                                                                                                         |
-+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
 CAD Files
 ---------

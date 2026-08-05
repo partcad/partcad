@@ -82,65 +82,6 @@ Feature: `pc render` command
      And STDOUT should contain 'The following quotes are received:'
      And STDOUT should contain '//pub/svc/commerce/gobilda:gobilda: No quote received'
 
-  # TODO: This depends on ~/.partcad/config.yaml:googleApiKey
-  # @alexanderilyin: I'm still not sure if it's okay to use live 3rd parties services during PR checks but from other
-  # had if it does not work in PRs for any reason same will happen for end user, so IMHO best part here is to have
-  # dedicated GitHub Actions token with spending limit.
-  @wip @docs-features
-  Scenario: Features: Design
-    When I run command:
-      """
-      mkdir -pv $HOME/.partcad
-      """
-    Then the command should exit with a status code of "0"
-    When a file named "$HOME/.partcad/config.yaml" is written with content:
-      """
-      # https://aistudio.google.com/apikey
-      # TODO: Create dedicated token for CI and create version of test for success scenario
-      googleApiKey: $PARTCAD_GOOGLE_API_KEY_MISSING
-      # YOLO settings to speed up the process
-      maxGeometricModeling: 1
-      maxModelGeneration: 1
-      maxScriptCorrection: 1
-      """
-    And I run "pc init"
-    Then the command should exit with a status code of "0"
-    When I run "pc add part ai-openscad --ai google --desc 'Pixel phone case of a surprising shape' 'generated-case.scad'"
-    Then the command should exit with a status code of "0"
-    When I run "pc inspect 'generated-case'"
-    Then the command should exit with a status code of "0"
-     And STDOUT should contain "DONE: InitCtx: /tmp/sandbox/behave/partcad-cli-"
-     # TODO: This could be moved to it's own test for negative scenario.
-     # And STDOUT should contain "Failed to generate with Google: Google API key is not set"
-     # And STDOUT should contain "Generated 0 CSG modeling candidates"
-     # And STDOUT should contain "No valid script generated. Try changing the prompt."
-     # And STDOUT should contain "OpenSCAD script is empty or does not exist: /tmp/sandbox/behave/partcad-cli-"
-    When I run "true > 'generated-case.scad'"
-    Then the command should exit with a status code of "0"
-    When I run "pc inspect 'generated-case'"
-    Then the command should exit with a status code of "0"
-
-
-  # TODO: This depends on ~/.partcad/config.yaml:googleApiKey
-  @wip @docs-features
-  Scenario: Features: Summarization
-    When I run "pc init"
-    Then the command should exit with a status code of "0"
-    When I run "pc inspect -V //pub/robotics/parts/gobilda:structure/u_channel_2"
-    Then the command should exit with a status code of "0"
-    When I run "pc inspect -V -a //pub/robotics/parts/gobilda:examples/wormgear"
-    Then the command should exit with a status code of "0"
-
-  # TODO: This depends on ~/.partcad/config.yaml:googleApiKey
-  @wip @docs-features
-  Scenario: Features: Summarization (Script Friendly)
-    When I run "pc init"
-    Then the command should exit with a status code of "0"
-    When I run "pc -q --no-ansi inspect -V //pub/robotics/parts/gobilda:structure/u_channel_2"
-    Then the command should exit with a status code of "0"
-    When I run "pc -q --no-ansi inspect -V -a //pub/robotics/parts/gobilda:examples/wormgear"
-    Then the command should exit with a status code of "0"
-
   @docs-installation
   Scenario: Installation: Command line tools
     When I run "pc init"

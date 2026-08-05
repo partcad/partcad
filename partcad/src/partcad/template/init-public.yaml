@@ -29,8 +29,8 @@ sketches:
 parts:
   # Add parts here
   # <part name>:
-  #   type: <openscad|cadquery|build123d|ai-openscad|ai-cadquery|ai-build123d|step|stl|3mf>
-  #   desc: <(optional) textual description, also used by AI>
+  #   type: <openscad|cadquery|build123d|step|stl|3mf>
+  #   desc: <(optional) textual description>
   #   path: <(optional) the source file path, "{part name}.{ext}" otherwise>
   #   # ... type-specific options ...
   #   offset: <OCCT Location object, e.g. "[[0,0,0], [0,0,1], 0]">

@@ -9,8 +9,6 @@ export interface ISettings {
     cwd: string;
     workspace: string;
     pythonSandbox: string;
-    googleApiKey: string;
-    openaiApiKey: string;
     telemetry: string;
     verbosity: string;
     packagePath: string;
@@ -89,8 +87,6 @@ export async function getWorkspaceSettings(
         cwd: workspace.uri.fsPath,
         workspace: workspace.uri.toString(),
         pythonSandbox: config.get<string>(`pythonSandbox`) ?? '',
-        googleApiKey: config.get<string>(`googleApiKey`) ?? '',
-        openaiApiKey: config.get<string>(`openaiApiKey`) ?? '',
         telemetry: config.get<string>(`telemetry`) ?? 'on',
         verbosity: config.get<string>(`verbosity`) ?? 'info',
         packagePath: config.get<string>(`packagePath`) ?? '.',
@@ -126,8 +122,6 @@ export async function getGlobalSettings(namespace: string, includeInterpreter?: 
         cwd: process.cwd(),
         workspace: process.cwd(),
         pythonSandbox: getGlobalValue<string>(config, 'pythonSandbox', ''),
-        googleApiKey: getGlobalValue<string>(config, 'googleApiKey', ''),
-        openaiApiKey: getGlobalValue<string>(config, 'openaiApiKey', ''),
         telemetry: getGlobalValue<string>(config, 'telemetry', 'on'),
         verbosity: getGlobalValue<string>(config, 'verbosity', 'info'),
         packagePath: getGlobalValue<string>(config, 'packagePath', '.'),
@@ -146,8 +140,6 @@ export async function getGlobalSettings(namespace: string, includeInterpreter?: 
 export function checkIfConfigurationChanged(e: ConfigurationChangeEvent, namespace: string): boolean {
     const settings = [
         `${namespace}.pythonSandbox`,
-        `${namespace}.googleApiKey`,
-        `${namespace}.openaiApiKey`,
         `${namespace}.telemetry`,
         `${namespace}.verbosity`,
         `${namespace}.packagePath`,

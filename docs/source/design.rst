@@ -77,12 +77,6 @@ PartCAD has an evergrowing list of ways to define the part model:
   - `build123d <https://github.com/gumyr/build123d>`_
   - `sdf <https://github.com/fogleman/sdf>`_
 
-- AI-generated scripts
-
-  - OpenSCAD
-  - CadQuery
-  - build123d
-
 Assemblies
 ==========
 

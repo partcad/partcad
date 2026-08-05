@@ -40,7 +40,6 @@ from .globals import (
     _partcad_context,
     render,
 )
-from .ai import supported_models
 from .consts import *
 from .context import Context
 from .assembly import Assembly

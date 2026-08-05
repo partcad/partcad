@@ -13,7 +13,6 @@ from . import telemetry
 from . import shape_envelope
 from .geom import Location
 from .shape import Shape
-from .shape_ai import ShapeWithAi
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
 
@@ -30,7 +29,7 @@ class AssemblyChild:
 
 
 @telemetry.instrument()
-class Assembly(ShapeWithAi):
+class Assembly(Shape):
     path: typing.Optional[str] = None
 
     def __init__(self, project_name: str, config: dict = {}):

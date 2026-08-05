@@ -16,20 +16,7 @@ from ...cli_context import CliContext
     "--desc",
     "desc",
     type=str,
-    help="The part description (also used by LLMs).",
-    required=False,
-    show_envvar=True,
-)
-@click.option(
-    "--ai",
-    "provider",
-    type=click.Choice(
-        [
-            "google",
-            "openai",
-        ]
-    ),
-    help="Generative AI provider.",
+    help="The sketch description.",
     required=False,
     show_envvar=True,
 )
@@ -43,15 +30,13 @@ from ...cli_context import CliContext
             "dxf",
             "svg",
             "basic",
-            "ai-cadquery",
-            "ai-openscad",
         ]
     ),
     # help="Type of the sketch",
 )
 @click.argument("path", type=str)  # help="Path to the file"
 @click.pass_context
-def cli(click_ctx: click.Context, desc: str | None, kind: str, provider: str | None, path: str):
+def cli(click_ctx: click.Context, desc: str | None, kind: str, path: str):
     package = click_ctx.parent.params["package"]
     cli_ctx: CliContext = click_ctx.obj
 
@@ -69,15 +54,5 @@ def cli(click_ctx: click.Context, desc: str | None, kind: str, provider: str | N
             config = {}
             if desc:
                 config["desc"] = desc
-            if provider:
-                config["provider"] = provider
-                kind_ext = {
-                    "ai-cadquery": "py",
-                    "ai-openscad": "scad",
-                }
-                if path.lower().endswith((".%s" % kind_ext[kind]).lower()):
-                    path = path.rsplit(".", 1)[0] + ".gen." + kind_ext[kind]
-                else:
-                    path += ".gen"
             if package_obj.add_sketch(kind, path, config):
                 Path(path).touch()

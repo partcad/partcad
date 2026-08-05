@@ -76,7 +76,6 @@ The commands and options supported by PartCAD CLI:
     render       Render a 2D projection of parts, assemblies, or scenes onto a plane
 
   Workflow commands:
-    ai           AI-powered workflows (regenerate)
     supply       Manage the supply chain of the current project
 
   Other commands:
@@ -234,8 +233,8 @@ What is included, and what is not
 =================================
 
 The bundle carries everything the wheels would install, including the optional extras that the wheels leave
-to the user: all the AI providers (``ai-google``, ``ai-openai``, ``ai-ollama``) and the Python linter
-(``lint``). A frozen bundle cannot be extended afterwards, so it ships complete.
+to the user: the Python linter (``lint``). A frozen bundle cannot be extended afterwards, so it ships
+complete.
 
 On Linux and Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to build
 ``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
@@ -303,29 +302,6 @@ doesn't usually need to be installed separately.
     ...
     >>> import partcad as pc
     >>> ctx = pc.init()
-
-============
-AI providers
-============
-
-The SDKs of the supported AI providers are optional. Install the extra that
-matches the provider you intend to use, either on ``partcad-cli``:
-
-.. code-block:: shell
-
-    $ python -m pip install -U 'partcad-cli[ai-google]'   # Google Gemini
-    $ python -m pip install -U 'partcad-cli[ai-openai]'   # OpenAI
-    $ python -m pip install -U 'partcad-cli[ai-ollama]'   # locally hosted Ollama
-    $ python -m pip install -U 'partcad-cli[ai]'          # all of the above
-
-or on ``partcad`` itself, using the same extra names:
-
-.. code-block:: shell
-
-    $ python -m pip install -U 'partcad[ai]'
-
-Without the matching extra, using an AI provider fails with an error naming the
-package to install. Everything else in PartCAD works without them.
 
 =======
 Linting

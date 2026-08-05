@@ -89,10 +89,6 @@ Object commands
 Workflow commands
 *****************
 
-``pc ai``
-  AI-powered workflows. The ``regenerate`` subcommand regenerates a sketch, part, or assembly from its
-  description using a configured AI model.
-
 ``pc supply``
   Manage the supply chain of the current project:
 
@@ -106,9 +102,8 @@ Other commands
 **************
 
 ``pc adhoc``
-  Ad-hoc operations that run on the fly without creating or configuring a package. Subcommands: ``convert``
-  (convert a part or sketch to another format without updating its type) and ``generate`` (generate an
-  AI-powered part without creating a package).
+  Ad-hoc operations that run on the fly without creating or configuring a package. Subcommand: ``convert``
+  (convert a part or sketch to another format without updating its type).
 
 ``pc healthcheck``
   Check the host system for known issues. Use ``--dry-run`` to list the available checks, ``--filters`` to run

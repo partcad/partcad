@@ -338,39 +338,6 @@ CadQuery and build123d. PartCAD uses CQGI to load models
         optional-path/part2:
             type: build123d # optional-path/part2.py is used
 
-Part: AI-generated
-------------------
-
-PartCAD can generate CadQuery and OpenSCAD scripts using GenAI models from
-Google and OpenAI.
-This is the fastest way to bootstrap most designs.
-Empty the generated file and iteratively improve the prompts until the desired
-script functionality is achieved.
-Alternatively, drop the AI parameters and continue improving the script manually.
-
-  .. code-block:: yaml
-
-    # partcad.yaml
-    parts:
-        part1:
-            type: ai-cadquery # part1.py is created
-            desc: A cube
-            provider: google
-        part2:
-            type: ai-openscad # part2.scad is created
-            desc: A flat screen TV
-            provider: openai
-            images:
-              - product_photo.png
-
-The following configuration is required:
-
-  .. code-block:: yaml
-
-    # ~/.partcad/config.yaml
-    googleApiKey: <...>
-    openaiApiKey: <...>
-
 Assembly
 --------
 

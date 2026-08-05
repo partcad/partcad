@@ -9,14 +9,14 @@
 
 import typing
 
-from .shape_ai import ShapeWithAi
+from .shape import Shape
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
 from . import telemetry
 
 
 @telemetry.instrument(exclude=["ref_inc"])
-class Part(ShapeWithAi):
+class Part(Shape):
     path: typing.Optional[str] = None
     url: typing.Optional[str] = None
 

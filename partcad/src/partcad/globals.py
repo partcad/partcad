@@ -26,10 +26,6 @@ from .plugin_factory_repository_basic import PluginFactoryRepositoryBasic
 # from .plugin_factory_repository_tree import PluginFactoryRepositoryTree
 # from .plugin_factory_repository_full import PluginFactoryRepositoryFull
 from .plugin_factory_repository_enrich import PluginFactoryRepositoryEnrich
-from .part_factory_ai_cadquery import PartFactoryAiCadquery
-from .part_factory_ai_build123d import PartFactoryAiBuild123d
-from .part_factory_ai_sdf import PartFactoryAiSdf
-from .part_factory_ai_openscad import PartFactoryAiScad
 from .part_factory_cadquery import PartFactoryCadquery
 from .part_factory_build123d import PartFactoryBuild123d
 from .part_factory_sdf import PartFactorySdf
@@ -72,10 +68,6 @@ factory.register("sketch", "dxf", SketchFactoryDxf)
 factory.register("sketch", "svg", SketchFactorySvg)
 factory.register("sketch", "alias", SketchFactoryAlias)
 factory.register("sketch", "enrich", SketchFactoryEnrich)
-factory.register("part", "ai-cadquery", PartFactoryAiCadquery)
-factory.register("part", "ai-build123d", PartFactoryAiBuild123d)
-factory.register("part", "ai-sdf", PartFactoryAiSdf)
-factory.register("part", "ai-openscad", PartFactoryAiScad)
 factory.register("part", "cadquery", PartFactoryCadquery)
 factory.register("part", "build123d", PartFactoryBuild123d)
 factory.register("part", "sdf", PartFactorySdf)

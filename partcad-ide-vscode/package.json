@@ -137,30 +137,6 @@
         }
       },
       {
-        "title": "Generative AI",
-        "order": 2,
-        "properties": {
-          "partcad.googleApiKey": {
-            "default": "",
-            "description": "Google AI API key.",
-            "scope": "machine",
-            "tags": [
-              "usesOnlineServices"
-            ],
-            "type": "string"
-          },
-          "partcad.openaiApiKey": {
-            "default": "",
-            "description": "OpenAI API key.",
-            "scope": "machine",
-            "tags": [
-              "usesOnlineServices"
-            ],
-            "type": "string"
-          }
-        }
-      },
-      {
         "title": "General",
         "order": 3,
         "properties": {
@@ -346,18 +322,6 @@
         "icon": "$(file-add)"
       },
       {
-        "command": "partcad.genPart",
-        "category": "PartCAD",
-        "title": "Generate a part with AI",
-        "icon": "$(sparkle)"
-      },
-      {
-        "command": "partcad.genPartItem",
-        "category": "PartCAD",
-        "title": "Generate a part with AI",
-        "icon": "$(sparkle)"
-      },
-      {
         "command": "partcad.addAssembly",
         "category": "PartCAD",
         "title": "Add an assembly",
@@ -446,20 +410,6 @@
         "category": "PartCAD",
         "title": "Edit",
         "icon": "$(edit)"
-      },
-      {
-        "command": "partcad.regeneratePart",
-        "category": "PartCAD",
-        "group": "AI",
-        "title": "Regenerate with AI",
-        "icon": "$(sparkle)"
-      },
-      {
-        "command": "partcad.changePart",
-        "category": "PartCAD",
-        "group": "AI",
-        "title": "Change with AI",
-        "icon": "$(sparkle)"
       },
       {
         "command": "partcad.exportToSVG",
@@ -626,16 +576,6 @@
           "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == packageWithCode || viewItem == interfaceWithCode)"
         },
         {
-          "command": "partcad.changePart",
-          "group": "AI",
-          "when": "view == partcadExplorer && viewItem == partWithAI"
-        },
-        {
-          "command": "partcad.regeneratePart",
-          "group": "AI",
-          "when": "view == partcadExplorer && viewItem == partWithAI"
-        },
-        {
           "command": "partcad.inspectSource",
           "group": "navigation",
           "when": "view == partcadExplorer && (viewItem == partWithAI || viewItem == partWithCode || viewItem == assemblyWithCode || viewItem == packageWithCode)"
@@ -678,11 +618,6 @@
           "when": "partcad.packageLoaded && view == partcadExplorer"
         },
         {
-          "command": "partcad.genPart",
-          "group": "add",
-          "when": "partcad.packageLoaded && view == partcadExplorer"
-        },
-        {
           "command": "partcad.addAssembly",
           "group": "add",
           "when": "partcad.packageLoaded && view == partcadExplorer"
@@ -701,11 +636,6 @@
         },
         {
           "command": "partcad.addPartItem",
-          "group": "add",
-          "when": "partcad.packageLoaded && view == partcadExplorer"
-        },
-        {
-          "command": "partcad.genPartItem",
           "group": "add",
           "when": "partcad.packageLoaded && view == partcadExplorer"
         },
@@ -874,7 +804,7 @@
       },
       {
         "view": "partcadExplorer",
-        "contents": "This package is empty.\n[Add a part](command:partcad.addPart)\n[Generate a part](command:partcad.genPart)\n[Add an assembly](command:partcad.addAssembly)",
+        "contents": "This package is empty.\n[Add a part](command:partcad.addPart)\n[Add an assembly](command:partcad.addAssembly)",
         "when": "partcad.activated && partcad.installed && partcad.packageLoaded && !partcad.packageContentsBeingLoaded && !partcad.itemsReceived"
       },
       {

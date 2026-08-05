@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-26 04:55+0000\n"
+"POT-Creation-Date: 2026-08-03 15:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -37,19 +37,19 @@ msgid ""
 "See the :doc:`tutorial <tutorial>` for a step-by-step walkthrough."
 msgstr ""
 "La extensión de PartCAD para Visual Studio Code es la interfaz gráfica "
-"principal de PartCAD. Agrega un banco de trabajo de PartCAD con una "
-"vista Explorer para explorar paquetes y una vista Inspector para ver "
-"objetos y editar sus parámetros. Instálela desde el `mercado de VS Code"
-" <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_."
-" Consulte el :doc:`tutorial <tutorial>` para ver una guía paso a paso."
+"principal de PartCAD. Agrega un banco de trabajo de PartCAD con una vista"
+" Explorer para explorar paquetes y una vista Inspector para ver objetos y"
+" editar sus parámetros. Instálela desde el `mercado de VS Code "
+"<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_. "
+"Consulte el :doc:`tutorial <tutorial>` para ver una guía paso a paso."
 
 #: ../../source/features.rst:14
 msgid ""
 "The extension exposes the following actions from the Explorer view and "
 "the command palette:"
 msgstr ""
-"La extensión expone las siguientes acciones desde la vista Explorer y la"
-" paleta de comandos:"
+"La extensión expone las siguientes acciones desde la vista Explorer y la "
+"paleta de comandos:"
 
 #: ../../source/features.rst:17
 msgid "Packages"
@@ -61,8 +61,8 @@ msgid ""
 "current workspace (a custom-path variant is also available)."
 msgstr ""
 "**Initialize new package** — Crea un paquete ``partcad.yaml`` en el "
-"espacio de trabajo actual (también hay disponible una variante con ruta"
-" personalizada)."
+"espacio de trabajo actual (también hay disponible una variante con ruta "
+"personalizada)."
 
 #: ../../source/features.rst:21
 msgid "**Open package** — Open an existing package."
@@ -110,35 +110,11 @@ msgstr ""
 msgid "**Test** a part, assembly, or scene."
 msgstr "**Test** una pieza, ensamblaje o escena."
 
-#: ../../source/features.rst:36 ../../source/features.rst:91
-msgid "Generative AI"
-msgstr "IA generativa"
-
-#: ../../source/features.rst:38
-msgid ""
-"**Generate a part with AI** — Create a new part from a natural-language "
-"description."
-msgstr ""
-"**Generate a part with AI** — Crea una nueva pieza a partir de una "
-"descripción en lenguaje natural."
-
-#: ../../source/features.rst:39
-msgid "**Regenerate with AI** — Regenerate an existing part."
-msgstr "**Regenerate with AI** — Regenera una pieza existente."
-
-#: ../../source/features.rst:40
-msgid ""
-"**Change with AI** — Modify an existing part through a natural-language "
-"instruction."
-msgstr ""
-"**Change with AI** — Modifica una pieza existente mediante una "
-"instrucción en lenguaje natural."
-
-#: ../../source/features.rst:43
+#: ../../source/features.rst:36
 msgid "Export"
 msgstr "Exportar"
 
-#: ../../source/features.rst:45
+#: ../../source/features.rst:38
 msgid ""
 "Objects can be exported directly from the extension to any of the "
 "following formats: **SVG**, **PNG**, **STEP**, **STL**, **3MF**, "
@@ -148,11 +124,11 @@ msgstr ""
 "cualquiera de los siguientes formatos: **SVG**, **PNG**, **STEP**, "
 "**STL**, **3MF**, **ThreeJS**, **OBJ**, **IGES**, y **glTF**."
 
-#: ../../source/features.rst:50
+#: ../../source/features.rst:43
 msgid "Procurement and Manufacturing"
 msgstr "Adquisición y fabricación"
 
-#: ../../source/features.rst:52
+#: ../../source/features.rst:45
 msgid ""
 "PartCAD currently supports two types of providers (entities that can "
 "provide parts and assemblies): ``store`` and ``manufacturer``. ``store`` "
@@ -160,14 +136,13 @@ msgid ""
 "and ``SKU``. ``manufacturer`` can be used to quote and order parts by "
 "using their 3D model (for example, by 3D printing them)."
 msgstr ""
-"PartCAD actualmente admite dos tipos de proveedores (entidades que "
-"pueden suministrar piezas y ensamblajes): ``store`` y ``manufacturer``."
-" ``store`` se puede usar para cotizar y pedir piezas de listas "
-"existentes: por ``vendor`` y ``SKU``. ``manufacturer`` se puede usar "
-"para cotizar y pedir piezas usando su modelo 3D (por ejemplo, "
-"imprimiéndolas en 3D)."
+"PartCAD actualmente admite dos tipos de proveedores (entidades que pueden"
+" suministrar piezas y ensamblajes): ``store`` y ``manufacturer``. "
+"``store`` se puede usar para cotizar y pedir piezas de listas existentes:"
+" por ``vendor`` y ``SKU``. ``manufacturer`` se puede usar para cotizar y "
+"pedir piezas usando su modelo 3D (por ejemplo, imprimiéndolas en 3D)."
 
-#: ../../source/features.rst:76
+#: ../../source/features.rst:69
 msgid ""
 "See :ref:`providers` for more information about the providers and how "
 "PartCAD selects them."
@@ -175,17 +150,17 @@ msgstr ""
 "Consulte :ref:`providers` para obtener más información sobre los "
 "proveedores y cómo los selecciona PartCAD."
 
-#: ../../source/features.rst:78
+#: ../../source/features.rst:71
 msgid ""
 "In the future, PartCAD will support ``assembler``, which is supposed to "
 "produce an assembly given assembly instructions and using parts ordered "
 "from ``store``-s and ``manufacturer``-s."
 msgstr ""
-"En el futuro, PartCAD admitirá ``assembler``, que se supone que "
-"producirá un ensamblaje a partir de instrucciones de ensamblaje y "
-"usando piezas pedidas a ``store``-s y ``manufacturer``-s."
+"En el futuro, PartCAD admitirá ``assembler``, que se supone que producirá"
+" un ensamblaje a partir de instrucciones de ensamblaje y usando piezas "
+"pedidas a ``store``-s y ``manufacturer``-s."
 
-#: ../../source/features.rst:82
+#: ../../source/features.rst:75
 msgid ""
 "Currently, the provider has to be explicitly specified in the quote or "
 "order request, or explicitly specified as one of the suppliers in the "
@@ -196,119 +171,18 @@ msgid ""
 "a patented design)."
 msgstr ""
 "Actualmente, el proveedor debe especificarse explícitamente en la "
-"solicitud de cotización o pedido, o especificarse explícitamente como "
-"uno de los proveedores en el paquete donde se declaran las piezas. En "
-"el futuro, PartCAD podrá seleccionar proveedores según la ubicación y "
-"las preferencias del solicitante, dejando la posibilidad de forzar el "
-"uso de un proveedor específico para las piezas correspondientes (por "
-"ejemplo, para piezas que usan un diseño patentado)."
+"solicitud de cotización o pedido, o especificarse explícitamente como uno"
+" de los proveedores en el paquete donde se declaran las piezas. En el "
+"futuro, PartCAD podrá seleccionar proveedores según la ubicación y las "
+"preferencias del solicitante, dejando la posibilidad de forzar el uso de "
+"un proveedor específico para las piezas correspondientes (por ejemplo, "
+"para piezas que usan un diseño patentado)."
 
-#: ../../source/features.rst:93
-msgid ""
-"PartCAD aims to provide powerful generative AI capabilities to the CAD "
-"community. Such capabilities serve two purposes."
-msgstr ""
-"PartCAD tiene como objetivo proporcionar potentes capacidades de IA "
-"generativa a la comunidad CAD. Dichas capacidades sirven para dos "
-"propósitos."
-
-#: ../../source/features.rst:96
-msgid ""
-"First of all, they can be used to script more features using LLMs. Write "
-"your own AI agents that iterate through existing packages to find the "
-"part you are looking for, or automatically generate part designs. Or "
-"anything else you can think of."
-msgstr ""
-"En primer lugar, se pueden usar para programar más funcionalidades "
-"mediante LLMs. Escriba sus propios agentes de IA que recorran los "
-"paquetes existentes para encontrar la pieza que busca, o que generen "
-"automáticamente diseños de piezas. O cualquier otra cosa que se le "
-"ocurra."
-
-#: ../../source/features.rst:101
-msgid ""
-"Last but not least, they are powering accessibility features, allowing "
-"blind users to navigate the catalog of parts or to interactively create "
-"their own designs."
-msgstr ""
-"Por último, pero no menos importante, impulsan funcionalidades de "
-"accesibilidad, permitiendo a usuarios con discapacidad visual navegar "
-"por el catálogo de piezas o crear interactivamente sus propios diseños."
-
-#: ../../source/features.rst:105
-msgid ""
-"Google Gemini, OpenAI and Ollama APIs are supported. The following "
-"configuration is required:"
-msgstr ""
-"Se admiten las API de Google Gemini, OpenAI y Ollama. Se requiere la "
-"siguiente configuración:"
-
-#: ../../source/features.rst:114
-msgid "The following configuration is optional:"
-msgstr "La siguiente configuración es opcional:"
-
-#: ../../source/features.rst:122
-msgid ""
-"PartCAD AI agents are designed to query AI multiple times, so that a "
-"range of options is considered and the best result is found. The "
-"following configuration options can be used to influence that behavior:"
-msgstr ""
-"Los agentes de IA de PartCAD están diseñados para consultar a la IA "
-"varias veces, de modo que se considere un rango de opciones y se "
-"encuentre el mejor resultado. Las siguientes opciones de configuración "
-"se pueden usar para influir en ese comportamiento:"
-
-#: ../../source/features.rst:138
-msgid "Design"
-msgstr "Diseño"
-
-#: ../../source/features.rst:140
-msgid ""
-"PartCAD is capable of using generative AI to create parts. The generated "
-"part definitions are persisted as Python or CAD scripts."
-msgstr ""
-"PartCAD es capaz de usar IA generativa para crear piezas. Las "
-"definiciones de pieza generadas se guardan como scripts de Python o "
-"CAD."
-
-#: ../../source/features.rst:152
-msgid ""
-"To use ChatGPT instead of Gemini, pass \"openai\" instead of \"google\" "
-"as the \"--ai\" parameter. To use Ollama, pass \"ollama\"."
-msgstr ""
-"Para usar ChatGPT en lugar de Gemini, pase \"openai\" en lugar de "
-"\"google\" como el parámetro \"--ai\". Para usar Ollama, pase "
-"\"ollama\"."
-
-#: ../../source/features.rst:155
-msgid "If needed, the part can be regenerated by truncating the generated files."
-msgstr ""
-"Si es necesario, la pieza se puede regenerar truncando los archivos "
-"generados."
-
-#: ../../source/features.rst:162
-msgid "Please, be ready to retry a few times to get an acceptable outcome."
-msgstr ""
-"Esté preparado para reintentar varias veces para obtener un resultado "
-"aceptable."
-
-#: ../../source/features.rst:165
-msgid "Summarization"
-msgstr "Resumen"
-
-#: ../../source/features.rst:167
-msgid "Summarize the part or assembly using following commands:"
-msgstr "Resuma la pieza o el ensamblaje usando los siguientes comandos:"
-
-#: ../../source/features.rst:175
-msgid "Or their more script-friendly variants:"
-msgstr "O sus variantes más adecuadas para scripts:"
-
-#: ../../source/features.rst:187
+#: ../../source/features.rst:86
 msgid "Caching"
 msgstr "Caché"
 
-#: ../../source/features.rst:189
+#: ../../source/features.rst:88
 msgid ""
 "PartCAD is capable of caching intermediate and final results of all model"
 " compilations. This can be particularly useful when working with large "
@@ -320,19 +194,19 @@ msgstr ""
 "particularmente útil al trabajar con modelos grandes o cuando se usan "
 "lenguajes de scripting (como OpenSCAD, CadQuery, build123d o sdf)."
 
-#: ../../source/features.rst:193
+#: ../../source/features.rst:92
 msgid ""
 "At the moment code-CAD caching is experimental and can be enabled by "
 "using the following configuration:"
 msgstr ""
-"Por el momento, el almacenamiento en caché de code-CAD es experimental "
-"y se puede habilitar usando la siguiente configuración:"
+"Por el momento, el almacenamiento en caché de code-CAD es experimental y "
+"se puede habilitar usando la siguiente configuración:"
 
-#: ../../source/features.rst:202
+#: ../../source/features.rst:101
 msgid "Security"
 msgstr "Seguridad"
 
-#: ../../source/features.rst:204
+#: ../../source/features.rst:103
 msgid ""
 "As code-CAD is gaining popularity in the community, the topic of supply "
 "chain security and the risk of running arbitrary third-party code is not "
@@ -343,19 +217,19 @@ msgstr ""
 "A medida que code-CAD gana popularidad en la comunidad, el tema de la "
 "seguridad de la cadena de suministro y el riesgo de ejecutar código "
 "arbitrario de terceros no está suficientemente atendido. PartCAD tiene "
-"como objetivo cerrar esa brecha para el software de código abierto de "
-"una manera que supere todo lo que el software comercial pueda ofrecer "
+"como objetivo cerrar esa brecha para el software de código abierto de una"
+" manera que supere todo lo que el software comercial pueda ofrecer "
 "actualmente."
 
-#: ../../source/features.rst:209
+#: ../../source/features.rst:108
 msgid ""
 "PartCAD is capable of rendering scripted parts (``CadQuery``, "
 "``build123d`` and ``sdf`` use Python) in sandboxed environments."
 msgstr ""
-"PartCAD es capaz de renderizar piezas basadas en scripts (``CadQuery``,"
-" ``build123d`` y ``sdf`` usan Python) en entornos aislados (sandbox)."
+"PartCAD es capaz de renderizar piezas basadas en scripts (``CadQuery``, "
+"``build123d`` y ``sdf`` usan Python) en entornos aislados (sandbox)."
 
-#: ../../source/features.rst:212
+#: ../../source/features.rst:111
 msgid ""
 "At the moment it is only useful from a dependency management perspective "
 "(it allows third-party packages to bring their Python dependencies "
@@ -371,15 +245,15 @@ msgstr ""
 "entornos sandbox. Eso cambiará fundamentalmente las implicaciones de "
 "seguridad de usar modelos basados en scripts compartidos en línea."
 
-#: ../../source/features.rst:221
+#: ../../source/features.rst:120
 msgid "Telemetry"
 msgstr "Telemetría"
 
-#: ../../source/features.rst:224
+#: ../../source/features.rst:123
 msgid "Public Repositories"
 msgstr "Repositorios públicos"
 
-#: ../../source/features.rst:226
+#: ../../source/features.rst:125
 msgid ""
 "By default PartCAD collects telemetry data to improve the user experience"
 " and to help understand how the tool is being used. The data collected "
@@ -389,29 +263,29 @@ msgstr ""
 "mejorar la experiencia del usuario y ayudar a entender cómo se usa la "
 "herramienta. Los datos recopilados incluyen lo siguiente:"
 
-#: ../../source/features.rst:230
+#: ../../source/features.rst:129
 msgid "What commands are being run?"
 msgstr "¿Qué comandos se están ejecutando?"
 
-#: ../../source/features.rst:231
+#: ../../source/features.rst:130
 msgid "How much time is consumed by each step?"
 msgstr "¿Cuánto tiempo consume cada paso?"
 
-#: ../../source/features.rst:232
+#: ../../source/features.rst:131
 msgid "What errors and exceptions are being raised?"
 msgstr "¿Qué errores y excepciones se están generando?"
 
-#: ../../source/features.rst:234
+#: ../../source/features.rst:133
 msgid ""
 "PartCAD uses `OpenTelemetry <https://opentelemetry.io/>`_ to collect "
 "telemetry data. You can disable telemetry by setting the following "
 "configuration:"
 msgstr ""
-"PartCAD usa `OpenTelemetry <https://opentelemetry.io/>`_ para recopilar"
-" datos de telemetría. Puede deshabilitar la telemetría estableciendo la"
-" siguiente configuración:"
+"PartCAD usa `OpenTelemetry <https://opentelemetry.io/>`_ para recopilar "
+"datos de telemetría. Puede deshabilitar la telemetría estableciendo la "
+"siguiente configuración:"
 
-#: ../../source/features.rst:243
+#: ../../source/features.rst:142
 msgid ""
 "Alternatively, you can disable telemetry by setting the following "
 "environment variable:"
@@ -419,16 +293,15 @@ msgstr ""
 "Alternativamente, puede deshabilitar la telemetría estableciendo la "
 "siguiente variable de entorno:"
 
-#: ../../source/features.rst:249
+#: ../../source/features.rst:148
 msgid "You can also change telemetry settings using CLI:"
-msgstr ""
-"También puede cambiar la configuración de telemetría usando la CLI:"
+msgstr "También puede cambiar la configuración de telemetría usando la CLI:"
 
-#: ../../source/features.rst:260
+#: ../../source/features.rst:159
 msgid "Private Repositories"
 msgstr "Repositorios privados"
 
-#: ../../source/features.rst:262
+#: ../../source/features.rst:161
 msgid ""
 "If you are systemically using PartCAD in your organization then it makes "
 "sense to collect your own telemetry data to understand how the tool is "
@@ -436,31 +309,31 @@ msgid ""
 "organization performance."
 msgstr ""
 "Si usa PartCAD sistemáticamente en su organización, tiene sentido "
-"recopilar sus propios datos de telemetría para entender cómo se usa la"
-" herramienta en su organización, y aprender a mejorar el rendimiento de"
-" su organización."
+"recopilar sus propios datos de telemetría para entender cómo se usa la "
+"herramienta en su organización, y aprender a mejorar el rendimiento de su"
+" organización."
 
-#: ../../source/features.rst:266
+#: ../../source/features.rst:165
 msgid ""
 "The only OpenTelemetry backend provider currently supported is `Sentry "
 "<https://sentry.io/>`_. Create an organization account on Sentry and "
 "obtain a DSN key."
 msgstr ""
 "El único proveedor de backend de OpenTelemetry admitido actualmente es "
-"`Sentry <https://sentry.io/>`_. Cree una cuenta de organización en "
-"Sentry y obtenga una clave DSN."
+"`Sentry <https://sentry.io/>`_. Cree una cuenta de organización en Sentry"
+" y obtenga una clave DSN."
 
-#: ../../source/features.rst:276
+#: ../../source/features.rst:175
 msgid "Other OpenTelemetry backend providers can be supported on request."
 msgstr ""
 "Se puede agregar soporte para otros proveedores de backend de "
 "OpenTelemetry bajo solicitud."
 
-#: ../../source/features.rst:280
+#: ../../source/features.rst:179
 msgid "Automation Support"
 msgstr "Soporte de automatización"
 
-#: ../../source/features.rst:282
+#: ../../source/features.rst:181
 msgid ""
 "PartCAD allows you to set CLI options and override user configurations "
 "specified in ``~/.partcad/config.yaml`` using environment variables. This"
@@ -473,30 +346,30 @@ msgstr ""
 "establecer configuraciones dinámicamente o en entornos donde modificar "
 "archivos de configuración no es factible."
 
-#: ../../source/features.rst:287
+#: ../../source/features.rst:186
 msgid ""
 "Generally, all of PartCAD's environment variables are prefixed with "
 "``PC``."
 msgstr ""
-"En general, todas las variables de entorno de PartCAD tienen el prefijo"
-" ``PC``."
+"En general, todas las variables de entorno de PartCAD tienen el prefijo "
+"``PC``."
 
-#: ../../source/features.rst:289
+#: ../../source/features.rst:188
 msgid ""
 "For CLI options, the environment variable prefix depends on the command "
 "being used. You can use the `--help` option to determine the "
 "corresponding environment variable for each CLI option."
 msgstr ""
-"Para las opciones de la CLI, el prefijo de la variable de entorno "
-"depende del comando que se esté usando. Puede usar la opción `--help` "
-"para determinar la variable de entorno correspondiente a cada opción de"
-" la CLI."
+"Para las opciones de la CLI, el prefijo de la variable de entorno depende"
+" del comando que se esté usando. Puede usar la opción `--help` para "
+"determinar la variable de entorno correspondiente a cada opción de la "
+"CLI."
 
-#: ../../source/features.rst:293
+#: ../../source/features.rst:192
 msgid "Here are some examples:"
 msgstr "Aquí hay algunos ejemplos:"
 
-#: ../../source/features.rst:300
+#: ../../source/features.rst:199
 msgid ""
 "Note that, these environment variables will be overridden if the CLI "
 "option is specified."
@@ -504,19 +377,20 @@ msgstr ""
 "Tenga en cuenta que estas variables de entorno serán anuladas si se "
 "especifica la opción de la CLI."
 
-#: ../../source/features.rst:302
+#: ../../source/features.rst:201
+#, fuzzy
 msgid ""
 "For user configurations, the environment variables are of the format "
 "``PC`` followed by the configuration option name(in uppercase). For "
-"example, to override the ``googleApiKey`` configuration, you would set "
-"the environment variable ``PC_GOOGLEAPIKEY``."
+"example, to override the ``pythonSandbox`` configuration, you would set "
+"the environment variable ``PC_PYTHONSANDBOX``."
 msgstr ""
-"Para las configuraciones de usuario, las variables de entorno tienen el"
-" formato ``PC`` seguido del nombre de la opción de configuración (en "
-"mayúsculas). Por ejemplo, para anular la configuración ``googleApiKey``,"
-" establecería la variable de entorno ``PC_GOOGLEAPIKEY``."
+"Para las configuraciones de usuario, las variables de entorno tienen el "
+"formato ``PC`` seguido del nombre de la opción de configuración (en "
+"mayúsculas). Por ejemplo, para anular la configuración ``pythonSandbox``, "
+"establecería la variable de entorno ``PC_PYTHONSANDBOX``."
 
-#: ../../source/features.rst:306
+#: ../../source/features.rst:205
 msgid ""
 "Note that environment variable names are case-sensitive. Always use "
 "uppercase letters for the ``PC`` prefix and the rest of the variable "
@@ -524,10 +398,10 @@ msgid ""
 msgstr ""
 "Tenga en cuenta que los nombres de las variables de entorno distinguen "
 "entre mayúsculas y minúsculas. Use siempre letras mayúsculas para el "
-"prefijo ``PC`` y el resto del nombre de la variable, como se muestra en"
-" los ejemplos anteriores."
+"prefijo ``PC`` y el resto del nombre de la variable, como se muestra en "
+"los ejemplos anteriores."
 
-#: ../../source/features.rst:309
+#: ../../source/features.rst:208
 msgid ""
 "In this case, these environment variables will take precedence over the "
 "values specified in ``~/.partcad/config.yaml``."
@@ -535,11 +409,11 @@ msgstr ""
 "En este caso, estas variables de entorno tendrán prioridad sobre los "
 "valores especificados en ``~/.partcad/config.yaml``."
 
-#: ../../source/features.rst:316
+#: ../../source/features.rst:215
 msgid "Flexible Git Configuration"
 msgstr "Configuración flexible de Git"
 
-#: ../../source/features.rst:318
+#: ../../source/features.rst:217
 msgid ""
 "PartCAD imports packages from git repositories without the ``git`` "
 "command line tool: it speaks the git protocols itself, through the "
@@ -547,25 +421,25 @@ msgid ""
 "installed alongside it for imports to work."
 msgstr ""
 "PartCAD importa paquetes desde repositorios git sin la herramienta de "
-"línea de comandos ``git``: implementa los protocolos de git por sí "
-"mismo, a través de la biblioteca ``libgit2`` que se incluye entre sus "
+"línea de comandos ``git``: implementa los protocolos de git por sí mismo,"
+" a través de la biblioteca ``libgit2`` que se incluye entre sus "
 "dependencias. No es necesario instalar nada adicional para que las "
 "importaciones funcionen."
 
-#: ../../source/features.rst:322
+#: ../../source/features.rst:221
 msgid ""
 "By default, PartCAD uses the system's Git configuration when importing "
 "packages using git, which it reads from ``~/.gitconfig`` whether or not "
 "git itself is installed. If you want to override these configurations, "
 "you can add your overrides in ``~/.partcad/config.yaml`` as shown below:"
 msgstr ""
-"De forma predeterminada, PartCAD usa la configuración de Git del "
-"sistema al importar paquetes mediante git, la cual lee de "
-"``~/.gitconfig`` independientemente de si git en sí está instalado. Si "
-"desea anular estas configuraciones, puede agregar sus anulaciones en "
+"De forma predeterminada, PartCAD usa la configuración de Git del sistema "
+"al importar paquetes mediante git, la cual lee de ``~/.gitconfig`` "
+"independientemente de si git en sí está instalado. Si desea anular estas "
+"configuraciones, puede agregar sus anulaciones en "
 "``~/.partcad/config.yaml`` como se muestra a continuación:"
 
-#: ../../source/features.rst:336
+#: ../../source/features.rst:235
 msgid ""
 "Cloning over SSH is faster and more reliable because it uses an efficient"
 " protocol with lower overhead, supports compression, and maintains stable"
@@ -574,13 +448,13 @@ msgid ""
 "ideal for large repositories or frequent interactions."
 msgstr ""
 "Clonar por SSH es más rápido y confiable porque usa un protocolo "
-"eficiente con menos sobrecarga, admite compresión y mantiene conexiones"
-" estables mediante autenticación basada en claves. SSH evita los "
-"límites de tasa de HTTPS, maneja mejor los cortafuegos, y elimina las "
-"solicitudes de credenciales, lo que lo hace ideal para repositorios "
-"grandes o interacciones frecuentes."
+"eficiente con menos sobrecarga, admite compresión y mantiene conexiones "
+"estables mediante autenticación basada en claves. SSH evita los límites "
+"de tasa de HTTPS, maneja mejor los cortafuegos, y elimina las solicitudes"
+" de credenciales, lo que lo hace ideal para repositorios grandes o "
+"interacciones frecuentes."
 
-#: ../../source/features.rst:342
+#: ../../source/features.rst:241
 msgid ""
 "Repositories reached over SSH are authenticated with the keys held by the"
 " running SSH agent, and then with the default key files "
@@ -589,15 +463,15 @@ msgid ""
 "never asks for one: a repository it cannot authenticate to fails with an "
 "error rather than waiting for a prompt that nothing would answer."
 msgstr ""
-"Los repositorios a los que se accede por SSH se autentican con las "
-"claves que posee el agente SSH en ejecución, y luego con los archivos "
-"de clave predeterminados (``~/.ssh/id_ed25519``, ``~/.ssh/id_ecdsa``, "
-"``~/.ssh/id_rsa``). Una clave protegida por una frase de contraseña "
-"solo funciona a través del agente, ya que PartCAD nunca solicita una: "
-"un repositorio al que no puede autenticarse falla con un error en lugar"
-" de esperar una solicitud que nada respondería."
+"Los repositorios a los que se accede por SSH se autentican con las claves"
+" que posee el agente SSH en ejecución, y luego con los archivos de clave "
+"predeterminados (``~/.ssh/id_ed25519``, ``~/.ssh/id_ecdsa``, "
+"``~/.ssh/id_rsa``). Una clave protegida por una frase de contraseña solo "
+"funciona a través del agente, ya que PartCAD nunca solicita una: un "
+"repositorio al que no puede autenticarse falla con un error en lugar de "
+"esperar una solicitud que nada respondería."
 
-#: ../../source/features.rst:348
+#: ../../source/features.rst:247
 msgid ""
 "If you have SSH keys configured then you can add the following to the "
 "~/.partcad/config.yaml:"
@@ -605,27 +479,27 @@ msgstr ""
 "Si tiene claves SSH configuradas, puede agregar lo siguiente a "
 "~/.partcad/config.yaml:"
 
-#: ../../source/features.rst:361
+#: ../../source/features.rst:260
 msgid "Personally Identifiable Information"
 msgstr "Información de identificación personal"
 
-#: ../../source/features.rst:363
+#: ../../source/features.rst:262
 msgid ""
 "The user section in ``~/.partcad/config.yaml`` defines the default "
 "personal and contact details used throughout the system. These details "
 "include the user's name, email, phone number, company, and address "
 "information."
 msgstr ""
-"La sección user en ``~/.partcad/config.yaml`` define los datos "
-"personales y de contacto predeterminados usados en todo el sistema. "
-"Estos datos incluyen el nombre del usuario, correo electrónico, número "
-"de teléfono, empresa e información de dirección."
+"La sección user en ``~/.partcad/config.yaml`` define los datos personales"
+" y de contacto predeterminados usados en todo el sistema. Estos datos "
+"incluyen el nombre del usuario, correo electrónico, número de teléfono, "
+"empresa e información de dirección."
 
-#: ../../source/features.rst:384
+#: ../../source/features.rst:283
 msgid "Address Configuration"
 msgstr "Configuración de dirección"
 
-#: ../../source/features.rst:386
+#: ../../source/features.rst:285
 msgid ""
 "Users can override any details from the user section by specifying "
 "shippingAddress and billingAddress separately."
@@ -633,27 +507,27 @@ msgstr ""
 "Los usuarios pueden anular cualquier dato de la sección user "
 "especificando shippingAddress y billingAddress por separado."
 
-#: ../../source/features.rst:418
+#: ../../source/features.rst:317
 msgid "**Override Behavior**"
 msgstr "**Comportamiento de anulación**"
 
-#: ../../source/features.rst:420
+#: ../../source/features.rst:319
 msgid ""
 "If shippingAddress is not specified, the system will use the user details"
 " for shipping."
 msgstr ""
-"Si no se especifica shippingAddress, el sistema usará los datos de user"
-" para el envío."
+"Si no se especifica shippingAddress, el sistema usará los datos de user "
+"para el envío."
 
-#: ../../source/features.rst:421
+#: ../../source/features.rst:320
 msgid ""
 "If billingAddress is not specified, the system will use the user details "
 "for billing."
 msgstr ""
-"Si no se especifica billingAddress, el sistema usará los datos de user"
-" para la facturación."
+"Si no se especifica billingAddress, el sistema usará los datos de user "
+"para la facturación."
 
-#: ../../source/features.rst:422
+#: ../../source/features.rst:321
 msgid ""
 "If shippingAddress or billingAddress is provided, it completely replaces "
 "the corresponding fields from user."
@@ -661,21 +535,21 @@ msgstr ""
 "Si se proporciona shippingAddress o billingAddress, este reemplaza "
 "completamente los campos correspondientes de user."
 
-#: ../../source/features.rst:424
+#: ../../source/features.rst:323
 msgid ""
 "This setup allows full customization of shipping and billing details, "
 "supporting scenarios where items need to be sent to different recipients "
 "or addresses."
 msgstr ""
-"Esta configuración permite una personalización completa de los datos "
-"de envío y facturación, admitiendo escenarios en los que los artículos "
-"deben enviarse a diferentes destinatarios o direcciones."
+"Esta configuración permite una personalización completa de los datos de "
+"envío y facturación, admitiendo escenarios en los que los artículos deben"
+" enviarse a diferentes destinatarios o direcciones."
 
-#: ../../source/features.rst:430
+#: ../../source/features.rst:329
 msgid "Parameter Configuration"
 msgstr "Configuración de parámetros"
 
-#: ../../source/features.rst:432
+#: ../../source/features.rst:331
 msgid ""
 "The configuration file (``~/.partcad/config.yaml``) allows users to "
 "define reusable parameters, which can be accessed dynamically within the "
@@ -685,33 +559,33 @@ msgstr ""
 "usuarios definir parámetros reutilizables, a los que se puede acceder "
 "dinámicamente dentro de las configuraciones de proveedores."
 
-#: ../../source/features.rst:435
+#: ../../source/features.rst:334
 msgid ""
 "In ``~/.partcad/config.yaml``, parameters are stored under a parameters "
 "section."
 msgstr ""
-"En ``~/.partcad/config.yaml``, los parámetros se almacenan en una "
-"sección parameters."
+"En ``~/.partcad/config.yaml``, los parámetros se almacenan en una sección"
+" parameters."
 
-#: ../../source/features.rst:437 ../../source/features.rst:460
+#: ../../source/features.rst:336 ../../source/features.rst:359
 msgid "Example:"
 msgstr "Ejemplo:"
 
-#: ../../source/features.rst:447
+#: ../../source/features.rst:346
 msgid ""
 "Object IDs are used to reference different types of objects within a "
 "package, such as sketches, parts, assemblies, scenes, interfaces, and "
 "providers."
 msgstr ""
 "Los IDs de objeto se usan para hacer referencia a diferentes tipos de "
-"objetos dentro de un paquete, como bocetos, piezas, ensamblajes, "
-"escenas, interfaces y proveedores."
+"objetos dentro de un paquete, como bocetos, piezas, ensamblajes, escenas,"
+" interfaces y proveedores."
 
-#: ../../source/features.rst:453
+#: ../../source/features.rst:352
 msgid "Accessing Parameters in Providers"
 msgstr "Acceso a parámetros en proveedores"
 
-#: ../../source/features.rst:455
+#: ../../source/features.rst:354
 msgid ""
 "In the providers section, parameters can be referenced dynamically using "
 "a function ``get_from_config()``, ensuring that sensitive or reusable "
@@ -719,5 +593,5 @@ msgid ""
 msgstr ""
 "En la sección providers, los parámetros se pueden referenciar "
 "dinámicamente usando una función ``get_from_config()``, asegurando que "
-"los valores sensibles o reutilizables (por ejemplo, claves de API, "
-"URLs) no necesiten codificarse de forma fija varias veces."
+"los valores sensibles o reutilizables (por ejemplo, claves de API, URLs) "
+"no necesiten codificarse de forma fija varias veces."

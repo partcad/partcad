@@ -251,8 +251,7 @@
                   "type": "string",
                   "enum": [
                     "cadquery", "build123d", "svg", "dxf", "extrude", "sweep",
-                    "stl", "step", "scad", "ai-cadquery", "ai-build123d",
-                    "ai-openscad", "3mf", "enrich", "alias", "brep", "obj",
+                    "stl", "step", "scad", "3mf", "enrich", "alias", "brep", "obj",
                     "kicad", "compound"
                   ]
                 },
@@ -311,17 +310,6 @@
                   "additionalProperties": false
                 },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
-                "provider": { "type": "string", "enum": ["google", "openai", "ollama"] },
-                "model": { "type": "string", "minLength": 1 },
-                "tokens" : {
-                  "oneOf": [
-                    { "type": "integer", "minimum": 1 },
-                    { "type": "null" }
-                  ]
-                },
-                "temperature": { "type": "number", "minimum": 0.0, "maximum": 2.0 },
-                "top_p": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-                "top_k": { "type": "integer", "minimum": 1 },
                 "cwd": { "type": "string", "minLength": 1 },
                 "showObject": { "type": "string", "minLength": 1 },
                 "method": { "type": "string", "minLength": 1 },
@@ -337,11 +325,6 @@
                   "uniqueItems": true
                 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
-                "images": {
-                  "type": "array",
-                  "items": { "type": "string", "format": "uri" },
-                  "uniqueItems": true
-                },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "manufacturing": {

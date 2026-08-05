@@ -17,20 +17,7 @@ from ...cli_context import CliContext
     "--desc",
     "desc",
     type=str,
-    help="The part description (also used by LLMs).",
-    required=False,
-    show_envvar=True,
-)
-@click.option(
-    "--ai",
-    "provider",
-    type=click.Choice(
-        [
-            "google",
-            "openai",
-        ]
-    ),
-    help="Generative AI provider.",
+    help="The part description.",
     required=False,
     show_envvar=True,
 )
@@ -48,16 +35,13 @@ from ...cli_context import CliContext
             "stl",
             "3mf",
             "obj",
-            "ai-cadquery",
-            "ai-openscad",
-            "ai-sdf",
         ]
     ),
     # help="Type of the part",
 )
 @click.argument("path", type=str)  # help="Path to the file"
 @click.pass_context
-def cli(click_ctx: click.Context, desc: str | None, kind: str, provider: str | None, path: str):
+def cli(click_ctx: click.Context, desc: str | None, kind: str, path: str):
     """
     CLI command to add a part to the project without copying.
     """
@@ -81,8 +65,6 @@ def cli(click_ctx: click.Context, desc: str | None, kind: str, provider: str | N
         config = {}
         if desc:
             config["desc"] = desc
-        if provider:
-            config["provider"] = provider
 
         # pc.logging.Process() is done inside "add_part_action"
         add_part_action(package_obj, kind, path, config)
