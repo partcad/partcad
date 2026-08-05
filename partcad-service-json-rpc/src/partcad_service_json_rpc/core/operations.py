@@ -20,8 +20,8 @@ from urllib.parse import urlparse
 import yaml
 from packaging.specifiers import SpecifierSet
 
-from . import events
 from ..rpc.dispatcher import JsonRpcError
+from . import events
 
 # PartCAD-specific JSON-RPC error code: a partcad.yaml could not be parsed. The
 # CLI turns this into its "Invalid configuration file" message + exit code.
@@ -44,6 +44,25 @@ def _ctx(session, params):
     if context_id is not None:
         return session.contexts.get(context_id)
     return session.partcad_ctx
+
+
+def _invalidate_context(session, params):
+    """Drop a cached context after a mutation so the next command re-reads config.
+
+    PartCAD writes config changes (``add``/``import``) straight to
+    ``partcad.yaml`` without refreshing the live in-memory project registry. The
+    daemon keeps contexts warm indefinitely, so a mutated context would otherwise
+    serve stale contents to later commands. Evicting it makes the next
+    ``context.create`` (the CLI issues one before every command) rebuild it from
+    disk. The old in-process CLI got the same effect for free by starting fresh
+    each run.
+    """
+    context_id = params.get("context")
+    if context_id is None:
+        return
+    evicted = session.contexts.pop(context_id, None)
+    if evicted is not None and session.partcad_ctx is evicted:
+        session.partcad_ctx = None
 
 
 _PART_AI_PROPERTIES = [
@@ -458,11 +477,11 @@ def adhoc_convert(session, params):
     pc = session.ensure_partcad()
     kind = params.get("kind", "part")
     if kind == "part":
-        from partcad.shape import PART_EXTENSION_MAPPING as mapping
         from partcad.adhoc.convert import convert_cad_file as convert_fn
+        from partcad.shape import PART_EXTENSION_MAPPING as mapping
     else:
-        from partcad.shape import SKETCH_EXTENSION_MAPPING as mapping
         from partcad.adhoc.convert import convert_sketch_file as convert_fn
+        from partcad.shape import SKETCH_EXTENSION_MAPPING as mapping
 
     input_path = Path(params["input_filename"])
     output_filename = params.get("output_filename")
@@ -712,6 +731,185 @@ def config_show(session, params):
     return None
 
 
+def add_object(session, params):
+    """Add an existing part or assembly to the project (by reference).
+
+    The file path is absolute (resolved by the CLI against the user's cwd).
+    """
+    from pathlib import Path
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    obj_kind = params.get("obj_kind", "part")
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+
+    path = params["path"]
+    config = {}
+    if params.get("desc"):
+        config["desc"] = params["desc"]
+    if params.get("provider"):
+        config["provider"] = params["provider"]
+
+    if obj_kind == "part":
+        if not Path(path).exists():
+            raise JsonRpcError(USAGE_ERROR, "ERROR: The part file '%s' does not exist." % path)
+        from partcad.actions.part import add_part_action
+
+        add_part_action(package_obj, params["kind"], path, config)
+        pc.logging.info("Part '%s' added to the project." % Path(path).stem)
+    else:
+        with pc.logging.Process("AddAssy", package_obj.name):
+            if package_obj.add_assembly(params["kind"], path):
+                Path(path).touch()
+    _invalidate_context(session, params)
+    return None
+
+
+def import_object(session, params):
+    """Import a part or assembly by copying it into the project (with optional conversion).
+
+    The source path is absolute; the type is detected by the CLI and passed here.
+    """
+    from pathlib import Path
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    obj_kind = params.get("obj_kind", "part")
+    source = params["source"]
+    if not Path(source).exists():
+        raise JsonRpcError(USAGE_ERROR, "File '%s' not found." % source)
+
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+
+    name = Path(source).stem
+    config = {"desc": params["desc"]} if params.get("desc") else {}
+
+    if obj_kind == "part":
+        from partcad.actions.part import import_part_action
+
+        part_type = params["part_type"]
+        pc.logging.info("Importing part: %s (%s)" % (source, part_type))
+        try:
+            import_part_action(package_obj, part_type, name, source, config, params.get("target_format"))
+            pc.logging.info("Successfully imported part: %s" % name)
+        except Exception as e:  # pylint: disable=broad-except
+            pc.logging.exception("Error importing part '%s' (%s)" % (name, part_type))
+            raise JsonRpcError(USAGE_ERROR, "Error importing part '%s' (%s): %s" % (name, part_type, e))
+        _invalidate_context(session, params)
+        return {"name": name}
+
+    from partcad.actions.assembly import import_assy_action
+
+    try:
+        assy_name = import_assy_action(package_obj, params["assembly_type"], source, config)
+    except Exception as e:  # pylint: disable=broad-except
+        pc.logging.exception("Error importing assembly")
+        raise JsonRpcError(USAGE_ERROR, "Error importing assembly: %s" % e)
+    _invalidate_context(session, params)
+    return {"name": assy_name}
+
+
+def init_package(session, params):
+    """Create a new partcad.yaml at the given absolute path.
+
+    Interactive prompts are collected by the CLI; here we validate (version
+    strings, root-prefixed name) and write the file via PartCAD's template.
+    """
+    pc = session.ensure_partcad()
+    dst_path = params["dst_path"]
+    config_options = dict(params.get("config_options") or {})
+
+    if params.get("interactive"):
+        from packaging.specifiers import InvalidSpecifier, SpecifierSet
+
+        # The daemon is long-lived and shares logging.had_errors across requests;
+        # a fresh in-process CLI would start clean. Reset it so the validation
+        # gate below reflects only errors from this init.
+        pc.logging.reset_errors()
+        pc.logging.info("Validating package configuration...")
+        for key in list(config_options.keys()):
+            value = config_options[key]
+            if isinstance(value, str) and "default: " in value:
+                config_options[key] = value.replace("default: ", "")
+                value = config_options[key]
+            if value is not None and key.endswith("version"):
+                try:
+                    SpecifierSet(value)
+                except InvalidSpecifier:
+                    pc.logging.error("'%s' is not a valid version string" % value)
+            if key == "name" and value is not None and not value.startswith(pc.ROOT):
+                config_options[key] = "%s%s" % (pc.ROOT, value)
+        if pc.logging.had_errors:
+            pc.logging.error("Failed creating '%s'!" % dst_path)
+            return None
+
+    pc.logging.info("Creating package configuration at '%s'..." % dst_path)
+    if pc.create_package(dst_path, config_options):
+        pc.logging.info("Successfully created package at '%s'" % dst_path)
+    else:
+        pc.logging.error("Failed creating '%s'!" % dst_path)
+    return None
+
+
+def inspect_object(session, params):
+    """Inspect an object: show it in the CAD viewer, or return a verbal summary."""
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    package = ctx.resolve_package_path(params.get("package"))
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+    package = package_obj.name
+
+    with pc.logging.Process("inspect", package):
+        param_dict = {}
+        for kv in params.get("params") or []:
+            if "=" in kv:
+                k, v = kv.split("=", 1)
+                param_dict[k] = v
+
+        object_name = params.get("object")
+        if object_name is None:
+            pc.logging.error("No object specified. Provide a part, assembly, sketch, interface, or scene to inspect.")
+            return None
+
+        package, object_name = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object_name)
+        path = "%s:%s" % (package, object_name)
+        if params.get("assembly"):
+            obj = ctx.get_assembly(path, params=param_dict)
+        elif params.get("interface"):
+            obj = ctx.get_interface(path)
+        elif params.get("sketch"):
+            obj = ctx.get_sketch(path, params=param_dict)
+        else:
+            obj = ctx.get_part(path, params=param_dict)
+
+        if obj is None:
+            pc.logging.error("Object %s is not found" % path)
+            return None
+        if params.get("verbal"):
+            summary = obj.get_summary(package_obj)
+            pc.logging.info("Summary: %s" % summary)
+            return {"summary": summary}
+        obj.show(ctx)
+    return None
+
+
 def prompt_respond(session, params):
     """Deliver a response to a pending interactive prompt."""
     session.provide_prompt_response(params["response"] + os.linesep)
@@ -773,7 +971,12 @@ def context_create(session, params):
 
     if context_id not in session.contexts:
         try:
-            session.contexts[context_id] = pc.init(path, user_config=pc.user_config)
+            # Instantiate Context directly rather than via pc.init(): pc.init keeps
+            # a module-level singleton keyed by path, so a second init of the same
+            # path returns the first (now stale) context. The daemon serves many
+            # independent, long-lived contexts and must read each one fresh from
+            # disk -- especially after add/import mutate partcad.yaml.
+            session.contexts[context_id] = pc.Context(path, user_config=pc.user_config)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
             raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)})
 
@@ -1164,8 +1367,13 @@ def search_objects(session, params):
     keyword = params.get("keyword", "")
     package = ctx.resolve_package_path(params.get("package", "//"))
 
-    from partcad.actions.shape import search_assemblies, search_interfaces, search_parts, search_sketches
     from partcad.actions.package import search_packages
+    from partcad.actions.shape import (
+        search_assemblies,
+        search_interfaces,
+        search_parts,
+        search_sketches,
+    )
 
     search_fns = {
         "parts": search_parts,
