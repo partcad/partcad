@@ -80,7 +80,7 @@ It's easier to test some parts of the robot like `link-lower-arm` or `link-base`
 ### Failed to load PartCAD: \_nlopt
 
 If you see the above error message then you are probably using Windows and not using Conda.
-Please, switch to a Python environment created with Conda and Python >=3.10 and <=3.11.
+Please, switch to a Python environment created with Conda and Python >=3.10 and <3.15.
 
 ## More documentation
 
