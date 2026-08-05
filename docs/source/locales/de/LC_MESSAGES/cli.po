@@ -328,7 +328,6 @@ msgid "``pc adhoc``"
 msgstr "``pc adhoc``"
 
 #: ../../source/cli.rst:105
-#, fuzzy
 msgid ""
 "Ad-hoc operations that run on the fly without creating or configuring a "
 "package. Subcommand: ``convert`` (convert a part or sketch to another "

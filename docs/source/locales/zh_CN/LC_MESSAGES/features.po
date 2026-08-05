@@ -322,9 +322,10 @@ msgstr "请注意，如果显式指定了对应的 CLI 选项，这些环境变�
 #, fuzzy
 msgid ""
 "For user configurations, the environment variables are of the format "
-"``PC`` followed by the configuration option name(in uppercase). For "
-"example, to override the ``pythonSandbox`` configuration, you would set "
-"the environment variable ``PC_PYTHONSANDBOX``."
+"``PC_`` followed by the configuration option name in upper snake case "
+"(camelCase word boundaries become underscores). For example, to "
+"override the ``pythonSandbox`` configuration, you would set the "
+"environment variable ``PC_PYTHON_SANDBOX``."
 msgstr ""
 "对于用户配置，环境变量的格式为 ``PC`` 后接配置选项名称（大写）。例如，要覆盖 ``pythonSandbox`` 配置，你需要设置环境变量 "
 "``PC_PYTHONSANDBOX`` 。"
