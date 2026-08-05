@@ -25,6 +25,8 @@ _OPERATIONS = {
     "export.assembly": operations.export_assembly,
     "add.part": operations.add_part,
     "add.assembly": operations.add_assembly,
+    "add.object": operations.add_object,
+    "import.object": operations.import_object,
     "inspect.object": operations.inspect_object,
     "package.path": operations.package_path,
     "package.load": operations.package_load,

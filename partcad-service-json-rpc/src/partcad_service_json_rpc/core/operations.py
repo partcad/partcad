@@ -232,6 +232,125 @@ def add_assembly(session, params):
     return None
 
 
+def _invalidate_context(session, params):
+    """Drop the cached context after a mutation so the next command re-reads it.
+
+    PartCAD writes configuration changes straight to ``partcad.yaml`` without
+    refreshing the live in-memory project registry, and the daemon keeps
+    contexts warm indefinitely -- so a mutated context would keep serving the
+    pre-mutation contents (``pc add part x`` followed by ``pc list parts``
+    showing nothing). Evicting it makes the next ``context.create`` -- which the
+    CLI issues before every command -- rebuild it from disk. This is why a
+    package-mutating command has to be served by the daemon rather than run in
+    the client: a client-side mutation is invisible to the warm context.
+    """
+    context_id = params.get("context")
+    if context_id is None:
+        return
+    evicted = session.contexts.pop(context_id, None)
+    if evicted is not None and session.partcad_ctx is evicted:
+        session.partcad_ctx = None
+
+
+def add_object(session, params):
+    """Add an existing part or assembly to a package (by reference, no copy).
+
+    The CLI resolves ``path`` to an absolute path (it and the daemon do not
+    share a working directory); ``Project._validate_path`` rejects anything
+    outside the package, and messages report the path relative to the package.
+    """
+    from pathlib import Path
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    obj_kind = params.get("obj_kind", "part")
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+
+    path = params["path"]
+    if not Path(path).exists():
+        raise JsonRpcError(USAGE_ERROR, "ERROR: The part file '%s' does not exist." % package_obj.rel_path(path))
+
+    config = {}
+    if params.get("desc"):
+        config["desc"] = params["desc"]
+
+    try:
+        if obj_kind == "part":
+            from partcad.actions.part import add_part_action
+
+            added = add_part_action(package_obj, params["kind"], path, config)
+        else:
+            with pc.logging.Process("AddAssy", package_obj.name):
+                added = package_obj.add_assembly(params["kind"], path)
+                if added:
+                    Path(path).touch()
+    finally:
+        _invalidate_context(session, params)
+    # Only report a name when the object was actually added, so the CLI does not
+    # announce success for a rejected path (e.g. one outside the package).
+    return {"name": Path(path).stem} if added else None
+
+
+def import_object(session, params):
+    """Import a part or assembly into a package, copying (and maybe converting) it.
+
+    Served by the daemon rather than the client because the work runs through
+    sandboxed wrappers: importing an assembly drives ``wrapper_import_assy`` in
+    a Python runtime, and ``--target-format`` converts through the same
+    machinery. Those runtimes belong to the daemon's environment and need not
+    exist on the client side at all.
+    """
+    from pathlib import Path
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+    obj_kind = params.get("obj_kind", "part")
+    source = params["source"]
+    if not Path(source).exists():
+        raise JsonRpcError(USAGE_ERROR, "File '%s' not found." % source)
+
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+
+    name = Path(source).stem
+    config = {"desc": params["desc"]} if params.get("desc") else {}
+
+    try:
+        if obj_kind == "part":
+            from partcad.actions.part import import_part_action
+
+            part_type = params["part_type"]
+            try:
+                import_part_action(package_obj, part_type, name, source, config, params.get("target_format"))
+                pc.logging.info("Successfully imported part: %s" % name)
+            except Exception as e:  # pylint: disable=broad-except
+                pc.logging.exception("Error importing part '%s' (%s)" % (name, part_type))
+                raise JsonRpcError(USAGE_ERROR, "Error importing part '%s' (%s): %s" % (name, part_type, e)) from e
+            return {"name": name}
+
+        from partcad.actions.assembly import import_assy_action
+
+        try:
+            name = import_assy_action(package_obj, params["assembly_type"], source, config)
+        except Exception as e:  # pylint: disable=broad-except
+            pc.logging.exception("Error importing assembly")
+            raise JsonRpcError(USAGE_ERROR, "Error importing assembly: %s" % e) from e
+        return {"name": name}
+    finally:
+        _invalidate_context(session, params)
+
+
 # ---- package helpers -------------------------------------------------------
 
 

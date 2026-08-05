@@ -5,11 +5,31 @@ JSON-RPC 2.0 interface whose methods mirror `partcad-cli` actions. Source: `./sr
 Tests: `./tests`. Part of the shared Poetry workspace rooted at the repo root — depends on the `partcad` package
 in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
 
-By default the service runs a per-workspace **daemon** holding a warm PartCAD context, served over an AF_UNIX
-socket at `~/.partcad/workspaces/<hash>/socket` (a named pipe on Windows). `--stdio` serves one foreground
-connection over stdin/stdout, and `--http [ADDR]` serves JSON-RPC at `POST /rpc` with notifications over
-Server-Sent Events at `GET /events` (no auth yet). The `partcad-ide-vscode` extension and the `pc` CLI are both
-clients of the daemon.
+By default the service runs a per-workspace **daemon**, served over an AF_UNIX socket at
+`~/.partcad/workspaces/<hash>/socket` (a named pipe on Windows). `--stdio` serves one foreground connection over
+stdin/stdout, and `--http [ADDR]` serves JSON-RPC at `POST /rpc` with notifications over Server-Sent Events at
+`GET /events` (no auth yet). The `partcad-ide-vscode` extension and the `pc` CLI are both clients of the daemon.
+
+The daemon owns two things its clients do not, and both decide what belongs on which side of the wire:
+
+1. **A warm PartCAD context** — the loaded package graph, so a client does not pay `import partcad` (~1.6s) and
+   a package reload per command. It also means the daemon's copy of a package is the *authoritative* one: a
+   client that edits `partcad.yaml` behind the daemon's back leaves it serving stale contents, which is why a
+   package-mutating command (`add`, `import`) must be a daemon client and evict the context it changed
+   (`_invalidate_context`).
+2. **The runtimes** — the sandboxed Python environments (`ctx.get_python_runtime()`) that every CAD wrapper runs
+   in: `wrapper_import_assy` for STEP assemblies, the conversion wrappers behind `convert`/`--target-format`,
+   the render/export wrappers. Those runtimes belong to the daemon's environment and **need not exist on the
+   client side at all** — a thin client cannot do this work itself even in principle. Any command that drives a
+   wrapper is therefore a daemon command.
+
+A command stays in the client only when its inputs and outputs are the *client's own* state, which cannot cross
+the wire: `init` (bootstraps a workspace before any package exists), `config` (prints the client's resolved
+`user_config`, including its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses the client host),
+`daemon start|stop`, and `system telemetry clear|info`. File paths are not a reason to stay local: a client
+sends an absolute path, `Project._validate_path` rejects anything outside the package, and `Project.rel_path`
+reports it back relative to the package that owns it — so the output does not depend on anyone's working
+directory.
 
 ## Layout
 

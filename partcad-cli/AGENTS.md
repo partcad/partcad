@@ -7,9 +7,20 @@ the `partcad` package in this monorepo (`../partcad`); run all commands below fr
 `pc daemon start` / `pc daemon stop` manage the per-workspace background daemon from
 [`partcad-service-json-rpc`](../partcad-service-json-rpc): `start` goes through
 `partcad_service_json_rpc.client.start_daemon()`, while `stop` calls
-`partcad_service_json_rpc.daemon.stop_daemon()` directly. Most command bodies are now thin clients of that
-daemon (see `click/service.py`); the commands that depend on the client's own working directory or global
-options — `init`, `config`, `add`, `import`, `healthcheck` — deliberately stay in-process.
+`partcad_service_json_rpc.daemon.stop_daemon()` directly.
+
+Command bodies are thin clients of that daemon (`click/service.py::run`) unless they cannot be. A command
+belongs to the **daemon** when it reads or mutates the package graph, or when it drives a CAD wrapper — the
+wrapper's Python runtime lives in the daemon's environment and may not exist on the client at all. That
+includes commands with file arguments (`add`, `import`, `convert`): the client sends an absolute path, the
+daemon rejects anything outside the package, and paths are printed relative to the package that owns them, so
+the output never depends on a working directory. A package-mutating command *must* be a daemon client, or the
+daemon's warm context keeps serving the pre-mutation package.
+
+A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
+`init` (creates the workspace, before any package or context exists), `config` (prints the client's resolved
+`user_config` with its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses this host), `daemon
+start|stop`, and `system telemetry clear|info`. Still unmigrated: `supply/*`, `add sketch`, `add dep`.
 
 ## Setup
 

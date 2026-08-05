@@ -7,42 +7,40 @@
 # Licensed under Apache License, Version 2.0.
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
 import asyncio
 import copy
 import os
 import re
-
-# from pprint import pformat
-from pathlib import Path
-import ruamel.yaml
 import threading
 import typing
 
-from typing import Optional, List
+# from pprint import pformat
+from pathlib import Path
+from typing import TYPE_CHECKING, List, Optional
 
-from . import consts
-from . import factory
-from . import logging as pc_logging
-from . import project_config
-from . import interface
-from . import sketch
-from . import sketch_config
-from .exception import EmptyShapesError
-from . import sketch_factory_alias as sfa
-from .part import Part
-from . import part_factory_alias as pfa
-from . import part_config
-from . import assembly
+import ruamel.yaml
+
+from . import assembly, assembly_config
 from . import assembly_factory_alias as afa
-from . import assembly_config
-from . import plugin_provider
-from . import plugin_repository
-from . import plugin_config
-from .render import render_cfg_merge
-from .utils import resolve_resource_path, normalize_resource_path
+from . import consts, factory, interface
+from . import logging as pc_logging
+from . import part_config
+from . import part_factory_alias as pfa
+from . import (
+    plugin_config,
+    plugin_provider,
+    plugin_repository,
+    project_config,
+    sketch,
+    sketch_config,
+)
+from . import sketch_factory_alias as sfa
 from . import telemetry
+from .exception import EmptyShapesError
+from .part import Part
+from .render import render_cfg_merge
+from .utils import normalize_resource_path, resolve_resource_path
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -431,9 +429,7 @@ class Project(project_config.Configuration):
         if dependencies:
             if not self.config_obj.get("isRoot", False):
                 dependencies = [
-                    x
-                    for x in dependencies
-                    if "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"]
+                    x for x in dependencies if "onlyInRoot" not in dependencies[x] or not dependencies[x]["onlyInRoot"]
                 ]
             if absolute:
                 children.extend([self.name + "/" + project_name for project_name in dependencies])
@@ -941,6 +937,24 @@ class Project(project_config.Configuration):
             yaml.dump(config, fp)
             fp.close()
 
+    def rel_path(self, path) -> str:
+        """Render a filesystem path for display, relative to this package.
+
+        Paths that belong to a package are reported relative to that package's
+        directory, so the output does not depend on the caller's working
+        directory. That matters because the caller is not always the process
+        doing the work: the JSON-RPC daemon runs detached with ``cwd=/``, and
+        receives absolute paths from its clients. A path outside the package is
+        reported in full, since it has no package-relative form.
+        """
+        if not path:
+            return path
+        abs_path = os.path.abspath(str(path))
+        root = os.path.abspath(self.config_dir)
+        if abs_path == root or abs_path.startswith(root + os.sep):
+            return os.path.relpath(abs_path, root).replace("\\", "/")
+        return abs_path
+
     def _validate_path(self, path, extension) -> tuple[bool, str, str]:
         if not os.path.isabs(path):
             path = os.path.abspath(path)
@@ -1014,7 +1028,7 @@ class Project(project_config.Configuration):
         return True
 
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
-        pc_logging.info("Adding the sketch %s of type %s" % (path, kind))
+        pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))
         ext_by_kind = {
             "cadquery": "py",
             "build123d": "py",
@@ -1029,7 +1043,7 @@ class Project(project_config.Configuration):
         )
 
     def add_part(self, kind: str, path: str, config={}) -> bool:
-        pc_logging.info("Adding the part %s of type %s" % (path, kind))
+        pc_logging.info("Adding the part %s of type %s" % (self.rel_path(path), kind))
         ext_by_kind = {
             "cadquery": "py",
             "build123d": "py",
@@ -1044,7 +1058,7 @@ class Project(project_config.Configuration):
         )
 
     def add_assembly(self, kind: str, path: str, config={}) -> bool:
-        pc_logging.info("Adding the assembly %s of type %s" % (path, kind))
+        pc_logging.info("Adding the assembly %s of type %s" % (self.rel_path(path), kind))
         ext_by_kind = {}
         return self._add_component(
             kind,
@@ -1353,11 +1367,7 @@ class Project(project_config.Configuration):
             else:
                 path = name
                 if "type" in config:
-                    if (
-                        config["type"] == "cadquery"
-                        or config["type"] == "build123d"
-                        or config["type"] == "sdf"
-                    ):
+                    if config["type"] == "cadquery" or config["type"] == "build123d" or config["type"] == "sdf":
                         path += ".py"
                     elif config["type"] == "openscad":
                         path += ".scad"

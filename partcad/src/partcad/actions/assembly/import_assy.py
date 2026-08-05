@@ -19,9 +19,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
 
 from ... import logging as pc_logging
-from ... import sandbox_versions
-from ... import shape_envelope
-from ... import wrapper
+from ... import sandbox_versions, shape_envelope, wrapper
 from ...project import Project
 from ..part import import_part_action
 
@@ -75,7 +73,7 @@ def import_assy_action(
     if not file_path.exists():
         raise FileNotFoundError(f"File '{assembly_file}' not found.")
 
-    pc_logging.info(f"Starting import of assembly: {assembly_file} (Type: {file_type})")
+    pc_logging.info(f"Starting import of assembly: {project.rel_path(assembly_file)} (Type: {file_type})")
 
     assembly_name = Path(assembly_file).stem
     project_root = Path(project.config_dir).resolve()
@@ -141,10 +139,12 @@ def import_assy_action(
     with open(assy_file_path, "w", encoding="utf-8") as file:
         yaml.dump(assembly_data, file)
 
-    # Add assembly to the project
-    assy_file_rel = assy_file_path.relative_to(Path(project.config_dir)).as_posix()
-    project.add_assembly("assy", assy_file_rel, config)
+    # Add assembly to the project. Pass the absolute path: Project._validate_path
+    # resolves a relative one against the *process* working directory, which is
+    # not the package directory when the work runs in the detached daemon (cwd=/).
+    # It relativizes the path to the package itself before storing it.
+    project.add_assembly("assy", str(assy_file_path), config)
 
-    pc_logging.info(f"Successfully created assembly file: {assy_file_path}")
+    pc_logging.info(f"Successfully created assembly file: {project.rel_path(assy_file_path)}")
 
     return assembly_data["name"]
