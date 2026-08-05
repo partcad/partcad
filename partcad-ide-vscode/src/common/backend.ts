@@ -216,14 +216,10 @@ function serviceArgs(serverId: string): string[] {
     } else if (verbosity === 'error') {
         args.push('--quiet');
     }
-    const google = config.get<string>('googleApiKey');
-    if (google) {
-        args.push('--google-api-key', google);
-    }
-    const openai = config.get<string>('openaiApiKey');
-    if (openai) {
-        args.push('--openai-api-key', openai);
-    }
+    // No AI provider keys: the generative-AI feature was retired, the settings
+    // are gone from package.json, and the service no longer accepts the flags --
+    // passing them (from a stale user settings.json) would fail its argument
+    // parsing and the service would not start.
     const sandbox = config.get<string>('pythonSandbox');
     if (sandbox) {
         args.push('--python-sandbox', sandbox);
