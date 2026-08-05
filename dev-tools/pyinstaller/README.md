@@ -8,7 +8,7 @@ with [`install.sh`](../../install.sh) and never see Python.
 | | wheels | standalone bundle |
 | --- | --- | --- |
 | Install | `pip install -U partcad-cli` | `curl -fsSL .../install.sh \| sh` |
-| Needs Python | yes, 3.10-3.12 | no |
+| Needs Python | yes, 3.10-3.14 | no |
 | Size | ~15MB plus whatever pip resolves | ~875MB unpacked, ~290MB compressed (Linux, OpenSCAD included) |
 | Optional extras (`ai`, `lint`) | installed on demand | always included |
 | Importable as a library | yes | no, it is only the CLI |
@@ -61,9 +61,13 @@ The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
 with `install.sh`, which derives the same name from `uname`.
 
 The bundle embeds the interpreter it was built with, so `PYTHON` decides the Python version users end up
-running. CI builds with 3.11, and 3.11 or 3.12 is required: PartCAD itself still supports 3.10, but
-`ocp_vscode` (what `pc inspect` hands shapes to) does not import there, and a dependency that cannot be
-imported cannot be frozen. `build.sh` checks that before it builds and says which import failed.
+running. CI builds with 3.14, the newest version PartCAD supports (`requires-python = ">=3.10,<3.15"`) and
+deliberately ahead of the 3.13 the wheels publish from: a standalone user cannot change the interpreter after
+the fact the way someone installing the wheels can, so shipping the oldest supported one would leave them on it
+for the life of the bundle. Nothing older is exercised. `ocp_vscode` (what `pc inspect` hands shapes to) long
+required 3.11 or newer, which is why the floor used to be documented as 3.11; it and its dependencies now all
+declare `>=3.10`, but only the version CI builds with is tested. A dependency that cannot be imported cannot be
+frozen, so `build.sh` imports them all before it builds and says which import failed.
 
 ## What the frozen bundle changes, and what it does not
 

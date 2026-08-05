@@ -144,10 +144,12 @@ add_package("ocpsvg")
 # ordinary extension modules.)
 add_package("lib3mf")
 
-# zstd for the BREP payloads of the wrapper protocol and the shape cache. The
-# bundle is frozen with 3.11 (see build.sh), which has no 'compression.zstd', so
-# the backport is what it actually imports. It lives under the 'backports'
-# namespace package, which PyInstaller does not follow into on its own.
+# zstd for the BREP payloads of the wrapper protocol and the shape cache. CI
+# freezes with 3.14 (see build-standalone.yml), whose standard library carries
+# 'compression.zstd', so this collects nothing there. On an older interpreter
+# PartCAD imports the backport of that module instead, and it lives under the
+# 'backports' namespace package, which PyInstaller does not follow into on its
+# own.
 if sys.version_info < (3, 14):
     add_package("backports.zstd")
 

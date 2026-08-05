@@ -270,7 +270,7 @@ import sys
 REQUIRED = {
     "OCP": "the geometry kernel",
     "build123d": "the geometry kernel",
-    "ocp_vscode": "`pc inspect` (needs Python 3.11 or newer)",
+    "ocp_vscode": "`pc inspect`",
     "ruff.__main__": "`pc lint` of Python files",
 }
 
