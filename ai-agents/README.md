@@ -42,8 +42,8 @@ The plugin folder is named `claude`, but the command namespace comes from
   into the active Python environment (run as `python -m partcad_cli.click.command`).
   Until a standalone release is published, `executable` reports that no published
   installer is available and stops.
-- **`/pc:gen <description>`** — decides whether the request is a part or an
-  assembly and follows the matching flow below.
+- **`/pc:gen <description>`** — decides whether the request is a part, an
+  assembly, or a 2D sketch and follows the matching flow below.
 - **`/pc:gen-part <description>`** — generates a single part: the agent picks a
   representation (build123d / cadquery / openscad / sdf), authors the CAD script
   itself, and validates it by rendering with `pc render`. Supersedes the legacy
@@ -52,6 +52,12 @@ The plugin folder is named `claude`, but the command namespace comes from
   generates the component parts, authors the `.assy` (explicit placement or
   interface mates), and validates by rendering. New capability — PartCAD had no
   AI assembly path.
+- **`/pc:gen-sketch <description>`** — generates a 2D sketch: the agent picks a
+  representation (build123d / cadquery / dxf / svg), authors the sketch, and
+  validates by rendering to SVG.
+- **`/pc:describe <object>`** — writes a narratable description of an existing
+  part, assembly, or sketch by rendering and examining it, and stores it in the
+  object's `summary:`. Reproduces the retired built-in AI shape-summary.
 
 ## Local use (Claude)
 
