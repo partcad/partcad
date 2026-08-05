@@ -13,6 +13,8 @@ OCP a shared sandbox gets -- a disagreement that surfaces as a native crash
 with no Python traceback at all (see runtime_python.PIP_CONSTRAINTS).
 """
 
+import re
+
 # 'cadquery-ocp' and the 'cadquery-ocp-novtk' that build123d 0.11 depends on
 # are NOT alternatives pip knows about: they are separate distributions that
 # both write the very same OCP native module, so whichever pip installs last
@@ -122,11 +124,23 @@ def distribution_name(requirement: str) -> str:
     Only what this module needs: a bare name optionally followed by extras, a
     version specifier or an environment marker. URLs and paths are returned
     unchanged (lowercased), which is enough for them to miss every lookup.
+
+    The normalization is the full PEP 503 rule - lowercase, with every run of
+    '.', '-' and '_' collapsed to a single '-' - because pip accepts all of those
+    spellings for the same distribution. Anything less lets 'cadquery.ocp==7.7.2'
+    or 'cadquery--ocp==7.7.2' name the pinned CAD stack while slipping past the
+    lookup below, which is exactly what this guard exists to prevent.
     """
     name = requirement.strip()
     for separator in ("[", "=", "<", ">", "!", "~", ";", " ", "@"):
         name = name.split(separator, 1)[0]
-    return name.strip().replace("_", "-").lower()
+    return re.sub(r"[-_.]+", "-", name.strip()).lower()
+
+
+def _split_marker(requirement: str) -> tuple[str, str | None]:
+    """Split a requirement into its body and its environment marker, if any."""
+    body, separator, marker = requirement.partition(";")
+    return body.strip(), (marker.strip() if separator else None)
 
 
 # Built once: distribution name -> the requirement this module pins for it.
@@ -140,13 +154,21 @@ def reconcile_requirement(requirement: str) -> tuple[str, str | None]:
     is the caller's original requirement when it was overridden, and None when
     the requirement was left alone - callers use it to report the substitution.
 
+    An environment marker is carried over onto the pinned requirement: the caller
+    asked for the package only under that condition, and dropping the marker
+    would install it unconditionally instead. Only the version is overridden.
+
     Anything outside PINNED_REQUIREMENTS is returned untouched: a package is free
     to install whatever else it needs into its sandbox.
     """
-    pinned = _PINNED_BY_DISTRIBUTION.get(distribution_name(requirement))
-    if pinned is None or requirement.strip() == pinned:
+    body, marker = _split_marker(requirement)
+    pinned = _PINNED_BY_DISTRIBUTION.get(distribution_name(body))
+    if pinned is None:
         return requirement, None
-    return pinned, requirement
+    reconciled = pinned if marker is None else "%s; %s" % (pinned, marker)
+    if reconciled == requirement.strip():
+        return requirement, None
+    return reconciled, requirement
 
 
 # What a sandbox gets when the package does not ask for a specific interpreter.
