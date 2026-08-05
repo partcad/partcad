@@ -173,6 +173,10 @@ class PythonRuntime(runtime.Runtime):
         self.lock = threading.RLock()
         self.tls = threading.local()
 
+        # Requirements already reported as superseded by the pinned CAD stack,
+        # so the warning is emitted once per runtime instead of once per part.
+        self.superseded_requirements = set()
+
         # The path to the Python executable
         self.exec_path = None
         # The name of the Python executable to search for in bin folders
@@ -647,7 +651,32 @@ class PythonRuntime(runtime.Runtime):
         self.once()
         self.ensure_onced(python_package, session=session, path=path, force=force)
 
+    def reconcile_requirement(self, python_package):
+        """Hold the CAD stack in a sandbox to the versions PartCAD pins.
+
+        Every part of a package shares one session v-env, so a single part that
+        asks for its own version of cadquery-ocp, build123d, cadquery,
+        ocp-tessellate, ocpsvg or nlopt downgrades that stack under all the
+        others: the next part to run then dies inside its wrapper with an
+        ImportError or AttributeError that names neither the offending package
+        nor the version that caused it (see sandbox_versions.PINNED_REQUIREMENTS).
+
+        Substituting the pinned version keeps the sandbox coherent, and the
+        warning - once per runtime, not once per part - says what was overridden
+        so a package that genuinely needs another version is not left guessing.
+        """
+        python_package, superseded = sandbox_versions.reconcile_requirement(python_package)
+        if superseded is not None and superseded not in self.superseded_requirements:
+            self.superseded_requirements.add(superseded)
+            pc_logging.warning(
+                "Installing '%s' instead of '%s': PartCAD pins the CAD stack across a sandbox, "
+                "and mixing versions of it breaks the other parts that share the same environment."
+                % (python_package, superseded)
+            )
+        return python_package
+
     def ensure_onced(self, python_package, session=None, path=None, force=False):
+        python_package = self.reconcile_requirement(python_package)
         if path is None:
             path = self.path
 
@@ -688,6 +717,7 @@ class PythonRuntime(runtime.Runtime):
                 invalidate_dependent_guards(path, python_package)
 
     def ensure_onced_locked(self, python_package, session=None, path=None, force=False):
+        python_package = self.reconcile_requirement(python_package)
         if path is None:
             path = self.path
 
@@ -729,6 +759,7 @@ class PythonRuntime(runtime.Runtime):
         await self.ensure_async_onced(python_package, session=session, path=path, force=force)
 
     async def ensure_async_onced(self, python_package, session=None, path=None, force=False):
+        python_package = self.reconcile_requirement(python_package)
         if path is None:
             path = self.path
 
@@ -770,6 +801,7 @@ class PythonRuntime(runtime.Runtime):
                 invalidate_dependent_guards(path, python_package)
 
     async def ensure_async_onced_locked(self, python_package, session=None, path=None, force=False):
+        python_package = self.reconcile_requirement(python_package)
         if path is None:
             path = self.path
 

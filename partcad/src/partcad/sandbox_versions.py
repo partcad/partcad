@@ -93,6 +93,62 @@ GUARD_INVALIDATED_BY = {
     BUILD123D: (CADQUERY_OCP,),
 }
 
+# The CAD stack this module pins, keyed by distribution name. These packages are
+# a single, co-dependent generation: 'cadquery' 2.8 calls OCP 7.9 APIs that OCP
+# 7.7 does not have ("type object 'OCP.TopoDS.TopoDS' has no attribute 'Vertex'"),
+# 'ocp-tessellate' tracks the same generation, and build123d/cadquery-ocp write
+# the same native module. Installing any one of them at a different version
+# breaks the others.
+#
+# That matters because a *session* v-env is shared by every part of a package.
+# A single part asking for its own version of one of these (part_factory_sdf.py
+# used to pin cadquery-ocp==7.7.2, ocp-tessellate==3.0.9 and build123d==0.8.0)
+# silently downgraded the stack under every other part in the same package, and
+# their renders then failed with errors that named neither the package nor the
+# part that caused it. reconcile_requirement() below makes that impossible.
+PINNED_REQUIREMENTS = (
+    CADQUERY_OCP,
+    OCPSVG,
+    BUILD123D,
+    CADQUERY,
+    OCP_TESSELLATE,
+    NLOPT,
+)
+
+
+def distribution_name(requirement: str) -> str:
+    """The distribution a requirement string names, normalized per PEP 503.
+
+    Only what this module needs: a bare name optionally followed by extras, a
+    version specifier or an environment marker. URLs and paths are returned
+    unchanged (lowercased), which is enough for them to miss every lookup.
+    """
+    name = requirement.strip()
+    for separator in ("[", "=", "<", ">", "!", "~", ";", " ", "@"):
+        name = name.split(separator, 1)[0]
+    return name.strip().replace("_", "-").lower()
+
+
+# Built once: distribution name -> the requirement this module pins for it.
+_PINNED_BY_DISTRIBUTION = {distribution_name(requirement): requirement for requirement in PINNED_REQUIREMENTS}
+
+
+def reconcile_requirement(requirement: str) -> tuple[str, str | None]:
+    """Force a CAD-stack requirement to the version this module pins.
+
+    Returns '(requirement_to_install, superseded_requirement)'. The second value
+    is the caller's original requirement when it was overridden, and None when
+    the requirement was left alone - callers use it to report the substitution.
+
+    Anything outside PINNED_REQUIREMENTS is returned untouched: a package is free
+    to install whatever else it needs into its sandbox.
+    """
+    pinned = _PINNED_BY_DISTRIBUTION.get(distribution_name(requirement))
+    if pinned is None or requirement.strip() == pinned:
+        return requirement, None
+    return pinned, requirement
+
+
 # What a sandbox gets when the package does not ask for a specific interpreter.
 # One step ahead of the minimum PartCAD itself supports.
 DEFAULT_PYTHON_VERSION = "3.11"

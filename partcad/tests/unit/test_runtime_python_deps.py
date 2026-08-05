@@ -261,3 +261,66 @@ def test_ensure_zstd_installs_nothing_where_the_stdlib_has_it(tmp_path, monkeypa
     asyncio.run(PythonRuntime.ensure_zstd_onced_locked_async(runtime))
 
     assert requested == []
+
+
+def test_reconcile_requirement_forces_the_pinned_cad_stack():
+    """A part asking for its own CAD version gets the sandbox-wide pin instead.
+
+    These three are the versions part_factory_sdf.py used to pin. Installed into
+    a session v-env they downgraded the stack under every other part of the same
+    package, and the next CadQuery render died on OCP 7.7 with "type object
+    'OCP.TopoDS.TopoDS' has no attribute 'Vertex'".
+    """
+    for stale, pinned in [
+        ("cadquery-ocp==7.7.2", sandbox_versions.CADQUERY_OCP),
+        ("ocp-tessellate==3.0.9", sandbox_versions.OCP_TESSELLATE),
+        ("build123d==0.8.0", sandbox_versions.BUILD123D),
+    ]:
+        assert sandbox_versions.reconcile_requirement(stale) == (pinned, stale)
+
+
+def test_reconcile_requirement_normalizes_the_distribution_name():
+    """PEP 503 normalization, so an underscore or capitals cannot slip past."""
+    for spelling in ["cadquery_ocp==7.7.2", "CadQuery-OCP==7.7.2", "build123d[ocp]==0.8.0"]:
+        reconciled, superseded = sandbox_versions.reconcile_requirement(spelling)
+        assert superseded == spelling
+        assert reconciled in (sandbox_versions.CADQUERY_OCP, sandbox_versions.BUILD123D)
+
+
+def test_reconcile_requirement_leaves_everything_else_alone():
+    """Only the co-dependent CAD stack is pinned; other packages are the package's own business."""
+    for untouched in ["sdf-fork", "numpy>=2.2,<3", "requests", sandbox_versions.CADQUERY_OCP]:
+        assert sandbox_versions.reconcile_requirement(untouched) == (untouched, None)
+
+
+def test_runtime_reconciles_a_requirement_and_warns_once(tmp_path, monkeypatch):
+    """The substitution is visible, but does not repeat for every part."""
+    runtime = _bare_runtime(tmp_path / "sandbox")
+    runtime.superseded_requirements = set()
+    recorded = _record_warnings(monkeypatch)
+
+    assert runtime.reconcile_requirement("cadquery-ocp==7.7.2") == sandbox_versions.CADQUERY_OCP
+    assert runtime.reconcile_requirement("cadquery-ocp==7.7.2") == sandbox_versions.CADQUERY_OCP
+
+    assert len(recorded) == 1
+    assert "cadquery-ocp==7.7.2" in recorded[0]
+    assert sandbox_versions.CADQUERY_OCP in recorded[0]
+
+
+def test_no_factory_pins_its_own_version_of_the_shared_cad_stack():
+    """Regression guard for the bug this file's reconciliation exists to prevent.
+
+    A session v-env is shared by every part of a package, so a factory that
+    hardcodes its own version of a pinned distribution corrupts that environment
+    for the other parts. Everything must go through sandbox_versions.
+    """
+    pinned_names = {sandbox_versions.distribution_name(req) for req in sandbox_versions.PINNED_REQUIREMENTS}
+    src = pathlib.Path(__file__).parent.parent.parent / "src" / "partcad"
+    offenders = []
+    for path in sorted(src.rglob("*.py")):
+        if path.name == "sandbox_versions.py":
+            continue
+        for literal in re.findall(r"""["']([A-Za-z0-9_.\-\[\]]+==[^"']+)["']""", path.read_text()):
+            if sandbox_versions.distribution_name(literal) in pinned_names:
+                offenders.append("%s: %s" % (path.name, literal))
+    assert offenders == [], offenders

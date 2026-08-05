@@ -2,6 +2,7 @@ import os
 
 from .part_factory_python import PartFactoryPython
 from . import logging as pc_logging
+from . import sandbox_versions
 from . import wrapper
 from . import transform
 from . import shape_envelope
@@ -52,20 +53,31 @@ class PartFactorySdf(PartFactoryPython):
             request["label"] = part.name
             request_serialized = shape_envelope.serialize(request)
 
+            # The versions come from sandbox_versions, like every other factory's.
+            # They used to be pinned here to a generation of their own
+            # (cadquery-ocp 7.7.2, ocp-tessellate 3.0.9, build123d 0.8.0), which
+            # downgraded the CAD stack for every other part sharing this
+            # package's v-env - a CadQuery part rendered after an SDF one then
+            # died on OCP 7.7 with "type object 'OCP.TopoDS.TopoDS' has no
+            # attribute 'Vertex'". wrapper_sdf.py itself needs only sdf, numpy,
+            # OCP and ocp-tessellate; build123d was never imported by it.
             await self.runtime.ensure_async(
                 "sdf-fork",
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "cadquery-ocp==7.7.2",
+                sandbox_versions.NUMPY,
                 session=self.session,
             )
             await self.runtime.ensure_async(
-                "ocp-tessellate==3.0.9",
+                sandbox_versions.OCP_TESSELLATE,
                 session=self.session,
             )
+            # Last, by the convention every install list here follows: it undoes
+            # any novtk OCP a build123d install elsewhere in this v-env left
+            # behind (see sandbox_versions.GUARD_INVALIDATED_BY).
             await self.runtime.ensure_async(
-                "build123d==0.8.0",
+                sandbox_versions.CADQUERY_OCP,
                 session=self.session,
             )
 
