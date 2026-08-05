@@ -105,7 +105,7 @@ class FakeUtils:
 
 
 class FakePartcad:
-    __version__ = "0.7.153"
+    __version__ = "0.7.155"
 
     def __init__(self):
         self.logging = RecordingLogging()
@@ -383,7 +383,7 @@ def test_info_emits_stats_with_version_and_recalculated_counts():
     operations.info(session, {})
     event, payload = seen[-1]
     assert event == events.STATS
-    assert payload["version"] == "0.7.153"
+    assert payload["version"] == "0.7.155"
     assert payload["stats"]["packages"] == 3
     assert payload["stats"]["path"] == "/abs/partcad.yaml"
 
@@ -684,7 +684,7 @@ def test_system_status_reports_version_and_sizes_in_megabytes(tmp_path):
 
     log = session.partcad.logging
     assert log.messages("info") == [
-        "PartCAD version: 0.7.153",
+        "PartCAD version: 0.7.155",
         "Internal data storage location: %s" % tmp_path,
         "Total internal data storage size: 1.50MB",
         "Git cache size: 1.00MB",

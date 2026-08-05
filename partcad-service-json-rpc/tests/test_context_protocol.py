@@ -125,7 +125,7 @@ class FakePartcad:
     already has a module, so no real ``import partcad`` happens.
     """
 
-    __version__ = "0.7.153"
+    __version__ = "0.7.155"
 
     def __init__(self, user_config=None):
         self.logging = FakeLogging()
