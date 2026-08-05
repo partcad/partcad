@@ -15,6 +15,7 @@ silently no-op when none is loaded, exactly as the legacy server did.
 
 import hashlib
 import os
+from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
@@ -869,7 +870,10 @@ def _url_to_path(url: str) -> str:
             # A UNC authority ("file://host/share/..."); keep it.
             path = "//%s%s" % (parsed.netloc, path)
         return path
-    if parsed.scheme == "":
+    # A bare path. A Windows path parses as a one-letter "scheme" ("C:\\pkg" ->
+    # scheme 'c'), and no real URL scheme is a single character, so treat that as
+    # a path too rather than rejecting it as an unsupported scheme.
+    if parsed.scheme == "" or len(parsed.scheme) == 1:
         return url
     raise JsonRpcError(INVALID_CONFIG, "Unsupported context URL scheme: %s" % (parsed.scheme,))
 
@@ -886,7 +890,11 @@ def context_create(session, params):
     without bound.
     """
     pc = session.ensure_partcad()
-    url = params.get("url") or ("file://" + os.getcwd())
+    # Path.as_uri(), not "file://" + path: the latter is not a valid URL for a
+    # Windows path ("file://C:\\x" parses the drive as the authority), which
+    # would build the context on the wrong root and give it an id that never
+    # matches the one a client computes for the same directory.
+    url = params.get("url") or Path(os.getcwd()).resolve().as_uri()
     path = _url_to_path(url)
     root = os.path.abspath(path)
     context_id = hashlib.sha256(root.encode("utf-8")).hexdigest()[:16]

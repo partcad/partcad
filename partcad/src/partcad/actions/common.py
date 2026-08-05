@@ -1,9 +1,9 @@
-from partcad.shape import Shape
-from partcad.project import Project
-from partcad.context import Context
-from partcad import logging as pc_logging
-
 from typing import Callable, Union
+
+from partcad import logging as pc_logging
+from partcad.context import Context
+from partcad.project import Project
+from partcad.shape import Shape
 
 
 def _search(
@@ -27,7 +27,11 @@ def _search(
         child_packages = ctx.get_all_packages(parent_name=package)
         if ctx.stats_git_ops:
             pc_logging.info(f"Git operations: {ctx.stats_git_ops}")
-        packages += [p["name"] for p in child_packages]
+        # get_packages() selects children with name.startswith(parent_name), so
+        # the starting package is in its own child list. Without this filter it
+        # is searched twice and every object it holds is reported (and counted
+        # in "Matches:") twice.
+        packages += [p["name"] for p in child_packages if p["name"] != project.name]
 
     for package_name in packages:
         package = ctx.get_project(package_name)

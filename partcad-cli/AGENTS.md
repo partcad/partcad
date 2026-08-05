@@ -9,6 +9,8 @@ the `partcad` package in this monorepo (`../partcad`); run all commands below fr
 `partcad_service_json_rpc.client.start_daemon()`, while `stop` calls
 `partcad_service_json_rpc.daemon.stop_daemon()` directly.
 
+## Command boundary
+
 Command bodies are thin clients of that daemon (`click/service.py::run`) unless they cannot be. A command
 belongs to the **daemon** when it reads or mutates the package graph, or when it drives a CAD wrapper — the
 wrapper's Python runtime lives in the daemon's environment and may not exist on the client at all. That
@@ -21,6 +23,10 @@ A command stays **in-process** only when it operates on the client's own state, 
 `init` (creates the workspace, before any package or context exists), `config` (prints the client's resolved
 `user_config` with its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses this host), `daemon
 start|stop`, and `system telemetry clear|info`. Still unmigrated: `supply/*`, `add sketch`, `add dep`.
+
+Both halves of this split are enforced by `tests/unit/test_command_boundary.py`, which also checks that every
+method name a command sends exists in the daemon's registry. The in-process and unmigrated lists live at the
+top of that file; update them there when a command intentionally moves.
 
 ## Setup
 
