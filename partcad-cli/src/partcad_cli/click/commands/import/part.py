@@ -4,14 +4,15 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import os
 from pathlib import Path
 
-import partcad_utils.logging as pc_logging
 import rich_click as click
 
+import partcad as pc
+from partcad.actions.part import import_part_action
+
+from ...cli_context import CliContext
 from ...commands.convert.part import SUPPORTED_CONVERT_FORMATS
-from ...service import run
 
 # part_type: [file_extensions]
 SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
@@ -50,41 +51,49 @@ SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
     default=".",
 )
 @click.pass_obj
-def cli(cli_ctx, package: str, existing_part: str, target_format: str, desc: str):
+def cli(cli_ctx: CliContext, package: str, existing_part: str, target_format: str, desc: str):
     """
     CLI command to import a part by copying and adding it to the project, with optional format conversion.
     """
-    file_path = Path(existing_part)
-    if not file_path.exists():
-        raise click.UsageError(f"File '{existing_part}' not found.")
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        ctx: pc.Context = cli_ctx.get_partcad_context()
 
-    # Auto-detect the part type based on the file extension and content
-    detected_ext = file_path.suffix.lstrip(".").lower()
-    part_type = None
-    for supported_type in SUPPORTED_IMPORT_FORMATS_WITH_EXT.keys():
-        if detected_ext in SUPPORTED_IMPORT_FORMATS_WITH_EXT[supported_type]:
-            part_type = supported_type if detected_ext != "py" else __detect_script_type(file_path)
+        file_path = Path(existing_part)
+        if not file_path.exists():
+            raise click.UsageError(f"File '{existing_part}' not found.")
 
-    if not part_type:
-        raise click.ClickException(
-            f"Cannot determine file type for '{existing_part}'. "
-            f"Supported part types: {', '.join(set(SUPPORTED_IMPORT_FORMATS_WITH_EXT.keys()))}. "
-        )
+        # Auto-detect the part type based on the file extension and content
+        detected_ext = file_path.suffix.lstrip(".").lower()
+        part_type = None
+        for supported_type in SUPPORTED_IMPORT_FORMATS_WITH_EXT.keys():
+            if detected_ext in SUPPORTED_IMPORT_FORMATS_WITH_EXT[supported_type]:
+                part_type = supported_type if detected_ext != "py" else __detect_script_type(file_path)
 
-    params = {
-        "obj_kind": "part",
-        "source": os.path.abspath(existing_part),
-        "part_type": part_type,
-        "package": package,
-    }
-    if target_format:
-        params["target_format"] = target_format
-    if desc:
-        params["desc"] = desc
+        if not part_type:
+            raise click.ClickException(
+                f"Cannot determine file type for '{existing_part}'. "
+                f"Supported part types: {', '.join(set(SUPPORTED_IMPORT_FORMATS_WITH_EXT.keys()))}. "
+            )
 
-    result = run(cli_ctx, "import.object", params, span_name="import part", needs_context=True)
-    name = (result or {}).get("name", file_path.stem)
-    click.echo(f"Part '{name}' imported successfully.")
+        # Get the target package
+        package = ctx.resolve_package_path(package)
+        package_obj: pc.Project = ctx.get_project(package)
+        if not package_obj:
+            pc.logging.error(f"Package {package} is not found")
+            return
+        package = package_obj.name  # '//' may end up having a different name
+
+        pc.logging.info(f"Importing part: {existing_part} ({part_type})")
+        name = file_path.stem
+        config = {"desc": desc} if desc else {}
+        try:
+            # pc.logging.Process() is done inside import_part_action()
+            import_part_action(package_obj, part_type, name, existing_part, config, target_format)
+            pc.logging.info(f"Successfully imported part: {name}")
+            click.echo(f"Part '{name}' imported successfully.")
+        except Exception as e:
+            pc.logging.exception(f"Error importing part '{name}' ({part_type})")
+            raise click.ClickException(f"Error importing part '{name}' ({part_type}): {e}") from e
 
 
 def __detect_script_type(file_path: Path, lines_check_range: int = 50) -> str | None:
@@ -111,6 +120,6 @@ def __detect_script_type(file_path: Path, lines_check_range: int = 50) -> str | 
                     return "sdf"
 
     except Exception as e:
-        pc_logging.warning(f"Could not read script file {file_path}: {e}")
+        pc.logging.warning(f"Could not read script file {file_path}: {e}")
 
     return None

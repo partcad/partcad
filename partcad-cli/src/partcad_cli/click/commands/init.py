@@ -11,10 +11,12 @@
 import os
 import sys
 
-import partcad_utils
 import rich_click as click
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
-from ..service import run
+import partcad as pc
+
+from ..cli_context import CliContext
 
 
 class DynamicPromptOption(click.Option):
@@ -94,7 +96,7 @@ class DynamicPromptOption(click.Option):
     "-pv",
     "--partcad",
     type=str,
-    default=f">={partcad_utils.__version__}",
+    default=f">={pc.__version__}",
     cls=DynamicPromptOption,
     help="Required PartCAD version spec string",
     prompt="Enter the required PartCAD version spec string",
@@ -122,23 +124,39 @@ class DynamicPromptOption(click.Option):
 )
 @click.pass_context
 @click.pass_obj
-def cli(cli_ctx, click_ctx: click.rich_context.RichContext, **kwargs):
-    package = click_ctx.parent.params.get("package")
-    if package is not None:
-        if os.path.isdir(package):
-            dst_path = os.path.join(package, "partcad.yaml")
+def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs):
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        # ctx: pc.Context = cli_ctx.get_partcad_context()
+
+        if not click_ctx.parent.params.get("package") is None:
+            if os.path.isdir(click_ctx.parent.params.get("package")):
+                dst_path = os.path.join(click_ctx.parent.params.get("package"), "partcad.yaml")
+            else:
+                dst_path = click_ctx.parent.params.get("package")
         else:
-            dst_path = package
-    else:
-        dst_path = "partcad.yaml"
-    dst_path = os.path.abspath(dst_path)
+            dst_path = "partcad.yaml"
 
-    interactive = bool(kwargs.get("interactive"))
-    config_options = {key: value for key, value in kwargs.items() if key != "interactive"}
+        if kwargs.get("interactive"):
+            pc.logging.info("Validating package configuration...")
+            for key in kwargs:
+                if isinstance(kwargs[key], str) and "default: " in kwargs[key]:
+                    kwargs[key] = kwargs[key].replace("default: ", "")
+                value = kwargs[key]
+                if value is not None and key.endswith("version"):
+                    try:
+                        SpecifierSet(value)
+                    except InvalidSpecifier:
+                        pc.logging.error(f"'{value}' is not a valid version string")
+                if key == "name" and value is not None and not value.startswith(pc.ROOT):
+                    kwargs[key] = f"{pc.ROOT}{value}"
 
-    run(
-        cli_ctx,
-        "init.package",
-        {"dst_path": dst_path, "config_options": config_options, "interactive": interactive},
-        span_name="init",
-    )
+            if pc.logging.had_errors:
+                pc.logging.error(f"Failed creating '{dst_path}'!")
+                return
+
+        pc.logging.info(f"Creating package configuration at '{dst_path}'...")
+        config_options = {key: value for key, value in kwargs.items() if key != "interactive"}
+        if pc.create_package(dst_path, config_options):
+            pc.logging.info(f"Successfully created package at '{dst_path}'")
+        else:
+            pc.logging.error(f"Failed creating '{dst_path}'!")

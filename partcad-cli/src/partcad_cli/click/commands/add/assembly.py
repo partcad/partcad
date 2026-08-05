@@ -4,11 +4,13 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import os
+from pathlib import Path
 
 import rich_click as click
 
-from ...service import run
+import partcad as pc
+
+from ...cli_context import CliContext
 
 
 @click.command(help="Add an assembly")
@@ -16,11 +18,19 @@ from ...service import run
 @click.argument("path", type=str)  # help="Path to the file"
 @click.pass_context
 def cli(click_ctx: click.Context, kind: str, path: str):
-    cli_ctx = click_ctx.obj
+    package = click_ctx.parent.params["package"]
+    cli_ctx: CliContext = click_ctx.obj
 
-    params = {"obj_kind": "assembly", "kind": kind, "path": os.path.abspath(path)}
-    package = click_ctx.parent.params.get("package")
-    if package is not None:
-        params["package"] = package
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        ctx: pc.Context = cli_ctx.get_partcad_context()
 
-    run(cli_ctx, "add.object", params, span_name="add assembly", needs_context=True)
+        package = ctx.resolve_package_path(package)
+        package_obj: pc.Project = ctx.get_project(package)
+        if not package_obj:
+            pc.logging.error(f"Package {package} is not found")
+            return
+        package = package_obj.name  # '//' may end up having a different name
+
+        with pc.logging.Process("AddAssy", package):
+            if package_obj.add_assembly(kind, path):
+                Path(path).touch()

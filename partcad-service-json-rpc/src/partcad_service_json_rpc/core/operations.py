@@ -46,25 +46,6 @@ def _ctx(session, params):
     return session.partcad_ctx
 
 
-def _invalidate_context(session, params):
-    """Drop a cached context after a mutation so the next command re-reads config.
-
-    PartCAD writes config changes (``add``/``import``) straight to
-    ``partcad.yaml`` without refreshing the live in-memory project registry. The
-    daemon keeps contexts warm indefinitely, so a mutated context would otherwise
-    serve stale contents to later commands. Evicting it makes the next
-    ``context.create`` (the CLI issues one before every command) rebuild it from
-    disk. The old in-process CLI got the same effect for free by starting fresh
-    each run.
-    """
-    context_id = params.get("context")
-    if context_id is None:
-        return
-    evicted = session.contexts.pop(context_id, None)
-    if evicted is not None and session.partcad_ctx is evicted:
-        session.partcad_ctx = None
-
-
 def _qualified(package: str, name: str) -> str:
     return package + ":" + name
 
@@ -418,11 +399,15 @@ def adhoc_convert(session, params):
     input_type = params.get("input_type") or ext_to_type.get(input_path.suffix.lower())
     output_type = params.get("output_type") or (ext_to_type.get(output_path.suffix.lower()) if output_path else None)
 
+    # Sketch conversion says "input sketch type"; part conversion says
+    # "input type" (matches the per-command CLI messages on devel, which the
+    # behave scenarios assert on).
+    noun = "sketch type" if kind == "sketch" else "type"
     if not input_type:
-        pc.logging.error("Cannot infer input type. Please specify --input explicitly.")
+        pc.logging.error("Cannot infer input %s. Please specify --input explicitly." % noun)
         return None
     if not output_type:
-        pc.logging.error("Cannot infer output type. Please specify --output explicitly.")
+        pc.logging.error("Cannot infer output %s. Please specify --output explicitly." % noun)
         return None
     if output_path is None:
         output_path = input_path.with_suffix(".%s" % mapping[output_type])
@@ -432,7 +417,7 @@ def adhoc_convert(session, params):
         convert_fn(str(input_path), input_type, str(output_path), output_type)
         pc.logging.info("Conversion complete: %s" % output_path)
     except Exception as e:  # pylint: disable=broad-except
-        pc.logging.error("Error during conversion: %s" % e)
+        pc.logging.error("Failed to convert: %s" % e)
     return None
 
 
@@ -606,7 +591,11 @@ def system_reset(session, params):
 
 
 def system_status(session, params):
-    """Report PartCAD's version and internal storage usage."""
+    """Report PartCAD's version and internal storage usage.
+
+    Output matches the in-process ``pc system status`` (human-readable MB sizes
+    and the "<X> cache size:" labels the behave scenarios assert on).
+    """
     pc = session.ensure_partcad()
     root = pc.user_config.internal_state_dir
 
@@ -617,174 +606,49 @@ def system_status(session, params):
                 fp = os.path.join(dirpath, name)
                 if not os.path.islink(fp):
                     total += os.path.getsize(fp)
-        return total
+        return total / 1048576.0
 
     with pc.logging.Process("Status", "global"):
         pc.logging.info("PartCAD version: %s" % pc.__version__)
         pc.logging.info("Internal data storage location: %s" % root)
-        if os.path.exists(root):
-            pc.logging.info("Total internal data storage size: %d bytes" % _dir_size(root))
-            for sub in ("git", "tar", "sandbox"):
-                p = os.path.join(root, sub)
-                if os.path.exists(p):
-                    pc.logging.info("Size of '%s': %d bytes" % (sub, _dir_size(p)))
+        with pc.logging.Action("Status", "total"):
+            pc.logging.info("Total internal data storage size: %.2fMB" % _dir_size(root))
+        with pc.logging.Action("Status", "git"):
+            pc.logging.info("Git cache size: %.2fMB" % _dir_size(os.path.join(root, "git")))
+        with pc.logging.Action("Status", "tar"):
+            pc.logging.info("Tar cache size: %.2fMB" % _dir_size(os.path.join(root, "tar")))
+        with pc.logging.Action("Status", "sandbox"):
+            pc.logging.info("Sandbox environments size: %.2fMB" % _dir_size(os.path.join(root, "sandbox")))
     return None
 
 
 def system_set_telemetry(session, params):
-    """Set a telemetry configuration value (type/env/sentryDsn) persistently."""
+    """Set a telemetry configuration value (type/env/sentryDsn) persistently.
+
+    Messages and per-key Process names mirror the in-process CLI commands the
+    behave scenarios assert on.
+    """
     pc = session.ensure_partcad()
     import partcad.actions.config as pc_actions_config
 
     key = params["key"]  # "type" | "env" | "sentryDsn"
     value = params["value"]
-    with pc.logging.Process("SysSet", "global"):
+    process_name = {"type": "SysSetTelType", "env": "SysSetTelEnv", "sentryDsn": "SysSetTelDsn"}.get(key, "SysSet")
+    with pc.logging.Process(process_name, "global"):
         yaml, config = pc_actions_config.system_config_get()
         if "telemetry" not in config:
             config["telemetry"] = {}
         config["telemetry"][key] = value
+        if key == "type":
+            if value == "none":
+                pc.logging.info("Telemetry collection disabled")
+            elif value == "sentry":
+                pc.logging.info("Telemetry collection enabled with Sentry")
+        elif key == "env":
+            pc.logging.info("Telemetry environment set to %s" % value)
+        elif key == "sentryDsn":
+            pc.logging.info("Sentry DSN set to %s" % value)
         pc_actions_config.system_config_set(yaml, config)
-        pc.logging.info("Set telemetry.%s = %s" % (key, value))
-    return None
-
-
-def config_show(session, params):
-    """Show the effective user configuration."""
-    pc = session.ensure_partcad()
-    for key, value in vars(pc.user_config).items():
-        if not callable(value) and key[0] != "_":
-            pc.logging.info("%s: %s" % (key, value))
-    pc.logging.debug("File: %s" % pc.user_config.get_config_dir())
-    return None
-
-
-def add_object(session, params):
-    """Add an existing part or assembly to the project (by reference).
-
-    The file path is absolute (resolved by the CLI against the user's cwd).
-    """
-    from pathlib import Path
-
-    ctx = _ctx(session, params)
-    if ctx is None:
-        return None
-    pc = session.partcad
-    obj_kind = params.get("obj_kind", "part")
-    package = ctx.resolve_package_path(params.get("package") or ".")
-    package_obj = ctx.get_project(package)
-    if not package_obj:
-        pc.logging.error("Package %s is not found" % package)
-        return None
-
-    path = params["path"]
-    config = {}
-    if params.get("desc"):
-        config["desc"] = params["desc"]
-
-    if obj_kind == "part":
-        if not Path(path).exists():
-            raise JsonRpcError(USAGE_ERROR, "ERROR: The part file '%s' does not exist." % path)
-        from partcad.actions.part import add_part_action
-
-        add_part_action(package_obj, params["kind"], path, config)
-        pc.logging.info("Part '%s' added to the project." % Path(path).stem)
-    else:
-        with pc.logging.Process("AddAssy", package_obj.name):
-            if package_obj.add_assembly(params["kind"], path):
-                Path(path).touch()
-    _invalidate_context(session, params)
-    return None
-
-
-def import_object(session, params):
-    """Import a part or assembly by copying it into the project (with optional conversion).
-
-    The source path is absolute; the type is detected by the CLI and passed here.
-    """
-    from pathlib import Path
-
-    ctx = _ctx(session, params)
-    if ctx is None:
-        return None
-    pc = session.partcad
-    obj_kind = params.get("obj_kind", "part")
-    source = params["source"]
-    if not Path(source).exists():
-        raise JsonRpcError(USAGE_ERROR, "File '%s' not found." % source)
-
-    package = ctx.resolve_package_path(params.get("package") or ".")
-    package_obj = ctx.get_project(package)
-    if not package_obj:
-        pc.logging.error("Package %s is not found" % package)
-        return None
-
-    name = Path(source).stem
-    config = {"desc": params["desc"]} if params.get("desc") else {}
-
-    if obj_kind == "part":
-        from partcad.actions.part import import_part_action
-
-        part_type = params["part_type"]
-        pc.logging.info("Importing part: %s (%s)" % (source, part_type))
-        try:
-            import_part_action(package_obj, part_type, name, source, config, params.get("target_format"))
-            pc.logging.info("Successfully imported part: %s" % name)
-        except Exception as e:  # pylint: disable=broad-except
-            pc.logging.exception("Error importing part '%s' (%s)" % (name, part_type))
-            raise JsonRpcError(USAGE_ERROR, "Error importing part '%s' (%s): %s" % (name, part_type, e))
-        _invalidate_context(session, params)
-        return {"name": name}
-
-    from partcad.actions.assembly import import_assy_action
-
-    try:
-        assy_name = import_assy_action(package_obj, params["assembly_type"], source, config)
-    except Exception as e:  # pylint: disable=broad-except
-        pc.logging.exception("Error importing assembly")
-        raise JsonRpcError(USAGE_ERROR, "Error importing assembly: %s" % e)
-    _invalidate_context(session, params)
-    return {"name": assy_name}
-
-
-def init_package(session, params):
-    """Create a new partcad.yaml at the given absolute path.
-
-    Interactive prompts are collected by the CLI; here we validate (version
-    strings, root-prefixed name) and write the file via PartCAD's template.
-    """
-    pc = session.ensure_partcad()
-    dst_path = params["dst_path"]
-    config_options = dict(params.get("config_options") or {})
-
-    if params.get("interactive"):
-        from packaging.specifiers import InvalidSpecifier, SpecifierSet
-
-        # The daemon is long-lived and shares logging.had_errors across requests;
-        # a fresh in-process CLI would start clean. Reset it so the validation
-        # gate below reflects only errors from this init.
-        pc.logging.reset_errors()
-        pc.logging.info("Validating package configuration...")
-        for key in list(config_options.keys()):
-            value = config_options[key]
-            if isinstance(value, str) and "default: " in value:
-                config_options[key] = value.replace("default: ", "")
-                value = config_options[key]
-            if value is not None and key.endswith("version"):
-                try:
-                    SpecifierSet(value)
-                except InvalidSpecifier:
-                    pc.logging.error("'%s' is not a valid version string" % value)
-            if key == "name" and value is not None and not value.startswith(pc.ROOT):
-                config_options[key] = "%s%s" % (pc.ROOT, value)
-        if pc.logging.had_errors:
-            pc.logging.error("Failed creating '%s'!" % dst_path)
-            return None
-
-    pc.logging.info("Creating package configuration at '%s'..." % dst_path)
-    if pc.create_package(dst_path, config_options):
-        pc.logging.info("Successfully created package at '%s'" % dst_path)
-    else:
-        pc.logging.error("Failed creating '%s'!" % dst_path)
     return None
 
 
@@ -1311,7 +1175,7 @@ def search_objects(session, params):
 
     count = 0
     output = "PartCAD %s with '%s' keyword:\n" % (kind, keyword)
-    with pc.logging.Process("Search" + kind.capitalize(), package):
+    with pc.logging.Process("Search " + kind.capitalize(), package):
         for obj in search_fn(ctx, package, recursive, keyword):
             if kind == "packages":
                 line = "\t%s" % obj.name
@@ -1325,7 +1189,11 @@ def search_objects(session, params):
                 desc = desc.replace("\n", "\n" + " " * 68)
                 line += "%s" % desc
             else:
-                line = "\t" + "%s %s" % (obj.project_name, obj.name)
+                # Interfaces expose their package as `.project`; parts, sketches
+                # and assemblies carry a flat `.project_name` (matches the
+                # per-command CLI behavior on devel).
+                project_name = obj.project.name if kind == "interfaces" else obj.project_name
+                line = "\t" + "%s %s" % (project_name, obj.name)
                 line += " " + " " * (84 - len(line))
                 desc = obj.desc if obj.desc is not None else ""
                 desc = desc.replace("\n", "\n\t" + " " * (len(line) - 1))
