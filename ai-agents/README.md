@@ -58,6 +58,11 @@ The plugin folder is named `claude`, but the command namespace comes from
 - **`/pc:describe <object>`** — writes a narratable description of an existing
   part, assembly, or sketch by rendering and examining it, and stores it in the
   object's `summary:`. Reproduces the retired built-in AI shape-summary.
+- **`/pc:search <query>`** — finds existing parts and assemblies in the catalog
+  whose name, description, or source matches the query (`pc search parts` /
+  `pc search assemblies`), lists the matches, and can inspect or render a chosen
+  one. Searches the local package by default; `-r` widens to every imported
+  package (the public registry and dependencies).
 
 ## Local use (Claude)
 
