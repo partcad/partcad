@@ -201,6 +201,26 @@ runs:
         python -m pip install --upgrade ./partcad-cli
         python -m pip install --upgrade -r partcad-cli/requirements-dev.txt
         python -m pip install --upgrade -r partcad-ide-vscode/src/test/python_tests/requirements.txt
+        # macOS/arm64 only: force the PyPI cffi wheel over conda-forge's build.
+        # PartCAD's ambient-git-config fallback reads and clears libgit2's config
+        # search path, which pygit2 does through the variadic C call
+        # 'git_libgit2_opts(GIT_OPT_GET_SEARCH_PATH, level, git_buf *)'. cffi
+        # dispatches variadic calls at runtime via _cffi_backend/libffi, and the
+        # conda-forge cffi 2.x build mis-marshals varargs on Apple arm64 -- it
+        # hands libgit2 a garbage git_buf* to write through, segfaulting Pytest
+        # (test_git_ambient_config_fallback) and any real clone that falls back.
+        # See the setup-miniconda channel comment above: dropping Anaconda
+        # 'defaults' fixed this while conda-forge cffi was 1.17.1, below pygit2's
+        # floor, so pip replaced it with the PyPI wheel. conda-forge now ships
+        # cffi 2.x for osx-arm64, which satisfies that floor, so pip keeps the
+        # conda build again and the crash returned on the 3.10 and 3.14 jobs. The
+        # PyPI wheel (linked against Apple's system libffi) marshals varargs
+        # correctly -- it is exactly what plain 'pip install partcad' users get.
+        # --only-binary pins the prebuilt wheel; a source rebuild here would
+        # re-link conda's libffi and reintroduce the bug.
+        if [ "${RUNNER_OS}" = "macOS" ]; then
+          python -m pip install --upgrade --force-reinstall --no-deps --only-binary=:all: cffi
+        fi
         mamba deactivate
 
         # echo "PC_INTERNAL_STATE_DIR=$(mktemp -d)" >> $GITHUB_ENV
