@@ -17,6 +17,7 @@ commands and ``?/partcad/*`` notifications) is unchanged, so the VS Code
 extension's "python" backend behaves exactly as before; only the bodies now
 delegate to the shared core, which the JSON-RPC service backend uses too.
 """
+
 from __future__ import annotations
 
 import atexit
@@ -173,24 +174,6 @@ def show_assembly(params: lsp.ExecuteCommandParams = None):
         return
     arg = params[0]
     _ops().inspect_assembly(session, {"package": arg["pkg"], "name": arg["name"], "params": arg.get("params")})
-
-
-@LSP_SERVER.command("partcad.regeneratePartCb")
-def regenerate_part_cb(params: lsp.ExecuteCommandParams = None):
-    session = _active_session()
-    if session is None:
-        return
-    arg = params[0]
-    _ops().ai_regenerate(session, {"package": arg["pkg"], "name": arg["name"], "config": arg.get("config", {})})
-
-
-@LSP_SERVER.command("partcad.changePartCb")
-def change_part_cb(params: lsp.ExecuteCommandParams = None):
-    session = _active_session()
-    if session is None:
-        return
-    arg = params[0]
-    _ops().ai_change(session, {"package": arg["pkg"], "name": arg["name"], "config": arg.get("config", {})})
 
 
 # ---- export ---------------------------------------------------------------
@@ -593,8 +576,6 @@ def on_shutdown(_params: Optional[Any] = None) -> None:
 def _get_global_defaults():
     return {
         "pythonSandbox": GLOBAL_SETTINGS.get("pythonSandbox", ""),
-        "googleApiKey": GLOBAL_SETTINGS.get("googleApiKey", ""),
-        "openaiApiKey": GLOBAL_SETTINGS.get("openaiApiKey", ""),
         "verbosity": GLOBAL_SETTINGS.get("verbosity", "info"),
         "packagePath": GLOBAL_SETTINGS.get("packagePath", "."),
         "forceUpdate": GLOBAL_SETTINGS.get("forceUpdate", "false"),

@@ -65,18 +65,6 @@ def _invalidate_context(session, params):
         session.partcad_ctx = None
 
 
-_PART_AI_PROPERTIES = [
-    "type",
-    "provider",
-    "desc",
-    "tokens",
-    "model",
-    "temperature",
-    "top_p",
-    "top_k",
-]
-
-
 def _qualified(package: str, name: str) -> str:
     return package + ":" + name
 
@@ -223,67 +211,6 @@ def export_assembly(session, params):
             assembly.render(ctx, params["type"], filepath=params["path"])
     session.emitter.signal(events.EXPORT_PART_DONE)
     return None
-
-
-# ---- generative design -----------------------------------------------------
-
-
-def _apply_ai_config(project, part_name, config):
-    part_config = project.get_part_config(part_name)
-    update = {}
-    for prop in _PART_AI_PROPERTIES:
-        if prop in config:
-            if config[prop] is not None:
-                part_config[prop] = config[prop]
-                update[prop] = config[prop]
-            else:
-                part_config.pop(prop, None)
-                update[prop] = None
-    if update:
-        project.update_part_config(part_name, update)
-
-
-def ai_regenerate(session, params):
-    """Regenerate an AI-authored part with an updated config, then show it."""
-    ctx = _ctx(session, params)
-    if ctx is None:
-        return None
-    package, name = params["package"], params["name"]
-    config = params.get("config", {})
-    with session.partcad.logging.Process("Regenerate", package, name):
-        try:
-            project = ctx.get_project(package)
-            _apply_ai_config(project, name, config)
-            if name in project.parts:
-                del project.parts[name]
-            part = ctx.get_part(_qualified(package, name))
-            part.regenerate()
-        except Exception as e:
-            session.partcad.logging.exception(e)
-            raise
-    return inspect_part(session, {"package": package, "name": name, "params": config.get("params")})
-
-
-def ai_change(session, params):
-    """Apply a natural-language change to an AI-authored part, then show it."""
-    ctx = _ctx(session, params)
-    if ctx is None:
-        return None
-    package, name = params["package"], params["name"]
-    config = params.get("config", {})
-    with session.partcad.logging.Process("Change", package, name):
-        try:
-            project = ctx.get_project(package)
-            _apply_ai_config(project, name, config)
-            if name in project.parts:
-                del project.parts[name]
-            part = ctx.get_part(_qualified(package, name))
-            part.do_change(change=config.get("change", None))
-            del project.parts[name]
-        except Exception as e:
-            session.partcad.logging.exception(e)
-            raise
-    return inspect_part(session, {"package": package, "name": name, "params": config.get("params")})
 
 
 # ---- authoring -------------------------------------------------------------
@@ -753,8 +680,6 @@ def add_object(session, params):
     config = {}
     if params.get("desc"):
         config["desc"] = params["desc"]
-    if params.get("provider"):
-        config["provider"] = params["provider"]
 
     if obj_kind == "part":
         if not Path(path).exists():
@@ -1031,7 +956,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.7.146"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.7.153"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None

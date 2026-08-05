@@ -23,8 +23,6 @@ _OPERATIONS = {
     "inspect.file": operations.inspect_file,
     "export.part": operations.export_part,
     "export.assembly": operations.export_assembly,
-    "ai.regenerate": operations.ai_regenerate,
-    "ai.change": operations.ai_change,
     "add.part": operations.add_part,
     "add.assembly": operations.add_assembly,
     "add.object": operations.add_object,

@@ -27,10 +27,11 @@ def test_http_flag_accepts_an_explicit_address():
 
 
 def test_build_settings_maps_cli_flags_to_core_setting_keys():
-    args = m.parse_args(["--verbose", "--offline", "--google-api-key", "KEY"])
+    args = m.parse_args(["--verbose", "--offline", "--python-sandbox", "conda"])
     settings = m.build_settings(args)
     assert settings["verbosity"] == "debug"
-    assert settings["googleApiKey"] == "KEY"
+    assert settings["offline"] == "true"
+    assert settings["pythonSandbox"] == "conda"
 
 
 def test_build_settings_quiet_sets_error_verbosity():

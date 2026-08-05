@@ -51,9 +51,6 @@ def build_parser() -> argparse.ArgumentParser:
     # Dependency management options.
     parser.add_argument("--offline", action="store_true", help="Do not fetch anything from the network.")
     parser.add_argument("--force-update", action="store_true", help="Force refresh of cached dependencies.")
-    # API keys.
-    parser.add_argument("--google-api-key", default=None, help="Google Generative AI API key.")
-    parser.add_argument("--openai-api-key", default=None, help="OpenAI API key.")
     # Sandbox options.
     parser.add_argument("--python-sandbox", default=None, help="Python sandbox runtime for CAD scripts.")
     return parser
@@ -72,10 +69,6 @@ def build_settings(args: argparse.Namespace) -> dict:
         settings["forceUpdate"] = "true"
     if args.offline:
         settings["offline"] = "true"
-    if args.google_api_key:
-        settings["googleApiKey"] = args.google_api_key
-    if args.openai_api_key:
-        settings["openaiApiKey"] = args.openai_api_key
     if args.verbose:
         settings["verbosity"] = "debug"
     elif args.quiet:

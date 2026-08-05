@@ -33,7 +33,7 @@ class FakeLogging:
 
 
 class FakePartcad:
-    __version__ = "0.7.146"
+    __version__ = "0.7.153"
 
     def __init__(self):
         self.logging = FakeLogging()
@@ -124,7 +124,7 @@ def test_info_emits_stats_with_version_and_recalculated_counts():
     operations.info(session, {})
     event, payload = seen[-1]
     assert event == events.STATS
-    assert payload["version"] == "0.7.146"
+    assert payload["version"] == "0.7.153"
     assert payload["stats"]["packages"] == 3
     assert payload["stats"]["path"] == "/abs/partcad.yaml"
 

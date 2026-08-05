@@ -164,10 +164,6 @@ class Session:
                 user_config.python_runtime = settings["pythonSandbox"]
             if settings.get("forceUpdate"):
                 user_config.force_update = settings["forceUpdate"] == "true"
-            if settings.get("googleApiKey"):
-                user_config.google_api_key = settings["googleApiKey"]
-            if settings.get("openaiApiKey"):
-                user_config.openai_api_key = settings["openaiApiKey"]
 
             logging.basicConfig()
             logging.getLogger("partcad").propagate = False

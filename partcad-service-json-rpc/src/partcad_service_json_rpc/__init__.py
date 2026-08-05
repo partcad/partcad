@@ -10,4 +10,4 @@ serves over stdin/stdout by default and, optionally, over HTTP. See
 ``partcad_service_json_rpc.__main__`` for the executable entry point.
 """
 
-__version__ = "0.7.146"
+__version__ = "0.7.153"

@@ -13,7 +13,7 @@ def test_registry_maps_cli_shaped_names_to_operations():
     registry = methods.build_registry()
     assert registry["inspect.part"] is operations.inspect_part
     assert registry["export.assembly"] is operations.export_assembly
-    assert registry["ai.regenerate"] is operations.ai_regenerate
+    assert registry["add.object"] is operations.add_object
     assert registry["package.load"] is operations.package_load
     assert registry["list.all"] is operations.list_all
     assert registry["info"] is operations.info
