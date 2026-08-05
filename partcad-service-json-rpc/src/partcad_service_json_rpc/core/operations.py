@@ -16,6 +16,7 @@ silently no-op when none is loaded, exactly as the legacy server did.
 import hashlib
 import os
 from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import yaml
 from packaging.specifiers import SpecifierSet
@@ -735,7 +736,13 @@ def _url_to_path(url: str) -> str:
     """
     parsed = urlparse(url)
     if parsed.scheme == "file":
-        return parsed.path
+        # url2pathname turns "/C:/x" back into "C:\x" on Windows and "/home/x"
+        # into "/home/x" on POSIX, undoing Path.as_uri()'s encoding on both.
+        path = url2pathname(parsed.path)
+        if parsed.netloc and parsed.netloc.lower() != "localhost":
+            # A UNC authority ("file://host/share/..."); keep it.
+            path = "//%s%s" % (parsed.netloc, path)
+        return path
     if parsed.scheme == "":
         return url
     raise JsonRpcError(INVALID_CONFIG, "Unsupported context URL scheme: %s" % (parsed.scheme,))

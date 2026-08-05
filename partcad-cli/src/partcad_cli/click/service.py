@@ -16,12 +16,12 @@ renderer, and returns the result.
 
 import logging
 import os
-
-import rich_click as click
-from partcad_service_json_rpc import client as _client
+from pathlib import Path
 
 import partcad_utils.logging_remote_client as _remote_client
 import partcad_utils.telemetry as _telemetry
+import rich_click as click
+from partcad_service_json_rpc import client as _client
 
 # Deliberate emitter.info()/warn()/error() notifications carry a bare string;
 # render them as log lines through the same client-side renderer as the streamed
@@ -59,9 +59,11 @@ def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_
             if needs_context:
                 # -p/--path (a partcad.yaml or directory), else the current dir,
                 # as a file:// URL. The daemon persists the context and returns
-                # its id, which context-aware operations carry.
+                # its id, which context-aware operations carry. Path.as_uri()
+                # produces a well-formed URL on every platform (Windows drive
+                # letters and spaces included) -- "file://" + a raw path does not.
                 path = getattr(cli_ctx, "path", None) or os.getcwd()
-                url = "file://" + os.path.abspath(path)
+                url = Path(path).resolve().as_uri()
                 result = conn.call("context.create", {"url": url}, on_event=_on_event)
                 call_params["context"] = result.get("context")
             return conn.call(method, call_params, on_event=_on_event)
