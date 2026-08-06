@@ -6,7 +6,10 @@
 """Tests for the DaemonClient (request/response + notification delivery)."""
 
 import os
+import pathlib
+import shutil
 import socket
+import tempfile
 import threading
 import time
 
@@ -18,6 +21,30 @@ from partcad_service_json_rpc.transport.socket_server import SocketServer
 
 if not hasattr(socket, "AF_UNIX"):
     pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
+
+
+@pytest.fixture
+def socket_dir():
+    """A directory short enough to hold an AF_UNIX socket path.
+
+    ``sun_path`` is a fixed-size field -- 104 bytes on macOS, 108 on Linux --
+    and pytest's ``tmp_path`` spends most of that before the socket name is
+    appended: on macOS it sits under
+    ``/private/var/folders/<hash>/T/pytest-of-<user>/pytest-<n>/<test-name><n>/``,
+    where a descriptive test name alone pushes a bind past the limit and fails
+    with "AF_UNIX path too long". ``/tmp`` keeps the prefix to a few characters,
+    which is also what a real daemon socket looks like (it lives under
+    ``~/.partcad/workspaces/<hash>/``).
+
+    Defined per-module rather than in a conftest: this package and ``partcad``
+    both have a ``tests`` package, so two ``tests.conftest`` modules collide
+    when a single pytest run collects both.
+    """
+    path = tempfile.mkdtemp(prefix="pcs", dir="/tmp")
+    try:
+        yield pathlib.Path(path)
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def _serve(socket_dir, registry):
