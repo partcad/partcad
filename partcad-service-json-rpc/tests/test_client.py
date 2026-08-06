@@ -51,8 +51,13 @@ def _serve(socket_dir, registry):
     path = str(socket_dir / "socket")
     server = SocketServer(Session(), registry)
     threading.Thread(target=server.serve_unix, args=(path,), daemon=True).start()
-    for _ in range(200):
-        if os.path.exists(path):
+    # Wait until the server is *accepting*, not merely until the socket file
+    # exists. serve_unix() binds -- which creates the file -- and only then
+    # calls listen(); a client that connects in between gets ECONNREFUSED.
+    # `_server_sock` is assigned after listen() returns, so it is the first
+    # observable moment at which a connection can succeed.
+    for _ in range(500):
+        if server._server_sock is not None:
             break
         time.sleep(0.01)
     return server, path
