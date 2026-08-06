@@ -20,12 +20,17 @@ __pycache__
 /partcad-cli/dist
 # Copied in from the repository root by the wheel and standalone builds
 /partcad-cli/LICENSE.txt
+/partcad-ide-client/build
+/partcad-ide-client/dist
+# Copied in from the repository root by the wheel build
+/partcad-ide-client/LICENSE.txt
+/partcad-ide-client/apache20.svg
 /partcad-service-json-rpc/LICENSE.txt
 /partcad-service-json-rpc/build
+/partcad-service-json-rpc/dist
 /partcad-utils/LICENSE.txt
 /partcad-utils/dist
 /partcad-utils/build
-/partcad-service-json-rpc/dist
 /partcad/build
 /partcad/dist
 allure-report/

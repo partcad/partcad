@@ -58,9 +58,11 @@ Feature: `pc render` command
       """
     Then the command should exit with a status code of "0"
      And STDOUT should contain 'DONE: InitCtx:'
-     And STDOUT should contain 'Visualizing in "OCP CAD Viewer"...'
+     And STDOUT should contain 'Visualizing in "PartCAD Viewer"...'
      And STDOUT should contain 'Unable to open config file /tmp/sandbox/home/partcad-cli-'
-     And STDOUT should contain 'No VS Code or "OCP CAD Viewer" extension detected.'
+     # There is no IDE listening on the viewer port in a test run, so the show
+     # ends here rather than in a window.
+     And STDOUT should contain 'No PartCAD IDE with an open PartCAD Viewer detected.'
      And STDOUT should contain 'DONE: inspect: this'
 
   @wip @docs-design @pc-241

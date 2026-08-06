@@ -32,6 +32,8 @@ import { createOutputChannel, isVirtualWorkspace, onDidChangeConfiguration, regi
 import { PartcadExplorer } from './PartcadExplorer';
 import { PartcadInspector } from './PartcadInspector';
 import { PartcadContext } from './PartcadContext';
+import { PartcadViewer } from './viewer/PartcadViewer';
+import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
 import { terminalInit } from './terminal';
@@ -42,6 +44,8 @@ let partcadExplorer: PartcadExplorer | undefined;
 let partcadExplorerView: vscode.TreeView<PartcadItem.PartcadItem | void>;
 let partcadContext: PartcadContext | undefined;
 let partcadInspector: PartcadInspector | undefined;
+let partcadViewer: PartcadViewer | undefined;
+let partcadViewerServer: PartcadViewerServer | undefined;
 let partcadTerminal: vscode.Terminal | undefined;
 let terminalEmitter: vscode.EventEmitter<string> | undefined;
 
@@ -762,7 +766,49 @@ connect:
         registerCommand(`partcad.support`, async () => {
             vscode.env.openExternal(vscode.Uri.parse('https://calendly.com/partcad-support/30min'));
         }),
+        registerCommand(`partcad.viewer`, async () => {
+            partcadViewer?.reveal(false);
+        }),
+        registerCommand(`partcad.showBrokenItem`, async ({ name, pkg, reason }) => {
+            // Clicking a broken item explains it rather than doing nothing.
+            // There is deliberately no attempt to inspect it: PartCAD could not
+            // create the object, so there is nothing to render.
+            await vscode.window
+                .showWarningMessage(
+                    `'${pkg}:${name}' could not be loaded.`,
+                    { modal: false, detail: reason },
+                    'Copy details',
+                )
+                .then(async (choice) => {
+                    if (choice === 'Copy details') {
+                        await vscode.env.clipboard.writeText(`${pkg}:${name}\n${reason ?? ''}`);
+                    }
+                });
+        }),
     );
+
+    /* Instantiate the viewer and start listening for PartCAD processes.
+     *
+     * Started here, during activation, rather than lazily when something is
+     * first shown: a 'partcad' running outside the IDE - in a terminal, in a
+     * notebook - connects on its own schedule, and there would be nothing for it
+     * to connect to.
+     */
+    partcadViewer = new PartcadViewer(context.extensionUri);
+    partcadViewerServer = new PartcadViewerServer();
+    context.subscriptions.push(
+        partcadViewer,
+        partcadViewerServer,
+        partcadViewerServer.onMessage((message) => partcadViewer?.handle(message)),
+        vscode.window.registerWebviewPanelSerializer(PartcadViewer.viewType, {
+            async deserializeWebviewPanel(panel: vscode.WebviewPanel) {
+                // VS Code restores the tab after a window reload; adopt it so the
+                // next show lands in it instead of opening a second one.
+                partcadViewer?.restore(panel);
+            },
+        }),
+    );
+    await partcadViewerServer.start();
 
     /* Instantiate the context viewer */
     partcadContext = new PartcadContext(context.extensionUri);

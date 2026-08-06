@@ -95,23 +95,24 @@ Message in "Explorer" left panel: "No Python (>= 3.10) installed"
 
  - Close and reopen VSCode
 
-Error while loading part or assembly view: "Unknown module: CadQuery"
-
- - In "OCP CAD Viewer -> Viewer manager" left panel, install the needed libraries by pressing "Quickstart CadQuery" button
-
 Error while loading part or assembly view: "Module ... not found"
 
  - Make sure that extension version matches PartCAD Python module version in `pc version` command output
 
 ==============
-OCP CAD Viewer
+PartCAD Viewer
 ==============
 
-If the PartCAD vscode extension does not work for you then it is possible to
-troubleshoot PartCAD using the ``OCP CAD Viewer`` vscode extension alone.
+The ``PartCAD Viewer`` is a tab the extension opens when a part, assembly,
+sketch or interface is inspected. PartCAD tessellates the shape in a sandboxed
+runtime, and sends the result to the extension as compressed glTF over a socket
+on ``127.0.0.1:9137``. The Python side of that connection is the
+``partcad-ide-client`` package, which the extension installs alongside
+``partcad``.
 
-Any part or assembly can be displayed in ``OCP CAD Viewer`` by running
-``pc inspect <part>`` or ``pc inspect -a <assembly>`` in a terminal.
+Anything with a ``partcad`` that can reach that port can display into the same
+viewer -- including a ``pc`` run in a plain terminal, as long as a window with
+the extension is open:
 
   .. code-block:: shell
 
@@ -121,12 +122,23 @@ Any part or assembly can be displayed in ``OCP CAD Viewer`` by running
     # Initialize a package with the default dependency on public PartCAD repository
     pc init
 
-    # Display the part in 'OCP CAD Viewer'
+    # Display the part in the 'PartCAD Viewer'
     pc inspect //pub/std/metric/cqwarehouse:fastener/hexhead-iso4014
 
 Typical problems
 ----------------
 
-Demo preview window is not shown on the right panel
+"Failed to load "partcad_ide_client"" in the PartCAD terminal view
 
-- Close the right panel and press "Arrow" button in "Viewer manager" left panel (next to "ocp_vscode")
+ - Install it with ``pip install partcad-ide-client``, or press "Update PartCAD"
+   in the "Context" left panel, which installs it along with ``partcad``
+
+"No PartCAD IDE with an open PartCAD Viewer detected"
+
+ - Nothing is listening on the viewer port. Open a window with the PartCAD
+   extension active; the extension starts listening when it activates.
+ - If two windows are open, only one of them may own the port on platforms
+   without ``SO_REUSEPORT``. The "PartCAD Viewer port ... is already in use"
+   message in the ``PartCAD`` output view says which case this is.
+ - Set ``PARTCAD_IDE_PORT`` to move a ``partcad`` process to a different port
+   if 9137 is taken by something else on the machine.

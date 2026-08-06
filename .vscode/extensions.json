@@ -4,8 +4,6 @@
     "ms-python.vscode-pylance",
     "ms-python.black-formatter",
     "donjayamanne.python-environment-manager",
-    // CAD
-    "bernhard-42.ocp-cad-viewer",
     // YAML
     "redhat.vscode-yaml",
     // Markdown

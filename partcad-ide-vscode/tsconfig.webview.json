@@ -1,0 +1,19 @@
+// The PartCAD Viewer's renderer is compiled differently from the extension.
+//
+// The extension host is CommonJS ("module": "Node16" in the base config), but
+// the viewer runs in a webview and is bundled by webpack, and three.js ships its
+// addons (GLTFLoader, OrbitControls, RoomEnvironment) as ES modules only - which
+// a CommonJS compilation cannot import. Hence a second configuration rather than
+// one shared one; webpack's ts-loader points at this file for 'src/webview'.
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "noEmit": false
+    },
+    // "exclude" is inherited from the base config, where it excludes exactly the
+    // directory this config is for; reset it.
+    "exclude": [],
+    "include": ["src/webview/**/*.ts"]
+}

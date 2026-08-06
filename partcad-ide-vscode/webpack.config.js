@@ -50,4 +50,51 @@ const extensionConfig = {
     level: 'log', // enables logging required for problem matchers
   },
 };
-module.exports = [extensionConfig];
+
+/**
+ * The PartCAD Viewer's renderer, bundled separately from the extension.
+ *
+ * It runs inside a webview, which is a browser context: it must not be built for
+ * 'node' (no require, no Buffer) and it must be fully self-contained, because
+ * the panel's CSP forbids loading anything from a CDN. That is why three.js is
+ * bundled in rather than linked.
+ *
+ * @type WebpackConfig
+ */
+const viewerConfig = {
+  target: 'web',
+  mode: 'none',
+
+  entry: './src/webview/viewer.ts',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'viewer.js',
+  },
+  resolve: {
+    extensions: ['.ts', '.js'],
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: 'ts-loader',
+            options: {
+              // three.js ships its addons as ES modules only, which the
+              // extension's CommonJS configuration cannot import.
+              configFile: 'tsconfig.webview.json',
+            },
+          },
+        ],
+      },
+    ],
+  },
+  devtool: 'source-map',
+  infrastructureLogging: {
+    level: 'log',
+  },
+};
+
+module.exports = [extensionConfig, viewerConfig];

@@ -244,6 +244,20 @@ def _decompress(data: bytes) -> bytes:
     return _zstd_decompress(data)
 
 
+def encode_gltf(glb: bytes) -> str:
+    """Compress and base64 a binary glTF buffer for the IDE viewer protocol.
+
+    Deliberately zlib and not the zstd the BREP payloads above use: this payload
+    is not read by another Python process but by the PartCAD IDE extension, and
+    zlib is in the standard library of both Python and Node whereas zstd is not.
+    The mirror of this function - the only other implementation - is
+    'partcad_ide_client.protocol.encode_gltf'; the two have to stay in step.
+    """
+    import zlib
+
+    return base64.b64encode(zlib.compress(bytes(glb), 6)).decode("ascii")
+
+
 def shape_to_brep(shape) -> bytes:
     """Serialize a TopoDS_Shape into the flat BREP byte array."""
     _ensure_ocp()

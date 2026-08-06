@@ -8,6 +8,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import os
+
 import pytest
 import asyncio
 import partcad as pc
@@ -94,3 +96,28 @@ def test_offline_mode(variation):
                 assert ctx.is_connected() == (has_connection and not offline)
                 if (should_check_connection or force_update) and not offline:
                     check_connectivity_mock.assert_called_once()
+
+
+def test_ctx_root_reports_the_loaded_package():
+    """The root package a Context loaded is reachable, and says where it came from.
+
+    This is the contract the PartCAD IDE reports a loaded package with: it needs
+    the 'partcad.yaml' that was loaded and whether the load succeeded, and both
+    live on 'Context.root', not on the Context. They were once read straight off
+    the Context, and when those attributes moved the extension started failing
+    silently with "No PartCAD package is detected" - a Context has no
+    'config_path' and no 'broken', so reading either raises AttributeError.
+    """
+    ctx = pc.Context("examples")
+
+    assert not hasattr(ctx, "config_path")
+    assert not hasattr(ctx, "broken")
+
+    assert ctx.root is not None
+    assert ctx.root.broken is False
+    assert ctx.root.config_path.endswith("partcad.yaml")
+    assert os.path.isfile(ctx.root.config_path)
+    # The name is adopted from the loaded 'partcad.yaml', so it is not the
+    # provisional '//' the Context starts out with.
+    assert ctx.name != pc.consts.ROOT
+    assert ctx.get_project(ctx.name) is ctx.root

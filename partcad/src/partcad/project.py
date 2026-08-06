@@ -182,6 +182,13 @@ class Project(project_config.Configuration):
             kind: self._initial_object_configs(kind) for kind in OBJECT_KINDS
         }
 
+        # Objects this package declares but could not instantiate, as
+        # {kind: {name: reason}}. They are kept rather than dropped so that the
+        # package can say what is missing and why: an object that vanishes with
+        # nothing but a line in a log leaves the user staring at an empty
+        # package with no way to tell an empty one from a broken one.
+        self.broken_objects: dict[str, dict[str, str]] = {kind: {} for kind in OBJECT_KINDS}
+
         # The instantiated objects of each kind, filled lazily by the getters.
         self.interfaces = {}
         self.interface_locks = {}
@@ -602,6 +609,27 @@ class Project(project_config.Configuration):
             self.get_repository_config,
         )
 
+    def record_broken_object(self, kind: str, name: str, reason) -> None:
+        """Remember that an object was declared but could not be created.
+
+        Reported once, here, rather than by each caller: the same failure is
+        reachable both while enumerating a package and while resolving a single
+        object by name, and it should read the same either way.
+        """
+        reason = str(reason) or type(reason).__name__
+        # One line, and short: some of these configurations embed multi-page
+        # descriptions, and logging the whole thing buries every other message.
+        reason = " ".join(reason.split())
+        if len(reason) > 200:
+            reason = reason[:197] + "..."
+
+        self.broken_objects.setdefault(kind, {})[name] = reason
+        pc_logging.error("Failed to create the %s '%s:%s': %s" % (kind, self.name, name, reason))
+
+    def get_broken_object_reason(self, kind: str, name: str):
+        """Why an object could not be created, or None if it was not one of them."""
+        return self.broken_objects.get(kind, {}).get(name)
+
     def init_objects(
         self,
         factory_name: str,
@@ -614,10 +642,18 @@ class Project(project_config.Configuration):
             return
 
         for name in configs:
-            config = get_config(name)
-            full_object_name = f"{self.name}:{name}"
-            config = config_class.normalize(name, config, full_object_name)
-            self.init_object_by_config(factory_name, config_class, alias_class, config)
+            # Per object, so that one unusable declaration costs the user that
+            # object and not the rest of the package. A package published years
+            # ago can name a feature this PartCAD no longer has (the 'ai-*' part
+            # types, say); without this, the first such entry aborted the loop
+            # and every object declared after it silently disappeared too.
+            try:
+                config = get_config(name)
+                full_object_name = f"{self.name}:{name}"
+                config = config_class.normalize(name, config, full_object_name)
+                self.init_object_by_config(factory_name, config_class, alias_class, config)
+            except Exception as e:
+                self.record_broken_object(factory_name, name, e)
 
     def init_sketch_by_config(self, config, source_project=None):
         self.init_object_by_config(
@@ -790,13 +826,24 @@ class Project(project_config.Configuration):
                         )
                     return None
                 # This is not yet created (invalidated?)
-                config = get_config(object_name)
-                full_object_name = f"{self.name}:{object_name}"
-                config = config_class.normalize(object_name, config, full_object_name)
-                self.init_object_by_config(factory_name, config_class, alias_class, config)
+                try:
+                    config = get_config(object_name)
+                    full_object_name = f"{self.name}:{object_name}"
+                    config = config_class.normalize(object_name, config, full_object_name)
+                    self.init_object_by_config(factory_name, config_class, alias_class, config)
+                except Exception as e:
+                    self.record_broken_object(factory_name, object_name, e)
+                    return None
 
                 if not object_name in objects or objects[object_name] is None:
-                    pc_logging.error("Failed to instantiate a non-parametrized object %s" % object_name)
+                    # Returning None, not 'objects[object_name]': the object is
+                    # known to be absent here - that is what this branch tests
+                    # for - so indexing it raised a bare KeyError out of the very
+                    # path that had just reported the failure.
+                    reason = self.get_broken_object_reason(factory_name, object_name)
+                    if reason is None:
+                        self.record_broken_object(factory_name, object_name, "the factory produced no object")
+                    return None
                 return objects[object_name]
 
             # This object has params (part_name != result_name). Only the base
@@ -873,15 +920,18 @@ class Project(project_config.Configuration):
             #     "Initializing a parametrized object using the following config: %s"
             #     % pformat(config)
             # )
-            factory.instantiate(factory_name, config["type"], self.ctx, self, self, config)
+            try:
+                factory.instantiate(factory_name, config["type"], self.ctx, self, self, config)
+            except Exception as e:
+                # Same reasoning as the non-parametrized branch above: a
+                # declaration this PartCAD cannot use costs the caller this one
+                # object, not an exception out of a package listing.
+                self.record_broken_object(factory_name, result_name, e)
+                return None
 
             # See if it worked
             if not result_name in objects:
-                pc_logging.error(
-                    "Failed to instantiate parameterized object '%s' in '%s'",
-                    result_name,
-                    self.name,
-                )
+                self.record_broken_object(factory_name, result_name, "the factory produced no object")
                 return None
 
             return objects[result_name]

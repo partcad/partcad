@@ -24,6 +24,16 @@ from . import telemetry
 # import it lazily.
 
 
+def _port_location(port) -> Location:
+    """A port's placement, defaulting to the identity.
+
+    'InterfacePort.location' is only set when the port declares one, so a port
+    that sits at its interface's origin - which is most of them, and every port
+    inherited without a placement - leaves it None.
+    """
+    return port.location if port.location is not None else Location()
+
+
 @telemetry.instrument()
 class InterfacePort:
     """One of the ports provided by the interface,
@@ -480,48 +490,45 @@ class Interface:
         return info
 
     async def get_components(self, ctx):
-        # This is a viewer-only path (Interface.show); the sketch components are
-        # BREP envelopes, so decode them to live shapes to locate and display.
-        # Lazy import keeps the module OCP-free at import time.
-        import os
-        import sys
+        """This interface's port sketches, each moved onto its port.
 
-        sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
-        import ocp_serialize
-
+        This is a viewer-only path (Interface.show). The sketch components stay
+        BREP envelopes: the port's placement is composed onto whatever placement
+        the envelope already carries and travels as plain data (KEY_LOCATION),
+        exactly as an assembly places its children, so the placement becomes a
+        real transform only once a sandbox decodes the envelope. That keeps this
+        module - and the core process - free of OCP.
+        """
         from . import shape_envelope
+
+        def move_component(component, placement):
+            if isinstance(component, list):
+                return [move_component(item, placement) for item in component]
+            if not shape_envelope.is_shape_envelope(component):
+                # Not geometry (a null a factory produced, say); nothing to place.
+                return component
+            own = component.get(shape_envelope.KEY_LOCATION)
+            composed = placement if own is None else (placement * Location(own))
+            moved = dict(component)
+            moved[shape_envelope.KEY_LOCATION] = composed.as_packed()
+            return moved
 
         components = []
         for port in self.get_ports().values():
-            components.append(port.location)
             if port.sketch is not None:
                 sketch_components = list(await port.sketch.get_components(ctx))
-
-                # 'port' is bound as a default so the closure captures this
-                # iteration's value (not the loop's last), the same guard
-                # Shape.show_async() uses: only decode actual shape envelopes and
-                # pass anything else (e.g. a nested list already handled above,
-                # or a bare location) through untouched.
-                def move_component(component, move_components, port=port):
-                    if isinstance(component, list):
-                        component = move_components(component)
-                    elif shape_envelope.is_shape_envelope(component):
-                        shape = ocp_serialize.decode_shape(component)
-                        component = shape.Located(port.location.wrapped)
-                    return component
-
-                def move_components(components):
-                    components = list(
-                        map(
-                            lambda x: move_component(x, move_components),
-                            components,
-                        )
-                    )
-                    return components
-
-                sketch_components = move_components(sketch_components)
-                components.append(sketch_components)
+                components.append([move_component(c, _port_location(port)) for c in sketch_components])
         return components
+
+    def get_markers(self):
+        """The ports' coordinate frames, as packed locations.
+
+        A port is a frame, and a frame has no geometry to tessellate - glTF has
+        no primitive for one. They are sent to the viewer alongside the geometry
+        so it can draw axes at each, which is what showing a bare 'port.location'
+        used to produce.
+        """
+        return [{"name": name, "location": _port_location(port).as_packed()} for name, port in self.get_ports().items()]
 
     async def show_async(self, ctx=None):
         components = []
@@ -530,27 +537,11 @@ class Interface:
         except Exception as e:
             pc_logging.error(e)
 
-        if len(components) != 0:
-            import importlib
+        markers = self.get_markers()
+        if len(components) != 0 or len(markers) != 0:
+            from . import viewer
 
-            ocp_vscode = importlib.import_module("ocp_vscode")
-            if ocp_vscode is None:
-                pc_logging.warning('Failed to load "ocp_vscode". Giving up on connection to VS Code.')
-            else:
-                try:
-                    pc_logging.info('Visualizing in "OCP CAD Viewer"...')
-                    ocp_vscode.show(
-                        *components,
-                        progress=None,
-                        # TODO(clairbee): make showing (and the connection
-                        # to ocp_vscode) a part of the context, and memorize
-                        # which part was displayed last. Keep the camera
-                        # if the part has not changed.
-                        # reset_camera=ocp_vscode.Camera.KEEP,
-                    )
-                except Exception as e:
-                    pc_logging.warning(e)
-                    pc_logging.warning('No VS Code or "OCP CAD Viewer" extension detected.')
+            await viewer.show(ctx, components, name=self.name, kind="interface", markers=markers)
 
     def show(self, ctx=None):
         asyncio.run(self.show_async(ctx))

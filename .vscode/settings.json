@@ -1,6 +1,5 @@
 {
   // TODO(clairbee): "python.analysis.typeCheckingMode": "basic",
-  "OcpCadViewer.advanced.autostart": false,
   "[feature]": {
     // Formatting is difficult with multi-line strings wrapped in """ (triple quotes)
     "editor.formatOnSave": false,
@@ -148,7 +147,6 @@
     "**/apache20.svg": true,
     ".conda": true,
     ".git/**": true,
-    ".ocp_vscode": true,
     ".tox": true,
     ".venv": true,
     "docs/build": true,
@@ -248,7 +246,6 @@
     "**/apache20.svg": true,
     ".conda": true,
     ".git/**": true,
-    ".ocp_vscode": true,
     ".tox": true,
     ".venv": true,
     "docs/build": true,

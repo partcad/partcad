@@ -16,6 +16,14 @@ export const ITEM_TYPE_SKETCH = 'sketch';
 export const ITEM_TYPE_INTERFACE = 'interface';
 export const ITEM_TYPE_PART = 'part';
 export const ITEM_TYPE_ASSEMBLY = 'assembly';
+/**
+ * An object the package declares but PartCAD could not create.
+ *
+ * Shown rather than omitted: a package that lists nothing looks exactly like an
+ * empty one, so silently dropping these leaves the user with no way to tell that
+ * something is wrong, let alone what.
+ */
+export const ITEM_TYPE_BROKEN = 'broken';
 
 // eslint-disable-next-line @typescript-eslint/naming-convention
 export type PartConfig = { name: string; desc?: string; type: string; item_path?: string };
@@ -59,7 +67,22 @@ export class PartcadItem extends vscode.TreeItem {
         }
         // this.description = `${config.desc}`;
 
-        if (itemType === ITEM_TYPE_PACKAGE) {
+        if (itemType === ITEM_TYPE_BROKEN) {
+            // Themed rather than one of the bundled SVGs, so it reads as an
+            // error in both light and dark themes without a second asset.
+            this.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'));
+            // The reason is put in 'description' as well as the tooltip: it
+            // shows greyed out next to the name, which is what makes the problem
+            // visible without hovering over every row.
+            this.description = config.desc;
+            this.tooltip = `${name}\n\n${config.desc ?? 'This object could not be loaded.'}`;
+            this.contextValue = 'brokenItem';
+            this.command = {
+                title: 'Why can this not be loaded?',
+                command: 'partcad.showBrokenItem',
+                arguments: [{ name, pkg, reason: config.desc }],
+            };
+        } else if (itemType === ITEM_TYPE_PACKAGE) {
             this.iconPath = {
                 light: path.join(__filename, '..', '..', 'resources', 'light', 'file-submodule.svg'),
                 dark: path.join(__filename, '..', '..', 'resources', 'dark', 'file-submodule.svg'),

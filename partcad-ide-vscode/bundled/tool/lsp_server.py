@@ -437,6 +437,11 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
                 "--no-input",
                 "--upgrade",
                 "partcad-service-json-rpc",
+                # Installed alongside, not depended on by 'partcad': it is only
+                # useful when an IDE is there to talk to, and 'partcad' imports
+                # it lazily. This is the install that makes 'show()' reach the
+                # PartCAD Viewer.
+                "partcad-ide-client",
             ],
             use_stdin=False,
             add_stdout=partcad_log_w_stream,

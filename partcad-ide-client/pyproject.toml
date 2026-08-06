@@ -1,0 +1,40 @@
+[project]
+name = "partcad-ide-client"
+version = "0.7.158"
+description = "Client library connecting PartCAD to the PartCAD IDE viewer"
+readme = "README.md"
+keywords = ["partcad", "cad", "vscode", "viewer", "gltf"]
+requires-python = ">=3.10,<3.15"
+license = {file = "LICENSE.txt"}
+authors = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+maintainers = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+# Deliberately empty: this package is standard library only, so that installing
+# it next to 'partcad' in an IDE-managed interpreter can never drag in a second
+# copy of a CAD stack (which is exactly what depending on 'ocp_vscode' did).
+dependencies = []
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/partcad/partcad"
+Issues = "https://github.com/partcad/partcad/issues"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

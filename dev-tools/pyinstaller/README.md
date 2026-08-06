@@ -70,10 +70,11 @@ The bundle embeds the interpreter it was built with, so `PYTHON` decides the Pyt
 running. CI builds with 3.14, the newest version PartCAD supports (`requires-python = ">=3.10,<3.15"`) and
 deliberately ahead of the 3.13 the wheels publish from: a standalone user cannot change the interpreter after
 the fact the way someone installing the wheels can, so shipping the oldest supported one would leave them on it
-for the life of the bundle. Nothing older is exercised. `ocp_vscode` (what `pc inspect` hands shapes to) long
-required 3.11 or newer, which is why the floor used to be documented as 3.11; it and its dependencies now all
-declare `>=3.10`, but only the version CI builds with is tested. A dependency that cannot be imported cannot be
-frozen, so `build.sh` imports them all before it builds and says which import failed.
+for the life of the bundle. Nothing older is exercised. The floor used to be documented as 3.11 because
+`ocp_vscode` (what `pc inspect` used to hand shapes to) required it; `pc inspect` now talks to the PartCAD IDE
+over a socket instead, and `partcad-ide-client` -- which is not bundled, since the IDE installs it -- is pure
+standard library. A dependency that cannot be imported cannot be frozen, so `build.sh` imports them all before
+it builds and says which import failed.
 
 ## What the frozen bundle changes, and what it does not
 

@@ -49,8 +49,7 @@
     "Other"
   ],
   "extensionDependencies": [
-    "ms-python.python",
-    "bernhard-42.ocp-cad-viewer"
+    "ms-python.python"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -64,8 +63,7 @@
   },
   "activationEvents": [
     "workspaceContains:partcad.yaml",
-    "onView:ocpCadStatus",
-    "onWebviewPanel:OcpCadViewer",
+    "onWebviewPanel:partcadViewer",
     "workspaceContains:*.assy",
     "workspaceContains:*cadquery*",
     "workspaceContains:*build123d*",
@@ -354,6 +352,18 @@
         "category": "PartCAD",
         "command": "partcad.support",
         "icon": "$(icon)"
+      },
+      {
+        "title": "Open PartCAD Viewer",
+        "category": "PartCAD",
+        "command": "partcad.viewer",
+        "icon": "$(preview)"
+      },
+      {
+        "title": "Explain why an object could not be loaded",
+        "category": "PartCAD",
+        "command": "partcad.showBrokenItem",
+        "icon": "$(warning)"
       },
       {
         "command": "partcad.addPart",
@@ -868,10 +878,12 @@
   "dependencies": {
     "@vscode/python-extension": "^1.0.6",
     "fs-extra": "^11.4.0",
+    "three": "^0.185.1",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
+    "@types/three": "^0.185.4",
     "@types/jest": "^30.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "18.x",

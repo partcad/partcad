@@ -8,6 +8,7 @@
 
 import asyncio
 import os
+import sys
 import time
 import socket
 import threading
@@ -212,7 +213,13 @@ class Context:
         self.name = consts.ROOT
         self.current_project_path = consts.ROOT
 
-        with pc_logging.Process("InitCtx", self.config_dir):
+        # The version is on this line because it is the first thing logged in
+        # every run, and the first question asked of any report ("which PartCAD
+        # is that?"). Read through sys.modules, as elsewhere in the package: this
+        # module is imported by 'partcad/__init__.py', so it cannot import
+        # '__version__' from it at module scope.
+        version = sys.modules["partcad"].__version__
+        with pc_logging.Process("InitCtx", self.config_dir, "v%s" % version):
             self.root = self.import_project(
                 None,  # parent
                 {
