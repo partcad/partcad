@@ -20,8 +20,8 @@ if not hasattr(socket, "AF_UNIX"):
     pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
 
 
-def _serve(tmp_path, registry):
-    path = str(tmp_path / "socket")
+def _serve(socket_dir, registry):
+    path = str(socket_dir / "socket")
     server = SocketServer(Session(), registry)
     threading.Thread(target=server.serve_unix, args=(path,), daemon=True).start()
     for _ in range(200):
@@ -38,8 +38,8 @@ def _client(path):
     return DaemonClient(stream, stream, closer=lambda: (stream.close(), sock.close()))
 
 
-def test_client_call_returns_result(tmp_path):
-    server, path = _serve(tmp_path, {"ping": lambda s, p: {"echo": p}})
+def test_client_call_returns_result(socket_dir):
+    server, path = _serve(socket_dir, {"ping": lambda s, p: {"echo": p}})
     try:
         client = _client(path)
         assert client.call("ping", {"x": 1}) == {"echo": {"x": 1}}
@@ -48,13 +48,13 @@ def test_client_call_returns_result(tmp_path):
         server.stop()
 
 
-def test_client_delivers_notifications_before_result(tmp_path):
+def test_client_delivers_notifications_before_result(socket_dir):
     def go(session, params):
         session.emitter.emit(events.INFO, "working")
         session.emitter.emit(events.ITEMS, {"name": "//"})
         return "done"
 
-    server, path = _serve(tmp_path, {"go": go})
+    server, path = _serve(socket_dir, {"go": go})
     try:
         seen = []
         client = _client(path)
@@ -66,8 +66,8 @@ def test_client_delivers_notifications_before_result(tmp_path):
         server.stop()
 
 
-def test_client_raises_daemon_error_on_error_response(tmp_path):
-    server, path = _serve(tmp_path, {})  # rpc.discover exists; "nope" does not
+def test_client_raises_daemon_error_on_error_response(socket_dir):
+    server, path = _serve(socket_dir, {})  # rpc.discover exists; "nope" does not
     try:
         client = _client(path)
         with pytest.raises(DaemonError):

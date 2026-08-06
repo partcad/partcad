@@ -21,8 +21,8 @@ if not hasattr(socket, "AF_UNIX"):
     pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
 
 
-def _serve(tmp_path, registry, session=None):
-    path = str(tmp_path / "socket")
+def _serve(socket_dir, registry, session=None):
+    path = str(socket_dir / "socket")
     server = SocketServer(session or Session(), registry)
     thread = threading.Thread(target=server.serve_unix, args=(path,), daemon=True)
     thread.start()
@@ -39,8 +39,8 @@ def _connect(path):
     return client.makefile("rwb"), client
 
 
-def test_socket_request_response_round_trip(tmp_path):
-    server, path, _ = _serve(tmp_path, {"ping": lambda s, p: "pong"})
+def test_socket_request_response_round_trip(socket_dir):
+    server, path, _ = _serve(socket_dir, {"ping": lambda s, p: "pong"})
     try:
         f, c = _connect(path)
         write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "ping"})
@@ -50,12 +50,12 @@ def test_socket_request_response_round_trip(tmp_path):
         server.stop()
 
 
-def test_notifications_route_to_the_calling_connection_before_the_response(tmp_path):
+def test_notifications_route_to_the_calling_connection_before_the_response(socket_dir):
     def go(session, params):
         session.emitter.emit(events.ITEMS, {"name": "//"})
         return "ok"
 
-    server, path, _ = _serve(tmp_path, {"go": go})
+    server, path, _ = _serve(socket_dir, {"go": go})
     try:
         f, c = _connect(path)
         write_message(f, {"jsonrpc": "2.0", "id": 7, "method": "go"})
@@ -68,8 +68,8 @@ def test_notifications_route_to_the_calling_connection_before_the_response(tmp_p
         server.stop()
 
 
-def test_daemon_stop_responds_then_shuts_down_and_unlinks(tmp_path):
-    server, path, thread = _serve(tmp_path, {})
+def test_daemon_stop_responds_then_shuts_down_and_unlinks(socket_dir):
+    server, path, thread = _serve(socket_dir, {})
     f, c = _connect(path)
     write_message(f, {"jsonrpc": "2.0", "id": 1, "method": "daemon.stop"})
     resp = read_message(f)
@@ -80,7 +80,7 @@ def test_daemon_stop_responds_then_shuts_down_and_unlinks(tmp_path):
     assert not os.path.exists(path)
 
 
-def test_dispatch_is_serialized_across_connections(tmp_path):
+def test_dispatch_is_serialized_across_connections(socket_dir):
     events_log = []
 
     def slow(session, params):
@@ -89,7 +89,7 @@ def test_dispatch_is_serialized_across_connections(tmp_path):
         events_log.append(("end", params["n"]))
         return params["n"]
 
-    server, path, _ = _serve(tmp_path, {"slow": slow})
+    server, path, _ = _serve(socket_dir, {"slow": slow})
     try:
         responses = {}
 
