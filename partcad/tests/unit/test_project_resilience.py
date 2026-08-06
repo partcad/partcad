@@ -93,3 +93,108 @@ def test_unknown_type_exception_lists_what_is_supported():
     assert "cadquery" in message
     assert excinfo.value.kind == "part"
     assert excinfo.value.type == "ai-cadquery"
+
+
+def test_a_parametrized_instance_of_an_unusable_declaration_returns_none(tmp_path):
+    """The parameterized branch of get_object() degrades the same way.
+
+    It reaches 'factory.instantiate' by a different path than the plain one, and
+    used to report "Failed to instantiate parameterized object" and then hand
+    back whatever was (not) in the dict. The base has to *declare* the parameter
+    for the lookup to get that far; without that it is rejected earlier, as an
+    unknown parameter.
+    """
+    config = {
+        "name": "//test",
+        "parts": {
+            "obsolete": {
+                "type": "ai-cadquery",
+                "provider": "openai",
+                "desc": "x" * 100,
+                "parameters": {"width": {"type": "float", "default": 1.0}},
+            }
+        },
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(config))
+    ctx = pc.Context(str(tmp_path))
+
+    assert ctx.get_part("//:obsolete;width=5") is None
+
+    # Recorded under the *parameterized* name, which is what proves the
+    # parameterized branch reported it rather than the plain one.
+    project = ctx.get_project("//")
+    assert "obsolete;width=5" in project.broken_objects["part"]
+    assert "ai-cadquery" in project.get_broken_object_reason("part", "obsolete;width=5")
+
+
+def test_record_broken_object_shortens_and_flattens_the_reason(tmp_path):
+    """Reasons go in a log line and a tree row, so they are one short line.
+
+    These declarations embed multi-page descriptions; logging the configuration
+    whole is what buried every other message.
+    """
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump({"name": "//test"}))
+    project = pc.Context(str(tmp_path)).get_project("//")
+
+    project.record_broken_object("part", "noisy", Exception("line one\nline two   spaced\n" + "x" * 5000))
+
+    reason = project.get_broken_object_reason("part", "noisy")
+    assert "\n" not in reason
+    assert "line one line two spaced" in reason
+    assert len(reason) <= 200
+    assert reason.endswith("...")
+
+
+def test_record_broken_object_reraises_a_needs_update_exception(tmp_path):
+    """ "This package needs a newer PartCAD" is not one object's problem.
+
+    Filing it against a single object would swallow the caller's "update
+    PartCAD" prompt.
+    """
+    from partcad.exception import NeedsUpdateException
+
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump({"name": "//test"}))
+    project = pc.Context(str(tmp_path)).get_project("//")
+
+    with pytest.raises(NeedsUpdateException):
+        project.record_broken_object("part", "whatever", NeedsUpdateException("too old"))
+
+    assert project.get_broken_object_reason("part", "whatever") is None
+
+
+def test_an_exception_with_no_message_still_records_something(tmp_path):
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump({"name": "//test"}))
+    project = pc.Context(str(tmp_path)).get_project("//")
+
+    project.record_broken_object("part", "silent", ValueError())
+
+    assert project.get_broken_object_reason("part", "silent") == "ValueError"
+
+
+def test_a_factory_that_produces_nothing_is_recorded_rather_than_indexed(tmp_path):
+    """A factory can construct without registering an object, and used to crash.
+
+    This is the other half of the KeyError: the type is known, so nothing raises,
+    but the object never lands in the dict. The branch that noticed this then
+    indexed the dict it had just found the name to be missing from.
+    """
+    config = {"name": "//test", "parts": {"silent": {"type": "test-silent"}}}
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(config))
+
+    class SilentFactory:
+        def __init__(self, ctx, source_project, target_project, config):
+            pass  # Constructs, registers nothing.
+
+    saved = factory.all["part"].get("test-silent")
+    factory.register("part", "test-silent", SilentFactory)
+    try:
+        ctx = pc.Context(str(tmp_path))
+        assert ctx.get_part("//:silent") is None
+
+        project = ctx.get_project("//")
+        assert "produced no object" in project.get_broken_object_reason("part", "silent")
+    finally:
+        if saved is None:
+            del factory.all["part"]["test-silent"]
+        else:
+            factory.register("part", "test-silent", saved)

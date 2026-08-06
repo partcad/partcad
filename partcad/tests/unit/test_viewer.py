@@ -199,3 +199,227 @@ def test_a_port_without_a_location_sits_at_the_origin():
     assert moved[shape_envelope.KEY_LOCATION] == Location().as_packed()
 
     assert interface.get_markers() == [{"name": "port", "location": Location().as_packed()}]
+
+
+def test_interface_show_sends_its_sketches_and_its_ports(monkeypatch):
+    """Interface.show_async hands both halves to the viewer.
+
+    The geometry is the port sketches; the ports themselves are frames with no
+    geometry, so they travel beside it as markers for the viewer to draw axes at.
+    """
+    from partcad.geom import Location
+
+    interface, port, _envelope = _interface_with_port(Location([[1, 2, 3], [0, 0, 1], 90]))
+
+    shown = {}
+
+    async def fake_show(ctx, components, name=None, kind=None, markers=None):
+        shown.update(ctx=ctx, components=components, name=name, kind=kind, markers=markers)
+        return True
+
+    monkeypatch.setattr(viewer, "show", fake_show)
+
+    asyncio.run(interface.show_async(None))
+
+    assert shown["kind"] == "interface"
+    assert shown["name"] == "//pkg:iface"
+    assert shown["markers"] == [{"name": "port", "location": port.location.as_packed()}]
+    ((moved,),) = shown["components"]
+    assert moved[shape_envelope.KEY_LOCATION] == port.location.as_packed()
+
+
+def test_interface_with_no_ports_shows_nothing(monkeypatch):
+    from partcad.interface import Interface
+
+    interface = Interface.__new__(Interface)
+    interface.name = "//pkg:empty"
+    interface.lock = threading.RLock()
+    interface.ports = {}
+
+    called = []
+
+    async def fake_show(*args, **kwargs):
+        called.append(True)
+        return True
+
+    monkeypatch.setattr(viewer, "show", fake_show)
+
+    asyncio.run(interface.show_async(None))
+    assert called == []
+
+
+def test_a_shape_sends_the_ports_of_its_interface_as_markers(monkeypatch):
+    """A part that implements an interface shows its ports too.
+
+    'Shape.get_components()' appends the ports' *sketches*; the port frames have
+    no geometry and would otherwise be lost, which is what showing a bare
+    location used to provide.
+    """
+    from partcad.geom import Location
+    from partcad.interface import InterfacePort
+    from partcad.shape import Shape
+
+    port = InterfacePort.__new__(InterfacePort)
+    port.name = "port"
+    port.location = Location([[4, 5, 6], [0, 1, 0], 45])
+    port.sketch = None
+
+    class FakeWithPorts:
+        def get_markers(self):
+            return [{"name": "port", "location": port.location.as_packed()}]
+
+    shape = Shape.__new__(Shape)
+    shape.name = "//pkg:part"
+    shape.kind = "part"
+    shape.project_name = "//pkg"
+    shape.with_ports = FakeWithPorts()
+    shape.components = [{"brep": "..."}]
+
+    async def fake_get_components(ctx):
+        return shape.components
+
+    shape.get_components = fake_get_components
+
+    shown = {}
+
+    async def fake_show(ctx, components, name=None, kind=None, markers=None):
+        shown.update(components=components, name=name, kind=kind, markers=markers)
+        return True
+
+    monkeypatch.setattr(viewer, "show", fake_show)
+
+    asyncio.run(shape.show_async(object()))
+
+    assert shown["kind"] == "part"
+    assert shown["markers"] == [{"name": "port", "location": port.location.as_packed()}]
+
+
+def test_interface_components_walk_lists_and_pass_non_geometry_through():
+    """A port's sketch can hand back nested lists and non-geometry entries.
+
+    Only shape envelopes get a placement; a nested list is walked, and anything
+    that is not geometry (a null a factory produced) is passed through as it is.
+    """
+    from partcad.geom import Location
+    from partcad.interface import Interface, InterfacePort
+
+    envelope = {"name": "sketch", shape_envelope.KEY_BREP: "unused"}
+
+    class FakeSketch:
+        async def get_components(self, ctx):
+            return [[envelope], None, "not-geometry"]
+
+    port = InterfacePort.__new__(InterfacePort)
+    port.name = "port"
+    port.location = Location([[1, 0, 0], [0, 0, 1], 0])
+    port.sketch = FakeSketch()
+
+    interface = Interface.__new__(Interface)
+    interface.name = "//pkg:iface"
+    interface.lock = threading.RLock()
+    interface.ports = {"port": port}
+
+    ((nested, null, text),) = asyncio.run(interface.get_components(None))
+
+    assert nested[0][shape_envelope.KEY_LOCATION] == port.location.as_packed()
+    assert null is None
+    assert text == "not-geometry"
+
+
+def test_interface_show_survives_components_it_cannot_build(monkeypatch):
+    """A sketch that will not build must not stop the ports being shown."""
+    from partcad.interface import Interface, InterfacePort
+
+    class ExplodingSketch:
+        async def get_components(self, ctx):
+            raise Exception("the sketch will not build")
+
+    port = InterfacePort.__new__(InterfacePort)
+    port.name = "port"
+    port.location = None
+    port.sketch = ExplodingSketch()
+
+    interface = Interface.__new__(Interface)
+    interface.name = "//pkg:iface"
+    interface.lock = threading.RLock()
+    interface.ports = {"port": port}
+
+    shown = {}
+
+    async def fake_show(ctx, components, name=None, kind=None, markers=None):
+        shown.update(components=components, markers=markers)
+        return True
+
+    monkeypatch.setattr(viewer, "show", fake_show)
+
+    asyncio.run(interface.show_async(None))
+
+    assert shown["components"] == []
+    assert len(shown["markers"]) == 1
+
+
+def test_a_missing_client_package_is_not_an_import_error(monkeypatch):
+    """'partcad_ide_client' is optional, so failing to import it is not fatal.
+
+    It is installed by the PartCAD IDE, not depended on by 'partcad', so a CLI
+    or library user simply does not have it.
+    """
+
+    def no_client(name):
+        raise ImportError("no module named %r" % name)
+
+    monkeypatch.setattr(viewer.importlib, "import_module", no_client)
+
+    assert viewer._client() is None
+
+
+def test_metadata_travels_beside_the_components():
+    """Names and labels are carried separately.
+
+    The sandbox's codec rebuilds live geometry from the envelopes and drops
+    their metadata, so the core sends it alongside, positionally.
+    """
+    envelope = {"name": "//pkg:part", "label": "part", shape_envelope.KEY_BREP: "..."}
+
+    assert viewer._metadata_of(envelope, "name") == "//pkg:part"
+    assert viewer._metadata_of(envelope, "label") == "part"
+    # A component can be a list of envelopes (a shape's ports); the first one
+    # names the group.
+    assert viewer._metadata_of([envelope], "name") == "//pkg:part"
+    assert viewer._metadata_of([], "name") is None
+    assert viewer._metadata_of(None, "name") is None
+
+
+def test_interface_show_is_callable_synchronously(monkeypatch):
+    """'show()' wraps 'show_async()' for callers outside an event loop."""
+    from partcad.interface import Interface
+
+    interface = Interface.__new__(Interface)
+    interface.name = "//pkg:empty"
+    interface.lock = threading.RLock()
+    interface.ports = {}
+
+    called = []
+
+    async def fake_show(*args, **kwargs):
+        called.append(True)
+        return True
+
+    monkeypatch.setattr(viewer, "show", fake_show)
+
+    interface.show()
+    assert called == []
+
+
+def test_showing_a_shape_with_nothing_in_it_warns_and_stops(monkeypatch):
+    """A shape that tessellates to nothing has nothing to send."""
+    client = FakeClient()
+    monkeypatch.setattr(viewer, "_client", lambda: client)
+
+    async def nothing(ctx, components, name=None, **kwargs):
+        return []
+
+    monkeypatch.setattr(viewer, "tessellate", nothing)
+
+    assert asyncio.run(viewer.show(object(), [{"brep": "..."}], name="//pkg:part")) is False
+    assert client.calls == []
