@@ -6,12 +6,14 @@
 """Tests for daemon discovery/liveness (the non-forking parts)."""
 
 import os
+import pathlib
+import shutil
 import socket
+import tempfile
 import threading
 import time
 
 import pytest
-
 from partcad_service_json_rpc import daemon
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.rpc.methods import build_registry
@@ -19,6 +21,23 @@ from partcad_service_json_rpc.transport.socket_server import SocketServer
 
 if not hasattr(socket, "AF_UNIX"):
     pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)
+
+
+@pytest.fixture
+def socket_dir():
+    """A directory short enough to hold an AF_UNIX socket path.
+
+    ``sun_path`` is 104 bytes on macOS and 108 on Linux; pytest's ``tmp_path``
+    spends most of that before the socket name is appended, so binding under it
+    fails with "AF_UNIX path too long". Defined per-module because this package
+    and ``partcad`` both have a ``tests`` package, so two ``tests.conftest``
+    modules would collide in a run that collects both.
+    """
+    path = tempfile.mkdtemp(prefix="pcs", dir="/tmp")
+    try:
+        yield pathlib.Path(path)
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def test_workspace_hash_is_deterministic_and_16_hex():
@@ -65,14 +84,14 @@ def test_is_alive_false_when_socket_absent(tmp_path):
     assert daemon.is_alive(str(tmp_path / "nope")) is False
 
 
-def test_is_alive_false_when_socket_file_is_stale(tmp_path):
-    stale = tmp_path / "socket"
+def test_is_alive_false_when_socket_file_is_stale(socket_dir):
+    stale = socket_dir / "socket"
     stale.write_text("")  # a plain file, nothing listening
     assert daemon.is_alive(str(stale)) is False
 
 
-def test_is_alive_true_when_a_daemon_is_serving(tmp_path):
-    path = str(tmp_path / "socket")
+def test_is_alive_true_when_a_daemon_is_serving(socket_dir):
+    path = str(socket_dir / "socket")
     server = _serve(path, build_registry())
     try:
         assert daemon.is_alive(path) is True

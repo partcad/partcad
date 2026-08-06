@@ -117,14 +117,20 @@ class SocketServer:
         if self._stop.is_set():
             return
         self._stop.set()
-        if self._server_sock is not None:
-            try:
-                self._server_sock.close()
-            except OSError:
-                pass
+        # Remove the rendezvous point before tearing down the listener, not
+        # after: a client that connects in between would otherwise reach a
+        # socket that is about to stop accepting. It also makes the shutdown
+        # observable in one order -- once the accept loop has exited, the socket
+        # file is already gone, rather than being unlinked by whichever thread
+        # called stop() some time later.
         if self._path and os.path.exists(self._path):
             try:
                 os.unlink(self._path)
+            except OSError:
+                pass
+        if self._server_sock is not None:
+            try:
+                self._server_sock.close()
             except OSError:
                 pass
         if self._on_shutdown is not None:
