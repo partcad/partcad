@@ -12,8 +12,9 @@ import importlib._bootstrap_external
 import importlib.machinery
 import importlib.util
 import os
-from pathlib import Path
 import shutil
+from pathlib import Path
+
 import vyper
 
 from . import logging as pc_logging
@@ -70,9 +71,11 @@ class GitConfig(BaseConfig):
         super().__init__(v, "git.config")
 
 
-class ApiKeyConfig(BaseConfig):
+class GitAuthConfig(BaseConfig):
+    """Credentials for private Git remotes, keyed by host (or "default")."""
+
     def __init__(self, v):
-        super().__init__(v, "apiKey")
+        super().__init__(v, "git.auth")
 
 
 class PIIConfig(BaseConfig):
@@ -410,6 +413,15 @@ class UserConfig(vyper.Vyper):
         self.bind_env("internalStateDir", "PC_INTERNAL_STATE_DIR")
         self.internal_state_dir = self.get_string("internalStateDir")
 
+        # option: logLevel
+        # description: verbosity of the daemon's persistent rotating log file,
+        #              independent of what any connected client requests
+        # values: [debug | info | warning | error | critical]
+        # default: debug (full detail)
+        self.set_default("logLevel", "debug")
+        self.bind_env("logLevel", "PC_LOG_LEVEL")
+        self.log_level = self.get_string("logLevel")
+
         # option: forceUpdate
         # description: update all repositories even if they are fresh
         # values: [True | False]
@@ -449,11 +461,21 @@ class UserConfig(vyper.Vyper):
         # default: {}
         self.git_config = GitConfig(self)
 
-        # option: Provider Key
-        # description: Provider Key configuration
+        # option: git.auth
+        # description: Credentials for private Git dependencies, keyed by host
+        #              (or "default"). PartCAD never prompts for credentials --
+        #              a prompt in a background daemon or a CI job is a hang --
+        #              so they are configured here, upfront:
+        #                git:
+        #                  auth:
+        #                    github.com:
+        #                      username: <user>          # HTTPS
+        #                      password: <token>         # a PAT, not a password
+        #                      sshKey: ~/.ssh/id_work    # SSH
+        #                      sshKeyPassphrase: <pass>
         # values: <dict>
         # default: {}
-        self.api_key = ApiKeyConfig(self)
+        self.git_auth = GitAuthConfig(self)
 
         # option: Personally identifiable information
         # description: Personally identifiable information configuration

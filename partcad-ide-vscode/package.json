@@ -115,6 +115,52 @@
     ],
     "configuration": [
       {
+        "title": "Backend",
+        "order": 0,
+        "properties": {
+          "partcad.backend": {
+            "default": "service",
+            "description": "How the extension talks to PartCAD. 'service' runs the standalone 'partcad-json-rpc' executable (downloaded on demand, no Python required). 'python' uses a Python interpreter and the bundled language server, as in previous versions.",
+            "enum": [
+              "service",
+              "python"
+            ],
+            "enumDescriptions": [
+              "Use the standalone partcad-json-rpc service (recommended; no Python environment required).",
+              "Use a Python interpreter and the bundled language server."
+            ],
+            "scope": "machine",
+            "type": "string"
+          },
+          "partcad.servicePath": {
+            "default": "",
+            "description": "Path to a 'partcad-json-rpc' executable. When empty, the extension looks for an existing standalone installation, then offers to download one. Only used when 'partcad.backend' is 'service'.",
+            "scope": "machine",
+            "type": "string"
+          },
+          "partcad.serviceChannel": {
+            "default": "socket",
+            "description": "How the extension connects to the PartCAD service. 'socket' uses a shared per-workspace background daemon (recommended); 'stdio' runs a dedicated service process over stdin/stdout. Only used when 'partcad.backend' is 'service'.",
+            "enum": [
+              "socket",
+              "stdio"
+            ],
+            "enumDescriptions": [
+              "Connect to the shared per-workspace daemon over a socket (or a named pipe on Windows).",
+              "Run a dedicated service process and talk to it over stdin/stdout."
+            ],
+            "scope": "machine",
+            "type": "string"
+          },
+          "partcad.serviceDownloadRepository": {
+            "default": "partcad/partcad",
+            "description": "GitHub repository (owner/name) to download the standalone PartCAD bundle from. Only used when 'partcad.backend' is 'service'.",
+            "scope": "machine",
+            "type": "string"
+          }
+        }
+      },
+      {
         "title": "Python",
         "order": 1,
         "properties": {

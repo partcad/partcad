@@ -43,39 +43,101 @@ class GitCallbacks(pygit2.RemoteCallbacks):
     it keeps by default, so the same is offered here. Each is offered once,
     because libgit2 asks again for every credential a remote refuses and an
     offer that is never withdrawn would loop forever.
+
+    Credentials a remote needs beyond that come from the user configuration
+    (``git.auth``), which is why they are configured upfront: this callback may
+    be running inside the background daemon or a CI job, where there is nobody
+    to ask. When nothing is configured for the host, it says so and names the
+    setting instead of failing with a bare authentication error.
     """
 
     # What ssh would reach for on its own. A key that needs a passphrase only
-    # works through the agent, since asking for one is the thing that must
-    # never happen here.
+    # works through the agent, unless the passphrase is configured too.
     _ssh_key_files = ("id_ed25519", "id_ecdsa", "id_rsa")
 
-    def __init__(self):
+    def __init__(self, user_config=None):
         super().__init__()
         self._ssh_credentials = None
+        if user_config is None:
+            # The process-wide configuration; injectable for tests.
+            from partcad_utils.user_config import user_config as default_user_config
+
+            user_config = default_user_config
+        self._user_config = user_config
+
+    def _auth_entry(self, url) -> dict:
+        """The ``git.auth`` entry configured for this remote's host, if any."""
+        auth = getattr(self._user_config, "git_auth", None)
+        auth = auth.to_dict() if auth is not None else {}
+        if not auth:
+            return {}
+        host = urlparse(url).hostname
+        if not host and "@" in url:
+            # scp-style "git@github.com:owner/repo" carries no scheme to parse.
+            host = url.split("@", 1)[1].split(":", 1)[0]
+        return auth.get(host) or auth.get("default") or {}
+
+    def _no_credentials(self, url, wanted: str) -> pygit2.GitError:
+        host = urlparse(url).hostname or "<host>"
+        return pygit2.GitError(
+            "Authentication is required for '%s' and no %s is configured. "
+            "PartCAD never prompts for credentials, so set them in the user configuration under "
+            "'git.auth.%s' (username/password for HTTPS, sshKey/sshKeyPassphrase for SSH)." % (url, wanted, host)
+        )
 
     def credentials(self, url, username_from_url, allowed_types):
-        username = username_from_url or "git"
+        entry = self._auth_entry(url)
+        username = entry.get("username") or username_from_url or "git"
+
         if allowed_types & CredentialType.USERNAME:
             return pygit2.Username(username)
+
+        if allowed_types & CredentialType.USERPASS_PLAINTEXT:
+            # An HTTPS remote. Only a configured token can answer this; there is
+            # no ambient equivalent of the ssh agent to fall back on.
+            password = entry.get("password")
+            if password:
+                return pygit2.UserPass(username, str(password))
+            raise self._no_credentials(url, "'git.auth' username/password")
+
         if allowed_types & CredentialType.SSH_KEY:
             if self._ssh_credentials is None:
-                self._ssh_credentials = self._ssh_candidates(username)
+                self._ssh_credentials = self._ssh_candidates(username, entry)
             if self._ssh_credentials:
                 return self._ssh_credentials.pop(0)
-        raise pygit2.GitError("Authentication is required for '%s' and no credentials are available" % url)
+            raise self._no_credentials(url, "usable SSH key")
 
-    def _ssh_candidates(self, username) -> list:
-        candidates = [pygit2.KeypairFromAgent(username)]
+        raise self._no_credentials(url, "credential of a supported type")
+
+    def _ssh_candidates(self, username, entry: dict) -> list:
+        candidates = []
+
+        # A configured key is tried first: it is the deliberate answer for this
+        # host, and unlike the defaults below it may carry a passphrase.
+        private_key = entry.get("sshKey")
+        if private_key:
+            private_key = os.path.expanduser(str(private_key))
+            public_key = entry.get("sshKeyPublic") or (private_key + ".pub")
+            public_key = os.path.expanduser(str(public_key))
+            candidates.append(
+                pygit2.Keypair(
+                    username,
+                    public_key if os.path.exists(public_key) else "",
+                    private_key,
+                    str(entry.get("sshKeyPassphrase") or ""),
+                )
+            )
+
+        candidates.append(pygit2.KeypairFromAgent(username))
 
         ssh_dir = os.path.join(os.path.expanduser("~"), ".ssh")
         for name in self._ssh_key_files:
-            private_key = os.path.join(ssh_dir, name)
-            if not os.path.exists(private_key):
+            default_key = os.path.join(ssh_dir, name)
+            if not os.path.exists(default_key):
                 continue
-            public_key = private_key + ".pub"
+            public_key = default_key + ".pub"
             candidates.append(
-                pygit2.Keypair(username, public_key if os.path.exists(public_key) else "", private_key, "")
+                pygit2.Keypair(username, public_key if os.path.exists(public_key) else "", default_key, "")
             )
 
         return candidates

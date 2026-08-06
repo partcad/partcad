@@ -1,7 +1,15 @@
 [run]
 branch = True
 concurrency = thread
-include = */partcad/*, */partcad-cli/*
+# Name every package explicitly. The old value relied on the CI checkout
+# path (.../work/partcad/partcad/...) making */partcad/* match everything,
+# which silently excluded partcad-utils and partcad-service-json-rpc from
+# any run outside CI.
+include =
+        */partcad/*
+        */partcad-cli/*
+        */partcad-utils/*
+        */partcad-service-json-rpc/*
 disable_warnings = already-imported
 parallel = True
 omit =

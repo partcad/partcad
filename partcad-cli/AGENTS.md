@@ -4,6 +4,47 @@ CLI interface (`pc` / `partcad` commands) to most `partcad` core functionality. 
 `./src/partcad_cli`. Tests: `./tests`. Part of the shared Poetry workspace rooted at the repo root — depends on
 the `partcad` package in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
 
+`pc daemon start` / `pc daemon stop` manage the per-workspace background daemon from
+[`partcad-service-json-rpc`](../partcad-service-json-rpc): `start` goes through
+`partcad_service_json_rpc.client.start_daemon()`, while `stop` calls
+`partcad_service_json_rpc.daemon.stop_daemon()` directly.
+
+## Command boundary
+
+Command bodies are thin clients of that daemon (`click/service.py::run`) unless they cannot be. A command
+belongs to the **daemon** when it reads or mutates the package graph, or when it drives a CAD wrapper — the
+wrapper's Python runtime lives in the daemon's environment and may not exist on the client at all. That
+includes commands with file arguments (`add`, `import`, `convert`): the client sends an absolute path, the
+daemon rejects anything outside the package, and paths are printed relative to the package that owns them, so
+the output never depends on a working directory. A package-mutating command *must* be a daemon client, or the
+daemon's warm context keeps serving the pre-mutation package.
+
+A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
+`init` (creates the workspace, before any package or context exists), `config` (prints the client's resolved
+`user_config` with its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses this host), and **all of
+`pc system ...`** — `system status`, `system reset` and `system set telemetry ...` act on the machine the CLI
+runs on, by definition: its internal state directory, its user configuration. Still unmigrated: `supply/*`,
+`add sketch`, `add dep`.
+
+`pc daemon ...` is the other side of that pair, command for command: `daemon start|stop` manage the process,
+while **`daemon status`**, **`daemon reset`** and **`daemon set telemetry ...`** are the daemon-side
+counterparts of the `pc system` commands of the same name — they report and change the daemon's own internal
+state directory and configuration, not the client's. The two coincide today, because the daemon runs on the
+same machine; they will not once a daemon can be remote, which is why both halves exist. `daemon reset` clears
+the daemon's state directory and the warm contexts that reference it. It runs unconditionally, because the caller has already decided and a
+background daemon has nobody to ask for confirmation; a destructive confirmation, when one is wanted, belongs
+in the client, before the call. (The daemon and the CLI share a machine today, so the two state directories
+coincide; they will not once a daemon can be remote, which is why the commands are separate. `daemon reset`
+carries a TODO to gate it behind access control before that happens.)
+
+PartCAD **never prompts** for anything mid-operation. Credentials for private Git dependencies are configured
+upfront under `git.auth` in the user configuration, and `GitCallbacks` fails with a message naming that setting
+when they are missing — a prompt inside a background daemon or a CI job is a hang, not a question.
+
+Both halves of this split are enforced by `tests/unit/test_command_boundary.py`, which also checks that every
+method name a command sends exists in the daemon's registry. The in-process and unmigrated lists live at the
+top of that file; update them there when a command intentionally moves.
+
 ## Setup
 
 All commands on this page run **inside the dev container**, not on the host — see "Where commands run" in the

@@ -1,9 +1,15 @@
+#
+# PartCAD, 2025
+#
+# Licensed under Apache License, Version 2.0.
+#
+
+import os
 from pathlib import Path
+
 import rich_click as click
 
-import partcad as pc
-from partcad.actions.assembly import import_assy_action
-from ...cli_context import CliContext
+from ...service import run
 
 # assembly_type: [file_extensions]
 SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT = {
@@ -22,46 +28,39 @@ SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT = {
     default=".",
 )
 @click.pass_obj
-def cli(cli_ctx: CliContext, package: str, assembly_file: str, desc: str):
+def cli(cli_ctx, package: str, assembly_file: str, desc: str):
     """
     CLI command to import an assembly from a file.
     Automatically creates multiple parts and an assembly.
+
+    Served by the daemon: the STEP-CAF read runs in a sandboxed wrapper
+    (`wrapper_import_assy`), whose Python runtime belongs to the daemon.
     """
-    with pc.telemetry.set_context(cli_ctx.otel_context):
-        ctx: pc.Context = cli_ctx.get_partcad_context()
+    file_path = Path(assembly_file)
+    if not file_path.exists():
+        raise click.UsageError(f"File '{assembly_file}' not found.")
 
-        file_path = Path(assembly_file)
+    assembly_type = None
+    detected_ext = file_path.suffix.lstrip(".").lower()
+    for supported_type in SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT.keys():
+        if detected_ext in SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT[supported_type]:
+            assembly_type = supported_type
 
-        if not file_path.exists():
-            raise click.UsageError(f"File '{assembly_file}' not found.")
+    if not assembly_type:
+        raise click.ClickException(
+            f"Cannot determine file type for '{assembly_file}'. "
+            f"Supported assembly types: {', '.join(set(SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT.keys()))}. "
+        )
 
-        assembly_type = None
-        detected_ext = file_path.suffix.lstrip(".").lower()
-        for supported_type in SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT.keys():
-            if detected_ext in SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT[supported_type]:
-                assembly_type = supported_type
+    params = {
+        "obj_kind": "assembly",
+        # Absolute: the daemon does not share the client's working directory.
+        "source": os.path.abspath(assembly_file),
+        "assembly_type": assembly_type,
+        "package": package,
+    }
+    if desc:
+        params["desc"] = desc
 
-        if not assembly_type:
-            raise click.ClickException(
-                f"Cannot determine file type for '{assembly_file}'. "
-                f"Supported assembly types: {', '.join(set(SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT.keys()))}. "
-            )
-
-        pc.logging.info(f"Importing assembly from {assembly_type.upper()} file: {assembly_file}")
-
-        # Get the target package
-        package = ctx.resolve_package_path(package)
-        package_obj: pc.Project = ctx.get_project(package)
-        if not package_obj:
-            pc.logging.error(f"Package {package} is not found")
-            return
-        package = package_obj.name  # '//' may end up having a different name
-
-        config = {"desc": desc} if desc else {}
-
-        try:
-            assy_name = import_assy_action(package_obj, assembly_type, assembly_file, config)
-            click.echo(f"Assembly '{assy_name}' imported successfully.")
-        except Exception as e:
-            pc.logging.exception(f"Error importing assembly")
-            raise click.ClickException(f"Error importing assembly: {e}") from e
+    result = run(cli_ctx, "import.object", params, span_name="import assembly", needs_context=True)
+    click.echo(f"Assembly '{(result or {}).get('name', file_path.stem)}' imported successfully.")

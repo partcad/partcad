@@ -4,14 +4,14 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from pathlib import Path
 import shutil
 import tempfile
+from pathlib import Path
 from typing import Optional
 
 from ... import logging as pc_logging
-from ...project import Project
 from ...adhoc.convert import convert_cad_file
+from ...project import Project
 from .add import add_part_action
 
 
@@ -28,7 +28,7 @@ def import_part_action(
     source_path = Path(source_path).resolve()
     original_source = source_path
 
-    pc_logging.info(f"Importing '{name}' ({kind}) from '{source_path}'")
+    pc_logging.info(f"Importing '{name}' ({kind}) from '{project.rel_path(source_path)}'")
 
     if not source_path.exists():
         raise ValueError(f"Source file '{source_path}' not found.")

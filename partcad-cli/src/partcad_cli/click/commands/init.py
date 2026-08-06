@@ -8,11 +8,14 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import os
+import sys
+
 import rich_click as click
-import os, sys
-from packaging.specifiers import SpecifierSet, InvalidSpecifier
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
 import partcad as pc
+
 from ..cli_context import CliContext
 
 

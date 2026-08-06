@@ -8,7 +8,7 @@
 //
 
 import * as vscode from 'vscode';
-import { LanguageClient } from 'vscode-languageclient/node';
+import { PartcadBackend, restartBackend } from './common/backend';
 import { registerLogger, traceError, traceLog, traceVerbose } from './common/log/logging';
 import {
     checkVersion,
@@ -17,9 +17,9 @@ import {
     onDidChangePythonInterpreter,
     resolveInterpreter,
 } from './common/python';
-import { restartServer } from './common/server';
 import {
     checkIfConfigurationChanged,
+    getBackendFromSetting,
     getInterpreterFromSetting,
     getPackagePathFromSetting,
     getReopenTerminalFromSetting,
@@ -37,7 +37,7 @@ import { examples } from './examples';
 import { terminalInit } from './terminal';
 import * as utils from './utils';
 
-let lsClient: LanguageClient | undefined;
+let lsClient: PartcadBackend | undefined;
 let partcadExplorer: PartcadExplorer | undefined;
 let partcadExplorerView: vscode.TreeView<PartcadItem.PartcadItem | void>;
 let partcadContext: PartcadContext | undefined;
@@ -91,11 +91,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         serverName: string,
         outputChannel: vscode.LogOutputChannel,
     ) => {
-        lsClient = await restartServer(serverId, serverName, outputChannel, lsClient).then(undefined, (err) => {
-            console.log('handleRestartServer: ');
-            console.log(err);
-            return undefined;
-        });
+        lsClient = await restartBackend(serverId, serverName, outputChannel, context, lsClient).then(
+            undefined,
+            (err) => {
+                console.log('handleRestartServer: ');
+                console.log(err);
+                return undefined;
+            },
+        );
         if (lsClient !== undefined) {
             await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
             await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
@@ -271,21 +274,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
                     terminalEmitter.fire(atob(message.line));
                 }),
-                lsClient.onNotification(`?/partcad/execute`, async ({ command, args }) => {
-                    await vscode.commands.executeCommand(command, ...args);
-                }),
-                lsClient.onNotification(`?/partcad/prompt`, async ({ prompt }) => {
-                    const response = await vscode.window.showInputBox({
-                        title: 'Provide missing information',
-                        prompt: prompt,
-                        ignoreFocusOut: true,
-                        password: false,
-                    });
-                    if (!response) {
-                        await vscode.window.showWarningMessage('No response was provided');
+                // The JSON-RPC service/daemon backend forwards structured log
+                // events (plain records and process/action markers) instead of
+                // pre-rendered ANSI. Render the log records as level-prefixed
+                // lines in the same terminal; the process/action markers only
+                // drive the CLI's ANSI progress footer, and the meaningful lines
+                // (including "DONE: ...") already arrive as 'log' records.
+                lsClient.onNotification('?/partcad/log', async (event: any) => {
+                    if (!terminalEmitter || !event || event.kind !== 'log') {
                         return;
                     }
-                    await vscode.commands.executeCommand('partcad.promptResponse', { response: response });
+
+                    if (
+                        getReopenTerminalFromSetting(serverId) === 'true' &&
+                        partcadTerminal !== undefined &&
+                        !vscode.window.terminals.includes(partcadTerminal)
+                    ) {
+                        partcadTerminal.dispose();
+                        partcadTerminal = terminalInit(context, terminalEmitter);
+                    }
+                    if (getPopupTerminalFromSetting(serverId) === 'true' && partcadTerminal !== undefined) {
+                        partcadTerminal.show(true);
+                    }
+
+                    const level = event.levelname || 'INFO';
+                    terminalEmitter.fire(`${level}: ${event.message ?? ''}\r\n`);
+                }),
+                lsClient.onNotification(`?/partcad/execute`, async ({ command, args }) => {
+                    await vscode.commands.executeCommand(command, ...args);
                 }),
             );
             await vscode.commands.executeCommand('partcad.activate');
@@ -301,6 +317,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             return;
         }
         await vscode.commands.executeCommand('setContext', 'partcad.workspaceIsGood', true);
+
+        // The service backend runs the standalone executable and needs no Python
+        // interpreter; skip the interpreter resolution the Python backend does.
+        if (getBackendFromSetting(serverId) === 'service') {
+            await vscode.commands.executeCommand('setContext', 'partcad.pythonIsGood', true);
+            await handleRestartServer(serverId, serverName, outputChannel);
+            return;
+        }
 
         const interpreter = getInterpreterFromSetting(serverId);
         if (interpreter && interpreter.length > 0) {
@@ -359,8 +383,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             partcadExplorer?.clearItems();
             await partcadInspector?.clear();
 
-            // reload the context
-            await vscode.commands.executeCommand('partcad.activate');
+            if (getBackendFromSetting(serverId) === 'service') {
+                // Terminate the shared daemon so its warm context is torn down,
+                // then start a fresh daemon, reconnect, and reactivate.
+                await lsClient?.stopDaemon?.();
+                await handleRestartServer(serverId, serverName, outputChannel);
+            } else {
+                // Python backend: reload the context in the running server.
+                await vscode.commands.executeCommand('partcad.activate');
+            }
         }),
         registerCommand(`partcad.update`, async () => {
             await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
@@ -888,6 +919,12 @@ connect:
     context.subscriptions.push(partcadTerminal);
 
     setImmediate(async () => {
+        // The service backend does not use Python at all; start it directly
+        // without pulling in the Python extension.
+        if (getBackendFromSetting(serverId) === 'service') {
+            await runServer();
+            return;
+        }
         const interpreter = getInterpreterFromSetting(serverId);
         if (interpreter === undefined || interpreter.length === 0) {
             traceLog(`Python extension loading`);

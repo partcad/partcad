@@ -196,7 +196,7 @@ jobs:
 
           mkdir -pv pytest-test-results
           pytest \
-            partcad partcad-cli \
+            partcad partcad-cli partcad-service-json-rpc \
             -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
           mamba deactivate
@@ -350,6 +350,15 @@ jobs:
           COV_PY=$(echo "$PYTHONS" | python -c "import json,sys; print(json.load(sys.stdin)[0])")
           if [[ "$MATRIX_PYTHON" == "$COV_PY" ]]; then
             export PC_BEHAVE_COVERAGE=1
+            # The scenarios drive `pc`, but a thin client hands the work to the
+            # daemon -- a separate process that the `coverage run` below does
+            # not wrap, and where most of the code under test runs. These make
+            # coverage.py trace it too, through its own subprocess mechanism
+            # (see dev-tools/coverage-subprocess/sitecustomize.py). Absolute
+            # paths, because the daemon chdir()s to "/".
+            export COVERAGE_PROCESS_START="$PWD/dev-tools/coverage.rc"
+            export COVERAGE_FILE="$PWD/.coverage"
+            export PYTHONPATH="$PWD/dev-tools/coverage-subprocess${PYTHONPATH:+:$PYTHONPATH}"
             if ! coverage run --rcfile=./dev-tools/coverage.rc --data-file=.coverage -m behave $BEHAVE_ARGS; then
               echo "Behave tests failed"
               exit 1

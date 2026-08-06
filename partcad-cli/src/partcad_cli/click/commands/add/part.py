@@ -4,12 +4,25 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-import rich_click as click
+import os
 from pathlib import Path
 
-import partcad as pc
-from partcad.actions.part import add_part_action
-from ...cli_context import CliContext
+import rich_click as click
+
+from ...service import run
+
+# TODO-93: @alexanderilyin: Make this optional and detect the kind from the PATH
+PART_KINDS = [
+    "cadquery",
+    "build123d",
+    "sdf",
+    "scad",
+    "step",
+    "brep",
+    "stl",
+    "3mf",
+    "obj",
+]
 
 
 @click.command(help="Add a part")
@@ -21,51 +34,31 @@ from ...cli_context import CliContext
     required=False,
     show_envvar=True,
 )
-# TODO-93: @alexanderilyin: Make this optional and detect the kind from the PATH
-@click.argument(
-    "kind",
-    type=click.Choice(
-        [
-            "cadquery",
-            "build123d",
-            "sdf",
-            "scad",
-            "step",
-            "brep",
-            "stl",
-            "3mf",
-            "obj",
-        ]
-    ),
-    # help="Type of the part",
-)
+@click.argument("kind", type=click.Choice(PART_KINDS))
 @click.argument("path", type=str)  # help="Path to the file"
 @click.pass_context
 def cli(click_ctx: click.Context, desc: str | None, kind: str, path: str):
     """
     CLI command to add a part to the project without copying.
     """
-    package = click_ctx.parent.params["package"]
-    cli_ctx: CliContext = click_ctx.obj
+    cli_ctx = click_ctx.obj
 
-    with pc.telemetry.set_context(cli_ctx.otel_context):
-        ctx: pc.Context = cli_ctx.get_partcad_context()
+    file_path = Path(path)
+    if not file_path.exists():
+        raise click.UsageError(f"ERROR: The part file '{file_path}' does not exist.")
 
-        package = ctx.resolve_package_path(package)
-        package_obj: pc.Project = ctx.get_project(package)
-        if not package_obj:
-            pc.logging.error(f"Package {package} is not found")
-            return
-        package = package_obj.name  # '//' may end up having a different name
+    # Absolute: the daemon runs detached, with a different working directory. It
+    # reports the path back relative to the package that receives it, and
+    # rejects a path that is not inside that package.
+    params = {"obj_kind": "part", "kind": kind, "path": os.path.abspath(path)}
+    package = click_ctx.parent.params.get("package")
+    if package is not None:
+        params["package"] = package
+    if desc:
+        params["desc"] = desc
 
-        file_path = Path(path)
-        if not file_path.exists():
-            raise click.UsageError(f"ERROR: The part file '{file_path}' does not exist.")
-
-        config = {}
-        if desc:
-            config["desc"] = desc
-
-        # pc.logging.Process() is done inside "add_part_action"
-        add_part_action(package_obj, kind, path, config)
-        click.echo(f"Part '{Path(path).stem}' added to the project.")
+    result = run(cli_ctx, "add.object", params, span_name="add part", needs_context=True)
+    # No result means the daemon rejected the file (e.g. outside the package) and
+    # already said why; do not follow that with a success line.
+    if result and result.get("name"):
+        click.echo(f"Part '{result['name']}' added to the project.")

@@ -6,8 +6,7 @@
 
 import rich_click as click
 
-import partcad as pc
-from ..cli_context import CliContext
+from ..service import run
 
 
 # TODO-98: @clairbee: fix type checking here
@@ -70,50 +69,22 @@ from ..cli_context import CliContext
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to test"
 @click.pass_context
 @click.pass_obj
-def cli(cli_ctx: CliContext, context, verbal, package, interface, assembly, sketch, scene, params, object):
-    with pc.telemetry.set_context(cli_ctx.otel_context):
-        ctx: pc.Context = cli_ctx.get_partcad_context()
+def cli(cli_ctx, context, verbal, package, interface, assembly, sketch, scene, params, object):
+    rpc_params = {
+        "verbal": verbal,
+        "interface": interface,
+        "assembly": assembly,
+        "sketch": sketch,
+        "scene": scene,
+        "params": list(params),
+        "object": object,
+    }
+    if package is not None:
+        rpc_params["package"] = package
 
-        package = ctx.resolve_package_path(package)
-        package_obj: pc.Project = ctx.get_project(package)
-        if not package_obj:
-            pc.logging.error(f"Package {package} is not found")
-            return
-        package = package_obj.name  # '//' may end up having a different name
+    result = run(cli_ctx, "inspect.object", rpc_params, span_name="inspect", needs_context=True)
 
-        with pc.logging.Process("inspect", package):
-            param_dict = {}
-            if params is not None:
-                for kv in params:
-                    k, v = kv.split("=")
-                    param_dict[k] = v
-
-            if object is None:
-                pc.logging.error(
-                    "No object specified. Provide a part, assembly, sketch, interface, or scene to inspect."
-                )
-                return
-
-            package, object = pc.utils.resolve_resource_path(ctx.get_current_project_path(), object)
-            path = f"{package}:{object}"
-
-            if assembly:
-                obj = ctx.get_assembly(path, params=param_dict)
-            elif interface:
-                obj = ctx.get_interface(path)
-            elif sketch:
-                obj = ctx.get_sketch(path, params=param_dict)
-            else:
-                obj = ctx.get_part(path, params=param_dict)
-
-            if obj is None:
-                pc.logging.error(f"Object {path} is not found")
-            else:
-                if verbal:
-                    summary = obj.get_summary(package_obj)
-                    pc.logging.info("Summary: %s" % summary)
-                    # TODO-99: @alexanderilyin: Test with dedicated test scenario
-                    if not context.parent.params.get("q"):
-                        print("%s" % summary)
-                else:
-                    obj.show(ctx)
+    # TODO-99: @alexanderilyin: Test with dedicated test scenario
+    if verbal and result and result.get("summary") is not None:
+        if not context.parent.params.get("q"):
+            print("%s" % result["summary"])

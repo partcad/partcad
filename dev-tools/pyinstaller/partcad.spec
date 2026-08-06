@@ -40,6 +40,7 @@ SPEC_DIR = Path(SPECPATH).resolve()
 REPO_ROOT = SPEC_DIR.parents[1]
 PARTCAD_SRC = REPO_ROOT / "partcad" / "src"
 CLI_SRC = REPO_ROOT / "partcad-cli" / "src"
+SERVICE_SRC = REPO_ROOT / "partcad-service-json-rpc" / "src"
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -127,6 +128,18 @@ datas += [
 hiddenimports += collect_submodules("partcad")
 hiddenimports += command_modules()
 
+# The shared lightweight utilities (logging, telemetry, user config). `partcad`
+# aliases these back under its own namespace, and the thin CLI/service clients
+# import them directly (some, like the telemetry backends, only by name), so
+# collect the whole package.
+hiddenimports += collect_submodules("partcad_utils")
+
+# The JSON-RPC service (`partcad-json-rpc`). Its HTTP transport imports aiohttp
+# lazily, inside a function that is only reached in HTTP mode, so PyInstaller's
+# static analysis does not see it; name it (and the service package) explicitly.
+hiddenimports += collect_submodules("partcad_service_json_rpc")
+hiddenimports += collect_submodules("aiohttp")
+
 ##############################################  DEPENDENCIES  ################################################
 
 # The geometry kernel. OCP is a single extension module that registers all of
@@ -185,7 +198,9 @@ else:
 
 # The version PartCAD reports and sends with telemetry.
 add_metadata("partcad")
+add_metadata("partcad-utils")
 add_metadata("partcad-cli")
+add_metadata("partcad-service-json-rpc")
 
 ###############################################  OPENSCAD  ###################################################
 
@@ -205,7 +220,7 @@ a = Analysis(
     [str(SPEC_DIR / "entrypoint.py")],
     # The checkout comes first so the bundle matches the working tree rather
     # than whatever copy happens to be installed in the build environment.
-    pathex=[str(PARTCAD_SRC), str(CLI_SRC)],
+    pathex=[str(PARTCAD_SRC), str(CLI_SRC), str(SERVICE_SRC)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
@@ -272,6 +287,7 @@ def executable(name):
 coll = COLLECT(
     executable("pc"),
     executable("partcad"),
+    executable("partcad-json-rpc"),
     a.binaries,
     a.datas,
     strip=False,

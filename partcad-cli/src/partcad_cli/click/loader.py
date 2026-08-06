@@ -8,7 +8,7 @@ import rich_click as click
 import importlib
 import os
 
-import partcad as pc
+from partcad_utils import logging as pc_logging
 
 
 class Loader(click.RichGroup):
@@ -42,7 +42,7 @@ class Loader(click.RichGroup):
             rv.sort()
             return rv
         except OSError as e:
-            pc.logging.error("Failed to list commands: %s", e)
+            pc_logging.error("Failed to list commands: %s", e)
             return []
 
     def get_command(self, _ctx, name: str) -> click.Command:
@@ -68,8 +68,8 @@ class Loader(click.RichGroup):
                 cmd_object.name = name
             return cmd_object
         except ModuleNotFoundError as e:
-            pc.logging.exception(e)
+            pc_logging.exception(e)
             raise click.ClickException(f"Failed to load command '{name}'") from e
         except SyntaxError as e:
-            pc.logging.exception(e)
+            pc_logging.exception(e)
             raise click.ClickException(f"Command '{name}' contains invalid Python code") from e

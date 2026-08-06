@@ -127,12 +127,18 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   # bundle is built with.
   "${PYTHON}" -m pip install "pyinstaller>=6.15" "${SETUPTOOLS_BOUND}"
 
-  # `partcad-cli` declares its license by a path inside its own directory, but
-  # the file itself only exists in the repository root. The wheel build in
-  # "deploy.yml" copies it the same way.
+  # `partcad-cli`, `partcad-service-json-rpc`, and `partcad-utils` each declare
+  # their license by a path inside their own directory, but the file itself only
+  # exists in the repository root. The wheel build in "deploy.yml" copies it the
+  # same way.
   cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-cli/"
+  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-service-json-rpc/"
+  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-utils/"
 
   echo "==> Installing PartCAD from this checkout"
+  # The shared partcad-utils is installed first: partcad (and the CLI/service)
+  # pin it, and it is not on PyPI, so it must come from this checkout.
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-utils" "${SETUPTOOLS_BOUND}"
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras that the wheels leave to the user are all built in.
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint]" "${SETUPTOOLS_BOUND}"
@@ -146,8 +152,11 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   # no longer a dependency - the bundle would then need no in-process CAD either.
   "${PYTHON}" -m pip install \
     "cadquery-ocp==7.9.3.1.1" "build123d==0.11.1" "ocpsvg==0.6.0" "${SETUPTOOLS_BOUND}"
-  # This satisfies the `partcad==<version>` pin of `partcad-cli` with the local
-  # build rather than with the release on PyPI.
+  # The JSON-RPC service (the bundle's third executable) is installed before
+  # partcad-cli: the CLI pins partcad-service-json-rpc, which is not on PyPI, so
+  # it must be satisfied from this checkout. Both pins (partcad, and the service)
+  # resolve to the local builds this way.
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-service-json-rpc" "${SETUPTOOLS_BOUND}"
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-cli" "${SETUPTOOLS_BOUND}"
 fi
 
@@ -394,6 +403,7 @@ SMOKE_DIR="$(mktemp -d)"
 trap 'rm -rf "${SMOKE_DIR}"' EXIT
 (cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/pc${EXE_SUFFIX}" version)
 (cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/partcad${EXE_SUFFIX}" --help >/dev/null)
+(cd "${SMOKE_DIR}" && "${BUNDLE_DIR}/partcad-json-rpc${EXE_SUFFIX}" --version >/dev/null)
 
 if [ -d "${OPENSCAD_BUNDLED_DIR}" ]; then
   # First that the payload itself runs, and that it is the version we pinned:

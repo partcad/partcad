@@ -15,12 +15,20 @@ import sys
 import sentry_sdk.session
 import yaml
 
-import partcad as pc
+import partcad_utils
+import partcad_utils.logging_remote_client as logging_remote_client
+from partcad_utils import logging as pc_logging
+from partcad_utils import telemetry as pc_telemetry
+from partcad_utils.user_config import user_config as pc_user_config
 from partcad_cli.click.loader import Loader
 from partcad_cli.click.cli_context import CliContext
 
+# partcad's package __init__ used to run this when the CLI imported it; the CLI
+# no longer imports the heavy partcad package, so initialize telemetry here.
+pc_telemetry.init(partcad_utils.__version__)
+
 global cli_span
-cli_span: pc.telemetry.trace.Span = None
+cli_span: pc_telemetry.trace.Span = None
 
 try:
     locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
@@ -106,7 +114,7 @@ option_groups = [
 command_groups = [
     {
         "name": "Host commands",
-        "commands": ["version", "config", "system"],
+        "commands": ["version", "config", "system", "daemon"],
     },
     {
         "name": "Package commands",
@@ -365,24 +373,24 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             if "telemetry" in attrib:
                 attrib = attrib.replace("telemetry_", "telemetry.")
                 attrib = re.sub(r"_([a-z])", lambda x: x.group(1).upper(), attrib)
-                pc.user_config.set(attrib, value)
+                pc_user_config.set(attrib, value)
             else:
-                setattr(pc.user_config, attrib, value)
+                setattr(pc_user_config, attrib, value)
 
-    # Initialize logging before using telemetry, as telemetry may use logging
-    if no_ansi:
-        logging.getLogger("partcad").propagate = True
-        logging.basicConfig()
-    else:
-        pc.logging_ansi_terminal.init()
+    # Initialize logging before using telemetry, as telemetry may use logging.
+    # The remote-log client wraps logging_ansi_terminal (ANSI) or a plain stderr
+    # handler (--no-ansi); it is the same renderer the migrated commands feed
+    # their daemon-forwarded log events into, so in-process and thin-client
+    # commands render identically.
+    logging_remote_client.init(want_ansi=not no_ansi)
 
     if quiet:
-        pc.logging.setLevel(logging.CRITICAL + 1)
+        pc_logging.setLevel(logging.CRITICAL + 1)
     else:
         if verbose:
-            pc.logging.setLevel(logging.DEBUG)
+            pc_logging.setLevel(logging.DEBUG)
         else:
-            pc.logging.setLevel(logging.INFO)
+            pc_logging.setLevel(logging.INFO)
 
     # Start telemetry as soon as the config and logging are initialized
     flat_params = {k: str(v) for k, v in ctx.params.items()}
@@ -391,18 +399,18 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
     flat_params["command"] = ctx.command.name
     flat_params["subcommand"] = ctx.invoked_subcommand
     flat_params["action"] = "cli " + " ".join(sys.argv[1:])
-    with pc.telemetry.start_as_current_span("cli", attributes=flat_params, end_on_exit=False) as span:
+    with pc_telemetry.start_as_current_span("cli", attributes=flat_params, end_on_exit=False) as span:
         global cli_span
         cli_span = span
 
         # Finish the span on exit only, as the command handler are called outside of the current stack
         def telemetry_atexit():
-            pc.logging.debug("Flushing Sentry SDK events")
+            pc_logging.debug("Flushing Sentry SDK events")
             global cli_span
             if cli_span:
                 # There was no clean exit
                 cli_span.set_attribute("aborted", True)
-                cli_span.set_status(pc.telemetry.trace.StatusCode.ERROR)
+                cli_span.set_status(pc_telemetry.trace.StatusCode.ERROR)
                 cli_span.end()
                 cli_span = None
             # TODO(clairbee): investigate how is this value related to PC_TELEMETRY_SENTRY_SHUTDOWN_TIMEOUT and make it configurable
@@ -410,19 +418,16 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
 
         atexit.register(telemetry_atexit)
 
-        if no_ansi:
-            logging.getLogger("partcad").propagate = True
-            logging.basicConfig()
-        else:
-            pc.logging_ansi_terminal.init()
+        # (Logging was already initialized above; init() is idempotent.)
+        logging_remote_client.init(want_ansi=not no_ansi)
 
         if quiet:
-            pc.logging.setLevel(logging.CRITICAL + 1)
+            pc_logging.setLevel(logging.CRITICAL + 1)
         else:
             if verbose:
-                pc.logging.setLevel(logging.DEBUG)
+                pc_logging.setLevel(logging.DEBUG)
             else:
-                pc.logging.setLevel(logging.INFO)
+                pc_logging.setLevel(logging.INFO)
 
         user_config_options = [
             ("PC_THREADS_MAX", "threads_max"),
@@ -455,17 +460,17 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 if "telemetry" in attrib:
                     attrib = attrib.replace("telemetry_", "telemetry.")
                     attrib = re.sub(r"_([a-z])", lambda x: x.group(1).upper(), attrib)
-                    pc.user_config.set(attrib, value)
+                    pc_user_config.set(attrib, value)
                 else:
-                    setattr(pc.user_config, attrib, value)
+                    setattr(pc_user_config, attrib, value)
 
         # parse extra parameters and add them to the user_config
         for params in kwargs["extra_param"]:
             param, value = params.split("=")
             object_id, key = param.split(".")
-            if object_id not in pc.user_config.parameter_config:
-                pc.user_config.parameter_config[object_id] = {}
-            pc.user_config.parameter_config[object_id][key] = value
+            if object_id not in pc_user_config.parameter_config:
+                pc_user_config.parameter_config[object_id] = {}
+            pc_user_config.parameter_config[object_id][key] = value
 
         # Prepare the callboack to be used by command handlers should they need a PartCAD context object
         def get_partcad_context():
@@ -473,13 +478,13 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             from partcad.globals import init
 
             try:
-                return pc.init(path, user_config=pc.user_config)
+                return init(path, user_config=pc_user_config)
             except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
                 exc = click.BadParameter("Invalid configuration file", ctx=ctx, param=path, param_hint=None)
                 exc.exit_code = 2
                 raise exc from e
             except Exception as e:
-                pc.logging.error(e)
+                pc_logging.error(e)
                 # Keep the traceback for troubleshooting, but do not dump it at
                 # the user during normal operation.
                 if logging.getLogger("partcad").isEnabledFor(logging.DEBUG):
@@ -489,7 +494,11 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
                 raise click.Abort from e
 
         # Pass everything the commands might need through the context object
-        ctx.obj = CliContext(otel_context=pc.telemetry.context.get_current(), get_partcad_context=get_partcad_context)
+        ctx.obj = CliContext(
+            otel_context=pc_telemetry.context.get_current(),
+            get_partcad_context=get_partcad_context,
+            path=path,
+        )
 
 
 cli.context_settings = {
@@ -504,20 +513,19 @@ cli.context_settings = {
 def process_result(click_ctx: click.Context, result, verbose, quiet, no_ansi, path, **kwargs):
     global cli_span
 
-    if not no_ansi:
-        pc.logging_ansi_terminal.fini()
+    logging_remote_client.fini()
 
     # Abort if there was at least one error reported during the execution time.
     # `result` is needed for the case when the command was not correct.
-    if pc.logging.had_errors or result:
+    if pc_logging.had_errors or result:
         if cli_span:
             cli_span.set_attribute("failed", True)
-            cli_span.set_status(pc.telemetry.trace.StatusCode.ERROR)
+            cli_span.set_status(pc_telemetry.trace.StatusCode.ERROR)
         raise click.Abort()
 
     if cli_span:
         cli_span.set_attribute("success", True)
-        cli_span.set_status(pc.telemetry.trace.StatusCode.OK)
+        cli_span.set_status(pc_telemetry.trace.StatusCode.OK)
         cli_span.end()
         cli_span = None
 
@@ -531,8 +539,8 @@ def main():
         # repository that could not be cloned), do not additionally dump a
         # traceback. Unexpected failures stay loud so that real bugs are not
         # hidden, and the traceback remains available under '-v'.
-        if pc.logging.had_errors and not logging.getLogger("partcad").isEnabledFor(logging.DEBUG):
-            pc.logging.error(str(e) if str(e) else type(e).__name__)
+        if pc_logging.had_errors and not logging.getLogger("partcad").isEnabledFor(logging.DEBUG):
+            pc_logging.error(str(e) if str(e) else type(e).__name__)
             sys.exit(1)
         raise e
 

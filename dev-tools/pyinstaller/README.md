@@ -20,6 +20,12 @@ with [`install.sh`](../../install.sh) and never see Python.
 - `entrypoint.py` - what the frozen executables run, in place of the console scripts a wheel would generate.
 - `build.sh` - prepares the environment, freezes, smoke tests, and packs the archive.
 
+The bundle contains three console executables that share one interpreter, `PYZ`, and set of libraries/data:
+`pc` and `partcad` (the CLI) and `partcad-json-rpc` (the JSON-RPC service the VS Code extension launches by
+default). All three run `entrypoint.py`, which dispatches on `sys.argv[0]`: `partcad-json-rpc` starts the
+service, anything else runs the CLI. A third executable adds only a small bootloader stub, not another copy of
+the ~290MB payload.
+
 ## Building
 
 From the repository root, inside the [dev container](../../docs/source/contributing.rst):
