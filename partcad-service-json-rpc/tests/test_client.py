@@ -5,7 +5,6 @@
 #
 """Tests for the DaemonClient (request/response + notification delivery)."""
 
-import os
 import pathlib
 import shutil
 import socket
@@ -47,14 +46,34 @@ def socket_dir():
         shutil.rmtree(path, ignore_errors=True)
 
 
+def _wait_until_listening(path, timeout=5.0):
+    """Block until the server at ``path`` accepts connections.
+
+    ``serve_unix()`` creates the socket *file* at bind() and only accepts after
+    listen(), so waiting for the file to exist returns too early and the next
+    connect is refused - a race a loaded CI runner loses (ECONNREFUSED on both
+    Linux and macOS). Probing with a real connect is the only signal that means
+    "ready".
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            probe.connect(path)
+            return
+        except (ConnectionRefusedError, FileNotFoundError):
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
+        finally:
+            probe.close()
+
+
 def _serve(socket_dir, registry):
     path = str(socket_dir / "socket")
     server = SocketServer(Session(), registry)
     threading.Thread(target=server.serve_unix, args=(path,), daemon=True).start()
-    for _ in range(200):
-        if os.path.exists(path):
-            break
-        time.sleep(0.01)
+    _wait_until_listening(path)
     return server, path
 
 
