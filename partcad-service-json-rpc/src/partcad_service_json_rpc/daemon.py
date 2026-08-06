@@ -169,7 +169,13 @@ def _serve_detached(server_sock: socket.socket, sock: str, wdir: str, build_sess
         server.serve_accepted(server_sock, sock)
     finally:
         _cleanup(wdir)
-        os._exit(0)
+        # Exit through the interpreter rather than os._exit(): the daemon has
+        # done its own cleanup above, and everything else that wants to run at
+        # shutdown -- buffered writers, atexit handlers registered by whatever
+        # this process loaded -- should get the chance to. The intermediate
+        # child above still leaves with os._exit(), because that one must not
+        # flush buffers it shares with its parent.
+        sys.exit(0)
 
 
 def _redirect_std_fds(log_path: str) -> None:
