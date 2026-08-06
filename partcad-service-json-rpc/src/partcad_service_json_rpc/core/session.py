@@ -7,7 +7,7 @@
 
 A :class:`Session` owns the loaded ``partcad`` module and context, the resolved
 settings, an :class:`~partcad_service_json_rpc.core.events.EventEmitter`, the
-interactive-prompt plumbing, and the optional log-streaming thread. Operations
+and the optional log-streaming thread. Operations
 receive a session and never touch a protocol library, so the same operations
 run under the JSON-RPC transports and under the legacy LSP adapter.
 """
@@ -15,7 +15,6 @@ run under the JSON-RPC transports and under the legacy LSP adapter.
 import copy
 import importlib
 import logging
-import queue
 import sys
 import threading
 
@@ -57,7 +56,6 @@ class Session:
         self.contexts: dict = {}
 
         self._load_lock = threading.RLock()
-        self._prompt_queue: "queue.Queue[str]" = queue.Queue()
 
         # Legacy LSP log streaming: an externally-owned ANSI write stream, bound
         # via bind_log_stream() (the bundled VS Code LSP adapter uses this).
@@ -68,17 +66,6 @@ class Session:
         self._use_remote_log = False
         self._log_file = None
         self._log_file_level = None
-
-    # ---- interactive prompts ------------------------------------------------
-
-    def _interactive_prompt(self, _key: str, prompt: str) -> str:
-        """Callback installed as ``partcad.interactive.prompt``."""
-        self.emitter.emit("prompt", {"prompt": prompt})
-        return self._prompt_queue.get().strip()
-
-    def provide_prompt_response(self, response: str) -> None:
-        """Unblock a pending interactive prompt with the user's answer."""
-        self._prompt_queue.put(response)
 
     # ---- log streaming ------------------------------------------------------
 
@@ -164,8 +151,6 @@ class Session:
                     ):
                         del sys.modules[module_name]
                 self.partcad = importlib.reload(importlib.import_module("partcad"))
-
-            self.partcad.interactive.prompt = self._interactive_prompt
 
             settings = copy.deepcopy(self.settings)
             user_config = self.partcad.user_config

@@ -791,15 +791,6 @@ def inspect_object(session, params):
     return None
 
 
-def prompt_respond(session, params):
-    """Deliver a response to a pending interactive prompt."""
-    session.provide_prompt_response(params["response"] + os.linesep)
-    return None
-
-
-# ---- host / info -----------------------------------------------------------
-
-
 def version(session, params):
     """Return the PartCAD Python module version."""
     pc = session.ensure_partcad()

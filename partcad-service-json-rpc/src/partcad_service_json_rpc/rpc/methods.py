@@ -49,7 +49,6 @@ _OPERATIONS = {
     "info.object": operations.info_object,
     "context.create": operations.context_create,
     "activate": operations.activate,
-    "prompt.respond": operations.prompt_respond,
     "version": operations.version,
     "healthcheck": operations.healthcheck,
     "ensure_loaded": operations.ensure_loaded,

@@ -191,7 +191,6 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.inspectFile', (path) => this.send('inspect.file', { path: typeof path === 'string' ? path : '' }));
         reg('partcad.testReal', (a) => this.send('test', { package: a.packageName, object: a.objectName }));
         reg('partcad.getStats', () => this.send('info', {}));
-        reg('partcad.promptResponse', (a) => this.send('prompt.respond', { response: a.response }));
         reg('partcad.activate', () => this.send('activate', {}));
         reg('partcad.initPackage', (p) => this.send('init', { path: typeof p === 'string' ? p : '' }));
         reg('partcad.loadPackage', (p) => this.send('package.load', { path: typeof p === 'string' ? p : '' }));

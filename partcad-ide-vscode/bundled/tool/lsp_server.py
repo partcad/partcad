@@ -311,17 +311,6 @@ def log_thread_kill():
     partcad_log_thread = None
 
 
-# ---- interactive prompts --------------------------------------------------
-
-
-@LSP_SERVER.command("partcad.promptResponse")
-def prompt_response(args) -> None:
-    session = _get_session()
-    if session is None:
-        return
-    _ops().prompt_respond(session, {"response": args["response"]})
-
-
 # ---- lifecycle ------------------------------------------------------------
 
 

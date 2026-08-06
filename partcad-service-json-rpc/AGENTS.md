@@ -34,7 +34,7 @@ directory.
 ## Layout
 
 - `core/` — transport-agnostic operations shared with the legacy VS Code LSP server: `session.py` (PartCAD
-  state + interactive prompt + log streaming), `events.py` (the event emitter and the event-name contract),
+  state + log streaming), `events.py` (the event emitter and the event-name contract),
   `operations.py` (the operation functions).
 - `rpc/` — `dispatcher.py` (JSON-RPC 2.0 parse/dispatch/error mapping) and `methods.py` (the CLI-shaped method
   registry; `rpc.discover` returns the catalog).
@@ -81,9 +81,13 @@ poetry run isort --check partcad-service-json-rpc
 
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|file`,
 `export.part|assembly`, `ai.regenerate|change`, `add.part|assembly`, `package.load|path|refresh`, `init`,
-`list.all`, `test`, `info`, `activate`, `prompt.respond`, and `rpc.discover`. Server-to-client notifications
+`list.all`, `test`, `info`, `activate`, and `rpc.discover`. Server-to-client notifications
 carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
-`stats`, `terminal`, `execute`, `prompt`, and the `*Done`/lifecycle signals).
+`stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
+
+There is deliberately no prompt in the protocol. A daemon has nobody to ask, and a request that blocks
+waiting for an answer it cannot receive is a hang, not a question -- anything a command needs is either an
+argument or configured upfront in the user configuration (see `git.auth` for private Git dependencies).
 
 ## Commit
 
