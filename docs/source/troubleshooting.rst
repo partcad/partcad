@@ -128,12 +128,12 @@ the extension is open:
 Typical problems
 ----------------
 
-"Failed to load "partcad_ide_client"" in the PartCAD terminal view
+``Failed to load "partcad_ide_client"`` in the PartCAD terminal view
 
  - Install it with ``pip install partcad-ide-client``, or press "Update PartCAD"
    in the "Context" left panel, which installs it along with ``partcad``
 
-"No PartCAD IDE with an open PartCAD Viewer detected"
+``No PartCAD IDE with an open PartCAD Viewer detected``
 
  - Nothing is listening on the viewer port. Open a window with the PartCAD
    extension active; the extension starts listening when it activates.

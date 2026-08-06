@@ -95,7 +95,7 @@ so this never affects a commit.
 From the repo root, inside the environment:
 
 ```bash
-poetry run pytest partcad partcad-cli partcad-ide-client -x -p no:error-for-skips -p no:warnings --dist no  # unit tests (matches CI)
+poetry run pytest partcad partcad-cli partcad-ide-client partcad-service-json-rpc -x -p no:error-for-skips -p no:warnings --dist no  # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```
 

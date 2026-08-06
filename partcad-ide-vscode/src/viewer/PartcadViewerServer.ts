@@ -14,9 +14,9 @@ import {
     MSG_PING,
     MSG_SHOW,
     PARTCAD_IDE_HOST,
-    PARTCAD_IDE_PORT,
     ViewerMessage,
     encodeFrame,
+    listenPort,
 } from './protocol';
 
 /**
@@ -39,7 +39,7 @@ export class PartcadViewerServer implements vscode.Disposable {
     public readonly onMessage = this.onMessageEmitter.event;
 
     constructor(
-        private readonly port: number = PARTCAD_IDE_PORT,
+        private readonly port: number = listenPort(),
         private readonly host: string = PARTCAD_IDE_HOST,
     ) {}
 

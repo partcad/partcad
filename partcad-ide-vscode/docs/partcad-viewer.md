@@ -2,7 +2,7 @@
 
 How a shape gets from a `partcad` process onto the screen.
 
-```
+```text
 partcad (any process)                       partcad-ide-vscode (extension host)     webview
 ────────────────────                        ───────────────────────────────────     ───────
 Shape.show() / Interface.show()

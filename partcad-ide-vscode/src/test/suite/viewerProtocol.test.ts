@@ -13,12 +13,14 @@ import {
     MAGIC,
     MAX_FRAME_LENGTH,
     MSG_SHOW,
+    PARTCAD_IDE_PORT,
     ProtocolError,
     VERSION,
     decodeGltf,
     decodeHeader,
     decodePayload,
     encodeFrame,
+    listenPort,
 } from '../../viewer/protocol';
 
 function header(magic: string, version: number, kind: number, length: number): Buffer {
@@ -90,6 +92,26 @@ suite('PartCAD Viewer protocol', () => {
         assert.throws(() => decodePayload(Buffer.from('[1,2,3]', 'utf-8')), ProtocolError);
         assert.throws(() => decodePayload(Buffer.from('not json', 'utf-8')), ProtocolError);
         assert.throws(() => decodePayload(Buffer.from('{"id":"no-type"}', 'utf-8')), ProtocolError);
+    });
+
+    test('the listen port follows PARTCAD_IDE_PORT, as the Python client does', () => {
+        // An environment, built through a helper rather than as an object
+        // literal per case: the variable's name is not camelCase (it cannot be),
+        // and spelling it inline trips the naming-convention rule five times.
+        const env = (value?: string): NodeJS.ProcessEnv => ({ ['PARTCAD_IDE_PORT']: value });
+
+        // Both ends have to honour it, or "set PARTCAD_IDE_PORT" moves only one
+        // of them and they stop finding each other.
+        assert.strictEqual(listenPort({}), PARTCAD_IDE_PORT);
+        assert.strictEqual(listenPort(env('9999')), 9999);
+        // Unparseable or out of range falls back rather than failing to bind,
+        // matching partcad_ide_client.client._port().
+        assert.strictEqual(listenPort(env('not-a-port')), PARTCAD_IDE_PORT);
+        assert.strictEqual(listenPort(env('70000')), PARTCAD_IDE_PORT);
+        assert.strictEqual(listenPort(env('')), PARTCAD_IDE_PORT);
+        assert.strictEqual(listenPort(env(undefined)), PARTCAD_IDE_PORT);
+        // 0 would bind an arbitrary free port, which the client could not find.
+        assert.strictEqual(listenPort(env('0')), PARTCAD_IDE_PORT);
     });
 
     test('glTF payloads written by the Python client are readable here', () => {

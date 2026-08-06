@@ -33,7 +33,8 @@ All commands run **inside the dev container** — see "Where commands run" in th
 ## Test and validate changes
 
 ```bash
-pytest partcad-ide-client -x -p no:error-for-skips -p no:warnings --dist no   # matches CI (test-pytest job)
+poetry run pytest partcad-ide-client -x -p no:error-for-skips -p no:warnings --dist no   # matches CI
+poetry run behave                                                                        # integration tests
 ```
 
 The client tests stand up a fake IDE on an ephemeral port and point the client at it with `PARTCAD_IDE_PORT`,
@@ -46,10 +47,12 @@ stubbed out, and the sandbox side is covered by the render tests.
 ## Lint / format
 
 ```bash
-black --check partcad-ide-client
-flake8 partcad-ide-client
-isort --check partcad-ide-client
+poetry run black --check partcad-ide-client
 ```
+
+Note that `flake8` reports E501 at 79 columns on every file in this repo (it does not read the 120-column
+setting from `pyproject.toml` without a plugin), and `isort` disagrees with the tree as committed; neither
+gates a PR. See the root [AGENTS.md](../AGENTS.md).
 
 ## Commit
 

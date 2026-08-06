@@ -33,6 +33,29 @@ export const PARTCAD_IDE_PORT = 9137;
 export const PARTCAD_IDE_HOST = '127.0.0.1';
 
 /**
+ * The port to listen on: the constant one, unless PARTCAD_IDE_PORT says otherwise.
+ *
+ * The Python client honours the same variable, so both ends move together - a
+ * developer running two IDE windows, or pointing a process at a throwaway
+ * server, sets it once in the environment. An unparseable or out-of-range value
+ * falls back to the constant rather than failing to bind, matching the client.
+ */
+export function listenPort(env: NodeJS.ProcessEnv = process.env): number {
+    const raw = env.PARTCAD_IDE_PORT;
+    if (!raw) {
+        // Unset or empty. Checked before Number(), which reads "" as 0.
+        return PARTCAD_IDE_PORT;
+    }
+    const override = Number(raw);
+    // From 1: port 0 means "any free port", which cannot be the far end of a
+    // protocol whose whole point is that the client knows where to connect.
+    if (Number.isInteger(override) && override >= 1 && override <= 65535) {
+        return override;
+    }
+    return PARTCAD_IDE_PORT;
+}
+
+/**
  * A single frame is capped so a desynchronized or hostile peer cannot make us
  * allocate an arbitrary buffer. Must match MAX_FRAME_LENGTH on the Python side.
  */

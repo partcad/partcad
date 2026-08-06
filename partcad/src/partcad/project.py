@@ -843,7 +843,7 @@ class Project(project_config.Configuration):
                     self.record_broken_object(factory_name, object_name, e)
                     return None
 
-                if not object_name in objects or objects[object_name] is None:
+                if object_name not in objects or objects[object_name] is None:
                     # Returning None, not 'objects[object_name]': the object is
                     # known to be absent here - that is what this branch tests
                     # for - so indexing it raised a bare KeyError out of the very
@@ -938,7 +938,7 @@ class Project(project_config.Configuration):
                 return None
 
             # See if it worked
-            if not result_name in objects:
+            if result_name not in objects:
                 self.record_broken_object(factory_name, result_name, "the factory produced no object")
                 return None
 

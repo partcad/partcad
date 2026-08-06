@@ -147,6 +147,18 @@ scene.add(shadowPlane);
 /** Everything the current show put on the stage; replaced wholesale by the next. */
 let content: THREE.Group | undefined;
 
+/**
+ * Which show is the current one.
+ *
+ * Parsing a glTF is asynchronous, so a second show (or a clear) can arrive and
+ * finish while the first is still decoding its objects. Without this, the older
+ * call would go on to install its now-stale model over the newer one - visible
+ * as the viewer showing the previously selected part after a quick change of
+ * selection, or after a save that re-renders. Every show takes a generation on
+ * entry and abandons its work as soon as it is no longer the newest.
+ */
+let generation = 0;
+
 const loader = new GLTFLoader();
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
@@ -182,6 +194,8 @@ function disposeTree(root: THREE.Object3D): void {
 }
 
 function clear(): void {
+    // Takes a generation too, so a show still decoding cannot undo the clear.
+    generation += 1;
     if (content !== undefined) {
         scene.remove(content);
         disposeTree(content);
@@ -264,6 +278,9 @@ function addMarkers(parent: THREE.Group, markers: ShowMarker[], size: number): v
 }
 
 async function show(message: ShowMessage): Promise<void> {
+    const mine = (generation += 1);
+    const superseded = () => generation !== mine;
+
     const totalSize = message.objects.reduce((sum, object) => sum + object.size, 0);
     overlay.style.display = '';
     overlay.textContent = `Model size: ${(totalSize / 1048576.0).toFixed(2)}MB\n0% loaded`;
@@ -278,6 +295,13 @@ async function show(message: ShowMessage): Promise<void> {
         } catch (error: any) {
             vscode.postMessage({ type: 'error', message: `failed to parse '${object.name}': ${error}` });
             continue;
+        }
+
+        if (superseded()) {
+            // Something newer arrived while this object was decoding. Drop what
+            // has been built so far rather than paint it over the newer state.
+            disposeTree(group);
+            return;
         }
 
         parsed.traverse((node) => {
@@ -312,6 +336,11 @@ async function show(message: ShowMessage): Promise<void> {
     const geometryBox = new THREE.Box3().setFromObject(group);
     const largest = geometryBox.isEmpty() ? 0 : Math.max(...geometryBox.getSize(new THREE.Vector3()).toArray());
     addMarkers(group, message.markers ?? [], largest > 0 ? largest / 4 / MM_TO_M : 10);
+
+    if (superseded()) {
+        disposeTree(group);
+        return;
+    }
 
     if (content !== undefined) {
         scene.remove(content);
