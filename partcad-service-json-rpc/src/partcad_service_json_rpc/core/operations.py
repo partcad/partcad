@@ -691,11 +691,19 @@ def lint_run(session, params):
     return None
 
 
-def system_reset(session, params):
-    """Reset PartCAD's internal state (cached repos, sandboxes, filesystem cache).
+def daemon_reset(session, params):
+    """Reset the daemon's internal state (cached repos, sandboxes, filesystem cache).
 
-    Because the daemon holds warm contexts that reference these directories, the
-    context registry is cleared too so later commands rebuild from clean state.
+    This is the daemon-side counterpart of `pc system reset`, which only ever
+    touches the machine the CLI runs on. The daemon owns its own internal state
+    directory and the warm contexts that reference it, so the context registry
+    is cleared too and later commands rebuild from clean state.
+
+    Runs unconditionally: the caller has already decided, and a background
+    daemon has nobody to ask for confirmation.
+    TODO: restrict this with some form of access control. It wipes state on
+    behalf of whoever can reach the socket, which is fine while the daemon is
+    per-user and local, and is not once it is reachable over HTTP or remotely.
     """
     import shutil
 
@@ -733,68 +741,6 @@ def system_reset(session, params):
     # The warm contexts now reference deleted directories; drop them.
     session.contexts.clear()
     session.partcad_ctx = None
-    return None
-
-
-def system_status(session, params):
-    """Report PartCAD's version and internal storage usage.
-
-    Output matches the in-process ``pc system status`` (human-readable MB sizes
-    and the "<X> cache size:" labels the behave scenarios assert on).
-    """
-    pc = session.ensure_partcad()
-    root = pc.user_config.internal_state_dir
-
-    def _dir_size(path):
-        total = 0
-        for dirpath, _dirnames, filenames in os.walk(path):
-            for name in filenames:
-                fp = os.path.join(dirpath, name)
-                if not os.path.islink(fp):
-                    total += os.path.getsize(fp)
-        return total / 1048576.0
-
-    with pc.logging.Process("Status", "global"):
-        pc.logging.info("PartCAD version: %s" % pc.__version__)
-        pc.logging.info("Internal data storage location: %s" % root)
-        with pc.logging.Action("Status", "total"):
-            pc.logging.info("Total internal data storage size: %.2fMB" % _dir_size(root))
-        with pc.logging.Action("Status", "git"):
-            pc.logging.info("Git cache size: %.2fMB" % _dir_size(os.path.join(root, "git")))
-        with pc.logging.Action("Status", "tar"):
-            pc.logging.info("Tar cache size: %.2fMB" % _dir_size(os.path.join(root, "tar")))
-        with pc.logging.Action("Status", "sandbox"):
-            pc.logging.info("Sandbox environments size: %.2fMB" % _dir_size(os.path.join(root, "sandbox")))
-    return None
-
-
-def system_set_telemetry(session, params):
-    """Set a telemetry configuration value (type/env/sentryDsn) persistently.
-
-    Messages and per-key Process names mirror the in-process CLI commands the
-    behave scenarios assert on.
-    """
-    pc = session.ensure_partcad()
-    import partcad.actions.config as pc_actions_config
-
-    key = params["key"]  # "type" | "env" | "sentryDsn"
-    value = params["value"]
-    process_name = {"type": "SysSetTelType", "env": "SysSetTelEnv", "sentryDsn": "SysSetTelDsn"}.get(key, "SysSet")
-    with pc.logging.Process(process_name, "global"):
-        yaml, config = pc_actions_config.system_config_get()
-        if "telemetry" not in config:
-            config["telemetry"] = {}
-        config["telemetry"][key] = value
-        if key == "type":
-            if value == "none":
-                pc.logging.info("Telemetry collection disabled")
-            elif value == "sentry":
-                pc.logging.info("Telemetry collection enabled with Sentry")
-        elif key == "env":
-            pc.logging.info("Telemetry environment set to %s" % value)
-        elif key == "sentryDsn":
-            pc.logging.info("Sentry DSN set to %s" % value)
-        pc_actions_config.system_config_set(yaml, config)
     return None
 
 

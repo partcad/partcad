@@ -518,7 +518,7 @@ def test_a_rejected_path_is_reported_without_touching_the_context(tmp_path):
     assert ctx.project.added == []
 
 
-def test_system_reset_drops_every_warm_context(tmp_path):
+def test_daemon_reset_drops_every_warm_context(tmp_path):
     """The reset deletes the directories the contexts point into; none may survive."""
     session, _ = make_session(FakeUserConfig(internal_state_dir=str(tmp_path / "state")))
     first_dir, second_dir = tmp_path / "one", tmp_path / "two"
@@ -527,7 +527,7 @@ def test_system_reset_drops_every_warm_context(tmp_path):
     create_context(session, first_dir)
     create_context(session, second_dir)
 
-    operations.system_reset(session, {})
+    operations.daemon_reset(session, {})
 
     assert session.contexts == {}
     assert session.partcad_ctx is None

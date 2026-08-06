@@ -63,6 +63,14 @@ IN_PROCESS = {
     "daemon/stop.py": "manages the daemon process itself",
     "system/telemetry/clear.py": "clears the client's own telemetry id under the client's state dir",
     "system/telemetry/info.py": "reports the client's own telemetry configuration",
+    # `pc system ...` acts on the machine the CLI runs on, by definition: its
+    # internal state directory, its telemetry settings, its user config. The
+    # daemon's own equivalent state is reached through `pc daemon reset`.
+    "system/reset.py": "resets the client's internal state dir; `pc daemon reset` does the daemon's",
+    "system/status.py": "reports the client's internal state dir and its sizes",
+    "system/set/telemetry/type.py": "writes the client's own user configuration",
+    "system/set/telemetry/env.py": "writes the client's own user configuration",
+    "system/set/telemetry/sentryDsn.py": "writes the client's own user configuration",
 }
 
 # Commands that have not been migrated to the daemon yet. This list is a debt

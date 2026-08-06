@@ -71,6 +71,13 @@ class GitConfig(BaseConfig):
         super().__init__(v, "git.config")
 
 
+class GitAuthConfig(BaseConfig):
+    """Credentials for private Git remotes, keyed by host (or "default")."""
+
+    def __init__(self, v):
+        super().__init__(v, "git.auth")
+
+
 class ApiKeyConfig(BaseConfig):
     def __init__(self, v):
         super().__init__(v, "apiKey")
@@ -458,6 +465,22 @@ class UserConfig(vyper.Vyper):
         # values: <dict>
         # default: {}
         self.git_config = GitConfig(self)
+
+        # option: git.auth
+        # description: Credentials for private Git dependencies, keyed by host
+        #              (or "default"). PartCAD never prompts for credentials --
+        #              a prompt in a background daemon or a CI job is a hang --
+        #              so they are configured here, upfront:
+        #                git:
+        #                  auth:
+        #                    github.com:
+        #                      username: <user>          # HTTPS
+        #                      password: <token>         # a PAT, not a password
+        #                      sshKey: ~/.ssh/id_work    # SSH
+        #                      sshKeyPassphrase: <pass>
+        # values: <dict>
+        # default: {}
+        self.git_auth = GitAuthConfig(self)
 
         # option: Provider Key
         # description: Provider Key configuration

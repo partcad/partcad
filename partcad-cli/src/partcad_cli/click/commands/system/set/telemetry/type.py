@@ -6,7 +6,8 @@
 
 import rich_click as click
 
-from .....service import run
+import partcad as pc
+import partcad.actions.config as pc_actions_config
 
 
 @click.command(help="Set telemetry collection method")
@@ -18,4 +19,20 @@ from .....service import run
 )
 @click.pass_obj
 def cli(cli_ctx, type: str) -> None:
-    run(cli_ctx, "system.set.telemetry", {"key": "type", "value": type}, span_name="system set telemetry type")
+    with pc.telemetry.set_context(cli_ctx.otel_context):
+        with pc.logging.Process("SysSetTelType", "global"):
+            yaml, config = pc_actions_config.system_config_get()
+            if not "telemetry" in config:
+                config["telemetry"] = {}
+
+            if type == "none":
+                config["telemetry"]["type"] = "none"
+                pc.logging.info("Telemetry collection disabled")
+            elif type == "sentry":
+                config["telemetry"]["type"] = "sentry"
+                pc.logging.info("Telemetry collection enabled with Sentry")
+            else:
+                pc.logging.error(f"Unknown telemetry type: {type}")
+                return
+
+            pc_actions_config.system_config_set(yaml, config)
