@@ -41,6 +41,7 @@ from .part_factory_sweep import PartFactorySweep
 from .part_factory_alias import PartFactoryAlias
 from .part_factory_enrich import PartFactoryEnrich
 from .part_factory_compound import PartFactoryCompound
+from .part_factory_wrapper import PartFactoryWrapper
 from .sketch_factory_basic import SketchFactoryBasic
 from .sketch_factory_cadquery import SketchFactoryCadquery
 from .sketch_factory_build123d import SketchFactoryBuild123d
@@ -83,6 +84,8 @@ factory.register("part", "sweep", PartFactorySweep)
 factory.register("part", "alias", PartFactoryAlias)
 factory.register("part", "enrich", PartFactoryEnrich)
 factory.register("part", "compound", PartFactoryCompound)
+# Constructs parts whose 'type' references a package-defined partType.
+factory.register("part", "wrapper", PartFactoryWrapper)
 factory.register("assembly", "assy", AssemblyFactoryAssy)
 factory.register("assembly", "alias", AssemblyFactoryAlias)
 factory.register("file", "url", FileFactoryUrl)

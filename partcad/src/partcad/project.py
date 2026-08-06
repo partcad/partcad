@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 # The kinds of first-class objects a package may contain, mapped to the
 # 'partcad.yaml' section that declares them. Kept as data so that introducing a
 # new kind of object does not require touching the per-kind accessor plumbing.
-OBJECT_KINDS = ("interface", "sketch", "part", "assembly", "provider", "repository")
+OBJECT_KINDS = ("interface", "sketch", "part", "assembly", "provider", "repository", "partType")
 OBJECT_KIND_SECTIONS = {
     "interface": "interfaces",
     "sketch": "sketches",
@@ -58,6 +58,11 @@ OBJECT_KIND_SECTIONS = {
     "assembly": "assemblies",
     "provider": "providers",
     "repository": "repositories",
+    # A 'partType' is a package-defined way to construct parts (e.g. a wrapper
+    # script). It is enumerable like any other object, but it is not a shape and
+    # is never instantiated: parts whose 'type' references it are constructed by
+    # PartFactoryWrapper, which looks the definition up here.
+    "partType": "partTypes",
 }
 
 
@@ -264,12 +269,18 @@ class Project(project_config.Configuration):
         everything if the targeted fetch is not supported.
         """
         configs = self._object_configs.get(kind)
-        if configs is not None:
-            return configs.get(name)
+        if configs is not None and name in configs:
+            return configs[name]
+        # Not in the (possibly already enumerated) set: try a targeted single
+        # fetch. A plugin-backed package can serve objects beyond what it
+        # enumerates - e.g. the first page of a large, paginated catalog - so
+        # any addressable object remains reachable even when it was not listed.
         one = self._fetch_object_config(kind, name)
         if one is not None:
             return one
-        return self.object_configs(kind).get(name)
+        if configs is None:
+            return self.object_configs(kind).get(name)
+        return None
 
     def object_names(self, kind: str) -> list:
         return list(self.object_configs(kind).keys())
@@ -552,6 +563,9 @@ class Project(project_config.Configuration):
     def get_repository_config(self, repository_name):
         return self.object_config("repository", repository_name)
 
+    def get_part_type_config(self, part_type_name):
+        return self.object_config("partType", part_type_name)
+
     def get_object_config(self, object_name, configs: dict[str, dict[str, typing.Any]]):
         if not object_name in configs:
             return None
@@ -779,8 +793,12 @@ class Project(project_config.Configuration):
             self.lock.release()
 
             if not has_name_params:
-                # This is just a regular object name, no params (object_name == result_name)
-                if not object_name in object_configs:
+                # This is just a regular object name, no params (object_name == result_name).
+                # Resolve through 'get_config' rather than a membership test on
+                # the enumerated set, so a plugin-backed package can serve an
+                # object it did not enumerate (a targeted single fetch).
+                config = get_config(object_name)
+                if config is None:
                     # We don't know anything about such an object
                     if not quiet:
                         pc_logging.error(
@@ -789,8 +807,6 @@ class Project(project_config.Configuration):
                             self.name,
                         )
                     return None
-                # This is not yet created (invalidated?)
-                config = get_config(object_name)
                 full_object_name = f"{self.name}:{object_name}"
                 config = config_class.normalize(object_name, config, full_object_name)
                 self.init_object_by_config(factory_name, config_class, alias_class, config)

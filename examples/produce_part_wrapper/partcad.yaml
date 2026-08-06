@@ -1,0 +1,27 @@
+desc: |
+  PartCAD example: a part built by a package-defined 'partType'.
+
+  'partTypes' declares a reusable way to construct parts. The 'box' partType
+  below is of the default kind 'wrapper': its 'path' is a Python script run in
+  the sandbox to produce the shape. The 'demo' part references it with the short
+  form ':box' (expanded to '<this package>:box' when loaded).
+
+docs:
+  usage: |
+    ```shell
+    pc inspect :demo
+    ```
+
+partTypes:
+  box:
+    kind: wrapper
+    path: box_wrapper.py
+
+parts:
+  demo:
+    type: ":box"
+    desc: A box built by the 'box' wrapper partType.
+    parameters:
+      size:
+        type: float
+        default: 12
