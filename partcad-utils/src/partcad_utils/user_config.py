@@ -78,11 +78,6 @@ class GitAuthConfig(BaseConfig):
         super().__init__(v, "git.auth")
 
 
-class ApiKeyConfig(BaseConfig):
-    def __init__(self, v):
-        super().__init__(v, "apiKey")
-
-
 class PIIConfig(BaseConfig):
     def __init__(self, v):
         super().__init__(v, "user")
@@ -481,12 +476,6 @@ class UserConfig(vyper.Vyper):
         # values: <dict>
         # default: {}
         self.git_auth = GitAuthConfig(self)
-
-        # option: Provider Key
-        # description: Provider Key configuration
-        # values: <dict>
-        # default: {}
-        self.api_key = ApiKeyConfig(self)
 
         # option: Personally identifiable information
         # description: Personally identifiable information configuration
