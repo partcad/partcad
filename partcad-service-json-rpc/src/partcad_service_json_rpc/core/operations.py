@@ -744,6 +744,70 @@ def daemon_reset(session, params):
     return None
 
 
+def daemon_status(session, params):
+    """Report the daemon's version and internal storage usage.
+
+    The daemon-side counterpart of `pc system status`, which reports the same
+    for the machine the CLI runs on. The two coincide while the daemon is local;
+    they will not once it can be remote, which is why both exist.
+    """
+    pc = session.ensure_partcad()
+    root = pc.user_config.internal_state_dir
+
+    def _dir_size(path):
+        total = 0
+        for dirpath, _dirnames, filenames in os.walk(path):
+            for name in filenames:
+                fp = os.path.join(dirpath, name)
+                if not os.path.islink(fp):
+                    total += os.path.getsize(fp)
+        return total / 1048576.0
+
+    with pc.logging.Process("Status", "global"):
+        pc.logging.info("PartCAD version: %s" % pc.__version__)
+        pc.logging.info("Internal data storage location: %s" % root)
+        with pc.logging.Action("Status", "total"):
+            pc.logging.info("Total internal data storage size: %.2fMB" % _dir_size(root))
+        with pc.logging.Action("Status", "git"):
+            pc.logging.info("Git cache size: %.2fMB" % _dir_size(os.path.join(root, "git")))
+        with pc.logging.Action("Status", "tar"):
+            pc.logging.info("Tar cache size: %.2fMB" % _dir_size(os.path.join(root, "tar")))
+        with pc.logging.Action("Status", "sandbox"):
+            pc.logging.info("Sandbox environments size: %.2fMB" % _dir_size(os.path.join(root, "sandbox")))
+    return None
+
+
+def daemon_set_telemetry(session, params):
+    """Set a telemetry setting in the daemon's own configuration.
+
+    The daemon-side counterpart of `pc system set telemetry ...`. It writes the
+    configuration the daemon reads, which is a different file from the client's
+    whenever the two are not the same machine.
+    """
+    pc = session.ensure_partcad()
+    import partcad.actions.config as pc_actions_config
+
+    key = params["key"]  # "type" | "env" | "sentryDsn"
+    value = params["value"]
+    process_name = {"type": "SysSetTelType", "env": "SysSetTelEnv", "sentryDsn": "SysSetTelDsn"}.get(key, "SysSet")
+    with pc.logging.Process(process_name, "global"):
+        yaml, config = pc_actions_config.system_config_get()
+        if "telemetry" not in config:
+            config["telemetry"] = {}
+        config["telemetry"][key] = value
+        if key == "type":
+            if value == "none":
+                pc.logging.info("Telemetry collection disabled")
+            elif value == "sentry":
+                pc.logging.info("Telemetry collection enabled with Sentry")
+        elif key == "env":
+            pc.logging.info("Telemetry environment set to %s" % value)
+        elif key == "sentryDsn":
+            pc.logging.info("Sentry DSN set to %s" % value)
+        pc_actions_config.system_config_set(yaml, config)
+    return None
+
+
 def inspect_object(session, params):
     """Inspect an object: show it in the CAD viewer, or return a verbal summary."""
     ctx = _ctx(session, params)

@@ -44,6 +44,8 @@ _OPERATIONS = {
     "test.run": operations.test_run,
     "lint.run": operations.lint_run,
     "daemon.reset": operations.daemon_reset,
+    "daemon.status": operations.daemon_status,
+    "daemon.set.telemetry": operations.daemon_set_telemetry,
     "test": operations.test,
     "info": operations.info,
     "info.object": operations.info_object,

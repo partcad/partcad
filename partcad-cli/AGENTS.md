@@ -26,9 +26,12 @@ A command stays **in-process** only when it operates on the client's own state, 
 runs on, by definition: its internal state directory, its user configuration. Still unmigrated: `supply/*`,
 `add sketch`, `add dep`.
 
-`pc daemon ...` is the other side of that pair: `daemon start|stop` manage the process, and **`daemon reset`**
-is the daemon-side counterpart of `pc system reset` — it clears the daemon's own internal state directory and
-the warm contexts that reference it. It runs unconditionally, because the caller has already decided and a
+`pc daemon ...` is the other side of that pair, command for command: `daemon start|stop` manage the process,
+while **`daemon status`**, **`daemon reset`** and **`daemon set telemetry ...`** are the daemon-side
+counterparts of the `pc system` commands of the same name — they report and change the daemon's own internal
+state directory and configuration, not the client's. The two coincide today, because the daemon runs on the
+same machine; they will not once a daemon can be remote, which is why both halves exist. `daemon reset` clears
+the daemon's state directory and the warm contexts that reference it. It runs unconditionally, because the caller has already decided and a
 background daemon has nobody to ask for confirmation; a destructive confirmation, when one is wanted, belongs
 in the client, before the call. (The daemon and the CLI share a machine today, so the two state directories
 coincide; they will not once a daemon can be remote, which is why the commands are separate. `daemon reset`
