@@ -425,30 +425,44 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
             partcad_log_w_stream.write("Installing the latest PartCAD...\r\n")
             partcad_log_w_stream.flush()
 
-        result = utils.run_module(
-            module="pip",
-            argv=[
-                "pip",
-                "install",
-            ]
-            + override_externally_managed
-            + [
-                "--user",
-                "--no-input",
-                "--upgrade",
-                "partcad-service-json-rpc",
-                # Installed alongside, not depended on by 'partcad': it is only
-                # useful when an IDE is there to talk to, and 'partcad' imports
-                # it lazily. This is the install that makes 'show()' reach the
-                # PartCAD Viewer.
-                "partcad-ide-client",
-            ],
-            use_stdin=False,
-            add_stdout=partcad_log_w_stream,
-            add_stderr=partcad_log_w_stream,
-            cwd=os.getcwd(),
-            source=None,
-        )
+        def pip_install(*packages):
+            return utils.run_module(
+                module="pip",
+                argv=["pip", "install"]
+                + override_externally_managed
+                + ["--user", "--no-input", "--upgrade"]
+                + list(packages),
+                use_stdin=False,
+                add_stdout=partcad_log_w_stream,
+                add_stderr=partcad_log_w_stream,
+                cwd=os.getcwd(),
+                source=None,
+            )
+
+        result = pip_install("partcad-service-json-rpc")
+
+        # A separate invocation, and a non-fatal one. 'partcad-ide-client' is
+        # installed alongside PartCAD rather than depended on by it: it is only
+        # useful when an IDE is there to talk to, 'partcad' imports it lazily,
+        # and 'show()' degrades to a warning without it. Putting it in the
+        # command above would mean that one unavailable optional package took
+        # PartCAD itself down with it, since pip installs nothing when any
+        # requirement in a single invocation cannot be resolved.
+        try:
+            client_result = pip_install("partcad-ide-client")
+            if client_result.stderr:
+                LSP_SERVER.send_notification(
+                    "?/partcad/warn",
+                    "PartCAD is installed, but 'partcad-ide-client' is not, so the PartCAD Viewer "
+                    "will not receive anything: %s" % client_result.stderr,
+                )
+        except Exception as e:  # pylint: disable=broad-except
+            LSP_SERVER.send_notification(
+                "?/partcad/warn",
+                "PartCAD is installed, but 'partcad-ide-client' is not, so the PartCAD Viewer "
+                "will not receive anything: %s" % e,
+            )
+
         if partcad_log_w_stream is not None:
             partcad_log_w_stream.write("Done attempting to install the latest PartCAD!\r\n")
             partcad_log_w_stream.flush()
