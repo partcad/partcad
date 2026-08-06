@@ -104,6 +104,10 @@ class FakeUtils:
         return project_pattern, item_pattern
 
 
+class FakeNeedsUpdateException(Exception):
+    """Stand-in for ``partcad.exception.NeedsUpdateException``."""
+
+
 class FakePartcad:
     __version__ = "0.7.158"
 
@@ -111,6 +115,9 @@ class FakePartcad:
         self.logging = RecordingLogging()
         self.user_config = FakeUserConfig()
         self.utils = FakeUtils()
+        # A real 'partcad' exposes this, and the load operations catch through
+        # it to tell "PartCAD is too old" apart from an ordinary failure.
+        self.exception = types.SimpleNamespace(NeedsUpdateException=FakeNeedsUpdateException)
 
 
 class FakeShape:
@@ -162,6 +169,11 @@ class FakeProject:
         self.path = path
         self.desc = desc
         self.broken = broken
+        # A real Project knows the 'partcad.yaml' it was parsed from; the
+        # Context does not, which is what '_root_config_path' exists for.
+        self.config_path = "/abs/partcad.yaml"
+        self.config_dir = path
+        self.broken_objects = {}
         self.config_obj = dict(config_obj or {})
         if url is not None:
             # Only imported packages have a `url` attribute; `list packages`
@@ -173,6 +185,13 @@ class FakeProject:
         self.assemblies = {}
         self.interfaces = {}
         self.providers = {}
+        self.children = []
+        # A real package's parsed configuration carries its name, which is what
+        # the client reads each row's label from.
+        self.config_obj.setdefault("name", name)
+
+    def get_child_project_names(self):
+        return list(self.children)
 
     def add(self, kind, obj):
         getattr(self, kind)[obj.name] = obj
@@ -202,12 +221,14 @@ class FakeContext:
     def __init__(self, name="//"):
         self.name = name
         self.current_project_path = name
-        self.config_path = "/abs/partcad.yaml"
         self.requested = []
         self.mates = {}
         self.stats_git_ops = 0
         self.user_config = FakeUserConfig()
         self.projects = {name: FakeProject(name=name)}
+        # As on a real Context: the root package, and the only place the loaded
+        # 'partcad.yaml' path can be read from.
+        self.root = self.projects[name]
         # Instantiated objects, keyed by (kind, "package:name") as the context
         # is asked for them.
         self.shapes = {}
@@ -908,3 +929,67 @@ def test_info_object_reports_a_missing_object():
     operations.info_object(session, {"object": "missing"})
 
     assert session.partcad.logging.messages("error") == ["Object //:missing not found"]
+
+
+# ---- package loading -------------------------------------------------------
+#
+# The operations that answer "which package is loaded, and what is in it". They
+# had no coverage at all, which is how the extension shipped unable to load any
+# package: they read `Context.config_path` and `Context.broken`, neither of
+# which a Context has -- both belong to the root Project.
+
+
+def test_package_load_reports_the_root_packages_config_path():
+    session, seen = make_session()
+    session.partcad.init = lambda path: session.partcad_ctx
+
+    operations.package_load(session, {"path": "/abs"})
+
+    loaded = [payload for event, payload in seen if event == events.PACKAGE_LOADED]
+    assert loaded == [{"configPath": "/abs/partcad.yaml", "root": "//"}]
+    assert events.PACKAGE_LOAD_FAILED not in [event for event, _ in seen]
+
+
+def test_package_load_says_why_when_the_root_package_is_missing():
+    session, seen = make_session()
+    session.partcad.init = lambda path: session.partcad_ctx
+    # A context whose root never loaded, which is the real "no package here".
+    session.partcad_ctx.root = None
+
+    operations.package_load(session, {"path": "/abs"})
+
+    assert events.PACKAGE_LOAD_FAILED in [event for event, _ in seen]
+    # ...and the reason is reported rather than swallowed, which is what left
+    # the user with a bare "No PartCAD package is detected".
+    errors = [payload for event, payload in seen if event == events.ERROR]
+    assert len(errors) == 1
+    assert "Failed to load package" in errors[0]
+
+
+def test_load_package_contents_lists_objects_that_could_not_be_created():
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    project.broken_objects = {"part": {"tier01": "unknown part type 'ai-cadquery'"}}
+
+    operations._load_package_contents(session, "//")
+
+    (items,) = [payload for event, payload in seen if event == events.ITEMS]
+    assert items["broken"] == [{"kind": "part", "name": "tier01", "reason": "unknown part type 'ai-cadquery'"}]
+    # The user is told to go look, since the package otherwise appears empty.
+    warnings = [payload for event, payload in seen if event == events.WARNING]
+    assert any("could not be loaded" in w for w in warnings)
+
+
+def test_load_package_contents_skips_a_child_package_it_cannot_read():
+    session, seen = make_session()
+    project = session.partcad_ctx.projects["//"]
+    project.children = ["//good", "//missing"]
+    session.partcad_ctx.projects["//good"] = FakeProject(name="//good")
+    # '//missing' resolves to None, as it does for a package that failed to load.
+
+    operations._load_package_contents(session, "//")
+
+    (items,) = [payload for event, payload in seen if event == events.ITEMS]
+    assert [p["name"] for p in items["packages"]] == ["//good"]
+    warnings = [payload for event, payload in seen if event == events.WARNING]
+    assert any("//missing" in w for w in warnings)

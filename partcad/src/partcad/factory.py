@@ -7,6 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+
 class UnknownTypeException(Exception):
     """A declared object names a type this PartCAD has no factory for.
 

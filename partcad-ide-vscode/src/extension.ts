@@ -212,7 +212,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         items.sketches.length === 0 &&
                         items.interfaces.length === 0 &&
                         items.parts.length === 0 &&
-                        items.assemblies.length === 0
+                        items.assemblies.length === 0 &&
+                        // Objects that failed to load count as items too: a
+                        // package of nothing but broken ones has something to
+                        // show, and hiding the tree behind the "no items"
+                        // placeholder is what leaves the user with no way to
+                        // find out what went wrong.
+                        (items.broken ?? []).length === 0
                     ) {
                         await vscode.commands.executeCommand('setContext', 'partcad.itemsReceived', false);
                     } else {

@@ -1526,6 +1526,10 @@ def _load_package_contents(session, name="//"):
                 if child is None:
                     raise Exception("the package could not be loaded")
                 packages.append(pkg_obj(child))
+            except session.partcad.exception.NeedsUpdateException:
+                # Not per-package: this says PartCAD itself is too old, and the
+                # caller turns it into the "update PartCAD" prompt.
+                raise
             except Exception as e:  # pylint: disable=broad-except
                 session.emitter.warning("Skipping the package '%s': %s" % (child_name, e))
 

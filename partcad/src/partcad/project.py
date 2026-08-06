@@ -37,7 +37,7 @@ from . import (
 )
 from . import sketch_factory_alias as sfa
 from . import telemetry
-from .exception import EmptyShapesError
+from .exception import EmptyShapesError, NeedsUpdateException
 from .part import Part
 from .render import render_cfg_merge
 from .utils import normalize_resource_path, resolve_resource_path
@@ -615,7 +615,15 @@ class Project(project_config.Configuration):
         Reported once, here, rather than by each caller: the same failure is
         reachable both while enumerating a package and while resolving a single
         object by name, and it should read the same either way.
+
+        A 'NeedsUpdateException' is re-raised rather than recorded: it says the
+        *package* requires a newer PartCAD, which is not a per-object condition
+        and which the caller turns into its own "update PartCAD" prompt. Filing
+        it against one object would swallow that prompt.
         """
+        if isinstance(reason, NeedsUpdateException):
+            raise reason
+
         reason = str(reason) or type(reason).__name__
         # One line, and short: some of these configurations embed multi-page
         # descriptions, and logging the whole thing buries every other message.
