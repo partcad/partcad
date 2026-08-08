@@ -108,6 +108,17 @@ def test_daemon_stop_responds_then_shuts_down_and_unlinks(socket_dir):
     c.close()
     thread.join(timeout=3)
     assert not thread.is_alive()
+    # The socket is unlinked by stop(), which the daemon.stop handler runs on
+    # the *connection* thread -- not the accept-loop `thread` joined above. And
+    # stop() sets the stop flag before it unlinks, so the accept loop can see
+    # the flag and exit (ending `thread`) in the window before the unlink runs.
+    # Joining `thread` therefore does not imply the file is gone; poll for it.
+    # Mirror image of the startup race #496 fixed by waiting for listen()
+    # rather than for the socket file to appear.
+    for _ in range(300):
+        if not os.path.exists(path):
+            break
+        time.sleep(0.01)
     assert not os.path.exists(path)
 
 
