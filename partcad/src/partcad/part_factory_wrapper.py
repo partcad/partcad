@@ -19,21 +19,11 @@ import os
 from .part_factory import PartFactory
 from .utils import resolve_resource_path
 from . import logging as pc_logging
+from . import sandbox_versions
 from . import shape_envelope
 from . import telemetry
 from . import transform
 from . import wrapper
-
-# The geometry stack the sandbox needs so a wrapper can build and serialize
-# shapes. Matches the other Python-backed part factories. The core itself never
-# imports OCP: shapes cross the boundary as BREP envelopes (see shape_envelope).
-_SANDBOX_REQUIREMENTS = (
-    "ocp-tessellate==3.0.9",
-    "typing_extensions==4.12.2",
-    "cadquery-ocp==7.7.2",
-    "ocpsvg==0.3.4",
-    "build123d==0.8.0",
-)
 
 
 @telemetry.instrument()
@@ -48,9 +38,7 @@ class PartFactoryWrapper(PartFactory):
                 target_project.name, self.part_type_ref
             )
 
-            python_version = self.project.python_version or "3.11"
-            if python_version in ("3.10", "3.12"):
-                python_version = "3.11"
+            python_version = self.project.python_version or sandbox_versions.DEFAULT_PYTHON_VERSION
             self.runtime = self.ctx.get_python_runtime(python_version)
             self.session = self.runtime.get_session(source_project.name)
 
@@ -110,14 +98,26 @@ class PartFactoryWrapper(PartFactory):
                 part.error(str(e))
                 return None
 
-            # Prepare the sandbox: the partType's package dependencies plus the
-            # geometry stack, plus any requirements the partType declares.
+            # Prepare the sandbox: the partType's package dependencies, then
+            # whatever the partType itself declares, then the geometry stack.
             await self.runtime.prepare_for_package(pt_project, session=self.session)
             await self.runtime.prepare_for_shape(self.config, session=self.session)
-            for req in _SANDBOX_REQUIREMENTS:
-                await self.runtime.ensure_async(req, session=self.session)
             for req in pt_config.get("pythonRequirements", []) or []:
                 await self.runtime.ensure_async(req, session=self.session)
+
+            # The geometry stack the sandbox needs so a wrapper can build and
+            # serialize shapes. The versions come from sandbox_versions: a
+            # session v-env is shared by every part of a package, so a factory
+            # that pins its own version corrupts it for all the others. The
+            # core itself never imports OCP - shapes cross the boundary as
+            # BREP envelopes (see shape_envelope).
+            await self.runtime.ensure_async(sandbox_versions.OCP_TESSELLATE, session=self.session)
+            await self.runtime.ensure_async(sandbox_versions.TYPING_EXTENSIONS, session=self.session)
+            await self.runtime.ensure_async(sandbox_versions.OCPSVG, session=self.session)
+            await self.runtime.ensure_async(sandbox_versions.BUILD123D, session=self.session)
+            # Last: re-asserts the VTK-enabled OCP that build123d's
+            # 'cadquery-ocp-novtk' dependency has just replaced.
+            await self.runtime.ensure_async(sandbox_versions.CADQUERY_OCP, session=self.session)
 
             # The request handed to the wrapper script.
             request = {
