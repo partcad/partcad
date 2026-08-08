@@ -87,7 +87,7 @@ Caching
 
 PartCAD is capable of caching intermediate and final results of all model compilations.
 This can be particularly useful when working with large models or when scripting languages
-(like OpenSCAD, CadQuery, build123d or sdf) are used.
+(like OpenSCAD, CadQuery, build123d, Chili3D or sdf) are used.
 
 At the moment code-CAD caching is experimental and can be enabled by using the following configuration:
 
@@ -105,12 +105,13 @@ security and the risk of running arbitrary third-party code is not sufficiently
 addressed. PartCAD aims to close that gap for open-source software in a way
 that exceeds anything commercial software has to offer at the moment.
 
-PartCAD is capable of rendering scripted parts
-(``CadQuery``, ``build123d`` and ``sdf`` use Python) in sandboxed environments.
+PartCAD is capable of rendering scripted parts in sandboxed environments:
+``CadQuery``, ``build123d`` and ``sdf`` use Python, and ``Chili3D`` uses
+JavaScript.
 
 At the moment it is only useful from a dependency management perspective
-(it allows third-party packages to bring their Python dependencies without
-polluting your own Python environment),
+(it allows third-party packages to bring their Python and npm dependencies
+without polluting your own environments),
 in the future, PartCAD aims to achieve security isolation of the sandboxed
 environments. That will fundamentally change the security implications of using
 scripted models shared online.

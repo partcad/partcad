@@ -1063,6 +1063,7 @@ class Project(project_config.Configuration):
         ext_by_kind = {
             "cadquery": "py",
             "build123d": "py",
+            "chili3d": "chili",
             "sdf": "py",
         }
         return self._add_component(
@@ -1385,6 +1386,8 @@ class Project(project_config.Configuration):
                 if "type" in config:
                     if config["type"] == "cadquery" or config["type"] == "build123d" or config["type"] == "sdf":
                         path += ".py"
+                    elif config["type"] == "chili3d":
+                        path += ".chili"
                     elif config["type"] == "openscad":
                         path += ".scad"
                     else:

@@ -215,3 +215,96 @@ def zstd_requirement(python_version: str) -> str | None:
     if is_at_least(python_version, MIN_PYTHON_VERSION_ZSTD_STDLIB):
         return None
     return ZSTD
+
+
+#
+# JavaScript (Node.js) sandboxes
+#
+# The same idea as everything above, for the npm side: one place that decides
+# which JavaScript CAD stack a sandbox gets, so no two factories can disagree
+# about it. See runtime_javascript.py for how these are installed.
+#
+
+# Chili3D ships its OCCT kernel as a WebAssembly module ('chili-wasm') plus a
+# TypeScript API bundled into 'dist/index.js'. Both live in the one 'chili3d'
+# distribution on npm, so a sandbox needs nothing else to model.
+#
+# Pinned exactly, for the same reason the Python stack is: the wrapper reaches
+# into 'chili3d/packages/chili-wasm/lib' for the '.wasm' and its Emscripten
+# loader, which the package's "exports" map does not expose, so a layout change
+# is a breaking change for us even when it is not one for a browser consumer.
+CHILI3D = "chili3d@1.1.2"
+
+# Chili3D's bundle is built for the browser: importing it evaluates modules that
+# subclass HTMLElement and register custom elements, so a bare Node process
+# fails at import with "HTMLElement is not defined". happy-dom supplies just
+# enough DOM for the import to succeed - it is what Chili3D itself uses for its
+# own tests - and nothing in the modeling path touches it afterwards.
+#
+# A range rather than a pin: it is only a shim for globals whose shape has been
+# stable for years, and it carries no native code.
+HAPPY_DOM = "happy-dom@^20.11.2"
+
+# What a JavaScript sandbox gets when the package does not ask for a specific
+# Node.js. 22 is the active LTS line.
+DEFAULT_NODE_VERSION = "22"
+
+# 'module.register()' - which the wrapper uses to resolve a script's bare
+# imports against the sandbox rather than against the user's package - landed in
+# 20.6, and the '--import' flag it is loaded with in 20.6 as well.
+MIN_NODE_VERSION = "20"
+
+# Nothing here pins zstd for the JavaScript side. 'node:zlib' grew the zstd
+# helpers in 22.15 and the wrappers feature-detect them: where they are missing
+# a wrapper writes BREP uncompressed, which the Python end accepts because it
+# sniffs the zstd frame header rather than being told (see
+# wrappers/ocp_serialize._decompress).
+
+# The JavaScript stack this module pins, keyed by npm package name. Same
+# contract as PINNED_REQUIREMENTS above: a v-env is shared by every part of a
+# package, so one part asking for its own Chili3D would silently change the
+# kernel under all the others.
+PINNED_JS_REQUIREMENTS = (
+    CHILI3D,
+    HAPPY_DOM,
+)
+
+
+def js_package_name(requirement: str) -> str:
+    """The npm package a requirement string names.
+
+    Handles the spellings npm accepts for a registry dependency: a bare name, a
+    name with a version range ("chili3d@1.1.2"), and a scoped name whose leading
+    '@' must not be mistaken for the version separator ("@scope/pkg@1.2.3").
+    Anything else - a URL, a tarball, a local path - is returned as given, which
+    is enough for it to miss the lookup below and be installed untouched.
+    """
+    requirement = requirement.strip()
+    if requirement.startswith("@"):
+        name, separator, _ = requirement[1:].partition("@")
+        return "@" + name if separator else requirement
+    return requirement.partition("@")[0] or requirement
+
+
+_PINNED_BY_JS_PACKAGE = {js_package_name(requirement): requirement for requirement in PINNED_JS_REQUIREMENTS}
+
+
+def reconcile_js_requirement(requirement: str) -> tuple[str, str | None]:
+    """Force a JavaScript CAD-stack requirement to the version this module pins.
+
+    Returns '(requirement_to_install, superseded_requirement)', exactly like
+    'reconcile_requirement()' does for pip.
+    """
+    pinned = _PINNED_BY_JS_PACKAGE.get(js_package_name(requirement))
+    if pinned is None or pinned == requirement.strip():
+        return requirement, None
+    return pinned, requirement
+
+
+def node_major_version(version: str) -> str:
+    """The major version of a "<major>[.<minor>...]" Node.js version string.
+
+    Node.js is versioned by major line, and that is the granularity a sandbox is
+    provisioned at, so "22", "22.11" and "v22.11.0" all name the same sandbox.
+    """
+    return str(version).lstrip("v").split(".")[0]

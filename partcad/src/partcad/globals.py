@@ -28,6 +28,7 @@ from .plugin_factory_repository_basic import PluginFactoryRepositoryBasic
 from .plugin_factory_repository_enrich import PluginFactoryRepositoryEnrich
 from .part_factory_cadquery import PartFactoryCadquery
 from .part_factory_build123d import PartFactoryBuild123d
+from .part_factory_chili3d import PartFactoryChili3d
 from .part_factory_sdf import PartFactorySdf
 from .part_factory_step import PartFactoryStep
 from .part_factory_brep import PartFactoryBrep
@@ -71,6 +72,7 @@ factory.register("sketch", "alias", SketchFactoryAlias)
 factory.register("sketch", "enrich", SketchFactoryEnrich)
 factory.register("part", "cadquery", PartFactoryCadquery)
 factory.register("part", "build123d", PartFactoryBuild123d)
+factory.register("part", "chili3d", PartFactoryChili3d)
 factory.register("part", "sdf", PartFactorySdf)
 factory.register("part", "step", PartFactoryStep)
 factory.register("part", "brep", PartFactoryBrep)

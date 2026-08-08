@@ -121,7 +121,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Windows
   - [x] Linux
   - [x] macOS
-- Workflow acceleration by caching rendered models (including OpenSCAD, CadQuery and build123d)
+- Workflow acceleration by caching rendered models (including OpenSCAD, CadQuery, build123d and Chili3D)
   - [x] In memory
   - [x] On disk
   - [ ] Local Server _(in progress)_
@@ -147,6 +147,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Using scripting languages
     - [x] [CadQuery]
     - [x] [build123d]
+    - [x] [Chili3D]
     - [x] [OpenSCAD]
   - Using legacy CAD files
     - [x] `STEP`
@@ -250,6 +251,7 @@ Give us a star for our hard work!
 [conda]: https://docs.conda.io/
 [CadQuery]: https://github.com/CadQuery/cadquery
 [build123d]: https://github.com/gumyr/build123d
+[Chili3D]: https://github.com/xiangechen/chili3d
 [OpenSCAD]: https://openscad.org/
 [STEP]: https://en.wikipedia.org/wiki/ISO_10303
 [BREP]: https://en.wikipedia.org/wiki/Boundary_representation

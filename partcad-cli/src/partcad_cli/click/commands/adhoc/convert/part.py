@@ -12,7 +12,21 @@ from ....service import run
 
 # PartCAD part types (partcad.shape.PART_EXTENSION_MAPPING keys), inlined so the
 # thin CLI does not import the heavy partcad package.
-PART_TYPES = ["step", "brep", "stl", "3mf", "threejs", "obj", "iges", "gltf", "cadquery", "build123d", "sdf", "scad"]
+PART_TYPES = [
+    "step",
+    "brep",
+    "stl",
+    "3mf",
+    "threejs",
+    "obj",
+    "iges",
+    "gltf",
+    "cadquery",
+    "build123d",
+    "chili3d",
+    "sdf",
+    "scad",
+]
 
 
 @click.command(help="Convert CAD files between formats (ad-hoc mode).")

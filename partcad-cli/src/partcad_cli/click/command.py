@@ -75,7 +75,7 @@ option_groups = [
     },
     {
         "name": "Sandbox options",
-        "options": ["--python-sandbox", "--ignore-bundled-openscad"],
+        "options": ["--python-sandbox", "--javascript-sandbox", "--ignore-bundled-openscad"],
     },
     {
         "name": "Telemetry options",
@@ -230,6 +230,13 @@ click.rich_click.COMMAND_GROUPS = {
     help="Sandboxing environment for invoking python scripts(defaults to conda)",
 )
 @click.option(
+    "--javascript-sandbox",
+    default=None,
+    show_envvar=True,
+    type=click.Choice(["none", "conda"]),
+    help="Sandboxing environment for invoking JavaScript scripts (defaults to the host's Node.js)",
+)
+@click.option(
     "--ignore-bundled-openscad",
     is_flag=True,
     default=None,
@@ -352,6 +359,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
         ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
         ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
         ("PC_PYTHON_SANDBOX", "python_sandbox"),
+        ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),
         ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
         ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
         ("PC_FORCE_UPDATE", "force_update"),
@@ -438,6 +446,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
             ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
             ("PC_PYTHON_SANDBOX", "python_sandbox"),
+            ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),
             ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
             ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
             ("PC_FORCE_UPDATE", "force_update"),

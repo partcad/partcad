@@ -52,6 +52,7 @@ PART_EXTENSION_MAPPING = {
     "gltf": "json",
     "cadquery": "py",
     "build123d": "py",
+    "chili3d": "chili",
     "sdf": "py",
     "scad": "scad",
 }
@@ -73,6 +74,7 @@ LIVE_OBJECT_PART_TYPES = frozenset({"build123d", "cadquery"})
 UNEXPORTABLE_PART_TYPES = {
     "scad": "PartCAD can read OpenSCAD but cannot write it",
     "sdf": "PartCAD can read SDF scripts but cannot write them",
+    "chili3d": "PartCAD can read Chili3D scripts but cannot write them",
 }
 
 # Every part type named by the extension mappings that 'Shape.convert()' can

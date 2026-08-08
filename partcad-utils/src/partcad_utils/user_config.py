@@ -316,6 +316,19 @@ class UserConfig(vyper.Vyper):
         else:
             self.set_default("pythonSandbox", "none")
 
+        # Unlike Python, whose sandbox has to be provisioned because PartCAD's
+        # own interpreter is the wrong one to render in, a host Node.js is
+        # simply used when there is one: it costs nothing, and the dependency
+        # tree - which is what actually has to be isolated - is provisioned
+        # either way. conda is the fallback, so a host without Node.js still
+        # works if conda can supply one.
+        if shutil.which("node") is not None:
+            self.set_default("javascriptSandbox", "none")
+        elif shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
+            self.set_default("javascriptSandbox", "conda")
+        else:
+            self.set_default("javascriptSandbox", "none")
+
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
 
@@ -391,6 +404,13 @@ class UserConfig(vyper.Vyper):
         # default: conda
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
         self.python_sandbox = self.get_string("pythonSandbox")
+
+        # option: javascriptSandbox
+        # description: sandboxing environment for invoking JavaScript scripts
+        # values: [none | conda]
+        # default: none if the host has Node.js, else conda
+        self.bind_env("javascriptSandbox", "PC_JAVASCRIPT_SANDBOX")
+        self.javascript_sandbox = self.get_string("javascriptSandbox")
 
         # option: ignoreBundledOpenscad
         # description: ignore the OpenSCAD that the standalone bundle carries and
