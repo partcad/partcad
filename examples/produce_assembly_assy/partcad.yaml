@@ -21,6 +21,10 @@ assemblies:
   logo:
     type: assy
     desc: PartCAD logo
+    # Ask for a document of this assembly's own: its bill of materials, grouped
+    # by package. 'pc render -t readme -a :logo' generates the same thing.
+    render:
+      readme:
   logo_embedded:
     type: assy
     desc: PartCAD logo using embedded assemblies

@@ -183,3 +183,62 @@ class Assembly(Shape):
                 else:
                     bom[part_name] = 1
         return bom
+
+    async def get_bom_grouped_async(self):
+        """The recursive contents of this assembly, grouped by package.
+
+        Unlike 'get_bom()', which flattens the whole tree into a map of part
+        names, this keeps parts and sub-assemblies apart and groups each of them
+        by the package they come from:
+
+            {
+                "parts": {"//package": {"name": {"count": 2, "desc": "..."}}},
+                "assemblies": {...},
+            }
+
+        Assemblies embedded in the parent's source file (the nested 'links:' of
+        an ASSY file) are not objects of any package, so they are not listed:
+        their contents are attributed to the assembly that embeds them.
+        """
+        with pc_logging.Action("BoMGrouped", self.project_name, self.name):
+            return await self._get_bom_grouped_locked()
+
+    def get_bom_grouped(self):
+        return asyncio.run(self.get_bom_grouped_async())
+
+    async def _get_bom_grouped_locked(self):
+        with self.lock:
+            async with self.get_async_lock():
+                await self.do_instantiate()
+                return await self._get_bom_grouped_real()
+
+    async def _get_bom_grouped_real(self):
+        grouped = {"parts": {}, "assemblies": {}}
+        for child in self.children:
+            item = child.item
+            if isinstance(item, Assembly):
+                if not item.config.get("child", False):
+                    _bom_grouped_add(grouped["assemblies"], item)
+                _bom_grouped_merge(grouped, await item._get_bom_grouped_locked())
+            else:
+                _bom_grouped_add(grouped["parts"], item)
+        return grouped
+
+
+def _bom_grouped_add(section: dict, item):
+    """Account for one more instance of 'item' in a grouped BoM section."""
+    entries = section.setdefault(item.project_name, {})
+    entry = entries.setdefault(item.name, {"count": 0, "desc": getattr(item, "desc", None)})
+    entry["count"] += 1
+
+
+def _bom_grouped_merge(grouped: dict, other: dict):
+    """Add the counts of another grouped BoM into 'grouped'."""
+    for kind, packages in other.items():
+        for package_name, entries in packages.items():
+            target = grouped[kind].setdefault(package_name, {})
+            for name, entry in entries.items():
+                if name in target:
+                    target[name]["count"] += entry["count"]
+                else:
+                    target[name] = dict(entry)

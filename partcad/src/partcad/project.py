@@ -1219,7 +1219,23 @@ class Project(project_config.Configuration):
 
             await asyncio.gather(*tasks)
 
-            if format == "readme" or (format is None and "readme" in render):
+            # The package document lists what the package declares; an assembly
+            # document lists what that assembly is made of. An assembly gets one
+            # of its own when it is the object the document was asked for, or
+            # when it asks for one in its own configuration.
+            assembly_readmes = []
+            if format is None or format == "readme":
+                for shape in shapes:
+                    if shape.kind != "assembly":
+                        continue
+                    if (format == "readme" and assemblies) or "readme" in (shape.config.get("render") or {}):
+                        assembly_readmes.append(shape.name)
+            for assembly_name in assembly_readmes:
+                await self.render_assembly_readme_async(assembly_name, render, output_dir)
+
+            # The package document is skipped when specific assemblies were asked
+            # for: their own documents are what was requested.
+            if (format == "readme" and not assemblies) or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
 
     def _enumerate_shapes(self, sketches, interfaces, parts, assemblies):
@@ -1277,6 +1293,153 @@ class Project(project_config.Configuration):
         output_dir: Optional[Path] = None,
     ):
         asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
+
+    def _readme_image(self, name, render_cfg, return_path, config=None):
+        """The '<img>' markup for the projection of the shape called 'name'.
+
+        Returns a '(markup, test_path)' pair: 'markup' is the image tag, with the
+        source relative to the document being generated, and 'test_path' is where
+        the image file is expected relative to the output directory, so that the
+        caller can check whether it has been rendered at all. Both are 'None' when
+        the package renders neither SVG nor PNG.
+        """
+        if "svg" in render_cfg or (config is not None and config.get("type") == "svg"):
+            image_cfg = render_cfg.get("svg", {})
+            extension = ".svg"
+        elif "png" in render_cfg:
+            image_cfg = render_cfg["png"]
+            extension = ".png"
+        else:
+            return None, None
+
+        if isinstance(image_cfg, str):
+            image_cfg = {"prefix": image_cfg}
+        if image_cfg is None:
+            image_cfg = {}
+        prefix = image_cfg.get("prefix", ".")
+
+        image_path = os.path.join(return_path, prefix, name + extension)
+        test_image_path = os.path.join(prefix, name + extension)
+        markup = '<img src="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">' % image_path
+        return markup, test_image_path
+
+    def _readme_package_link(self, package_name, dir_path):
+        """The path to another package's README.md, relative to 'dir_path'.
+
+        Both the document being generated and the package it refers to have to
+        live under the same root for a link to be produced. Packages served from
+        the local cache, and documents generated outside of the root, are left
+        unlinked: a path pointing out of the tree is of no use to whoever reads
+        the generated document.
+        """
+        if self.ctx is None:
+            return None
+        project = self.ctx.get_project(package_name)
+        config_dir = getattr(project, "config_dir", None)
+        if config_dir is None:
+            return None
+
+        # 'ctx.config_dir', not 'ctx.root_path': the latter may name the root
+        # package's configuration file rather than the directory holding it.
+        root_path = os.path.abspath(self.ctx.config_dir)
+        try:
+            for path in (config_dir, dir_path):
+                if os.path.relpath(os.path.abspath(path), root_path).startswith(os.pardir):
+                    return None
+            return os.path.relpath(os.path.join(config_dir, "README.md"), dir_path)
+        except ValueError:
+            # Not on the same drive (Windows); no relative path exists.
+            return None
+
+    async def render_assembly_readme_async(self, assembly_name, render_cfg=None, output_dir=None):
+        """Generate the markdown document of a single assembly.
+
+        Where the package document lists what the package declares, this one lists
+        what the assembly is made of: every part and every sub-assembly it uses,
+        recursively, grouped by the package they come from and counted.
+
+        Returns the path of the generated document, or 'None' if there is no such
+        assembly in this package.
+        """
+        assembly = self.get_assembly(assembly_name)
+        if assembly is None:
+            return None
+
+        if render_cfg is None:
+            render_cfg = self.config_obj.get("render", {}) or {}
+        if output_dir is None:
+            output_dir = self.config_dir
+
+        # Only the assembly's own configuration is consulted for the path here:
+        # the package-level 'readme' setting points at the package document, and
+        # reusing it would have the assembly overwrite it.
+        cfg = (assembly.config.get("render") or {}).get("readme", {})
+        if isinstance(cfg, str):
+            cfg = {"path": cfg}
+        if cfg is None:
+            cfg = {}
+
+        # 'assembly.name' rather than the requested name: a parameterized
+        # assembly is known by the name its parameter values resolve to, which is
+        # also the name its images are rendered under.
+        name = assembly.name
+        path = os.path.join(output_dir, cfg.get("path", name + ".md"))
+        dir_path = os.path.dirname(path)
+        return_path = os.path.relpath(output_dir, dir_path)
+
+        grouped = await assembly.get_bom_grouped_async()
+
+        lines = ["# %s" % name, ""]
+        if assembly.desc:
+            lines += [assembly.desc, ""]
+        lines += ["Package: `%s`" % self.name, ""]
+
+        # The image is looked up where the assembly's own configuration puts it,
+        # the same way rendering it there does.
+        image_cfg = render_cfg_merge(copy.copy(render_cfg), assembly.config.get("render", {}) or {})
+        img_text, test_image_path = self._readme_image(name, image_cfg, return_path, assembly.config)
+        if img_text is not None and os.path.exists(os.path.join(output_dir, test_image_path)):
+            lines += [img_text, ""]
+
+        def add_section(title, column_title, packages):
+            section = []
+            for package_name in sorted(packages.keys()):
+                entries = packages[package_name]
+                link = self._readme_package_link(package_name, dir_path)
+                if link is None:
+                    section += ["### %s" % package_name]
+                else:
+                    section += ["### [%s](%s)" % (package_name, link)]
+                section += [""]
+                section += ["| %s | Count | Description |" % column_title]
+                section += ["| --- | ---: | --- |"]
+                for object_name in sorted(entries.keys()):
+                    entry = entries[object_name]
+                    desc = entry.get("desc") or ""
+                    # The table is one row per line, so a multi-line description
+                    # has to be folded into it.
+                    desc = desc.replace("|", "\\|").replace("\n", "<br/>")
+                    section += ["| %s | %d | %s |" % (object_name, entry["count"], desc)]
+                section += [""]
+            if not section:
+                return []
+            return ["## %s" % title, ""] + section
+
+        lines += add_section("Sub-Assemblies", "Assembly", grouped["assemblies"])
+        lines += add_section("Parts", "Part", grouped["parts"])
+
+        lines += [
+            "<br/><br/>",
+            "",
+            "*Generated by [PartCAD](https://partcad.org/)*",
+        ]
+
+        with open(path, "w") as f:
+            f.writelines(map(lambda s: s + "\n", lines))
+        return path
+
+    def render_assembly_readme(self, assembly_name, render_cfg=None, output_dir=None):
+        return asyncio.run(self.render_assembly_readme_async(assembly_name, render_cfg, output_dir))
 
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:
@@ -1391,53 +1554,15 @@ class Project(project_config.Configuration):
                         path += "." + config["type"]
 
             columns = []
-            if "svg" in render_cfg or ("type" in config and config["type"] == "svg"):
-                svg_cfg = render_cfg["svg"] if "svg" in render_cfg else {}
-                if isinstance(svg_cfg, str):
-                    svg_cfg = {"prefix": svg_cfg}
-                svg_cfg = svg_cfg if svg_cfg is not None else {}
-                image_path = os.path.join(
-                    return_path,
-                    svg_cfg.get("prefix", "."),
-                    name + ".svg",
-                )
-                test_image_path = os.path.join(
-                    svg_cfg.get("prefix", "."),
-                    name + ".svg",
-                )
-                img_text = (
-                    '<img src="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">'
-                    % image_path
-                )
-                if path:
-                    img_text = '<a href="%s">%s</a>' % (path, img_text)
-                columns += [img_text]
-            elif "png" in render_cfg:
-                png_cfg = render_cfg["png"]
-                png_cfg = png_cfg if png_cfg is not None else {}
-                image_path = os.path.join(
-                    return_path,
-                    png_cfg.get("prefix", "."),
-                    name + ".png",
-                )
-                test_image_path = os.path.join(
-                    png_cfg.get("prefix", "."),
-                    name + ".png",
-                )
-                img_text = (
-                    '<img src="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">'
-                    % image_path
-                )
-                if path:
-                    img_text = '<a href="%s">%s</a>' % (path, img_text)
-                columns += [img_text]
-            else:
-                image_path = None
-                test_image_path = None
+            img_text, test_image_path = self._readme_image(name, render_cfg, return_path, config)
 
-            if image_path is None or not os.path.exists(os.path.join(output_dir, test_image_path)):
+            if img_text is None or not os.path.exists(os.path.join(output_dir, test_image_path)):
                 pc_logging.warn("Skipping rendering of %s: no image found at %s" % (name, test_image_path))
                 return []
+
+            if path:
+                img_text = '<a href="%s">%s</a>' % (path, img_text)
+            columns += [img_text]
 
             if "desc" in config:
                 columns += [config["desc"]]
