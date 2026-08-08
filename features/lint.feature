@@ -59,7 +59,9 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "$.parts.part1.type: 'unknown_type' is not one of"
+    # A part 'type' is now anyOf {built-in enum, a '<package>:<partType>' reference},
+    # so an unknown type fails the whole part schema rather than just the enum.
+    And STDOUT should contain "$.parts.part1: {'type': 'unknown_type'} is not valid under any of the given schemas"
 
   @failure
   Scenario: Invalid enum in shape parameters
@@ -80,7 +82,9 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "'nonsense' is not one of ['string', 'int', 'bool', 'float']"
+    # Same anyOf part schema: a bad parameter 'type' surfaces as the parameter
+    # object failing its schemas, not as a bare enum error.
+    And STDOUT should contain "{'type': 'nonsense'} is not valid under any of the given schemas"
 
   @success
   Scenario: Fully valid configuration with deeply nested parameters
