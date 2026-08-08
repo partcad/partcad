@@ -1390,6 +1390,13 @@ class Project(project_config.Configuration):
             if "type" in config and config["type"] == "alias" and "aliases" in exclude:
                 return []
 
+            # The same merge 'render_async()' performs when it decides what to
+            # render: a shape's own 'render' section adds to, and overrides, the
+            # package's. Without it a format enabled - or pointed at a different
+            # prefix - on the shape alone renders a file that the README then
+            # fails to find.
+            render_cfg = render_cfg_merge(copy.copy(render_cfg), config.get("render", None) or {})
+
             path = None
             if "path" in config:
                 path = config["path"]

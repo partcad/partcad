@@ -64,8 +64,13 @@ def process(path, request, fmt, config_pil=None):
     passed through to 'PIL.Image.save()' by renderPM.
     """
     try:
-        svg_path = tempfile.mktemp(".svg")
-        try:
+        # A private directory, not a bare temporary name: 'tempfile.mktemp()'
+        # only invents a path and reserves nothing, leaving a window in which
+        # another local process can plant a symlink there and have the SVG
+        # written through it. The directory also takes care of the cleanup.
+        with tempfile.TemporaryDirectory(prefix="partcad-render-") as temp_dir:
+            svg_path = os.path.join(temp_dir, "projection.svg")
+
             svg_response = wrapper_render_svg.process(svg_path, request)
             # Report why the projection failed instead of the "Failed to convert
             # to RLG" that an absent or empty SVG would produce below.
@@ -74,11 +79,6 @@ def process(path, request, fmt, config_pil=None):
 
             # Render the raster image
             drawing = svglib.svg2rlg(svg_path)
-        finally:
-            try:
-                os.remove(svg_path)
-            except OSError:
-                pass
 
         if drawing is None:
             return {

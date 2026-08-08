@@ -180,3 +180,55 @@ def test_background_color_is_parsed(value, expected):
 def test_invalid_background_color_is_rejected():
     with pytest.raises(ValueError):
         _raster_wrapper().parse_background("#ff")
+
+
+def _readme_project(tmp_path, package_render, part_render):
+    """A throwaway package whose only part carries its own render options."""
+    (tmp_path / "bolt.step").write_bytes(b"")
+    (tmp_path / "partcad.yaml").write_text(
+        "parts:\n"
+        "  bolt:\n"
+        "    type: step\n"
+        "    path: bolt.step\n"
+        "%s"
+        "render:\n"
+        "%s" % (part_render, package_render)
+    )
+    ctx = pc.Context(str(tmp_path))
+    return ctx.get_project("//")
+
+
+def test_readme_preview_follows_a_shape_only_render_config(tmp_path):
+    """A format enabled on the shape alone still gets its README preview.
+
+    'render_async()' merges the shape's own 'render' section over the package's
+    when it decides what to render, so a shape-only 'jpeg' section does produce
+    a '.jpg'. The README generator has to apply the same merge or it looks for a
+    file that was never rendered (and misses the shape's 'prefix' override).
+    """
+    prj = _readme_project(
+        tmp_path,
+        package_render="  readme: README.md\n",
+        part_render="    render:\n      jpeg:\n        prefix: ./images\n",
+    )
+    images = tmp_path / "images"
+    images.mkdir()
+    (images / "bolt.jpg").write_bytes(b"")
+
+    prj.render_readme_async(prj.config_obj.get("render", {}), None)
+
+    assert "images/bolt.jpg" in (tmp_path / "README.md").read_text()
+
+
+def test_readme_preview_honors_a_format_enabled_without_options(tmp_path):
+    """A bare 'png:' key means "render it with the defaults", not "skip it".
+
+    The same idiom the examples use for 'readme:'. The preview has to be emitted
+    for it, since that is exactly what '_should_render_format()' renders.
+    """
+    prj = _readme_project(tmp_path, package_render="  readme: README.md\n  png:\n", part_render="")
+    (tmp_path / "bolt.png").write_bytes(b"")
+
+    prj.render_readme_async(prj.config_obj.get("render", {}), None)
+
+    assert "bolt.png" in (tmp_path / "README.md").read_text()
