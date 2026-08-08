@@ -17,7 +17,7 @@ filesystem rather than from a path list. Three levels:
   <sandbox>/pc-js-<sandbox type>-<node major>/     the runtime
     env/                                           the baseline environment
       package.json                                 the manifest, carrying the npm overrides
-      node_modules/                                what every sandbox gets (the pinned stack)
+      node_modules/                                what every sandbox gets by default
       .partcad.installed.<hash>                    install guards
       pkg-<package hash>/                          one working directory per PartCAD package
         node_modules -> ../node_modules            symlink, so cwd-based resolution works
@@ -67,7 +67,7 @@ from . import logging as pc_logging
 from . import telemetry
 
 # The baseline environment, shared by every PartCAD package that needs nothing
-# beyond the pinned stack. Named rather than hashed so it stays recognizable in
+# beyond the defaults. Named rather than hashed so it stays recognizable in
 # a sandbox directory a user is looking at.
 BASE_ENV_DIR = "env"
 
@@ -236,10 +236,6 @@ class JavaScriptRuntime(runtime.Runtime):
         self.lock = threading.RLock()
         self.tls = threading.local()
 
-        # Requirements already reported as superseded by the pinned CAD stack,
-        # so the warning is emitted once per runtime instead of once per part.
-        self.superseded_requirements = set()
-
         # The path to the Node.js executable, and to npm
         self.exec_path = None
         self.npm_path = None
@@ -255,8 +251,10 @@ class JavaScriptRuntime(runtime.Runtime):
         self.npm_flags = ["--no-audit", "--no-fund", "--loglevel=error"]
         # '--save-exact' so what the manifest records is the version that was
         # installed, not the caret range npm would otherwise widen it to. The
-        # pins here mean the same thing pip's '==' does on the Python side, and
-        # a later install into the same environment must not drift off them.
+        # exact versions here mean what pip's '==' does on the Python side, and
+        # a later install into the same environment must not drift off them -
+        # an environment is identified by the dependency set it holds, so the
+        # set silently changing under it would make that identity a lie.
         self.npm_install_flags = ["--save-exact"]
         if platform.system() == "Windows":
             # npm otherwise fails an install whose dependency tree contains a
@@ -400,21 +398,21 @@ class JavaScriptRuntime(runtime.Runtime):
     #
 
     def once(self):
-        """Provision the baseline environment: the pinned stack, nothing else.
+        """Provision the baseline environment: the default stack, nothing else.
 
-        The pinned packages are re-asserted on every call rather than only when
-        the sandbox is new. 'initialized' is set from the mere existence of the
+        The defaults are re-asserted on every call rather than only when the
+        sandbox is new. 'initialized' is set from the mere existence of the
         sandbox directory, so a sandbox provisioned by an earlier PartCAD would
-        otherwise never be told about a package the pins have since gained. The
-        install guards make this one stat() per package once it has run - the
-        same trade runtime_python makes for zstd.
+        otherwise never be told about a package the defaults have since gained.
+        The install guards make this one stat() per package once it has run -
+        the same trade runtime_python makes for zstd.
         """
         with self.sync_lock():
             with self.sync_lock_install():
                 if not self.initialized:
                     self.prepare_env_locked(os.path.join(self.path, BASE_ENV_DIR))
                     self.initialized = True
-                for js_package in sandbox_versions.PINNED_JS_REQUIREMENTS:
+                for js_package in sandbox_versions.DEFAULT_JS_REQUIREMENTS:
                     self.ensure_onced_locked(js_package)
 
     async def once_async(self):
@@ -424,7 +422,7 @@ class JavaScriptRuntime(runtime.Runtime):
                 if not self.initialized:
                     self.prepare_env_locked(os.path.join(self.path, BASE_ENV_DIR))
                     self.initialized = True
-                for js_package in sandbox_versions.PINNED_JS_REQUIREMENTS:
+                for js_package in sandbox_versions.DEFAULT_JS_REQUIREMENTS:
                     await self.ensure_async_onced_locked(js_package)
 
     def _subprocess_env(self):
@@ -596,24 +594,6 @@ class JavaScriptRuntime(runtime.Runtime):
     # Installing
     #
 
-    def reconcile_requirement(self, js_package):
-        """Hold the CAD stack in a sandbox to the versions PartCAD pins.
-
-        The npm twin of runtime_python.reconcile_requirement(): every part of a
-        PartCAD package shares one environment, so a part that asks for its own
-        Chili3D would change the kernel under all the others. The warning is
-        emitted once per runtime, not once per part.
-        """
-        js_package, superseded = sandbox_versions.reconcile_js_requirement(js_package)
-        if superseded is not None and superseded not in self.superseded_requirements:
-            self.superseded_requirements.add(superseded)
-            pc_logging.warning(
-                "Installing '%s' instead of '%s': PartCAD pins the CAD stack across a sandbox, "
-                "and mixing versions of it breaks the other parts that share the same environment."
-                % (js_package, superseded)
-            )
-        return js_package
-
     def npm_install_command(self, js_package, path, force=False):
         return [
             self.get_npm_path(),
@@ -655,14 +635,13 @@ class JavaScriptRuntime(runtime.Runtime):
         clear_reassert(path, js_package)
         invalidate_dependent_guards(path, js_package)
 
-    def ensure(self, js_package, session=None, path=None, force=False):
+    def ensure(self, js_package, session=None, path=None, force=False, default=False):
         self.once()
-        self.ensure_onced(js_package, session=session, path=path, force=force)
+        self.ensure_onced(js_package, session=session, path=path, force=force, default=default)
 
-    def ensure_onced(self, js_package, session=None, path=None, force=False):
-        js_package = self.reconcile_requirement(js_package)
+    def ensure_onced(self, js_package, session=None, path=None, force=False, default=False):
         if session:
-            self.declare_dependency(session, js_package)
+            self.declare_dependency(session, js_package, default=default)
             return
         if path is None:
             path = os.path.join(self.path, BASE_ENV_DIR)
@@ -671,24 +650,22 @@ class JavaScriptRuntime(runtime.Runtime):
                 if not os.path.exists(get_guard_path(path, js_package)):
                     self.install_onced_locked(js_package, path, force or needs_reassert(path, js_package))
 
-    def ensure_onced_locked(self, js_package, session=None, path=None, force=False):
-        js_package = self.reconcile_requirement(js_package)
+    def ensure_onced_locked(self, js_package, session=None, path=None, force=False, default=False):
         if session:
-            self.declare_dependency(session, js_package)
+            self.declare_dependency(session, js_package, default=default)
             return
         if path is None:
             path = os.path.join(self.path, BASE_ENV_DIR)
         if not os.path.exists(get_guard_path(path, js_package)):
             self.install_onced_locked(js_package, path, force or needs_reassert(path, js_package))
 
-    async def ensure_async(self, js_package, session=None, path=None, force=False):
+    async def ensure_async(self, js_package, session=None, path=None, force=False, default=False):
         await self.once_async()
-        await self.ensure_async_onced(js_package, session=session, path=path, force=force)
+        await self.ensure_async_onced(js_package, session=session, path=path, force=force, default=default)
 
-    async def ensure_async_onced(self, js_package, session=None, path=None, force=False):
-        js_package = self.reconcile_requirement(js_package)
+    async def ensure_async_onced(self, js_package, session=None, path=None, force=False, default=False):
         if session:
-            self.declare_dependency(session, js_package)
+            self.declare_dependency(session, js_package, default=default)
             return
         if path is None:
             path = os.path.join(self.path, BASE_ENV_DIR)
@@ -697,29 +674,43 @@ class JavaScriptRuntime(runtime.Runtime):
                 if not os.path.exists(get_guard_path(path, js_package)):
                     await self.install_async_onced_locked(js_package, path, force or needs_reassert(path, js_package))
 
-    async def ensure_async_onced_locked(self, js_package, session=None, path=None, force=False):
-        js_package = self.reconcile_requirement(js_package)
+    async def ensure_async_onced_locked(self, js_package, session=None, path=None, force=False, default=False):
         if session:
-            self.declare_dependency(session, js_package)
+            self.declare_dependency(session, js_package, default=default)
             return
         if path is None:
             path = os.path.join(self.path, BASE_ENV_DIR)
         if not os.path.exists(get_guard_path(path, js_package)):
             await self.install_async_onced_locked(js_package, path, force or needs_reassert(path, js_package))
 
-    def declare_dependency(self, session, js_package):
-        """Add a dependency to a session, and mark it dirty if it is a new one.
+    def declare_dependency(self, session, js_package, default=False):
+        """Add a dependency to a session, replacing any other ask for that package.
 
-        A session stays clean - and so keeps using the shared baseline
-        environment - for as long as everything it asks for is already part of
-        the pinned stack. The first dependency beyond that gives it an
-        environment of its own, keyed by the whole set (see env_dir_name).
+        Uniqueness is by npm package name, not by the whole requirement string:
+        a tree holding both 'chili3d@1.1.2' and 'chili3d@1.0.0' is not a thing
+        npm can produce, so the two have to resolve to one. 'default=True' marks
+        a requirement PartCAD supplies on its own behalf - it yields to anything
+        the package or the part named, whichever order they arrive in - while an
+        explicit declaration replaces whatever came before it. That ordering is
+        what makes a part's 'chili3dVersion' win over its package's, which wins
+        over a 'chili3d@...' listed in 'javascriptRequirements'.
+
+        Whether a session needs an environment of its own is then derived from
+        the result rather than tracked as it goes, so a declaration that happens
+        to restate a default leaves the session on the shared baseline.
         """
-        if js_package in session["deps"]:
-            return
-        session["deps"].append(js_package)
-        if js_package not in sandbox_versions.PINNED_JS_REQUIREMENTS:
-            session["dirty"] = True
+        name = sandbox_versions.js_package_name(js_package)
+        for index, declared in enumerate(session["deps"]):
+            if sandbox_versions.js_package_name(declared) != name:
+                continue
+            if default or declared == js_package:
+                return
+            session["deps"][index] = js_package
+            break
+        else:
+            session["deps"].append(js_package)
+
+        session["dirty"] = set(session["deps"]) != set(sandbox_versions.DEFAULT_JS_REQUIREMENTS)
 
     #
     # Dependency declarations
@@ -754,7 +745,7 @@ class JavaScriptRuntime(runtime.Runtime):
     def get_session(self, name: str):
         """Create a context describing the environment this package needs.
 
-        Seeded with the pinned stack rather than left empty, so that a session
+        Seeded with the default stack rather than left empty, so that a session
         which later declares a dependency of its own gets an environment
         carrying the whole set - the baseline packages included - instead of one
         holding only the extra.
@@ -763,7 +754,7 @@ class JavaScriptRuntime(runtime.Runtime):
             "name": name,
             "hash": hashlib.sha256(name.encode()).hexdigest()[:16],
             "dirty": False,
-            "deps": list(sandbox_versions.PINNED_JS_REQUIREMENTS),
+            "deps": list(sandbox_versions.DEFAULT_JS_REQUIREMENTS),
         }
 
 

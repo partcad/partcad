@@ -18,7 +18,7 @@ import pytest
 
 import partcad as pc
 from partcad import factory, sandbox_versions
-from partcad.part_factory_chili3d import PartFactoryChili3d
+from partcad.part_factory_chili3d import PartFactoryChili3d, resolve_chili3d
 from partcad.shape import PART_EXTENSION_MAPPING, UNEXPORTABLE_PART_TYPES
 from partcad.user_config import UserConfig
 
@@ -83,6 +83,89 @@ def test_a_node_below_the_floor_is_raised_to_it(tmp_path, javascript_config):
     ctx.get_part("cube")
 
     assert list(ctx.runtimes_javascript) == ["none-" + sandbox_versions.MIN_NODE_VERSION]
+
+
+#
+# Choosing versions
+#
+
+
+class _Project:
+    """Just the package-level attributes resolve_chili3d() reads."""
+
+    def __init__(self, chili3d_version=None):
+        self.chili3d_version = chili3d_version
+
+
+def test_the_default_chili3d_is_only_a_default():
+    """So that a 'chili3d@...' in javascriptRequirements is left standing."""
+    assert resolve_chili3d({}, _Project()) == (sandbox_versions.CHILI3D, True)
+
+
+def test_a_package_can_choose_its_chili3d():
+    requirement, is_default = resolve_chili3d({}, _Project("1.0.0"))
+
+    assert requirement == "chili3d@1.0.0"
+    assert is_default is False
+
+
+def test_a_part_outranks_its_package():
+    requirement, is_default = resolve_chili3d({"chili3dVersion": "1.0.1"}, _Project("1.0.0"))
+
+    assert requirement == "chili3d@1.0.1"
+    assert is_default is False
+
+
+def test_a_part_requirement_outranks_the_package_version():
+    """Same rule stated the other way: the more specific level wins.
+
+    The declaration is left as a default so that the entry the part put in
+    'javascriptRequirements' is the one that survives.
+    """
+    _, is_default = resolve_chili3d({"javascriptRequirements": ["chili3d@1.0.9"]}, _Project("1.0.0"))
+
+    assert is_default is True
+
+
+def test_the_dedicated_option_outranks_the_requirements_list():
+    """Within one level, the specific knob beats the general one."""
+    config = {"chili3dVersion": "1.0.1", "javascriptRequirements": ["chili3d@1.0.9"]}
+
+    assert resolve_chili3d(config, _Project()) == ("chili3d@1.0.1", False)
+
+
+def test_an_unrelated_requirement_does_not_count_as_choosing_chili3d():
+    _, is_default = resolve_chili3d({"javascriptRequirements": ["seedrandom@3.0.5"]}, _Project("1.0.0"))
+
+    assert is_default is False
+
+
+def test_a_part_can_choose_its_node(tmp_path, javascript_config):
+    (tmp_path / "partcad.yaml").write_text(
+        'javascriptVersion: "22"\n\nparts:\n  cube:\n    type: chili3d\n    javascriptVersion: "24"\n',
+    )
+    (tmp_path / "cube.chili").write_text("show(shapeFactory.box(chili3d.Plane.XY, 1, 1, 1).value);\n")
+    ctx = pc.Context(str(tmp_path), user_config=javascript_config)
+
+    ctx.get_part("cube")
+
+    assert list(ctx.runtimes_javascript) == ["none-24"]
+
+
+def test_the_chosen_versions_are_part_of_the_cache_key(tmp_path, javascript_config):
+    """Otherwise a version change would be served the previous version's shape."""
+
+    def hash_of(chili3d_version):
+        package = tmp_path / chili3d_version
+        package.mkdir()
+        (package / "partcad.yaml").write_text(
+            'chili3dVersion: "%s"\n\nparts:\n  cube:\n    type: chili3d\n' % chili3d_version,
+        )
+        (package / "cube.chili").write_text("show(shapeFactory.box(chili3d.Plane.XY, 1, 1, 1).value);\n")
+        ctx = pc.Context(str(package), user_config=javascript_config)
+        return ctx.get_part("cube").hash.get()
+
+    assert hash_of("1.0.0") != hash_of("1.0.1")
 
 
 @needs_node

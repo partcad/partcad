@@ -53,6 +53,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
   pythonRequirements: <(python scripts only) the list of dependencies to install>
   javascriptVersion: <(optional) Node.js major version for sandboxing if applicable>
   javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
+  chili3dVersion: <(Chili3D parts only) the version of Chili3D to render with>
 
   dependencies:
       <dependency-name>:
@@ -668,6 +669,8 @@ Define parts with CodeCAD scripts using the following syntax:
         "pattern": "repl"
       pythonRequirements: <(python scripts only) the list of dependencies to install>
       javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
+      javascriptVersion: <(JavaScript scripts only) Node.js major version, overriding the package's>
+      chili3dVersion: <(Chili3D parts only) the version of Chili3D, overriding the package's>
       dependencies: # (optional) the list of filenames the caching logic checks for changes
         - <file1.py>
         - <file2.dat>
@@ -749,9 +752,40 @@ it does in any Node.js project: by name for anything the package declares under
 
 .. code-block:: yaml
 
-  javascriptVersion: "22"
   javascriptRequirements:
     - "seedrandom@3.0.5"
+
+Choosing versions
+~~~~~~~~~~~~~~~~~
+
+``javascriptVersion`` names the Node.js major version to render on, and
+``chili3dVersion`` the version of Chili3D to render with. Both may be set on the
+package and overridden on an individual part:
+
+.. code-block:: yaml
+
+  javascriptVersion: "22"
+  chili3dVersion: "1.1.2"
+
+  parts:
+    cube:
+      type: chili3d
+    older_cube:
+      type: chili3d
+      chili3dVersion: "1.0.20"
+
+``chili3dVersion`` takes an exact version, or any range or tag npm accepts
+(``"^1.1"``, ``"latest"``). Naming ``chili3d`` under ``javascriptRequirements``
+does the same thing; where both are given the dedicated option wins, and a
+part's choice wins over its package's. Note that not every Chili3D release
+publishes the WebAssembly kernel PartCAD needs - one that does not fails with a
+message naming the version.
+
+Unlike the Python script types, where PartCAD pins CadQuery and build123d and
+overrides a package that asks for a different version, this really is the
+package's choice. A Node.js sandbox is identified by the set of dependencies it
+holds, so a package on its own Chili3D gets an environment of its own and
+changes nothing for any other package - or for another part of the same one.
 
 Two notes on how this differs from the Python script types:
 

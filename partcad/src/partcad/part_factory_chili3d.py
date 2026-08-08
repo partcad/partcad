@@ -22,16 +22,51 @@ from . import sandbox_versions
 from . import telemetry
 
 
+def _names_chili3d(requirements) -> bool:
+    """Whether a 'javascriptRequirements' list already names Chili3D."""
+    if isinstance(requirements, str):
+        requirements = requirements.strip().split("\n")
+    return any(sandbox_versions.js_package_name(req.strip()) == "chili3d" for req in (requirements or []) if req)
+
+
+def resolve_chili3d(config, source_project) -> tuple[str, bool]:
+    """Which Chili3D a part renders against, and whether that is only a default.
+
+    Two ways to say it, at two levels, so the rule is: the dedicated
+    'chili3dVersion' beats the general 'javascriptRequirements' at the same
+    level, and the part beats its package. Returning "this is only a default"
+    rather than declaring unconditionally is what lets a requirements entry
+    stand: a default yields to anything already named (see
+    JavaScriptRuntime.declare_dependency), so the two ways of spelling it do not
+    fight.
+    """
+    if "chili3dVersion" in config:
+        return sandbox_versions.chili3d_requirement(config["chili3dVersion"]), False
+    if _names_chili3d(config.get("javascriptRequirements")):
+        return sandbox_versions.CHILI3D, True
+    if source_project.chili3d_version is not None:
+        return sandbox_versions.chili3d_requirement(source_project.chili3d_version), False
+    return sandbox_versions.CHILI3D, True
+
+
 @telemetry.instrument()
 class PartFactoryChili3d(PartFactoryJavaScript):
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
-        javascript_version = source_project.javascript_version
+        # The part's own choice first, then the package's, then the default.
+        javascript_version = config.get("javascriptVersion", None)
+        if javascript_version is None:
+            javascript_version = source_project.javascript_version
         if javascript_version is None:
             javascript_version = sandbox_versions.DEFAULT_NODE_VERSION
-        # Chili3D's wrapper resolves a script's bare imports through Node.js
-        # module customization hooks, which arrived in 20.6; an older sandbox
-        # would fail at bootstrap rather than at the interesting place.
+        javascript_version = sandbox_versions.node_major_version(str(javascript_version))
+        # A Node.js below the floor would fail inside the wrapper's own
+        # bootstrap rather than anywhere the user could act on, so a package
+        # that asks for one is rendered on the floor instead - the same thing
+        # the CadQuery factory does with a Python CadQuery has no release for.
         javascript_version = sandbox_versions.at_least(javascript_version, sandbox_versions.MIN_NODE_VERSION)
+
+        self.chili3d_requirement, self.chili3d_is_default = resolve_chili3d(config, source_project)
+
         with pc_logging.Action("InitChili3d", target_project.name, config["name"]):
             super().__init__(
                 ctx,
@@ -44,6 +79,13 @@ class PartFactoryChili3d(PartFactoryJavaScript):
             )
             # Complement the config object here if necessary
             self._create(config)
+
+    def post_create(self) -> None:
+        # Which Chili3D built the shape is part of the cache key: the version is
+        # the package's or the part's to choose, so changing it has to produce a
+        # different key rather than serve what the previous one built.
+        self.part.hash.add_string(self.chili3d_requirement)
+        super().post_create()
 
     async def instantiate(self, part):
         await super().instantiate(part)
@@ -82,13 +124,20 @@ class PartFactoryChili3d(PartFactoryJavaScript):
                 request["kind"] = "part"
                 request_serialized = shape_envelope.serialize(request)
 
+            # Declared after the package's and the part's
+            # 'javascriptRequirements' so that an explicit 'chili3dVersion'
+            # outranks a 'chili3d@...' listed there, while the default yields to
+            # it. happy-dom is always a default: it is the wrapper's own DOM
+            # shim, not something a script models with.
             await self.runtime.ensure_async(
-                sandbox_versions.CHILI3D,
+                self.chili3d_requirement,
                 session=self.session,
+                default=self.chili3d_is_default,
             )
             await self.runtime.ensure_async(
                 sandbox_versions.HAPPY_DOM,
                 session=self.session,
+                default=True,
             )
             cwd = self.project.config_dir
             if self.cwd is not None:

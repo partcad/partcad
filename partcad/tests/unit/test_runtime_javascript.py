@@ -47,12 +47,10 @@ def _bare_runtime(path):
 #
 
 
-def test_chili3d_is_pinned_exactly():
-    """A floating Chili3D would change the kernel under a package's other parts."""
-    assert "@" in sandbox_versions.CHILI3D
-    assert not sandbox_versions.CHILI3D.endswith("@")
-    _, _, version = sandbox_versions.CHILI3D.partition("@")
-    assert version[0].isdigit(), version
+def test_the_default_chili3d_is_an_exact_version():
+    """The default has to be reproducible; a package may still float its own."""
+    assert sandbox_versions.CHILI3D == "chili3d@" + sandbox_versions.DEFAULT_CHILI3D_VERSION
+    assert sandbox_versions.DEFAULT_CHILI3D_VERSION[0].isdigit()
 
 
 @pytest.mark.parametrize(
@@ -70,18 +68,21 @@ def test_js_package_name(requirement, expected):
     assert sandbox_versions.js_package_name(requirement) == expected
 
 
-def test_reconcile_js_requirement_forces_the_pin():
-    reconciled, superseded = sandbox_versions.reconcile_js_requirement("chili3d@0.9.0")
-    assert reconciled == sandbox_versions.CHILI3D
-    assert superseded == "chili3d@0.9.0"
-
-
-def test_reconcile_js_requirement_leaves_others_alone():
-    assert sandbox_versions.reconcile_js_requirement("seedrandom@3.0.5") == ("seedrandom@3.0.5", None)
-
-
-def test_reconcile_js_requirement_is_a_no_op_on_the_pin_itself():
-    assert sandbox_versions.reconcile_js_requirement(sandbox_versions.CHILI3D) == (sandbox_versions.CHILI3D, None)
+@pytest.mark.parametrize(
+    "version, expected",
+    [
+        (None, sandbox_versions.CHILI3D),
+        ("", sandbox_versions.CHILI3D),
+        # A bare version becomes an exact requirement
+        ("1.0.0", "chili3d@1.0.0"),
+        # ... and anything npm would read as a range or a tag is passed through,
+        # so a package that wants to float can say so.
+        ("^1.1", "chili3d@^1.1"),
+        ("latest", "chili3d@latest"),
+    ],
+)
+def test_chili3d_requirement(version, expected):
+    assert sandbox_versions.chili3d_requirement(version) == expected
 
 
 @pytest.mark.parametrize(
@@ -128,7 +129,7 @@ def test_package_dir_is_named_after_the_package():
 
 def test_a_clean_session_uses_the_baseline_environment(tmp_path):
     runtime = _bare_runtime(tmp_path)
-    session = {"name": "//pub/a", "dirty": False, "deps": list(sandbox_versions.PINNED_JS_REQUIREMENTS)}
+    session = {"name": "//pub/a", "dirty": False, "deps": list(sandbox_versions.DEFAULT_JS_REQUIREMENTS)}
 
     assert runtime.get_env_path(session) == os.path.join(str(tmp_path), BASE_ENV_DIR)
 
@@ -295,7 +296,7 @@ def test_a_session_starts_on_the_shared_baseline(tmp_path):
     session = JavaScriptRuntime.get_session(runtime, "//pub/a")
 
     assert session["dirty"] is False
-    assert set(session["deps"]) == set(sandbox_versions.PINNED_JS_REQUIREMENTS)
+    assert set(session["deps"]) == set(sandbox_versions.DEFAULT_JS_REQUIREMENTS)
 
 
 def test_asking_for_a_pinned_package_keeps_the_session_clean(tmp_path):
@@ -318,7 +319,7 @@ def test_asking_for_anything_else_forks_a_tree(tmp_path):
     assert session["dirty"] is True
     # The forked tree carries the whole set, baseline included: a package that
     # adds a dependency still needs Chili3D.
-    assert set(sandbox_versions.PINNED_JS_REQUIREMENTS) <= set(session["deps"])
+    assert set(sandbox_versions.DEFAULT_JS_REQUIREMENTS) <= set(session["deps"])
     assert "seedrandom@3.0.5" in session["deps"]
 
 
@@ -344,11 +345,64 @@ def test_two_packages_with_the_same_extra_share_a_tree(tmp_path):
     assert runtime.get_package_path(a) != runtime.get_package_path(b)
 
 
-def test_a_part_cannot_downgrade_the_stack_for_its_neighbours(tmp_path):
-    """reconcile_requirement() is what stops one part changing the kernel."""
+def test_a_part_may_choose_its_own_chili3d(tmp_path):
+    """The version is a package's to choose - it only moves that package."""
     runtime = _runtime_for_sessions(tmp_path)
+    session = JavaScriptRuntime.get_session(runtime, "//pub/a")
 
-    assert runtime.reconcile_requirement("chili3d@0.9.0") == sandbox_versions.CHILI3D
+    runtime.declare_dependency(session, "chili3d@1.0.0")
+
+    # One tree cannot hold two Chili3D versions, so the ask replaces the default
+    # rather than joining it...
+    assert session["deps"].count("chili3d@1.0.0") == 1
+    assert sandbox_versions.CHILI3D not in session["deps"]
+    # ... and it lands somewhere of its own, so no other package is affected.
+    assert session["dirty"] is True
+    assert runtime.get_env_path(session) != os.path.join(str(tmp_path), BASE_ENV_DIR)
+
+
+def test_a_default_yields_to_what_was_already_asked_for(tmp_path):
+    """This is what lets 'javascriptRequirements' name Chili3D itself."""
+    runtime = _runtime_for_sessions(tmp_path)
+    session = JavaScriptRuntime.get_session(runtime, "//pub/a")
+
+    runtime.declare_dependency(session, "chili3d@1.0.0")
+    runtime.declare_dependency(session, sandbox_versions.CHILI3D, default=True)
+
+    assert "chili3d@1.0.0" in session["deps"]
+
+
+def test_restating_a_default_leaves_the_session_on_the_baseline(tmp_path):
+    """'chili3dVersion' set to what PartCAD installs anyway must not fork a tree."""
+    runtime = _runtime_for_sessions(tmp_path)
+    session = JavaScriptRuntime.get_session(runtime, "//pub/a")
+
+    runtime.declare_dependency(session, sandbox_versions.CHILI3D)
+
+    assert session["dirty"] is False
+    assert runtime.get_env_path(session) == os.path.join(str(tmp_path), BASE_ENV_DIR)
+
+
+def test_going_back_to_the_default_returns_to_the_baseline(tmp_path):
+    """'dirty' is derived from the result, not accumulated as declarations arrive."""
+    runtime = _runtime_for_sessions(tmp_path)
+    session = JavaScriptRuntime.get_session(runtime, "//pub/a")
+
+    runtime.declare_dependency(session, "chili3d@1.0.0")
+    runtime.declare_dependency(session, sandbox_versions.CHILI3D)
+
+    assert session["dirty"] is False
+
+
+def test_two_versions_of_one_package_never_coexist(tmp_path):
+    """npm cannot produce such a tree, so the declarations have to resolve to one."""
+    runtime = _runtime_for_sessions(tmp_path)
+    session = JavaScriptRuntime.get_session(runtime, "//pub/a")
+
+    runtime.declare_dependency(session, "seedrandom@3.0.5")
+    runtime.declare_dependency(session, "seedrandom@2.4.4")
+
+    assert [dep for dep in session["deps"] if dep.startswith("seedrandom")] == ["seedrandom@2.4.4"]
 
 
 #

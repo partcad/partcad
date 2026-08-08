@@ -171,6 +171,10 @@
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },
+    "chili3dVersion": {
+      "type": ["string", "number"],
+      "minLength": 1
+    },
     "suppliers":{
       "oneOf":[
         { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
@@ -332,6 +336,14 @@
                   "type": "array",
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
+                },
+                "javascriptVersion": {
+                  "type": ["string", "number"],
+                  "pattern": "^[0-9]+(\\.[0-9]+)*$"
+                },
+                "chili3dVersion": {
+                  "type": ["string", "number"],
+                  "minLength": 1
                 },
                 "dependencies": {
                   "type": "array",

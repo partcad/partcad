@@ -44,13 +44,28 @@ class PartFactoryJavaScript(PartFactoryFile):
         self.cwd = config.get("cwd", None)
 
         if javascript_version is None:
-            javascript_version = self.project.javascript_version
+            # The part's own choice outranks the package's, matching how
+            # 'javascriptRequirements' works at both levels.
+            javascript_version = config.get("javascriptVersion", None) or self.project.javascript_version
         self.runtime = self.ctx.get_javascript_runtime(javascript_version)
+        # One session per part, not per package: a session carries the exact
+        # dependency set its part asked for, and the environment it resolves to
+        # is derived from that set (see runtime_javascript.env_dir_name). Two
+        # parts of one package that want different Chili3D versions therefore
+        # get different environments instead of overwriting each other's.
         self.session = self.runtime.get_session(source_project.name)
 
     def post_create(self) -> None:
         for dep in self.config.get("dependencies", []):
             self.part.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
+        # The sandbox is part of what produced the shape, so it belongs in the
+        # cache key: a package that moves to another Node.js has to be rendered
+        # again rather than served what the previous one built. Only the shape
+        # config feeds the hash by default (see Shape.__init__), and these are
+        # not in it - 'javascriptVersion' can come from the package rather than
+        # the part, and the dependency set is resolved rather than declared.
+        self.part.hash.add_string("nodejs:" + self.runtime.version)
+        self.part.hash.add_dict({"javascriptRequirements": self.config.get("javascriptRequirements", [])})
         super().post_create()
 
     async def prepare_javascript(self):

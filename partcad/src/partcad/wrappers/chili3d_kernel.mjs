@@ -146,35 +146,77 @@ async function installDomShim(root) {
  * 'initWasm()' is what normally sets it, by a route that only works in a
  * browser), so its high-level classes do not work until this is in place.
  */
-async function initKernel(chili3dDir) {
-    // The kernel ships twice in the published package - once as the workspace
-    // package it is built in, once inside the browser bundle's asset directory.
-    // Either will do; which one is present has changed between releases.
-    const candidates = [
+/**
+ * Where the kernel's Emscripten loader and its '.wasm' sit next to each other.
+ *
+ * The published package has carried them in more than one place across
+ * releases - as the workspace package they are built in, and inside the browser
+ * bundle's asset directories - and the version is the package's to choose, so
+ * the known layouts are tried first and then a bounded scan covers the rest.
+ */
+function findKernelDir(chili3dDir) {
+    const known = [
         path.join(chili3dDir, "packages", "chili-wasm", "lib"),
         path.join(chili3dDir, "dist", "wasm"),
+        path.join(chili3dDir, "dist", "assets"),
     ];
-    for (const dir of candidates) {
-        const loader = path.join(dir, "chili-wasm.js");
-        const binary = path.join(dir, "chili-wasm.wasm");
-        if (!fs.existsSync(loader) || !fs.existsSync(binary)) {
-            continue;
+    const holdsKernel = (dir) =>
+        fs.existsSync(path.join(dir, "chili-wasm.js")) && fs.existsSync(path.join(dir, "chili-wasm.wasm"));
+
+    for (const dir of known) {
+        if (holdsKernel(dir)) {
+            return dir;
         }
-        const factory = (await import(pathToFileURL(loader).href)).default;
-        return await factory({
-            wasmBinary: fs.readFileSync(binary),
-            // Emscripten prints to stdout by default, and stdout is where the
-            // response goes. Route both streams to stderr, which PartCAD shows
-            // as a warning rather than trying to parse.
-            print: (text) => process.stderr.write(text + "\n"),
-            printErr: (text) => process.stderr.write(text + "\n"),
-        });
     }
-    throw new Error(
-        "The Chili3D WebAssembly kernel was not found in " +
-            chili3dDir +
-            ". The installed 'chili3d' does not have the layout PartCAD pins (see sandbox_versions.CHILI3D).",
-    );
+
+    // Breadth-first and depth-capped: the package is large (the '.wasm' alone
+    // is ~15MB) and this runs on every render, so it must not turn into a walk
+    // of the whole tree.
+    let frontier = [chili3dDir];
+    for (let depth = 0; depth < 4 && frontier.length > 0; depth++) {
+        const next = [];
+        for (const dir of frontier) {
+            let entries;
+            try {
+                entries = fs.readdirSync(dir, { withFileTypes: true });
+            } catch {
+                continue;
+            }
+            for (const entry of entries) {
+                if (!entry.isDirectory() || entry.name === "node_modules") {
+                    continue;
+                }
+                const child = path.join(dir, entry.name);
+                if (holdsKernel(child)) {
+                    return child;
+                }
+                next.push(child);
+            }
+        }
+        frontier = next;
+    }
+    return null;
+}
+
+async function initKernel(chili3dDir) {
+    const dir = findKernelDir(chili3dDir);
+    if (dir === null) {
+        const version = JSON.parse(fs.readFileSync(path.join(chili3dDir, "package.json"), "utf8")).version;
+        throw new Error(
+            `The Chili3D WebAssembly kernel is not part of the installed 'chili3d' (version ${version}, in ` +
+                `${chili3dDir}). Not every release publishes it; pick one that does, with 'chili3dVersion' ` +
+                "on the part or the package.",
+        );
+    }
+    const factory = (await import(pathToFileURL(path.join(dir, "chili-wasm.js")).href)).default;
+    return await factory({
+        wasmBinary: fs.readFileSync(path.join(dir, "chili-wasm.wasm")),
+        // Emscripten prints to stdout by default, and stdout is where the
+        // response goes. Route both streams to stderr, which PartCAD shows as
+        // a warning rather than trying to parse.
+        print: (text) => process.stderr.write(text + "\n"),
+        printErr: (text) => process.stderr.write(text + "\n"),
+    });
 }
 
 /**

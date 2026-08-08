@@ -220,20 +220,29 @@ def zstd_requirement(python_version: str) -> str | None:
 #
 # JavaScript (Node.js) sandboxes
 #
-# The same idea as everything above, for the npm side: one place that decides
-# which JavaScript CAD stack a sandbox gets, so no two factories can disagree
-# about it. See runtime_javascript.py for how these are installed.
+# The npm counterpart of everything above: one place that decides what a
+# JavaScript sandbox gets by default. "By default" is the whole difference from
+# the Python side. There, the CAD stack has to be forced (see
+# reconcile_requirement) because every part of a package shares one flat
+# environment, so one part's choice silently becomes everybody's. A JavaScript
+# environment is instead identified by the very set of dependencies it holds
+# (see runtime_javascript.env_dir_name), so a part that asks for its own Chili3D
+# gets its own tree and cannot reach anyone else's - which means the version can
+# simply be a package's or a part's to choose.
 #
 
 # Chili3D ships its OCCT kernel as a WebAssembly module ('chili-wasm') plus a
 # TypeScript API bundled into 'dist/index.js'. Both live in the one 'chili3d'
 # distribution on npm, so a sandbox needs nothing else to model.
 #
-# Pinned exactly, for the same reason the Python stack is: the wrapper reaches
-# into 'chili3d/packages/chili-wasm/lib' for the '.wasm' and its Emscripten
-# loader, which the package's "exports" map does not expose, so a layout change
-# is a breaking change for us even when it is not one for a browser consumer.
-CHILI3D = "chili3d@1.1.2"
+# An exact version rather than a range: the wrapper reaches into
+# 'chili3d/packages/chili-wasm/lib' for the '.wasm' and its Emscripten loader,
+# which the package's "exports" map does not expose, so a layout change is a
+# breaking change for us even when it is not one for a browser consumer. This is
+# the version a package gets when it does not name one - see
+# chili3d_requirement().
+DEFAULT_CHILI3D_VERSION = "1.1.2"
+CHILI3D = "chili3d@" + DEFAULT_CHILI3D_VERSION
 
 # Chili3D's bundle is built for the browser: importing it evaluates modules that
 # subclass HTMLElement and register custom elements, so a bare Node process
@@ -241,17 +250,17 @@ CHILI3D = "chili3d@1.1.2"
 # enough DOM for the import to succeed - it is what Chili3D itself uses for its
 # own tests - and nothing in the modeling path touches it afterwards.
 #
-# A range rather than a pin: it is only a shim for globals whose shape has been
-# stable for years, and it carries no native code.
+# A range rather than an exact version: it is only a shim for globals whose
+# shape has been stable for years, and it carries no native code.
 HAPPY_DOM = "happy-dom@^20.11.2"
 
 # What a JavaScript sandbox gets when the package does not ask for a specific
 # Node.js. 22 is the active LTS line.
 DEFAULT_NODE_VERSION = "22"
 
-# 'module.register()' - which the wrapper uses to resolve a script's bare
-# imports against the sandbox rather than against the user's package - landed in
-# 20.6, and the '--import' flag it is loaded with in 20.6 as well.
+# The oldest Node.js the Chili3D wrapper is known to load on: it reads the
+# WebAssembly kernel through the Emscripten loader's 'wasmBinary' hook and needs
+# 'node:zlib', 'fs.realpathSync' and top-level await, all of which 20 has.
 MIN_NODE_VERSION = "20"
 
 # Nothing here pins zstd for the JavaScript side. 'node:zlib' grew the zstd
@@ -260,11 +269,11 @@ MIN_NODE_VERSION = "20"
 # sniffs the zstd frame header rather than being told (see
 # wrappers/ocp_serialize._decompress).
 
-# The JavaScript stack this module pins, keyed by npm package name. Same
-# contract as PINNED_REQUIREMENTS above: a v-env is shared by every part of a
-# package, so one part asking for its own Chili3D would silently change the
-# kernel under all the others.
-PINNED_JS_REQUIREMENTS = (
+# What a JavaScript sandbox is provisioned with when nothing asks for anything
+# else. Unlike PINNED_REQUIREMENTS above these are defaults, not pins: a package
+# or a part that names its own version of one of them gets that version, in an
+# environment of its own (see the note at the top of this section).
+DEFAULT_JS_REQUIREMENTS = (
     CHILI3D,
     HAPPY_DOM,
 )
@@ -277,7 +286,7 @@ def js_package_name(requirement: str) -> str:
     name with a version range ("chili3d@1.1.2"), and a scoped name whose leading
     '@' must not be mistaken for the version separator ("@scope/pkg@1.2.3").
     Anything else - a URL, a tarball, a local path - is returned as given, which
-    is enough for it to miss the lookup below and be installed untouched.
+    is enough to keep it distinct from every name that matters here.
     """
     requirement = requirement.strip()
     if requirement.startswith("@"):
@@ -286,19 +295,19 @@ def js_package_name(requirement: str) -> str:
     return requirement.partition("@")[0] or requirement
 
 
-_PINNED_BY_JS_PACKAGE = {js_package_name(requirement): requirement for requirement in PINNED_JS_REQUIREMENTS}
+def chili3d_requirement(version=None) -> str:
+    """The npm requirement for a Chili3D version, or for the default one.
 
-
-def reconcile_js_requirement(requirement: str) -> tuple[str, str | None]:
-    """Force a JavaScript CAD-stack requirement to the version this module pins.
-
-    Returns '(requirement_to_install, superseded_requirement)', exactly like
-    'reconcile_requirement()' does for pip.
+    A bare version ("1.1.2") becomes an exact requirement; anything that already
+    looks like a range or a tag ("^1.1", "~1.1.2", "latest") is passed through,
+    so a package that wants to float can say so.
     """
-    pinned = _PINNED_BY_JS_PACKAGE.get(js_package_name(requirement))
-    if pinned is None or pinned == requirement.strip():
-        return requirement, None
-    return pinned, requirement
+    if version is None:
+        return CHILI3D
+    version = str(version).strip()
+    if not version:
+        return CHILI3D
+    return "chili3d@" + version
 
 
 def node_major_version(version: str) -> str:
