@@ -30,6 +30,11 @@ Feature: `pc render` command
     |    type | filename              |
     |     png | logo_embedded.png     |
 
+  @type-image
+  Examples: Media Type: .jpg
+    |    type | filename              |
+    |    jpeg | logo_embedded.jpg     |
+
 
 # pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t readme -a :logo_embedded
 # pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t svg -a :logo_embedded

@@ -1200,7 +1200,20 @@ class Project(project_config.Configuration):
                 raise EmptyShapesError
 
             tasks = []
-            render_formats = ["svg", "png", "dxf", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
+            render_formats = [
+                "svg",
+                "png",
+                "jpeg",
+                "dxf",
+                "step",
+                "stl",
+                "3mf",
+                "threejs",
+                "obj",
+                "gltf",
+                "brep",
+                "iges",
+            ]
 
             for shape in shapes:
                 shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
@@ -1391,38 +1404,31 @@ class Project(project_config.Configuration):
                         path += "." + config["type"]
 
             columns = []
-            if "svg" in render_cfg or ("type" in config and config["type"] == "svg"):
-                svg_cfg = render_cfg["svg"] if "svg" in render_cfg else {}
-                if isinstance(svg_cfg, str):
-                    svg_cfg = {"prefix": svg_cfg}
-                svg_cfg = svg_cfg if svg_cfg is not None else {}
+            # The first image format the package renders wins, in this order.
+            # Each entry is the render config key and the extension the rendered
+            # file carries (which is not always the key: "jpeg" writes ".jpg").
+            image_formats = [("svg", "svg"), ("png", "png"), ("jpeg", "jpg")]
+            if "type" in config and config["type"] == "svg":
+                image_format, image_ext = "svg", "svg"
+            else:
+                image_format, image_ext = next(
+                    ((fmt, ext) for fmt, ext in image_formats if fmt in render_cfg),
+                    (None, None),
+                )
+
+            if image_ext is not None:
+                image_cfg = render_cfg.get(image_format, {})
+                if isinstance(image_cfg, str):
+                    image_cfg = {"prefix": image_cfg}
+                image_cfg = image_cfg if image_cfg is not None else {}
                 image_path = os.path.join(
                     return_path,
-                    svg_cfg.get("prefix", "."),
-                    name + ".svg",
+                    image_cfg.get("prefix", "."),
+                    name + "." + image_ext,
                 )
                 test_image_path = os.path.join(
-                    svg_cfg.get("prefix", "."),
-                    name + ".svg",
-                )
-                img_text = (
-                    '<img src="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">'
-                    % image_path
-                )
-                if path:
-                    img_text = '<a href="%s">%s</a>' % (path, img_text)
-                columns += [img_text]
-            elif "png" in render_cfg:
-                png_cfg = render_cfg["png"]
-                png_cfg = png_cfg if png_cfg is not None else {}
-                image_path = os.path.join(
-                    return_path,
-                    png_cfg.get("prefix", "."),
-                    name + ".png",
-                )
-                test_image_path = os.path.join(
-                    png_cfg.get("prefix", "."),
-                    name + ".png",
+                    image_cfg.get("prefix", "."),
+                    name + "." + image_ext,
                 )
                 img_text = (
                     '<img src="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">'

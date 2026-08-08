@@ -83,7 +83,7 @@ Object commands
 
 ``pc render``
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:
-  ``svg``, ``png``, or ``readme``.
+  ``svg``, ``png``, ``jpeg``, or ``readme``.
 
 *****************
 Workflow commands
