@@ -182,6 +182,17 @@ def test_invalid_background_color_is_rejected():
         _raster_wrapper().parse_background("#ff")
 
 
+def _readme_text(tmp_path):
+    """The generated README, with path separators normalized.
+
+    The generator builds the image 'src' with 'os.path.join', so on Windows it
+    comes back as '.\\./images\\bolt.jpg'. That is pre-existing behaviour shared
+    by every image format; these tests are about which file is referenced, not
+    about the separator.
+    """
+    return (tmp_path / "README.md").read_text().replace("\\", "/")
+
+
 def _readme_project(tmp_path, package_render, part_render):
     """A throwaway package whose only part carries its own render options."""
     (tmp_path / "bolt.step").write_bytes(b"")
@@ -217,7 +228,7 @@ def test_readme_preview_follows_a_shape_only_render_config(tmp_path):
 
     prj.render_readme_async(prj.config_obj.get("render", {}), None)
 
-    assert "images/bolt.jpg" in (tmp_path / "README.md").read_text()
+    assert "images/bolt.jpg" in _readme_text(tmp_path)
 
 
 def test_readme_preview_honors_a_format_enabled_without_options(tmp_path):
@@ -231,4 +242,4 @@ def test_readme_preview_honors_a_format_enabled_without_options(tmp_path):
 
     prj.render_readme_async(prj.config_obj.get("render", {}), None)
 
-    assert "bolt.png" in (tmp_path / "README.md").read_text()
+    assert "bolt.png" in _readme_text(tmp_path)
