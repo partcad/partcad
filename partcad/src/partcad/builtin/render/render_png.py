@@ -35,6 +35,13 @@ def _scale(drawing, request):
     if width is None and height is None:
         width = height = DEFAULT_SIZE
 
+    # A dimension of zero or less has no image to describe, and it would not
+    # fail on its own: it produces a scale of zero or a negative one, and the
+    # exporter goes on to write a degenerate PNG. Say what is wrong instead.
+    for name, value in (("width", width), ("height", height)):
+        if value is not None and float(value) <= 0:
+            raise Exception("The '%s' of a PNG has to be greater than zero, not %s" % (name, value))
+
     ratios = []
     if width is not None:
         ratios.append(float(width) / float(drawing.width))

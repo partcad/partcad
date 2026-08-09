@@ -97,6 +97,53 @@ def test_every_builtin_implementation_honours_the_wrapper_contract(ctx):
             assert arguments == ["path", "request"], "%s: %s" % (format_name, arguments)
 
 
+def _builtin_function(section, script_name, function_name):
+    """One function out of a built-in implementation, without its imports.
+
+    Same reason as the test above parses instead of importing: these scripts
+    import a CAD stack this process does not have. Compiling the single
+    function definition gives a callable to test the arithmetic in.
+    """
+    script = os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[section]], script_name)
+    tree = ast.parse(open(script).read(), filename=script)
+    definition = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == function_name)
+    namespace = {"DEFAULT_SIZE": 512}
+    exec(compile(ast.Module(body=[definition], type_ignores=[]), script, "exec"), namespace)
+    return namespace[function_name]
+
+
+class _Drawing:
+    """Just enough of a reportlab drawing for '_scale()' to measure."""
+
+    width = 100.0
+    height = 50.0
+
+
+@pytest.mark.parametrize(
+    "request_obj, expected",
+    [
+        ({}, 512.0 / 100.0),  # neither given: the default bounds both
+        ({"width": 200}, 2.0),  # only one given: it alone bounds the result
+        ({"height": 200}, 4.0),
+        ({"width": 200, "height": 100}, 2.0),  # both given: the smaller wins
+    ],
+)
+def test_the_png_scale_is_bounded_by_the_dimensions_that_were_given(request_obj, expected):
+    scale = _builtin_function(output.RENDER, "render_png.py", "_scale")
+    assert scale(_Drawing(), request_obj) == expected
+
+
+@pytest.mark.parametrize(
+    "request_obj",
+    [{"width": 0}, {"height": 0}, {"width": -1}, {"height": -1}, {"width": 0, "height": 100}],
+)
+def test_a_png_dimension_of_zero_or_less_is_refused(request_obj):
+    """It would otherwise scale to zero and write a degenerate image."""
+    scale = _builtin_function(output.RENDER, "render_png.py", "_scale")
+    with pytest.raises(Exception, match="greater than zero"):
+        scale(_Drawing(), request_obj)
+
+
 def test_builtin_formats_cover_what_the_exporters_supported(ctx):
     """No format lost its implementation in the move into 'builtin/'."""
     assert set(output.builtin_formats(ctx, output.EXPORT)) == {

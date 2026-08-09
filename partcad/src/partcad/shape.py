@@ -858,8 +858,9 @@ class Shape(ShapeConfiguration):
         filepath=None,
         options_package: Optional[str] = None,
         output_dir=None,
+        **kwargs,
     ) -> None:
-        asyncio.run(self.render_async(ctx, format_name, project, filepath, options_package, output_dir))
+        asyncio.run(self.render_async(ctx, format_name, project, filepath, options_package, output_dir, **kwargs))
 
     async def render_svg_somewhere(
         self,

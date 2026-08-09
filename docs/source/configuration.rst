@@ -1211,12 +1211,21 @@ For a ``render:`` type the fallback is what an export implementation *is*. An
 export file is one a CAD tool can open as a part or a sketch, which is a
 stricter thing to be than an output file in general -- so it also serves
 wherever any output file would do, and a render request for a file type only
-``export:`` implements uses that implementation. The converse is not true, and
-that asymmetry is deliberate: a drawing, a picture or a report is an output
-file but not a part, so an ``export:`` request never falls back to a
-``render:`` implementation. A package whose output is a document rather than
-geometry should therefore declare it under ``render:`` -- from there it is
-reachable either way, while ``export:`` would promise a part it cannot deliver.
+``export:`` implements uses that implementation.
+
+Note that neither fallback has anything to do with which command was typed.
+``pc export`` and ``pc render`` differ in their defaults, not in the section
+they read: a file type declared only under ``render:`` is produced by
+``pc export -t <type>`` just as well, because the section follows the
+declaration and not the command.
+
+What the two sections do say is what a file type *is*, and that is worth
+getting right when publishing a package. Declare a type under ``export:`` and
+you are promising geometry another tool can go on working with; declare it
+under ``render:`` and you are promising an output file, nothing more. A drawing,
+a picture or a report is the latter -- so declare it under ``render:``, where it
+stays reachable from both commands, rather than under ``export:``, where it
+would promise a part it cannot deliver.
 
 The short form ``<file type>: <path>`` is the same as ``prefix: <path>``.
 
