@@ -9,7 +9,9 @@
 partcad-utils==0.7.158
 # sdf-fork  # installed on demand into the sandbox runtime (see part_factory_sdf.py)
 pyyaml>=6.0.1
-pygit2>=1.15.0
+# 1.18.2 is where 'Remote.list_heads()' appeared and 'ls_remotes()' was
+# deprecated; 1.20 removed the latter. See project_factory_git.py.
+pygit2>=1.18.2
 ruamel.yaml>=0.18.5
 packaging>=23.1
 setuptools

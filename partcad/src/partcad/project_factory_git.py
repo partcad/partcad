@@ -393,9 +393,9 @@ def _single_branch_remote():
 
     def create(repo, name, url):
         head = None
-        for ref in repo.remotes.create_anonymous(url).ls_remotes(callbacks=GitCallbacks(), proxy=True):
-            if ref["name"] == "HEAD":
-                head = ref.get("symref_target")
+        for ref in repo.remotes.create_anonymous(url).list_heads(callbacks=GitCallbacks(), proxy=True):
+            if ref.name == "HEAD":
+                head = ref.symref_target
                 break
 
         if not head:
