@@ -9,6 +9,7 @@ PNG is the SVG projection, rasterized: 'render_svg.py' does the projection and
 this scales the result to the requested pixel size.
 """
 
+import math
 import os
 import sys
 import tempfile
@@ -35,12 +36,14 @@ def _scale(drawing, request):
     if width is None and height is None:
         width = height = DEFAULT_SIZE
 
-    # A dimension of zero or less has no image to describe, and it would not
-    # fail on its own: it produces a scale of zero or a negative one, and the
-    # exporter goes on to write a degenerate PNG. Say what is wrong instead.
+    # A dimension that is not a positive, finite number has no image to
+    # describe, and none of them fail on their own: zero and negatives produce
+    # a scale to match and the exporter writes a degenerate PNG, while a YAML
+    # '.nan' passes any comparison and an '.inf' scales past what can be
+    # rasterized. Say what is wrong instead.
     for name, value in (("width", width), ("height", height)):
-        if value is not None and float(value) <= 0:
-            raise Exception("The '%s' of a PNG has to be greater than zero, not %s" % (name, value))
+        if value is not None and not (math.isfinite(float(value)) and float(value) > 0):
+            raise Exception("The '%s' of a PNG has to be a positive finite number, not %s" % (name, value))
 
     ratios = []
     if width is not None:

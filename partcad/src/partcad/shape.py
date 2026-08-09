@@ -835,6 +835,14 @@ class Shape(ShapeConfiguration):
                 overriding whatever the configuration asked for.
             kwargs: Export parameters, overriding what the configuration says.
         """
+        # A caller that names no package still gets the shape's own. Its
+        # 'export:'/'render:' sections are where a package declares its file
+        # types, so resolving it here is what makes a package-defined
+        # implementation work through this method and not only through
+        # 'Project.render_async()', which always passes the package in.
+        if project is None:
+            project = ctx.get_project(self.project_name)
+
         options_project = ctx.get_project(options_package) if options_package else None
         if options_package and options_project is None:
             pc_logging.error("The options package is not found: %s" % options_package)
@@ -862,7 +870,7 @@ class Shape(ShapeConfiguration):
     ) -> None:
         asyncio.run(self.render_async(ctx, format_name, project, filepath, options_package, output_dir, **kwargs))
 
-    async def render_svg_somewhere(
+    async def render_svg_somewhere_async(
         self,
         ctx,
         project=None,
@@ -886,6 +894,16 @@ class Shape(ShapeConfiguration):
         )
         if os.path.exists(filepath):
             self.svg_path = filepath
+
+    def render_svg_somewhere(
+        self,
+        ctx,
+        project=None,
+        filepath=None,
+        line_weight=None,
+        viewport_origin=None,
+    ):
+        asyncio.run(self.render_svg_somewhere_async(ctx, project, filepath, line_weight, viewport_origin))
 
     async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
         if not self.finalized:

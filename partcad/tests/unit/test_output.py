@@ -15,6 +15,7 @@ end-to-end test writes a real file when a sandbox is available.
 import ast
 import asyncio
 import importlib.util
+import math
 import os
 import sys
 
@@ -107,7 +108,7 @@ def _builtin_function(section, script_name, function_name):
     script = os.path.join(output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[section]], script_name)
     tree = ast.parse(open(script).read(), filename=script)
     definition = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == function_name)
-    namespace = {"DEFAULT_SIZE": 512}
+    namespace = {"DEFAULT_SIZE": 512, "math": math}
     exec(compile(ast.Module(body=[definition], type_ignores=[]), script, "exec"), namespace)
     return namespace[function_name]
 
@@ -135,12 +136,24 @@ def test_the_png_scale_is_bounded_by_the_dimensions_that_were_given(request_obj,
 
 @pytest.mark.parametrize(
     "request_obj",
-    [{"width": 0}, {"height": 0}, {"width": -1}, {"height": -1}, {"width": 0, "height": 100}],
+    [
+        {"width": 0},
+        {"height": 0},
+        {"width": -1},
+        {"height": -1},
+        {"width": 0, "height": 100},
+        # YAML spells these '.nan' and '.inf', so a configuration can carry
+        # them. Neither is caught by comparing against zero.
+        {"width": float("nan")},
+        {"height": float("nan")},
+        {"width": float("inf")},
+        {"height": float("-inf")},
+    ],
 )
-def test_a_png_dimension_of_zero_or_less_is_refused(request_obj):
-    """It would otherwise scale to zero and write a degenerate image."""
+def test_a_png_dimension_that_is_not_a_positive_finite_number_is_refused(request_obj):
+    """Each of these otherwise scales to something no rasterizer can use."""
     scale = _builtin_function(output.RENDER, "render_png.py", "_scale")
-    with pytest.raises(Exception, match="greater than zero"):
+    with pytest.raises(Exception, match="positive finite number"):
         scale(_Drawing(), request_obj)
 
 
