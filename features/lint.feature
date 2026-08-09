@@ -390,18 +390,42 @@ Feature: `pc lint` command
     Then the command should exit with a status code of "0"
 
   @success
-  Scenario: Invalid render with unexpected property
+  Scenario: Render with a parameter of the implementation's own
+    # A field of an output file type that is not one of the structural ones is
+    # an export/render parameter, handed to whatever implements that file type.
+    # Which parameters exist is up to the implementation - a package may add one
+    # of its own along with an implementation of its own - so the schema cannot
+    # close the set here.
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: Render config with an implementation parameter
+      render:
+        png:
+          prefix: "render_"
+          line_weight: 2.0
+      export:
+        step:
+          comment: Not for manufacturing.
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+    And STDOUT should not contain "Additional properties are not allowed"
+
+  @failure
+  Scenario: Invalid render with a malformed structural property
+    # The fields that say how the file is produced and where it goes are still
+    # checked, even though the parameters around them are open-ended.
     Given a file named "partcad.yaml" with content:
       """
       desc: Invalid render config
       render:
         png:
           prefix: "render_"
-          invalid_key: true
+          exclude: ["nonsense"]
       """
     When I run "pc lint"
-    Then the command should exit with a status code of "0"
-    And STDOUT should contain "$.render.png: Additional properties are not allowed ('invalid_key' was unexpected)"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "$.render.png.exclude[0]: 'nonsense' is not one of"
 
   @success
   Scenario: Valid suppliers configuration
