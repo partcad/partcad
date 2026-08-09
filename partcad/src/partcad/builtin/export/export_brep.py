@@ -1,10 +1,13 @@
-# This script is executed within the python sandbox environment (python runtime)
-# to read BREP files.
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""The built-in BREP exporter (see '//builtin/export' in partcad.yaml)."""
 
 import os
 import sys
 
-# from OCP.BRep import BRep_Builder
 # Pinned before the CAD imports below, which load OCP and with it VTK's
 # bundled copy of expat: see the note in ocp_serialize. Without this the
 # standard library's pyexpat binds to VTK's older expat and any later
@@ -44,9 +47,4 @@ def process(path, request):
         return {"success": True, "exception": None}
     except Exception as e:
         wrapper_common.handle_exception(e)
-        return {"success": False, "exception": str(e)}
-
-if __name__ == "__main__":
-    path, request = wrapper_common.handle_input()
-    response = process(path, request)
-    wrapper_common.handle_output(response)
+        return {"success": False, "exception": wrapper_common.exception_to_str(e)}

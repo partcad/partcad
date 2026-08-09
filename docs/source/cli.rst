@@ -78,12 +78,15 @@ Object commands
 
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. Choose the format with ``-t``:
-  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, or ``iges``. Use ``-O`` to set the
-  output directory and ``-r`` to export recursively.
+  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, or any file type a package
+  implements itself (see :ref:`output-files`). Use ``-O`` to set the output directory and ``-r`` to export
+  recursively. ``-e`` names a further package whose ``export:`` options and implementations are used, which is
+  how one package's exporter is applied to another package's objects.
 
 ``pc render``
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:
-  ``svg``, ``png``, or ``readme``.
+  ``svg``, ``png``, ``dxf``, ``readme``, or any file type a package implements itself. ``-e`` works the same
+  way as it does for ``pc export``, reading the ``render:`` options from another package.
 
 *****************
 Workflow commands

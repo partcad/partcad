@@ -34,14 +34,21 @@ from ..service import run
 @click.option(
     "-t",
     "--format",
-    help="The type of file to export",
-    type=click.Choice(["readme", "svg", "png"]),
+    help=("The type of file to render: readme, svg, png, dxf, or any type a package implements itself"),
+    type=str,
     show_envvar=True,
 )
 @click.option(
     "-P",
     "--package",
     help="Package to retrieve the object from",
+    type=str,
+    show_envvar=True,
+)
+@click.option(
+    "-e",
+    "--options-package",
+    help="Package to read the export/render options from, in addition to the object's own package",
     type=str,
     show_envvar=True,
 )
@@ -88,6 +95,7 @@ def cli(
     output_dir,
     format,
     package,
+    options_package,
     recursive,
     sketch,
     interface,
@@ -105,6 +113,7 @@ def cli(
             "output_dir": os.path.abspath(output_dir) if output_dir else None,
             "format": format,
             "package": package,
+            "options_package": options_package,
             "recursive": recursive,
             "sketch": sketch,
             "interface": interface,

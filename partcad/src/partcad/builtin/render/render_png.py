@@ -1,15 +1,13 @@
 #
-# OpenVMP, 2024
-#
-# Author: Roman Kuzmenko
-# Created: 2024-03-16
+# PartCAD, 2026
 #
 # Licensed under Apache License, Version 2.0.
 #
+"""The built-in PNG renderer (see '//builtin/render' in partcad.yaml).
 
-# This script is executed within a python runtime environment
-# (no need for a sandbox) to speed up parallel rendering and
-# to reduce Python dependencies on the host environment
+PNG is the SVG projection, rasterized: 'render_svg.py' does the projection and
+this scales the result to the requested pixel size.
+"""
 
 import os
 import sys
@@ -17,7 +15,7 @@ import tempfile
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
-import wrapper_render_svg
+import render_svg
 
 import svglib.svglib as svglib
 import reportlab.graphics.renderPM as renderPM
@@ -26,7 +24,12 @@ import reportlab.graphics.renderPM as renderPM
 def process(path, request):
     try:
         svg_path = tempfile.mktemp(".svg")
-        wrapper_render_svg.process(svg_path, request)
+        result_svg = render_svg.process(svg_path, request)
+        if not result_svg.get("success", False):
+            return {
+                "success": False,
+                "exception": f"SVG render failed: {result_svg.get('exception')}",
+            }
 
         # Render the raster image
         drawing = svglib.svg2rlg(svg_path)
@@ -36,8 +39,8 @@ def process(path, request):
                 "exception": "Failed to convert to RLG. Aborting.",
             }
 
-        scale_width = float(request["width"]) / float(drawing.width)
-        scale_height = float(request["height"]) / float(drawing.height)
+        scale_width = float(request.get("width", 512)) / float(drawing.width)
+        scale_height = float(request.get("height", 512)) / float(drawing.height)
         scale = min(scale_width, scale_height)
         drawing.scale(scale, scale)
         drawing.width *= scale
@@ -49,21 +52,7 @@ def process(path, request):
             configPIL={"transparent": True},
         )
 
-        return {
-            "success": True,
-            "exception": None,
-        }
+        return {"success": True, "exception": None}
     except Exception as e:
         wrapper_common.handle_exception(e)
-        return {
-            "success": False,
-            "exception": str(e.with_traceback(None)),
-        }
-
-
-path, request = wrapper_common.handle_input()
-
-# Perform rendering
-response = process(path, request)
-
-wrapper_common.handle_output(response)
+        return {"success": False, "exception": wrapper_common.exception_to_str(e)}

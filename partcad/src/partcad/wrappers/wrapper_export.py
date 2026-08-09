@@ -1,0 +1,97 @@
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""Sandbox entry point for an export/render implementation.
+
+Every output file PartCAD writes - the built-in formats in '//builtin/export'
+and '//builtin/render' as much as a format a package implements itself - is
+produced by a Python script run through here. This meta-wrapper runs inside the
+PartCAD sandbox (so the script it runs may import OCP / build123d / cadquery),
+executes that script with 'runpy', and serializes its verdict back to
+'Shape.render_async()'.
+
+The script is executed with these globals available:
+
+    request  -- the shape ('request["wrapped"]') plus every export parameter
+                declared for this format (see '//builtin/export/partcad.yaml'),
+                along with 'shape_name', 'shape_kind' and 'shape_type' so the
+                script can adapt to what it was handed
+    path     -- the absolute path of the file to write
+
+and reports what happened in one of two ways, whichever suits it:
+
+    output = {"success": True}                        # wrote the file
+    output = {"success": False, "exception": "..."}   # did not
+
+or by defining a function, which is called with the same two values:
+
+    def process(path, request): ...                   # returns the dict above
+
+Both '__file__' and the run name '__partcad_export__' are set on the script, so
+it can gate any top-level work ("if __name__ == '__partcad_export__':") and
+remain importable by its siblings - which is how the PNG and DXF renderers
+reuse the SVG one.
+"""
+
+import os
+import runpy
+import sys
+
+sys.path.append(os.path.dirname(__file__))
+import wrapper_common
+
+# The key the request carries the implementation script under. Passed in the
+# request rather than on the command line: 'wrapper_common.handle_input()'
+# already spends both positional arguments on the output path and the working
+# directory.
+SCRIPT_KEY = "__script__"
+
+
+def _failed(exception):
+    return {"success": False, "exception": wrapper_common.exception_to_str(exception)}
+
+
+def process(script, path, request):
+    try:
+        result = runpy.run_path(
+            script,
+            init_globals={"request": request, "path": path},
+            run_name="__partcad_export__",
+        )
+    except Exception as e:
+        wrapper_common.handle_exception(e, script)
+        return _failed(e)
+
+    output = result.get("output")
+    if output is None:
+        entry_point = result.get("process")
+        if not callable(entry_point):
+            return _failed(
+                Exception("%s: neither set 'output' nor defined 'process(path, request)'" % os.path.basename(script))
+            )
+        try:
+            output = entry_point(path, request)
+        except Exception as e:
+            wrapper_common.handle_exception(e, script)
+            return _failed(e)
+
+    if not isinstance(output, dict):
+        return _failed(Exception("%s: produced %s, expected a dict" % (os.path.basename(script), type(output))))
+
+    # A script that reports an exception but forgets to clear 'success', or that
+    # reports neither, is normalized here so the core only ever sees the two
+    # consistent shapes.
+    exception = wrapper_common.exception_to_str(output.get("exception"))
+    return {"success": bool(output.get("success")) and exception is None, "exception": exception}
+
+
+if __name__ == "__main__":
+    path, request = wrapper_common.handle_input()
+    script = request.pop(SCRIPT_KEY, None)
+    if script is None:
+        result = _failed(Exception("No implementation script was passed to the export wrapper"))
+    else:
+        result = process(script, path, request)
+    wrapper_common.handle_output(result)

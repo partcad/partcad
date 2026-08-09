@@ -1,0 +1,111 @@
+# The export implementations PartCAD ships with: the 3D and CAD file formats
+# that `pc export` (and `Shape.convert()`) can write.
+#
+# Every subsection of `export:` below declares one output file type. The fields
+# it carries are exactly the fields a package may declare for that type in its
+# own `partcad.yaml`, with the same meaning:
+#
+#   - `path`                -- the wrapper script that writes the file. It runs
+#                              in a PartCAD sandbox and is handed the shape plus
+#                              every other field of this section (see below).
+#   - `extension`           -- the file extension used when the output file name
+#                              has to be derived from the object's name.
+#   - `pythonRequirements`  -- what the sandbox needs installed to run `path`.
+#                              Order matters: `cadquery-ocp` comes last in every
+#                              list that also has `build123d`, because build123d
+#                              depends on `cadquery-ocp-novtk`, which overwrites
+#                              the very same OCP native module with a VTK-less
+#                              build (see `sandbox_versions.py`).
+#   - anything else         -- an export parameter, passed to the wrapper script
+#                              as part of its `request`. The values here are the
+#                              defaults; a package, a shape, or a command-line
+#                              option overrides them.
+#
+# A package overrides any of this by declaring the same format in its own
+# `export:` section. Declaring `path` there replaces the implementation below
+# with the package's own script.
+
+name: //builtin/export
+desc: |
+  The export implementations PartCAD ships with: the 3D and CAD file formats
+  that `pc export` writes. A package replaces any of them, or adds one of its
+  own, by declaring that file type in its own `export:` section.
+
+export:
+  step:
+    desc: ISO 10303-21 (STEP), the CAD interchange format.
+    path: export_step.py
+    extension: step
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    write_pcurves: true
+    precision_mode: 0
+    # 'comment' has no default: without one the STEP header is left exactly as
+    # OpenCASCADE wrote it. Set it to have the text placed in the file's
+    # FILE_DESCRIPTION header entity.
+    # comment: <text>
+
+  brep:
+    desc: The native OpenCASCADE boundary representation.
+    path: export_brep.py
+    extension: brep
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+
+  stl:
+    desc: Triangle mesh, the 3D printing lingua franca.
+    path: export_stl.py
+    extension: stl
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    tolerance: 0.1
+    angularTolerance: 0.1
+    ascii: false
+
+  3mf:
+    desc: 3D Manufacturing Format.
+    path: export_3mf.py
+    extension: 3mf
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+      - cadquery==2.8.0
+    tolerance: 0.1
+    angularTolerance: 0.1
+
+  obj:
+    desc: Wavefront OBJ mesh.
+    path: export_obj.py
+    extension: obj
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    tolerance: 0.1
+    angularTolerance: 0.1
+
+  gltf:
+    desc: glTF 2.0 (written as '.json' unless 'binary' is set).
+    path: export_gltf.py
+    extension: json
+    pythonRequirements:
+      - build123d==0.11.1
+      - cadquery-ocp==7.9.3.1.1
+    tolerance: 0.1
+    angularTolerance: 0.1
+    binary: false
+
+  iges:
+    desc: Initial Graphics Exchange Specification.
+    path: export_iges.py
+    extension: iges
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    write_pcurves: true
+    precision_mode: 0
+
+  threejs:
+    desc: The three.js JSON geometry format.
+    path: export_threejs.py
+    extension: json
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+    tolerance: 0.1
+    angularTolerance: 0.1

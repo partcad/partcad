@@ -18,6 +18,7 @@ from .cache_shape import ShapeCache
 from . import consts
 from . import logging as pc_logging
 from .mating import Mating
+from . import output
 from . import runtime_python_all
 from . import project_factory_local as rfl
 from . import project_factory_git as rfg
@@ -379,8 +380,39 @@ class Context:
 
         return get_child_project_path(project_path, rel_project_path)
 
+    def _get_builtin_project(self, project_path: str) -> Optional[Project]:
+        """Load one of the packages that ship inside 'partcad' itself.
+
+        '//builtin' and its children are not reachable the way every other
+        package is: they have no place in the root package's directory tree and
+        nothing depends on them, yet they have to resolve in every context,
+        whatever the root package is called. They are therefore loaded on demand
+        straight from the 'partcad' installation, and only when something asks
+        for them - a context that never writes an output file never pays for it.
+
+        Returns None for any other path, which is what makes this safe to call
+        on the way into 'get_project()'.
+        """
+        path = output.BUILTIN_PATHS.get(project_path)
+        if path is None:
+            return None
+        if project_path in self.projects:
+            return self.projects[project_path]
+        return self.import_project(
+            None,  # parent: there is nothing above '//builtin'
+            {
+                "name": project_path,
+                "type": "local",
+                "path": path,
+            },
+        )
+
     def get_project(self, rel_project_path: str) -> Optional[Project]:
         project_path = self.get_project_abs_path(rel_project_path)
+
+        builtin_project = self._get_builtin_project(project_path)
+        if builtin_project is not None:
+            return builtin_project
 
         with self.lock:
             # Check if it's an explicit reference outside of the root project
@@ -1010,19 +1042,19 @@ class Context:
         """Thin alias for convert_assembly(assembly_spec, "build123d", params)."""
         return self.convert_assembly(assembly_spec, "build123d", params)
 
-    async def render_async(self, project_path=None, format=None, output_dir=None):
+    async def render_async(self, project_path=None, format=None, output_dir=None, options_package=None):
         if project_path is None:
             project_path = self.get_current_project_path()
         pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
-        await project.render_async(format=format, output_dir=output_dir)
+        await project.render_async(format=format, output_dir=output_dir, options_package=options_package)
 
-    def render(self, project_path=None, format=None, output_dir=None):
+    def render(self, project_path=None, format=None, output_dir=None, options_package=None):
         if project_path is None:
             project_path = self.get_current_project_path()
         pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
-        project.render(format=format, output_dir=output_dir)
+        project.render(format=format, output_dir=output_dir, options_package=options_package)
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})
     def get_python_runtime(self, version=None, python_runtime=None):

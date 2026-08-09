@@ -46,6 +46,16 @@ isort --check partcad
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships two packages inside itself, reachable from
+  every context as `//builtin/export` and `//builtin/render` (loaded on demand by `Context.get_project`, see
+  `output.py`). They declare the file types `pc export` and `pc render` write, in exactly the form a user's
+  package declares one — a `path` to a script, its `pythonRequirements`, and the export parameters. So adding a
+  format, changing its defaults or changing what it needs installed is an edit to `builtin/*/partcad.yaml`, not
+  to `shape.py`. The scripts run in a sandbox through `wrappers/wrapper_export.py`; they are data files, so
+  anything new under `builtin/` has to be listed in `pyproject.toml`'s `package-data` and in the PyInstaller
+  spec (see "Packaging" in the root [AGENTS.md](../AGENTS.md)). The requirement strings there are the versions
+  `sandbox_versions.py` pins, which `tests/unit/test_output.py` enforces.
+
 ## Commit
 
 `pre-commit` hooks (`dev-tools/pre-commit-config.yaml`) run `pytest`, formatting, and lint checks on commit and

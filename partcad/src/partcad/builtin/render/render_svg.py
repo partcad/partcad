@@ -1,14 +1,13 @@
 #
-# OpenVMP, 2024
-#
-# Author: Roman Kuzmenko
-# Created: 2024-03-16
+# PartCAD, 2026
 #
 # Licensed under Apache License, Version 2.0.
 #
+"""The built-in SVG renderer (see '//builtin/render' in partcad.yaml).
 
-# This script is executed within a python runtime environment
-# (no need for a sandbox) to speed up parallel rendering
+'render_png.py' and 'render_dxf.py' both start from what this produces, so they
+import 'process()' from here rather than duplicating the projection.
+"""
 
 import os
 import sys
@@ -24,6 +23,30 @@ import build123d as b3d
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
+
+
+def viewport_origin(request):
+    """Where the shape is looked at from, when the request does not say.
+
+    A sketch is flat, so it is looked at head-on; anything else is looked at
+    from a corner, which is what makes a 3D shape read as 3D.
+    """
+    origin = request.get("viewport_origin")
+    if origin:
+        return tuple(origin)
+    if request.get("shape_kind") == "sketch":
+        return (0, 0, 100)
+    return (100, -100, 100)
+
+
+def viewport_up(request):
+    """Which way is up in the projection, when the request does not say."""
+    up = request.get("viewport_up")
+    if up:
+        return tuple(up)
+    if request.get("shape_kind") == "sketch":
+        return (0, 1, 0)
+    return (0, 0, 1)
 
 
 def _normalize_mesh(shape):
@@ -59,31 +82,27 @@ def _normalize_mesh(shape):
             pass
 
 
+def needs_mesh_normalization(request):
+    """SDF parts are meshes: a triangulation with no edges to project."""
+    if request.get("normalize_mesh") is not None:
+        return bool(request["normalize_mesh"])
+    return request.get("shape_type") == "sdf"
+
+
 def process(path, request):
     try:
         wrapped = request["wrapped"]
-        if request.get("normalize_mesh"):
+        if needs_mesh_normalization(request):
             wrapped = _normalize_mesh(wrapped)
 
         b3d_obj = b3d.Solid.make_box(1, 1, 1)
         b3d_obj.wrapped = wrapped
 
-        viewport_origin = tuple(request.get("viewport_origin"))
-        viewport_up = tuple(request.get("viewport_up", [0, 0, 1]))
         visible, hidden = b3d_obj.project_to_viewport(
-            viewport_origin=viewport_origin,
-            viewport_up=viewport_up,
+            viewport_origin=viewport_origin(request),
+            viewport_up=viewport_up(request),
         )
-        # visible = b3d_obj.project_to_viewport(
-        #     viewport_origin=viewport_origin,
-        #     ignore_hidden=True,
-        # )[0]
-        max_dimension = max(
-            # *b3d.Compound(children=visible + hidden)
-            *b3d.Compound(children=visible)
-            .bounding_box()
-            .size
-        )
+        max_dimension = max(*b3d.Compound(children=visible).bounding_box().size)
         if max_dimension == 0:
             max_dimension = 4
         scale = 512.0 / max_dimension
@@ -94,36 +113,15 @@ def process(path, request):
         exporter.add_layer(
             "Visible",
             line_color=(64, 192, 64),
-            line_weight=request["line_weight"],
+            line_weight=request.get("line_weight", 1.0),
         )
-        # exporter.add_layer(
-        #     "Hidden",
-        #     line_color=(32, 64, 32),
-        #     line_type=b3d.LineType.ISO_DOT,
-        # )
         try:
             exporter.add_shape(visible, layer="Visible")
-            # exporter.add_shape(hidden, layer="Hidden")
         except:
             pass
         exporter.write(path)
 
-        return {
-            "success": True,
-            "exception": None,
-        }
+        return {"success": True, "exception": None}
     except Exception as e:
         wrapper_common.handle_exception(e)
-        return {
-            "success": False,
-            "exception": str(e.with_traceback(None)),
-        }
-
-
-if __name__ == "__main__":
-    path, request = wrapper_common.handle_input()
-
-    # Perform rendering
-    response = process(path, request)
-
-    wrapper_common.handle_output(response)
+        return {"success": False, "exception": wrapper_common.exception_to_str(e)}

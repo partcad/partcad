@@ -1,14 +1,9 @@
 #
-# PartCAD, 2025
-#
-# Author: Roman Kuzmenko
-# Created: 2025-01-07
+# PartCAD, 2026
 #
 # Licensed under Apache License, Version 2.0.
 #
-
-# This script is executed within a python runtime environment
-# to speed up parallel rendering, and not to leverage any other benefits of sandboxing
+"""The built-in 3MF exporter (see '//builtin/export' in partcad.yaml)."""
 
 import os
 import sys
@@ -27,7 +22,6 @@ import wrapper_common
 
 
 def process(path, request):
-
     try:
         obj = request["wrapped"]
 
@@ -37,25 +31,11 @@ def process(path, request):
         cq.exporters.export(
             cq_solid,
             path,
-            tolerance=request["tolerance"],
-            angularTolerance=request["angularTolerance"],
+            tolerance=request.get("tolerance", 0.1),
+            angularTolerance=request.get("angularTolerance", 0.1),
         )
 
-        return {
-            "success": True,
-            "exception": None,
-        }
+        return {"success": True, "exception": None}
     except Exception as e:
         wrapper_common.handle_exception(e)
-        return {
-            "success": False,
-            "exception": wrapper_common.exception_to_str(e),
-        }
-
-
-path, request = wrapper_common.handle_input()
-
-# Perform rendering
-response = process(path, request)
-
-wrapper_common.handle_output(response)
+        return {"success": False, "exception": wrapper_common.exception_to_str(e)}

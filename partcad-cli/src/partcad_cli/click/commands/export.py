@@ -27,24 +27,22 @@ from ..service import run
 @click.option(
     "-t",
     "--format",
-    help="The type of file to export",
-    type=click.Choice(
-        [
-            "step",
-            "brep",
-            "stl",
-            "3mf",
-            "threejs",
-            "obj",
-            "gltf",
-            "iges",
-        ]
+    help=(
+        "The type of file to export: step, brep, stl, 3mf, threejs, obj, gltf, iges, "
+        "or any type a package implements itself"
     ),
+    type=str,
 )
 @click.option(
     "-P",
     "--package",
     help="Package to retrieve the object from",
+    type=str,
+)
+@click.option(
+    "-e",
+    "--options-package",
+    help="Package to read the export/render options from, in addition to the object's own package",
     type=str,
 )
 @click.option(
@@ -85,6 +83,7 @@ def cli(
     output_dir,
     format,
     package: str,
+    options_package: str,
     recursive,
     sketch,
     interface,
@@ -102,6 +101,7 @@ def cli(
             "output_dir": os.path.abspath(output_dir) if output_dir else None,
             "format": format,
             "package": package,
+            "options_package": options_package,
             "recursive": recursive,
             "sketch": sketch,
             "interface": interface,

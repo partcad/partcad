@@ -1164,3 +1164,145 @@ Responses are cached per key (in memory and on disk), so a repository that is
 slow or remote is queried as little as possible. See
 ``examples/plugin_repository_basic``, ``examples/plugin_repository_full`` (an
 HTTP-backed repository) and ``examples/plugin_repository_tree`` (a hierarchy).
+
+.. _output-files:
+
+============
+Output files
+============
+
+``pc export`` writes 3D and CAD files; ``pc render`` writes 2D projections. Both
+are configured by a section of ``partcad.yaml`` named after the command --
+``export:`` and ``render:`` -- with one subsection per output file type:
+
+.. code-block:: yaml
+
+  export:
+    <file type>:
+      path: <(optional) the script that writes the file>
+      package: <(optional) the package that script belongs to>
+      pythonRequirements: # (optional) what that script's sandbox needs
+        - <requirement>
+      pythonVersion: <(optional) the sandbox interpreter to run it on>
+      extension: <(optional) the extension used when the file name is derived>
+      prefix: <(optional) where the file goes, relative to the package>
+      exclude: <(optional) kinds of object not to write this type for>
+      <parameter name>: <value> # anything else is an export parameter
+
+  render:
+    <file type>:
+      ... # the same fields, for the 2D projections
+
+The two sections behave identically; which one a file type belongs to is
+decided by whichever built-in package implements it (see `Built-in
+implementations`_). An ``export:`` file type also reads its configuration from
+``render:`` first, so a package that configured its STEP or STL output there
+before ``export:`` existed keeps working.
+
+The short form ``<file type>: <path>`` is the same as ``prefix: <path>``.
+
+Export parameters
+-----------------
+
+Every field that is not one of those listed above is a parameter of that file
+type, handed to whatever implements it. Which parameters exist is therefore up
+to the implementation, not to PartCAD. For example, the built-in STEP
+implementation accepts ``comment``, which it places into the STEP file's
+``FILE_DESCRIPTION`` header entity:
+
+.. code-block:: yaml
+
+  export:
+    step:
+      comment: Produced by ACME Corp. Not for manufacturing.
+
+Every STEP file the package produces -- for any part or assembly in it -- then
+carries that text.
+
+Parameters may be declared per package, as above, or per object, in which case
+the object's value wins:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: cadquery
+      export:
+        step:
+          comment: Revision C.
+
+Custom implementations
+----------------------
+
+Declaring ``path`` for a file type replaces the implementation itself with a
+script the package supplies. This is the same mechanism as a ``partType``
+wrapper: the script runs inside a PartCAD sandbox, so it may import OCP,
+build123d or CadQuery, and it is executed with two globals available --
+
+- ``request`` -- the shape in ``request["wrapped"]``, every export parameter the
+  configuration resolved to, and ``shape_name``, ``shape_kind`` and
+  ``shape_type`` describing the object being written
+- ``path`` -- the absolute path of the file to write
+
+-- and reports what happened either by setting a global ``output``:
+
+.. code-block:: python
+
+  output = {"success": True}
+  # or
+  output = {"success": False, "exception": "..."}
+
+or by defining a function that returns the same thing, which is what lets one
+implementation reuse another:
+
+.. code-block:: python
+
+  def process(path, request):
+      ...
+      return {"success": True, "exception": None}
+
+.. code-block:: yaml
+
+  export:
+    stl:
+      path: my_stl_exporter.py
+      pythonRequirements:
+        - cadquery-ocp==7.9.3.1.1
+      comment: Produced by ACME Corp.
+
+``path`` is resolved relative to the package that declared it. A file type that
+no built-in package implements may be declared this way too, and is then
+nameable with ``pc export -t`` / ``pc render -t`` like any other.
+
+See ``examples/feature_export_custom`` for both halves of this.
+
+Using another package's implementation
+--------------------------------------
+
+``pc export -e <package>`` (and ``pc render -e <package>``) reads the
+``export:``/``render:`` sections of a further package on top of the built-in
+ones, so an implementation declared in one package can be applied to the objects
+of another without that package knowing about it:
+
+.. code-block:: shell
+
+  pc export -t stl -e //acme/exporters --package //some/other/package -O ./ bracket
+
+Built-in implementations
+------------------------
+
+The formats PartCAD ships are not special-cased anywhere: they are declared in
+exactly the form above by two packages that live inside the ``partcad``
+installation and that every context can reach, ``//builtin/export`` and
+``//builtin/render``. They are the bottom layer of the configuration, so a
+package that sets a single parameter keeps the built-in implementation for
+everything else, and a package that sets ``path`` replaces it.
+
+``//builtin/export`` implements ``step``, ``brep``, ``stl``, ``3mf``, ``obj``,
+``gltf``, ``iges`` and ``threejs``. ``//builtin/render`` implements ``svg``,
+``png`` and ``dxf``. Reading their ``partcad.yaml`` is the most direct way to
+see what parameters each file type takes and what a package's own
+implementation should look like.
+
+``readme`` is the one output ``render:`` accepts that no implementation writes:
+PartCAD assembles it itself out of the images the other file types leave behind.

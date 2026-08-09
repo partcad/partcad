@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import asyncio
-import copy
+import base64
 import os
 import sys
 import tempfile
@@ -19,7 +19,7 @@ import warnings
 from typing import Optional
 
 from .cache_hash import CacheHash
-from .render import *
+from . import output
 from .shape_config import ShapeConfiguration
 from .utils import total_size
 from . import logging as pc_logging
@@ -38,7 +38,6 @@ if TYPE_CHECKING:
 sys.path.append(os.path.join(os.path.dirname(__file__), "wrappers"))
 from . import shape_envelope
 
-from . import sandbox_versions
 from . import telemetry
 
 PART_EXTENSION_MAPPING = {
@@ -77,8 +76,8 @@ UNEXPORTABLE_PART_TYPES = {
 
 # Every part type named by the extension mappings that 'Shape.convert()' can
 # serialize. Derived from the mappings rather than hand-listed, so a new format
-# added to a mapping (with a matching 'wrapper_render_<format>.py') is picked up
-# here automatically.
+# added to a mapping (and declared by '//builtin/export' or '//builtin/render')
+# is picked up here automatically.
 SERIALIZED_PART_TYPES = (
     frozenset(set(PART_EXTENSION_MAPPING) | set(SKETCH_EXTENSION_MAPPING))
     - LIVE_OBJECT_PART_TYPES
@@ -562,6 +561,299 @@ class Shape(ShapeConfiguration):
             pc_logging.error(msg)
         self.errors.append(msg)
 
+    # ------------------------------------------------------------------ #
+    # Output files: 'pc export' and 'pc render'                          #
+    # ------------------------------------------------------------------ #
+    #
+    # Neither the formats nor the implementations that write them are listed
+    # here. They are declared by the packages that implement them - the ones
+    # PartCAD ships, '//builtin/export' and '//builtin/render', exactly like a
+    # package that implements a format itself - and resolved through 'output'.
+    # What is left in this module is the part that is the same for every
+    # format: gather the configuration, work out the file name, run the
+    # implementation in a sandbox.
+
+    def _output_section(self, ctx, format_name, project=None, options_project=None) -> str:
+        """Whether a file type is an 'export:' or a 'render:' one.
+
+        The built-in packages decide it for the formats they implement. For one
+        they do not, the package that declares it does: a format is an export
+        format if it appears in an 'export:' section and a render format if it
+        appears in a 'render:' one.
+        """
+        section = output.section_of(ctx, format_name)
+        if section is not None:
+            return section
+
+        for config_obj in (self.config, *(p.config_obj for p in (project, options_project) if p is not None)):
+            for candidate in output.SECTIONS:
+                if format_name in (config_obj.get(candidate) or {}):
+                    return candidate
+        return output.EXPORT
+
+    def _output_getopts(self, ctx, format_name, section, project=None, options_project=None):
+        """Layer every configuration of a file type, lowest priority first.
+
+        The built-in package is the bottom layer, so a package that re-tunes a
+        single parameter keeps the built-in implementation for everything else.
+        On top of it come the package the options were asked to come from (the
+        '--options-package' of 'pc export' / 'pc render'), then the package the
+        shape belongs to, then the shape itself.
+
+        Returns the merged configuration and the output directory the sections
+        asked for, if any.
+        """
+        layers = []
+        builtin = output.builtin_project(ctx, section)
+        if builtin is not None:
+            layers.append((builtin.name, builtin.config_obj))
+        for source in (options_project, project):
+            if source is not None:
+                layers.append((source.name, source.config_obj))
+        layers.append((self.project_name, self.config))
+
+        opts = {}
+        output_dir = None
+        for package_name, config_obj in layers:
+            for section_name in output.config_sections(section):
+                section_obj = config_obj.get(section_name)
+                if not isinstance(section_obj, dict):
+                    continue
+                if section_obj.get("output_dir"):
+                    output_dir = section_obj["output_dir"]
+                if format_name in section_obj:
+                    layer = output.stamp(output.normalize(section_obj[format_name]), package_name)
+                    opts = output.merge(opts, layer)
+        return opts, output_dir
+
+    def _output_filepath(self, opts, output_dir, extension, project=None, filepath=None):
+        """Where a file of this type goes when the caller did not say.
+
+        'prefix' names the directory the file goes in, relative to the output
+        directory or, failing that, to the package. A prefix that carries an
+        extension is taken to name the file itself, which is the one way to
+        give an object's output a name of its own.
+        """
+        if filepath is not None:
+            return filepath
+
+        filepath = opts.get("prefix") or "."
+        if not os.path.isabs(filepath):
+            if output_dir:
+                # TODO(clairbee): consider using project.config_dir
+                filepath = os.path.join(output_dir, filepath)
+            elif project is not None:
+                filepath = os.path.join(project.config_dir, filepath)
+        filepath = os.path.normpath(filepath)
+
+        # A directory that does not exist yet is still a directory: '--create-dirs'
+        # is what creates it, and that happens once the name is known.
+        if os.path.isdir(filepath) or not os.path.splitext(filepath)[1]:
+            filepath = os.path.join(filepath, self.name + extension)
+        return filepath
+
+    def output_getopts(self, ctx, format_name, project=None, filepath=None, options_project=None, output_dir=None):
+        """Resolve one output file type: its implementation, options and path.
+
+        This is the whole of what a format's configuration means, in one place:
+        which script writes the file, what it is handed, and where the file
+        lands. 'pc export' and 'pc render' differ only in which section the
+        answer is read from.
+        """
+        section = self._output_section(ctx, format_name, project, options_project)
+        opts, configured_output_dir = self._output_getopts(ctx, format_name, section, project, options_project)
+        # An explicitly requested output directory (e.g. 'pc export -O') beats
+        # whatever the configuration asked for.
+        output_dir = output_dir or configured_output_dir
+
+        if filepath is not None and os.path.isdir(filepath):
+            # A directory was passed where a file was expected: it names where
+            # the file goes, not the file.
+            output_dir, filepath = filepath, None
+
+        impl = output.Implementation(section, format_name, opts)
+        default_extension = PART_EXTENSION_MAPPING.get(format_name) or SKETCH_EXTENSION_MAPPING.get(
+            format_name, format_name
+        )
+        extension = "." + impl.extension(default_extension)
+        filepath = self._output_filepath(opts, output_dir, extension, project, filepath)
+
+        pc_logging.debug("Rendering: %s" % filepath)
+        return impl, filepath
+
+    async def _materialize_output_script(self, ctx, impl):
+        """The on-disk path of the script that writes this file type.
+
+        For a local package - which the built-in ones are - that is a file in
+        the package. For a plugin-backed package it is fetched from the plugin
+        (like a file-backed object) and written into the package's cache
+        directory, the same way a partType's wrapper script is.
+        """
+        if not impl.script:
+            raise Exception(
+                "No implementation of '%s' is declared: neither %s nor this package provides a 'path'"
+                % (impl.format_name, output.BUILTIN_PACKAGES[impl.section])
+            )
+
+        package_name = impl.config.get("package") or output.BUILTIN_PACKAGES[impl.section]
+        project = ctx.get_project(package_name)
+        if project is None:
+            raise Exception("The package implementing '%s' is not found: %s" % (impl.format_name, package_name))
+        impl.project = project
+
+        script_abs = os.path.join(project.config_dir, impl.script)
+        if os.path.exists(script_abs):
+            return script_abs
+
+        get_data_async = getattr(project, "get_data_async", None)
+        if get_data_async is None:
+            raise Exception("The implementation of '%s' is not found: %s" % (impl.format_name, script_abs))
+
+        data = await get_data_async("files/" + impl.script)
+        if data is None:
+            raise Exception(
+                "The repository did not provide the implementation of '%s': %s" % (impl.format_name, impl.script)
+            )
+        content = base64.b64decode(data) if isinstance(data, str) else bytes(data)
+        dirs = os.path.dirname(script_abs)
+        if dirs and not os.path.exists(dirs):
+            os.makedirs(dirs, exist_ok=True)
+        with open(script_abs, "wb") as f:
+            f.write(content)
+        return script_abs
+
+    def _output_request(self, obj, impl, kwargs):
+        """What the implementation is handed.
+
+        The shape, every parameter the layered configuration ended up with, and
+        enough about the shape itself for an implementation to adapt to what it
+        was given - which is how the SVG renderer knows to look at a sketch
+        head-on without PartCAD having to tell it.
+        """
+        request = {
+            "wrapped": obj,
+            "shape_name": self.name,
+            "shape_kind": self.kind,
+            "shape_type": self.config.get("type"),
+            "package_name": self.project_name,
+        }
+        request.update(impl.parameters)
+        # An explicit argument wins over the configuration, but only when it is
+        # one: 'render_async(**kwargs)' is called with a fixed set of keyword
+        # arguments defaulting to None by several callers.
+        request.update({key: value for key, value in kwargs.items() if value is not None})
+        return request
+
+    async def _render_one_async(self, ctx, obj, format_name, project, filepath, options_project, output_dir, kwargs):
+        """Produce one output file, whatever its type."""
+        impl, final_filepath = self.output_getopts(ctx, format_name, project, filepath, options_project, output_dir)
+        final_filepath = os.path.abspath(final_filepath)
+        # Create the output directory for the resolved path (the incoming
+        # 'filepath' is None when called from Project.render_async) using the
+        # 'ctx' passed in, so direct callers without a project get
+        # '--create-dirs' too.
+        ctx.ensure_dirs_for_file(final_filepath)
+        pc_logging.debug("Rendering: %s:%s for format '%s'" % (self.project_name, self.name, format_name))
+
+        script = await self._materialize_output_script(ctx, impl)
+
+        request = self._output_request(obj, impl, kwargs)
+        request[output.SCRIPT_KEY] = os.path.abspath(script)
+        request_serialized = shape_envelope.serialize(request)
+
+        runtime = ctx.get_python_runtime(version=impl.python_version())
+        await runtime.prepare_for_package(impl.project)
+        # Installed one at a time, not with asyncio.gather(): the order
+        # matters, since build123d overwrites the OCP native module that
+        # cadquery-ocp installs (see sandbox_versions.GUARD_INVALIDATED_BY).
+        for dep in impl.python_requirements:
+            await runtime.ensure_async(dep)
+
+        with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
+            command = [
+                wrapper.get("export.py"),
+                final_filepath,
+                os.path.abspath(impl.project.config_dir),
+            ]
+            exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+            if exitcode != 0 and len(errors) == 0:
+                errors = "Failed to execute command '%s' with exit code %s" % (" ".join(command), exitcode)
+            if errors:
+                pc_logging.error(errors)
+                raise Exception(errors)
+
+        response_lines = response_serialized.strip().splitlines()
+        if not response_lines:
+            pc_logging.error("Empty response from the '%s' implementation: %s" % (format_name, script))
+            return
+
+        try:
+            result = shape_envelope.deserialize(response_lines[-1].strip())
+        except Exception as e:
+            pc_logging.error("Failed to deserialize response: %s" % e)
+            return
+
+        if not result.get("success", False):
+            pc_logging.error(
+                "Render %s failed for %s:%s: %s"
+                % (format_name.upper(), self.project_name, self.name, result.get("exception", "Unknown error"))
+            )
+        if result.get("exception"):
+            pc_logging.exception("Render %s exception: %s" % (format_name.upper(), result["exception"]))
+
+    async def render_async(
+        self,
+        ctx: Context,
+        format_name: str,
+        project: Optional[Project] = None,
+        filepath=None,
+        options_package: Optional[str] = None,
+        output_dir=None,
+        **kwargs,
+    ) -> None:
+        """Write this shape out as one output file type, or as all of them.
+
+        Args:
+            ctx: Execution context.
+            format_name: The file type (e.g. "step", "svg", "png"). None
+                produces every type that has a built-in implementation.
+            project: The package the shape belongs to, whose 'export:' and
+                'render:' sections configure the output.
+            filepath: The file to write. None resolves it from the
+                configuration and the object's name.
+            options_package: A package to read the export/render options from
+                in addition to 'project', which is how a custom implementation
+                declared in one package is used from another.
+            output_dir: Where the file goes when 'filepath' does not say,
+                overriding whatever the configuration asked for.
+            kwargs: Export parameters, overriding what the configuration says.
+        """
+        options_project = ctx.get_project(options_package) if options_package else None
+        if options_package and options_project is None:
+            pc_logging.error("The options package is not found: %s" % options_package)
+            return
+
+        action = f"Render{format_name.upper()}" if format_name else "Render"
+        with pc_logging.Action(action, self.project_name, self.name):
+            obj = await self.get_wrapped(ctx)
+            if obj is None:
+                pc_logging.error(f"Cannot render '{self.name}': shape is empty")
+                return
+
+            for format in [format_name] if format_name else output.all_formats(ctx):
+                await self._render_one_async(ctx, obj, format, project, filepath, options_project, output_dir, kwargs)
+
+    def render(
+        self,
+        ctx: Context,
+        format_name: str,
+        project: Optional[Project] = None,
+        filepath=None,
+        options_package: Optional[str] = None,
+        output_dir=None,
+    ) -> None:
+        asyncio.run(self.render_async(ctx, format_name, project, filepath, options_package, output_dir))
+
     async def render_svg_somewhere(
         self,
         ctx,
@@ -570,318 +862,21 @@ class Shape(ShapeConfiguration):
         line_weight=None,
         viewport_origin=None,
     ):
-        """Renders an SVG file somewhere and ignore the project settings"""
+        """Renders an SVG file somewhere, ignoring where the project wants it."""
         if filepath is None:
             filepath = tempfile.mktemp(".svg")
 
-        obj = await self.get_wrapped(ctx)
-        if obj is None:
-            # pc_logging.error("The shape failed to instantiate")
-            self.svg_path = None
-            return
-
-        svg_opts, _ = self.render_getopts("svg", ".svg", project, filepath)
-
-        if line_weight is None:
-            if "lineWeight" in svg_opts and not svg_opts["lineWeight"] is None:
-                line_weight = svg_opts["lineWeight"]
-            else:
-                line_weight = 1.0
-
-        if viewport_origin is None:
-            if "viewportOrigin" in svg_opts and not svg_opts["viewportOrigin"] is None:
-                viewport_origin = svg_opts["viewportOrigin"]
-            else:
-                viewport_origin = [100, -100, 100]
-
-        wrapper_path = wrapper.get("render_svg.py")
-        request = {
-            "wrapped": obj,
-            "line_weight": line_weight,
-            "viewport_origin": viewport_origin,
-        }
-        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{shape_envelope.serialize}"):
-            request_serialized = shape_envelope.serialize(request)
-
-        # We don't care about customer preferences much here
-        # as this is expected to be hermetic.
-        # Stick to the version where CadQuery and build123d are known to work.
-        runtime = ctx.get_python_runtime(version="3.11")
-        await runtime.ensure_async(sandbox_versions.OCPSVG)
-        await runtime.ensure_async(sandbox_versions.BUILD123D)
-        # Last: re-asserts the VTK-enabled OCP that build123d's
-        # 'cadquery-ocp-novtk' dependency has just replaced.
-        await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
-
-        command = [wrapper_path, os.path.abspath(filepath)]
-        exitcode, response_serialized, errors = await runtime.run_async(
-            command,
-            request_serialized,
+        self.svg_path = None
+        await self.render_async(
+            ctx,
+            "svg",
+            project=project,
+            filepath=filepath,
+            line_weight=line_weight,
+            viewport_origin=viewport_origin,
         )
-        if exitcode != 0 and len(errors) == 0:
-            errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
-
-        if errors:
-            pc_logging.error(errors)
-            raise Exception(errors)
-
-        result = shape_envelope.deserialize(response_serialized)
-        if not result["success"]:
-            pc_logging.error("RenderSVG failed: %s:%s: %s" % (self.project_name, self.name, result["exception"]))
-        if "exception" in result and not result["exception"] is None:
-            pc_logging.exception("RenderSVG exception: %s" % result["exception"])
-
-        self.svg_path = filepath
-
-    async def _get_svg_path(self, ctx, project):
-        async with self.svg_lock:
-            if self.svg_path is None:
-                await self.render_svg_somewhere(ctx=ctx, project=project)
-            return self.svg_path
-
-    def render_getopts(
-        self,
-        kind,
-        extension,
-        project=None,
-        filepath=None,
-    ):
-        if not project is None and "render" in project.config_obj:
-            render_opts = copy.copy(project.config_obj["render"])
-        else:
-            render_opts = {}
-
-        if kind in render_opts and not render_opts[kind] is None:
-            if isinstance(render_opts[kind], str):
-                opts = {"prefix": render_opts[kind]}
-            else:
-                opts = copy.copy(render_opts[kind])
-        else:
-            opts = {}
-
-        if (
-            "render" in self.config
-            and not self.config["render"] is None
-            and kind in self.config["render"]
-            and not self.config["render"][kind] is None
-        ):
-            shape_opts = copy.copy(self.config["render"][kind])
-            if isinstance(shape_opts, str):
-                shape_opts = {"prefix": shape_opts}
-            opts = render_cfg_merge(opts, shape_opts)
-
-        # Using the project's config defaults if any
-        if filepath is None:
-            if "path" in opts and not opts["path"] is None:
-                filepath = opts["path"]
-            elif "prefix" in opts and not opts["prefix"] is None:
-                filepath = opts["prefix"]
-            else:
-                filepath = "."
-
-            # Check if the format specific section of the config (e.g. "png")
-            # provides a relative path and there is output dir in cmd line or
-            # the generic section of rendering options in the config.
-            if not os.path.isabs(filepath):
-                if "output_dir" in render_opts:
-                    # TODO(clairbee): consider using project.config_dir
-                    # filepath = os.path.join(
-                    #     project.config_dir, render_opts["output_dir"], filepath
-                    # )
-                    filepath = os.path.join(render_opts["output_dir"], filepath)
-                elif not project is None:
-                    filepath = os.path.join(project.config_dir, filepath)
-
-            if os.path.isdir(filepath):
-                filepath = os.path.join(filepath, self.name + extension)
-
-        pc_logging.debug("Rendering: %s" % filepath)
-
-        return opts, filepath
-
-    async def render_async(
-        self, ctx: Context, format_name: str, project: Optional[Project] = None, filepath=None, **kwargs
-    ) -> None:
-        """
-        Centralized method to render shape via external wrapper.
-        Args:
-            ctx: Execution context.
-            format_name: Render format (e.g., "png", "svg", "dxf").
-            project: Optional project object.
-            filepath: Target file path for output.
-            kwargs: Additional options (width, height, etc.).
-        """
-        WRAPPER_FORMATS = {
-            # NOTE: cadquery-ocp comes last in every list that also has
-            # build123d. build123d pulls 'cadquery-ocp-novtk', which replaces
-            # the OCP native module with a VTK-less build; re-asserting
-            # cadquery-ocp afterwards puts the right one back.
-            "svg": [
-                sandbox_versions.OCPSVG,
-                sandbox_versions.BUILD123D,
-                sandbox_versions.CADQUERY_OCP,
-            ],
-            "png": [
-                sandbox_versions.OCPSVG,
-                sandbox_versions.BUILD123D,
-                sandbox_versions.SVGLIB,
-                sandbox_versions.REPORTLAB,
-                sandbox_versions.RLPYCAIRO,
-                sandbox_versions.CADQUERY_OCP,
-            ],
-            "dxf": [
-                sandbox_versions.OCPSVG,
-                sandbox_versions.BUILD123D,
-                sandbox_versions.SVGPATHTOOLS,
-                sandbox_versions.EZDXF,
-                sandbox_versions.CADQUERY_OCP,
-            ],
-            "brep": [sandbox_versions.CADQUERY_OCP],
-            "step": [sandbox_versions.CADQUERY_OCP],
-            "stl": [sandbox_versions.CADQUERY_OCP],
-            "obj": [sandbox_versions.CADQUERY_OCP],
-            "3mf": [sandbox_versions.CADQUERY_OCP, sandbox_versions.CADQUERY],
-            "gltf": [sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP],
-            "iges": [sandbox_versions.CADQUERY_OCP],
-            "threejs": [sandbox_versions.CADQUERY_OCP],
-        }
-
-        with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
-
-            if filepath and os.path.isdir(filepath):
-                self.config_obj.setdefault("render", {})["output_dir"] = filepath
-
-            # The wire format carries OCCT geometry, not build123d objects, so glTF
-            # is handed the raw shape too and the wrapper rebuilds the build123d
-            # wrapper it needs on the far side.
-            obj = await self.get_wrapped(ctx)
-
-            if obj is None:
-                pc_logging.error(f"Cannot render '{self.name}': shape is empty")
-                return
-
-            formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
-
-            for format in formats_to_render:
-                file_extension = PART_EXTENSION_MAPPING.get(format, format)
-                render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
-                final_filepath = os.path.abspath(final_filepath)
-                # Create the output directory for the resolved path. Use
-                # 'final_filepath' (the incoming 'filepath' is None when called
-                # from Project.render_async, which broke '--create-dirs' with a
-                # TypeError) and the 'ctx' passed in, so direct callers without a
-                # project still get '--create-dirs'.
-                ctx.ensure_dirs_for_file(final_filepath)
-                pc_logging.debug(f"Rendering: {self.project_name}:{self.name} for format '{format}'")
-
-                wrapper_path = wrapper.get(f"render_{format}.py")
-
-                request = {"wrapped": obj}
-
-                # Common defaults
-                line_weight = kwargs.get("line_weight", 1.0)
-                viewport_origin = kwargs.get("viewport_origin")
-                viewport_up = kwargs.get("viewport_up")
-
-                # 2D formats
-                if format in ["svg", "png"]:
-                    request["viewport_origin"] = viewport_origin or (
-                        [0, 0, 100] if self.kind == "sketch" else [100, -100, 100]
-                    )
-                    if self.kind == "sketch":
-                        request["viewport_up"] = viewport_up or [0, 1, 0]
-                    request["line_weight"] = line_weight
-
-                    # SDF parts are meshes: the wrapped shape is a triangulation
-                    # with no edges to project, so ask the render runtime to
-                    # normalize it first (see wrapper_render_svg._normalize_mesh).
-                    if self.config.get("type") == "sdf":
-                        request["normalize_mesh"] = True
-
-                    if format == "png":
-                        request["width"] = kwargs.get("width", 512)
-                        request["height"] = kwargs.get("height", 512)
-
-                # DXF
-                elif format == "dxf":
-                    request["line_weight"] = line_weight
-                    request["viewport_origin"] = viewport_origin or [0, 0, 100]
-                    request["viewport_up"] = viewport_up or [0, 1, 0]
-
-                # Mesh formats
-                elif format in ["3mf", "obj", "gltf", "stl", "threejs"]:
-                    request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
-                    request["angularTolerance"] = kwargs.get(
-                        "angularTolerance", render_opts.get("angularTolerance", 0.1)
-                    )
-
-                    if format == "stl":
-                        request["ascii"] = kwargs.get("ascii", render_opts.get("ascii", False))
-                    elif format == "gltf":
-                        request["binary"] = kwargs.get("binary", render_opts.get("binary", False))
-
-                # CAD formats
-                elif format in ["step", "iges"]:
-                    request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
-                    request["precision_mode"] = kwargs.get("precision_mode", render_opts.get("precision_mode", 0))
-
-                request_serialized = shape_envelope.serialize(request)
-
-                runtime = ctx.get_python_runtime(version="3.11")
-
-                dependencies = WRAPPER_FORMATS[format_name]
-                # Installed one at a time, not with asyncio.gather(): the
-                # order matters, since build123d overwrites the OCP native
-                # module that cadquery-ocp installs (see the note above).
-                for dep in dependencies:
-                    await runtime.ensure_async(dep)
-
-                # Run wrapper
-                with telemetry.start_as_current_span("*Shape.render_async.{runtime.run_async}"):
-                    command = [wrapper_path, os.path.abspath(final_filepath)]
-                    exitcode, response_serialized, errors = await runtime.run_async(
-                        command,
-                        request_serialized,
-                    )
-                    if exitcode != 0 and len(errors) == 0:
-                        errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
-
-                    if errors:
-                        pc_logging.error(errors)
-                        raise Exception(errors)
-
-                if errors:
-                    pc_logging.error(f"Wrapper {format_name} stderr:\n{errors}")
-
-                response_lines = response_serialized.strip().splitlines()
-                if not response_lines:
-                    pc_logging.error(f"Empty response from wrapper: {wrapper_path}")
-                    return
-
-                cleaned_response = response_lines[-1].strip()
-
-                # Handle response
-                result = {}
-                try:
-                    result = shape_envelope.deserialize(cleaned_response)
-                except Exception as e:
-                    pc_logging.error(f"Failed to deserialize response: {e}")
-
-                if not result.get("success", False):
-                    pc_logging.error(
-                        f"Render {format_name.upper()} failed for {self.project_name}:{self.name}: {result.get('exception', 'Unknown error')}"
-                    )
-                if "exception" in result and result["exception"]:
-                    pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
-
-    def render(
-        self,
-        ctx: Context,
-        format_name: str,
-        project: Optional[Project] = None,
-        filepath=None,
-    ) -> None:
-        asyncio.run(self.render_async(ctx, format_name, project, filepath))
+        if os.path.exists(filepath):
+            self.svg_path = filepath
 
     async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
         if not self.finalized:

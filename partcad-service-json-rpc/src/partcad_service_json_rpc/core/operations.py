@@ -1381,13 +1381,39 @@ def search_objects(session, params):
     return None
 
 
+def _validate_output_format(pc, ctx, fmt, packages):
+    """Reject a file type nothing implements, instead of quietly writing nothing.
+
+    The set is not fixed: on top of what `//builtin/export` and `//builtin/render`
+    implement, a package may declare a file type of its own in its `export:` or
+    `render:` section, and that has to be nameable on the command line.
+    """
+    if fmt is None:
+        return
+    known = set(pc.output.all_formats(ctx)) | pc.output.NON_WRAPPER_FORMATS
+    for package in packages:
+        package_obj = ctx.get_project(package)
+        if package_obj is None:
+            continue
+        for section in pc.output.SECTIONS:
+            known.update(package_obj.config_obj.get(section) or {})
+    if fmt not in known:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "Unknown output file type '%s'. Known types: %s" % (fmt, ", ".join(sorted(known))),
+        )
+
+
 def render_objects(session, params):
     """Render/export parts, assemblies, sketches, or interfaces to files.
 
     Backs both `pc export` (3D formats) and `pc render` (2D projections); the CLI
     passes the ``format`` and the ``label`` ("Export"/"Render"). ``output_dir``,
     when given, is resolved to an absolute path by the CLI so it lands in the
-    user's working directory (the daemon runs elsewhere).
+    user's working directory (the daemon runs elsewhere). ``options_package``
+    names a further package whose ``export:``/``render:`` sections are read on
+    top of the built-in ones, which is how a custom implementation declared in
+    one package is used against the objects of another.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -1403,6 +1429,11 @@ def render_objects(session, params):
     fmt = params.get("format")
     output_dir = params.get("output_dir")
     object_name = params.get("object")
+    options_package = params.get("options_package")
+    if options_package:
+        options_package = ctx.resolve_package_path(options_package)
+        if ctx.get_project(options_package) is None:
+            raise JsonRpcError(USAGE_ERROR, "Options package %s is not found" % options_package)
 
     with pc.logging.Process(params.get("label", "Render"), package):
         ctx.option_create_dirs = params.get("create_dirs", False)
@@ -1411,12 +1442,19 @@ def render_objects(session, params):
         else:
             packages = [package]
 
+        _validate_output_format(pc, ctx, fmt, packages + ([options_package] if options_package else []))
+
         for package in packages:
             if object_name is not None:
                 package, object_name = pc.utils.resolve_resource_path(package, object_name)
 
             if object_name is None:
-                ctx.render(project_path=package, format=fmt, output_dir=output_dir)
+                ctx.render(
+                    project_path=package,
+                    format=fmt,
+                    output_dir=output_dir,
+                    options_package=options_package,
+                )
             else:
                 sketches, interfaces, parts, assemblies = [], [], [], []
                 if params.get("sketch"):
@@ -1435,6 +1473,7 @@ def render_objects(session, params):
                     assemblies=assemblies,
                     format=fmt,
                     output_dir=output_dir,
+                    options_package=options_package,
                 )
     return None
 

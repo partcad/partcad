@@ -25,6 +25,7 @@ from . import assembly, assembly_config
 from . import assembly_factory_alias as afa
 from . import consts, factory, interface
 from . import logging as pc_logging
+from . import output
 from . import part_config
 from . import part_factory_alias as pfa
 from . import (
@@ -1176,6 +1177,23 @@ class Project(project_config.Configuration):
     def test_log_wrapper(self, ctx, tests=None) -> bool:
         return asyncio.run(self.test_log_wrapper_async(ctx, tests))
 
+    def _output_cfg(self, shape, options_project=None) -> dict:
+        """Which output file types are configured for a shape, and how.
+
+        Used to decide what a package produces, not how: it is the union of the
+        'export:' and 'render:' sections of the package (and of the package the
+        options were asked to come from), overlaid with the shape's own. The
+        options each type ends up with are resolved per type and per format in
+        'Shape.output_getopts()'.
+        """
+        cfg = {}
+        for config_obj in [p.config_obj for p in (options_project, self) if p is not None] + [shape.config]:
+            for section in output.SECTIONS:
+                section_obj = config_obj.get(section)
+                if isinstance(section_obj, dict):
+                    cfg = render_cfg_merge(cfg, copy.deepcopy(section_obj))
+        return cfg
+
     async def render_async(
         self,
         sketches: Optional[List] = None,
@@ -1184,41 +1202,46 @@ class Project(project_config.Configuration):
         assemblies: Optional[List] = None,
         format: Optional[str] = None,
         output_dir: Optional[Path] = None,
+        options_package: Optional[str] = None,
     ):
         with pc_logging.Action("RenderPkg", self.name):
-            # Override the default output_dir.
-            # TODO(clairbee): pass the preference downstream without making a
-            # persistent change.
+            options_project = self.ctx.get_project(options_package) if options_package else None
+            if options_package and options_project is None:
+                pc_logging.error("The options package is not found: %s" % options_package)
+                return
 
-            if output_dir:
-                self.config_obj.setdefault("render", {})["output_dir"] = output_dir
-
-            render = self.config_obj.get("render", {})
             shapes: List[Shape] = self._enumerate_shapes(sketches, interfaces, parts, assemblies)
 
             if None in shapes:
                 raise EmptyShapesError
 
             tasks = []
-            render_formats = ["svg", "png", "dxf", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
+            # Every file type that has a built-in implementation, plus any the
+            # packages involved implement themselves.
+            output_formats = output.all_formats(self.ctx)
 
             for shape in shapes:
-                shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
+                shape_cfg = self._output_cfg(shape, options_project)
+                formats = output_formats + [
+                    name for name in shape_cfg if name not in output_formats and name not in output.NON_WRAPPER_FORMATS
+                ]
 
-                for format_name in render_formats:
-                    if self._should_render_format(format_name, shape_render, format, shape.kind):
+                for format_name in formats:
+                    if self._should_render_format(format_name, shape_cfg, format, shape.kind):
                         if not hasattr(shape, "finalized") or shape.finalized:
                             tasks.append(
                                 shape.render_async(
                                     ctx=self.ctx,
                                     format_name=format_name,
                                     project=self,
-                                    filepath=None,
+                                    output_dir=output_dir,
+                                    options_package=options_package,
                                 )
                             )
 
             await asyncio.gather(*tasks)
 
+            render = self.config_obj.get("render") or {}
             if format == "readme" or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
 
@@ -1246,7 +1269,7 @@ class Project(project_config.Configuration):
         return shapes
 
     def _should_render_format(
-        self, format_name: str, shape_render: dict, current_format: typing.Optional[str], shape_kind: str
+        self, format_name: str, shape_cfg: dict, current_format: typing.Optional[str], shape_kind: str
     ) -> bool:
         """Helper function to determine if a format should be rendered"""
         plural_shape_kind = {
@@ -1257,13 +1280,13 @@ class Project(project_config.Configuration):
             "providers": "providers",
         }
         if (
-            format_name in shape_render
-            and shape_render[format_name] is not None
-            and not isinstance(shape_render[format_name], str)
-            and plural_shape_kind.get(shape_kind, None) in shape_render.get(format_name, {}).get("exclude", [])
+            format_name in shape_cfg
+            and shape_cfg[format_name] is not None
+            and not isinstance(shape_cfg[format_name], str)
+            and plural_shape_kind.get(shape_kind, None) in shape_cfg.get(format_name, {}).get("exclude", [])
         ):
             return False
-        return (current_format is None and format_name in shape_render) or (
+        return (current_format is None and format_name in shape_cfg) or (
             current_format is not None and current_format == format_name
         )
 
@@ -1275,8 +1298,9 @@ class Project(project_config.Configuration):
         assemblies: Optional[list] = None,
         format: Optional[str] = None,
         output_dir: Optional[Path] = None,
+        options_package: Optional[str] = None,
     ):
-        asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
+        asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir, options_package))
 
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:
