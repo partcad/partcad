@@ -91,6 +91,10 @@ Object commands
   grouped by the package they come from and counted). An assembly can also ask for its own document in the
   package configuration, by declaring ``readme`` in its ``render`` section.
 
+  Only assemblies that a package declares are listed as sub-assemblies. An assembly embedded in an Assembly
+  YAML file's nested ``links:`` section belongs to no package, so it is not listed on its own: the parts it
+  holds are counted towards the assembly that embeds it.
+
 *****************
 Workflow commands
 *****************

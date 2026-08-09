@@ -9,12 +9,18 @@
 #
 
 import asyncio
+import copy
 import os
 import platform
 import pytest
 import tempfile
 
 import partcad as pc
+
+# A package whose top level assembly is built out of another package's parts and
+# assemblies, so that the grouping and the counting have something to group and
+# count that the examples do not cover.
+ASSEMBLY_BOM_PACKAGE = "partcad/tests/unit/data/assembly_bom/partcad.yaml"
 
 
 @pytest.mark.slow
@@ -133,3 +139,52 @@ def test_render_assembly_readme_from_config():
     assert os.path.exists(os.path.join(output_dir, "logo.md"))
     # Only the assemblies that ask for one get a document of their own.
     assert not os.path.exists(os.path.join(output_dir, "logo_embedded.md"))
+
+
+def test_assembly_bom_grouped_sub_assemblies():
+    """A sub-assembly declared by a package is counted as itself and walked into"""
+    ctx = pc.Context(ASSEMBLY_BOM_PACKAGE)
+    top = ctx._get_assembly("//:top")
+    assert top is not None
+    grouped = asyncio.run(top.get_bom_grouped_async())
+
+    # 'top' uses '//sub:unit' twice, and each of those is a pair of cubes, on top
+    # of the one cube 'top' places itself.
+    assert grouped["assemblies"] == {"//sub": {"unit": {"count": 2, "desc": "A pair of cubes"}}}
+    assert grouped["parts"] == {"//sub": {"cube": {"count": 5, "desc": "A cube"}}}
+
+
+def test_render_assembly_readme_sub_assemblies():
+    """The assembly document groups sub-assemblies by package and counts them"""
+    ctx = pc.Context(ASSEMBLY_BOM_PACKAGE)
+    prj = ctx.get_project("//")
+    assert prj is not None
+    output_dir = tempfile.mkdtemp()
+    path = prj.render_assembly_readme("top", output_dir=output_dir)
+
+    with open(path) as f:
+        lines = f.read().splitlines()
+
+    assert lines[0] == "# top"
+    assert "## Sub-Assemblies" in lines
+    assert "| Assembly | Count | Description |" in lines
+    assert "| unit | 2 | A pair of cubes |" in lines
+    assert "## Parts" in lines
+    assert "| cube | 5 | A cube |" in lines
+    # The document is generated outside of the package's own tree, so the
+    # packages it refers to are named but not linked.
+    assert "### //sub" in lines
+
+
+def test_render_assembly_readme_keeps_package_config_intact():
+    """Resolving one assembly's render settings does not mutate the package's"""
+    ctx = pc.Context(ASSEMBLY_BOM_PACKAGE)
+    prj = ctx.get_project("//")
+    assert prj is not None
+    before = copy.deepcopy(prj.config_obj["render"])
+    assert before["svg"]["prefix"] == "./"
+
+    prj.render_assembly_readme("top", output_dir=tempfile.mkdtemp())
+
+    # 'top' overrides the SVG prefix; that override belongs to 'top' alone.
+    assert prj.config_obj["render"] == before

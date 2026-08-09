@@ -1203,7 +1203,11 @@ class Project(project_config.Configuration):
             render_formats = ["svg", "png", "dxf", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
 
             for shape in shapes:
-                shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
+                # A deep copy: 'render_cfg_merge()' merges nested dictionaries in
+                # place, so a shallow copy would let one shape's settings leak
+                # into the package's own configuration and into every shape
+                # rendered after it.
+                shape_render = render_cfg_merge(copy.deepcopy(render), shape.config.get("render", {}))
 
                 for format_name in render_formats:
                     if self._should_render_format(format_name, shape_render, format, shape.kind):
@@ -1320,7 +1324,10 @@ class Project(project_config.Configuration):
 
         image_path = os.path.join(return_path, prefix, name + extension)
         test_image_path = os.path.join(prefix, name + extension)
-        markup = '<img src="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">' % image_path
+        markup = '<img src="%s" alt="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">' % (
+            image_path,
+            name,
+        )
         return markup, test_image_path
 
     def _readme_package_link(self, package_name, dir_path):
@@ -1395,8 +1402,8 @@ class Project(project_config.Configuration):
         lines += ["Package: `%s`" % self.name, ""]
 
         # The image is looked up where the assembly's own configuration puts it,
-        # the same way rendering it there does.
-        image_cfg = render_cfg_merge(copy.copy(render_cfg), assembly.config.get("render", {}) or {})
+        # the same way rendering it there does. Deep copy: the merge is in place.
+        image_cfg = render_cfg_merge(copy.deepcopy(render_cfg), assembly.config.get("render", {}) or {})
         img_text, test_image_path = self._readme_image(name, image_cfg, return_path, assembly.config)
         if img_text is not None and os.path.exists(os.path.join(output_dir, test_image_path)):
             lines += [img_text, ""]

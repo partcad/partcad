@@ -4,7 +4,7 @@ PartCAD logo
 
 Package: `//pub/examples/partcad/produce_assembly_assy`
 
-<img src="././logo.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">
+<img src="././logo.svg" alt="logo" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">
 
 ## Parts
 

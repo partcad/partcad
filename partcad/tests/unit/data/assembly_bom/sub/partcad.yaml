@@ -1,0 +1,11 @@
+desc: The package the top level assembly is built out of
+
+parts:
+  cube:
+    type: cadquery
+    desc: A cube
+
+assemblies:
+  unit:
+    type: assy
+    desc: A pair of cubes
