@@ -16,7 +16,10 @@ import pytest
 
 import partcad as pc
 from partcad import sandbox_versions
+from partcad.runtime_javascript import JavaScriptRuntime
+from partcad.runtime_python import PythonRuntime
 from partcad.user_config import UserConfig
+from partcad_utils import telemetry
 
 
 @pytest.fixture
@@ -196,3 +199,39 @@ def test_an_unchanged_environment_keeps_the_hash(tmp_path, config):
     second = _hash_for(tmp_path, config, "second", template, "thing.chili")
 
     assert first == second
+
+
+#
+# How the helpers behind it have to be declared
+#
+
+
+def test_the_requirement_helpers_are_not_class_attributes():
+    """They have to be module-level functions, not static methods.
+
+    Both runtimes are decorated with '@telemetry.instrument()', which rewrites
+    every callable in the class body - and a 'staticmethod' object is callable,
+    so it comes back out as a plain function and turns into a bound method the
+    moment it is reached through an instance. The result is a TypeError about
+    argument counts from a call that reads as correct.
+    """
+    for cls in (PythonRuntime, JavaScriptRuntime):
+        assert not hasattr(cls, "package_requirements"), cls.__name__
+        assert not hasattr(cls, "shape_requirements"), cls.__name__
+
+
+def test_instrument_unwraps_a_static_method():
+    """The behavior the rule above exists for, pinned so it stays visible."""
+
+    @telemetry.instrument()
+    class Example:
+        @staticmethod
+        def helper(value):
+            return value
+
+    # The staticmethod is gone from the class body, so the attribute binds like
+    # any other function and an instance call passes 'self' as its first
+    # argument. What that then raises varies with the argument types, which is
+    # part of why the symptom is confusing; that it no longer descriptor-binds
+    # correctly is the fact worth pinning.
+    assert not isinstance(Example.__dict__["helper"], staticmethod)

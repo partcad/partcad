@@ -164,6 +164,22 @@ def _requirement_list(requirements) -> list[str]:
     return [requirement.strip() for requirement in requirements if requirement and requirement.strip()]
 
 
+def package_requirements(project) -> list[str]:
+    """What a package declares its Node.js sandbox needs.
+
+    Module-level rather than a method on the runtime, like its Python twin:
+    telemetry.instrument() rewrites every callable in a class body, and a
+    'staticmethod' object is callable, so it would come back out as a plain
+    function and turn into a bound method on the way through an instance.
+    """
+    return _requirement_list(project.config_obj.get("javascriptRequirements"))
+
+
+def shape_requirements(config) -> list[str]:
+    """What one shape declares its Node.js sandbox needs."""
+    return _requirement_list(config.get("javascriptRequirements"))
+
+
 def link_or_copy(source: str, destination: str) -> None:
     """Make 'destination' resolve to 'source', preferring a symlink.
 
@@ -743,16 +759,6 @@ class JavaScriptRuntime(runtime.Runtime):
     # under, are both derived from the set and so must not still be moving when
     # the render starts.
     #
-
-    @staticmethod
-    def package_requirements(project) -> list[str]:
-        """What a package declares its Node.js sandbox needs."""
-        return _requirement_list(project.config_obj.get("javascriptRequirements"))
-
-    @staticmethod
-    def shape_requirements(config) -> list[str]:
-        """What one shape declares its Node.js sandbox needs."""
-        return _requirement_list(config.get("javascriptRequirements"))
 
     def get_session(self, name: str):
         """Create a context describing the environment this package needs.

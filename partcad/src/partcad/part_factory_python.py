@@ -10,7 +10,7 @@
 import os
 
 from .part_factory_file import PartFactoryFile
-from .runtime_python import PythonRuntime
+from .runtime_python import PythonRuntime, package_requirements, shape_requirements
 from . import sandbox_versions
 from . import telemetry
 
@@ -59,8 +59,8 @@ class PartFactoryPython(PartFactoryFile):
         override does not key as though it had been honored.
         """
         requirements = list(sandbox_versions.PINNED_REQUIREMENTS)
-        requirements += PythonRuntime.package_requirements(self.project)
-        requirements += PythonRuntime.shape_requirements(self.config)
+        requirements += package_requirements(self.project)
+        requirements += shape_requirements(self.config)
         return [sandbox_versions.reconcile_requirement(requirement)[0] for requirement in requirements]
 
     def post_create(self) -> None:

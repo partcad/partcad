@@ -18,7 +18,7 @@ moving once a render starts.
 import os
 
 from .part_factory_file import PartFactoryFile
-from .runtime_javascript import JavaScriptRuntime
+from .runtime_javascript import JavaScriptRuntime, package_requirements, shape_requirements
 from . import sandbox_versions
 from . import telemetry
 
@@ -63,8 +63,8 @@ class PartFactoryJavaScript(PartFactoryFile):
         # The package's declarations first, then the part's, so that the more
         # specific one replaces the other where they name the same npm package.
         # A subclass adds what its own part type needs after this returns.
-        self.runtime.declare_requirements(self.session, JavaScriptRuntime.package_requirements(self.project))
-        self.runtime.declare_requirements(self.session, JavaScriptRuntime.shape_requirements(config))
+        self.runtime.declare_requirements(self.session, package_requirements(self.project))
+        self.runtime.declare_requirements(self.session, shape_requirements(config))
 
     def environment_requirements(self) -> list[str]:
         """Everything installed into the sandbox this part renders in.

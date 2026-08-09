@@ -128,6 +128,54 @@ def describe_exit_code(returncode: int) -> str:
     return "exit code %d" % returncode
 
 
+def package_requirements(project) -> list[str]:
+    """What a package declares its Python sandbox needs.
+
+    Shared by PythonRuntime.prepare_for_package() and by the cache key the
+    factories build (see part_factory_python.PartFactoryPython), so the two
+    cannot come to different conclusions about what a sandbox holds.
+
+    A module-level function rather than a static method on the runtime:
+    telemetry.instrument() rewrites every callable in a class body, and a
+    'staticmethod' object is callable, so it would come back out as a plain
+    function and turn into a bound method on the way through an instance.
+    """
+    # TODO(clairbee): expire the guard file after a certain time
+    dependencies = []
+    if "pythonRequirements" in project.config_obj:
+        reqs = project.config_obj["pythonRequirements"]
+        if isinstance(reqs, str):
+            reqs = reqs.strip().split("\n")
+        for req in reqs:
+            dependencies.append(req.strip())
+    else:
+        # TODO-218: @alexanderilyin: Add support for --hash=... in requirements.txt
+        requirements_path = os.path.join(project.path, "requirements.txt")
+        if os.path.exists(requirements_path):
+            with open(requirements_path) as f:
+                requirements_text = f.read()
+            requirements_lines = requirements_text.strip().split("\n")
+            for line in requirements_lines:
+                line = line.strip()
+                if line.startswith("#"):
+                    continue
+                dependencies.append(line)
+    return [dep for dep in dependencies if dep]
+
+
+def shape_requirements(config) -> list[str]:
+    """What one shape declares its Python sandbox needs.
+
+    Module-level for the same reason package_requirements() is.
+    """
+    if "pythonRequirements" not in config:
+        return []
+    reqs = config["pythonRequirements"]
+    if isinstance(reqs, str):
+        reqs = reqs.strip().split("\n")
+    return [req.strip() for req in reqs if req and req.strip()]
+
+
 class VenvLock:
     lock: FileLock
 
@@ -840,50 +888,10 @@ class PythonRuntime(runtime.Runtime):
                 clear_reassert(path, python_package)
                 invalidate_dependent_guards(path, python_package)
 
-    @staticmethod
-    def package_requirements(project) -> list[str]:
-        """What a package declares its Python sandbox needs.
-
-        Shared by the installer below and by the cache key the factories build
-        (see part_factory_python.PartFactoryPython.environment_requirements), so
-        the two cannot come to different conclusions about what a sandbox holds.
-        """
-        # TODO(clairbee): expire the guard file after a certain time
-        dependencies = []
-        if "pythonRequirements" in project.config_obj:
-            reqs = project.config_obj["pythonRequirements"]
-            if isinstance(reqs, str):
-                reqs = reqs.strip().split("\n")
-            for req in reqs:
-                dependencies.append(req.strip())
-        else:
-            # TODO-218: @alexanderilyin: Add support for --hash=... in requirements.txt
-            requirements_path = os.path.join(project.path, "requirements.txt")
-            if os.path.exists(requirements_path):
-                with open(requirements_path) as f:
-                    requirements_text = f.read()
-                requirements_lines = requirements_text.strip().split("\n")
-                for line in requirements_lines:
-                    line = line.strip()
-                    if line.startswith("#"):
-                        continue
-                    dependencies.append(line)
-        return [dep for dep in dependencies if dep]
-
-    @staticmethod
-    def shape_requirements(config) -> list[str]:
-        """What one shape declares its Python sandbox needs."""
-        if "pythonRequirements" not in config:
-            return []
-        reqs = config["pythonRequirements"]
-        if isinstance(reqs, str):
-            reqs = reqs.strip().split("\n")
-        return [req.strip() for req in reqs if req and req.strip()]
-
     async def prepare_for_package(self, project, session=None):
         await self.once_async()
 
-        for dep in self.package_requirements(project):
+        for dep in package_requirements(project):
             # Use local partcad package instead of the deployed one (specifically intended to be used during testing)
             if dep == "partcad":
                 dep = get_local_partcad_pkg(dep)
@@ -893,7 +901,7 @@ class PythonRuntime(runtime.Runtime):
         await self.once_async()
 
         # Install dependencies of this part
-        for req in self.shape_requirements(config):
+        for req in shape_requirements(config):
             await self.ensure_async_onced(req, session)
 
     def get_venv_python_path(self, session=None, path=None):
