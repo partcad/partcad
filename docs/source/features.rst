@@ -89,6 +89,13 @@ PartCAD is capable of caching intermediate and final results of all model compil
 This can be particularly useful when working with large models or when scripting languages
 (like OpenSCAD, CadQuery, build123d, Chili3D or sdf) are used.
 
+A scripted model is cached under the environment that produced it as well as under
+the script itself: the interpreter version and the versions of the CAD libraries
+installed alongside it. Moving a package to another Python or Node.js, or to
+another version of Chili3D, therefore re-renders it rather than serving what the
+previous environment built. ``pc info`` reports that environment for the objects
+that have one.
+
 At the moment code-CAD caching is experimental and can be enabled by using the following configuration:
 
   .. code-block:: yaml

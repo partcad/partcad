@@ -11,6 +11,7 @@ import os
 
 from .part_factory_file import PartFactoryFile
 from .runtime_python import PythonRuntime
+from . import sandbox_versions
 from . import telemetry
 
 
@@ -45,9 +46,29 @@ class PartFactoryPython(PartFactoryFile):
         self.runtime = self.ctx.get_python_runtime(python_version)
         self.session = self.runtime.get_session(source_project.name)
 
+    def environment_requirements(self) -> list[str]:
+        """Everything installed into the sandbox this part renders in.
+
+        The CAD stack PartCAD supplies comes first: 'once()' preinstalls all of
+        it into every sandbox, and 'reconcile_requirement()' holds a package to
+        those versions, so a bump moves every Python part's shape - which is the
+        point, since those versions are what produced it.
+
+        The package's and the part's own requirements are reconciled the same
+        way the installer reconciles them, so that a requirement PartCAD would
+        override does not key as though it had been honored.
+        """
+        requirements = list(sandbox_versions.PINNED_REQUIREMENTS)
+        requirements += PythonRuntime.package_requirements(self.project)
+        requirements += PythonRuntime.shape_requirements(self.config)
+        return [sandbox_versions.reconcile_requirement(requirement)[0] for requirement in requirements]
+
     def post_create(self) -> None:
         for dep in self.config.get("dependencies", []):
             self.part.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
+        self.part.set_environment_cache_key(
+            sandbox_versions.environment_cache_key("python", self.runtime.version, self.environment_requirements())
+        )
         super().post_create()
 
     async def prepare_python(self):

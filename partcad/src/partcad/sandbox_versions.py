@@ -317,3 +317,25 @@ def node_major_version(version: str) -> str:
     provisioned at, so "22", "22.11" and "v22.11.0" all name the same sandbox.
     """
     return str(version).lstrip("v").split(".")[0]
+
+
+#
+# Caching
+#
+
+
+def environment_cache_key(interpreter: str, version: str, requirements) -> str:
+    """The identity of a sandbox, as the string a shape is cached under.
+
+    '(interpreter, version)' is what runs the script - "python" and "3.11", or
+    "nodejs" and "22" - and 'requirements' is everything installed alongside it.
+
+    Sorted and de-duplicated, so the key is decided by *what* the environment
+    contains and not by the order the factories happened to ask for it. Empty
+    entries are dropped: a package that declares no dependencies of its own has
+    to key the same as one that declares an empty list.
+
+    See Shape.set_environment_cache_key() for what this is for.
+    """
+    unique = sorted({requirement.strip() for requirement in requirements if requirement and requirement.strip()})
+    return "%s==%s;%s" % (interpreter, version, ";".join(unique))

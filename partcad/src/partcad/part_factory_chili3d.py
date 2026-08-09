@@ -77,15 +77,16 @@ class PartFactoryChili3d(PartFactoryJavaScript):
                 javascript_version=javascript_version,
                 extension=".chili",
             )
+            # After the base class, so that an explicit 'chili3dVersion'
+            # replaces a 'chili3d@...' the package or the part listed under
+            # 'javascriptRequirements', while the default yields to it.
+            # happy-dom is always a default: it is the wrapper's own DOM shim,
+            # not something a script models with.
+            self.runtime.declare_requirements(self.session, [self.chili3d_requirement], default=self.chili3d_is_default)
+            self.runtime.declare_requirements(self.session, [sandbox_versions.HAPPY_DOM], default=True)
+
             # Complement the config object here if necessary
             self._create(config)
-
-    def post_create(self) -> None:
-        # Which Chili3D built the shape is part of the cache key: the version is
-        # the package's or the part's to choose, so changing it has to produce a
-        # different key rather than serve what the previous one built.
-        self.part.hash.add_string(self.chili3d_requirement)
-        super().post_create()
 
     async def instantiate(self, part):
         await super().instantiate(part)
@@ -124,21 +125,6 @@ class PartFactoryChili3d(PartFactoryJavaScript):
                 request["kind"] = "part"
                 request_serialized = shape_envelope.serialize(request)
 
-            # Declared after the package's and the part's
-            # 'javascriptRequirements' so that an explicit 'chili3dVersion'
-            # outranks a 'chili3d@...' listed there, while the default yields to
-            # it. happy-dom is always a default: it is the wrapper's own DOM
-            # shim, not something a script models with.
-            await self.runtime.ensure_async(
-                self.chili3d_requirement,
-                session=self.session,
-                default=self.chili3d_is_default,
-            )
-            await self.runtime.ensure_async(
-                sandbox_versions.HAPPY_DOM,
-                session=self.session,
-                default=True,
-            )
             cwd = self.project.config_dir
             if self.cwd is not None:
                 cwd = os.path.join(self.project.config_dir, self.cwd)

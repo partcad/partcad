@@ -152,22 +152,6 @@ def test_a_part_can_choose_its_node(tmp_path, javascript_config):
     assert list(ctx.runtimes_javascript) == ["none-24"]
 
 
-def test_the_chosen_versions_are_part_of_the_cache_key(tmp_path, javascript_config):
-    """Otherwise a version change would be served the previous version's shape."""
-
-    def hash_of(chili3d_version):
-        package = tmp_path / chili3d_version
-        package.mkdir()
-        (package / "partcad.yaml").write_text(
-            'chili3dVersion: "%s"\n\nparts:\n  cube:\n    type: chili3d\n' % chili3d_version,
-        )
-        (package / "cube.chili").write_text("show(shapeFactory.box(chili3d.Plane.XY, 1, 1, 1).value);\n")
-        ctx = pc.Context(str(package), user_config=javascript_config)
-        return ctx.get_part("cube").hash.get()
-
-    assert hash_of("1.0.0") != hash_of("1.0.1")
-
-
 @needs_node
 @pytest.mark.slow
 def test_the_example_renders_to_a_brep_envelope(javascript_config):

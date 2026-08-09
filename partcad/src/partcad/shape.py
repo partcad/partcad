@@ -132,6 +132,10 @@ class Shape(ShapeConfiguration):
 
         # Cache behavior
         self.cacheable = config.get("cache", True)
+        # Optional: what the environment this shape is produced in consists of,
+        # for the shapes that are produced in one at all (see
+        # set_environment_cache_key). None for a shape read from a CAD file.
+        self.environment_cache_key = None
         self.cache_dependencies = []
         self.cache_dependencies_broken = False
         self.cache_dependencies_ignore = self.config.get("cache_dependencies_ignore", True)
@@ -149,6 +153,29 @@ class Shape(ShapeConfiguration):
                 if key in self.config:
                     cad_config[key] = self.config[key]
             self.hash.add_dict(cad_config)
+
+    def set_environment_cache_key(self, environment_cache_key: str) -> None:
+        """Record the environment this shape is produced in, and cache by it.
+
+        A shape rendered by a script is produced by an interpreter of some
+        version with dependencies of some versions, and the result belongs to
+        that combination: move the package to another interpreter or another
+        CAD library and the shape has to be built again rather than read back
+        from what the previous one produced.
+
+        None of that is visible to the hash otherwise. Only 'parameters',
+        'offset' and 'scale' are taken from the configuration above, and the
+        environment is not spelled out in the shape's own configuration anyway -
+        it is resolved from the package's settings, the part's, and the versions
+        PartCAD itself supplies.
+
+        Set by the factories that render in a sandbox, from
+        'sandbox_versions.environment_cache_key()'; the shapes that are simply
+        read from a file leave it None. Must be called before the hash is used,
+        which for a factory means during 'post_create()'.
+        """
+        self.environment_cache_key = environment_cache_key
+        self.hash.add_string(environment_cache_key)
 
     def matches(self, keyword: str) -> bool:
         if not keyword:
@@ -555,6 +582,10 @@ class Shape(ShapeConfiguration):
             info["Ports"] = self.with_ports.info()
 
         info["Hash"] = self.hash.get()
+        if self.environment_cache_key is not None:
+            # Part of that hash, and the part of it a user is most likely to be
+            # asking about when a shape re-renders instead of coming from cache.
+            info["Environment"] = self.environment_cache_key
         info["Dependencies"] = self.cache_dependencies
         return info
 

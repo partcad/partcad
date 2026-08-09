@@ -6,15 +6,20 @@
 """Common base for parts produced by a script running in a Node.js sandbox.
 
 The JavaScript twin of part_factory_python: it resolves which Node.js sandbox
-the part renders in, opens the session that scopes that package's dependency
-tree, and installs whatever the package and the part declare before the wrapper
-is run.
+the part renders in and what goes into it, then hands the script to a wrapper
+running there.
+
+The dependency set is settled here, when the factory is constructed, rather than
+when the part is rendered. Both the directory the part renders in and the cache
+key its shape is stored under are derived from that set, so it must not still be
+moving once a render starts.
 """
 
 import os
 
 from .part_factory_file import PartFactoryFile
 from .runtime_javascript import JavaScriptRuntime
+from . import sandbox_versions
 from . import telemetry
 
 
@@ -55,17 +60,26 @@ class PartFactoryJavaScript(PartFactoryFile):
         # get different environments instead of overwriting each other's.
         self.session = self.runtime.get_session(source_project.name)
 
+        # The package's declarations first, then the part's, so that the more
+        # specific one replaces the other where they name the same npm package.
+        # A subclass adds what its own part type needs after this returns.
+        self.runtime.declare_requirements(self.session, JavaScriptRuntime.package_requirements(self.project))
+        self.runtime.declare_requirements(self.session, JavaScriptRuntime.shape_requirements(config))
+
+    def environment_requirements(self) -> list[str]:
+        """Everything installed into the sandbox this part renders in.
+
+        The session's dependency set, which is exactly what gets installed and
+        what the environment directory is named after.
+        """
+        return list(self.session["deps"])
+
     def post_create(self) -> None:
         for dep in self.config.get("dependencies", []):
             self.part.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
-        # The sandbox is part of what produced the shape, so it belongs in the
-        # cache key: a package that moves to another Node.js has to be rendered
-        # again rather than served what the previous one built. Only the shape
-        # config feeds the hash by default (see Shape.__init__), and these are
-        # not in it - 'javascriptVersion' can come from the package rather than
-        # the part, and the dependency set is resolved rather than declared.
-        self.part.hash.add_string("nodejs:" + self.runtime.version)
-        self.part.hash.add_dict({"javascriptRequirements": self.config.get("javascriptRequirements", [])})
+        self.part.set_environment_cache_key(
+            sandbox_versions.environment_cache_key("nodejs", self.runtime.version, self.environment_requirements())
+        )
         super().post_create()
 
     async def prepare_javascript(self):
@@ -73,9 +87,10 @@ class PartFactoryJavaScript(PartFactoryFile):
         This method is called by child classes
         to prepare the JavaScript environment
         before instantiating the part.
+
+        Only provisioning: what to install was decided in the constructor.
         """
-        await self.runtime.prepare_for_package(self.project, session=self.session)
-        await self.runtime.prepare_for_shape(self.config, session=self.session)
+        await self.runtime.once_async()
 
     def info(self, part):
         info: dict[str, object] = part.shape_info(self.ctx)

@@ -840,15 +840,16 @@ class PythonRuntime(runtime.Runtime):
                 clear_reassert(path, python_package)
                 invalidate_dependent_guards(path, python_package)
 
-    async def prepare_for_package(self, project, session=None):
-        await self.once_async()
+    @staticmethod
+    def package_requirements(project) -> list[str]:
+        """What a package declares its Python sandbox needs.
 
+        Shared by the installer below and by the cache key the factories build
+        (see part_factory_python.PartFactoryPython.environment_requirements), so
+        the two cannot come to different conclusions about what a sandbox holds.
+        """
         # TODO(clairbee): expire the guard file after a certain time
-
-        # Check if this project has python requirements
         dependencies = []
-
-        # Install dependencies of the package
         if "pythonRequirements" in project.config_obj:
             reqs = project.config_obj["pythonRequirements"]
             if isinstance(reqs, str):
@@ -867,8 +868,22 @@ class PythonRuntime(runtime.Runtime):
                     if line.startswith("#"):
                         continue
                     dependencies.append(line)
+        return [dep for dep in dependencies if dep]
 
-        for dep in dependencies:
+    @staticmethod
+    def shape_requirements(config) -> list[str]:
+        """What one shape declares its Python sandbox needs."""
+        if "pythonRequirements" not in config:
+            return []
+        reqs = config["pythonRequirements"]
+        if isinstance(reqs, str):
+            reqs = reqs.strip().split("\n")
+        return [req.strip() for req in reqs if req and req.strip()]
+
+    async def prepare_for_package(self, project, session=None):
+        await self.once_async()
+
+        for dep in self.package_requirements(project):
             # Use local partcad package instead of the deployed one (specifically intended to be used during testing)
             if dep == "partcad":
                 dep = get_local_partcad_pkg(dep)
@@ -878,12 +893,8 @@ class PythonRuntime(runtime.Runtime):
         await self.once_async()
 
         # Install dependencies of this part
-        if "pythonRequirements" in config:
-            reqs = config["pythonRequirements"]
-            if isinstance(reqs, str):
-                reqs = reqs.strip().split("\n")
-            for req in reqs:
-                await self.ensure_async_onced(req.strip(), session)
+        for req in self.shape_requirements(config):
+            await self.ensure_async_onced(req, session)
 
     def get_venv_python_path(self, session=None, path=None):
         use_venv = False

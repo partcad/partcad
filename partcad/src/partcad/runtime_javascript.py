@@ -151,6 +151,19 @@ def package_dir_name(package_name: str) -> str:
     return "pkg-" + hashlib.sha256(package_name.encode()).hexdigest()[:16]
 
 
+def _requirement_list(requirements) -> list[str]:
+    """Normalize a 'javascriptRequirements' value into a list of requirements.
+
+    Accepts the list the schema describes and the newline-separated string the
+    Python side also tolerates, and drops blank entries either way.
+    """
+    if requirements is None:
+        return []
+    if isinstance(requirements, str):
+        requirements = requirements.strip().split("\n")
+    return [requirement.strip() for requirement in requirements if requirement and requirement.strip()]
+
+
 def link_or_copy(source: str, destination: str) -> None:
     """Make 'destination' resolve to 'source', preferring a symlink.
 
@@ -712,35 +725,34 @@ class JavaScriptRuntime(runtime.Runtime):
 
         session["dirty"] = set(session["deps"]) != set(sandbox_versions.DEFAULT_JS_REQUIREMENTS)
 
+    def declare_requirements(self, session, requirements, default=False):
+        """Declare several dependencies at once, in the order given."""
+        for requirement in requirements:
+            self.declare_dependency(session, requirement, default=default)
+
     #
     # Dependency declarations
     #
+    # Unlike the Python side, these are resolved when a factory is constructed
+    # rather than when a part is rendered, and they are plain functions because
+    # nothing here touches the network - installing is what
+    # provision_async_onced_locked() does, from the set these produce.
+    #
+    # Settling the set up front is what lets an environment be identified by it:
+    # the directory a part renders in, and the cache key its shape is stored
+    # under, are both derived from the set and so must not still be moving when
+    # the render starts.
+    #
 
-    async def prepare_for_package(self, project, session=None):
-        await self.once_async()
+    @staticmethod
+    def package_requirements(project) -> list[str]:
+        """What a package declares its Node.js sandbox needs."""
+        return _requirement_list(project.config_obj.get("javascriptRequirements"))
 
-        dependencies = []
-        if "javascriptRequirements" in project.config_obj:
-            reqs = project.config_obj["javascriptRequirements"]
-            if isinstance(reqs, str):
-                reqs = reqs.strip().split("\n")
-            for req in reqs:
-                dependencies.append(req.strip())
-
-        for dep in dependencies:
-            if dep:
-                await self.ensure_async_onced(dep, session=session)
-
-    async def prepare_for_shape(self, config, session=None):
-        await self.once_async()
-
-        if "javascriptRequirements" in config:
-            reqs = config["javascriptRequirements"]
-            if isinstance(reqs, str):
-                reqs = reqs.strip().split("\n")
-            for req in reqs:
-                if req.strip():
-                    await self.ensure_async_onced(req.strip(), session=session)
+    @staticmethod
+    def shape_requirements(config) -> list[str]:
+        """What one shape declares its Node.js sandbox needs."""
+        return _requirement_list(config.get("javascriptRequirements"))
 
     def get_session(self, name: str):
         """Create a context describing the environment this package needs.
