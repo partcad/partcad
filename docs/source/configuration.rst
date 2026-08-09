@@ -1201,11 +1201,22 @@ implements, the section it is declared in is what decides: declare a type of
 your own under ``export:`` and it is an export type, under ``render:`` and it is
 a render type.
 
-An ``export:`` file type also reads its configuration from ``render:`` first, so
-a package that configured its STEP or STL output there before ``export:`` existed
-keeps working; where the same package sets a field in both, ``export:`` wins.
-The reverse does not apply -- a ``render:`` file type is never configured from
-``export:``.
+Whichever section owns a file type, the other one is read first and acts as a
+fallback, so the owning section always wins where both set the same field.
+
+For an ``export:`` type the fallback is history: a package that configured its
+STEP or STL output under ``render:`` before ``export:`` existed keeps working.
+
+For a ``render:`` type the fallback is what an export implementation *is*. An
+export file is one a CAD tool can open as a part or a sketch, which is a
+stricter thing to be than an output file in general -- so it also serves
+wherever any output file would do, and a render request for a file type only
+``export:`` implements uses that implementation. The converse is not true, and
+that asymmetry is deliberate: a drawing, a picture or a report is an output
+file but not a part, so an ``export:`` request never falls back to a
+``render:`` implementation. A package whose output is a document rather than
+geometry should therefore declare it under ``render:`` -- from there it is
+reachable either way, while ``export:`` would promise a part it cannot deliver.
 
 The short form ``<file type>: <path>`` is the same as ``prefix: <path>``.
 

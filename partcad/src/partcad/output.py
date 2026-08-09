@@ -179,12 +179,22 @@ def stamp(config: dict, package_name: str) -> dict:
 def config_sections(section: str) -> tuple:
     """The 'partcad.yaml' sections a file type's configuration is read from.
 
-    An export format reads 'render:' before 'export:'. PartCAD had only a
-    'render:' section before 'export:' existed, and packages configured their
-    STEP and STL output there; those configurations keep working, and an
-    'export:' section of the same package overrides them.
+    Both sections are read either way, and the one that owns the file type is
+    read last so that it wins. What the other one provides is a fallback:
+
+    'export:' falls back to 'render:' for history. PartCAD had only a 'render:'
+    section before 'export:' existed, and packages configured their STEP and
+    STL output there; those configurations keep working.
+
+    'render:' falls back to 'export:' because an export implementation is
+    usable as a render one. An export format is a file a CAD tool can open as a
+    part or a sketch, which is a stricter thing to be than an output file in
+    general - so it also serves where any output file would do. The reverse
+    does not hold: a drawing or a picture is not a part, which is why an
+    'export:' request never falls back to a 'render:' implementation for a
+    format that 'render:' owns.
     """
-    return (RENDER, EXPORT) if section == EXPORT else (RENDER,)
+    return (RENDER, EXPORT) if section == EXPORT else (EXPORT, RENDER)
 
 
 def builtin_project(ctx, section: str):

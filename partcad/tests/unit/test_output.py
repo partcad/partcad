@@ -307,6 +307,47 @@ def test_an_unknown_format_falls_back_to_the_section_that_declares_it(ctx):
         del part.config["render"]
 
 
+def test_a_render_format_falls_back_to_the_export_implementation(ctx):
+    """An export implementation stands in when 'render:' has none.
+
+    A file a CAD tool opens as a part is also an output file, so it serves a
+    render request; the reverse is not true, which is what the next test pins.
+    """
+    project, part = _part(ctx, "//produce_part_step", "bolt")
+    part.config["export"] = {"tiff": {"path": "from_export.py"}}
+    try:
+        opts, _ = part._output_getopts(ctx, "tiff", output.RENDER, project)
+        assert opts["path"] == "from_export.py"
+    finally:
+        del part.config["export"]
+
+
+def test_a_render_implementation_wins_over_the_export_one_it_falls_back_to(ctx):
+    """The fallback only applies where 'render:' left the format unimplemented."""
+    project, part = _part(ctx, "//produce_part_step", "bolt")
+    part.config["export"] = {"tiff": {"path": "from_export.py"}}
+    part.config["render"] = {"tiff": {"path": "from_render.py"}}
+    try:
+        opts, _ = part._output_getopts(ctx, "tiff", output.RENDER, project)
+        assert opts["path"] == "from_render.py"
+    finally:
+        del part.config["export"]
+        del part.config["render"]
+
+
+def test_an_export_format_does_not_fall_back_to_a_render_implementation(ctx):
+    """'export:' owns the format, so its implementation is the one that runs."""
+    project, part = _part(ctx, "//produce_part_step", "bolt")
+    part.config["render"] = {"tiff": {"path": "from_render.py"}}
+    part.config["export"] = {"tiff": {"path": "from_export.py"}}
+    try:
+        opts, _ = part._output_getopts(ctx, "tiff", output.EXPORT, project)
+        assert opts["path"] == "from_export.py"
+    finally:
+        del part.config["render"]
+        del part.config["export"]
+
+
 # --------------------------------------------------------------------------- #
 # The 'output' helpers                                                        #
 # --------------------------------------------------------------------------- #
