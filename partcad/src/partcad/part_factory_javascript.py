@@ -66,20 +66,18 @@ class PartFactoryJavaScript(PartFactoryFile):
         self.runtime.declare_requirements(self.session, package_requirements(self.project))
         self.runtime.declare_requirements(self.session, shape_requirements(config))
 
-    def environment_requirements(self) -> list[str]:
-        """Everything installed into the sandbox this part renders in.
+    def environment_cache_key(self) -> str | None:
+        """The Node.js and the dependency versions this part renders with.
 
-        The session's dependency set, which is exactly what gets installed and
-        what the environment directory is named after.
+        The session's dependency set is exactly what gets installed, and is what
+        the environment directory is named after, so there is nothing to resolve
+        again here.
         """
-        return list(self.session["deps"])
+        return sandbox_versions.environment_cache_key("nodejs", self.runtime.version, self.session["deps"])
 
     def post_create(self) -> None:
         for dep in self.config.get("dependencies", []):
             self.part.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
-        self.part.set_environment_cache_key(
-            sandbox_versions.environment_cache_key("nodejs", self.runtime.version, self.environment_requirements())
-        )
         super().post_create()
 
     async def prepare_javascript(self):

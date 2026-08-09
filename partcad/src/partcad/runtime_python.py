@@ -176,6 +176,24 @@ def shape_requirements(config) -> list[str]:
     return [req.strip() for req in reqs if req and req.strip()]
 
 
+def environment_requirements(project, config) -> list[str]:
+    """Everything installed into the sandbox a shape renders in.
+
+    The CAD stack PartCAD supplies comes first: 'once()' preinstalls all of it
+    into every sandbox and 'reconcile_requirement()' holds a package to those
+    versions, so a bump moves every sandboxed shape - which is the point, since
+    those versions are what produced it.
+
+    The package's and the shape's own requirements are then reconciled the same
+    way the installer reconciles them, so that a requirement PartCAD would
+    override does not key as though it had been honored.
+    """
+    requirements = list(sandbox_versions.PINNED_REQUIREMENTS)
+    requirements += package_requirements(project)
+    requirements += shape_requirements(config)
+    return [sandbox_versions.reconcile_requirement(requirement)[0] for requirement in requirements]
+
+
 class VenvLock:
     lock: FileLock
 

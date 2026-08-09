@@ -32,6 +32,7 @@ class AssemblyFactory(ShapeFactory):
         self.assembly.with_ports = self.with_ports
         self.project.assemblies[self.name] = self.assembly
 
+        self.apply_environment_cache_key(self.assembly)
         self.post_create()
 
         self.ctx.stats_assemblies += 1

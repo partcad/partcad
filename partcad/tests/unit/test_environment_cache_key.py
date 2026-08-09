@@ -4,12 +4,16 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""The environment a part is rendered in, as part of its cache key.
+"""The environment a shape is produced in, as part of its cache key.
 
-A shape produced by a script belongs to the interpreter and the dependency
-versions that produced it. None of that is in the shape's own configuration, so
-without this a package that moves to another interpreter or another CAD library
-is served what the previous one built.
+A shape produced by a sandboxed interpreter belongs to the interpreter and the
+dependency versions that produced it. None of that is in the shape's own
+configuration, so without this a package that moves to another interpreter or
+another CAD library is served what the previous one built.
+
+This covers every kind of shape, not only parts: a sketch is rendered the same
+way, and so is a part read from a CAD file - the importer that turns a STEP file
+into a BREP is itself a script in a sandbox.
 """
 
 import pytest
@@ -165,11 +169,80 @@ def test_a_javascript_part_keys_on_what_it_asks_for_itself(tmp_path, config):
     assert "seedrandom@3.0.5" in part.environment_cache_key
 
 
-def test_a_part_read_from_a_file_has_no_environment(tmp_path, config):
-    """It is produced by no interpreter, so there is nothing to key on."""
-    part = _part(tmp_path, config, "parts:\n  thing:\n    type: step\n", "thing.step")
+@pytest.mark.parametrize(
+    "part_type, extension",
+    [("step", "step"), ("brep", "brep"), ("stl", "stl"), ("3mf", "3mf"), ("obj", "obj"), ("scad", "scad")],
+)
+def test_a_part_read_from_a_file_keys_on_its_importer(tmp_path, config, part_type, extension):
+    """Reading a CAD file is itself a script in a sandbox, so it has one too.
 
-    assert part.environment_cache_key is None
+    The interpreter is fixed per format rather than resolved from the package,
+    which is what ShapeFactory.PYTHON_SANDBOX_VERSION expresses.
+    """
+    part = _part(
+        tmp_path,
+        config,
+        "parts:\n  thing:\n    type: %s\n" % part_type,
+        "thing." + extension,
+    )
+
+    assert part.environment_cache_key.startswith("python==")
+    assert sandbox_versions.CADQUERY_OCP in part.environment_cache_key
+
+
+def _sketch(tmp_path, config, partcad_yaml, filename, source="# empty\n"):
+    (tmp_path / "partcad.yaml").write_text(partcad_yaml)
+    (tmp_path / filename).write_text(source)
+    return pc.Context(str(tmp_path), user_config=config).get_sketch("thing")
+
+
+@pytest.mark.parametrize(
+    "sketch_type, extension",
+    [("cadquery", "py"), ("build123d", "py"), ("dxf", "dxf"), ("svg", "svg")],
+)
+def test_a_sketch_keys_on_its_environment(tmp_path, config, sketch_type, extension):
+    """The whole point of rescoping this to Shape: sketches render too."""
+    sketch = _sketch(
+        tmp_path,
+        config,
+        "sketches:\n  thing:\n    type: %s\n" % sketch_type,
+        "thing." + extension,
+    )
+
+    assert sketch.environment_cache_key.startswith("python==")
+    assert sandbox_versions.CADQUERY_OCP in sketch.environment_cache_key
+
+
+def test_a_sketch_keys_on_what_its_package_asks_for(tmp_path, config):
+    sketch = _sketch(
+        tmp_path,
+        config,
+        'pythonRequirements:\n  - "seaborn==0.13.2"\n\nsketches:\n  thing:\n    type: build123d\n',
+        "thing.py",
+    )
+
+    assert "seaborn==0.13.2" in sketch.environment_cache_key
+
+
+def test_a_basic_sketch_keys_on_its_environment(tmp_path, config):
+    """Even the one built from parameters alone - it is built in a sandbox."""
+    (tmp_path / "partcad.yaml").write_text(
+        "sketches:\n  thing:\n    type: basic\n    circle: 5\n",
+    )
+    ctx = pc.Context(str(tmp_path), user_config=config)
+
+    assert ctx.get_sketch("thing").environment_cache_key.startswith("python==")
+
+
+def test_an_assembly_has_no_environment_of_its_own(tmp_path, config):
+    """It is composed from shapes that each carry their own."""
+    (tmp_path / "partcad.yaml").write_text(
+        "assemblies:\n  thing:\n    type: assy\n",
+    )
+    (tmp_path / "thing.assy").write_text("links:\n")
+    ctx = pc.Context(str(tmp_path), user_config=config)
+
+    assert ctx.get_assembly("thing").environment_cache_key is None
 
 
 #

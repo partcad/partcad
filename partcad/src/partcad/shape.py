@@ -132,9 +132,10 @@ class Shape(ShapeConfiguration):
 
         # Cache behavior
         self.cacheable = config.get("cache", True)
-        # Optional: what the environment this shape is produced in consists of,
-        # for the shapes that are produced in one at all (see
-        # set_environment_cache_key). None for a shape read from a CAD file.
+        # Optional: what the environment this shape is produced in consists
+        # of, for the shapes that are produced in one at all (see
+        # set_environment_cache_key). None for a shape that is composed rather
+        # than rendered, such as an assembly.
         self.environment_cache_key = None
         self.cache_dependencies = []
         self.cache_dependencies_broken = False
@@ -157,22 +158,27 @@ class Shape(ShapeConfiguration):
     def set_environment_cache_key(self, environment_cache_key: str) -> None:
         """Record the environment this shape is produced in, and cache by it.
 
-        A shape rendered by a script is produced by an interpreter of some
-        version with dependencies of some versions, and the result belongs to
-        that combination: move the package to another interpreter or another
-        CAD library and the shape has to be built again rather than read back
-        from what the previous one produced.
+        A shape produced by a sandbox comes from an interpreter of some version
+        with dependencies of some versions, and the result belongs to that
+        combination: move the package to another interpreter or another CAD
+        library and the shape has to be built again rather than read back from
+        what the previous one produced.
 
-        None of that is visible to the hash otherwise. Only 'parameters',
-        'offset' and 'scale' are taken from the configuration above, and the
-        environment is not spelled out in the shape's own configuration anyway -
-        it is resolved from the package's settings, the part's, and the versions
-        PartCAD itself supplies.
+        Every kind of shape can have one. A part written as a script obviously
+        does, but so does a sketch, and so does a part read from a CAD file -
+        the importer that turns a STEP file into a BREP is itself a script in a
+        sandbox. What does not is a shape that is composed rather than rendered,
+        such as an assembly, whose pieces each carry their own.
 
-        Set by the factories that render in a sandbox, from
-        'sandbox_versions.environment_cache_key()'; the shapes that are simply
-        read from a file leave it None. Must be called before the hash is used,
-        which for a factory means during 'post_create()'.
+        None of it is visible to the hash otherwise. Only 'parameters', 'offset'
+        and 'scale' are taken from the configuration above, and the environment
+        is not spelled out in a shape's configuration anyway - it is resolved
+        from the package's settings, the shape's, and the versions PartCAD
+        itself supplies.
+
+        Set through ShapeFactory.apply_environment_cache_key() as a shape is
+        created, from 'sandbox_versions.environment_cache_key()'. Must happen
+        before the hash is used, which creation time guarantees.
         """
         self.environment_cache_key = environment_cache_key
         self.hash.add_string(environment_cache_key)
