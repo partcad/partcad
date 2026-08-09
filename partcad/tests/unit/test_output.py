@@ -452,7 +452,10 @@ def test_step_export_carries_the_configured_comment(tmp_path):
     except Exception as e:
         pytest.skip("Sandbox unavailable: %s" % e)
     assert os.path.exists(path), "the STEP exporter produced no file"
-    assert "Produced by the PartCAD 'feature_export_custom' example." in open(path).read()
+    comment = "Produced by the PartCAD 'feature_export_custom' example."
+    # A STEP string escapes a single quote by doubling it, so the comment the
+    # example configures is in the file in that form rather than verbatim.
+    assert comment.replace("'", "''") in open(path).read()
 
 
 @pytest.mark.slow
