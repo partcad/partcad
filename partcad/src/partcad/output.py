@@ -62,6 +62,19 @@ BUILTIN_PATHS = {
 # leave behind (see Project.render_readme_async). 'markdown' is its old name.
 NON_WRAPPER_FORMATS = frozenset({"readme", "markdown"})
 
+# Keys of a section that configure the section itself rather than name a file
+# type. Everything else under 'export:'/'render:' is a file type, so these have
+# to be held out wherever the section is read as a list of them.
+SECTION_KEYS = frozenset({"output_dir"})
+
+
+def format_names(section_obj) -> list:
+    """The file types a section names, without its own settings."""
+    if not isinstance(section_obj, dict):
+        return []
+    return [name for name in section_obj if name not in SECTION_KEYS]
+
+
 # The fields of a file type's configuration that are not parameters.
 #
 # The first group picks the implementation, the second places the output file.
@@ -208,5 +221,5 @@ def all_formats(ctx) -> list:
     """
     formats = []
     for section in (RENDER, EXPORT):
-        formats.extend(name for name in builtin_formats(ctx, section) if name not in formats)
+        formats.extend(name for name in format_names(builtin_formats(ctx, section)) if name not in formats)
     return formats

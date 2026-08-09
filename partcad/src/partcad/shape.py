@@ -587,7 +587,7 @@ class Shape(ShapeConfiguration):
 
         for config_obj in (self.config, *(p.config_obj for p in (project, options_project) if p is not None)):
             for candidate in output.SECTIONS:
-                if format_name in (config_obj.get(candidate) or {}):
+                if format_name in output.format_names(config_obj.get(candidate)):
                     return candidate
         return output.EXPORT
 
@@ -701,7 +701,14 @@ class Shape(ShapeConfiguration):
             raise Exception("The package implementing '%s' is not found: %s" % (impl.format_name, package_name))
         impl.project = project
 
-        script_abs = os.path.join(project.config_dir, impl.script)
+        # The script is named by the package's own configuration and is about to
+        # be executed, so it has to come from inside that package: a 'path' of
+        # '../../..' would otherwise both read and, for a plugin-backed package,
+        # write outside it.
+        config_dir = os.path.abspath(project.config_dir)
+        script_abs = os.path.abspath(os.path.join(config_dir, impl.script))
+        if os.path.commonpath([config_dir, script_abs]) != config_dir:
+            raise Exception("The implementation of '%s' is outside its package: %s" % (impl.format_name, impl.script))
         if os.path.exists(script_abs):
             return script_abs
 
@@ -784,17 +791,17 @@ class Shape(ShapeConfiguration):
 
         response_lines = response_serialized.strip().splitlines()
         if not response_lines:
-            pc_logging.error("Empty response from the '%s' implementation: %s" % (format_name, script))
+            self.error("Empty response from the '%s' implementation: %s" % (format_name, script))
             return
 
         try:
             result = shape_envelope.deserialize(response_lines[-1].strip())
         except Exception as e:
-            pc_logging.error("Failed to deserialize response: %s" % e)
+            self.error("Failed to deserialize response: %s" % e)
             return
 
         if not result.get("success", False):
-            pc_logging.error(
+            self.error(
                 "Render %s failed for %s:%s: %s"
                 % (format_name.upper(), self.project_name, self.name, result.get("exception", "Unknown error"))
             )
@@ -840,8 +847,8 @@ class Shape(ShapeConfiguration):
                 pc_logging.error(f"Cannot render '{self.name}': shape is empty")
                 return
 
-            for format in [format_name] if format_name else output.all_formats(ctx):
-                await self._render_one_async(ctx, obj, format, project, filepath, options_project, output_dir, kwargs)
+            for fmt in [format_name] if format_name else output.all_formats(ctx):
+                await self._render_one_async(ctx, obj, fmt, project, filepath, options_project, output_dir, kwargs)
 
     def render(
         self,
@@ -864,7 +871,8 @@ class Shape(ShapeConfiguration):
     ):
         """Renders an SVG file somewhere, ignoring where the project wants it."""
         if filepath is None:
-            filepath = tempfile.mktemp(".svg")
+            with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+                filepath = f.name
 
         self.svg_path = None
         await self.render_async(

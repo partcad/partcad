@@ -98,7 +98,7 @@ def process(path, request):
         b3d_obj = b3d.Solid.make_box(1, 1, 1)
         b3d_obj.wrapped = wrapped
 
-        visible, hidden = b3d_obj.project_to_viewport(
+        visible, _hidden = b3d_obj.project_to_viewport(
             viewport_origin=viewport_origin(request),
             viewport_up=viewport_up(request),
         )
@@ -115,10 +115,15 @@ def process(path, request):
             line_color=(64, 192, 64),
             line_weight=request.get("line_weight", 1.0),
         )
+        # A projection that cannot be added still leaves an SVG behind - an empty
+        # one. That predates this package and is deliberately kept, because it is
+        # what the shapes that hit it currently produce; what is new is that the
+        # reason no longer disappears silently (it was a bare 'except: pass', so
+        # it also swallowed KeyboardInterrupt).
         try:
             exporter.add_shape(visible, layer="Visible")
-        except:
-            pass
+        except Exception as e:
+            wrapper_common.handle_exception(e)
         exporter.write(path)
 
         return {"success": True, "exception": None}

@@ -27,7 +27,7 @@ CURVE_SEGMENTS = 20
 
 
 def convert_svg_to_dxf(svg_file, dxf_file):
-    paths, attributes, svg_attributes = svgpathtools.svg2paths2(svg_file)
+    paths, _attributes, _svg_attributes = svgpathtools.svg2paths2(svg_file)
 
     doc = ezdxf.new(dxfversion="R2010")
     msp = doc.modelspace()
@@ -49,8 +49,10 @@ def convert_svg_to_dxf(svg_file, dxf_file):
 
 
 def process(path, request):
+    svg_path = None
     try:
-        svg_path = tempfile.mktemp(".svg")
+        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
+            svg_path = f.name
         result_svg = render_svg.process(svg_path, request)
 
         if not result_svg.get("success", False):
@@ -72,3 +74,11 @@ def process(path, request):
     except Exception as e:
         wrapper_common.handle_exception(e)
         return {"success": False, "exception": wrapper_common.exception_to_str(e)}
+    finally:
+        # Every path above leaves through here, so the intermediate SVG never
+        # accumulates in the temporary directory of a long render job.
+        if svg_path and os.path.exists(svg_path):
+            try:
+                os.remove(svg_path)
+            except OSError:
+                pass

@@ -1193,11 +1193,19 @@ are configured by a section of ``partcad.yaml`` named after the command --
     <file type>:
       ... # the same fields, for the 2D projections
 
-The two sections behave identically; which one a file type belongs to is
+The two sections behave identically. Which one a file type belongs to is
 decided by whichever built-in package implements it (see `Built-in
-implementations`_). An ``export:`` file type also reads its configuration from
-``render:`` first, so a package that configured its STEP or STL output there
-before ``export:`` existed keeps working.
+implementations`_) -- ``step`` is an ``export:`` type wherever it is written
+down, ``svg`` is a ``render:`` one. For a file type no built-in package
+implements, the section it is declared in is what decides: declare a type of
+your own under ``export:`` and it is an export type, under ``render:`` and it is
+a render type.
+
+An ``export:`` file type also reads its configuration from ``render:`` first, so
+a package that configured its STEP or STL output there before ``export:`` existed
+keeps working; where the same package sets a field in both, ``export:`` wins.
+The reverse does not apply -- a ``render:`` file type is never configured from
+``export:``.
 
 The short form ``<file type>: <path>`` is the same as ``prefix: <path>``.
 

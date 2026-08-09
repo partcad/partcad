@@ -1396,7 +1396,7 @@ def _validate_output_format(pc, ctx, fmt, packages):
         if package_obj is None:
             continue
         for section in pc.output.SECTIONS:
-            known.update(package_obj.config_obj.get(section) or {})
+            known.update(pc.output.format_names(package_obj.config_obj.get(section)))
     if fmt not in known:
         raise JsonRpcError(
             USAGE_ERROR,
@@ -1442,7 +1442,14 @@ def render_objects(session, params):
         else:
             packages = [package]
 
-        _validate_output_format(pc, ctx, fmt, packages + ([options_package] if options_package else []))
+        # An object named as '<package>:<name>' is produced by that package, not
+        # by the one '--package' selected, so its file types count as known too.
+        validated_packages = list(packages)
+        if object_name is not None:
+            validated_packages += [pc.utils.resolve_resource_path(p, object_name)[0] for p in packages]
+        if options_package:
+            validated_packages.append(options_package)
+        _validate_output_format(pc, ctx, fmt, validated_packages)
 
         for package in packages:
             if object_name is not None:

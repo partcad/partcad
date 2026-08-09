@@ -50,7 +50,7 @@ isort --check partcad
   every context as `//builtin/export` and `//builtin/render` (loaded on demand by `Context.get_project`, see
   `output.py`). They declare the file types `pc export` and `pc render` write, in exactly the form a user's
   package declares one — a `path` to a script, its `pythonRequirements`, and the export parameters. So adding a
-  format, changing its defaults or changing what it needs installed is an edit to `builtin/*/partcad.yaml`, not
+  format, changing its defaults or changing which dependencies it needs is an edit to `builtin/*/partcad.yaml`, not
   to `shape.py`. The scripts run in a sandbox through `wrappers/wrapper_export.py`; they are data files, so
   anything new under `builtin/` has to be listed in `pyproject.toml`'s `package-data` and in the PyInstaller
   spec (see "Packaging" in the root [AGENTS.md](../AGENTS.md)). The requirement strings there are the versions

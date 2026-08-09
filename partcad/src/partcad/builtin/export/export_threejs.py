@@ -35,7 +35,7 @@ def process(path, request):
         }
 
         with open(path, "w", encoding="utf-8", buffering=BUFFER_SIZE) as f:
-            f.write(json.dumps(result))
+            json.dump(result, f)
 
         return {"success": True, "exception": None}
     except Exception as e:

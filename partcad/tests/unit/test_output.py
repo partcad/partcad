@@ -13,6 +13,7 @@ end-to-end test writes a real file when a sandbox is available.
 """
 
 import ast
+import asyncio
 import importlib.util
 import os
 import sys
@@ -232,7 +233,7 @@ def test_the_render_section_still_configures_export_formats(ctx):
         part.config.pop("export", None)
 
 
-def test_the_output_path_comes_from_the_prefix_and_the_extension(ctx):
+def test_the_output_path_comes_from_the_prefix_and_the_extension(ctx, tmp_path):
     project, part = _part(ctx, "//produce_part_step", "bolt")
 
     _, path = part.output_getopts(ctx, "step", project)
@@ -243,12 +244,56 @@ def test_the_output_path_comes_from_the_prefix_and_the_extension(ctx):
     assert path.endswith("bolt.json")
 
     # An output directory that does not exist yet is still a directory.
-    _, path = part.output_getopts(ctx, "step", project, output_dir="/nonexistent-dir")
-    assert path == os.path.join("/nonexistent-dir", "bolt.step")
+    missing = str(tmp_path / "not-created-yet")
+    _, path = part.output_getopts(ctx, "step", project, output_dir=missing)
+    assert path == os.path.join(missing, "bolt.step")
 
     # An explicit file wins over everything.
-    _, path = part.output_getopts(ctx, "step", project, filepath="/tmp/somewhere.step")
-    assert path == "/tmp/somewhere.step"
+    explicit = str(tmp_path / "somewhere.step")
+    _, path = part.output_getopts(ctx, "step", project, filepath=explicit)
+    assert path == explicit
+
+
+def test_output_dir_is_a_section_setting_not_a_file_type(ctx):
+    """'render: output_dir:' configures the section; it is not a format."""
+    project, part = _part(ctx, "//produce_part_step", "bolt")
+    section = {"output_dir": "build", "svg": {"prefix": "./"}}
+    assert output.format_names(section) == ["svg"]
+    assert "output_dir" not in output.all_formats(ctx)
+
+    # ...and it still places the file it was set to place.
+    part.config["render"] = section
+    try:
+        _, path = part.output_getopts(ctx, "svg", project)
+        assert path == os.path.join("build", "bolt.svg")
+    finally:
+        del part.config["render"]
+
+
+def test_export_wins_over_the_legacy_render_section_when_deciding_what_to_produce(ctx):
+    """Project._output_cfg reads 'render:' first, so 'export:' is what lands."""
+    project = ctx.get_project(CUSTOM_EXAMPLE)
+    part = project.get_part("cube")
+    part.config["render"] = {"step": {"exclude": ["parts"]}}
+    part.config["export"] = {"step": {"comment": "from export:"}}
+    try:
+        cfg = project._output_cfg(part)
+        assert cfg["step"]["comment"] == "from export:"
+    finally:
+        del part.config["render"]
+        del part.config["export"]
+
+
+def test_an_implementation_may_not_escape_its_package(ctx):
+    """A 'path' that climbs out of the package is refused, not executed."""
+    project, part = _part(ctx, "//produce_part_step", "bolt")
+    part.config["export"] = {"step": {"path": "../../../etc/evil.py"}}
+    try:
+        impl, _ = part.output_getopts(ctx, "step", project)
+        with pytest.raises(Exception, match="outside its package"):
+            asyncio.run(part._materialize_output_script(ctx, impl))
+    finally:
+        del part.config["export"]
 
 
 def test_an_unknown_format_falls_back_to_the_section_that_declares_it(ctx):

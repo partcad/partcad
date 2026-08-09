@@ -1185,10 +1185,17 @@ class Project(project_config.Configuration):
         options were asked to come from), overlaid with the shape's own. The
         options each type ends up with are resolved per type and per format in
         'Shape.output_getopts()'.
+
+        'render:' is read before 'export:', the same order the option resolution
+        uses, so that a package which configured an export format under the old
+        section and then moved it gets the newer answer. The merge itself is
+        'render_cfg_merge', not 'output.merge': what this is read for is
+        'exclude', and a shape's exclusions have always added to its package's
+        rather than replacing them.
         """
         cfg = {}
         for config_obj in [p.config_obj for p in (options_project, self) if p is not None] + [shape.config]:
-            for section in output.SECTIONS:
+            for section in output.config_sections(output.EXPORT):
                 section_obj = config_obj.get(section)
                 if isinstance(section_obj, dict):
                     cfg = render_cfg_merge(cfg, copy.deepcopy(section_obj))
@@ -1223,7 +1230,9 @@ class Project(project_config.Configuration):
             for shape in shapes:
                 shape_cfg = self._output_cfg(shape, options_project)
                 formats = output_formats + [
-                    name for name in shape_cfg if name not in output_formats and name not in output.NON_WRAPPER_FORMATS
+                    name
+                    for name in output.format_names(shape_cfg)
+                    if name not in output_formats and name not in output.NON_WRAPPER_FORMATS
                 ]
 
                 for format_name in formats:
