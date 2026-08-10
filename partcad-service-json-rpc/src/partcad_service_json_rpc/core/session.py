@@ -18,6 +18,8 @@ import logging
 import sys
 import threading
 
+from partcad_utils.booleans import to_bool
+
 from .events import EventEmitter
 
 _LEVELS = {
@@ -35,19 +37,6 @@ def _resolve_level(name, default):
     if not name:
         return default
     return _LEVELS.get(str(name).lower(), default)
-
-
-def _as_bool(value) -> bool:
-    """Read a setting that may arrive as a JSON boolean or as its string form.
-
-    The two clients spell the same setting differently: the daemon's own command
-    line turns a flag into ``"true"``, while the VS Code extension forwards its
-    configuration values with their JSON types intact, so a boolean setting
-    arrives as ``True``.
-    """
-    if isinstance(value, bool):
-        return value
-    return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
 class Session:
@@ -169,10 +158,13 @@ class Session:
             user_config = self.partcad.user_config
             if settings.get("pythonSandbox"):
                 user_config.python_runtime = settings["pythonSandbox"]
-            if settings.get("forceUpdate"):
-                user_config.force_update = settings["forceUpdate"] == "true"
+            # Both spellings, one reading: the daemon's own command line turns
+            # a flag into "true", while the VS Code extension forwards its
+            # settings with their JSON types intact.
+            if "forceUpdate" in settings:
+                user_config.force_update = to_bool(settings["forceUpdate"])
             if "develPub" in settings:
-                user_config.devel_pub = _as_bool(settings["develPub"])
+                user_config.devel_pub = to_bool(settings["develPub"])
 
             logging.basicConfig()
             logging.getLogger("partcad").propagate = False

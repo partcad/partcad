@@ -18,6 +18,7 @@ from pathlib import Path
 import vyper
 
 from . import logging as pc_logging
+from .booleans import to_bool
 from .utils import is_editable_install
 
 # IMPORTANT:
@@ -160,10 +161,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.performance" in self.v._override:
-                return self.v._override["telemetry.performance"]
+                return to_bool(self.v._override["telemetry.performance"])
             telemetry = self.v._config.get("telemetry", {})
             if "performance" in telemetry:
-                return telemetry["performance"]
+                return to_bool(telemetry["performance"])
 
         return True
 
@@ -175,10 +176,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.failures" in self.v._override:
-                return self.v._override["telemetry.failures"]
+                return to_bool(self.v._override["telemetry.failures"])
             telemetry = self.v._config.get("telemetry", {})
             if "failures" in telemetry:
-                return telemetry["failures"]
+                return to_bool(telemetry["failures"])
 
         return True
 
@@ -190,10 +191,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.debug" in self.v._override:
-                return self.v._override["telemetry.debug"]
+                return to_bool(self.v._override["telemetry.debug"])
             telemetry = self.v._config.get("telemetry", {})
             if "debug" in telemetry:
-                return telemetry["debug"]
+                return to_bool(telemetry["debug"])
 
         return False
 
@@ -237,10 +238,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.sentryAttachStacktrace" in self.v._override:
-                return self.v._override["telemetry.sentryAttachStacktrace"]
+                return to_bool(self.v._override["telemetry.sentryAttachStacktrace"])
             telemetry = self.v._config.get("telemetry", {})
             if "sentryAttachStacktrace" in telemetry:
-                return telemetry["sentryAttachStacktrace"]
+                return to_bool(telemetry["sentryAttachStacktrace"])
 
         return False
 
@@ -268,6 +269,26 @@ class TelemetryConfig(dict):
 
 
 class UserConfig(vyper.Vyper):
+    def get_bool(self, key):
+        """Read a boolean option, believing "0", "no" and "off".
+
+        vyper's own implementation treats every string but "false" as true,
+        because it never converts a value -- it hands back what it was given and
+        falls through to ``bool()``. That is a fine default for a library that
+        does not know where its values came from, but PartCAD does: every one of
+        these keys is bound to a ``PC_*`` environment variable, and an
+        environment variable can only carry a string. Under vyper's reading,
+        ``PC_FORCE_UPDATE=0`` turned the flag *on*.
+
+        The conversion is therefore PartCAD's to make, and making it here makes
+        it once: every boolean option, including the ones ``TelemetryConfig``
+        reads through this same object, gets the same answer. It is also the
+        answer ``pc`` already gave, since click converts the same variable with
+        its own BOOL type -- so ``pc`` and the daemon it launches stop
+        disagreeing about what the environment said.
+        """
+        return to_bool(self.get(key))
+
     @staticmethod
     def get_config_dir():
         home = os.environ.get("HOME", Path.home())
@@ -508,8 +529,13 @@ class UserConfig(vyper.Vyper):
         # description: offline mode
         # values: [True | False]
         # default: False
-        self.offline = False
+        # The read has to come after the binding, not before it: assigning the
+        # default first and binding afterwards left 'PC_OFFLINE' bound to a key
+        # nothing ever looked up, so the variable had no effect at all outside
+        # the CLI (which sets this attribute from its own '--offline' option).
+        self.set_default("offline", False)
         self.bind_env("offline", "PC_OFFLINE")
+        self.offline = self.get_bool("offline")
 
         # option: useDockerPython
         # description: use a Docker container for running Python scripts

@@ -17,6 +17,11 @@ the dependency tree and leaves every other dependency alone. The same switch is 
 ``PC_DEVEL_PUB`` environment variable, as ``develPub`` in the user configuration, and as the ``partcad.develPub``
 setting of the VS Code extension.
 
+Every boolean ``PC_*`` variable (``PC_DEVEL_PUB``, ``PC_FORCE_UPDATE``, ``PC_OFFLINE``, ``PC_CACHE_FILES``, the
+``PC_TELEMETRY_*`` switches, …) is read the same way: ``1``, ``true``, ``yes``, ``on`` turn it on, and ``0``,
+``false``, ``no``, ``off`` or an empty value turn it off, ignoring case. Setting one to anything else turns it
+on.
+
 *************
 Host commands
 *************
