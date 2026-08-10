@@ -22,7 +22,12 @@ python-jsonrpc-server
 # ../partcad/requirements.txt (minus the heavy CAD kernels cadquery-ocp/ocpsvg/
 # build123d, which ship with the separately installed partcad package).
 pyyaml>=6.0.1
-pygit2>=1.15.0
+# Pinned for the same reason as in ../partcad/requirements.txt: pygit2 drops
+# deprecated API across minor releases, and '--upgrade' here would otherwise
+# float the bundle onto one. 1.18.2 is the last line supporting Python 3.10,
+# which is what this file is compiled against.
+pygit2==1.18.2; python_version < "3.11"
+pygit2==1.20.0; python_version >= "3.11"
 ruamel.yaml>=0.18.5
 setuptools
 jinja2

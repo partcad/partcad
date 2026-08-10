@@ -187,7 +187,12 @@ cadquery-ocp = "7.9.3.1.1"
 ocpsvg = "0.6.0"
 build123d = "0.11.1"
 pyyaml = ">=6.0.1"
-pygit2 = ">=1.15.0"
+# Pinned to match partcad/requirements.txt, which explains why. 1.18.2 is the
+# last pygit2 line that supports Python 3.10; 1.19 and later require 3.11.
+pygit2 = [
+  { version = "1.18.2", python = "<3.11" },
+  { version = "1.20.0", python = ">=3.11" },
+]
 ruamel-yaml = ">=0.18.5"
 vyper-config = "^1.2.1"
 packaging = ">=23.1"
