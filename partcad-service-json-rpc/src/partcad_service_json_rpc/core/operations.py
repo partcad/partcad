@@ -267,6 +267,7 @@ def _invalidate_context(session, params):
     if context_id is None:
         return
     evicted = session.contexts.pop(context_id, None)
+    session.context_user_configs.pop(context_id, None)
     if evicted is not None and session.partcad_ctx is evicted:
         session.partcad_ctx = None
 
@@ -740,6 +741,7 @@ def daemon_reset(session, params):
 
     # The warm contexts now reference deleted directories; drop them.
     session.contexts.clear()
+    session.context_user_configs.clear()
     session.partcad_ctx = None
     return None
 
@@ -897,34 +899,29 @@ def _url_to_path(url: str) -> str:
     raise JsonRpcError(INVALID_CONFIG, "Unsupported context URL scheme: %s" % (parsed.scheme,))
 
 
-def _apply_devel_pub(session, pc, params) -> None:
-    """Carry the caller's ``develPub`` choice into this daemon.
+def _caller_user_config(pc, params):
+    """The configuration a context has to be built from, and its fingerprint.
 
-    Which revision of the public index to import cannot be a property of how the
-    daemon was launched. The daemon is shared per workspace and outlives the
-    command that started it, so a client passing ``--devel-pub`` would otherwise
-    be served by a warm daemon started without it and would silently get the
-    released index instead -- the one thing the flag exists to avoid. Clients
-    that care therefore send the value they were invoked with on every call, and
-    the daemon follows it.
+    The daemon's own ``user_config`` is the wrong answer here. It was resolved
+    from the environment that happened to start the daemon, and the daemon then
+    stays warm for every later command, so it says nothing about how *this*
+    command was invoked -- a ``pc --devel-index`` or ``PC_FORCE_UPDATE=1`` would
+    be silently dropped the moment a daemon was already running. A client that
+    knows its own configuration therefore sends a copy of it, and the context is
+    built from that copy instead.
 
-    A change drops the warm contexts: each one holds a package graph resolved
-    against the other revision of the index, which is no longer what was asked
-    for. Nothing on disk is discarded -- the git cache keys each revision
-    separately, so switching back and forth re-reads rather than re-clones.
+    The fingerprint is what the copy is compared against later. It is the sent
+    data itself rather than a hash of it: the payload is small, comparing it is
+    exact, and a hash would only add a way to be wrong.
 
-    Clients that do not send the key (the VS Code extension, which sets it once
-    at launch through the session settings) leave the daemon's value alone.
+    A client that sends nothing -- the VS Code extension, which configures the
+    daemon once through its launch arguments -- keeps the daemon's own
+    configuration, as before.
     """
-    requested = params.get("develPub")
-    if requested is None:
-        return
-    requested = bool(requested)
-    if bool(getattr(pc.user_config, "devel_pub", False)) == requested:
-        return
-    pc.user_config.devel_pub = requested
-    session.contexts.clear()
-    session.partcad_ctx = None
+    data = params.get("userConfig")
+    if data is None:
+        return None, pc.user_config
+    return data, pc.UserConfig.from_dict(data)
 
 
 def context_create(session, params):
@@ -948,9 +945,16 @@ def context_create(session, params):
     root = os.path.abspath(path)
     context_id = hashlib.sha256(root.encode("utf-8")).hexdigest()[:16]
 
-    # Before the context is built or reused: it resolves its dependencies
-    # against whichever revision of the public index this selects.
-    _apply_devel_pub(session, pc, params)
+    fingerprint, user_config = _caller_user_config(pc, params)
+
+    # A warm context resolved its package graph -- which dependencies, from
+    # which revisions, through which proxy -- against the configuration it was
+    # built with. Reusing it for a caller configured differently would answer
+    # this command from the other caller's graph, so it is rebuilt instead.
+    # Nothing on disk is discarded: the git cache keys each revision separately,
+    # so switching back and forth re-reads rather than re-clones.
+    if context_id in session.contexts and session.context_user_configs.get(context_id) != fingerprint:
+        session.contexts.pop(context_id, None)
 
     if context_id not in session.contexts:
         try:
@@ -959,9 +963,10 @@ def context_create(session, params):
             # path returns the first (now stale) context. The daemon serves many
             # independent, long-lived contexts and must read each one fresh from
             # disk -- especially after add/import mutate partcad.yaml.
-            session.contexts[context_id] = pc.Context(path, user_config=pc.user_config)
+            session.contexts[context_id] = pc.Context(path, user_config=user_config)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
             raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)}) from e
+        session.context_user_configs[context_id] = fingerprint
 
     # Keep the most recently created context as the session default so the
     # extension's context-less operations continue to work.

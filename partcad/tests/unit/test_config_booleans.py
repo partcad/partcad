@@ -33,7 +33,7 @@ TRUE_TEXT = ["1", "true", "True", "TRUE", "yes", "y", "on", "t", " on "]
 # option that is bound to one, so a new one cannot quietly be added with the old
 # reading.
 BOOLEAN_OPTIONS = [
-    ("develPub", "PC_DEVEL_PUB", "devel_pub"),
+    ("develIndex", "PC_DEVEL_INDEX", "devel_index"),
     ("forceUpdate", "PC_FORCE_UPDATE", "force_update"),
     ("offline", "PC_OFFLINE", "offline"),
     ("cacheFiles", "PC_CACHE_FILES", "cache"),
@@ -162,7 +162,7 @@ def test_config_file_values_read_the_same_way(config_home, monkeypatch, key, att
         ("use_docker_kicad", True),
         ("use_docker_python", False),
         ("force_update", False),
-        ("devel_pub", False),
+        ("devel_index", False),
         ("offline", False),
         ("cache_dependencies_ignore", False),
         ("ignore_bundled_openscad", False),

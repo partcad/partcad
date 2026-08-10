@@ -28,8 +28,8 @@ def to_bool(value, default: bool = False) -> bool:
     """Interpret 'value' as a boolean, however it was written.
 
     A boolean is itself and a number is false only when it is zero, which is
-    what a YAML configuration file produces for ``develPub: false`` and
-    ``develPub: 0``. A string is matched against the spellings above, ignoring
+    what a YAML configuration file produces for ``develIndex: false`` and
+    ``develIndex: 0``. A string is matched against the spellings above, ignoring
     case and surrounding space, so the environment can say ``0``, ``no`` or
     ``off`` and be believed.
 

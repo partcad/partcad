@@ -21,7 +21,7 @@ DEFAULT_PACKAGE_CONFIG = "partcad.yaml"
 # own. Both the path it has now and the one it moved from are listed: packages
 # published before the move still import it under the old organization, and
 # GitHub keeps serving that spelling.
-PUB_INDEX_REPO_PATHS = (
+DEVEL_INDEX_REPO_PATHS = (
     "partcad/partcad-index",
     "openvmp/partcad-index",
 )
@@ -29,4 +29,4 @@ PUB_INDEX_REPO_PATHS = (
 # The branch of the public index that carries what has not been released yet.
 # Its 'main' is fast-forwarded to this branch during a release, so 'devel' is
 # always either equal to, or ahead of, what a default clone gets.
-PUB_INDEX_DEVEL_REVISION = "devel"
+DEVEL_INDEX_REVISION = "devel"

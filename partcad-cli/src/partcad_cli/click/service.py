@@ -65,14 +65,18 @@ def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_
                 # letters and spaces included) -- "file://" + a raw path does not.
                 path = getattr(cli_ctx, "path", None) or os.getcwd()
                 url = Path(path).resolve().as_uri()
-                # '--devel-pub' travels with every call rather than with the
-                # daemon's launch arguments: the daemon is warm and shared, so a
-                # value fixed at launch would make this invocation's flag a
-                # no-op. The daemon drops its warm contexts when the value
-                # changes.
+                # This invocation's resolved user configuration travels with the
+                # request, and the daemon builds the context from it rather than
+                # from its own. The daemon is warm and shared per workspace, so
+                # its own configuration is whatever the environment held when
+                # something first started it -- not what this command was
+                # invoked with. Anything resolved here ('--devel-index',
+                # '--force-update', '--offline', the 'PC_*' environment, the
+                # config file) would otherwise be ignored the moment a daemon
+                # was already running.
                 result = conn.call(
                     "context.create",
-                    {"url": url, "develPub": bool(_user_config.devel_pub)},
+                    {"url": url, "userConfig": _user_config.to_dict()},
                     on_event=_on_event,
                 )
                 call_params["context"] = result.get("context")

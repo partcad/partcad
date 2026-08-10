@@ -222,7 +222,7 @@
             "scope": "machine",
             "type": "string"
           },
-          "partcad.develPub": {
+          "partcad.develIndex": {
             "default": false,
             "description": "Whether to take the public PartCAD index from its 'devel' branch instead of the released state on 'main'. Turn this on to work against index changes that have not been released yet.",
             "scope": "machine",

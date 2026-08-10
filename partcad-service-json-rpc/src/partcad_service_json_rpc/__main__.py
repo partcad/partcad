@@ -52,7 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--offline", action="store_true", help="Do not fetch anything from the network.")
     parser.add_argument("--force-update", action="store_true", help="Force refresh of cached dependencies.")
     parser.add_argument(
-        "--devel-pub",
+        "--devel-index",
         action="store_true",
         help="Use the 'devel' branch of the public index instead of the released one.",
     )
@@ -72,8 +72,8 @@ def build_settings(args: argparse.Namespace) -> dict:
         settings["pythonSandbox"] = args.python_sandbox
     if args.force_update:
         settings["forceUpdate"] = "true"
-    if args.devel_pub:
-        settings["develPub"] = "true"
+    if args.devel_index:
+        settings["develIndex"] = "true"
     if args.offline:
         settings["offline"] = "true"
     if args.verbose:

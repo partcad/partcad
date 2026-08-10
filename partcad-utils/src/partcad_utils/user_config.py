@@ -268,6 +268,43 @@ class TelemetryConfig(dict):
         return str({k: v for k, v in properties})
 
 
+# The options a user configuration resolves to, by their configuration-file
+# names. This is what travels when one process hands its configuration to
+# another; a new option belongs here, or the daemon will keep resolving it from
+# its own environment instead of the caller's.
+OPTION_KEYS = (
+    "threadsMax",
+    "cacheFiles",
+    "cacheFilesMaxEntrySize",
+    "cacheFilesMinEntrySize",
+    "cacheMemoryMaxEntrySize",
+    "cacheMemoryDoubleCacheMaxEntrySize",
+    "cacheDependenciesIgnore",
+    "pythonSandbox",
+    "ignoreBundledOpenscad",
+    "internalStateDir",
+    "logLevel",
+    "forceUpdate",
+    "develIndex",
+    "offline",
+    "git.clone.timeout",
+    "useDockerPython",
+    "useDockerKicad",
+)
+
+# The nested sections, by the path each configuration view reads. 'git.auth'
+# carries credentials for private dependencies; it travels because the daemon is
+# meant to ignore its own configuration, and a caller whose configuration is the
+# only one holding those credentials would otherwise fail to clone.
+SECTION_PATHS = (
+    "git.config",
+    "git.auth",
+    "telemetry",
+    "parameters",
+    "user",
+)
+
+
 class UserConfig(vyper.Vyper):
     def get_bool(self, key):
         """Read a boolean option, believing "0", "no" and "off".
@@ -298,7 +335,39 @@ class UserConfig(vyper.Vyper):
     def get_cache_dir():
         return os.path.join(Path.home(), ".cache", "partcad")
 
-    def __init__(self):
+    def to_dict(self) -> dict:
+        """This configuration as plain data, ready to hand to another process.
+
+        A PartCAD client resolves its own configuration -- a config file, the
+        ``PC_*`` environment, and the command line on top of each other -- and
+        then asks the daemon to do the work. The daemon has a configuration of
+        its own, resolved from its own environment when it was launched and warm
+        ever since, which is not the one the command was invoked with. Sending
+        this alongside the request is what lets the daemon build the context
+        from the caller's configuration instead of its own.
+
+        Only the resolved options are copied, keyed by their configuration-file
+        names, plus the nested sections. A value that resolved to nothing is
+        left out rather than sent as null, so that reconstructing it falls back
+        to the same default rather than overriding the option with an empty one.
+        """
+        data = {}
+        for key in OPTION_KEYS:
+            value = self.get(key)
+            if value is not None:
+                data[key] = value
+        for path in SECTION_PATHS:
+            value = self.get(path)
+            if value:
+                data[path] = value
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "UserConfig":
+        """Rebuild a configuration from what :meth:`to_dict` produced."""
+        return cls(settings=data)
+
+    def __init__(self, settings: dict = None):
         super().__init__()
         self.set_config_type("yaml")
 
@@ -314,6 +383,16 @@ class UserConfig(vyper.Vyper):
                     self.read_config(f)
             except Exception as e:
                 pc_logging.error("ERROR: Failed to parse %s: %s" % (config_path, str(e)))
+
+        # A configuration handed over by another process, applied before
+        # anything below reads a value back. These land as vyper overrides,
+        # which outrank the file just read and the environment bound further
+        # down, so every option resolves to what the caller resolved it to and
+        # this process's own environment is ignored -- which is the point when
+        # the caller is a CLI and this process is the daemon serving it.
+        if settings:
+            for key, value in settings.items():
+                self.set(key, value)
 
         # If the filesystem cache is enabled, then (by default):
         # - objects of 1 byte bytes are cached both in memory and on the filesystem (to cache test results)
@@ -339,7 +418,7 @@ class UserConfig(vyper.Vyper):
 
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
-        self.set_default("develPub", False)
+        self.set_default("develIndex", False)
 
         # option: git.clone.timeout
         # description: how long a single git network operation (clone, fetch,
@@ -451,7 +530,7 @@ class UserConfig(vyper.Vyper):
         self.bind_env("forceUpdate", "PC_FORCE_UPDATE")
         self.force_update = self.get_bool("forceUpdate")
 
-        # option: develPub
+        # option: develIndex
         # description: take the public PartCAD index ("//pub") from its 'devel'
         #              branch instead of the released state on 'main'. The index
         #              lives in its own repository, so its version is not pinned
@@ -462,8 +541,8 @@ class UserConfig(vyper.Vyper):
         #              and leaves every other dependency alone.
         # values: [True | False]
         # default: False
-        self.bind_env("develPub", "PC_DEVEL_PUB")
-        self.devel_pub = self.get_bool("develPub")
+        self.bind_env("develIndex", "PC_DEVEL_INDEX")
+        self.devel_index = self.get_bool("develIndex")
 
         # option: git.clone.timeout
         # description: seconds a single git network operation may take

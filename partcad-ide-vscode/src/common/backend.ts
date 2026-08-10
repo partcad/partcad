@@ -229,8 +229,8 @@ function serviceArgs(serverId: string): string[] {
     // The daemon reads this once, at launch. Toggling the setting restarts the
     // backend (checkIfConfigurationChanged lists it), so the running daemon
     // always reflects the current value.
-    if (config.get<boolean>('develPub') === true) {
-        args.push('--devel-pub');
+    if (config.get<boolean>('develIndex') === true) {
+        args.push('--devel-index');
     }
     return args;
 }

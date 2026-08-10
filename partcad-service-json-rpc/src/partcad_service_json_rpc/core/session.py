@@ -57,6 +57,12 @@ class Session:
         # TODO: expire contexts (evict idle/old ones) so this never grows unbounded.
         self.contexts: dict = {}
 
+        # The user configuration each warm context was built from, by the same
+        # id. A caller hands its own configuration over with context.create, and
+        # a context built from a different one cannot answer for it, so this is
+        # what says whether the warm context still applies.
+        self.context_user_configs: dict = {}
+
         self._load_lock = threading.RLock()
 
         # Legacy LSP log streaming: an externally-owned ANSI write stream, bound
@@ -163,8 +169,8 @@ class Session:
             # settings with their JSON types intact.
             if "forceUpdate" in settings:
                 user_config.force_update = to_bool(settings["forceUpdate"])
-            if "develPub" in settings:
-                user_config.devel_pub = to_bool(settings["develPub"])
+            if "develIndex" in settings:
+                user_config.devel_index = to_bool(settings["develIndex"])
 
             logging.basicConfig()
             logging.getLogger("partcad").propagate = False
