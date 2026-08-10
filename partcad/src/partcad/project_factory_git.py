@@ -23,6 +23,7 @@ from filelock import FileLock
 from pygit2.enums import CheckoutStrategy, ConfigLevel, CredentialType, ReferenceType, ResetMode
 
 from .project_local import ProjectLocal
+from . import consts
 from . import project_factory as pf
 from . import logging as pc_logging
 from . import telemetry
@@ -246,6 +247,32 @@ _SCP_LIKE_RE = re.compile(r"^[A-Za-z0-9_.+-]+@[A-Za-z0-9_.-]+:")
 
 def looks_like_commit_id(revision: str) -> bool:
     return bool(_SHA_RE.match(revision.strip()))
+
+
+def repo_path(url: str) -> str:
+    """The "<owner>/<name>" that a repository URL names, lowercased.
+
+    Every spelling of the same repository has to normalize alike, because a
+    dependency may be written in any of them: the https and ssh URLs, the
+    scp-like "git@host:owner/name" form, with or without a trailing slash and
+    with or without the optional ".git" suffix. What is left identifies the
+    repository; the host is deliberately dropped, so a mirror of the same
+    repository is recognized as well.
+    """
+    url = (url or "").strip()
+    if _SCP_LIKE_RE.match(url):
+        path = url.split(":", 1)[1]
+    else:
+        path = urlparse(url).path
+    path = path.strip("/")
+    if path.endswith(".git"):
+        path = path[: -len(".git")]
+    return path.lower()
+
+
+def is_pub_index_url(url: str) -> bool:
+    """Whether 'url' names the repository the public PartCAD index lives in."""
+    return repo_path(url) in consts.PUB_INDEX_REPO_PATHS
 
 
 @dataclass(frozen=True)
@@ -663,6 +690,37 @@ class GitImportConfiguration:
             for key, value in url_override.items():
                 if value in self.import_config_url:
                     self.import_config_url = self.import_config_url.replace(value, key)
+
+        self._apply_devel_pub_override()
+
+    def _apply_devel_pub_override(self):
+        """Point the public index at its unreleased branch when asked to.
+
+        The public index lives in a repository of its own, so nothing in the
+        package that imports it says which version of it to use: a plain import
+        gets whatever its default branch holds, which is the released state.
+        'develPub' is how the staged state is exercised instead, and it names no
+        dependency: the index is recognized by the repository its URL points at,
+        so it is redirected wherever in the dependency tree it appears and under
+        whatever name the importing package gave it.
+
+        Run after the url overrides above so that a URL rewritten there is still
+        recognized. A revision the package pinned itself is replaced rather than
+        respected -- this is an override, and a pin is exactly what it exists to
+        get past.
+        """
+        if not getattr(self.ctx.user_config, "devel_pub", False):
+            return
+        if not is_pub_index_url(self.import_config_url):
+            return
+        if self.import_revision == consts.PUB_INDEX_DEVEL_REVISION:
+            return
+        pc_logging.info(
+            "Using the '%s' revision of the public index: %s",
+            consts.PUB_INDEX_DEVEL_REVISION,
+            self.import_config_url,
+        )
+        self.import_revision = consts.PUB_INDEX_DEVEL_REVISION
 
     def _git_config(self) -> dict[str, str]:
         params = {}

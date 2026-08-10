@@ -37,6 +37,19 @@ def _resolve_level(name, default):
     return _LEVELS.get(str(name).lower(), default)
 
 
+def _as_bool(value) -> bool:
+    """Read a setting that may arrive as a JSON boolean or as its string form.
+
+    The two clients spell the same setting differently: the daemon's own command
+    line turns a flag into ``"true"``, while the VS Code extension forwards its
+    configuration values with their JSON types intact, so a boolean setting
+    arrives as ``True``.
+    """
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
 class Session:
     """Holds the state one PartCAD connection needs."""
 
@@ -158,6 +171,8 @@ class Session:
                 user_config.python_runtime = settings["pythonSandbox"]
             if settings.get("forceUpdate"):
                 user_config.force_update = settings["forceUpdate"] == "true"
+            if "develPub" in settings:
+                user_config.devel_pub = _as_bool(settings["develPub"])
 
             logging.basicConfig()
             logging.getLogger("partcad").propagate = False

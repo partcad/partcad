@@ -531,3 +531,64 @@ def test_daemon_reset_drops_every_warm_context(tmp_path):
 
     assert session.contexts == {}
     assert session.partcad_ctx is None
+
+
+# ---- context.create: which revision of the public index ----------------------
+#
+# 'develPub' cannot be a property of how the daemon was launched: the daemon is
+# warm and shared, so a client that passes '--devel-pub' to a daemon started
+# without it would silently get the released index -- the one thing the flag
+# exists to avoid. Clients that care send it on every call instead.
+
+
+def test_the_caller_s_devel_pub_choice_reaches_the_daemon(tmp_path):
+    session, _ = make_session()
+
+    operations.context_create(session, {"url": workspace_url(tmp_path), "develPub": True})
+
+    assert session.partcad.user_config.devel_pub is True
+
+
+def test_turning_devel_pub_on_drops_contexts_resolved_without_it(tmp_path):
+    """A warm context holds a graph resolved against the other index revision."""
+    session, _ = make_session()
+    first = operations.context_create(session, {"url": workspace_url(tmp_path), "develPub": False})
+
+    second = operations.context_create(session, {"url": workspace_url(tmp_path), "develPub": True})
+
+    assert first["context"] == second["context"]
+    # Same id, but rebuilt rather than reused.
+    assert len(session.partcad.contexts_built) == 2
+    assert session.contexts[second["context"]] is session.partcad.contexts_built[1]
+
+
+def test_turning_devel_pub_off_again_drops_the_contexts_too(tmp_path):
+    session, _ = make_session()
+    operations.context_create(session, {"url": workspace_url(tmp_path), "develPub": True})
+
+    operations.context_create(session, {"url": workspace_url(tmp_path), "develPub": False})
+
+    assert session.partcad.user_config.devel_pub is False
+    assert len(session.partcad.contexts_built) == 2
+
+
+def test_an_unchanged_devel_pub_still_reuses_the_warm_context(tmp_path):
+    """Every call carries the value, so an unchanged one must cost nothing."""
+    session, _ = make_session()
+    operations.context_create(session, {"url": workspace_url(tmp_path), "develPub": True})
+
+    operations.context_create(session, {"url": workspace_url(tmp_path), "develPub": True})
+
+    assert len(session.partcad.contexts_built) == 1
+
+
+def test_a_client_that_sends_no_choice_leaves_the_daemon_s_alone(tmp_path):
+    """The VS Code extension sets this once, at launch, through the session
+    settings; its later calls must not reset it to the default."""
+    session, _ = make_session()
+    session.partcad.user_config.devel_pub = True
+
+    operations.context_create(session, {"url": workspace_url(tmp_path)})
+
+    assert session.partcad.user_config.devel_pub is True
+    assert len(session.partcad.contexts_built) == 1

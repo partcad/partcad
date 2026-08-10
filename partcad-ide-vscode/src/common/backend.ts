@@ -226,6 +226,12 @@ function serviceArgs(serverId: string): string[] {
     if ((config.get<string>('forceUpdate') ?? 'false') === 'true') {
         args.push('--force-update');
     }
+    // The daemon reads this once, at launch. Toggling the setting restarts the
+    // backend (checkIfConfigurationChanged lists it), so the running daemon
+    // always reflects the current value.
+    if (config.get<boolean>('develPub') === true) {
+        args.push('--devel-pub');
+    }
     return args;
 }
 

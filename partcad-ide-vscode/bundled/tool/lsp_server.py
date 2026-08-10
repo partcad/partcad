@@ -573,6 +573,7 @@ def _get_global_defaults():
         "verbosity": GLOBAL_SETTINGS.get("verbosity", "info"),
         "packagePath": GLOBAL_SETTINGS.get("packagePath", "."),
         "forceUpdate": GLOBAL_SETTINGS.get("forceUpdate", "false"),
+        "develPub": GLOBAL_SETTINGS.get("develPub", False),
         "path": GLOBAL_SETTINGS.get("path", []),
         "interpreter": GLOBAL_SETTINGS.get("interpreter", [sys.executable]),
         "importStrategy": GLOBAL_SETTINGS.get("importStrategy", "useBundled"),

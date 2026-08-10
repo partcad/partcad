@@ -71,7 +71,7 @@ option_groups = [
     },
     {
         "name": "Dependency management options",
-        "options": ["--force-update", "--offline", "--internal-state-dir"],
+        "options": ["--force-update", "--offline", "--devel-pub", "--internal-state-dir"],
     },
     {
         "name": "Sandbox options",
@@ -262,6 +262,13 @@ click.rich_click.COMMAND_GROUPS = {
     help="Operate in offline mode, without any repo updates",
 )
 @click.option(
+    "--devel-pub",
+    is_flag=True,
+    show_envvar=True,
+    default=None,
+    help="Use the 'devel' branch of the public index instead of the released one",
+)
+@click.option(
     "--telemetry-type",
     type=click.Choice(["none", "sentry"]),
     show_envvar=True,
@@ -356,6 +363,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
         ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
         ("PC_FORCE_UPDATE", "force_update"),
         ("PC_OFFLINE", "offline"),
+        ("PC_DEVEL_PUB", "devel_pub"),
         ("PC_TELEMETRY_TYPE", "telemetry_type"),
         ("PC_TELEMETRY_ENV", "telemetry_env"),
         ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),
@@ -442,6 +450,7 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
             ("PC_FORCE_UPDATE", "force_update"),
             ("PC_OFFLINE", "offline"),
+            ("PC_DEVEL_PUB", "devel_pub"),
             ("PC_TELEMETRY_TYPE", "telemetry_type"),
             ("PC_TELEMETRY_ENV", "telemetry_env"),
             ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),

@@ -7,6 +7,16 @@ same tool. Run ``pc <command> --help`` at any time to see the full, up-to-date o
 Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text logs), ``--offline``,
 ``--threads-max``, and ``-p PATH`` (select the package), apply to every command.
 
+``--devel-pub`` is one of those common options, and is worth calling out. The public index (the ``pub``
+dependency, published at `partcad-index <https://github.com/partcad/partcad-index>`_) lives in a repository of
+its own, so nothing in your package pins which version of it you get: an ordinary run imports its default
+branch, which is the released state. ``--devel-pub`` imports its ``devel`` branch instead — the branch that a
+release fast-forwards ``main`` to — so a change staged there can be exercised before it is released. The
+redirect follows the repository rather than the dependency name, so it applies wherever the index appears in
+the dependency tree and leaves every other dependency alone. The same switch is available as the
+``PC_DEVEL_PUB`` environment variable, as ``develPub`` in the user configuration, and as the ``partcad.develPub``
+setting of the VS Code extension.
+
 *************
 Host commands
 *************

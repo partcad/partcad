@@ -897,6 +897,36 @@ def _url_to_path(url: str) -> str:
     raise JsonRpcError(INVALID_CONFIG, "Unsupported context URL scheme: %s" % (parsed.scheme,))
 
 
+def _apply_devel_pub(session, pc, params) -> None:
+    """Carry the caller's ``develPub`` choice into this daemon.
+
+    Which revision of the public index to import cannot be a property of how the
+    daemon was launched. The daemon is shared per workspace and outlives the
+    command that started it, so a client passing ``--devel-pub`` would otherwise
+    be served by a warm daemon started without it and would silently get the
+    released index instead -- the one thing the flag exists to avoid. Clients
+    that care therefore send the value they were invoked with on every call, and
+    the daemon follows it.
+
+    A change drops the warm contexts: each one holds a package graph resolved
+    against the other revision of the index, which is no longer what was asked
+    for. Nothing on disk is discarded -- the git cache keys each revision
+    separately, so switching back and forth re-reads rather than re-clones.
+
+    Clients that do not send the key (the VS Code extension, which sets it once
+    at launch through the session settings) leave the daemon's value alone.
+    """
+    requested = params.get("develPub")
+    if requested is None:
+        return
+    requested = bool(requested)
+    if bool(getattr(pc.user_config, "devel_pub", False)) == requested:
+        return
+    pc.user_config.devel_pub = requested
+    session.contexts.clear()
+    session.partcad_ctx = None
+
+
 def context_create(session, params):
     """Create (or reuse) a PartCAD context for a repository URL; return its id.
 
@@ -917,6 +947,10 @@ def context_create(session, params):
     path = _url_to_path(url)
     root = os.path.abspath(path)
     context_id = hashlib.sha256(root.encode("utf-8")).hexdigest()[:16]
+
+    # Before the context is built or reused: it resolves its dependencies
+    # against whichever revision of the public index this selects.
+    _apply_devel_pub(session, pc, params)
 
     if context_id not in session.contexts:
         try:

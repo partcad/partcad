@@ -318,6 +318,7 @@ class UserConfig(vyper.Vyper):
 
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
+        self.set_default("develPub", False)
 
         # option: git.clone.timeout
         # description: how long a single git network operation (clone, fetch,
@@ -428,6 +429,20 @@ class UserConfig(vyper.Vyper):
         # default: False
         self.bind_env("forceUpdate", "PC_FORCE_UPDATE")
         self.force_update = self.get_bool("forceUpdate")
+
+        # option: develPub
+        # description: take the public PartCAD index ("//pub") from its 'devel'
+        #              branch instead of the released state on 'main'. The index
+        #              lives in its own repository, so its version is not pinned
+        #              by anything in the package that imports it; this is how a
+        #              change staged there is exercised before it is released.
+        #              Applies to every dependency whose URL names that
+        #              repository, wherever in the dependency tree it appears,
+        #              and leaves every other dependency alone.
+        # values: [True | False]
+        # default: False
+        self.bind_env("develPub", "PC_DEVEL_PUB")
+        self.devel_pub = self.get_bool("develPub")
 
         # option: git.clone.timeout
         # description: seconds a single git network operation may take
