@@ -925,6 +925,47 @@ Here is an example of an assembly definition:
 
 In this example, an assembly named ``example_assembly`` is defined with a parameter ``length`` and an offset.
 
+URDF
+----
+
+The ``urdf`` type uses a `URDF <https://wiki.ros.org/urdf>`_ file - the robot
+description format of ROS - as an assembly directly, with no conversion step:
+
+.. code-block:: yaml
+
+  assemblies:
+    robot:
+      type: urdf
+      path: <(optional) the source file path, "<assembly name>.urdf" by default>
+      geometry: <(optional) "visual" (default) or "collision">
+      packagePaths: # (optional) roots to resolve "package://" mesh references against
+        - <../meshes>
+
+Each link becomes a part or a sub-assembly, placed where the joints between it
+and the robot's root link put it with **every joint at its zero position**. The
+result is the same in-memory representation an `Assembly YAML`_ file produces,
+so everything else - rendering, export, BoM, inspection - treats the two alike.
+The robot's root link is the assembly itself.
+
+URDF's ``box``, ``cylinder`` and ``sphere`` primitives are turned into geometry;
+``mesh`` references are read from the file they name (``package://``, ``file://``
+and paths relative to the URDF file are all resolved), for the mesh formats
+PartCAD reads - ``stl``, ``obj``, ``step``, ``brep`` and ``3mf``. A mesh
+``scale`` is honoured: URDF reads mesh coordinates as metres after scaling,
+PartCAD works in millimetres.
+
+A URDF says a great deal that a PartCAD assembly has nowhere to put: masses and
+inertia tensors, joint types, axes, limits and dynamics, materials, collision
+geometry distinct from the visual geometry, sensors and Gazebo extensions. All
+of it is dropped, and PartCAD reports what it dropped rather than passing over
+it in silence. :doc:`simulation` describes what it would take to keep it.
+
+The reverse direction is ``pc export -t urdf``, which writes a ``.urdf`` file
+plus a directory of the STL files it references, from any part or assembly.
+Each node of the assembly tree becomes a link, each parent/child relation a
+fixed joint, and a shape used more than once is written out once. Inertial
+properties are computed from the geometry (see :doc:`simulation`).
+
 Assembly YAML
 -------------
 

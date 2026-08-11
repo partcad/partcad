@@ -48,6 +48,15 @@ ZSTD = "backports.zstd>=1.6.0"
 # The first Python whose standard library makes ZSTD unnecessary.
 MIN_PYTHON_VERSION_ZSTD_STDLIB = "3.14"
 
+# The URDF reader/writer used by the 'urdf' assembly type and by the URDF
+# exporter. This is ROS's own URDF parser (github.com/ros/urdf_parser_py), the
+# same package 'urdfdom_py'/'ros-*-urdfdom-py' ships as, so PartCAD reads and
+# writes exactly what the ROS toolchain does rather than a lookalike of it.
+#
+# Installed only into the sandboxes that touch URDF, so neither PartCAD nor a
+# package that never mentions URDF grows a dependency on the ROS stack.
+URDF_PARSER_PY = "urdf-parser-py==0.0.4"
+
 # Only needed by the sandboxes that rasterize or export 2D formats.
 #
 # Deliberately held at the versions this repo already shipped, not bumped to the

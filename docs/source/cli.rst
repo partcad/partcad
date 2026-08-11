@@ -78,8 +78,9 @@ Object commands
 
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. Choose the format with ``-t``:
-  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, or ``iges``. Use ``-O`` to set the
-  output directory and ``-r`` to export recursively.
+  ``step``, ``brep``, ``stl``, ``3mf``, ``threejs``, ``obj``, ``gltf``, ``iges``, or ``urdf``. Use ``-O`` to set the
+  output directory and ``-r`` to export recursively. ``urdf`` writes a ``.urdf``
+  file plus a directory of the mesh files it references.
 
 ``pc render``
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:

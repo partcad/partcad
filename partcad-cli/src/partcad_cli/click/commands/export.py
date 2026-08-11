@@ -38,6 +38,7 @@ from ..service import run
             "obj",
             "gltf",
             "iges",
+            "urdf",
         ]
     ),
 )

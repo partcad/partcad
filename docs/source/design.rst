@@ -85,10 +85,23 @@ assemblies together.
 
 PartCAD is expected to have an ever-growing list of ways to define assemblies
 using existing parts.
-However, at the moment, only one way is supported.
-It is called ASSY: assembly YAML.
-The idea behind ASSY is to create a simplistic way to enumerate parts,
-define their parameters and define how parts connect.
+
+- ASSY: assembly YAML
+
+  The native format. The idea behind ASSY is to create a simplistic way to
+  enumerate parts, define their parameters and define how parts connect.
+
+- URDF
+
+  A `URDF <https://wiki.ros.org/urdf>`_ robot description used as an assembly
+  directly. Its links become the same tree of placed parts an ASSY file
+  produces, evaluated with every joint at its zero position. PartCAD can also
+  write a URDF (plus the meshes it references) from any assembly.
+
+  A URDF is a description of a *simulatable* robot, so most of what it says -
+  mass and inertia, joint kinematics, collision geometry, materials, sensors -
+  has nowhere to go in an assembly built out of rigid placements, and is
+  dropped. :doc:`simulation` describes that gap and what closing it would take.
 
 Scenes
 ======
@@ -96,7 +109,7 @@ Scenes
 PartCAD does not yet implement scenes. But the idea is to be able to reproduce
 the same features as worlds in Gazebo to the extent that PartCAD scenes can be
 exported to and simulated in Gazebo, but without using XML while creating the
-scene.
+scene. See :doc:`simulation`.
 
 Monorepos
 =========

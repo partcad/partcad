@@ -1200,7 +1200,20 @@ class Project(project_config.Configuration):
                 raise EmptyShapesError
 
             tasks = []
-            render_formats = ["svg", "png", "dxf", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
+            render_formats = [
+                "svg",
+                "png",
+                "dxf",
+                "step",
+                "stl",
+                "3mf",
+                "threejs",
+                "obj",
+                "gltf",
+                "brep",
+                "iges",
+                "urdf",
+            ]
 
             for shape in shapes:
                 shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
@@ -1517,9 +1530,12 @@ class Project(project_config.Configuration):
                 lines += add_section(name, display_name, shape, render_cfg)
 
         if self.parts and not "parts" in exclude:
-            lines += ["## Parts"]
-            lines += [""]
-            shape_names = sorted(self.parts.keys())
+            # A part an assembly materialized while it was being built (the
+            # meshes a URDF points at, for instance) is an implementation detail
+            # of that assembly, not something the package offers, so it is not
+            # documented. The heading is only emitted if something is left.
+            part_lines = []
+            shape_names = sorted(name for name in self.parts if not self.parts[name].config.get("internal", False))
             for name in shape_names:
                 shape = self.parts[name]
                 if shape.config["type"] == "alias":
@@ -1528,7 +1544,10 @@ class Project(project_config.Configuration):
                     display_name = name + " (alias to " + shape.name + ")"
                 else:
                     display_name = name
-                lines += add_section(name, display_name, shape, render_cfg)
+                part_lines += add_section(name, display_name, shape, render_cfg)
+            if part_lines:
+                lines += ["## Parts", ""]
+                lines += part_lines
 
         if self.interfaces and not "interfaces" in exclude:
             lines += ["## Interfaces"]

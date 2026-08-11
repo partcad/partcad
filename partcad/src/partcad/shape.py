@@ -50,6 +50,7 @@ PART_EXTENSION_MAPPING = {
     "obj": "obj",
     "iges": "iges",
     "gltf": "json",
+    "urdf": "urdf",
     "cadquery": "py",
     "build123d": "py",
     "sdf": "py",
@@ -73,6 +74,13 @@ LIVE_OBJECT_PART_TYPES = frozenset({"build123d", "cadquery"})
 UNEXPORTABLE_PART_TYPES = {
     "scad": "PartCAD can read OpenSCAD but cannot write it",
     "sdf": "PartCAD can read SDF scripts but cannot write them",
+    # URDF is exportable, but not *in memory*: the export is a .urdf file plus
+    # the directory of mesh files it references, and convert() hands back a
+    # single payload. Returning only the XML would quietly lose the geometry.
+    "urdf": (
+        "a URDF export is a .urdf file plus the mesh files it references, so it cannot be "
+        "returned in memory; export it to a path instead ('pc export -t urdf')"
+    ),
 }
 
 # Every part type named by the extension mappings that 'Shape.convert()' can
@@ -744,6 +752,7 @@ class Shape(ShapeConfiguration):
             "gltf": [sandbox_versions.BUILD123D, sandbox_versions.CADQUERY_OCP],
             "iges": [sandbox_versions.CADQUERY_OCP],
             "threejs": [sandbox_versions.CADQUERY_OCP],
+            "urdf": [sandbox_versions.CADQUERY_OCP, sandbox_versions.URDF_PARSER_PY],
         }
 
         with pc_logging.Action(f"Render{format_name.upper()}", self.project_name, self.name):
@@ -820,6 +829,21 @@ class Shape(ShapeConfiguration):
                     elif format == "gltf":
                         request["binary"] = kwargs.get("binary", render_opts.get("binary", False))
 
+                # URDF: an assembly tree rather than a single shape. The
+                # exporter writes the mesh files itself, so it takes the mesh
+                # options too.
+                elif format == "urdf":
+                    request["tolerance"] = kwargs.get("tolerance", render_opts.get("tolerance", 0.1))
+                    request["angularTolerance"] = kwargs.get(
+                        "angularTolerance", render_opts.get("angularTolerance", 0.1)
+                    )
+                    request["ascii"] = kwargs.get("ascii", render_opts.get("ascii", False))
+                    request["robot_name"] = kwargs.get("robot_name", render_opts.get("robot_name"))
+                    request["mesh_dir"] = kwargs.get("mesh_dir", render_opts.get("mesh_dir"))
+                    request["mesh_prefix"] = kwargs.get("mesh_prefix", render_opts.get("mesh_prefix"))
+                    request["inertial"] = kwargs.get("inertial", render_opts.get("inertial", True))
+                    request["density"] = kwargs.get("density", render_opts.get("density"))
+
                 # CAD formats
                 elif format in ["step", "iges"]:
                     request["write_pcurves"] = kwargs.get("write_pcurves", render_opts.get("write_pcurves", True))
@@ -873,6 +897,12 @@ class Shape(ShapeConfiguration):
                     )
                 if "exception" in result and result["exception"]:
                     pc_logging.exception(f"Render {format_name.upper()} exception: {result['exception']}")
+
+                # An exporter may report what it could not represent in the
+                # target format without that being a failure (URDF, for one,
+                # cannot hold everything a PartCAD assembly knows).
+                for warning in result.get("warnings") or []:
+                    pc_logging.warning(f"{self.project_name}:{self.name}: {warning}")
 
     def render(
         self,

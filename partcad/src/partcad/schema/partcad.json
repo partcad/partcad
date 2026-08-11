@@ -409,9 +409,21 @@
             {
               "type": "object",
               "properties": {
-                "type": { "type": "string", "enum": ["assy", "alias"] },
+                "type": { "type": "string", "enum": ["assy", "urdf", "alias"] },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
+                "geometry": {
+                  "type": "string",
+                  "enum": ["visual", "collision"],
+                  "default": "visual",
+                  "description": "Which URDF geometry to build the assembly from ('urdf' type only)"
+                },
+                "packagePaths": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true,
+                  "description": "Roots to resolve 'package://' mesh references against ('urdf' type only)"
+                },
                 "manufacturing": {
                   "type": "object",
                   "properties": {

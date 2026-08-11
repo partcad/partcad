@@ -1,0 +1,27 @@
+desc: URDF assembly examples
+
+docs:
+  usage: |
+    A URDF file is used as an assembly directly, with no conversion step:
+
+    ```shell
+    pc inspect -a robot
+    ```
+
+    The reverse direction writes a URDF (plus the mesh files it references) from
+    any PartCAD assembly:
+
+    ```shell
+    pc export -a -t urdf -O ./ robot
+    pc export -P /produce_assembly_assy -a -t urdf -O ./ :logo
+    ```
+
+assemblies:
+  robot:
+    type: urdf
+    desc: A URDF robot description used directly as a PartCAD assembly
+
+render:
+  readme:
+  svg:
+    prefix: ./
