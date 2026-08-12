@@ -68,11 +68,24 @@ def config_at(tmp_path, name, text):
     return home
 
 
-@pytest.fixture
-def homes(tmp_path, monkeypatch):
-    """A client and a daemon whose configurations disagree about everything."""
+# What CI exports for every job (see the workflow's top-level 'env'). These are
+# the reason this file sets the environment at all: reading a 'telemetry' key
+# while one of them is set used to raise KeyError out of vyper, so a copy taken
+# under CI's environment failed where a copy taken under a bare one passed.
+CI_TELEMETRY_ENV = {"PC_TELEMETRY_ENV": "test", "PC_TELEMETRY_PERFORMANCE": "false"}
+
+
+@pytest.fixture(params=[{}, CI_TELEMETRY_ENV], ids=["bare-environment", "ci-environment"])
+def homes(request, tmp_path, monkeypatch):
+    """A client and a daemon whose configurations disagree about everything.
+
+    Run twice: once under a bare environment and once under the one CI exports,
+    because the two used to disagree about whether taking a copy works at all.
+    """
     client_home = config_at(tmp_path, "client", CLIENT_CONFIG)
     daemon_home = config_at(tmp_path, "daemon", DAEMON_CONFIG)
+    for name, value in request.param.items():
+        monkeypatch.setenv(name, value)
 
     def build(home, settings=None):
         monkeypatch.setenv("HOME", str(home))
@@ -157,7 +170,6 @@ def test_the_nested_sections_travel_too(homes):
     assert rebuilt.git_auth.to_dict() == {"github.com": {"username": "alice", "password": "secret-token"}}
     assert rebuilt.git_config.to_dict() == {"http.proxy": "http://proxy:3128"}
     assert rebuilt.parameter_config.to_dict() == {"obj1": {"k": "v"}}
-    assert rebuilt.telemetry_config.type == "none"
 
 
 def test_a_nested_section_does_not_clobber_the_flat_key_beside_it(homes):
@@ -199,3 +211,28 @@ def test_the_environment_does_not_outrank_a_handed_over_configuration(homes, mon
 
     assert rebuilt.devel_index is True
     assert rebuilt.force_update is True
+
+
+# ---- what must not travel ----------------------------------------------------
+
+
+def test_telemetry_does_not_travel(homes):
+    """Telemetry belongs to a process, not to a package.
+
+    It is initialized once at import, long before any context exists, and
+    nothing in context creation reads it -- so copying it would be inert, and a
+    daemon reporting under the caller's DSN and environment would be wrong even
+    if it were not.
+    """
+    build, client_home, _ = homes
+    assert not [key for key in build(client_home).to_dict() if key.startswith("telemetry")]
+
+
+def test_the_rebuilt_configuration_keeps_its_own_telemetry(homes):
+    build, client_home, daemon_home = homes
+    data = build(client_home).to_dict()
+
+    rebuilt = build(daemon_home, settings=data)
+
+    # The client's config file says 'none'; the daemon never adopts it.
+    assert rebuilt.telemetry_config.type != "none"

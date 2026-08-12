@@ -296,10 +296,27 @@ OPTION_KEYS = (
 # carries credentials for private dependencies; it travels because the daemon is
 # meant to ignore its own configuration, and a caller whose configuration is the
 # only one holding those credentials would otherwise fail to clone.
+#
+# 'telemetry' is deliberately absent, on two counts. It is a property of a
+# process rather than of a package: it is initialized once at import
+# (telemetry.init) long before any context exists, and nothing in context
+# creation or dependency resolution reads it, so a copy of it would be inert --
+# and a daemon reporting under a caller's DSN and environment would be wrong
+# even if it were not. It is also the one key that cannot be read safely:
+# reading a parent that has environment-bound children makes vyper merge each of
+# those children into the mapping the config file gave, and raise KeyError when
+# the mapping does not already carry that child. 'PC_TELEMETRY_ENV=test' over a
+# config file without a 'telemetry.env' is enough, which is what CI runs under.
+# The same happens when reading a 'telemetry.*' leaf that is not set, because
+# the lookup descends to that parent. It is the vyper bug that the try/except in
+# TelemetryConfig above is already written around.
+#
+# The sections below are safe for the same reason inverted: none is the parent
+# of an environment-bound key. 'git.clone.timeout' hangs off 'git', which is why
+# 'git' is never read whole -- only 'git.config' and 'git.auth' are.
 SECTION_PATHS = (
     "git.config",
     "git.auth",
-    "telemetry",
     "parameters",
     "user",
 )
