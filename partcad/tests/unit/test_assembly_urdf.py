@@ -149,8 +149,13 @@ def absolute_placements(assembly):
 #
 
 
-def test_urdf_example_builds_the_expected_tree():
-    """The example URDF becomes a nested assembly with one part per link.
+def test_urdf_example_builds_a_flat_list_of_links():
+    """The example URDF becomes one list of placed links, not a chain of nesting.
+
+    The joint tree is the robot's kinematics, and an assembly is one static
+    configuration of it, so a link hanging off another says nothing its own
+    placement does not - nesting per joint would make an arm as deep as it has
+    joints, for no information.
 
     It exercises every geometry source a URDF can name: primitives
     (box/cylinder/sphere), a mesh reached through 'package://', a link that
@@ -163,21 +168,17 @@ def test_urdf_example_builds_the_expected_tree():
     asyncio.run(robot.do_instantiate())
 
     tree = structure(robot)
-    # base_link's own shape, then the shoulder sub-tree.
-    assert [child["kind"] for child in tree["children"]] == ["part", "assembly"]
+    assert [child["kind"] for child in tree["children"]] == ["part"] * 4
+    assert all(not child["children"] for child in tree["children"])
 
-    # A URDF joint origin is metres; PartCAD is millimetres. 'shoulder_pan' sits
-    # at z=0.02 m above the base.
-    assert tree["children"][1]["location"][0] == (0.0, 0.0, 20.0)
-
-    # The 'elbow' joint's rpy of (0, pi/4, 0) is a 45 degree rotation.
-    forearm = tree["children"][1]["children"][1]
-    assert forearm["location"][2] == pytest.approx(45.0, abs=1e-3)
-
-    # The wrist's collision geometry is a single mesh, so the link is one part
-    # even though its visual geometry is two elements.
-    wrist = forearm["children"][1]
-    assert wrist["kind"] == "part"
+    placements = absolute_placements(robot)
+    # A URDF joint origin is metres; PartCAD is millimetres. The shoulder sits
+    # 0.02 m above the base, and its own shape 0.03 m above that.
+    assert placements["shoulder"][0] == (0.0, 0.0, 50.0)
+    # The 'elbow' joint's rpy of (0, pi/4, 0) is a 45 degree rotation, and it
+    # reaches the wrist through the chain even though nothing nests.
+    assert placements["forearm"][2] == pytest.approx(45.0, abs=1e-3)
+    assert placements["wrist"][2] == pytest.approx(45.0, abs=1e-3)
 
     bom = asyncio.run(robot.get_bom())
     assert sorted(name.rsplit(":", 1)[1] for name in bom) == [
@@ -418,10 +419,12 @@ def test_export_puts_back_what_a_urdf_import_carried(tmp_path):
 
 
 def test_logo_round_trip_through_urdf(tmp_path):
-    """logo.assy -> URDF + STL -> 'urdf' assembly gives back the same tree.
+    """logo.assy -> URDF + STL -> 'urdf' assembly puts the same shapes in the same places.
 
-    Names, materials and every other thing URDF cannot carry are gone; the tree
-    of placed shapes is not.
+    What survives is every shape, at the placement it had, under the name it had.
+    What does not is the *nesting*: an ASSY file may group its parts, and reading
+    a URDF back produces one flat list, because a URDF's own grouping is its
+    joint tree and that is kinematics rather than structure.
     """
     ctx = pc.init(EXAMPLES)
     logo = ctx._get_assembly("//produce_assembly_assy:logo")
@@ -435,9 +438,9 @@ def test_logo_round_trip_through_urdf(tmp_path):
     assert imported is not None
     asyncio.run(imported.do_instantiate())
 
-    assert structure(imported) == structure(logo)
+    assert absolute_placements(imported) == absolute_placements(logo)
 
-    # And it is still buildable geometry, not just a matching tree.
+    # And it is still buildable geometry, not just matching placements.
     assert asyncio.run(imported.get_wrapped(imported_ctx)) is not None
 
 

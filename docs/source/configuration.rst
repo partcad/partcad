@@ -983,15 +983,24 @@ description format of ROS - as an assembly directly, with no conversion step:
       packagePaths: # (optional) roots to resolve "package://" mesh references against
         - <../meshes>
 
-**One part per shape.** A link that has a single ``<visual>`` (or
-``<collision>``) becomes the part ``<assembly name>/<link name>``. A link that
-has several becomes a *sub-assembly* of one part each, named
-``<assembly name>/<link name>/<element name or index>``. Everything is placed
-where the joints between it and the robot's root link put it with **every joint
-at its zero position**, and each shape keeps the offset its own ``<origin>``
-gave it. The result is the same in-memory representation an `Assembly YAML`_
-file produces, so everything else - rendering, export, BoM, inspection - treats
-the two alike. The robot's root link is the assembly itself.
+**One part per shape, in one flat list.** A link that has a single ``<visual>``
+(or ``<collision>``) becomes the part ``<assembly name>/<link name>``. A link
+that has several becomes a *sub-assembly* of one part each, named
+``<assembly name>/<link name>/<element name or index>``. Every link is a direct
+child of the assembly, placed where the joints between it and the robot's root
+link put it with **every joint at its zero position**, and each shape keeps the
+offset its own ``<origin>`` gave it. The result is the same in-memory
+representation an `Assembly YAML`_ file produces, so everything else -
+rendering, export, BoM, inspection - treats the two alike. The robot's root link
+is the assembly itself.
+
+The joint tree deliberately does not become nesting. A URDF's tree is its
+*kinematics*, and an assembly is one static configuration of it, so a link
+hanging off another says nothing that the link's own placement does not already
+say - while nesting per joint would make an arm as deep as it has joints. The
+relative placements are not lost: they are what ``pc convert assembly -t assy``
+turns into joints, below. The only nesting left is the one that means something,
+a link whose several shapes group together.
 
 Those parts are ordinary parts. ``pc inspect robot/forearm`` and
 ``pc export -t step robot/wrist`` work on them like on any other. They are not

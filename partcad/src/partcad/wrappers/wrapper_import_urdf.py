@@ -426,18 +426,21 @@ def geometry_node(element, name, link_name, context):
     return None
 
 
-def link_geometry(link, context):
+def link_geometry(link, parent, context):
     """(part nodes, physics) for a link's geometry."""
     chosen, other, kind = choose_geometry(link, context)
     context["dropped"].add("collision" if kind == "visual" else "visual", len(other))
 
-    # The URDF link these properties belong to. PartCAD renames things - its own
-    # names carry package paths, and a link of several shapes becomes a
-    # sub-assembly of parts named after its elements - so the link's name is
-    # worth keeping: the export uses it to tell a link's own shapes from the
-    # links beneath it, and a reader of the configuration can see where a part
-    # came from.
+    # Which URDF link these properties belong to, and which link it hung off.
+    # PartCAD renames things - its own names carry package paths, and a link of
+    # several shapes becomes a sub-assembly of parts named after its elements -
+    # so the link's own name is worth keeping: the export uses it to tell a
+    # link's shapes apart, a reader of the configuration can see where a part
+    # came from, and 'parent' is what a future exporter would need to put the
+    # joint tree back (see docs/source/simulation.rst).
     physics = {"link": link.name}
+    if parent is not None:
+        physics["parent"] = parent
     if getattr(link, "inertial", None) is not None:
         context["dropped"].add("inertial")
         physics["inertial"] = inertial_descriptor(link.inertial)
@@ -463,94 +466,98 @@ def link_geometry(link, context):
     return nodes, {"urdf": physics}
 
 
-def link_node(robot, link_name, pose, context, visited, ancestor):
-    """The node for a link and everything below it, placed at 'pose'.
+def walk_link(robot, link_name, relative, absolute, context, visited, ancestor):
+    """Add a link's node to the flat list, then walk the links below it.
 
-    'pose' is the link's placement relative to the *nearest ancestor that has
-    geometry* - not necessarily its URDF parent, because a link with no geometry
-    contributes nothing and its children are composed straight through it.
-    'ancestor' names that link, which is what the ASSY conversion connects to.
+    **The joint chain is not nesting.** A URDF's tree is its kinematics, and an
+    assembly is one static configuration of it - every joint at zero - so a link
+    hanging off another says nothing that the link's own placement does not
+    already say. Nesting a sub-assembly per link would make an arm as deep as it
+    has joints, for no information. So every link goes into one list at its
+    *absolute* placement, and the only nesting left is the one that means
+    something: a link of several shapes groups them.
 
-    Returns None for a link that contributes nothing - no geometry anywhere
-    beneath it - so an empty frame link does not become an empty assembly.
+    The relative placements are not lost - they are what URDF actually states,
+    and 'pc convert assembly -t assy' turns them into joints - they are recorded
+    in the link table rather than built into the tree.
+
+    'relative' is the link's placement relative to the nearest ancestor that has
+    geometry (not necessarily its URDF parent - a link with no geometry
+    contributes nothing and its children compose straight through it), and
+    'absolute' is its placement relative to the robot's root.
     """
     if link_name in visited:
         context["warnings"].append("Ignoring a cycle in the URDF joint tree at link '%s'" % link_name)
-        return None
+        return
     visited = visited | {link_name}
 
     link = robot.link_map.get(link_name)
     if link is None:
         context["warnings"].append("Joint refers to the unknown link '%s'" % link_name)
-        return None
+        return
     context["reached"].add(link_name)
 
-    geometry, physics = link_geometry(link, context)
+    geometry, physics = link_geometry(link, ancestor, context)
+    placement = urdf_common.round_packed(urdf_common.to_packed(absolute), context["precision"])
 
-    # Children hang off the link frame. When the link itself has geometry, that
-    # frame is where its node sits; when it does not, the link is a frame with
-    # nothing in it and its children are composed straight through.
+    if len(geometry) == 1:
+        # The link is one shape, so the part *is* the link: it takes the link's
+        # placement, keeps its own offset within it, and carries what the link
+        # said about itself.
+        node = geometry[0]
+        shape_origin = node["location"]
+        node["location"] = urdf_common.round_packed(
+            urdf_common.to_packed(urdf_common.compose(absolute, urdf_common.from_packed(shape_origin))),
+            context["precision"],
+        )
+        node["physics"] = physics
+        context["nodes"].append(node)
+    elif geometry:
+        # Several shapes: the one grouping worth keeping. The sub-assembly's
+        # frame is the link frame, so every element keeps the offset the URDF
+        # gave it.
+        shape_origin = urdf_common.to_packed(IDENTITY)
+        context["nodes"].append(
+            {
+                "type": "assembly",
+                "name": link_name,
+                "link": link_name,
+                "location": placement,
+                "physics": physics,
+                "links": geometry,
+            }
+        )
+
     if geometry:
-        child_ancestor, child_pose, chain = link_name, IDENTITY, []
+        record_link(
+            context,
+            link_name,
+            ancestor,
+            urdf_common.round_packed(urdf_common.to_packed(relative), context["precision"]),
+            shape_origin,
+            physics,
+        )
+        # What is below this link is stated relative to it.
+        child_ancestor, child_relative, chain = link_name, IDENTITY, []
     else:
-        child_ancestor, child_pose, chain = ancestor, pose, list(context["joint_chain"])
+        child_ancestor, child_relative, chain = ancestor, relative, list(context["joint_chain"])
 
-    children = []
     for joint_name, child_name in robot.child_map.get(link_name, []):
         joint = robot.joint_map[joint_name]
         count_joint(joint, context)
+        origin = urdf_common.from_urdf_origin(joint.origin)
         saved = context["joint_chain"]
         context["joint_chain"] = chain + [joint_name]
-        child = link_node(
+        walk_link(
             robot,
             child_name,
-            urdf_common.compose(child_pose, urdf_common.from_urdf_origin(joint.origin)),
+            urdf_common.compose(child_relative, origin),
+            urdf_common.compose(absolute, origin),
             context,
             visited,
             child_ancestor,
         )
         context["joint_chain"] = saved
-        if child is not None:
-            children.append(child)
-
-    if not geometry and not children:
-        return None
-
-    placement = urdf_common.round_packed(urdf_common.to_packed(pose), context["precision"])
-
-    if geometry:
-        if len(geometry) == 1 and not children:
-            # One shape and nothing else: the part *is* the link, so it absorbs
-            # the link's placement and keeps its own offset within it.
-            node = geometry[0]
-            shape_origin = node["location"]
-            node["location"] = urdf_common.round_packed(
-                urdf_common.to_packed(urdf_common.compose(pose, urdf_common.from_packed(shape_origin))),
-                context["precision"],
-            )
-            node["physics"] = physics
-            record_link(context, link_name, ancestor, placement, shape_origin, physics)
-            return node
-
-        # Several shapes, or shapes and child links: a sub-assembly whose frame
-        # is the link frame, so every element keeps the offset the URDF gave it.
-        record_link(context, link_name, ancestor, placement, urdf_common.to_packed(IDENTITY), physics)
-        if len(geometry) == 1:
-            # The link is one shape and some child links. The part is that
-            # link's geometry, so it carries the link's properties too - a
-            # reader looking for what '<assembly>/<link>' is made of should find
-            # it on the part, not only on the sub-assembly around it.
-            geometry[0]["physics"] = physics
-        children = geometry + children
-
-    return {
-        "type": "assembly",
-        "name": link_name,
-        "link": link_name,
-        "location": placement,
-        "physics": physics,
-        "links": children,
-    }
 
 
 def record_link(context, link_name, ancestor, placement, shape_origin, physics):
@@ -658,6 +665,7 @@ def process(request):
         "dropped": dropped,
         "primitives": {},
         "written": set(),
+        "nodes": [],
         "links": {},
         "reached": set(),
         "joint_chain": [],
@@ -670,22 +678,22 @@ def process(request):
         # assertions; both mean the joint tree is not a tree.
         raise ValueError("%s: %s" % (urdf_file, e)) from e
 
-    root = link_node(robot, root_name, IDENTITY, context, frozenset(), None)
-    if root is None:
+    walk_link(robot, root_name, IDENTITY, IDENTITY, context, frozenset(), None)
+    if not context["nodes"]:
         raise ValueError("No geometry found in %s" % urdf_file)
 
-    # The robot's root link is the assembly itself. When it collapsed into a
-    # single part node (a one-link robot), wrap it so the caller always gets the
-    # same "assembly with links" shape back.
-    if root["type"] != "assembly":
-        root = {
-            "type": "assembly",
-            "name": root_name,
-            "link": root_name,
-            "location": urdf_common.to_packed(IDENTITY),
-            "physics": {},
-            "links": [root],
-        }
+    # The robot's root link is the assembly itself, and every link is one of its
+    # children - see 'walk_link' for why the joint tree is not nesting. What the
+    # root link said about itself belongs to the assembly, since there is no
+    # node above it to hold it.
+    root = {
+        "type": "assembly",
+        "name": root_name,
+        "link": root_name,
+        "location": urdf_common.to_packed(IDENTITY),
+        "physics": (context["links"].get(root_name) or {}).get("physics") or {},
+        "links": context["nodes"],
+    }
 
     # A link no joint connects to the root is not part of the robot as far as
     # the kinematic tree is concerned, and is invisible in the result.

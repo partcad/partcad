@@ -30,6 +30,12 @@ geometry, and hands back plain data. The core registers one part per shape -
 under a sub-assembly for a link that is several - and builds the very same
 ``Assembly``/``AssemblyChild`` tree an ASSY file produces.
 
+The links go into **one flat list**, each at its absolute placement. The joint
+tree is the robot's kinematics; an assembly is one static configuration of it,
+so nesting a sub-assembly per joint would make an arm as deep as it has joints
+and say nothing the placement does not. The relative placements are recorded in
+a link table instead, which is what the ASSY conversion turns into joints.
+
 Nothing is rewritten that does not have to be: a ``<mesh>`` becomes a part that
 reads the very file the URDF named, and the ``<origin>`` that places it becomes
 a location rather than a transform baked into a copy of the geometry. Only
@@ -51,11 +57,21 @@ carrying that child's placement, and each node with geometry gets an STL written
 next to the URDF. A shape that appears more than once is written once and
 referenced by every link that uses it.
 
-A node that *came from* a URDF link - it carries the link's own properties in
-its ``physics`` section - and holds shapes beneath it goes back out as one link
-with a ``<visual>`` per shape, at the offset each was placed at, rather than as
-a frame link with a link per shape. So a link of several visuals survives the
+A node that *came from* a URDF link - it carries the link's own name in its
+``physics`` section - and holds shapes beneath it goes back out as one link with
+a ``<visual>`` per shape, at the offset each was placed at, rather than as a
+frame link with a link per shape. So a link of several visuals survives the
 round trip as itself.
+
+The joint *tree*, though, does not: the export mirrors the assembly, and a URDF
+assembly is flat, so what comes out is one root link with every other link fixed
+to it directly. That is an honest reading - the exported joints are all fixed
+because PartCAD dropped the kinematics on the way in, and a star of fixed joints
+is what a static assembly is. The chain is preserved where it means something,
+in ``pc convert assembly -t assy``. Should a faithful re-export ever be wanted,
+each part records the link it came from and that link's parent
+(``physics.urdf.link`` and ``physics.urdf.parent``), which is what an exporter
+would need to put the tree back.
 
 Inertial properties come from the part's ``physics`` section when it has one -
 which is how a URDF's own numbers survive a round trip - and are computed from
@@ -79,9 +95,10 @@ What the round trip preserves
 =============================
 
 ``examples/produce_assembly_assy:logo`` exported to URDF and read back as a
-``urdf`` assembly produces a tree with the same nesting, the same number of
-children at every level and the same placements, built from the same geometry.
-That is the whole of what survives.
+``urdf`` assembly puts every shape back where it was, under the name it had,
+built from the same geometry - flattened, because a URDF has no way to say
+"these parts belong together" other than by joining them. That is the whole of
+what survives.
 
 .. list-table::
    :header-rows: 1
@@ -89,9 +106,11 @@ That is the whole of what survives.
 
    * - Preserved
      - Lost
-   * - The tree of placed shapes
+   * - Every shape, at the placement it had
      - Every name (PartCAD names carry package paths; ROS names cannot)
    * - Placements, to full double precision
+     - Nesting: an ASSY may group its parts, a URDF's grouping is its joint tree
+   * - Names of the assembly's own children
      - Parametrization: an ASSY parameter, an enrich, an alias
    * - Geometry, as a triangle mesh
      - Exact B-rep geometry; the mesh is a tessellation at a chosen tolerance
@@ -145,6 +164,14 @@ gap is:
   algebra (below) and a table of where each link's item sits relative to the
   link frame. That is the right trade: a digital thread that rewrites what it
   was handed is not one.
+- **Nesting a sub-assembly per joint was also a mistake, for the opposite
+  reason.** It preserved the URDF's tree faithfully and cost an arm one level of
+  depth per joint, in a representation that has no joints in it. Two different
+  things were being expressed by one mechanism - "these shapes are one link",
+  which is grouping, and "this link hangs off that one", which is kinematics -
+  and only the first is structure. Flattening the second and recording the
+  relative placements in a table beside the tree is what let the ASSY conversion
+  keep the kinematics *and* the assembly stay shallow.
 - **Two long-standing gaps in the interface code surfaced.** The schema has
   always allowed ``ports: {name:}`` and ``implements: {iface:}`` with no value,
   and both crashed - nothing had written them before, because nothing had
