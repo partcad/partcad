@@ -11,7 +11,11 @@ import rich_click as click
 from ....service import run
 
 # PartCAD part types (partcad.shape.PART_EXTENSION_MAPPING keys), inlined so the
-# thin CLI does not import the heavy partcad package.
+# thin CLI does not import the heavy partcad package. 'urdf' is deliberately
+# absent: it describes an assembly, not a shape, and only means anything inside
+# a package - see partcad.adhoc.convert.PACKAGE_ONLY_TYPES and
+# 'pc convert assembly'. It is still inferable from a '.urdf' filename, which is
+# where that rejection is reported from.
 PART_TYPES = ["step", "brep", "stl", "3mf", "threejs", "obj", "iges", "gltf", "cadquery", "build123d", "sdf", "scad"]
 
 

@@ -15,7 +15,10 @@ class ConvertCommands(Loader):
     COMMANDS_PACKAGE_NAME = Loader.COMMANDS_PACKAGE_NAME + ".convert"
 
 
-@click.command(cls=ConvertCommands, help="Convert parts or sketches to another format and update their type.")
+@click.command(
+    cls=ConvertCommands,
+    help="Convert parts, sketches or assemblies to another format and update their type.",
+)
 @click.option(
     "-P",
     "--package",

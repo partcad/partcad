@@ -277,6 +277,35 @@ class Shape(ShapeConfiguration):
                     self._wrapped = shape
                 return shape
 
+    async def _physics_index(self):
+        """The 'physics' section of this shape and everything under it.
+
+        Keyed by the full name ("<package>:<name>") an exporter sees on the
+        envelope, so a wrapper that is handed a whole assembly tree can find the
+        properties belonging to each node of it. Only shapes that declare a
+        'physics' section appear.
+
+        An assembly is built first: its geometry may well have come from the
+        cache, in which case its children have never been instantiated and there
+        would be nothing to walk.
+        """
+        instantiate = getattr(self, "do_instantiate", None)
+        if instantiate is not None:
+            await instantiate()
+
+        index = {}
+
+        def walk(shape):
+            config = getattr(shape, "config", None)
+            physics = config.get("physics") if isinstance(config, dict) else None
+            if physics:
+                index["%s:%s" % (shape.project_name, shape.name)] = physics
+            for child in getattr(shape, "children", None) or []:
+                walk(child.item)
+
+        walk(self)
+        return index
+
     def _shape_metadata(self):
         """The (full_name, label) stamped onto this shape's envelope."""
         name = getattr(self, "name", None)
@@ -843,6 +872,11 @@ class Shape(ShapeConfiguration):
                     request["mesh_prefix"] = kwargs.get("mesh_prefix", render_opts.get("mesh_prefix"))
                     request["inertial"] = kwargs.get("inertial", render_opts.get("inertial", True))
                     request["density"] = kwargs.get("density", render_opts.get("density"))
+                    # What the parts say about themselves that PartCAD carries
+                    # but does not model - a URDF import puts the link's mass,
+                    # inertia, material and Gazebo blocks here - so the export
+                    # can put it back instead of recomputing or losing it.
+                    request["physics"] = await self._physics_index()
 
                 # CAD formats
                 elif format in ["step", "iges"]:

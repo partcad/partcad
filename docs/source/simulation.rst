@@ -1,13 +1,15 @@
 Simulation and URDF
 ###################
 
-PartCAD can now read a `URDF <https://wiki.ros.org/urdf>`_ file as an assembly
-(``type: urdf``) and write one back out (``pc export -t urdf``). This page is
-the design record for that work: what the two directions actually preserve,
-what they cannot, and what it would take for PartCAD to hold everything a
-physical simulation needs.
+PartCAD can read a `URDF <https://wiki.ros.org/urdf>`_ file as an assembly
+(``type: urdf``), write one back out (``pc export -t urdf``), and convert an
+assembly between URDF and ASSY in either direction (``pc convert assembly``).
+This page is the design record for that work: what the conversions actually
+preserve, what they cannot, and what it would take for PartCAD to hold
+everything a physical simulation needs.
 
-It is a proposal. Nothing below the "What exists today" section is implemented.
+The "What exists today" section describes what is built. Everything after it is
+a proposal, and none of it is implemented.
 
 .. contents::
    :local:
@@ -23,9 +25,15 @@ Reading a URDF
 ``AssemblyFactoryUrdf`` drives ``wrapper_import_urdf`` in a python sandbox. The
 sandbox parses the file with ROS's own ``urdf_parser_py``, walks the joint tree
 from the root link with every joint at its zero position, resolves each link's
-geometry, and hands back plain data. The core registers the referenced meshes as
-parts and builds the very same ``Assembly``/``AssemblyChild`` tree an ASSY file
-produces.
+geometry, and hands back plain data. The core registers one part per link -
+``<assembly>/<link>``, expressed in the link frame - and builds the very same
+``Assembly``/``AssemblyChild`` tree an ASSY file produces.
+
+A link is built from its **collision** geometry when it states both, since that
+is the shape a simulator resolves contact against; ``ignoreCollision`` reverses
+that per link or wholesale. What the link says that PartCAD does not model - its
+mass and inertia, its materials, the geometry that was not used, its ``<gazebo>``
+blocks - is carried verbatim in the part's ``physics`` section.
 
 Writing a URDF
 ==============
@@ -36,11 +44,23 @@ carrying that child's placement, and each node with geometry gets an STL written
 next to the URDF. A shape that appears more than once is written once and
 referenced by every link that uses it.
 
-Inertial properties are the one thing the exporter adds rather than carries:
-OCCT gives the volume, the centre of mass and the inertia tensor about it, and a
-density turns those into a mass. Since PartCAD has nowhere to record what a part
-is made of, the density is a parameter of the export with a default, not a
-property of the part - which is the first gap this page proposes to close.
+Inertial properties come from the part's ``physics`` section when it has one -
+which is how a URDF's own numbers survive a round trip - and are computed from
+the geometry otherwise: OCCT gives the volume, the centre of mass and the
+inertia tensor about it, and a density turns those into a mass. Since PartCAD
+has nowhere to record what a part is *made of*, that density is a parameter of
+the export with a default rather than a property of the part - the first gap
+this page proposes to close.
+
+Converting between the two
+==========================
+
+``pc convert assembly`` rewrites the package rather than just producing a file.
+To URDF it writes the ``.urdf`` and its meshes and switches the declaration
+over. To ASSY it writes an ``stl`` part for every link, an interface pair for
+every joint, and an ``.assy`` whose nodes use ``connect:`` - so the result is an
+assembly stated the way PartCAD states one, not a transcription of coordinates.
+How the joints become interfaces is `URDF joints as PartCAD interfaces`_ below.
 
 What the round trip preserves
 =============================
@@ -65,12 +85,15 @@ That is the whole of what survives.
    * - Shape sharing (one mesh, many links)
      - Which part in which package a link came from - the digital thread itself
 
-And in the other direction, reading a URDF drops mass and inertia, joint types,
-axes, limits and dynamics, ``mimic`` relations, materials and colors, collision
-geometry (when it differs from the visual geometry), sensors, transmissions,
-``ros2_control`` blocks and every Gazebo extension. PartCAD reports the count of
-each rather than passing over them in silence, so the loss is visible at import
-time.
+In the other direction, reading a URDF loses less than it used to but still
+loses. Mass and inertia, materials, the unused geometry and the ``<gazebo>``
+blocks are *carried* in the part's ``physics`` section and put back on export;
+joint types, axes, limits and dynamics are carried on the generated interfaces
+when the assembly is converted to ASSY. What is genuinely gone is the *effect*
+of a joint - the assembly is one configuration, so a movable joint is a
+placement and not a degree of freedom - along with transmissions, sensors and
+``ros2_control`` blocks. PartCAD reports the count of each rather than passing
+over them in silence, so the loss is visible at import time and in ``pc info``.
 
 What it took to implement
 =========================
@@ -91,15 +114,97 @@ gap is:
   fixed-axis roll-pitch-yaw; PartCAD is millimetres, degrees and axis-angle.
   ``wrappers/urdf_common.py`` exists to keep that conversion in one tested
   place rather than spread across two wrappers.
-- **The parts a URDF points at have no declaration.** They are whatever files
-  the URDF names, so they are materialized into the package in memory and
-  marked ``internal``. A concept of "a part that exists because an assembly
-  needed it" did not exist before.
+- **The parts a URDF points at have no declaration.** They are whatever the URDF
+  names, so they are materialized into the package in memory as
+  ``<assembly>/<link>`` and the package resolves such a name by building the
+  assembly that owns it. A concept of "a part that exists because an assembly
+  produced it" did not exist before, and it turns out to be the right one: those
+  parts are ordinary parts, inspectable and exportable, not an internal detail.
 - **Mapping the robot's root link to the assembly itself** is what makes the
   round trip structurally exact instead of growing a wrapper level each time.
+- **One part per link, in the link frame, is what makes everything else line
+  up.** A link with several visuals had been the obvious case for a
+  sub-assembly, and that was wrong: it makes the link unaddressable, it puts the
+  part's origin somewhere other than the link's, and every joint that attaches
+  to it then needs a correction. Combining the link's geometry into one shape
+  costs a mesh reader in the sandbox and pays for itself immediately.
+- **Two long-standing gaps in the interface code surfaced.** The schema has
+  always allowed ``ports: {name:}`` and ``implements: {iface:}`` with no value,
+  and both crashed - nothing had written them before, because nothing had
+  generated interfaces programmatically. Generating them found it at once.
 
 None of that was hard. The hard part is everything the geometry does not cover,
 which is the rest of this page.
+
+.. _URDF joints as PartCAD interfaces:
+
+URDF joints as PartCAD interfaces
+=================================
+
+This is the part worth dwelling on, because it is where the two models actually
+have to be reconciled rather than translated.
+
+A URDF joint relates two link *frames*: at the zero configuration, the child
+link's frame sits at the joint's ``origin`` in the parent link's frame, and the
+joint's ``axis`` says how it may move from there. PartCAD does not relate frames;
+it relates **ports**, and its rule is that two connected ports *face* each
+other - the connection composes the target's placement, the target port, a half
+turn, the freedom-of-movement offsets, and the inverse of the source port.
+
+So one side has to carry the flip. The mapping is:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - URDF
+     - PartCAD
+   * - joint (parent side)
+     - a **socket** interface with one port at its origin, which the parent part
+       implements at the joint origin, under an instance named after the joint
+   * - joint (child side)
+     - a **plug** interface whose one port sits at the half turn, which the child
+       part implements once, at its own origin
+   * - the two are the same joint
+     - ``mates:`` on the plug, naming the socket
+   * - ``axis`` + ``limit``
+     - an interface ``parameter`` (``angle`` for a revolute joint, ``offset``
+       for a prismatic one) plus a ``motion:`` record
+   * - ``limit`` effort/velocity, ``dynamics``, ``mimic``, ``safety_controller``
+     - ``physics:``, verbatim
+   * - a link's attachment
+     - ``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: <joint>}``
+
+Putting the flip on the plug is what keeps the *socket* readable: the parent
+implements it at exactly the joint origin, which is a number a reader can check
+against the URDF. It costs one wrinkle, in the axis. The half turn ``T`` is a
+180 degree rotation about ``(1, 1, 0)``, and a rotation conjugated by it is the
+same rotation about the mapped axis, ``(x, y, z) -> (y, x, -z)``. So the
+parameter's ``dir`` is the joint axis under that map, while ``motion.axis``
+keeps the axis as URDF stated it. The record stays readable; the executable half
+stays correct.
+
+Two things fall out of this that are worth more than the mapping itself.
+
+**Interfaces are reusable, instances are not.** What varies between two joints of
+the same kind is *where* they are, and that lives in the ``implements:``
+instance location, not in the interface. So every fixed joint in a robot is the
+same interface, and so is every revolute joint with the same axis and limits.
+The converter deduplicates on exactly that - the joint's type, axis, limits,
+dynamics and mimic - and a four-wheeled robot comes out with one interface pair
+for its wheels rather than four. There is deliberately no attempt to match
+against the existing library of interfaces: a URDF joint says nothing about the
+*hardware* that implements it, so claiming it is an ``m3-screw-6mm`` would be an
+invention. Custom interfaces per joint kind, reused where they agree, is the
+honest reading.
+
+**A pose becomes expressible.** The parameter the converter generates is not
+decoration: ``connect: {toParams: {angle: 90}}`` in the generated ASSY places
+the child exactly where the URDF joint at 90 degrees would, and everything
+below it follows. That is a static assembly gaining the first half of a
+kinematic one, using machinery PartCAD already had. What is still missing is the
+other half - a *named configuration* of the whole assembly rather than a value
+written into one connection - which is item 5 below.
 
 ==========================================
 What a physical simulation actually needs
@@ -225,7 +330,11 @@ formats disagree on almost everything except what they are trying to describe.
 
 **Lose nothing, even before modelling it.** Anything PartCAD does not yet
 understand should survive an import as opaque, target-tagged passthrough, so
-that a round trip is lossless long before it is fully modelled.
+that a round trip is lossless long before it is fully modelled. This principle
+is the one already in place: ``physics:`` on a part and ``physics:`` on an
+interface are exactly that, keyed by the format the content came from, and the
+URDF exporter reads them back. Everything below is what it would take to
+*model* what is currently only carried.
 
 1. Materials as first-class objects
 ===================================
@@ -253,6 +362,12 @@ about, and the simulation.
 
 2. Physical properties on a part
 ================================
+
+A part already has a ``physics:`` section, but it is a *carrier*: the URDF
+import fills it in and the URDF export reads it back, and PartCAD in between
+neither computes it, checks it, nor lets any other format at it. The modelled
+counterpart sits next to it, and the rule between the two is that ``physics:``
+holds what a format said and ``physical:`` holds what the *model* means:
 
 .. code-block:: yaml
 
@@ -315,49 +430,63 @@ are what an exporter needs to write ``<frame>`` or a sensor's ``<origin>``.
 PartCAD's ``interfaces`` and ``ports`` already describe named, located features
 on a part; frames should be the same mechanism, not a parallel one.
 
-5. Kinematics: joints in assemblies
-===================================
+5. Kinematics: a configuration, not a joint section
+===================================================
 
-This is the substantial change. Today an ASSY node places a child with a
-``location``, or connects it by ``connect``/``connectPorts``. A third form:
+The obvious proposal here used to be a ``joint:`` form for an ASSY node, next to
+``location:`` and ``connect:``. Building the URDF mapping above argues against
+it. A joint is not a third way to place a part - it is what a ``connect:``
+*already is*, plus a value. An interface says what freedom of movement it allows
+(``motion:``, ``parameters:``); a connection says which two things are joined
+and, optionally, at what value (``toParams:``). Adding a parallel ``joint:``
+section would restate the interface's own description at every use site, which
+is the duplication the rest of PartCAD exists to remove.
+
+What is actually missing is one level up: the assembly has no way to name a
+*configuration*.
 
 .. code-block:: yaml
 
-  links:
-    - part: base
-      name: base
-    - part: arm
-      name: arm
-      joint:
-        type: revolute
-        parent: base
-        origin: [[0,0,20], [0,0,1], 0]      # or connect/connectPorts, as today
-        axis: [0, 0, 1]
-        limits: { lower: -180deg, upper: 180deg, effort: 12 N*m, velocity: 2 rad/s }
-        dynamics: { damping: 0.1, friction: 0.05 }
-        state: 0deg                          # the configuration this assembly shows
-        mimic: { joint: arm2, multiplier: -1 }
+  assemblies:
+    robot:
+      type: assy
+      configurations:
+        home:    { shoulder_pan: 0deg, elbow: 0deg }
+        stowed:  { shoulder_pan: -90deg, elbow: 135deg }
+      configuration: home    # which one this assembly shows
 
-Two things follow from this, and they are the reason it is worth doing.
+with the connections referring to the configuration rather than carrying a
+literal:
 
-**A static assembly becomes one sample of a parametrized one.** ``state`` is the
-joint value the assembly is evaluated at. Everything that exists today - a tree
-of rigid placements - is what you get by evaluating the joints at their states,
-so no consumer of the representation has to change. But ``pc inspect
-'robot;shoulder=45deg'`` becomes meaningful, and the same machinery that already
-passes parameters to an ASSY file drives a pose.
+.. code-block:: yaml
 
-**Joints should mostly be derived, not written.** PartCAD's interfaces and
-mating already describe how two parts go together, and interface parameters
-already generate offsets. Give an interface a degrees-of-freedom description - a
-bearing bore is revolute about its axis, a linear rail is prismatic along its
-own - and a joint falls out of a ``connect:`` that is already there. Writing
-``axis: [0,0,1]`` by hand next to a bearing whose axis is already known is the
-kind of duplication the rest of PartCAD exists to remove.
+  - part: arm
+    connect:
+      to: shoulder_pan-socket
+      toParams: { angle: "{{ joint.shoulder_pan }}" }
 
-For a closed loop (a four-bar linkage), a node may state more than one joint;
-the exporter then has to pick a spanning tree and emit the remainder as an
-explicit loop constraint, or refuse and say so, since URDF cannot express it.
+Everything that exists today - a tree of rigid placements - is what you get by
+evaluating a configuration, so no consumer of the representation has to change.
+But ``pc inspect 'robot;configuration=stowed'`` becomes meaningful through the
+parameter machinery ASSY files already have, and an exporter gains something to
+write a joint *state* from.
+
+Two things this still needs, which the URDF work did not:
+
+- **A joint identity.** ``toInstance: shoulder_pan`` names the joint today only
+  by convention. A configuration has to address it, so the instance name has to
+  become the joint's name in earnest.
+- **Loops.** A four-bar linkage is a connection whose child is already placed.
+  PartCAD's tree cannot express it and neither can URDF; SDF can. Until then the
+  honest behaviour is to detect it and say so.
+
+There remains a genuinely attractive case for *deriving* joints from the
+existing interface library: a bearing bore is revolute about its own axis and a
+linear rail is prismatic along its own, so an interface that says so once gives
+every ``connect:`` that uses it a joint for free. That is the same ``motion:``
+section the URDF conversion writes, applied to hand-authored interfaces instead
+of generated ones - which is why ``motion:`` belongs on the interface and not on
+the connection.
 
 6. Internal representation
 ==========================
@@ -404,23 +533,34 @@ model instances with initial poses, and physics engine settings. A scene is also
 where a *fixed to the world* joint belongs, which is the piece a single assembly
 cannot express.
 
-9. Passthrough, so nothing is lost
-==================================
+9. Passthrough, so nothing is lost (in place)
+=============================================
 
-.. code-block:: yaml
+This is the item that is built, and doing it first was right: it makes a URDF
+round trip nearly lossless while the rest of the proposal is still being
+designed, and it is the difference between PartCAD being usable in a robotics
+workflow and being a one-way trip out of one.
 
-  assemblies:
-    robot:
-      type: urdf
-      passthrough: keep      # store unmodelled content verbatim, tagged by target
+A part carries ``physics:`` and an interface carries ``motion:`` and
+``physics:``, each keyed by the format its contents came from. A URDF import
+fills them - inertials, materials, unused geometry, ``<gazebo>`` blocks on a
+part; joint type, axis, limits, dynamics and mimic on an interface - and the
+URDF export reads them back out.
 
-Everything the importer does not understand - ``<gazebo>`` blocks,
-``<ros2_control>``, vendor extensions - is kept as opaque XML tagged with the
-format it came from, attached to the link or joint it referenced, and written
-back out on export to that same format. This is worth doing *first*: it makes a
-URDF round trip lossless while the rest of the proposal is still being built,
-and it is the difference between PartCAD being usable in a robotics workflow and
-being a one-way trip out of one.
+What is still missing:
+
+- **``<ros2_control>`` and ``<transmission>``**, which are robot-level rather
+  than link-level, and so have nowhere to attach yet. The assembly needs its own
+  ``physics:`` for them.
+- **Passthrough on the way *out* of a format PartCAD did not import from.**
+  Carried content is tagged ``urdf``; an SDF exporter would have to decide
+  whether to translate it or drop it, and today there is no rule.
+- **Any check at all that carried content still applies.** ``physics:`` does not
+  take part in the shape cache, which is right - it says nothing about the
+  geometry - but it also means nothing notices when the geometry moves out from
+  under it. A mass carried from a URDF survives an edit to the CAD that
+  invalidates it, silently. ``pc lint`` is where that belongs, and it needs item
+  2 below to have something to compare against.
 
 10. Units
 =========
@@ -463,19 +603,22 @@ Suggested order of work
 Each step is useful on its own, which is the test of whether the decomposition
 is right:
 
-1. **Passthrough** (item 9). Makes the URDF round trip lossless immediately.
-2. **Units** (item 10). Everything after this depends on it and it gets harder
-   to add later.
-3. **Materials and physical properties** (items 1-2). Turns the exporter's
-   density parameter into a model property and makes the exported inertials
-   trustworthy.
-4. **Collision geometry** (item 3). Independently valuable - it also makes
-   rendering and interference checking cheaper.
-5. **Frames** (item 4), folded into the existing ports/interfaces mechanism.
-6. **Joints** (items 5-6). The largest change, and the one that turns an
-   assembly into a mechanism.
-7. **SDF export**, which is the first target able to carry all of the above.
-8. **Sensors** (item 7) and **scenes** (item 8).
+0. **Passthrough** (item 9) - *done*. The URDF round trip carries what PartCAD
+   does not model instead of dropping it.
+1. **Units** (item 10). Everything after this depends on it and it gets harder
+   to add later - the generated ``motion:`` sections already have to state
+   ``units: rad`` in prose because there is no way to state it in the value.
+2. **Materials and physical properties** (items 1-2). Turns the exporter's
+   density parameter into a model property and makes a computed inertial
+   trustworthy, so that carrying one becomes the exception rather than the rule.
+3. **Collision geometry** (item 3). Independently valuable - it also makes
+   rendering and interference checking cheaper - and it is what would let the
+   collision/visual choice ``ignoreCollision`` makes today become "keep both".
+4. **Frames** (item 4), folded into the existing ports/interfaces mechanism.
+5. **Configurations** (items 5-6). The largest change, and the one that turns an
+   assembly into a mechanism rather than a photograph of one.
+6. **SDF export**, which is the first target able to carry all of the above.
+7. **Sensors** (item 7) and **scenes** (item 8).
 
 Non-goals
 =========

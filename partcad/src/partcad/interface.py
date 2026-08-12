@@ -250,6 +250,19 @@ class Interface:
         self.abstract = config.get("abstract", False)
         self.lead_port = config.get("leadPort", None)
 
+        # What this connection allows and what it costs, as data PartCAD carries
+        # rather than interprets. 'motion' states the freedom of movement (type,
+        # axis, position limits) and 'physics' the rest of what a simulator
+        # needs (effort and velocity limits, damping, friction, and whatever
+        # else the source format said). Both are open-ended on purpose: a URDF
+        # joint's own spelling survives a round trip through PartCAD unchanged.
+        #
+        # 'parameters' below is the executable counterpart: where 'motion' is a
+        # record, a parameter actually moves the parts when a connection names
+        # it. A URDF import writes both, so the joint is described *and* usable.
+        self.motion = config.get("motion", None)
+        self.physics = config.get("physics", None)
+
         self.ports = None
         self.inherits = None
         self.compatible_with = set()
@@ -306,7 +319,12 @@ class Interface:
                 raise Exception("Invalid 'ports' section in the interface '%s'" % self.name)
 
             for port_name, port_config in ports_config.items():
-                if isinstance(port_config, list):
+                if port_config is None:
+                    # A port declared by name alone ("joint:"), which the schema
+                    # allows: it sits at the interface origin and whatever
+                    # implements the interface decides where that is.
+                    port_config = {}
+                elif isinstance(port_config, list):
                     port_config = {"location": port_config}
                 self.ports[port_name] = InterfacePort(port_name, self.project, port_config)
 
@@ -326,12 +344,14 @@ class Interface:
             if isinstance(inherits_config, str):
                 inherits_config = {inherits_config: ""}  # {}???
 
-            if len(inherits_config.keys()) == 1 and (
-                isinstance(list(inherits_config.values())[0], str) or len(list(inherits_config.values())[0]) == 1
-            ):
-                compatible_with_parents = True
-            else:
-                compatible_with_parents = False
+            # Inheriting exactly one interface, exactly once, makes this one a
+            # drop-in for it. 'None' is that case spelled shortest: a single
+            # unnamed instance at the origin ("implements: {m3-screw:}").
+            values = list(inherits_config.values())
+            only = values[0] if len(values) == 1 else None
+            compatible_with_parents = len(inherits_config.keys()) == 1 and (
+                only is None or isinstance(only, str) or len(only) == 1
+            )
 
             for interface_name, interface_config in inherits_config.items():
                 # Resolve the parameter values in the interface name
@@ -477,6 +497,10 @@ class Interface:
             info["abstract"] = True
         if self.lead_port is not None:
             info["leadPort"] = self.lead_port
+        if self.motion is not None:
+            info["motion"] = self.motion
+        if self.physics is not None:
+            info["physics"] = self.physics
         return info
 
     async def get_components(self, ctx):

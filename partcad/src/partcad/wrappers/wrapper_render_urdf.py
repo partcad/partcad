@@ -172,11 +172,53 @@ def inertial_of(shape, density, warnings, link_name):
     )
 
 
+def carried_inertial(physics):
+    """The ``<inertial>`` a part carries verbatim, if it has one.
+
+    A part that came from a URDF keeps the link's stated mass and inertia tensor
+    in its 'physics' section. Those are what the model's author meant - a
+    measurement, or the number a simulation was tuned against - so they win over
+    anything recomputed from the geometry and a guessed density.
+    """
+    from urdf_parser_py.urdf import Inertia, Inertial, Pose
+
+    inertial = (physics or {}).get("urdf", {}).get("inertial")
+    if not inertial:
+        return None
+    origin = inertial.get("origin") or {}
+    inertia = inertial.get("inertia") or {}
+    return Inertial(
+        mass=float(inertial.get("mass", 0.0)),
+        origin=Pose(xyz=list(origin.get("xyz") or [0.0, 0.0, 0.0]), rpy=list(origin.get("rpy") or [0.0, 0.0, 0.0])),
+        inertia=Inertia(**{key: float(inertia.get(key, 0.0)) for key in Inertia.KEYS}) if inertia else None,
+    )
+
+
+def carried_material(physics):
+    """The ``<material>`` a part carries verbatim, if any of its geometry had one."""
+    from urdf_parser_py.urdf import Color, LinkMaterial, Texture
+
+    urdf = (physics or {}).get("urdf", {})
+    for kind in ("visual", "collision"):
+        for descriptor in urdf.get(kind) or []:
+            material = descriptor.get("material")
+            if not material:
+                continue
+            built = LinkMaterial(name=material.get("name"))
+            if material.get("rgba"):
+                built.color = Color(rgba=list(material["rgba"]))
+            if material.get("texture"):
+                built.texture = Texture(filename=material["texture"])
+            return built
+    return None
+
+
 def build_link(node, link_name, state):
     """The URDF ``<link>`` for one node of the assembly tree."""
     from urdf_parser_py.urdf import Collision, Link, Mesh, Visual
 
     link = Link(name=link_name)
+    physics = state["physics"].get(node.get("name"))
 
     shape = node_geometry(node)
     if shape is None:
@@ -196,10 +238,17 @@ def build_link(node, link_name, state):
 
     reference = state["mesh_prefix"] + mesh_file
     scale = [MESH_SCALE, MESH_SCALE, MESH_SCALE]
-    link.visual = Visual(geometry=Mesh(filename=reference, scale=scale))
+    link.visual = Visual(geometry=Mesh(filename=reference, scale=scale), material=carried_material(physics))
     link.collision = Collision(geometry=Mesh(filename=reference, scale=scale))
     if state["options"]["inertial"]:
-        link.inertial = inertial_of(shape, state["options"]["density"], state["warnings"], link_name)
+        link.inertial = carried_inertial(physics) or inertial_of(
+            shape, state["options"]["density"], state["warnings"], link_name
+        )
+    for block in (physics or {}).get("urdf", {}).get("gazebo") or []:
+        # Re-tagged with the name this link is going out under: PartCAD renames
+        # links (its own names carry package paths), and a '<gazebo>' block that
+        # still references the old name would attach to nothing.
+        state["gazebo"].append((link_name, block))
     return link
 
 
@@ -254,6 +303,11 @@ def process(path, request):
         # itself - what a standalone URDF wants. A ROS package sets this to
         # "package://<pkg>/" so the meshes resolve through the ROS package path.
         "mesh_prefix": request.get("mesh_prefix") or "",
+        # Shape full name -> the 'physics' section its part declares. A part
+        # that came from a URDF carries the link's mass, inertia, material and
+        # Gazebo blocks here, and they go back out rather than being recomputed.
+        "physics": request.get("physics") or {},
+        "gazebo": [],
         "options": {
             "tolerance": request.get("tolerance", 0.1),
             "angularTolerance": request.get("angularTolerance", 0.1),
@@ -276,7 +330,7 @@ def process(path, request):
         emit(root, world.name, root_pose, state)
 
     with open(path, "w", encoding="utf-8") as f:
-        f.write(state["robot"].to_xml_string())
+        f.write(with_gazebo(state["robot"].to_xml_string(), state["gazebo"], warnings))
 
     return {
         "success": True,
@@ -292,6 +346,35 @@ def _world_link(state):
     from urdf_parser_py.urdf import Link
 
     return Link(name=state["names"].take("world", "world"))
+
+
+def with_gazebo(xml, blocks, warnings):
+    """Put the carried ``<gazebo>`` blocks back into the serialized robot.
+
+    They are re-inserted as text rather than through urdf_parser_py, because
+    PartCAD never parsed them in the first place - they are carried verbatim,
+    and the point is that they come out exactly as they went in, apart from the
+    link name they reference.
+    """
+    if not blocks:
+        return xml
+
+    from xml.etree import ElementTree
+
+    restored = []
+    for link_name, block in blocks:
+        try:
+            element = ElementTree.fromstring(block)
+            if element.get("reference") is not None:
+                element.set("reference", link_name)
+            restored.append(ElementTree.tostring(element, encoding="unicode").rstrip())
+        except Exception as e:  # pragma: no cover - malformed stored XML
+            warnings.append("Could not restore a Gazebo block for link '%s': %s" % (link_name, e))
+
+    if not restored:
+        return xml
+    closing = xml.rindex("</robot>")
+    return xml[:closing] + "\n".join("  %s" % line for line in restored) + "\n" + xml[closing:]
 
 
 if __name__ == "__main__":

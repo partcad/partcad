@@ -73,8 +73,10 @@ Object commands
   Show detailed information about a part, assembly, or scene, including its parameters.
 
 ``pc convert``
-  Convert parts or sketches to another format and update their type in the package. Subcommands: ``part`` and
-  ``sketch``.
+  Convert parts, sketches or assemblies to another format and update their type in the package. Subcommands:
+  ``part``, ``sketch`` and ``assembly``. An assembly converts between ``assy`` and ``urdf``: to URDF it writes
+  the ``.urdf`` file and the meshes it references; to ASSY it writes an ``stl`` part for every URDF link, an
+  interface pair for every joint, and an ``.assy`` that places the parts with ``connect:``.
 
 ``pc export``
   Export a 3D view of parts, assemblies, or scenes. Choose the format with ``-t``:
@@ -104,7 +106,9 @@ Other commands
 
 ``pc adhoc``
   Ad-hoc operations that run on the fly without creating or configuring a package. Subcommand: ``convert``
-  (convert a part or sketch to another format without updating its type).
+  (convert a part or sketch to another format without updating its type). The assembly formats ``assy`` and
+  ``urdf`` are refused here: an ASSY file is a set of references to the parts of a package and a URDF becomes a
+  part per link, so neither means anything without one. Use ``pc convert assembly`` in a package instead.
 
 ``pc healthcheck``
   Check the host system for known issues. Use ``--dry-run`` to list the available checks, ``--filters`` to run

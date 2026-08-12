@@ -10,6 +10,36 @@
       "type": "string",
       "pattern": "((http|https)://)(www.)?[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)"
     },
+    "physics": {
+      "type": "object",
+      "description": "Physical properties PartCAD carries but does not model, keyed by the format they came from (e.g. 'urdf'). Deliberately opaque: it round-trips to the exporter that understands it.",
+      "additionalProperties": true
+    },
+    "motion": {
+      "type": "object",
+      "description": "The freedom of movement a connection allows: its type, its axis and its position limits. Deliberately open-ended, so a format's own spelling survives a round trip.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["fixed", "revolute", "continuous", "prismatic", "planar", "floating", "ball", "screw"]
+        },
+        "axis": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "lower": { "type": "number" },
+            "upper": { "type": "number" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
     "OCCTLocation":{
       "type": "array",
       "items": [
@@ -70,6 +100,7 @@
                 "min": { "type": "number" },
                 "max": { "type": "number" },
                 "default": { "type": "number" },
+                "type": { "type": "string", "enum": ["move", "turn"], "default": "move" },
                 "dir": {
                   "type": "array",
                   "items": { "type": "number" },
@@ -185,7 +216,7 @@
     "render": {
       "type": "object",
       "patternProperties": {
-        "^(readme|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
+        "^(readme|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|urdf|markdown)$": {
           "oneOf": [
             { "type": "null" },
             { "type": "string" },
@@ -376,7 +407,8 @@
                     "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/port" }
                   },
                   "additionalProperties": false
-                }
+                },
+                "physics": { "$ref": "#/definitions/physics" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -412,11 +444,13 @@
                 "type": { "type": "string", "enum": ["assy", "urdf", "alias"] },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
-                "geometry": {
-                  "type": "string",
-                  "enum": ["visual", "collision"],
-                  "default": "visual",
-                  "description": "Which URDF geometry to build the assembly from ('urdf' type only)"
+                "ignoreCollision": {
+                  "oneOf": [
+                    { "type": "boolean" },
+                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                  ],
+                  "default": false,
+                  "description": "Build a URDF link from its visual geometry rather than its collision geometry: true for every link, or a list of the link names it applies to ('urdf' type only)"
                 },
                 "packagePaths": {
                   "type": "array",
@@ -626,7 +660,9 @@
                 }
               ]
             },
-            "parameters": { "$ref": "#/definitions/interface-parameter"}
+            "parameters": { "$ref": "#/definitions/interface-parameter"},
+            "motion": { "$ref": "#/definitions/motion" },
+            "physics": { "$ref": "#/definitions/physics" }
           },
           "additionalProperties": false
         }

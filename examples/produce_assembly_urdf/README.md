@@ -9,12 +9,29 @@ A URDF file is used as an assembly directly, with no conversion step:
 pc inspect -a robot
 ```
 
+Each link becomes a part of this package, named `<assembly>/<link>`, which
+can be inspected and exported like any other part:
+
+```shell
+pc inspect robot/forearm
+pc export -t step robot/wrist
+```
+
 The reverse direction writes a URDF (plus the mesh files it references) from
 any PartCAD assembly:
 
 ```shell
 pc export -a -t urdf -O ./ robot
 pc export -P /produce_assembly_assy -a -t urdf -O ./ :logo
+```
+
+`pc convert assembly` goes further and rewrites the package: to ASSY it
+writes an `stl` part per link and an interface pair per joint, so the
+assembly places its parts with `connect:`; to URDF it writes the `.urdf` and
+its meshes and switches the declaration over.
+
+```shell
+pc convert assembly -t assy robot
 ```
 
 

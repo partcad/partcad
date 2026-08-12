@@ -562,6 +562,12 @@ def adhoc_convert(session, params):
         pc.logging.info("Converting %s (%s) to %s (%s)..." % (input_path, input_type, output_path, output_type))
         convert_fn(str(input_path), input_type, str(output_path), output_type)
         pc.logging.info("Conversion complete: %s" % output_path)
+    except ValueError as e:
+        # A format that only means anything inside a package ('.urdf', '.assy')
+        # is inferable from the filename, so it reaches here even though the
+        # CLI's choices exclude it. That is a usage error, not a failed
+        # conversion: nothing was attempted and nothing could have been.
+        raise JsonRpcError(USAGE_ERROR, str(e))
     except Exception as e:  # pylint: disable=broad-except
         pc.logging.error("Failed to convert: %s" % e)
     return None
@@ -1451,7 +1457,7 @@ def convert_object(session, params):
     output_dir = params.get("output_dir")
     dry_run = params.get("dry_run", False)
 
-    if kind == "part":
+    if kind in ("part", "assembly"):
         package = ctx.resolve_package_path(params.get("package") or ".")
     else:
         package = params.get("package") if params.get("package") is not None else "."
@@ -1463,7 +1469,17 @@ def convert_object(session, params):
     from partcad.actions.part import convert_part_action
     from partcad.actions.sketch import convert_sketch_action
 
-    if kind == "part":
+    if kind == "assembly":
+        from partcad.actions.assembly import convert_assembly_action
+
+        action = convert_assembly_action
+        starting_msg = "Starting assembly conversion: '%s' -> '%s', dry_run=%s" % (
+            object_name,
+            target_format,
+            dry_run,
+        )
+        done_msg = "Assembly conversion of '%s' completed." % object_name
+    elif kind == "part":
         action = convert_part_action
         starting_msg = "Starting conversion: '%s' -> '%s', dry_run=%s" % (object_name, target_format, dry_run)
         done_msg = "Conversion of '%s' completed." % object_name

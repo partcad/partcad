@@ -470,6 +470,30 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
           default: ...
           type: <move (default)|turn>
           dir: [<x>, <y>, <z>] # the vector to move along or rotate around
+      motion: # (optional) what freedom of movement this connection allows
+        type: <fixed|revolute|continuous|prismatic|planar|floating|ball|screw>
+        axis: [<x>, <y>, <z>]
+        limits:
+          lower: ...
+          upper: ...
+          units: <the unit the limits are stated in, e.g. rad or m>
+      physics: # (optional) what the connection costs, keyed by the source format
+        <format name>: ... # e.g. "urdf": effort and velocity limits, damping, friction
+
+Motion and physics
+------------------
+
+``motion`` and ``physics`` are a *record* of a connection, next to the
+``parameters`` that make it move. Where a parameter is executable - naming it in
+a connection places the parts - ``motion`` states what kind of joint the
+connection is, about which axis, and between which limits, and ``physics``
+carries everything else a simulation needs (effort and velocity limits, damping,
+friction) as the source format stated it.
+
+Both are deliberately open-ended, and PartCAD does not interpret them: they
+exist so that importing a robot description and exporting it again does not lose
+what PartCAD has no model for. ``pc convert assembly -t assy`` fills them in
+from a URDF's joints - see :doc:`simulation` for the mapping.
 
 Abstract interfaces
 -------------------
@@ -645,7 +669,25 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
+      physics: # (optional) physical properties, keyed by the format they came from
+        urdf:
+          inertial: # mass, centre of mass and inertia tensor, as URDF states them
+            origin: { xyz: [...], rpy: [...] }
+            mass: ...
+            inertia: { ixx: ..., ixy: ..., ixz: ..., iyy: ..., iyz: ..., izz: ... }
+          visual: [...]   # the geometry descriptors, verbatim
+          collision: [...]
+          gazebo: [...]   # '<gazebo>' blocks, as the XML they were
+
 Depending on the type of the part, the configuration may have different options.
+
+``physics`` is carried, not modelled: PartCAD stores it and hands it back to an
+exporter that understands it, without interpreting or checking it. A URDF import
+fills it in for every link and a URDF export puts it back, so a mass or an
+inertia tensor a model's author measured is not replaced by one PartCAD
+computed. It does not take part in the shape cache - it says nothing about the
+geometry - which also means nothing notices when an edit to the CAD invalidates
+it. See :doc:`simulation`.
 
 See :ref:`location` for more information on the OCCT Location object.
 
@@ -937,34 +979,66 @@ description format of ROS - as an assembly directly, with no conversion step:
     robot:
       type: urdf
       path: <(optional) the source file path, "<assembly name>.urdf" by default>
-      geometry: <(optional) "visual" (default) or "collision">
+      ignoreCollision: <(optional) true, or a list of link names; false by default>
       packagePaths: # (optional) roots to resolve "package://" mesh references against
         - <../meshes>
 
-Each link becomes a part or a sub-assembly, placed where the joints between it
-and the robot's root link put it with **every joint at its zero position**. The
-result is the same in-memory representation an `Assembly YAML`_ file produces,
-so everything else - rendering, export, BoM, inspection - treats the two alike.
-The robot's root link is the assembly itself.
+**One part per link.** Every link becomes a single part of the package, named
+``<assembly name>/<link name>`` and expressed in the link's own frame, placed
+where the joints between it and the robot's root link put it with **every joint
+at its zero position**. The result is the same in-memory representation an
+`Assembly YAML`_ file produces, so everything else - rendering, export, BoM,
+inspection - treats the two alike. The robot's root link is the assembly itself.
+
+Those parts are ordinary parts. ``pc inspect robot/forearm`` and
+``pc export -t step robot/wrist`` work on them like on any other. They are not
+declared in ``partcad.yaml`` - the URDF is what declares them - so a package
+handed one of these names builds the assembly that owns it first.
 
 URDF's ``box``, ``cylinder`` and ``sphere`` primitives are turned into geometry;
 ``mesh`` references are read from the file they name (``package://``, ``file://``
 and paths relative to the URDF file are all resolved), for the mesh formats
-PartCAD reads - ``stl``, ``obj``, ``step``, ``brep`` and ``3mf``. A mesh
-``scale`` is honoured: URDF reads mesh coordinates as metres after scaling,
-PartCAD works in millimetres.
+PartCAD reads - ``stl``, ``obj``, ``step`` and ``brep``. A mesh ``scale`` is
+honoured: URDF reads mesh coordinates as metres after scaling, PartCAD works in
+millimetres. A link that is a single mesh sitting at its link origin references
+that file directly; a link with several elements, or a placed one, has its shape
+built and cached as a single generated file.
 
-A URDF says a great deal that a PartCAD assembly has nowhere to put: masses and
-inertia tensors, joint types, axes, limits and dynamics, materials, collision
-geometry distinct from the visual geometry, sensors and Gazebo extensions. All
-of it is dropped, and PartCAD reports what it dropped rather than passing over
-it in silence. :doc:`simulation` describes what it would take to keep it.
+A link that states both a visual and a collision shape is built from the
+**collision** one: that is what a simulator resolves contact against, and a
+model that bothers to state both means it to be the physical shape.
+``ignoreCollision: true`` reverses that for every link, and a list of link names
+reverses it for those links only.
+
+What a link says that PartCAD does not model - its mass and inertia tensor, its
+materials, the geometry the shape was *not* built from, and its ``<gazebo>``
+blocks - is carried verbatim in the part's ``physics`` section rather than
+thrown away, and put back when the assembly is exported to URDF again. What
+cannot be carried at all (joint kinematics, transmissions, sensors) is counted
+and reported; ``pc info`` shows the tally. :doc:`simulation` describes the gap
+and what closing it would take.
 
 The reverse direction is ``pc export -t urdf``, which writes a ``.urdf`` file
 plus a directory of the STL files it references, from any part or assembly.
 Each node of the assembly tree becomes a link, each parent/child relation a
 fixed joint, and a shape used more than once is written out once. Inertial
-properties are computed from the geometry (see :doc:`simulation`).
+properties are taken from the part's ``physics`` section when it has them and
+computed from the geometry otherwise (see :doc:`simulation`).
+
+``pc convert assembly`` goes further than exporting: it rewrites the package
+around the assembly and switches its declared type.
+
+.. code-block:: shell
+
+  pc convert assembly -t assy robot   # urdf -> assy
+  pc convert assembly -t urdf logo    # assy -> urdf
+
+Converting to ASSY writes an ``stl`` part for every link, an interface pair for
+every joint, and an ``.assy`` that places its parts with ``connect:`` rather
+than with coordinates. Converting to URDF writes the ``.urdf`` and its meshes.
+Neither direction has an ad-hoc equivalent: ``pc adhoc convert`` refuses both
+formats, because an ASSY file is a set of references to the parts of a package
+and a URDF becomes a part per link - neither means anything without one.
 
 Assembly YAML
 -------------

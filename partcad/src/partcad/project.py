@@ -65,6 +65,12 @@ OBJECT_KIND_SECTIONS = {
     "partType": "partTypes",
 }
 
+# Assembly types whose parts the assembly itself materializes, rather than the
+# package declaring them: a URDF's links become the parts '<assembly>/<link>'.
+# Such a part is only in 'Project.parts' once the assembly has been built, so
+# 'get_part' builds it on demand (see '_materialize_derived_part').
+PART_PRODUCING_ASSEMBLY_TYPES = ("urdf",)
+
 
 @telemetry.instrument()
 class Project(project_config.Configuration):
@@ -686,6 +692,12 @@ class Project(project_config.Configuration):
         )
 
     def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+        # A part an assembly materializes (a URDF link, for one) is not declared
+        # in 'partcad.yaml' - the assembly's own source file is what declares it
+        # - so it only exists once that assembly has been built. Build it now,
+        # rather than report a part that the package can perfectly well produce
+        # as missing.
+        self._materialize_derived_part(part_name)
         return self.get_object(
             "part",
             Project.PartLock,
@@ -698,6 +710,63 @@ class Project(project_config.Configuration):
             func_params,
             quiet=quiet,
         )
+
+    def _derived_part_owner(self, part_name: str) -> Optional[str]:
+        """The assembly whose parts are named '<this assembly>/<something>'.
+
+        Only assemblies of a type that materializes parts qualify, and only when
+        the package really declares one under that name, so an ordinary part
+        called 'brackets/left' is not mistaken for one.
+
+        Read from the configs already known rather than through
+        'get_assembly_config()': this runs on every part lookup, and that
+        accessor would ask a plugin-backed package to go and fetch the name over
+        the network before it could say it does not have it.
+        """
+        known = self._object_configs.get("assembly") or {}
+        prefix = part_name.split(";")[0]
+        while "/" in prefix:
+            prefix = prefix.rsplit("/", 1)[0]
+            config = known.get(prefix)
+            if config and config.get("type") in PART_PRODUCING_ASSEMBLY_TYPES:
+                return prefix
+        return None
+
+    def _materialize_derived_part(self, part_name: str) -> None:
+        """Build the assembly that would produce 'part_name', if one would.
+
+        A no-op unless the name is unknown *and* names an assembly that produces
+        parts, so the common path costs one dictionary lookup.
+        """
+        if part_name in self.parts:
+            return
+        owner = self._derived_part_owner(part_name)
+        if owner is None:
+            return
+        owning_assembly = self.get_assembly(owner)
+        if owning_assembly is None or owning_assembly.children:
+            return
+
+        pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
+
+        # On a thread of its own: instantiating an assembly runs 'asyncio.run()',
+        # which raises if the calling thread already has a running event loop -
+        # and this is reached from both synchronous callers and coroutines.
+        failure = []
+
+        def build():
+            try:
+                asyncio.run(owning_assembly.do_instantiate())
+            except Exception as e:  # pylint: disable=broad-except
+                failure.append(e)
+
+        thread = threading.Thread(target=build, daemon=True)
+        thread.start()
+        thread.join()
+        if failure:
+            pc_logging.error(
+                "Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner, part_name, failure[0])
+            )
 
     def get_assembly(self, assembly_name, func_params=None) -> Optional[assembly.Assembly]:
         return self.get_object(
@@ -1215,6 +1284,12 @@ class Project(project_config.Configuration):
                 "urdf",
             ]
 
+            # Only the objects the package declares. Building the assemblies
+            # below may materialize more parts - a URDF's links become the parts
+            # '<assembly>/<link>' - but those are named with a '/' and so would
+            # need a directory created for each one, which is exactly what
+            # PartCAD does not do without '--create-dirs'. They stay reachable
+            # and exportable by name; they are simply not part of a bulk render.
             for shape in shapes:
                 shape_render = render_cfg_merge(copy.copy(render), shape.config.get("render", {}))
 
@@ -1530,12 +1605,12 @@ class Project(project_config.Configuration):
                 lines += add_section(name, display_name, shape, render_cfg)
 
         if self.parts and not "parts" in exclude:
-            # A part an assembly materialized while it was being built (the
-            # meshes a URDF points at, for instance) is an implementation detail
-            # of that assembly, not something the package offers, so it is not
-            # documented. The heading is only emitted if something is left.
+            # Built first, and the heading only emitted if anything came of it:
+            # 'add_section' skips a part with no rendered image, and a package
+            # where that is true of every part would otherwise get a "## Parts"
+            # heading with nothing under it.
             part_lines = []
-            shape_names = sorted(name for name in self.parts if not self.parts[name].config.get("internal", False))
+            shape_names = sorted(self.parts.keys())
             for name in shape_names:
                 shape = self.parts[name]
                 if shape.config["type"] == "alias":

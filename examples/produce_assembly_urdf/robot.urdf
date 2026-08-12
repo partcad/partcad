@@ -25,10 +25,13 @@
       </geometry>
       <material name="grey"/>
     </visual>
+    <!-- The collision shape is what a simulator resolves contact against, and
+         it is what PartCAD builds the link from unless 'ignoreCollision' says
+         otherwise. Here it is deliberately a little larger than the visual one. -->
     <collision>
       <origin xyz="0 0 0.01" rpy="0 0 0"/>
       <geometry>
-        <box size="0.12 0.12 0.02"/>
+        <box size="0.13 0.13 0.02"/>
       </geometry>
     </collision>
     <inertial>
@@ -87,7 +90,11 @@
     <child link="wrist"/>
   </joint>
 
-  <!-- A link with two visuals. It becomes a sub-assembly holding both. -->
+  <!-- A link whose two shapes are told apart. Its visual geometry is two
+       elements - which PartCAD combines into the single shape of the part
+       'robot/wrist' - while its collision geometry is one simple mesh, which is
+       referenced as it stands. Which of the two the part is built from is what
+       'ignoreCollision' decides. -->
   <link name="wrist">
     <visual>
       <origin xyz="0 0 0.015" rpy="0 0 0"/>
@@ -105,6 +112,11 @@
       </geometry>
       <material name="orange"/>
     </visual>
+    <collision>
+      <geometry>
+        <mesh filename="package://produce_part_stl/cube.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
   </link>
 
   <gazebo reference="base_link">
