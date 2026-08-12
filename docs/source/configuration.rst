@@ -983,26 +983,29 @@ description format of ROS - as an assembly directly, with no conversion step:
       packagePaths: # (optional) roots to resolve "package://" mesh references against
         - <../meshes>
 
-**One part per link.** Every link becomes a single part of the package, named
-``<assembly name>/<link name>`` and expressed in the link's own frame, placed
+**One part per shape.** A link that has a single ``<visual>`` (or
+``<collision>``) becomes the part ``<assembly name>/<link name>``. A link that
+has several becomes a *sub-assembly* of one part each, named
+``<assembly name>/<link name>/<element name or index>``. Everything is placed
 where the joints between it and the robot's root link put it with **every joint
-at its zero position**. The result is the same in-memory representation an
-`Assembly YAML`_ file produces, so everything else - rendering, export, BoM,
-inspection - treats the two alike. The robot's root link is the assembly itself.
+at its zero position**, and each shape keeps the offset its own ``<origin>``
+gave it. The result is the same in-memory representation an `Assembly YAML`_
+file produces, so everything else - rendering, export, BoM, inspection - treats
+the two alike. The robot's root link is the assembly itself.
 
 Those parts are ordinary parts. ``pc inspect robot/forearm`` and
 ``pc export -t step robot/wrist`` work on them like on any other. They are not
 declared in ``partcad.yaml`` - the URDF is what declares them - so a package
 handed one of these names builds the assembly that owns it first.
 
-URDF's ``box``, ``cylinder`` and ``sphere`` primitives are turned into geometry;
-``mesh`` references are read from the file they name (``package://``, ``file://``
-and paths relative to the URDF file are all resolved), for the mesh formats
-PartCAD reads - ``stl``, ``obj``, ``step`` and ``brep``. A mesh ``scale`` is
-honoured: URDF reads mesh coordinates as metres after scaling, PartCAD works in
-millimetres. A link that is a single mesh sitting at its link origin references
-that file directly; a link with several elements, or a placed one, has its shape
-built and cached as a single generated file.
+**Nothing is rewritten that does not have to be.** A ``mesh`` reference becomes
+a part that reads the very file the URDF named (``package://``, ``file://`` and
+paths relative to the URDF file are all resolved), for the mesh formats PartCAD
+reads - ``stl``, ``obj``, ``step``, ``brep`` and ``3mf``. The ``<origin>`` that
+places it becomes a PartCAD location, not a transform baked into a copy of the
+geometry. A mesh ``scale`` is honoured: URDF reads mesh coordinates as metres
+after scaling, PartCAD works in millimetres. Only ``box``, ``cylinder`` and
+``sphere`` are generated, because there is no file to point at.
 
 A link that states both a visual and a collision shape is built from the
 **collision** one: that is what a simulator resolves contact against, and a

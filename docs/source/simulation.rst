@@ -25,9 +25,16 @@ Reading a URDF
 ``AssemblyFactoryUrdf`` drives ``wrapper_import_urdf`` in a python sandbox. The
 sandbox parses the file with ROS's own ``urdf_parser_py``, walks the joint tree
 from the root link with every joint at its zero position, resolves each link's
-geometry, and hands back plain data. The core registers one part per link -
-``<assembly>/<link>``, expressed in the link frame - and builds the very same
+geometry, and hands back plain data. The core registers one part per shape -
+``<assembly>/<link>`` for a link that is one, and ``<assembly>/<link>/<n>``
+under a sub-assembly for a link that is several - and builds the very same
 ``Assembly``/``AssemblyChild`` tree an ASSY file produces.
+
+Nothing is rewritten that does not have to be: a ``<mesh>`` becomes a part that
+reads the very file the URDF named, and the ``<origin>`` that places it becomes
+a location rather than a transform baked into a copy of the geometry. Only
+``<box>``/``<cylinder>``/``<sphere>`` are generated, because there is no file to
+point at.
 
 A link is built from its **collision** geometry when it states both, since that
 is the shape a simulator resolves contact against; ``ignoreCollision`` reverses
@@ -43,6 +50,12 @@ decodes to. Each node becomes a link, each parent/child relation a fixed joint
 carrying that child's placement, and each node with geometry gets an STL written
 next to the URDF. A shape that appears more than once is written once and
 referenced by every link that uses it.
+
+A node that *came from* a URDF link - it carries the link's own properties in
+its ``physics`` section - and holds shapes beneath it goes back out as one link
+with a ``<visual>`` per shape, at the offset each was placed at, rather than as
+a frame link with a link per shape. So a link of several visuals survives the
+round trip as itself.
 
 Inertial properties come from the part's ``physics`` section when it has one -
 which is how a URDF's own numbers survive a round trip - and are computed from
@@ -122,12 +135,16 @@ gap is:
   parts are ordinary parts, inspectable and exportable, not an internal detail.
 - **Mapping the robot's root link to the assembly itself** is what makes the
   round trip structurally exact instead of growing a wrapper level each time.
-- **One part per link, in the link frame, is what makes everything else line
-  up.** A link with several visuals had been the obvious case for a
-  sub-assembly, and that was wrong: it makes the link unaddressable, it puts the
-  part's origin somewhere other than the link's, and every joint that attaches
-  to it then needs a correction. Combining the link's geometry into one shape
-  costs a mesh reader in the sandbox and pays for itself immediately.
+- **A link of several shapes is a sub-assembly, and combining them was a
+  mistake.** Merging a link's visuals into one generated shape made the joint
+  algebra fall out neatly - every part's origin was the link frame - but it
+  bought that by rewriting the model: the mesh files the URDF pointed at were
+  replaced by a generated compound and the ``<origin>`` that placed each one
+  disappeared into the geometry. Keeping them as parts of a sub-assembly, each
+  reading its own file at its own offset, costs one extra term in the joint
+  algebra (below) and a table of where each link's item sits relative to the
+  link frame. That is the right trade: a digital thread that rewrites what it
+  was handed is not one.
 - **Two long-standing gaps in the interface code surfaced.** The schema has
   always allowed ``ports: {name:}`` and ``implements: {iface:}`` with no value,
   and both crashed - nothing had written them before, because nothing had
@@ -174,6 +191,15 @@ So one side has to carry the flip. The mapping is:
      - ``physics:``, verbatim
    * - a link's attachment
      - ``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: <joint>}``
+
+All of this is stated in the *link* frame, which is not necessarily where a
+link's geometry sits: a link that is one shape placed at an ``<origin>`` has its
+part's frame at that offset, and a link of several is a sub-assembly whose frame
+is the link's. So the conversion re-expresses each link in the link frame before
+writing its mesh - one term, recorded per link by the importer and applied in
+one place - and everything downstream can then assume the part's origin *is* the
+link's. Folding that term into the interface instances instead would have worked
+too, and would have spread it across every socket and plug in the file.
 
 Putting the flip on the plug is what keeps the *socket* readable: the parent
 implements it at exactly the joint origin, which is a number a reader can check

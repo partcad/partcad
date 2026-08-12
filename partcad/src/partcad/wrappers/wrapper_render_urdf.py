@@ -124,8 +124,13 @@ def write_mesh(shape, path, options):
         raise Exception("Failed to write the mesh file: %s" % path)
 
 
-def inertial_of(shape, density, warnings, link_name):
-    """The URDF ``<inertial>`` for a solid, or None when it has no volume.
+def inertial_of(placed, density, warnings, link_name):
+    """The URDF ``<inertial>`` for a link's solids, or None when they have none.
+
+    'placed' is the (shape, packed placement) pairs the link is made of - one for
+    an ordinary link, several for a URDF link with more than one ``<visual>``.
+    Each is put where it belongs before the moments are taken, so the result is
+    about the link as a whole.
 
     OCCT's GProp_GProps.MatrixOfInertia() is already the tensor about the centre
     of mass, which is the frame URDF's ``<inertia>`` is stated in, so no
@@ -133,8 +138,8 @@ def inertial_of(shape, density, warnings, link_name):
     integrates at unit density in the shape's own (millimetre) units, so the
     volume becomes a mass and the second moment (length^5) becomes kg.m^2.
 
-    A shape with no volume (a mesh imported as a shell, an empty compound) has
-    no inertia to compute: it is reported and the link goes out without an
+    A link with no volume (a mesh imported as a shell, an empty compound) has no
+    inertia to compute: it is reported and the link goes out without an
     ``<inertial>``, rather than carrying invented numbers.
     """
     from OCP.BRepGProp import BRepGProp
@@ -142,7 +147,7 @@ def inertial_of(shape, density, warnings, link_name):
     from urdf_parser_py.urdf import Inertia, Inertial, Pose
 
     props = GProp_GProps()
-    BRepGProp.VolumeProperties_s(shape, props)
+    BRepGProp.VolumeProperties_s(combined(placed), props)
     volume = props.Mass()
     if volume <= 0.0:
         warnings.append(
@@ -170,6 +175,36 @@ def inertial_of(shape, density, warnings, link_name):
             izz=inertia[2][2] * factor,
         ),
     )
+
+
+def combined(placed):
+    """The (shape, placement) pairs as one shape, each put where it belongs."""
+    if len(placed) == 1 and placed[0][1] is None:
+        return placed[0][0]
+
+    from OCP.BRep import BRep_Builder
+    from OCP.TopoDS import TopoDS_Compound
+
+    builder = BRep_Builder()
+    compound = TopoDS_Compound()
+    builder.MakeCompound(compound)
+    for shape, placement in placed:
+        builder.Add(compound, shape if placement is None else shape.Located(_toploc(placement)))
+    return compound
+
+
+def _toploc(packed):
+    """The OCCT location for PartCAD's packed [[t], [axis], angle] form."""
+    import math
+
+    from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+    from OCP.TopLoc import TopLoc_Location
+
+    translation, axis, angle = packed
+    trsf = gp_Trsf()
+    trsf.SetRotation(gp_Ax1(gp_Pnt(), gp_Dir(axis[0], axis[1], axis[2])), math.radians(angle))
+    trsf.SetTranslationPart(gp_Vec(translation[0], translation[1], translation[2]))
+    return TopLoc_Location(trsf)
 
 
 def carried_inertial(physics):
@@ -213,36 +248,85 @@ def carried_material(physics):
     return None
 
 
-def build_link(node, link_name, state):
+def mesh_reference(shape, node, link_name, state):
+    """Write 'shape' out as a mesh (or reuse one) and return the URDF reference.
+
+    An identical shape used twice - the two bones of the PartCAD logo, a
+    repeated fastener - shares one mesh file, the way a URDF written by hand
+    would.
+    """
+    key = node.get(ocp_serialize.KEY_BREP)
+    mesh_file = state["meshes"].get(key)
+    if mesh_file is None:
+        mesh_name = state["mesh_names"].take(node.get("label") or link_name, "mesh")
+        mesh_file = "%s/%s.stl" % (state["mesh_dir_name"], mesh_name)
+        write_mesh(shape, os.path.join(state["mesh_dir"], "%s.stl" % mesh_name), state["options"])
+        state["meshes"][key] = mesh_file
+    return state["mesh_prefix"] + mesh_file
+
+
+def shape_elements(node, state):
+    """The (shape node, placement) pairs one URDF link is built from.
+
+    Usually a node is one shape and that is the whole of it. A node that *came
+    from* a URDF link holds that link's several ``<visual>`` elements, and goes
+    back out as one link with several of them rather than as a frame link with a
+    link per shape.
+
+    Which of its children are the link's own shapes and which are links beneath
+    it is decided by name: the import names a link's elements after the link
+    ("wrist", or "wrist/1" and "wrist/2"), and a child link after itself. That
+    name is recorded alongside the properties the node carries, because PartCAD
+    labels are not URDF link names and the two have to be matched deliberately.
+    """
+    if ocp_serialize.is_shape_object(node):
+        return [(node, None)], []
+
+    children = node.get(ocp_serialize.KEY_ASSEMBLY, [])
+    link = (state["physics"].get(node.get("name")) or {}).get("urdf", {}).get("link")
+    if not link:
+        return [], children
+
+    def belongs(child):
+        label = child.get("label") or ""
+        return ocp_serialize.is_shape_object(child) and (label == link or label.startswith(link + "/"))
+
+    own = [(child, child.get(ocp_serialize.KEY_LOCATION)) for child in children if belongs(child)]
+    return own, [child for child in children if not belongs(child)]
+
+
+def build_link(node, link_name, elements, state):
     """The URDF ``<link>`` for one node of the assembly tree."""
-    from urdf_parser_py.urdf import Collision, Link, Mesh, Visual
+    from urdf_parser_py.urdf import Collision, Link, Mesh, Pose, Visual
 
     link = Link(name=link_name)
     physics = state["physics"].get(node.get("name"))
 
-    shape = node_geometry(node)
-    if shape is None:
-        # A sub-assembly: a frame that carries children, with no geometry of its
-        # own. URDF has no other way to express one.
+    material = carried_material(physics)
+    placed = []
+    for shape_node, placement in elements:
+        shape = node_geometry(shape_node)
+        if shape is None:
+            continue
+        reference = mesh_reference(shape, shape_node, link_name, state)
+        geometry = Mesh(filename=reference, scale=[MESH_SCALE, MESH_SCALE, MESH_SCALE])
+        if placement is None:
+            origin = None
+        else:
+            xyz, rpy = urdf_common.to_urdf_origin(urdf_common.from_packed(placement))
+            origin = Pose(xyz=xyz, rpy=rpy)
+        link.add_aggregate("visual", Visual(geometry=geometry, origin=origin, material=material))
+        link.add_aggregate("collision", Collision(geometry=geometry, origin=origin))
+        placed.append((shape, placement))
+
+    if not placed:
+        # A frame that carries children, with no geometry of its own. URDF has
+        # no other way to express one.
         return link
 
-    # An identical shape used twice (the two bones of the PartCAD logo, a
-    # repeated fastener) shares one mesh file.
-    key = node.get(ocp_serialize.KEY_BREP)
-    mesh_file = state["meshes"].get(key)
-    if mesh_file is None:
-        mesh_name = state["mesh_names"].take(link_name, "mesh")
-        mesh_file = "%s/%s.stl" % (state["mesh_dir_name"], mesh_name)
-        write_mesh(shape, os.path.join(state["mesh_dir"], "%s.stl" % mesh_name), state["options"])
-        state["meshes"][key] = mesh_file
-
-    reference = state["mesh_prefix"] + mesh_file
-    scale = [MESH_SCALE, MESH_SCALE, MESH_SCALE]
-    link.visual = Visual(geometry=Mesh(filename=reference, scale=scale), material=carried_material(physics))
-    link.collision = Collision(geometry=Mesh(filename=reference, scale=scale))
     if state["options"]["inertial"]:
         link.inertial = carried_inertial(physics) or inertial_of(
-            shape, state["options"]["density"], state["warnings"], link_name
+            placed, state["options"]["density"], state["warnings"], link_name
         )
     for block in (physics or {}).get("urdf", {}).get("gazebo") or []:
         # Re-tagged with the name this link is going out under: PartCAD renames
@@ -257,7 +341,8 @@ def emit(node, parent_link, pose, state):
     from urdf_parser_py.urdf import Joint, Pose
 
     link_name = state["names"].take(node.get("label") or node.get("name"), "link")
-    state["robot"].add_link(build_link(node, link_name, state))
+    elements, children = shape_elements(node, state)
+    state["robot"].add_link(build_link(node, link_name, elements, state))
 
     if parent_link is not None:
         xyz, rpy = urdf_common.to_urdf_origin(pose)
@@ -271,7 +356,7 @@ def emit(node, parent_link, pose, state):
             )
         )
 
-    for child in node.get(ocp_serialize.KEY_ASSEMBLY, []):
+    for child in children:
         emit(child, link_name, urdf_common.from_packed(child.get(ocp_serialize.KEY_LOCATION)), state)
 
 

@@ -91,10 +91,10 @@
   </joint>
 
   <!-- A link whose two shapes are told apart. Its visual geometry is two
-       elements - which PartCAD combines into the single shape of the part
-       'robot/wrist' - while its collision geometry is one simple mesh, which is
-       referenced as it stands. Which of the two the part is built from is what
-       'ignoreCollision' decides. -->
+       elements, which become the sub-assembly 'robot/wrist' of the parts
+       'robot/wrist/1' and 'robot/wrist/2'; its collision geometry is one simple
+       mesh, which becomes the single part 'robot/wrist'. Which of the two the
+       link is built from is what 'ignoreCollision' decides. -->
   <link name="wrist">
     <visual>
       <origin xyz="0 0 0.015" rpy="0 0 0"/>

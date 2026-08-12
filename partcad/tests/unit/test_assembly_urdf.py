@@ -94,6 +94,40 @@ def placement(packed):
     )
 
 
+def link_frames(urdf_assembly):
+    """Where each URDF link's own frame ends up, relative to the assembly.
+
+    The frame of a link is not always where its geometry sits - a link that is
+    one shape placed at an ``<origin>`` has its part offset from it - so this is
+    what a conversion has to reproduce, and what the generated connections claim
+    to. Composed from the table the import records rather than from the tree.
+    """
+    links = urdf_assembly.urdf_factory.urdf_info["links"]
+    resolved = {}
+
+    def absolute(name):
+        # The table is recorded as the walk unwinds, so a parent may come after
+        # its children in it; resolve by following the parent links instead.
+        if name not in resolved:
+            parent = links[name]["parent"]
+            base = absolute(parent) if parent in links else Location()
+            resolved[name] = base * Location(links[name]["origin"])
+        return resolved[name]
+
+    return {name: placement(absolute(name).as_packed()) for name in links}
+
+
+def find_child(assembly, name):
+    """The item an assembly holds under 'name', at any depth."""
+    for child in getattr(assembly, "children", []):
+        if child.name == name:
+            return child.item
+        found = find_child(child.item, name)
+        if found is not None:
+            return found
+    return None
+
+
 def absolute_placements(assembly):
     """Every leaf part's placement relative to the assembly, keyed by its name."""
     found = {}
@@ -119,9 +153,9 @@ def test_urdf_example_builds_the_expected_tree():
     """The example URDF becomes a nested assembly with one part per link.
 
     It exercises every geometry source a URDF can name: primitives
-    (box/cylinder/sphere), a mesh reached through 'package://', a link whose
-    several elements are combined into one shape, and a movable joint (which is
-    placed at its zero position).
+    (box/cylinder/sphere), a mesh reached through 'package://', a link that
+    states its collision and visual shapes separately, and a movable joint
+    (which is placed at its zero position).
     """
     ctx = pc.init(EXAMPLES)
     robot = ctx._get_assembly(URDF_EXAMPLE)
@@ -140,8 +174,8 @@ def test_urdf_example_builds_the_expected_tree():
     forearm = tree["children"][1]["children"][1]
     assert forearm["location"][2] == pytest.approx(45.0, abs=1e-3)
 
-    # One part per link, so the wrist is a part and not a pair of them, even
-    # though the URDF gives it two visuals.
+    # The wrist's collision geometry is a single mesh, so the link is one part
+    # even though its visual geometry is two elements.
     wrist = forearm["children"][1]
     assert wrist["kind"] == "part"
 
@@ -193,39 +227,82 @@ def test_a_slash_in_a_part_name_is_not_enough():
 def test_urdf_parts_carry_what_partcad_does_not_model():
     """A link's mass, inertia, materials and geometry are kept verbatim."""
     ctx = pc.Context(EXAMPLES)
-    urdf = ctx.get_part("//produce_assembly_urdf:robot/base_link").config["physics"]["urdf"]
+    urdf = ctx.get_part("//produce_assembly_urdf:robot/shoulder").config["physics"]["urdf"]
 
-    assert urdf["inertial"]["mass"] == pytest.approx(0.78)
-    assert urdf["inertial"]["inertia"]["izz"] == pytest.approx(1.87e-3)
+    assert urdf["link"] == "shoulder"
+    assert urdf["inertial"]["mass"] == pytest.approx(0.32)
+    assert urdf["visual"][0]["material"]["name"] == "orange"
+
+    # The robot's root link is the assembly itself, so what it said about itself
+    # belongs to the assembly - there is no part above it to hold it.
+    robot = ctx._get_assembly(URDF_EXAMPLE)
+    asyncio.run(robot.do_instantiate())
+    root = robot.config["physics"]["urdf"]
+    assert root["inertial"]["mass"] == pytest.approx(0.78)
+    assert root["inertial"]["inertia"]["izz"] == pytest.approx(1.87e-3)
     # Both the geometry the shape was built from and the geometry that was not.
-    assert urdf["collision"][0]["box"]["size"] == pytest.approx([0.13, 0.13, 0.02])
-    assert urdf["visual"][0]["box"]["size"] == pytest.approx([0.12, 0.12, 0.02])
-    assert urdf["visual"][0]["material"]["name"] == "grey"
+    assert root["collision"][0]["box"]["size"] == pytest.approx([0.13, 0.13, 0.02])
+    assert root["visual"][0]["box"]["size"] == pytest.approx([0.12, 0.12, 0.02])
+    assert root["visual"][0]["material"]["name"] == "grey"
     # The Gazebo block, as the XML it was.
-    assert "<mu1>" in urdf["gazebo"][0]
+    assert "<mu1>" in root["gazebo"][0]
+
+
+def test_a_link_of_several_shapes_is_a_sub_assembly(tmp_path):
+    """Nothing is combined: one part per shape, each reading its own file.
+
+    The example's wrist has two visuals - a sphere and a mesh - at different
+    offsets. Built from those, it is a sub-assembly of two parts, the mesh one
+    reading the very file the URDF named, and each placed at the offset the URDF
+    gave it rather than having it baked into new geometry.
+    """
+    root = sandbox(tmp_path, URDF_EXAMPLE_PACKAGES)
+    package = root / "produce_assembly_urdf"
+    config = (package / "partcad.yaml").read_text().replace("ignoreCollision: false", "ignoreCollision: true")
+    (package / "partcad.yaml").write_text(config)
+
+    ctx = pc.Context(str(root))
+    sphere = ctx.get_part("//produce_assembly_urdf:robot/wrist/1")
+    mesh = ctx.get_part("//produce_assembly_urdf:robot/wrist/2")
+    assert sphere is not None and mesh is not None
+
+    # The mesh part reads the URDF's own file; only the primitive is generated.
+    assert mesh.config["type"] == "stl"
+    assert Path(mesh.config["path"]).name == "cube.stl"
+    assert sphere.config["type"] == "step"
+
+    # And the offsets are still offsets: each shape sits inside the link's
+    # sub-assembly exactly where the URDF's '<origin>' put it (0.015 m and
+    # 0.03 m up), rather than having been moved there before the file was read.
+    robot = ctx._get_assembly("//produce_assembly_urdf:robot")
+    asyncio.run(robot.do_instantiate())
+    wrist = find_child(robot, "wrist")
+    assert [child.name for child in wrist.children] == ["wrist/1", "wrist/2"]
+    assert [placement(child.location.as_packed())[0] for child in wrist.children] == [
+        (0.0, 0.0, 15.0),
+        (0.0, 0.0, 30.0),
+    ]
 
 
 def test_collision_geometry_wins_unless_ignored(tmp_path):
     """A link that states both is built from its collision geometry.
 
-    In the example the wrist's collision geometry is one mesh, which is
-    referenced as it stands, while its visual geometry is two elements that have
-    to be combined into a generated shape - so which one was used is visible in
-    the part's own type.
+    In the example the wrist's collision geometry is one simple mesh while its
+    visual geometry is two elements, so which was used decides whether the link
+    is one part or a sub-assembly of two.
     """
     root = sandbox(tmp_path, URDF_EXAMPLE_PACKAGES)
     package = root / "produce_assembly_urdf"
 
-    default = pc.Context(str(package)).get_part(":robot/wrist")
-    assert default.config["type"] == "stl"
+    default = pc.Context(str(root)).get_project(URDF_PACKAGE)
+    assert default.get_part("robot/wrist").config["type"] == "stl"
+    assert default.get_part("robot/wrist/1", quiet=True) is None
 
     config = (package / "partcad.yaml").read_text().replace("ignoreCollision: false", "ignoreCollision: true")
     (package / "partcad.yaml").write_text(config)
-    ignored = pc.Context(str(package)).get_part(":robot/wrist")
-    assert ignored.config["type"] == "brep"
-
-    ctx = pc.Context(str(package))
-    assert asyncio.run(ignored.get_wrapped(ctx))["brep"] != asyncio.run(default.get_wrapped(ctx))["brep"]
+    ignored = pc.Context(str(root)).get_project(URDF_PACKAGE)
+    assert ignored.get_part("robot/wrist", quiet=True) is None
+    assert ignored.get_part("robot/wrist/1") is not None
 
 
 def test_urdf_reports_what_it_could_not_keep():
@@ -316,15 +393,27 @@ def test_export_puts_back_what_a_urdf_import_carried(tmp_path):
     path = _export_urdf(ctx, robot, str(tmp_path), name="robot")
     exported = ET.parse(path).getroot()
 
-    base = next(link for link in exported.findall("link") if link.get("name") == "base_link")
-    # The stated mass, not one recomputed from the geometry and a density.
+    # One link per link of the source, with its shapes back where they were:
+    # the sub-assembly a link of several shapes becomes does not turn into a
+    # frame link with a link per shape.
+    links = [link.get("name") for link in exported.findall("link")]
+    assert len(links) == 4
+    for link in exported.findall("link"):
+        assert link.find("visual") is not None
+
+    # The root link is the assembly itself, so it is what carries what the
+    # URDF's own root link said - the stated mass, not one recomputed from the
+    # geometry and a density.
+    base = exported.find("link")
     assert float(base.find("inertial/mass").get("value")) == pytest.approx(0.78)
     assert float(base.find("inertial/inertia").get("izz")) == pytest.approx(1.87e-3)
     assert base.find("visual/material").get("name") == "grey"
+    # The '<origin>' of a shape within its link survived as an origin.
+    assert [float(v) for v in base.find("visual/origin").get("xyz").split()] == pytest.approx([0.0, 0.0, 0.01])
 
     # The Gazebo block came back, pointing at the link it went out on.
     gazebo = exported.findall("gazebo")
-    assert [element.get("reference") for element in gazebo] == ["base_link"]
+    assert [element.get("reference") for element in gazebo] == [base.get("name")]
     assert gazebo[0].find("mu1") is not None
 
 
@@ -367,9 +456,9 @@ def test_convert_urdf_to_assy(tmp_path):
     root = sandbox(tmp_path, URDF_EXAMPLE_PACKAGES)
     package = root / "produce_assembly_urdf"
 
-    before = pc.Context(str(package))._get_assembly(":robot")
+    before = pc.Context(str(root))._get_assembly("//produce_assembly_urdf:robot")
     asyncio.run(before.do_instantiate())
-    expected = absolute_placements(before)
+    expected = link_frames(before)
 
     ctx = pc.Context(str(root))
     convert_assembly_action(ctx.get_project("//produce_assembly_urdf"), "robot", "assy")

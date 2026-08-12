@@ -7,16 +7,18 @@
 
 This runs inside the python sandbox, for two reasons. The URDF parser is ROS's
 own 'urdf_parser_py' rather than an XML reader written here, and PartCAD does
-not carry the ROS stack as a dependency; and turning URDF's geometry into shapes
-needs OCCT, which the core process never loads. The core only receives plain
-data back.
+not carry the ROS stack as a dependency; and URDF's primitive shapes have to be
+turned into geometry, which needs OCCT and which the core process never loads.
+The core only receives plain data back.
 
-**One part per link.** Whatever geometry a link carries - one mesh, several
-meshes, primitives, or a mix - becomes a single shape expressed in the *link
-frame*, so the part PartCAD registers for a link is addressable as
-``<assembly>/<link>`` and lines up with the link's own coordinate system. A link
-that is one mesh at the identity origin references that mesh file directly;
-anything else is combined here and written out as a BREP file.
+**Nothing is rewritten that does not have to be.** A ``<mesh>`` becomes a part
+that reads the very file the URDF named, at the path the URDF named it by; the
+``<origin>`` that places it becomes a PartCAD location, not a transform baked
+into new geometry. Only ``<box>``/``<cylinder>``/``<sphere>`` are generated,
+because there is no file to point at. So a link with several visuals becomes a
+*sub-assembly* of one part per visual, addressable as
+``<assembly>/<link>/<name or index>``, and a link with one becomes the single
+part ``<assembly>/<link>``.
 
 The tree this returns has the same node shape wrapper_import_assy produces from
 a STEP assembly, so both feed the same node handler and end up as the identical
@@ -24,7 +26,7 @@ in-memory representation an ASSY file produces:
 
     assembly node:  {"type": "assembly", "name", "location", "links": [...]}
     part node:      {"type": "part", "name", "location", "part_file",
-                     "part_type", "scale", "physics"}
+                     "part_type", "scale"}
 
 Alongside the tree, the response carries the flat ``links`` and ``joints``
 tables that ``pc convert assembly -t assy`` needs to write an ASSY file, its
@@ -37,7 +39,7 @@ import sys
 # Pinned before anything that may pull OCP: VTK bundles its own older expat
 # under the standard XML_* names, and once that is loaded the standard library's
 # pyexpat binds to it and dies with an undefined-symbol ImportError. lxml (which
-# urdf_parser_py parses with) and OCP both reach it.
+# urdf_parser_py may parse with) and OCP both reach it.
 import pyexpat  # noqa: F401
 
 sys.path.append(os.path.dirname(__file__))
@@ -53,11 +55,12 @@ MESH_PART_TYPES = {
     ".step": "step",
     ".stp": "step",
     ".brep": "brep",
+    ".3mf": "3mf",
 }
 
 # What a URDF file may carry that the assembly representation cannot hold as
 # geometry. The counters are reported rather than the loss being passed over in
-# silence; what can be kept verbatim goes into the part's 'physics' section.
+# silence; what can be kept verbatim goes into the 'physics' section.
 DROPPABLE = (
     "inertial",
     "material",
@@ -70,6 +73,8 @@ DROPPABLE = (
     "gazebo",
     "sensor",
 )
+
+IDENTITY = (urdf_common.IDENTITY_Q, urdf_common.IDENTITY_T)
 
 
 class Dropped(dict):
@@ -159,163 +164,89 @@ def mesh_scale_factor(mesh, warnings):
 
 
 #
-# Geometry
+# Primitives - the only geometry that has to be generated
 #
 
 
-def _trsf(pose):
-    """The gp_Trsf for a (quaternion, translation) pose."""
-    from OCP.gp import gp_Quaternion, gp_Trsf, gp_Vec
-
-    q, t = pose
-    trsf = gp_Trsf()
-    trsf.SetRotation(gp_Quaternion(q[1], q[2], q[3], q[0]))
-    trsf.SetTranslationPart(gp_Vec(t[0], t[1], t[2]))
-    return trsf
-
-
-def _transformed(shape, trsf):
-    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
-
-    return BRepBuilderAPI_Transform(shape, trsf, True).Shape()
-
-
-def _scaled(shape, factor):
-    from OCP.gp import gp_Pnt, gp_Trsf
-
-    if abs(factor - 1.0) < 1e-12:
-        return shape
-    trsf = gp_Trsf()
-    trsf.SetScale(gp_Pnt(), factor)
-    return _transformed(shape, trsf)
-
-
-def compound_of(shapes):
-    from OCP.TopoDS import TopoDS_Builder, TopoDS_Compound
-
-    builder = TopoDS_Builder()
-    compound = TopoDS_Compound()
-    builder.MakeCompound(compound)
-    for shape in shapes:
-        if shape is not None and not shape.IsNull():
-            builder.Add(compound, shape)
-    return compound
-
-
-def primitive_shape(geometry, kind):
-    """A URDF box/cylinder/sphere as a solid, in millimetres.
+def primitive_file(geometry, kind, name, context):
+    """Write a URDF box/cylinder/sphere out as a STEP file and return its path.
 
     All three are centred on the link origin in URDF, which is not where OCCT's
-    primitive builders put them, so each is re-centred here.
+    primitive builders put them, so each is re-centred here - and then it is the
+    element's own ``<origin>`` that places it, exactly as it would place a mesh.
+    Identical primitives share one file: a URDF that repeats a shape (wheels,
+    bolts) should not produce a file per link.
     """
     from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox, BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeSphere
     from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+    from OCP.STEPControl import STEPControl_AsIs, STEPControl_Writer
 
     mm = urdf_common.MM_PER_M
     if kind == "box":
-        x, y, z = (float(v) * mm for v in geometry.size)
-        return BRepPrimAPI_MakeBox(gp_Pnt(-x / 2.0, -y / 2.0, -z / 2.0), x, y, z).Shape()
-    if kind == "cylinder":
-        radius, length = float(geometry.radius) * mm, float(geometry.length) * mm
-        return BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, -length / 2.0), gp_Dir(0, 0, 1)), radius, length).Shape()
-    return BRepPrimAPI_MakeSphere(float(geometry.radius) * mm).Shape()
+        size = tuple(round(float(v) * mm, 9) for v in geometry.size)
+        key = ("box",) + size
+    elif kind == "cylinder":
+        radius, length = round(float(geometry.radius) * mm, 9), round(float(geometry.length) * mm, 9)
+        key = ("cylinder", radius, length)
+    else:
+        radius = round(float(geometry.radius) * mm, 9)
+        key = ("sphere", radius)
 
+    cache = context["primitives"]
+    if key in cache:
+        return cache[key]
 
-def read_mesh_file(path, part_type):
-    """Read a mesh/CAD file into a TopoDS_Shape.
+    if kind == "box":
+        shape = BRepPrimAPI_MakeBox(gp_Pnt(-size[0] / 2.0, -size[1] / 2.0, -size[2] / 2.0), *size).Shape()
+    elif kind == "cylinder":
+        shape = BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(0, 0, -length / 2.0), gp_Dir(0, 0, 1)), radius, length).Shape()
+    else:
+        shape = BRepPrimAPI_MakeSphere(radius).Shape()
 
-    Only reached when a link's geometry has to be combined into one shape; a
-    link that is a single mesh at the identity origin references its file
-    directly and never comes through here.
-    """
-    if part_type == "stl":
-        # Read exactly the way the 'stl' part factory does, build123d's Mesher
-        # first: it turns the triangles into real faces, while the OCCT reader
-        # below yields one face that carries a triangulation and no surface.
-        # That distinction matters downstream - a surface-less face takes the
-        # SVG renderer down - so the fallback is only for a sandbox without
-        # build123d.
-        try:
-            import build123d as b3d
+    os.makedirs(context["output_folder"], exist_ok=True)
+    base = os.path.basename(name.replace("/", "_")) or kind
+    path = os.path.join(context["output_folder"], "%s.step" % base)
+    suffix = 1
+    while path in context["written"]:
+        path = os.path.join(context["output_folder"], "%s_%d.step" % (base, suffix))
+        suffix += 1
+    context["written"].add(path)
 
-            return b3d.Mesher().read(path)[0].wrapped
-        except Exception:
-            pass
+    writer = STEPControl_Writer()
+    if writer.Transfer(shape, STEPControl_AsIs) != 1 or writer.Write(path) != 1:
+        raise ValueError("Failed to write the STEP file for a URDF primitive: %s" % path)
 
-        from OCP.BRep import BRep_Builder
-        from OCP.RWStl import RWStl
-        from OCP.TopoDS import TopoDS_Face, TopoDS_Shell, TopoDS_Solid
-
-        triangulation = RWStl.ReadFile_s(os.fsdecode(path))
-        if not triangulation:
-            raise ValueError("Failed to read the STL file: %s" % path)
-        builder = BRep_Builder()
-        face = TopoDS_Face()
-        builder.MakeFace(face, triangulation)
-        shell = TopoDS_Shell()
-        builder.MakeShell(shell)
-        builder.Add(shell, face)
-        solid = TopoDS_Solid()
-        builder.MakeSolid(solid)
-        builder.Add(solid, shell)
-        return solid
-
-    if part_type == "brep":
-        from OCP.BRep import BRep_Builder
-        from OCP.BRepTools import BRepTools
-        from OCP.TopoDS import TopoDS_Shape
-
-        shape = TopoDS_Shape()
-        if not BRepTools.Read_s(shape, path, BRep_Builder()):
-            raise ValueError("Failed to read the BREP file: %s" % path)
-        return shape
-
-    if part_type == "step":
-        import OCP.IFSelect
-        from OCP.STEPControl import STEPControl_Reader
-
-        reader = STEPControl_Reader()
-        if reader.ReadFile(path) != OCP.IFSelect.IFSelect_RetDone:
-            raise ValueError("Failed to read the STEP file: %s" % path)
-        for index in range(reader.NbRootsForTransfer()):
-            reader.TransferRoot(index + 1)
-        return compound_of(reader.Shape(index + 1) for index in range(reader.NbShapes()))
-
-    if part_type == "obj":
-        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
-        from OCP.gp import gp_Pnt
-
-        vertices, faces = [], []
-        with open(path, "r") as f:
-            for line in f:
-                if line.startswith("v "):
-                    vertices.append(tuple(float(v) for v in line.split()[1:4]))
-                elif line.startswith("f "):
-                    faces.append([int(item.split("/")[0]) for item in line.split()[1:]])
-        shapes = []
-        for face in faces:
-            polygon = BRepBuilderAPI_MakePolygon()
-            for index in face:
-                polygon.Add(gp_Pnt(*vertices[index - 1]))
-            polygon.Close()
-            shapes.append(BRepBuilderAPI_MakeFace(polygon.Wire()).Face())
-        return compound_of(shapes)
-
-    raise ValueError("No reader for the '%s' geometry of %s" % (part_type, path))
-
-
-def write_brep(shape, path):
-    from OCP.BRepTools import BRepTools
-
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    if not BRepTools.Write_s(shape, path):
-        raise ValueError("Failed to write the BREP file: %s" % path)
+    cache[key] = path
     return path
 
 
 #
-# Per-element descriptors, for the part's opaque 'physics' section
+# Descriptors, for the opaque 'physics' section
 #
+
+
+def element_to_string(element):
+    """Serialize an XML element back to text.
+
+    urdf_parser_py parses with lxml when it is importable and with the standard
+    library's ElementTree otherwise, and hands raw elements straight through -
+    so which of the two this gets is not ours to decide.
+    """
+    if (type(element).__module__ or "").startswith("lxml"):
+        from lxml import etree
+
+        return etree.tostring(element, encoding="unicode")
+
+    from xml.etree import ElementTree
+
+    return ElementTree.tostring(element, encoding="unicode")
+
+
+def pose_descriptor(origin):
+    return {
+        "xyz": [float(v) for v in (getattr(origin, "xyz", None) or (0.0, 0.0, 0.0))],
+        "rpy": [float(v) for v in (getattr(origin, "rpy", None) or (0.0, 0.0, 0.0))],
+    }
 
 
 def material_descriptor(material):
@@ -332,21 +263,15 @@ def material_descriptor(material):
 def geometry_descriptor(element):
     """A URDF ``<visual>``/``<collision>`` as plain data, kept verbatim.
 
-    Both the geometry the shape was built from and the geometry that was not are
-    recorded, so that an export back to URDF can restore what PartCAD does not
-    model rather than let it silently disappear.
+    Both the geometry the shapes were built from and the geometry that was not
+    are recorded, so that an export back to URDF can restore what PartCAD does
+    not model rather than let it silently disappear.
     """
     geometry = getattr(element, "geometry", None)
     if geometry is None:
         return None
 
-    origin = getattr(element, "origin", None)
-    descriptor = {
-        "origin": {
-            "xyz": [float(v) for v in (getattr(origin, "xyz", None) or (0.0, 0.0, 0.0))],
-            "rpy": [float(v) for v in (getattr(origin, "rpy", None) or (0.0, 0.0, 0.0))],
-        }
-    }
+    descriptor = {"origin": pose_descriptor(getattr(element, "origin", None))}
     if getattr(element, "name", None):
         descriptor["name"] = element.name
 
@@ -372,13 +297,9 @@ def geometry_descriptor(element):
 
 
 def inertial_descriptor(inertial):
-    origin = getattr(inertial, "origin", None)
     inertia = getattr(inertial, "inertia", None)
     descriptor = {
-        "origin": {
-            "xyz": [float(v) for v in (getattr(origin, "xyz", None) or (0.0, 0.0, 0.0))],
-            "rpy": [float(v) for v in (getattr(origin, "rpy", None) or (0.0, 0.0, 0.0))],
-        },
+        "origin": pose_descriptor(getattr(inertial, "origin", None)),
         "mass": float(getattr(inertial, "mass", 0.0) or 0.0),
     }
     if inertia is not None:
@@ -388,16 +309,12 @@ def inertial_descriptor(inertial):
 
 def joint_descriptor(joint):
     """A URDF joint as plain data - everything about it, for the ASSY conversion."""
-    origin = getattr(joint, "origin", None)
     descriptor = {
         "name": joint.name,
         "type": joint.type,
         "parent": joint.parent,
         "child": joint.child,
-        "origin": {
-            "xyz": [float(v) for v in (getattr(origin, "xyz", None) or (0.0, 0.0, 0.0))],
-            "rpy": [float(v) for v in (getattr(origin, "rpy", None) or (0.0, 0.0, 0.0))],
-        },
+        "origin": pose_descriptor(getattr(joint, "origin", None)),
     }
     if getattr(joint, "axis", None) is not None:
         descriptor["axis"] = [float(v) for v in joint.axis]
@@ -427,7 +344,7 @@ def joint_descriptor(joint):
 
 
 def choose_geometry(link, context):
-    """The elements a link's shape is built from, and the ones left over.
+    """The elements a link's shapes are built from, and the ones left over.
 
     Collision geometry wins by default: it is what a simulator resolves contact
     against, it is usually the cheaper shape, and a URDF that states both means
@@ -447,89 +364,86 @@ def choose_geometry(link, context):
     return chosen, other, kind
 
 
-def single_file_geometry(element, context):
-    """(path, part_type, scale) when a lone element is a file PartCAD reads as is.
+def element_node_name(element, index, count, link_name):
+    """What the part for one ``<visual>``/``<collision>`` is called.
 
-    Only when its origin is the identity: otherwise the shape would not be in
-    the link frame, and the whole point of one-part-per-link is that it is.
+    A link with one is simply the link. A link with several gets one part per
+    element, under the link: by the element's own ``name`` when the URDF gave it
+    one, and by its position otherwise.
+    """
+    if count == 1:
+        return link_name
+    return "%s/%s" % (link_name, getattr(element, "name", None) or (index + 1))
+
+
+def geometry_node(element, name, link_name, context):
+    """The part node for one ``<visual>``/``<collision>``, or None if unreadable.
+
+    A mesh is referenced where it lies: the part reads the file the URDF named,
+    and the element's ``<origin>`` becomes the part's location rather than a
+    transform applied to a copy of the geometry.
     """
     geometry = getattr(element, "geometry", None)
-    if type(geometry).__name__.lower() != "mesh":
-        return None
-    if not urdf_common.is_identity(urdf_common.from_urdf_origin(getattr(element, "origin", None))):
+    if geometry is None:
         return None
 
-    path = resolve_mesh_path(geometry.filename, context["urdf_dir"], context["package_paths"])
-    if path is None or not os.path.isfile(path):
-        return None
-    part_type = MESH_PART_TYPES.get(os.path.splitext(path)[1].lower())
-    if part_type is None:
-        return None
-    return os.path.abspath(path), part_type, mesh_scale_factor(geometry, context["warnings"])
+    node = {
+        "type": "part",
+        "name": name,
+        "link": link_name,
+        "location": urdf_common.round_packed(
+            urdf_common.to_packed(urdf_common.from_urdf_origin(getattr(element, "origin", None))),
+            context["precision"],
+        ),
+        "scale": 1.0,
+    }
 
-
-def element_shape(element, name, context):
-    """One ``<visual>``/``<collision>`` as a shape placed in the link frame."""
-    geometry = element.geometry
     kind = type(geometry).__name__.lower()
-
-    if kind in ("box", "cylinder", "sphere"):
-        shape = primitive_shape(geometry, kind)
-    elif kind == "mesh":
+    if kind == "mesh":
         path = resolve_mesh_path(geometry.filename, context["urdf_dir"], context["package_paths"])
         if path is None or not os.path.isfile(path):
-            context["warnings"].append("Mesh file not found for link '%s': %s" % (name, geometry.filename))
+            context["warnings"].append("Mesh file not found for link '%s': %s" % (link_name, geometry.filename))
             return None
-        part_type = MESH_PART_TYPES.get(os.path.splitext(path)[1].lower())
+        extension = os.path.splitext(path)[1].lower()
+        part_type = MESH_PART_TYPES.get(extension)
         if part_type is None:
             context["warnings"].append(
                 "Link '%s' uses the mesh format '%s', which PartCAD cannot read; skipping it"
-                % (name, os.path.splitext(path)[1] or "<none>")
+                % (link_name, extension or "<none>")
             )
             return None
-        shape = _scaled(read_mesh_file(path, part_type), mesh_scale_factor(geometry, context["warnings"]))
-    else:
-        context["warnings"].append("Link '%s' uses an unsupported geometry type '%s'" % (name, kind))
-        return None
+        node["part_file"] = os.path.abspath(path)
+        node["part_type"] = part_type
+        node["scale"] = mesh_scale_factor(geometry, context["warnings"])
+        return node
 
-    return _transformed(shape, _trsf(urdf_common.from_urdf_origin(getattr(element, "origin", None))))
+    if kind in ("box", "cylinder", "sphere"):
+        node["part_file"] = primitive_file(geometry, kind, name, context)
+        node["part_type"] = "step"
+        return node
 
-
-def combine_geometry(link, elements, context):
-    """Build a link's geometry into one BREP file, returning (path, "brep")."""
-    shapes = [element_shape(element, link.name, context) for element in elements]
-    shapes = [shape for shape in shapes if shape is not None]
-    if not shapes:
-        return None
-    base = os.path.basename(link.name) or "link"
-    path = os.path.join(context["output_folder"], "%s.brep" % base)
-    suffix = 1
-    while path in context["written"]:
-        path = os.path.join(context["output_folder"], "%s_%d.brep" % (base, suffix))
-        suffix += 1
-    context["written"].add(path)
-    return write_brep(compound_of(shapes), path), "brep"
+    context["warnings"].append("Link '%s' uses an unsupported geometry type '%s'" % (link_name, kind))
+    return None
 
 
-def link_part(link, context):
-    """The part node for a link's geometry, or None if it has none.
-
-    The shape is always expressed in the link frame. A link that is a single
-    mesh sitting at the link origin references that mesh file as it is; anything
-    else - several elements, a placed element, a primitive - is built here and
-    written out as one BREP file, so that a link is always exactly one part.
-    """
+def link_geometry(link, context):
+    """(part nodes, physics) for a link's geometry."""
     chosen, other, kind = choose_geometry(link, context)
     context["dropped"].add("collision" if kind == "visual" else "visual", len(other))
 
-    physics = {}
+    # The URDF link these properties belong to. PartCAD renames things - its own
+    # names carry package paths, and a link of several shapes becomes a
+    # sub-assembly of parts named after its elements - so the link's name is
+    # worth keeping: the export uses it to tell a link's own shapes from the
+    # links beneath it, and a reader of the configuration can see where a part
+    # came from.
+    physics = {"link": link.name}
     if getattr(link, "inertial", None) is not None:
         context["dropped"].add("inertial")
         physics["inertial"] = inertial_descriptor(link.inertial)
     used = [geometry_descriptor(element) for element in chosen]
-    used = [descriptor for descriptor in used if descriptor is not None]
-    if used:
-        physics[kind] = used
+    if any(used):
+        physics[kind] = [descriptor for descriptor in used if descriptor is not None]
     if other:
         left = [geometry_descriptor(element) for element in other]
         physics["collision" if kind == "visual" else "visual"] = [d for d in left if d is not None]
@@ -540,28 +454,13 @@ def link_part(link, context):
     if gazebo:
         physics["gazebo"] = gazebo
 
-    if not chosen:
-        return None
-
-    node = {
-        "type": "part",
-        "name": link.name,
-        "link": link.name,
-        "location": urdf_common.to_packed((urdf_common.IDENTITY_Q, urdf_common.IDENTITY_T)),
-        "scale": 1.0,
-        "physics": {"urdf": physics} if physics else {},
-    }
-
-    single = single_file_geometry(chosen[0], context) if len(chosen) == 1 else None
-    if single is not None:
-        node["part_file"], node["part_type"], node["scale"] = single
-        return node
-
-    combined = combine_geometry(link, chosen, context)
-    if combined is None:
-        return None
-    node["part_file"], node["part_type"] = combined
-    return node
+    nodes = []
+    for index, element in enumerate(chosen):
+        name = element_node_name(element, index, len(chosen), link.name)
+        node = geometry_node(element, name, link.name, context)
+        if node is not None:
+            nodes.append(node)
+    return nodes, {"urdf": physics}
 
 
 def link_node(robot, link_name, pose, context, visited, ancestor):
@@ -569,7 +468,7 @@ def link_node(robot, link_name, pose, context, visited, ancestor):
 
     'pose' is the link's placement relative to the *nearest ancestor that has
     geometry* - not necessarily its URDF parent, because a link with no geometry
-    contributes no part and its children are composed straight through it.
+    contributes nothing and its children are composed straight through it.
     'ancestor' names that link, which is what the ASSY conversion connects to.
 
     Returns None for a link that contributes nothing - no geometry anywhere
@@ -586,24 +485,15 @@ def link_node(robot, link_name, pose, context, visited, ancestor):
         return None
     context["reached"].add(link_name)
 
-    part = link_part(link, context)
-    if part is not None:
-        context["links"][link_name] = {
-            "part_file": part["part_file"],
-            "part_type": part["part_type"],
-            "scale": part["scale"],
-            "physics": part["physics"],
-            "parent": ancestor,
-            "origin": urdf_common.round_packed(urdf_common.to_packed(pose), context["precision"]),
-            "joints": list(context["joint_chain"]),
-        }
-        # Everything below this link is placed relative to it.
-        ancestor = link_name
-        pose_for_children = (urdf_common.IDENTITY_Q, urdf_common.IDENTITY_T)
-        chain = []
+    geometry, physics = link_geometry(link, context)
+
+    # Children hang off the link frame. When the link itself has geometry, that
+    # frame is where its node sits; when it does not, the link is a frame with
+    # nothing in it and its children are composed straight through.
+    if geometry:
+        child_ancestor, child_pose, chain = link_name, IDENTITY, []
     else:
-        pose_for_children = pose
-        chain = list(context["joint_chain"])
+        child_ancestor, child_pose, chain = ancestor, pose, list(context["joint_chain"])
 
     children = []
     for joint_name, child_name in robot.child_map.get(link_name, []):
@@ -614,35 +504,70 @@ def link_node(robot, link_name, pose, context, visited, ancestor):
         child = link_node(
             robot,
             child_name,
-            urdf_common.compose(pose_for_children, urdf_common.from_urdf_origin(joint.origin)),
+            urdf_common.compose(child_pose, urdf_common.from_urdf_origin(joint.origin)),
             context,
             visited,
-            ancestor,
+            child_ancestor,
         )
         context["joint_chain"] = saved
         if child is not None:
             children.append(child)
 
-    if part is None and not children:
+    if not geometry and not children:
         return None
 
     placement = urdf_common.round_packed(urdf_common.to_packed(pose), context["precision"])
-    if part is not None and not children:
-        # A link that is one piece of geometry and nothing else becomes that
-        # part directly, so a round trip reproduces the tree it started from.
-        part["location"] = placement
-        return part
-    if part is not None:
-        # The link's geometry sits at the link frame and its children hang off
-        # the same frame, so the assembly node carries the link's placement.
-        children = [part] + children
+
+    if geometry:
+        if len(geometry) == 1 and not children:
+            # One shape and nothing else: the part *is* the link, so it absorbs
+            # the link's placement and keeps its own offset within it.
+            node = geometry[0]
+            shape_origin = node["location"]
+            node["location"] = urdf_common.round_packed(
+                urdf_common.to_packed(urdf_common.compose(pose, urdf_common.from_packed(shape_origin))),
+                context["precision"],
+            )
+            node["physics"] = physics
+            record_link(context, link_name, ancestor, placement, shape_origin, physics)
+            return node
+
+        # Several shapes, or shapes and child links: a sub-assembly whose frame
+        # is the link frame, so every element keeps the offset the URDF gave it.
+        record_link(context, link_name, ancestor, placement, urdf_common.to_packed(IDENTITY), physics)
+        if len(geometry) == 1:
+            # The link is one shape and some child links. The part is that
+            # link's geometry, so it carries the link's properties too - a
+            # reader looking for what '<assembly>/<link>' is made of should find
+            # it on the part, not only on the sub-assembly around it.
+            geometry[0]["physics"] = physics
+        children = geometry + children
 
     return {
         "type": "assembly",
         "name": link_name,
         "link": link_name,
         "location": placement,
+        "physics": physics,
         "links": children,
+    }
+
+
+def record_link(context, link_name, ancestor, placement, shape_origin, physics):
+    """Note where a link ended up, for 'pc convert assembly -t assy'.
+
+    'shape_origin' is where the link's *item* sits relative to the link frame:
+    the identity for a sub-assembly, and the single element's own offset for a
+    link that collapsed into one part. 'physics' travels here too: the
+    conversion writes one part per link, and the link is what the properties
+    belong to whether or not they also ended up on a part of the tree.
+    """
+    context["links"][link_name] = {
+        "parent": ancestor,
+        "origin": placement,
+        "shape_origin": shape_origin,
+        "physics": physics,
+        "joints": list(context["joint_chain"]),
     }
 
 
@@ -682,24 +607,6 @@ def parse_robot(text, warnings):
         return URDF.from_xml_string(text)
     finally:
         xml_reflection.core.on_error = previous
-
-
-def element_to_string(element):
-    """Serialize an XML element back to text.
-
-    urdf_parser_py parses with lxml when it is importable and with the standard
-    library's ElementTree otherwise, and hands the raw element straight through
-    - so which of the two this gets is not ours to decide.
-    """
-    module = type(element).__module__ or ""
-    if module.startswith("lxml"):
-        from lxml import etree
-
-        return etree.tostring(element, encoding="unicode")
-
-    from xml.etree import ElementTree
-
-    return ElementTree.tostring(element, encoding="unicode")
 
 
 def gazebo_blocks(robot, warnings):
@@ -749,6 +656,7 @@ def process(request):
         "gazebo": gazebo_blocks(robot, warnings),
         "warnings": warnings,
         "dropped": dropped,
+        "primitives": {},
         "written": set(),
         "links": {},
         "reached": set(),
@@ -762,7 +670,7 @@ def process(request):
         # assertions; both mean the joint tree is not a tree.
         raise ValueError("%s: %s" % (urdf_file, e)) from e
 
-    root = link_node(robot, root_name, (urdf_common.IDENTITY_Q, urdf_common.IDENTITY_T), context, frozenset(), None)
+    root = link_node(robot, root_name, IDENTITY, context, frozenset(), None)
     if root is None:
         raise ValueError("No geometry found in %s" % urdf_file)
 
@@ -774,7 +682,8 @@ def process(request):
             "type": "assembly",
             "name": root_name,
             "link": root_name,
-            "location": urdf_common.to_packed((urdf_common.IDENTITY_Q, urdf_common.IDENTITY_T)),
+            "location": urdf_common.to_packed(IDENTITY),
+            "physics": {},
             "links": [root],
         }
 

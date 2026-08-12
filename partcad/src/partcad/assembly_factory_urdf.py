@@ -74,8 +74,11 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             self.assembly.cache_dependencies_broken = True
             for dep in self.config.get("dependencies", []):
                 self.assembly.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
-            # link name -> the Part registered for it.
+            # node name -> the Part registered for it, and link name -> whatever
+            # the link resolved to (that same part, or the sub-assembly of its
+            # several shapes).
             self._parts = {}
+            self._items = {}
             # What the last read of the URDF found: 'pc info' reports it and
             # 'pc convert assembly' builds the ASSY file out of it.
             self.urdf_info = {}
@@ -93,7 +96,12 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             root = result["root"]
             # The robot's root link *is* this assembly, so its children become
             # this assembly's children. Nesting it one level deeper instead
-            # would make a URDF round trip grow a wrapper level every time.
+            # would make a URDF round trip grow a wrapper level every time. By
+            # the same token, what the root link said about itself belongs to
+            # the assembly - otherwise an export would have nowhere to put it
+            # back and would invent a link to hang the rest off.
+            if root.get("physics"):
+                assembly.config["physics"] = root["physics"]
             await self.handle_node_list(assembly, root.get("links") or [])
 
             if not assembly.children:
@@ -111,16 +119,22 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
         self._report(result)
         return result
 
+    def link_item(self, link_name):
+        """What a link resolved to: its part, or the sub-assembly of its shapes.
+
+        Only populated once the assembly has been built. ``pc convert assembly
+        -t assy`` uses it to render one mesh per link whatever the link is made
+        of.
+        """
+        return self._items.get(link_name)
+
     async def _read_async(self):
         """Run the URDF reader in a sandbox and return its data tree."""
         runtime = self.ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
         await runtime.ensure_async(sandbox_versions.URDF_PARSER_PY)
-        # Needed to turn URDF geometry into shapes: the primitives, and the
-        # combining a link with more than one geometry asks for. build123d is
-        # what reads a mesh into faces rather than a bare triangulation (see
-        # wrapper_import_urdf.read_mesh_file); cadquery-ocp comes last, because
-        # build123d pulls the VTK-less OCP over it.
-        await runtime.ensure_async(sandbox_versions.BUILD123D)
+        # Only URDF's box/cylinder/sphere have to be turned into geometry - a
+        # mesh is referenced where it lies and read by the part factory for its
+        # format, in that factory's own runtime.
         await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
 
         request = {
@@ -223,15 +237,17 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
         location = Location(node["location"]) if node.get("location") else Location()
 
         if node["type"] == "assembly":
-            item = Assembly(
-                assembly.project_name,
-                {
-                    "name": "%s:%s" % (self.name, name),
-                    "child": True,
-                    "cache": self.ctx.user_config.cache,
-                    "cache_dependencies_ignore": self.ctx.user_config.cache_dependencies_ignore,
-                },
-            )
+            config = {
+                "name": "%s:%s" % (self.name, name),
+                "child": True,
+                "cache": self.ctx.user_config.cache,
+                "cache_dependencies_ignore": self.ctx.user_config.cache_dependencies_ignore,
+            }
+            # A sub-assembly that *is* a URDF link carries what the link said
+            # about itself, so the export finds it where it expects to.
+            if node.get("physics"):
+                config["physics"] = node["physics"]
+            item = Assembly(assembly.project_name, config)
             # Keep it uncacheable before the parts info is in the hashing context
             item.cacheable = False
             item.instantiate = lambda _self: True
@@ -243,28 +259,37 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             if item is None:
                 return None
 
+        if node.get("link") and node["link"] not in self._items:
+            # What a link resolved to - a part, or the sub-assembly of its
+            # several shapes. 'pc convert assembly -t assy' renders it.
+            self._items[node["link"]] = item
+
         return AssemblyChild(item, name, location)
 
-    def part_name(self, link_name):
-        """The package-wide name of the part a URDF link becomes."""
-        return "%s/%s" % (self.name, link_name)
+    def part_name(self, node_name):
+        """The package-wide name of the part a URDF shape becomes.
+
+        ``<assembly>/<link>`` for a link that is one shape, and
+        ``<assembly>/<link>/<name or index>`` for one of several.
+        """
+        return "%s/%s" % (self.name, node_name)
 
     def part_for(self, node):
-        """The Part for a link, registering it into the package on first use.
+        """The Part for one URDF shape, registering it on first use.
 
-        One part per link, named ``<assembly>/<link>``, so it can be inspected
-        and exported like any other part. Two links that happen to reference the
-        same mesh file stay two parts: a link is the unit, not the file.
+        The part reads the very file the URDF named - a mesh is never copied or
+        rewritten - so what a link's ``<origin>`` said stays a location in the
+        assembly rather than becoming a transform baked into new geometry.
 
         The parts are registered in memory only - the URDF is what declares
         them, not ``partcad.yaml`` - which is why 'Project.get_part' builds the
         owning assembly when it is handed one of these names.
         """
-        link_name = node.get("link") or node["name"]
-        if link_name in self._parts:
-            return self._parts[link_name]
+        node_name = node["name"]
+        if node_name in self._parts:
+            return self._parts[node_name]
 
-        part_name = self.part_name(link_name)
+        part_name = self.part_name(node_name)
         part_file = os.path.abspath(node["part_file"])
         scale = float(node.get("scale") or 1.0)
         config = {
@@ -272,7 +297,7 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             "name": part_name,
             "orig_name": part_name,
             "path": part_file,
-            "desc": "Link '%s' of the URDF assembly '%s'" % (link_name, self.name),
+            "desc": "Link '%s' of the URDF assembly '%s'" % (node.get("link") or node_name, self.name),
         }
         # URDF states mesh coordinates in metres after applying the mesh's own
         # 'scale'; PartCAD works in millimetres. The wrapper reduces the two to a
@@ -297,5 +322,5 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             pc_logging.error("%s: the part '%s' failed to instantiate" % (self.name, part_name))
             return None
         self.assembly.cache_dependencies.append(part_file)
-        self._parts[link_name] = part
+        self._parts[node_name] = part
         return part

@@ -32,6 +32,8 @@ import ruamel.yaml
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from ... import logging as pc_logging
+from ...assembly import Assembly, AssemblyChild
+from ...geom import Location
 from ...project import Project
 from ...utils import resolve_resource_path
 
@@ -73,6 +75,12 @@ def _flow(values):
 
 def _location(packed):
     return _flow([_flow(packed[0]), _flow(packed[1]), packed[2]])
+
+
+def is_identity(packed):
+    """Whether a packed location is a no-op, within rounding noise."""
+    translation, _, angle = Location(packed).as_packed()
+    return all(abs(v) < 1e-9 for v in translation) and abs(angle) < 1e-9
 
 
 def joint_axis_in_port_frame(axis):
@@ -250,6 +258,26 @@ def effective_joint(link, joints, warnings):
     return joints[chain[-1]]
 
 
+def at_link_frame(project: Project, assembly_name: str, link_name: str, item, shape_origin):
+    """'item' seen from the link frame, so its mesh comes out in that frame.
+
+    A link that is a sub-assembly already is in its own frame; a link that
+    collapsed into a single part sits at that shape's ``<origin>`` instead, and
+    has to be put back. Wrapping it either way keeps the caller uniform.
+    """
+    if is_identity(shape_origin):
+        return item
+
+    wrapper = Assembly(
+        project.name,
+        {"name": "%s:%s:frame" % (assembly_name, link_name), "child": True, "cache": False},
+    )
+    wrapper.cacheable = False
+    wrapper.instantiate = lambda _self: True
+    wrapper.children.append(AssemblyChild(item, link_name, Location(shape_origin)))
+    return wrapper
+
+
 def urdf_to_assy(project: Project, assembly_name: str, config: dict, out_dir: Path):
     """Turn a URDF assembly into an ASSY one, with parts and interfaces.
 
@@ -282,19 +310,23 @@ def urdf_to_assy(project: Project, assembly_name: str, config: dict, out_dir: Pa
             used_joints.append(joint["name"])
     interfaces, interface_of_joint = build_interfaces(assembly_name, joints, used_joints)
 
-    # Each link's shape as an STL beside the package, and the part that reads it.
+    # Each link's shape as one STL beside the package, and the part that reads
+    # it. A link may be a single part or a sub-assembly of several shapes; both
+    # render to one mesh, and both are re-expressed in the link frame first so
+    # that the connections below place the *link*, not one of its pieces.
+    asyncio.run(assembly.do_instantiate())
     parts = CommentedMap()
     implements = {name: CommentedMap() for name in links}
     for link_name in ordered:
-        part_name = "%s/%s" % (assembly_name, link_name)
-        part = project.get_part(part_name)
-        if part is None:
-            raise ValueError("The URDF link '%s' produced no part to convert" % link_name)
+        item = factory.link_item(link_name)
+        if item is None:
+            raise ValueError("The URDF link '%s' produced no shape to convert" % link_name)
 
         relative = "%s/%s.stl" % (assembly_name, link_name)
         stl_path = out_dir / relative
         stl_path.parent.mkdir(parents=True, exist_ok=True)
-        asyncio.run(part.render_async(ctx, "stl", project=project, filepath=str(stl_path)))
+        in_link_frame = at_link_frame(project, assembly_name, link_name, item, links[link_name]["shape_origin"])
+        asyncio.run(in_link_frame.render_async(ctx, "stl", project=project, filepath=str(stl_path)))
         if not stl_path.exists():
             raise RuntimeError("Failed to write the mesh of the link '%s'" % link_name)
 
@@ -302,10 +334,9 @@ def urdf_to_assy(project: Project, assembly_name: str, config: dict, out_dir: Pa
         entry["type"] = "stl"
         entry["path"] = relative
         entry["desc"] = "Link '%s' of '%s'" % (link_name, assembly_name)
-        physics = (part.config or {}).get("physics")
-        if physics:
-            entry["physics"] = physics
-        parts[part_name] = entry
+        if links[link_name].get("physics"):
+            entry["physics"] = links[link_name]["physics"]
+        parts["%s/%s" % (assembly_name, link_name)] = entry
 
     # Which interface each link implements, and where.
     for link_name in ordered:
