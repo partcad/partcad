@@ -82,6 +82,12 @@ def homes(request, tmp_path, monkeypatch):
     Run twice: once under a bare environment and once under the one CI exports,
     because the two used to disagree about whether taking a copy works at all.
     """
+    # Cleared first, or the bare case is only bare when the suite happens to be
+    # run outside CI -- which is exactly the blind spot this parametrization
+    # exists to close, and it would close it in one direction only.
+    for name in CI_TELEMETRY_ENV:
+        monkeypatch.delenv(name, raising=False)
+
     client_home = config_at(tmp_path, "client", CLIENT_CONFIG)
     daemon_home = config_at(tmp_path, "daemon", DAEMON_CONFIG)
     for name, value in request.param.items():
@@ -228,11 +234,23 @@ def test_telemetry_does_not_travel(homes):
     assert not [key for key in build(client_home).to_dict() if key.startswith("telemetry")]
 
 
+def telemetry_of(config):
+    """The telemetry settings a configuration resolves to."""
+    telemetry = config.telemetry_config
+    return {
+        name: getattr(telemetry, name)
+        for name in ("type", "env", "performance", "failures", "debug", "sentry_attach_stacktrace")
+    }
+
+
 def test_the_rebuilt_configuration_keeps_its_own_telemetry(homes):
+    """Not just "it did not adopt the client's 'none'" -- the whole telemetry
+    configuration has to be the one this process resolved for itself, which only
+    a comparison against that baseline can show."""
     build, client_home, daemon_home = homes
+    baseline = telemetry_of(build(daemon_home))
     data = build(client_home).to_dict()
 
     rebuilt = build(daemon_home, settings=data)
 
-    # The client's config file says 'none'; the daemon never adopts it.
-    assert rebuilt.telemetry_config.type != "none"
+    assert telemetry_of(rebuilt) == baseline
