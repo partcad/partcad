@@ -27,6 +27,13 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality.
 
+* [partcad-cad-freecad](./partcad-cad-freecad/AGENTS.md):
+
+  The `PartCAD` addon (workbench) for FreeCAD: browse packages, parts and assemblies as a hierarchy, set an
+  object's parameters in a generated dialog, and import the result into the open document as a STEP file. Like
+  `partcad-ide-vscode` it is a thin client of `partcad-service-json-rpc` (the standalone PyInstaller bundle),
+  because FreeCAD's embedded Python cannot host `partcad` itself.
+
 * [README.md](./README.md) and [docs](./docs/README.md):
 
   Human-friendly documentation.
@@ -34,7 +41,8 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 ## Development process
 
 Full narrative guide (Docker/dev-container setup, PR merge criteria): `docs/source/contributing.rst`.
-Component-specific commands: `partcad/AGENTS.md`, `partcad-cli/AGENTS.md`, `partcad-ide-vscode/AGENTS.md`.
+Component-specific commands: `partcad/AGENTS.md`, `partcad-cli/AGENTS.md`, `partcad-ide-vscode/AGENTS.md`,
+`partcad-cad-freecad/AGENTS.md`.
 
 ### Where commands run
 
@@ -90,7 +98,8 @@ so this never affects a commit.
 From the repo root, inside the environment:
 
 ```bash
-poetry run pytest partcad partcad-cli -x -p no:error-for-skips -p no:warnings --dist no  # unit tests (matches CI)
+poetry run pytest partcad partcad-cli partcad-service-json-rpc partcad-cad-freecad \
+  -x -p no:error-for-skips -p no:warnings --dist no   # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```
 
