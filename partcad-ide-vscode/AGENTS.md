@@ -22,6 +22,29 @@ The backend abstraction (`src/common/backend.ts`) keeps the extension's command/
 across both; the JSON-RPC backend translates the extension's `partcad.*` commands to the CLI-shaped JSON-RPC
 methods and routes the service's notifications back under the legacy `?/partcad/*` names.
 
+## Updating PartCAD
+
+"Update PartCAD" (`partcad.update`) updates the PartCAD installation, not the imported packages — those are
+"Reload the package" (`partcad.refresh`). The extension does not implement the update: it runs the same
+`partcad_service_json_rpc.selfupdate` that `pc update` does, so the CLI and the extension cannot drift apart.
+
+- `service` — spawns `<bundle>/partcad-json-rpc --self-update` and streams it to the output channel
+  (`updateServiceBundle` in `src/common/provision.ts`). That process looks up the latest release, and only if
+  something newer exists stops **every** running daemon, waits for it, and installs the new bundle beside the
+  running one. The extension then reconnects, at the new path — which is why `resolveServicePath` picks the
+  newest `<root>/<version>/` directory rather than a fixed one.
+- `python` — the bundled server's `partcad.install` handler calls the same `selfupdate` when the service module
+  is already installed, and falls back to its `pip` bootstrap only when there is nothing installed to ask.
+
+The Explorer's "install"/"needs to be updated" buttons (`partcad.startInstall`) route to `partcad.update` too:
+installing what is missing and updating what is stale is one operation, and a user should not have to know
+which of the two they are asking for.
+
+The standalone layout is shared with `install.sh` and `pc update`: `<install-dir>/<version>/{pc,partcad,
+partcad-json-rpc}`. Installing side by side (rather than over the running copy) is what lets the bundle replace
+itself while it is executing, and is required on Windows, where deleting a running executable fails outright.
+The superseded bundle is removed on the *next* update, once it is no longer the one running.
+
 ## Setup
 
 ```bash

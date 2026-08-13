@@ -17,18 +17,25 @@ never imports the heavy ``partcad`` module.
 """
 
 import contextlib
+import glob
 import hashlib
 import os
 import signal
 import socket
 import sys
-from typing import Callable, Optional
+import time
+from typing import Callable, List, Optional
 
 from .rpc.methods import build_registry
 from .transport.framing import read_message, write_message
 from .transport.socket_server import SocketServer
 
 LIVENESS_TIMEOUT = 1.0
+
+# How long to wait for a daemon that acknowledged `daemon.stop` to actually be
+# gone. Generous on purpose: the caller that waits is an update about to replace
+# the files the daemon runs from, and being slow there beats being wrong.
+STOP_TIMEOUT = 30.0
 
 
 def determine_root_path(start: Optional[str] = None) -> str:
@@ -47,8 +54,12 @@ def workspace_hash(root_path: str) -> str:
     return hashlib.sha256(root_path.encode("utf-8")).hexdigest()[:16]
 
 
+def workspaces_dir() -> str:
+    return os.path.join(os.path.expanduser("~"), ".partcad", "workspaces")
+
+
 def workspace_dir(root_path: str) -> str:
-    return os.path.join(os.path.expanduser("~"), ".partcad", "workspaces", workspace_hash(root_path))
+    return os.path.join(workspaces_dir(), workspace_hash(root_path))
 
 
 def socket_path(root_path: str) -> str:
@@ -197,17 +208,40 @@ def _cleanup(wdir: str) -> None:
         os.unlink(os.path.join(wdir, "pid"))
 
 
-def stop_daemon(root_path: Optional[str] = None, timeout: float = LIVENESS_TIMEOUT) -> bool:
-    """Ask the workspace daemon to stop. True only if it acknowledged the stop."""
+def stop_daemon(
+    root_path: Optional[str] = None,
+    timeout: float = LIVENESS_TIMEOUT,
+    wait: float = 0.0,
+) -> bool:
+    """Ask the workspace daemon to stop. True only if it acknowledged the stop.
+
+    An acknowledgement means the daemon has *decided* to stop, not that it has
+    finished doing so. Pass ``wait`` (seconds) to also block until the process is
+    actually gone -- required before anything replaces the files it runs from.
+    """
     root = root_path or determine_root_path()
 
     # As in ensure_daemon: the AF_UNIX path below does not exist on Windows.
     if os.name == "nt":  # pragma: no cover - exercised only on Windows
         from .win_pipe import pipe_name, stop_pipe_daemon
 
-        return stop_pipe_daemon(pipe_name(root), timeout)
+        pipe = pipe_name(root)
+        stopped = stop_pipe_daemon(pipe, timeout)
+        if stopped and wait:
+            from .win_pipe import is_pipe_alive
+
+            _wait_until(lambda: not is_pipe_alive(pipe, timeout), wait)
+        return stopped
 
     sock = socket_path(root)
+    stopped = _stop_socket_daemon(sock, timeout)
+    if stopped and wait:
+        wait_until_stopped(os.path.dirname(sock), timeout=wait, liveness_timeout=timeout)
+    return stopped
+
+
+def _stop_socket_daemon(sock: str, timeout: float = LIVENESS_TIMEOUT) -> bool:
+    """Send ``daemon.stop`` to the daemon listening on ``sock``; True if acked."""
     if not is_alive(sock, timeout):
         return False
     client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -225,3 +259,120 @@ def stop_daemon(root_path: Optional[str] = None, timeout: float = LIVENESS_TIMEO
     finally:
         with contextlib.suppress(OSError):
             client.close()
+
+
+def _wait_until(predicate: Callable[[], bool], timeout: float, interval: float = 0.1) -> bool:
+    """Poll ``predicate`` until it is true or ``timeout`` seconds have passed."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(interval)
+
+
+def _daemon_pid(wdir: str) -> Optional[int]:
+    try:
+        with open(os.path.join(wdir, "pid"), encoding="utf-8") as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _pid_is_running(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # Somebody else's process holds the pid; not our daemon, but not proof
+        # it is gone either. Treat it as running rather than declare success.
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def wait_until_stopped(
+    wdir: str,
+    timeout: float = STOP_TIMEOUT,
+    liveness_timeout: float = LIVENESS_TIMEOUT,
+) -> bool:
+    """Block until the daemon serving ``wdir`` is really gone. True if it is.
+
+    A daemon that acknowledged ``daemon.stop`` still has to unwind: finish the
+    in-flight call, tear the warm context down, and exit. Both signals are
+    checked, because either one alone can lie -- the socket stops answering
+    before the process exits, and the pid file is removed by a cleanup handler
+    that a crashed daemon never reaches.
+    """
+    sock = os.path.join(wdir, "socket")
+    pid = _daemon_pid(wdir)
+
+    def gone() -> bool:
+        if is_alive(sock, liveness_timeout):
+            return False
+        return pid is None or not _pid_is_running(pid)
+
+    return _wait_until(gone, timeout)
+
+
+def live_daemon_dirs(liveness_timeout: float = LIVENESS_TIMEOUT) -> List[str]:
+    """Workspace directories whose daemon is answering right now.
+
+    Enumerated from the filesystem rather than from workspace roots: the
+    directory name is a hash of the root, so the roots cannot be recovered from
+    it -- and a caller that is about to replace the installation needs *every*
+    daemon on this machine, not the one for its own workspace.
+    """
+    if os.name == "nt":  # pragma: no cover - exercised only on Windows
+        return []
+    dirs = []
+    for sock in sorted(glob.glob(os.path.join(workspaces_dir(), "*", "socket"))):
+        if is_alive(sock, liveness_timeout):
+            dirs.append(os.path.dirname(sock))
+    return dirs
+
+
+def stop_all_daemons(
+    timeout: float = STOP_TIMEOUT,
+    liveness_timeout: float = LIVENESS_TIMEOUT,
+) -> List[str]:
+    """Stop every daemon running on this machine and wait for them to be gone.
+
+    Returns the workspace directories of the daemons that stopped. A daemon that
+    does not go away within ``timeout`` is left out of the result, so the caller
+    can decide whether to proceed -- it is the one that knows what it is about to
+    do to the files that daemon is running from.
+    """
+    stopped = []
+    if os.name == "nt":  # pragma: no cover - exercised only on Windows
+        from .win_pipe import is_pipe_alive, stop_pipe_daemon
+
+        for pipe in _live_pipe_names(liveness_timeout):
+            # `name=pipe` binds this iteration's pipe into the predicate rather
+            # than leaving it to read whatever the loop variable holds later.
+            gone = lambda name=pipe: not is_pipe_alive(name, liveness_timeout)  # noqa: E731
+            if stop_pipe_daemon(pipe, liveness_timeout) and _wait_until(gone, timeout):
+                stopped.append(pipe)
+        return stopped
+
+    for wdir in live_daemon_dirs(liveness_timeout):
+        if _stop_socket_daemon(os.path.join(wdir, "socket"), liveness_timeout) and wait_until_stopped(
+            wdir, timeout, liveness_timeout
+        ):
+            stopped.append(wdir)
+    return stopped
+
+
+def _live_pipe_names(liveness_timeout: float = LIVENESS_TIMEOUT) -> List[str]:  # pragma: no cover - Windows only
+    """PartCAD named pipes that answer. Windows exposes them as a directory."""
+    from .win_pipe import is_pipe_alive
+
+    try:
+        names = os.listdir(r"\\.\pipe")
+    except OSError:
+        return []
+    pipes = [r"\\.\pipe\%s" % name for name in sorted(names) if name.startswith("partcad-")]
+    return [pipe for pipe in pipes if is_pipe_alive(pipe, liveness_timeout)]

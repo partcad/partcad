@@ -19,6 +19,14 @@ daemon rejects anything outside the package, and paths are printed relative to t
 the output never depends on a working directory. A package-mutating command *must* be a daemon client, or the
 daemon's warm context keeps serving the pre-mutation package.
 
+`pc update` is the one command that is **both**, and deliberately. Its package half is a daemon call like any
+other; its self-update half (`partcad_service_json_rpc.selfupdate`) replaces the very files the daemon runs
+from, and stops every daemon and waits for it before doing so — work a daemon cannot do to itself. It stays
+within the boundary's letter as well as its spirit: `selfupdate` lives in the deliberately cheap
+`partcad_service_json_rpc`, so the command never imports the heavy `partcad`. The same module backs
+`partcad-json-rpc --self-update` and, through it, the VS Code extension's "Update PartCAD", so all three update
+identically.
+
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
 `init` (creates the workspace, before any package or context exists), `config` (prints the client's resolved
 `user_config` with its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses this host), and **all of

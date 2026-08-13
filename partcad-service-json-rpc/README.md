@@ -39,6 +39,26 @@ Global flags mirror the `pc` CLI (`--verbose`/`--quiet`, `--offline`, `--force-u
 
 Call `rpc.discover` to list the available methods and their summaries.
 
+## Updating the installation
+
+```sh
+# Report whether a newer PartCAD is available, and exit.
+partcad-json-rpc --check-update
+
+# Update this PartCAD installation, and exit.
+partcad-json-rpc --self-update
+```
+
+Both exit instead of serving, and print a JSON report as their last line for a caller that would rather not
+parse the prose it just streamed. `--update-to VERSION` installs a specific version; `--update-repository
+OWNER/NAME` takes standalone builds from somewhere other than `partcad/partcad`.
+
+This is `partcad_service_json_rpc.selfupdate`, the module `pc update` and the VS Code extension's "Update
+PartCAD" also run, so every entry point updates the same way. It knows both shapes PartCAD ships in — the
+wheels (upgraded with `pip`) and the standalone bundle (a release archive, checksum-verified, installed under
+`<install-dir>/<version>/` beside the running copy) — and it stops every running daemon, and waits for it,
+before installing anything. Nothing is stopped or written until a newer version has actually been found.
+
 ## Install
 
 Shipped as a Python wheel (`pip install partcad-service-json-rpc`) and as the third executable in the

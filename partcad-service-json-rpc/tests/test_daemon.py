@@ -123,3 +123,105 @@ def test_ensure_daemon_returns_existing_socket_when_alive(monkeypatch, capsys):
     finally:
         server.stop()
         shutil.rmtree(home, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Stopping daemons, and waiting for them.
+#
+# An update replaces the files a daemon is running from, so "it acknowledged the
+# stop" is not good enough: these are the helpers that make the difference
+# between asking and knowing.
+# ---------------------------------------------------------------------------
+
+
+def test_wait_until_stopped_returns_immediately_when_nothing_is_running(socket_dir):
+    assert daemon.wait_until_stopped(str(socket_dir), timeout=1.0) is True
+
+
+def test_wait_until_stopped_is_false_while_a_daemon_is_serving(socket_dir):
+    server = _serve(str(socket_dir / "socket"), build_registry())
+    try:
+        assert daemon.wait_until_stopped(str(socket_dir), timeout=0.5) is False
+    finally:
+        server.stop()
+
+
+def test_wait_until_stopped_is_false_while_the_pid_is_still_alive(socket_dir):
+    """The socket goes quiet before the process exits; both are checked."""
+    (socket_dir / "pid").write_text(str(os.getpid()))
+    assert daemon.wait_until_stopped(str(socket_dir), timeout=0.5) is False
+
+
+def test_wait_until_stopped_ignores_a_stale_pid_file(socket_dir):
+    # A daemon killed outright never runs its cleanup handler, so the pid file
+    # outlives it. Waiting forever on that would block every future update.
+    (socket_dir / "pid").write_text("2147483646")
+    assert daemon.wait_until_stopped(str(socket_dir), timeout=1.0) is True
+
+
+def test_live_daemon_dirs_finds_a_serving_daemon(monkeypatch, socket_dir):
+    home = tempfile.mkdtemp(prefix="pch", dir="/tmp")
+    monkeypatch.setenv("HOME", home)
+    wdir = os.path.join(daemon.workspaces_dir(), "deadbeefdeadbeef")
+    os.makedirs(wdir, exist_ok=True)
+    server = _serve(os.path.join(wdir, "socket"), build_registry())
+    try:
+        assert daemon.live_daemon_dirs() == [wdir]
+    finally:
+        server.stop()
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def test_live_daemon_dirs_ignores_a_stale_socket(monkeypatch):
+    home = tempfile.mkdtemp(prefix="pch", dir="/tmp")
+    monkeypatch.setenv("HOME", home)
+    wdir = os.path.join(daemon.workspaces_dir(), "deadbeefdeadbeef")
+    os.makedirs(wdir, exist_ok=True)
+    pathlib.Path(wdir, "socket").write_text("")  # nothing listening
+    try:
+        assert daemon.live_daemon_dirs() == []
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def test_stop_all_daemons_stops_every_workspace(monkeypatch):
+    home = tempfile.mkdtemp(prefix="pch", dir="/tmp")
+    monkeypatch.setenv("HOME", home)
+    servers, wdirs = [], []
+    for name in ("aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb"):
+        wdir = os.path.join(daemon.workspaces_dir(), name)
+        os.makedirs(wdir, exist_ok=True)
+        servers.append(_serve(os.path.join(wdir, "socket"), build_registry()))
+        wdirs.append(wdir)
+    try:
+        stopped = daemon.stop_all_daemons(timeout=10.0)
+        assert sorted(stopped) == sorted(wdirs)
+        assert daemon.live_daemon_dirs() == []
+    finally:
+        for server in servers:
+            server.stop()
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def test_stop_all_daemons_is_a_no_op_without_daemons(monkeypatch):
+    home = tempfile.mkdtemp(prefix="pch", dir="/tmp")
+    monkeypatch.setenv("HOME", home)
+    try:
+        assert daemon.stop_all_daemons(timeout=1.0) == []
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def test_stop_daemon_waits_for_the_daemon_to_be_gone(monkeypatch):
+    home = tempfile.mkdtemp(prefix="pch", dir="/tmp")
+    monkeypatch.setenv("HOME", home)
+    root = "/some/root"
+    sock = daemon.socket_path(root)
+    os.makedirs(os.path.dirname(sock), exist_ok=True)
+    server = _serve(sock, build_registry())
+    try:
+        assert daemon.stop_daemon(root, wait=10.0) is True
+        assert daemon.is_alive(sock) is False
+    finally:
+        server.stop()
+        shutil.rmtree(home, ignore_errors=True)

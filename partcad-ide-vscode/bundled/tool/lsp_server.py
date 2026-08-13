@@ -332,9 +332,14 @@ def do_activate(params: lsp.ExecuteCommandParams = None) -> None:
 
 @LSP_SERVER.command("partcad.reinstall")
 def do_update(params: lsp.ExecuteCommandParams = None) -> None:
-    """LSP handler for partcad.reinstall command."""
+    """LSP handler for partcad.reinstall command.
+
+    Install (or update), and let the `?/partcad/installed` notification drive the
+    activation: the extension answers it with `partcad.activate`, so calling
+    `do_activate` here as well loaded the package twice -- and loaded it even
+    when the install had just reported failure.
+    """
     do_install_partcad(params)
-    do_activate(params)
 
 
 @LSP_SERVER.command("partcad.initPackage")
@@ -409,8 +414,16 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     Bootstraps the PartCAD service module (and, through it, `partcad`) into the
     interpreter. This is specific to the "python" backend: the frozen JSON-RPC
     service already carries PartCAD.
+
+    Once the service module *is* installed, the update it already knows how to
+    do is the one that happens: the same `selfupdate` the standalone bundle and
+    `pc update` run, so all three stop the daemons and pick versions the same
+    way. The pip bootstrap below only runs when there is nothing to ask.
     """
     global partcad_log_w_stream
+
+    if _do_self_update():
+        return
 
     try:
         import lsp_utils as utils
@@ -473,6 +486,38 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     except Exception as e:  # pylint: disable=broad-except
         LSP_SERVER.send_notification("?/partcad/installFailed")
         LSP_SERVER.send_notification("?/partcad/error", "Failed to install PartCAD: %s" % e)
+
+
+def _do_self_update() -> bool:
+    """Update an already-installed PartCAD. False when there is nothing to update.
+
+    Returning False hands the caller back to the pip bootstrap: either the
+    service module is not installed yet (the first run, which is what the
+    bootstrap is for) or it is too old to carry `selfupdate`.
+    """
+    try:
+        from partcad_service_json_rpc import selfupdate
+    except ImportError:
+        return False
+
+    def log(message: str) -> None:
+        if partcad_log_w_stream is not None:
+            partcad_log_w_stream.write(message.replace("\n", "\r\n") + "\r\n")
+            partcad_log_w_stream.flush()
+
+    try:
+        selfupdate.update(log=log)
+    except selfupdate.SelfUpdateError as e:
+        # A source checkout, or an unreachable index. Neither is a reason to
+        # leave the extension unusable: what is installed still works.
+        LSP_SERVER.send_notification("?/partcad/warn", "PartCAD was not updated: %s" % e)
+    except Exception as e:  # pylint: disable=broad-except
+        LSP_SERVER.send_notification("?/partcad/installFailed")
+        LSP_SERVER.send_notification("?/partcad/error", "Failed to update PartCAD: %s" % e)
+        return True
+
+    LSP_SERVER.send_notification("?/partcad/installed")
+    return True
 
 
 # **********************************************************

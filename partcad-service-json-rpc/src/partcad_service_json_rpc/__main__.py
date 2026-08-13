@@ -15,6 +15,7 @@ CLI is.
 """
 
 import argparse
+import json
 import os
 import sys
 
@@ -45,6 +46,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     # Internal: serve a specific named pipe (used by the detached Windows child).
     parser.add_argument("--serve-pipe", default=None, help=argparse.SUPPRESS)
+    # Updating the installation itself. The same code `pc update` runs, reachable
+    # without partcad-cli: an environment provisioned for the VS Code extension
+    # has the service and no CLI at all.
+    parser.add_argument(
+        "--self-update",
+        action="store_true",
+        help="Update the PartCAD installation itself, then exit.",
+    )
+    parser.add_argument(
+        "--check-update",
+        action="store_true",
+        help="Report whether a newer PartCAD is available, then exit, without installing anything.",
+    )
+    parser.add_argument(
+        "--update-to",
+        default=None,
+        metavar="VERSION",
+        help="With --self-update/--check-update: this version instead of the latest one.",
+    )
+    parser.add_argument(
+        "--update-repository",
+        default=None,
+        metavar="OWNER/NAME",
+        help="With --self-update/--check-update: the GitHub repository to get standalone builds from.",
+    )
     # Output options (mirror `pc --verbose/--quiet`).
     parser.add_argument("-v", "--verbose", action="store_true", help="Increase logging verbosity.")
     parser.add_argument("-q", "--quiet", action="store_true", help="Decrease logging verbosity.")
@@ -95,8 +121,45 @@ def _build_session(args: argparse.Namespace, log_dir: str = None) -> Session:
     return session
 
 
+def run_update(args: argparse.Namespace) -> int:
+    """Handle ``--check-update``/``--self-update``: report or install, then exit.
+
+    Prints as it goes rather than at the end: the caller is the VS Code extension
+    streaming this into its output channel, and a bundle download is minutes of
+    silence otherwise. Returns a process exit code.
+    """
+    from . import selfupdate
+
+    def emit(message: str) -> None:
+        print(message, flush=True)
+
+    try:
+        if args.check_update:
+            status = selfupdate.check(repo=args.update_repository, to_version=args.update_to)
+            if status["reason"]:
+                emit("PartCAD %s: %s." % (status["current"], status["reason"]))
+            elif status["update_available"]:
+                emit("PartCAD %s is installed; %s is available." % (status["current"], status["latest"]))
+            else:
+                emit("PartCAD %s is up to date." % status["current"])
+            # The result is also machine-readable, so a caller does not have to
+            # parse the prose it just streamed to a human.
+            print(json.dumps(status), flush=True)
+            return 0
+
+        status = selfupdate.update(repo=args.update_repository, to_version=args.update_to, log=emit)
+        print(json.dumps(status), flush=True)
+        return 0
+    except selfupdate.SelfUpdateError as e:
+        print("error: %s" % e, file=sys.stderr, flush=True)
+        return 1
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
+
+    if args.self_update or args.check_update:
+        return run_update(args)
 
     # Internal: the detached Windows child serves a specific named pipe.
     if args.serve_pipe is not None:  # pragma: no cover - Windows only

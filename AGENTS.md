@@ -23,6 +23,11 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
   so a client need not have a CAD environment at all. That is what decides whether a command runs in the client
   or on the daemon — see "Command boundary" in `partcad-cli/AGENTS.md`.
 
+  It also owns `selfupdate`, the one implementation of "update PartCAD itself" — for the wheels and for the
+  standalone bundle alike. `pc update`, `partcad-json-rpc --self-update` and the VS Code extension's "Update
+  PartCAD" all run it, so the three cannot drift apart. It stops every running daemon, and waits for it, before
+  replacing the files a daemon runs from, and only once a newer version has actually been found.
+
 * [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality.

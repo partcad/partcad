@@ -25,6 +25,7 @@ import {
     getReopenTerminalFromSetting,
     getPopupTerminalFromSetting,
 } from './common/settings';
+import { updateServiceBundle } from './common/provision';
 import { loadServerDefaults } from './common/setup';
 import { getLSClientTraceLevel } from './common/utilities';
 import { createOutputChannel, isVirtualWorkspace, onDidChangeConfiguration, registerCommand } from './common/vscodeapi';
@@ -396,7 +397,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         registerCommand(`partcad.update`, async () => {
             await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
             await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
-            await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
+            await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', true);
             await vscode.commands.executeCommand('setContext', 'partcad.itemsReceived', false);
             await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
             await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
@@ -410,8 +411,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             partcadExplorer?.clearItems();
             await partcadInspector?.clear();
 
-            // reload the context
-            await vscode.commands.executeCommand('partcad.reinstall');
+            if (getBackendFromSetting(serverId) === 'service') {
+                // The standalone bundle updates itself: `--self-update` is the
+                // same code `pc update` runs, down to stopping every daemon and
+                // waiting for it before it replaces anything. This client's
+                // connection goes with those daemons, so reconnect afterwards --
+                // to the new executable, which is at a new path once the update
+                // installed one.
+                try {
+                    // Stop this workspace's daemon first. `--self-update` stops
+                    // every daemon itself, but the fallback download does not,
+                    // and neither path should be replacing files a daemon of
+                    // ours is executing.
+                    await lsClient?.stopDaemon?.();
+                    const result = await updateServiceBundle(context, serverId, outputChannel);
+                    if (!result.execPath) {
+                        await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
+                        return;
+                    }
+                } catch (e: any) {
+                    traceError(`PartCAD update failed: ${e?.stack ?? e}`);
+                    vscode.window.showErrorMessage(`Failed to update PartCAD: ${e?.message ?? e}`);
+                }
+                await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
+                await handleRestartServer(serverId, serverName, outputChannel);
+            } else {
+                // Python backend: the server upgrades its own environment and
+                // reloads the context. `?/partcad/installed` clears the flag.
+                await vscode.commands.executeCommand('partcad.reinstall');
+            }
         }),
         registerCommand(`partcad.promptInitPackage`, async () => {
             if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length === 1) {
@@ -756,7 +784,21 @@ connect:
             }
         }),
         registerCommand(`partcad.startInstall`, async () => {
+            // The "not installed" and "needs to be updated" buttons in the
+            // Explorer view. Installing what is missing and updating what is out
+            // of date is one request as far as the user is concerned, so both
+            // buttons end up in the same updater the toolbar's "Update PartCAD"
+            // uses -- reached by the route each backend needs.
             await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', true);
+            if (getBackendFromSetting(serverId) === 'service') {
+                await vscode.commands.executeCommand('partcad.update');
+                return;
+            }
+            // Python backend: `partcad.install` runs the shared updater when the
+            // service module is already installed, and the pip bootstrap when it
+            // is not. Going through it rather than through `partcad.update`
+            // leaves `partcad.activated` alone, so a failed install still shows
+            // the Explorer's install button instead of an empty view.
             await vscode.commands.executeCommand('partcad.install');
         }),
         registerCommand(`partcad.support`, async () => {

@@ -8,6 +8,7 @@ with [`install.sh`](../../install.sh) and never see Python.
 | | wheels | standalone bundle |
 | --- | --- | --- |
 | Install | `pip install -U partcad-cli` | `curl -fsSL .../install.sh \| sh` |
+| Update | `pc update` (runs `pip`) | `pc update` (fetches the release archive) |
 | Needs Python | yes, 3.10-3.14 | no |
 | Size | ~15MB plus whatever pip resolves | ~875MB unpacked, ~290MB compressed (Linux, OpenSCAD included) |
 | Optional extras (`ai`, `lint`) | installed on demand | always included |
@@ -64,7 +65,12 @@ separately in `.github/actions/setup-all/action.yml`.
 
 The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
 `partcad-<version>-<os>-<arch>.tar.gz` (`.zip` on Windows), and its `.sha256`. The archive name is a contract
-with `install.sh`, which derives the same name from `uname`.
+with three consumers that derive it independently: `install.sh` (from `uname`),
+`partcad_service_json_rpc.selfupdate` (from `sys.platform`/`platform.machine()`, which is what `pc update` and
+the VS Code extension use to update a bundle in place), and the extension's own first-time download
+(`src/common/provision.ts`, from `process.platform`/`process.arch`). So is the archive's single top-level
+`partcad/` directory: all three unpack it and rename that directory to `<install-dir>/<version>/`, which is
+what lets a new bundle be installed beside a running one instead of over it.
 
 The bundle embeds the interpreter it was built with, so `PYTHON` decides the Python version users end up
 running. CI builds with 3.14, the newest version PartCAD supports (`requires-python = ">=3.10,<3.15"`) and

@@ -39,7 +39,22 @@ Package commands
   Download and set up all packages imported by the current package.
 
 ``pc update``
-  Force update all imported packages to their latest versions.
+  Update PartCAD itself and force update all imported packages to their latest versions, in that order, so a
+  package that needs a newer PartCAD gets one.
+
+  PartCAD updates itself whichever way it was installed: the Python wheels are upgraded with ``pip``, and a
+  standalone bundle downloads the matching release, verifies its checksum, and installs it beside the running
+  copy. Nothing is downloaded and no daemon is disturbed until a newer version has actually been found; once
+  one has, every running daemon is asked to stop and waited for before anything is installed. An installation
+  that runs from a source checkout is reported and skipped — update that one with ``git`` — and the imported
+  packages are still updated.
+
+  Use ``--check`` to report whether a newer PartCAD is available without installing anything,
+  ``--partcad-only`` or ``--packages-only`` to update one half and not the other, and ``--to-version`` to
+  install a specific version instead of the latest one. Under the global ``--offline`` flag the version check
+  is skipped entirely.
+
+  The "Update PartCAD" command in the VS Code extension runs exactly this, so the two never drift apart.
 
 ``pc lint``
   Run linting checks on the files within packages. Use ``-r`` to check imported packages recursively and
