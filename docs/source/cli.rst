@@ -45,7 +45,9 @@ Package commands
   PartCAD updates itself whichever way it was installed: the Python wheels are upgraded with ``pip``, and a
   standalone bundle downloads the matching release, verifies its checksum, and installs it beside the running
   copy. Nothing is downloaded and no daemon is disturbed until a newer version has actually been found; once
-  one has, every running daemon is asked to stop and waited for before anything is installed. An installation
+  one has, the daemon for this workspace is asked to stop and waited for before anything is installed — the
+  new version goes in beside the old one, so a daemon in another workspace keeps working until it is next
+  restarted. An installation
   that runs from a source checkout is reported and skipped — update that one with ``git`` — and the imported
   packages are still updated.
 

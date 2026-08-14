@@ -7,10 +7,11 @@
 
 The parts that must hold whatever shape PartCAD was installed in:
 
-* nothing is stopped or written until a newer version has actually been found,
-* every daemon is stopped, and waited for, *before* the first byte is written,
+* nothing is written, and the caller's `before_install` hook does not run, until
+  a newer version has actually been found,
 * the new bundle is installed beside the running one, never over it,
-* a corrupted or hostile archive is refused before it is unpacked.
+* a corrupted or hostile archive is refused before it is unpacked,
+* and none of it knows what a daemon is -- that belongs to the client.
 
 The download is stubbed throughout; the archive it produces is a real tarball
 with the real layout, so the unpacking, moving, relinking and pruning are
@@ -18,11 +19,12 @@ exercised for real.
 """
 
 import os
+import pathlib
 import tarfile
 import textwrap
 
 import pytest
-from partcad_service_json_rpc import selfupdate
+from partcad_utils import selfupdate
 
 # ---------------------------------------------------------------------------
 # What is installed
@@ -39,14 +41,14 @@ def test_installation_kind_is_wheel_when_under_site_packages(monkeypatch):
     monkeypatch.setattr(
         selfupdate,
         "__file__",
-        os.path.join("/venv", "lib", "python3.12", "site-packages", "partcad_service_json_rpc", "selfupdate.py"),
+        os.path.join("/venv", "lib", "python3.12", "site-packages", "partcad_utils", "selfupdate.py"),
     )
     assert selfupdate.installation_kind() == selfupdate.KIND_WHEEL
 
 
 def test_installation_kind_is_source_for_a_checkout(monkeypatch):
     monkeypatch.delattr(selfupdate.sys, "frozen", raising=False)
-    monkeypatch.setattr(selfupdate, "__file__", "/home/dev/partcad/src/partcad_service_json_rpc/selfupdate.py")
+    monkeypatch.setattr(selfupdate, "__file__", "/home/dev/partcad/partcad-utils/src/partcad_utils/selfupdate.py")
     assert selfupdate.installation_kind() == selfupdate.KIND_SOURCE
 
 
@@ -330,57 +332,66 @@ def _fail_download(url, dest):
 
 
 # ---------------------------------------------------------------------------
-# Ordering: daemons stop before anything is written
+# `before_install`: the caller's chance to quiesce, and when it gets it.
+#
+# This module knows nothing about daemons -- a caller that has one injects the
+# stopping here. What it is owed is the timing: after a newer version has been
+# confirmed, before the first byte is written, and never otherwise.
 # ---------------------------------------------------------------------------
 
 
 class _Recorder:
     """Records the order of the steps an update takes."""
 
-    def __init__(self, monkeypatch, live=("/tmp/ws-a", "/tmp/ws-b"), stops=None):
+    def __init__(self, monkeypatch):
         self.events = []
-        self._stops = list(live) if stops is None else list(stops)
-        monkeypatch.setattr(selfupdate.daemon, "live_daemon_dirs", lambda *a, **k: list(live))
-        monkeypatch.setattr(selfupdate.daemon, "stop_all_daemons", self._stop_all)
         monkeypatch.setattr(selfupdate, "_install_standalone", self._install)
         monkeypatch.setattr(selfupdate, "_install_wheels", lambda pin, log: self.events.append("install") or "/wheels")
         monkeypatch.setattr(selfupdate, "installation_kind", lambda: selfupdate.KIND_STANDALONE)
         monkeypatch.setattr(selfupdate, "current_version", lambda: "0.7.158")
 
-    def _stop_all(self, timeout=None, liveness_timeout=None):
-        self.events.append("stop")
-        return self._stops
+    def prepare(self):
+        self.events.append("before_install")
 
     def _install(self, version, repo, log):
         self.events.append("install")
         return "/installed/%s" % version
 
 
-def test_update_stops_the_daemons_before_installing(monkeypatch):
+def test_before_install_runs_before_anything_is_written(monkeypatch):
     monkeypatch.setattr(selfupdate, "latest_version", lambda kind=None, repo=None: "0.7.159")
     recorder = _Recorder(monkeypatch)
-    result = selfupdate.update()
-    assert recorder.events == ["stop", "install"]
+    result = selfupdate.update(before_install=recorder.prepare)
+    assert recorder.events == ["before_install", "install"]
     assert result["updated"] is True
 
 
-def test_update_does_not_touch_the_daemons_when_nothing_is_newer(monkeypatch):
+def test_before_install_does_not_run_when_nothing_is_newer(monkeypatch):
     """The common case: a no-op update must not cost anyone their warm context."""
     monkeypatch.setattr(selfupdate, "latest_version", lambda kind=None, repo=None: "0.7.158")
     recorder = _Recorder(monkeypatch)
-    result = selfupdate.update()
+    result = selfupdate.update(before_install=recorder.prepare)
     assert recorder.events == []
     assert result["updated"] is False
 
 
-def test_update_installs_anyway_when_a_daemon_refuses_to_stop(monkeypatch):
-    """Installing side by side is what makes a stubborn daemon survivable."""
+def test_update_without_a_before_install_hook_just_installs(monkeypatch):
     monkeypatch.setattr(selfupdate, "latest_version", lambda kind=None, repo=None: "0.7.159")
-    recorder = _Recorder(monkeypatch, live=("/tmp/ws-a", "/tmp/ws-b"), stops=["/tmp/ws-a"])
-    messages = []
-    selfupdate.update(log=messages.append)
-    assert recorder.events == ["stop", "install"]
-    assert any("did not stop" in m for m in messages)
+    recorder = _Recorder(monkeypatch)
+    assert selfupdate.update()["updated"] is True
+    assert recorder.events == ["install"]
+
+
+def test_the_module_never_reaches_for_a_daemon():
+    """Updating is a client-side act; a daemon can be remote, or somebody else's.
+
+    `partcad-utils` does not depend on `partcad-service-json-rpc` and must not
+    start to: a caller that has a daemon passes `before_install`.
+    """
+    source = pathlib.Path(selfupdate.__file__).read_text(encoding="utf-8")
+    body = source.split('"""', 2)[2]  # everything after the module docstring
+    assert "partcad_service_json_rpc" not in body
+    assert "stop_daemon" not in body
 
 
 def test_update_refuses_a_source_checkout(monkeypatch):
@@ -464,10 +475,11 @@ def test_pip_target_flags_ask_for_user_when_the_environment_is_read_only(monkeyp
     assert flags == ["--break-system-packages", "--user"]
 
 
-def test_module_docstring_documents_the_two_rules():
+def test_module_docstring_documents_the_rules():
     """The invariants above are only safe because they are written down."""
-    assert "Stop the daemons first" in textwrap.dedent(selfupdate.__doc__)
-    assert "Never write over the running installation" in selfupdate.__doc__
+    doc = textwrap.dedent(selfupdate.__doc__)
+    assert "updating an installation is a client-side operation" in doc
+    assert "never write over the running installation" in doc.lower()
 
 
 def test_install_standalone_refuses_to_unpack_into_the_running_bundle(monkeypatch, standalone):
@@ -479,63 +491,3 @@ def test_install_standalone_refuses_to_unpack_into_the_running_bundle(monkeypatc
         # would target the directory currently being executed.
         selfupdate._install_standalone("0.7.158", "partcad/partcad", lambda _m: None)
     assert (running / "pc").read_text() == "old"
-
-
-# ---------------------------------------------------------------------------
-# The same ordering, against a real daemon rather than a stub.
-# ---------------------------------------------------------------------------
-
-
-def test_update_installs_only_after_a_real_daemon_is_gone(monkeypatch):
-    """The requirement, end to end: stop it, wait for it, *then* install.
-
-    The stubbed ordering test above proves `update` calls the two in order. This
-    one proves the wait is real: the installer asserts, at the moment it runs,
-    that nothing is answering on the socket any more.
-    """
-    import shutil
-    import socket as socket_module
-    import tempfile
-    import threading
-    import time
-
-    if not hasattr(socket_module, "AF_UNIX"):
-        pytest.skip("AF_UNIX not available on this platform")
-
-    from partcad_service_json_rpc import daemon
-    from partcad_service_json_rpc.core.session import Session
-    from partcad_service_json_rpc.rpc.methods import build_registry
-    from partcad_service_json_rpc.transport.socket_server import SocketServer
-
-    home = tempfile.mkdtemp(prefix="pch", dir="/tmp")
-    monkeypatch.setenv("HOME", home)
-    wdir = os.path.join(daemon.workspaces_dir(), "0123456789abcdef")
-    os.makedirs(wdir, exist_ok=True)
-    sock = os.path.join(wdir, "socket")
-
-    server = SocketServer(Session(), build_registry())
-    threading.Thread(target=server.serve_unix, args=(sock,), daemon=True).start()
-    for _ in range(500):
-        if server._server_sock is not None:
-            break
-        time.sleep(0.01)
-
-    observed = {}
-
-    def install(version, repo, log):
-        observed["alive_at_install"] = daemon.is_alive(sock)
-        return "/installed/%s" % version
-
-    monkeypatch.setattr(selfupdate, "installation_kind", lambda: selfupdate.KIND_STANDALONE)
-    monkeypatch.setattr(selfupdate, "current_version", lambda: "0.7.158")
-    monkeypatch.setattr(selfupdate, "latest_version", lambda kind=None, repo=None: "0.7.159")
-    monkeypatch.setattr(selfupdate, "_install_standalone", install)
-
-    try:
-        assert daemon.is_alive(sock) is True
-        result = selfupdate.update()
-        assert result["updated"] is True
-        assert observed["alive_at_install"] is False
-    finally:
-        server.stop()
-        shutil.rmtree(home, ignore_errors=True)

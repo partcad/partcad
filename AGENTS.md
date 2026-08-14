@@ -23,10 +23,22 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
   so a client need not have a CAD environment at all. That is what decides whether a command runs in the client
   or on the daemon — see "Command boundary" in `partcad-cli/AGENTS.md`.
 
-  It also owns `selfupdate`, the one implementation of "update PartCAD itself" — for the wheels and for the
-  standalone bundle alike. `pc update`, `partcad-json-rpc --self-update` and the VS Code extension's "Update
-  PartCAD" all run it, so the three cannot drift apart. It stops every running daemon, and waits for it, before
-  replacing the files a daemon runs from, and only once a newer version has actually been found.
+  It does **not** update PartCAD itself: that is `partcad_utils.selfupdate`, run by the client. See
+  `partcad-utils` below.
+
+* [partcad-utils](./partcad-utils/README.md):
+
+  The lightweight pieces every component shares without a CAD-kernel dependency: logging, telemetry, user
+  configuration — and `selfupdate`, the one implementation of "update PartCAD itself", for the wheels and for
+  the standalone bundle alike.
+
+  Updating an installation is a **client-side** act: it is this machine's copy of PartCAD being replaced, by
+  the process running from it. It lives here, rather than in the daemon, because a daemon can be remote (where
+  "update PartCAD" would mean updating somebody else's installation) and because a daemon that went looking for
+  other daemons to stop would be racing every client on the machine. So `selfupdate` knows nothing about
+  daemons; a caller that has one passes `before_install`, which is what `pc update` uses to stop its own
+  workspace's daemon and wait for it. `pc update` and the VS Code extension's "Update PartCAD" both end up
+  here — the extension by running `pc update --partcad-only` — so the two cannot drift apart.
 
 * [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
 

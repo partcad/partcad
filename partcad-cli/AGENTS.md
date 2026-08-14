@@ -20,12 +20,18 @@ the output never depends on a working directory. A package-mutating command *mus
 daemon's warm context keeps serving the pre-mutation package.
 
 `pc update` is the one command that is **both**, and deliberately. Its package half is a daemon call like any
-other; its self-update half (`partcad_service_json_rpc.selfupdate`) replaces the very files the daemon runs
-from, and stops every daemon and waits for it before doing so — work a daemon cannot do to itself. It stays
-within the boundary's letter as well as its spirit: `selfupdate` lives in the deliberately cheap
-`partcad_service_json_rpc`, so the command never imports the heavy `partcad`. The same module backs
-`partcad-json-rpc --self-update` and, through it, the VS Code extension's "Update PartCAD", so all three update
-identically.
+other. Its self-update half (`partcad_utils.selfupdate`) replaces this machine's copy of PartCAD, which only
+the process running from it can do: a daemon can be remote, where "update PartCAD" would mean updating somebody
+else's installation. It stays within the boundary's letter as well as its spirit — `selfupdate` lives in the
+deliberately cheap `partcad-utils`, so the command never imports the heavy `partcad`.
+
+This command owns the one bit of daemon handling the update needs, because `selfupdate` deliberately has none:
+its workspace's daemon runs from the files about to be replaced, so `pc update` stops it and waits for it
+(`daemon.stop_daemon(wait=...)`) through the `before_install` hook — after a newer version is confirmed, before
+anything is written. It stops **its** daemon and no others. Enumerating other workspaces' daemons would race
+every other client on the machine, and buys nothing: the new version is installed beside the old one, so a
+daemon left running keeps serving from intact files until it is restarted. The VS Code extension's "Update
+PartCAD" runs this very command, so the two cannot drift apart.
 
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
 `init` (creates the workspace, before any package or context exists), `config` (prints the client's resolved

@@ -39,25 +39,13 @@ Global flags mirror the `pc` CLI (`--verbose`/`--quiet`, `--offline`, `--force-u
 
 Call `rpc.discover` to list the available methods and their summaries.
 
-## Updating the installation
+## Updating PartCAD
 
-```sh
-# Report whether a newer PartCAD is available, and exit.
-partcad-json-rpc --check-update
-
-# Update this PartCAD installation, and exit.
-partcad-json-rpc --self-update
-```
-
-Both exit instead of serving, and print a JSON report as their last line for a caller that would rather not
-parse the prose it just streamed. `--update-to VERSION` installs a specific version; `--update-repository
-OWNER/NAME` takes standalone builds from somewhere other than `partcad/partcad`.
-
-This is `partcad_service_json_rpc.selfupdate`, the module `pc update` and the VS Code extension's "Update
-PartCAD" also run, so every entry point updates the same way. It knows both shapes PartCAD ships in — the
-wheels (upgraded with `pip`) and the standalone bundle (a release archive, checksum-verified, installed under
-`<install-dir>/<version>/` beside the running copy) — and it stops every running daemon, and waits for it,
-before installing anything. Nothing is stopped or written until a newer version has actually been found.
+Not here, deliberately. Updating an installation is a client-side act — it is the client's machine, and its copy
+of PartCAD, that gets replaced — and a daemon can be remote, where "update PartCAD" would mean updating somebody
+else's installation. The implementation is `partcad_utils.selfupdate`; the way to run it is `pc update`, which
+stops **its own** workspace's daemon and waits for it before installing. This service neither updates itself nor
+goes looking for other daemons to stop.
 
 ## Install
 

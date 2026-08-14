@@ -412,17 +412,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             await partcadInspector?.clear();
 
             if (getBackendFromSetting(serverId) === 'service') {
-                // The standalone bundle updates itself: `--self-update` is the
-                // same code `pc update` runs, down to stopping every daemon and
-                // waiting for it before it replaces anything. This client's
-                // connection goes with those daemons, so reconnect afterwards --
-                // to the new executable, which is at a new path once the update
-                // installed one.
+                // The bundle updates itself by running its own `pc update
+                // --partcad-only`, so the extension and the CLI update by the
+                // same code. That takes the workspace's daemon down with it, so
+                // reconnect afterwards -- to the new executable, which is at a
+                // new path once the update installed one.
                 try {
-                    // Stop this workspace's daemon first. `--self-update` stops
-                    // every daemon itself, but the fallback download does not,
-                    // and neither path should be replacing files a daemon of
-                    // ours is executing.
+                    // Stop this workspace's daemon before anything replaces the
+                    // files it is executing. `pc update` would do it too, but the
+                    // fallback download path does not, and this connection has to
+                    // go either way.
                     await lsClient?.stopDaemon?.();
                     const result = await updateServiceBundle(context, serverId, outputChannel);
                     if (!result.execPath) {

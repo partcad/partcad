@@ -25,16 +25,20 @@ methods and routes the service's notifications back under the legacy `?/partcad/
 ## Updating PartCAD
 
 "Update PartCAD" (`partcad.update`) updates the PartCAD installation, not the imported packages — those are
-"Reload the package" (`partcad.refresh`). The extension does not implement the update: it runs the same
-`partcad_service_json_rpc.selfupdate` that `pc update` does, so the CLI and the extension cannot drift apart.
+"Reload the package" (`partcad.refresh`). The extension implements none of it, which is the point: there is one
+updater, `partcad_utils.selfupdate`, and the extension reaches it the same way a user would.
 
-- `service` — spawns `<bundle>/partcad-json-rpc --self-update` and streams it to the output channel
-  (`updateServiceBundle` in `src/common/provision.ts`). That process looks up the latest release, and only if
-  something newer exists stops **every** running daemon, waits for it, and installs the new bundle beside the
-  running one. The extension then reconnects, at the new path — which is why `resolveServicePath` picks the
-  newest `<root>/<version>/` directory rather than a fixed one.
-- `python` — the bundled server's `partcad.install` handler calls the same `selfupdate` when the service module
-  is already installed, and falls back to its `pip` bootstrap only when there is nothing installed to ask.
+- `service` — spawns `<bundle>/pc --no-ansi update --partcad-only` and streams it to the output channel
+  (`updateServiceBundle` in `src/common/provision.ts`). `pc` looks up the latest release and, only if something
+  newer exists, stops its workspace's daemon, waits for it, and installs the new bundle beside the running one.
+  The extension then reconnects, at the new path — which is why `resolveServicePath` picks the newest
+  `<root>/<version>/` directory rather than a fixed one, and how the extension detects that anything happened:
+  the resolved path moves. If there is no `pc` beside the service, or it is too old to know the option, the
+  extension downloads the release itself (`downloadLatest`), the same path a first install takes.
+- `python` — the bundled server's `partcad.install` handler calls `partcad_utils.selfupdate` directly when
+  PartCAD is already installed, and falls back to its `pip` bootstrap only when there is nothing installed to
+  update. No daemon is stopped there, and none needs to be: this backend serves the extension in-process and
+  never starts one.
 
 The Explorer's "install"/"needs to be updated" buttons (`partcad.startInstall`) route to `partcad.update` too:
 installing what is missing and updating what is stale is one operation, and a user should not have to know

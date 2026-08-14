@@ -5,27 +5,30 @@
 #
 """Updating the PartCAD installation itself.
 
-PartCAD ships in two shapes and both of them have to be updatable by the same
-gesture: the Python wheels on PyPI (`pip install -U partcad-cli`) and the
-standalone PyInstaller bundle that carries its own interpreter (installed by
-`install.sh`, or downloaded by the VS Code extension). This module is the one
-place that knows the difference, so `pc update`, the `partcad-json-rpc`
-executable and the VS Code extension all update the same way rather than three
-slightly different ways.
+PartCAD ships in two shapes and both have to be updatable by the same gesture:
+the Python wheels on PyPI (`pip install -U partcad-cli`) and the standalone
+PyInstaller bundle that carries its own interpreter (installed by `install.sh`,
+or downloaded by the VS Code extension). This module is the one place that knows
+the difference.
 
-Two rules shape everything here:
+It lives in `partcad-utils`, the package every thin client already depends on,
+because **updating an installation is a client-side operation**. It is *this*
+machine's copy of PartCAD that gets replaced, by the process that runs from it.
+A daemon must not do it: a daemon can be remote, where "update PartCAD" would
+mean updating somebody else's installation, and a daemon that went looking for
+other daemons to stop would be racing every client on the machine. So nothing
+here knows what a daemon is. A caller that has one passes ``before_install``,
+which runs once a newer version is confirmed and before the first byte is
+written -- see `pc update`, which uses it to stop its own workspace's daemon and
+wait for it.
 
-* **Stop the daemons first.** A running daemon holds a warm PartCAD context and
-  the sandboxed runtimes, and it runs *from the files this module replaces*. It
-  is asked to stop, and waited for, before anything is written -- and only once
-  a newer version has actually been found, so a no-op `pc update` never costs
-  anyone their warm context.
-* **Never write over the running installation.** The standalone bundle is
-  installed side by side, under ``<install-dir>/<version>/``, exactly the layout
-  ``install.sh`` produces; the launcher symlinks are then repointed. Nothing
-  deletes the directory the current process is executing from -- which is what
-  makes the update safe on Windows, where that would fail outright, and what
-  lets the frozen `pc` update itself.
+The other rule is **never write over the running installation**. The standalone
+bundle is installed side by side, under ``<install-dir>/<version>/``, exactly the
+layout ``install.sh`` produces; the launcher symlinks are then repointed. Nothing
+deletes the directory the current process is executing from -- which is what
+makes the update safe on Windows, where that would fail outright, what lets the
+frozen `pc` update itself, and what leaves any daemon that was not stopped still
+serving from intact files until it is restarted.
 """
 
 import contextlib
@@ -45,7 +48,7 @@ import zipfile
 from hashlib import sha256
 from typing import Callable, List, Optional
 
-from . import __version__, daemon
+from . import __version__
 
 # How PartCAD was installed.
 KIND_STANDALONE = "standalone"  # the frozen PyInstaller bundle
@@ -55,10 +58,10 @@ KIND_SOURCE = "source"  # an editable install of a source checkout
 DEFAULT_REPOSITORY = "partcad/partcad"
 
 # The distributions that make up a wheel installation, most specific first. Only
-# the ones actually installed are upgraded: `partcad-cli` pulls `partcad` in, but
+# the ones actually installed are upgraded: `partcad-cli` pulls the rest in, but
 # an environment provisioned for the VS Code extension has
 # `partcad-service-json-rpc` and no CLI at all.
-DISTRIBUTIONS = ("partcad-cli", "partcad-service-json-rpc", "partcad")
+DISTRIBUTIONS = ("partcad-cli", "partcad-service-json-rpc", "partcad", "partcad-utils")
 
 # The executables a standalone bundle contains, which is also what `install.sh`
 # links into the bin directory.
@@ -247,13 +250,18 @@ def update(
     repo: Optional[str] = None,
     to_version: Optional[str] = None,
     log: Callable[[str], None] = _noop,
-    stop_timeout: float = daemon.STOP_TIMEOUT,
+    before_install: Optional[Callable[[], None]] = None,
 ) -> dict:
     """Update the PartCAD installation in place. Returns the :func:`check` report.
 
     The report carries ``updated``: False means there was nothing newer to
     install (the common case), not that anything failed. Raises
     :class:`SelfUpdateError` when the installation cannot be updated at all.
+
+    ``before_install`` runs once a newer version has been confirmed and before
+    anything is written, and only then -- so a caller can put whatever it needs
+    to quiesce there (`pc update` stops its workspace's daemon and waits for it)
+    without a no-op update costing anybody anything.
     """
     status = check(repo, to_version)
     if status["reason"]:
@@ -264,9 +272,8 @@ def update(
 
     log("Updating PartCAD from %s to %s..." % (status["current"], status["latest"]))
 
-    # Only now, with a newer version in hand, is it worth costing anyone their
-    # warm context -- and it has to happen before a single file is written.
-    _stop_daemons(log, stop_timeout)
+    if before_install is not None:
+        before_install()
 
     if status["kind"] == KIND_STANDALONE:
         location = _install_standalone(status["latest"], repo or repository(), log)
@@ -275,26 +282,6 @@ def update(
 
     log("PartCAD %s is installed in %s." % (status["latest"], location))
     return {**status, "updated": True, "location": location}
-
-
-def _stop_daemons(log: Callable[[str], None], stop_timeout: float) -> None:
-    """Stop every running daemon and wait for it, or explain why we go ahead."""
-    running = daemon.live_daemon_dirs()
-    if not running:
-        return
-    log("Stopping %d running PartCAD daemon(s) before installing..." % len(running))
-    stopped = daemon.stop_all_daemons(timeout=stop_timeout)
-    remaining = [wdir for wdir in running if wdir not in stopped]
-    if remaining:
-        # Installing side by side, never over the running files, is what makes
-        # this survivable: the stale daemon keeps serving the old bundle until
-        # it is restarted. Say so rather than fail the update.
-        log(
-            "Warning: %d PartCAD daemon(s) did not stop within %ds; they keep running the previous "
-            "version until they are restarted." % (len(remaining), int(stop_timeout))
-        )
-    else:
-        log("All PartCAD daemons stopped.")
 
 
 # ---------------------------------------------------------------------------

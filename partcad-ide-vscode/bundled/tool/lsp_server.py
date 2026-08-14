@@ -415,10 +415,10 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     interpreter. This is specific to the "python" backend: the frozen JSON-RPC
     service already carries PartCAD.
 
-    Once the service module *is* installed, the update it already knows how to
-    do is the one that happens: the same `selfupdate` the standalone bundle and
-    `pc update` run, so all three stop the daemons and pick versions the same
-    way. The pip bootstrap below only runs when there is nothing to ask.
+    Once PartCAD *is* installed, the update that happens is the one `pc update`
+    performs: `partcad_utils.selfupdate`, so the extension and the CLI cannot
+    pick versions differently. The pip bootstrap below only runs when there is
+    nothing installed yet to update.
     """
     global partcad_log_w_stream
 
@@ -491,12 +491,17 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
 def _do_self_update() -> bool:
     """Update an already-installed PartCAD. False when there is nothing to update.
 
-    Returning False hands the caller back to the pip bootstrap: either the
-    service module is not installed yet (the first run, which is what the
-    bootstrap is for) or it is too old to carry `selfupdate`.
+    Returning False hands the caller back to the pip bootstrap: either PartCAD is
+    not installed yet (the first run, which is what the bootstrap is for) or it
+    is too old to carry `selfupdate`.
+
+    No daemon is stopped here, and none needs to be: this backend serves the
+    extension in-process and never starts one. A daemon belonging to some `pc` on
+    this machine keeps running the code it already imported, and picks the new
+    version up when it is next restarted.
     """
     try:
-        from partcad_service_json_rpc import selfupdate
+        from partcad_utils import selfupdate
     except ImportError:
         return False
 

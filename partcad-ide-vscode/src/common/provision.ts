@@ -194,13 +194,14 @@ export async function ensureServiceExecutable(
 }
 
 /**
- * Update the standalone service to the latest release.
+ * Update the standalone installation to the latest release.
  *
- * The work is done by the bundle's own `--self-update`, which is the same code
- * `pc update` runs: it decides whether anything is newer, stops every running
- * daemon and waits for it, and installs the new version beside the old one. The
- * extension's part is to show what is happening and to hand back the executable
- * to reconnect to, which is a different path once a new version is installed.
+ * The extension implements none of this: it runs `pc update --partcad-only`
+ * from the bundle it is already using, which is the same command a user would
+ * type in a terminal. `pc` decides whether anything is newer, stops its
+ * workspace's daemon and waits for it, and installs the new version beside the
+ * old one. The extension's part is to show what is happening and to hand back
+ * the executable to reconnect to -- a different path once a new version is in.
  *
  * Returns `updated: false` when the installation was already current -- not a
  * failure, and the reason the caller can reconnect to the same executable.
@@ -218,39 +219,43 @@ export async function updateServiceBundle(
         return { updated: !!downloaded, execPath: downloaded };
     }
 
-    const args = ['--self-update'];
-    const repo = getServiceDownloadRepositoryFromSetting(serverId);
-    if (repo) {
-        args.push('--update-repository', repo);
-    }
-
-    let output: string;
-    try {
-        output = await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Notification, title: 'Updating PartCAD', cancellable: false },
-            async () => runStreaming(execPath, args, outputChannel),
-        );
-    } catch (e) {
-        // A bundle older than `--self-update` rejects the flag outright -- and
-        // that is exactly the installation with the most to gain from being
-        // updated. Fall back to downloading the release here, the way the first
-        // install does. No prompt: the user asked for this, and consented to the
-        // download size when they installed the bundle that is being replaced.
-        traceInfo(`PartCAD: --self-update unavailable (${e}); downloading the release instead`);
-        const downloaded = await downloadLatest(context, serverId);
-        return { updated: !!downloaded, execPath: downloaded ?? execPath };
-    }
-
-    // The last JSON line is the machine-readable report; everything before it is
-    // the narration already streamed to the output channel.
-    const report = parseReport(output);
-    if (!report?.updated) {
-        if (report?.reason) {
-            vscode.window.showWarningMessage(`PartCAD was not updated: ${report.reason}`);
+    const cli = path.join(path.dirname(execPath), process.platform === 'win32' ? 'pc.exe' : 'pc');
+    if (isFile(cli)) {
+        const env = { ...process.env };
+        const repo = getServiceDownloadRepositoryFromSetting(serverId);
+        if (repo) {
+            // The same override install.sh and `pc update` read.
+            env.PARTCAD_REPOSITORY = repo;
         }
-        return { updated: false, execPath };
+        // The workspace folder, because `pc` derives the daemon it stops from
+        // its working directory -- the same way this extension's own connection
+        // does. Run it anywhere else and it stops a daemon nobody was using
+        // while the one holding these files stays up.
+        const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+        try {
+            await vscode.window.withProgress(
+                { location: vscode.ProgressLocation.Notification, title: 'Updating PartCAD', cancellable: false },
+                async () => runStreaming(cli, ['--no-ansi', 'update', '--partcad-only'], outputChannel, { cwd, env }),
+            );
+            // Whether anything was installed is a question about the filesystem,
+            // not about the command's output: an update lands in a directory
+            // named after the new version, so the resolved path moves.
+            const updatedPath = resolveServicePath(context, serverId);
+            return { updated: !!updatedPath && updatedPath !== execPath, execPath: updatedPath ?? execPath };
+        } catch (e) {
+            // A bundle older than `pc update --partcad-only` rejects the option
+            // outright -- and that is exactly the installation with the most to
+            // gain from being updated. Fall through to downloading the release.
+            traceInfo(`PartCAD: 'pc update' failed (${e}); downloading the release instead`);
+        }
     }
-    return { updated: true, execPath: resolveServicePath(context, serverId) ?? execPath };
+
+    // No `pc` beside the service (a bare wheel install of the service alone), or
+    // one too old to understand the command. Download the release here, the way
+    // the first install does. No prompt: the user asked for this, and consented
+    // to the download size when they installed what is being replaced.
+    const downloaded = await downloadLatest(context, serverId);
+    return { updated: !!downloaded, execPath: downloaded ?? execPath };
 }
 
 /** Download and install the latest release, without asking first. */
@@ -269,25 +274,16 @@ function downloadLatest(context: vscode.ExtensionContext, serverId: string): The
     );
 }
 
-function parseReport(output: string): any | undefined {
-    for (const line of output.split(/\r?\n/).reverse()) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-            try {
-                return JSON.parse(trimmed);
-            } catch {
-                // Not the report line after all; keep looking backwards.
-            }
-        }
-    }
-    return undefined;
-}
-
 /** Run a command, streaming both its streams to the channel, and return stdout. */
-function runStreaming(cmd: string, args: string[], outputChannel: vscode.LogOutputChannel): Promise<string> {
+function runStreaming(
+    cmd: string,
+    args: string[],
+    outputChannel: vscode.LogOutputChannel,
+    options?: cp.SpawnOptions,
+): Promise<string> {
     return new Promise((resolve, reject) => {
         outputChannel.appendLine(`> ${cmd} ${args.join(' ')}`);
-        const proc = cp.spawn(cmd, args);
+        const proc = cp.spawn(cmd, args, options ?? {});
         let stdout = '';
         proc.stdout?.on('data', (d: Buffer) => {
             stdout += d.toString();

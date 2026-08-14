@@ -17,14 +17,13 @@ never imports the heavy ``partcad`` module.
 """
 
 import contextlib
-import glob
 import hashlib
 import os
 import signal
 import socket
 import sys
 import time
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from .rpc.methods import build_registry
 from .transport.framing import read_message, write_message
@@ -54,12 +53,8 @@ def workspace_hash(root_path: str) -> str:
     return hashlib.sha256(root_path.encode("utf-8")).hexdigest()[:16]
 
 
-def workspaces_dir() -> str:
-    return os.path.join(os.path.expanduser("~"), ".partcad", "workspaces")
-
-
 def workspace_dir(root_path: str) -> str:
-    return os.path.join(workspaces_dir(), workspace_hash(root_path))
+    return os.path.join(os.path.expanduser("~"), ".partcad", "workspaces", workspace_hash(root_path))
 
 
 def socket_path(root_path: str) -> str:
@@ -316,63 +311,3 @@ def wait_until_stopped(
         return pid is None or not _pid_is_running(pid)
 
     return _wait_until(gone, timeout)
-
-
-def live_daemon_dirs(liveness_timeout: float = LIVENESS_TIMEOUT) -> List[str]:
-    """Workspace directories whose daemon is answering right now.
-
-    Enumerated from the filesystem rather than from workspace roots: the
-    directory name is a hash of the root, so the roots cannot be recovered from
-    it -- and a caller that is about to replace the installation needs *every*
-    daemon on this machine, not the one for its own workspace.
-    """
-    if os.name == "nt":  # pragma: no cover - exercised only on Windows
-        return []
-    dirs = []
-    for sock in sorted(glob.glob(os.path.join(workspaces_dir(), "*", "socket"))):
-        if is_alive(sock, liveness_timeout):
-            dirs.append(os.path.dirname(sock))
-    return dirs
-
-
-def stop_all_daemons(
-    timeout: float = STOP_TIMEOUT,
-    liveness_timeout: float = LIVENESS_TIMEOUT,
-) -> List[str]:
-    """Stop every daemon running on this machine and wait for them to be gone.
-
-    Returns the workspace directories of the daemons that stopped. A daemon that
-    does not go away within ``timeout`` is left out of the result, so the caller
-    can decide whether to proceed -- it is the one that knows what it is about to
-    do to the files that daemon is running from.
-    """
-    stopped = []
-    if os.name == "nt":  # pragma: no cover - exercised only on Windows
-        from .win_pipe import is_pipe_alive, stop_pipe_daemon
-
-        for pipe in _live_pipe_names(liveness_timeout):
-            # `name=pipe` binds this iteration's pipe into the predicate rather
-            # than leaving it to read whatever the loop variable holds later.
-            gone = lambda name=pipe: not is_pipe_alive(name, liveness_timeout)  # noqa: E731
-            if stop_pipe_daemon(pipe, liveness_timeout) and _wait_until(gone, timeout):
-                stopped.append(pipe)
-        return stopped
-
-    for wdir in live_daemon_dirs(liveness_timeout):
-        if _stop_socket_daemon(os.path.join(wdir, "socket"), liveness_timeout) and wait_until_stopped(
-            wdir, timeout, liveness_timeout
-        ):
-            stopped.append(wdir)
-    return stopped
-
-
-def _live_pipe_names(liveness_timeout: float = LIVENESS_TIMEOUT) -> List[str]:  # pragma: no cover - Windows only
-    """PartCAD named pipes that answer. Windows exposes them as a directory."""
-    from .win_pipe import is_pipe_alive
-
-    try:
-        names = os.listdir(r"\\.\pipe")
-    except OSError:
-        return []
-    pipes = [r"\\.\pipe\%s" % name for name in sorted(names) if name.startswith("partcad-")]
-    return [pipe for pipe in pipes if is_pipe_alive(pipe, liveness_timeout)]
