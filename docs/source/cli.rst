@@ -85,6 +85,16 @@ Object commands
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:
   ``svg``, ``png``, or ``readme``.
 
+  ``-t readme`` generates a markdown document instead of a projection: the package document (``README.md``,
+  listing what the package declares) or, when ``-a`` names an assembly, that assembly's own document
+  (``<assembly>.md``, listing the bill of materials — every part and sub-assembly it is made of, recursively,
+  grouped by the package they come from and counted). An assembly can also ask for its own document in the
+  package configuration, by declaring ``readme`` in its ``render`` section.
+
+  Only assemblies that a package declares are listed as sub-assemblies. An assembly embedded in an Assembly
+  YAML file's nested ``links:`` section belongs to no package, so it is not listed on its own: the parts it
+  holds are counted towards the assembly that embeds it.
+
 *****************
 Workflow commands
 *****************
