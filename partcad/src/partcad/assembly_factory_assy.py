@@ -93,7 +93,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
             result = await self.handle_node(assembly, assy)
             if result is not None:
-                assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
+                assembly.children.append(AssemblyChild(*result))
             else:
                 pc_logging.warning("Assembly is empty")
 
@@ -109,7 +109,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 f = await asyncio.tasks.wait([task])
                 result = f[0].pop().result()
                 if result is not None:
-                    assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
+                    assembly.children.append(AssemblyChild(*result))
 
         for link in node_list:
             if "connect" in link or "connectPorts" in link:
@@ -126,6 +126,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             name = None
 
         connect = None
+        connection = None
         connect_with_iface = None
         connect_with_params = None
         connect_with_instance = None
@@ -809,7 +810,61 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         pc_logging.error("Not enough data to connect %s" % name)
                         location = Location((0, 0, 0), (0, 0, 1), 0)
 
+                    connection = self._connection_info(
+                        connect,
+                        connect_to_name,
+                        connect_with_port,
+                        connect_to_port,
+                        connect_with_iface,
+                        connect_to_iface,
+                        target_part_location,
+                        target_port,
+                    )
+
         if not item is None:
-            return [item, name, location]
+            return [item, name, location, connection]
         else:
             return None
+
+    def _connection_info(
+        self,
+        connect,
+        connect_to_name,
+        connect_with_port,
+        connect_to_port,
+        connect_with_iface,
+        connect_to_iface,
+        target_part_location,
+        target_port,
+    ):
+        """What was connected to what, recorded as plain data on the child.
+
+        This is not needed to build the assembly - the placement computed above
+        is - but it is the only place that knows it. An assembly instruction book
+        (see assembly_guide.py) needs to say which two items each step joins,
+        where the joint is, and which way the two have to be pulled apart to show
+        it, and none of that can be recovered from the resulting placements.
+
+        'point' and 'direction' are in the coordinate system of the assembly
+        being built: the point where the two ports meet, and the unit vector
+        along which the item has to be moved to separate them (the port's own
+        normal, since the item was mated onto it facing the other way).
+        """
+        info = {
+            "target": connect_to_name,
+            "with_port": connect_with_port,
+            "to_port": connect_to_port,
+            "with_interface": connect_with_iface,
+            "to_interface": connect_to_iface,
+            # option: "exploded"
+            # description: the gap to show between the two items in the exploded
+            #              view of this step, in millimeters
+            # values: number
+            # default: half of the largest dimension of the two items
+            "exploded": connect.get("exploded", None),
+        }
+        if target_port is not None and target_part_location is not None:
+            port_location = target_part_location * target_port.location
+            info["point"] = list(port_location.translation)
+            info["direction"] = list(port_location.rotate_vector((0, 0, 1)))
+        return info

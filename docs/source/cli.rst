@@ -83,7 +83,7 @@ Object commands
 
 ``pc render``
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:
-  ``svg``, ``png``, or ``readme``.
+  ``svg``, ``png``, ``readme``, ``pdf``, or ``html``.
 
   ``-t readme`` generates a markdown document instead of a projection: the package document (``README.md``,
   listing what the package declares) or, when ``-a`` names an assembly, that assembly's own document
@@ -94,6 +94,22 @@ Object commands
   Only assemblies that a package declares are listed as sub-assemblies. An assembly embedded in an Assembly
   YAML file's nested ``links:`` section belongs to no package, so it is not listed on its own: the parts it
   holds are counted towards the assembly that embeds it.
+
+  ``-t pdf`` and ``-t html`` generate the assembly instruction book of the assembly named by ``-a``: a title
+  page, the same bill of materials, then — sub-assemblies first, since they have to exist before the assembly
+  that uses them — a page showing each (sub-)assembly as it should look once it is together, followed by one
+  page per assembly step. A step page shows the two items being joined, and below them an exploded view of the
+  joint with a line drawn across the gap it opens. That gap is half of the largest dimension of the two items,
+  unless the step sets ``exploded:`` in its ``connect:`` section (see :doc:`assy`). The last page collects
+  links: to this assembly and its package, to every other package that supplies at least three of its parts,
+  and to PartCAD. The HTML is one self-contained file that shows a single page at a time, with arrows on
+  either side (and the arrow keys) to flip through it. As with ``readme``, an assembly can ask for either
+  document in the package configuration, by declaring ``pdf`` or ``html`` in its ``render`` section.
+
+  Both formats are only defined for an assembly declared as ``type: assy``: the steps come from the Assembly
+  YAML file, and an assembly that has none is refused rather than reduced to a title page and a parts list. An
+  assembly that is not meant to be built at all (``manufacturable: false``, on the assembly or inherited from
+  its package) is refused too; pass ``--ignore-manufacturability`` to generate the document anyway.
 
 *****************
 Workflow commands

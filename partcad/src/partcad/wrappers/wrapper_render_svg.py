@@ -59,6 +59,22 @@ def _normalize_mesh(shape):
             pass
 
 
+def _annotation_edges(annotations):
+    """The line segments to draw on top of the projection, as build123d edges.
+
+    Each annotation is a pair of 3D points in the coordinate system of the shape
+    being rendered. Zero-length segments are dropped: 'Edge.make_line' rejects
+    them, and they would draw nothing anyway.
+    """
+    edges = []
+    for annotation in annotations:
+        start, end = annotation[0], annotation[1]
+        if tuple(start) == tuple(end):
+            continue
+        edges.append(b3d.Edge.make_line(tuple(start), tuple(end)))
+    return edges
+
+
 def process(path, request):
     try:
         wrapped = request["wrapped"]
@@ -106,6 +122,29 @@ def process(path, request):
             # exporter.add_shape(hidden, layer="Hidden")
         except:
             pass
+
+        # The annotations go through the very same projection, so that a line
+        # pointing at a feature of the shape still points at it once both are
+        # flattened. They are projected separately only so that they can be
+        # drawn in their own style.
+        annotations = request.get("annotations") or []
+        edges = _annotation_edges(annotations)
+        if edges:
+            exporter.add_layer(
+                "Annotations",
+                line_color=(192, 64, 64),
+                line_weight=request["line_weight"],
+                line_type=b3d.LineType.ISO_DASH,
+            )
+            try:
+                projected = b3d.Compound(children=edges).project_to_viewport(
+                    viewport_origin=viewport_origin,
+                    viewport_up=viewport_up,
+                )[0]
+                exporter.add_shape(projected, layer="Annotations")
+            except:
+                pass
+
         exporter.write(path)
 
         return {

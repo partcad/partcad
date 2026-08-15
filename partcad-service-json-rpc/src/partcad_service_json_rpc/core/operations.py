@@ -1403,40 +1403,60 @@ def render_objects(session, params):
     fmt = params.get("format")
     output_dir = params.get("output_dir")
     object_name = params.get("object")
+    ignore_manufacturability = params.get("ignore_manufacturability", False)
+
+    from partcad.exception import AssemblyDocumentError
 
     with pc.logging.Process(params.get("label", "Render"), package):
         ctx.option_create_dirs = params.get("create_dirs", False)
-        if params.get("recursive"):
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
-        else:
-            packages = [package]
-
-        for package in packages:
-            if object_name is not None:
-                package, object_name = pc.utils.resolve_resource_path(package, object_name)
-
-            if object_name is None:
-                ctx.render(project_path=package, format=fmt, output_dir=output_dir)
-            else:
-                sketches, interfaces, parts, assemblies = [], [], [], []
-                if params.get("sketch"):
-                    sketches.append(object_name)
-                elif params.get("interface"):
-                    interfaces.append(object_name)
-                elif params.get("assembly"):
-                    assemblies.append(object_name)
-                else:
-                    parts.append(object_name)
-                prj = ctx.get_project(package)
-                prj.render(
-                    sketches=sketches,
-                    interfaces=interfaces,
-                    parts=parts,
-                    assemblies=assemblies,
-                    format=fmt,
-                    output_dir=output_dir,
-                )
+        try:
+            _render_objects(pc, ctx, params, package, fmt, output_dir, object_name, ignore_manufacturability)
+        except AssemblyDocumentError as e:
+            # Asking for an assembly instruction book of something that has no
+            # assembly steps, or that is not meant to be built: what the user
+            # asked for, not a failure of the machinery.
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
     return None
+
+
+def _render_objects(pc, ctx, params, package, fmt, output_dir, object_name, ignore_manufacturability):
+    """The body of 'render_objects', once the request has been made sense of."""
+    if params.get("recursive"):
+        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+    else:
+        packages = [package]
+
+    for package in packages:
+        if object_name is not None:
+            package, object_name = pc.utils.resolve_resource_path(package, object_name)
+
+        if object_name is None:
+            ctx.render(
+                project_path=package,
+                format=fmt,
+                output_dir=output_dir,
+                ignore_manufacturability=ignore_manufacturability,
+            )
+        else:
+            sketches, interfaces, parts, assemblies = [], [], [], []
+            if params.get("sketch"):
+                sketches.append(object_name)
+            elif params.get("interface"):
+                interfaces.append(object_name)
+            elif params.get("assembly"):
+                assemblies.append(object_name)
+            else:
+                parts.append(object_name)
+            prj = ctx.get_project(package)
+            prj.render(
+                sketches=sketches,
+                interfaces=interfaces,
+                parts=parts,
+                assemblies=assemblies,
+                format=fmt,
+                output_dir=output_dir,
+                ignore_manufacturability=ignore_manufacturability,
+            )
 
 
 def convert_object(session, params):

@@ -120,7 +120,7 @@
     "render": {
       "type": "object",
       "patternProperties": {
-        "^(readme|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
+        "^(readme|pdf|html|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
           "oneOf": [
             { "type": "null" },
             { "type": "string" },

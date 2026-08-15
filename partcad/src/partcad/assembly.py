@@ -22,10 +22,20 @@ from . import logging as pc_logging
 
 
 class AssemblyChild:
-    def __init__(self, item, name=None, location=None):
+    """One item placed into an assembly.
+
+    'connection' is set when the item was placed by connecting it to another
+    child rather than at an absolute location: it records which child it was
+    connected to and where the two ports met, so that an assembly instruction
+    book can show that step (see assembly_guide.py). It stays 'None' for items
+    placed with 'location:', and for assemblies built through 'add()'.
+    """
+
+    def __init__(self, item, name=None, location=None, connection=None):
         self.item = item
         self.name = name
         self.location = location
+        self.connection = connection
 
 
 @telemetry.instrument()
