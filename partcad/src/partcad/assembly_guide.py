@@ -105,6 +105,10 @@ class ImageSource:
     async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
         return None
 
+    def shape_image(self, shape, key=None, alt=None, caption=None, annotations=None):
+        # Inherited by every image source, so each of them offers both forms.
+        return asyncio.run(self.shape_image_async(shape, key, alt, caption, annotations))
+
 
 class PackageImages(ImageSource):
     """The projections the package has already rendered next to its documents.
