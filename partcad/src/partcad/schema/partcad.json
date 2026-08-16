@@ -431,7 +431,9 @@
                   "uniqueItems": true
                 },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
-                "render": { "$ref": "#/definitions/render" }
+                "render": { "$ref": "#/definitions/render" },
+                "vendor": { "type": "string", "minLength": 1 },
+                "sku": { "type": "string", "minLength": 1 }
               },
               "required": ["type"],
               "additionalProperties": false

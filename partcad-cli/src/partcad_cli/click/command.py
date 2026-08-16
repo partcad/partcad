@@ -122,7 +122,7 @@ command_groups = [
     },
     {
         "name": "Object commands",
-        "commands": ["list", "add", "import", "test", "inspect", "info", "convert", "export", "render"],
+        "commands": ["list", "add", "import", "test", "inspect", "info", "bom", "convert", "export", "render"],
     },
     {
         "name": "Workflow commands",

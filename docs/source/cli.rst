@@ -72,6 +72,18 @@ Object commands
 ``pc info``
   Show detailed information about a part, assembly, or scene, including its parameters.
 
+``pc bom``
+  Print the bill of materials of an assembly: every part it is made of, recursively, with how many of each
+  are needed and, where the object says so, the vendor and the SKU to order it by. Use ``-P`` to name the
+  package the assembly comes from, ``-p <name>=<value>`` to set parameters, and ``-j``/``--json`` to produce
+  JSON on standard output instead of a table.
+
+  ``-s``/``--stop-at-purchasable`` stops the recursion at a sub-assembly that can be bought ready-made — one
+  that declares both a ``vendor`` and an ``sku``, and that a supplier of its package reports as available.
+  Such a sub-assembly is listed as a single line item and its own contents are left out: it is one thing to
+  order, not a list of parts to source and assemble. A sub-assembly that names a vendor and an SKU nobody
+  supplies is still expanded.
+
 ``pc convert``
   Convert parts or sketches to another format and update their type in the package. Subcommands: ``part`` and
   ``sketch``.
