@@ -126,6 +126,55 @@ Feature: `pc lint` command
     When I run "pc lint"
     Then the command should exit with a status code of "0"
 
+  @success
+  Scenario: Part and sketch with a source file pulled from a URL
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: Vendor files pulled from a URL
+      parts:
+        bolt:
+          type: step
+          path: bolt.step
+          fileFrom: url
+          fileUrl: https://example.com/vendor/catalog/bolt.step
+      sketches:
+        outline:
+          type: dxf
+          fileFrom: url
+          fileUrl: https://example.com/vendor/catalog/outline.dxf
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @failure
+  Scenario: fileFrom without fileUrl
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: Missing the URL to download the file from
+      parts:
+        bolt:
+          type: step
+          fileFrom: url
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "$.parts.bolt: 'fileUrl' is a dependency of 'fileFrom'"
+
+  @failure
+  Scenario: Unsupported fileFrom source
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: Only 'url' is supported so far
+      parts:
+        bolt:
+          type: step
+          fileFrom: ftp
+          fileUrl: https://example.com/vendor/catalog/bolt.step
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "$.parts.bolt.fileFrom: 'ftp' is not one of ['url']"
+
   @failure
   Scenario: Invalid provider type
     Given a file named "partcad.yaml" with content:

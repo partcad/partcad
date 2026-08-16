@@ -244,6 +244,7 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
           "oneOf": [
             {"type": "string", "minLength": 1},
             {
@@ -269,6 +270,8 @@
                   }
                 },
                 "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "desc": { "type": "string", "maxLength": 1000 },
@@ -449,6 +452,8 @@
             "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
             "desc": { "type": "string", "maxLength": 1000 },
             "path": { "type": "string", "minLength": 1 },
+            "fileFrom": { "type": "string", "enum": ["url"] },
+            "fileUrl": { "$ref": "#/definitions/url" },
             "tolerance": { "type": "number", "minimum": 0 },
             "parameters": { "$ref": "#/definitions/shape-parameter"},
             "include":{
@@ -563,6 +568,7 @@
             }
           },
           "required": ["type"],
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
           "additionalProperties": false
         }
       },

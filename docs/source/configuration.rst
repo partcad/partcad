@@ -249,6 +249,8 @@ This section exclusively covers the requirements used to create the design.
         esthetic: |
           The part has to look like ...
 
+.. _files:
+
 Files
 -----
 
@@ -265,17 +267,26 @@ can be defined explicitly using the `path` parameter:
       type: step
       path: alternative-path.step # Instead of "part-name.step"
 
-When the source file is not present in the package source repository
-but needs to be pulled from a remote location, the following options can be used:
+When the source file is not kept in the package source repository but has to be
+pulled from a remote location (a STEP file published by the part vendor, for
+example), declare where to get it from using ``fileFrom`` and ``fileUrl``:
 
 .. code-block:: yaml
 
-  fileFrom: url
-  fileUrl: <url to pull the file from>
-  # fileCompressed: <(optional) whether the file needs to be decompressed before use>
-  # fileMd5Sum: <(optional) the MD5 checksum of the file>
-  # fileSha1Sum: <(optional) the SHA1 checksum of the file>
-  # fileSha2Sum: <(optional) the SHA2 checksum of the file>
+  parts:
+    bolt:
+      type: step
+      path: bolt.step # (optional) where to place the file once it is downloaded
+      fileFrom: url # "url" is the only source supported so far
+      fileUrl: https://example.com/vendor/catalog/bolt.step
+
+The file is fetched lazily: nothing is downloaded until the object is used for
+the first time, and the downloaded file is reused afterwards. Since the file is
+not expected to be a part of the package, PartCAD does not complain about it
+being missing while the package is loaded.
+
+``fileFrom`` and ``fileUrl`` must be declared together.
+They are recognized in :ref:`parts` and :ref:`sketches`.
 
 Parameters
 ----------
@@ -349,6 +360,8 @@ Sketches are declared in ``partcad.yaml`` using the following syntax:
       type: <basic|dxf|svg|cadquery|build123d>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{sketch name}.{ext}" otherwise>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
 
 Basic
@@ -628,6 +641,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       type: <openscad|cadquery|build123d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
@@ -702,6 +717,10 @@ Define parts with CAD files using the following syntax:
     <part name>:
       type: <step|brep|stl|3mf|obj>
       binary: <(stl only) use the binary format>
+
+A CAD file published elsewhere (in a vendor's catalog, for example) does not
+have to be committed to the package: see :ref:`files` for how to have PartCAD
+download it on demand.
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
