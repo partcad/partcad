@@ -147,18 +147,21 @@ def test_pdf_table_row_never_outgrows_the_table():
     a cell past the right edge of the page is hidden just as surely as one that
     was dropped.
     """
+    # 'wrapper_layout', not the wrapper that draws the PDF: the latter imports
+    # reportlab, which is installed in the sandbox the PDF is composed in and
+    # not on the host the tests run on.
     sys.path.insert(0, os.path.join("partcad", "src", "partcad", "wrappers"))
-    import wrapper_render_pdf
+    import wrapper_layout
 
     widths, aligns = [100.0, 50.0, 200.0], ["left", "right", "left"]
     total = sum(widths)
 
     # The usual case is left exactly as it was.
-    assert wrapper_render_pdf._fit_row(["a", "b", "c"], widths, aligns) == (widths, aligns)
+    assert wrapper_layout.fit_row(["a", "b", "c"], widths, aligns) == (widths, aligns)
 
     for count in (4, 6):
         row = ["cell"] * count
-        row_widths, row_aligns = wrapper_render_pdf._fit_row(row, widths, aligns)
+        row_widths, row_aligns = wrapper_layout.fit_row(row, widths, aligns)
         assert len(row_widths) >= count
         assert len(row_aligns) >= count
         assert row_widths == pytest.approx([100.0, 50.0] + [200.0 / (count - 2)] * (count - 2))

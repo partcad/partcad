@@ -26,6 +26,7 @@ import svglib.svglib as svglib
 
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
+from wrapper_layout import fit_row
 
 PAGE_SIZES = {"A4": A4, "letter": letter}
 
@@ -244,7 +245,7 @@ class Composer:
             # markdown and the HTML renderers do: 'zip(row, widths)' would drop
             # them, and a bill of materials that loses a value on paper alone is
             # worse than one that looks crowded.
-            row_widths, row_aligns = _fit_row(row, widths, aligns)
+            row_widths, row_aligns = fit_row(row, widths, aligns)
             # 'max(..., MIN_WRAP_WIDTH)': a column squeezed down to nothing by a
             # single very long value would otherwise be asked to wrap text into
             # zero width, which no line ever fits into.
@@ -278,24 +279,6 @@ class Composer:
             else:
                 self.canvas.drawString(x, self.y, str(cell))
             x += width
-
-
-def _fit_row(row, widths, aligns):
-    """Widths and alignments covering every cell of a row.
-
-    A row is normally exactly as wide as the table's columns. One that is wider
-    fits its extra cells into the last column, which they share: the row has to
-    keep the width of the table, or the cells past the end of it would be drawn
-    off the edge of the page - hidden just as surely as if they were dropped.
-    """
-    if len(row) <= len(widths):
-        return widths, aligns
-    extra = len(row) - len(widths)
-    shared = widths[-1] / (extra + 1)
-    return (
-        list(widths[:-1]) + [shared] * (extra + 1),
-        list(aligns) + ["left"] * extra,
-    )
 
 
 def _column_widths(columns, rows, available):
