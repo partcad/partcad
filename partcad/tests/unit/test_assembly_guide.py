@@ -8,6 +8,7 @@
 import asyncio
 import os
 import re
+import sys
 import tempfile
 
 import pytest
@@ -137,6 +138,31 @@ def test_document_to_data_is_plain():
     assert blocks[0] == {"type": "heading", "text": "widget", "level": 1, "url": None}
     assert blocks[1]["rows"] == [["bolt"]]
     assert blocks[2]["images"] == [{"path": "/tmp/widget.svg", "caption": "widget", "alt": ""}]
+
+
+def test_pdf_table_row_never_outgrows_the_table():
+    """A row wider than the table's columns stays on the page
+
+    Every cell has to be drawn, and the row has to keep the width of the table:
+    a cell past the right edge of the page is hidden just as surely as one that
+    was dropped.
+    """
+    sys.path.insert(0, os.path.join("partcad", "src", "partcad", "wrappers"))
+    import wrapper_render_pdf
+
+    widths, aligns = [100.0, 50.0, 200.0], ["left", "right", "left"]
+    total = sum(widths)
+
+    # The usual case is left exactly as it was.
+    assert wrapper_render_pdf._fit_row(["a", "b", "c"], widths, aligns) == (widths, aligns)
+
+    for count in (4, 6):
+        row = ["cell"] * count
+        row_widths, row_aligns = wrapper_render_pdf._fit_row(row, widths, aligns)
+        assert len(row_widths) >= count
+        assert len(row_aligns) >= count
+        assert row_widths == pytest.approx([100.0, 50.0] + [200.0 / (count - 2)] * (count - 2))
+        assert sum(row_widths) == pytest.approx(total)
 
 
 #

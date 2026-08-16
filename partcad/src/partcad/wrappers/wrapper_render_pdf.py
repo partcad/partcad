@@ -284,13 +284,18 @@ def _fit_row(row, widths, aligns):
     """Widths and alignments covering every cell of a row.
 
     A row is normally exactly as wide as the table's columns. One that is wider
-    borrows the last column's width for the cells beyond them, so they are drawn
-    rather than dropped.
+    fits its extra cells into the last column, which they share: the row has to
+    keep the width of the table, or the cells past the end of it would be drawn
+    off the edge of the page - hidden just as surely as if they were dropped.
     """
     if len(row) <= len(widths):
         return widths, aligns
     extra = len(row) - len(widths)
-    return list(widths) + [widths[-1]] * extra, list(aligns) + ["left"] * extra
+    shared = widths[-1] / (extra + 1)
+    return (
+        list(widths[:-1]) + [shared] * (extra + 1),
+        list(aligns) + ["left"] * extra,
+    )
 
 
 def _column_widths(columns, rows, available):
