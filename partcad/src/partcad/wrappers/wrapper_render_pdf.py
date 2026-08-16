@@ -183,6 +183,11 @@ class Composer:
         x = MARGIN
         lowest = top
         for image, drawing in drawings:
+            if not drawing.width or not drawing.height:
+                # An empty or degenerate viewport. Nothing to place, and nothing
+                # to divide by either.
+                sys.stderr.write("Skipping an illustration of no size: %s\n" % image.get("path"))
+                continue
             scale = min(box_width / drawing.width, box_height / drawing.height)
             width, height = drawing.width * scale, drawing.height * scale
             drawing.scale(scale, scale)
@@ -276,12 +281,19 @@ def _column_widths(columns, rows, available):
 
 
 def _load_image(path):
-    """The drawable form of an illustration, or None if it cannot be read."""
+    """The drawable form of an illustration, or None if it cannot be read.
+
+    A picture that cannot be read is left out rather than allowed to fail the
+    whole book, but it is reported: a page silently missing its illustration is
+    not something the reader of the PDF can diagnose. The wrapper exits zero, so
+    this reaches the caller as a warning (see runtime_python.run_async_onced).
+    """
     if not path or not os.path.exists(path):
         return None
     try:
         return svglib.svg2rlg(path)
-    except Exception:
+    except Exception as e:
+        sys.stderr.write("Failed to read the illustration %s: %s\n" % (path, e))
         return None
 
 

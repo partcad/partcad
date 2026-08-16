@@ -24,6 +24,7 @@ fits on one".
 
 import base64
 import html
+import json
 import mimetypes
 import os
 import re
@@ -237,12 +238,15 @@ def render_html(document: Document) -> str:
             % (number, html.escape(page.title or ""), blocks, footer)
         )
 
-    titles = [html.escape(page.title or "") for page in document.pages]
+    # json.dumps, not hand-escaping: these become JavaScript string literals, and
+    # HTML escaping leaves a backslash in a title alone - which would end the
+    # literal in the wrong place and take the whole script with it.
+    titles = [json.dumps(page.title or "") for page in document.pages]
 
     return _HTML_TEMPLATE % {
         "title": html.escape(document.title),
         "pages": "\n".join(pages_html),
-        "titles": ", ".join('"%s"' % title.replace('"', '\\"') for title in titles),
+        "titles": ", ".join(titles),
     }
 
 
@@ -292,9 +296,13 @@ def _html_block(block: Block) -> str:
         )
         body = []
         for row in block.rows:
+            # A row with more cells than there are columns keeps them all, the
+            # same way markdown does: the three formats have to say the same
+            # thing about the same document.
+            row_aligns = list(aligns) + ["left"] * max(0, len(row) - len(aligns))
             cells = "".join(
                 '<td style="text-align: %s">%s</td>' % (align, html.escape("" if cell is None else str(cell)))
-                for cell, align in zip(row, aligns)
+                for cell, align in zip(row, row_aligns)
             )
             body.append("<tr>%s</tr>" % cells)
         return "<table><thead><tr>%s</tr></thead><tbody>%s</tbody></table>" % (head, "".join(body))

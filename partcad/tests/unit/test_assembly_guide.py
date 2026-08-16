@@ -13,6 +13,7 @@ import tempfile
 import pytest
 
 import partcad as pc
+from partcad import assembly_factory_assy
 from partcad import assembly_guide
 from partcad import document as pc_document
 from partcad.assembly import Assembly
@@ -222,6 +223,24 @@ def test_exploded_location_moves_the_item_along_the_joint():
     assert translation == pytest.approx((1.0, 2.0, 13.0))
 
 
+def test_exploded_is_validated_where_it_is_declared():
+    """A gap that is not a number is reported and dropped, not carried onwards
+
+    An ASSY file is not validated against a schema, so this is the only place
+    that can tell the reader which file the bad value is in. Left to reach the
+    renderer, it would surface as a ValueError naming neither.
+    """
+    factory = assembly_factory_assy.AssemblyFactoryAssy.__new__(assembly_factory_assy.AssemblyFactoryAssy)
+    factory.name = "widget"
+
+    assert factory._exploded_distance(None, "bracket") is None
+    assert factory._exploded_distance(30, "bracket") == 30.0
+    assert factory._exploded_distance("30", "bracket") == 30.0
+    # Neither of these is a distance; the step falls back to the default gap.
+    assert factory._exploded_distance("far", "bracket") is None
+    assert factory._exploded_distance(True, "bracket") is None
+
+
 def test_step_description_names_the_ports():
     """A step says what is connected to what"""
     step = assembly_guide.GuideStep(
@@ -371,8 +390,8 @@ def test_render_assembly_guide_sub_assemblies():
 
 
 @pytest.mark.slow
-def test_render_assembly_guide_refuses_a_non_assembly():
-    """The instruction book of something with no steps is refused"""
+def test_render_assembly_guide_refuses_a_non_manufacturable_assembly():
+    """The instruction book of an assembly nobody is meant to build is refused"""
     ctx = pc.init("examples")
     prj = ctx.get_project("//produce_assembly_assy")
     output_dir = tempfile.mkdtemp()

@@ -25,6 +25,9 @@ import build123d as b3d
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
+# Two points closer than this are the same point, as far as a drawn line goes.
+TOLERANCE = 1e-9
+
 
 def _normalize_mesh(shape):
     """Round-trip a triangulation-only shape (e.g. an SDF mesh) through STL.
@@ -63,15 +66,20 @@ def _annotation_edges(annotations):
     """The line segments to draw on top of the projection, as build123d edges.
 
     Each annotation is a pair of 3D points in the coordinate system of the shape
-    being rendered. Zero-length segments are dropped: 'Edge.make_line' rejects
-    them, and they would draw nothing anyway.
+    being rendered. Segments too short to draw are dropped, with a tolerance
+    rather than by exact equality: 'Edge.make_line' rejects two points that are
+    merely very close, and an annotation is decoration - one that cannot be built
+    must not cost the caller the projection it was going to be drawn on.
     """
     edges = []
     for annotation in annotations:
-        start, end = annotation[0], annotation[1]
-        if tuple(start) == tuple(end):
+        start, end = tuple(annotation[0]), tuple(annotation[1])
+        if all(abs(float(a) - float(b)) < TOLERANCE for a, b in zip(start, end)):
             continue
-        edges.append(b3d.Edge.make_line(tuple(start), tuple(end)))
+        try:
+            edges.append(b3d.Edge.make_line(start, end))
+        except Exception as e:
+            sys.stderr.write("Skipping an annotation from %s to %s: %s\n" % (start, end, e))
     return edges
 
 

@@ -22,6 +22,7 @@ ASSY - has no steps to describe, and is refused rather than silently reduced to
 a title page and a parts list.
 """
 
+import asyncio
 import copy
 import math
 import os
@@ -101,7 +102,7 @@ def check_source(assembly, ignore_manufacturability: bool = False):
 class ImageSource:
     """Where the pictures of a document come from."""
 
-    async def shape_image(self, shape, key=None, alt=None, caption=None, annotations=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
         return None
 
 
@@ -118,7 +119,7 @@ class PackageImages(ImageSource):
         self.output_dir = output_dir
         self.return_path = return_path
 
-    async def shape_image(self, shape, key=None, alt=None, caption=None, annotations=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
         # The image is looked up where the shape's own configuration puts it, the
         # same way rendering it there does. Deep copy: the merge is in place.
         image_cfg = render_cfg_merge(copy.deepcopy(self.render_cfg), shape.config.get("render") or {})
@@ -149,7 +150,7 @@ class RenderedImages(ImageSource):
         self.directory = directory
         self.rendered = {}
 
-    async def shape_image(self, shape, key=None, alt=None, caption=None, annotations=None):
+    async def shape_image_async(self, shape, key=None, alt=None, caption=None, annotations=None):
         if key is None:
             key = "%s:%s" % (shape.project_name, shape.name)
 
@@ -232,7 +233,7 @@ class GuideSection:
     top: bool = False
 
 
-async def collect_sections(ctx, assembly) -> list:
+async def collect_sections_async(ctx, assembly) -> list:
     """Every assembly that has to be built, in the order it has to be built in.
 
     Sub-assemblies come before the assembly that uses them - they have to exist
@@ -243,6 +244,10 @@ async def collect_sections(ctx, assembly) -> list:
     seen = set()
     await _collect_section(ctx, assembly, sections, seen, top=True)
     return sections
+
+
+def collect_sections(ctx, assembly) -> list:
+    return asyncio.run(collect_sections_async(ctx, assembly))
 
 
 async def _collect_section(ctx, assembly, sections, seen, top=False):
@@ -537,7 +542,7 @@ def package_author(project):
     return None
 
 
-async def build_readme_document(project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
+async def build_readme_document_async(project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
     """The markdown document of an assembly: what it is made of."""
     grouped = await assembly.get_bom_grouped_async()
 
@@ -546,7 +551,7 @@ async def build_readme_document(project, assembly, images: ImageSource, dir_path
         blocks.append(doc.Paragraph(assembly.desc))
     blocks.append(doc.Properties([("Package", "`%s`" % project.name)]))
 
-    image = await images.shape_image(assembly)
+    image = await images.shape_image_async(assembly)
     if image is not None:
         blocks.append(doc.ImageRow([image]))
 
@@ -560,14 +565,18 @@ async def build_readme_document(project, assembly, images: ImageSource, dir_path
     )
 
 
-async def build_guide_document(ctx, project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
+def build_readme_document(project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
+    return asyncio.run(build_readme_document_async(project, assembly, images, dir_path))
+
+
+async def build_guide_document_async(ctx, project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
     """The assembly instruction book of an assembly.
 
     A title page, the bill of materials, then every assembly - sub-assemblies
     first - with a page showing what it should look like once it is together and
     a page for each of its steps, and a page of links to close.
     """
-    sections = await collect_sections(ctx, assembly)
+    sections = await collect_sections_async(ctx, assembly)
     grouped = await assembly.get_bom_grouped_async()
 
     pages = [await _title_page(project, assembly, images, sections)]
@@ -586,10 +595,14 @@ async def build_guide_document(ctx, project, assembly, images: ImageSource, dir_
     )
 
 
+def build_guide_document(ctx, project, assembly, images: ImageSource, dir_path=None) -> doc.Document:
+    return asyncio.run(build_guide_document_async(ctx, project, assembly, images, dir_path))
+
+
 async def _title_page(project, assembly, images, sections):
     blocks = [doc.Heading(assembly.name, level=1)]
 
-    image = await images.shape_image(assembly, alt=assembly.name)
+    image = await images.shape_image_async(assembly, alt=assembly.name)
     if image is not None:
         blocks.append(doc.ImageRow([image], height=0.5))
 
@@ -618,7 +631,7 @@ async def _section_pages(project, section: GuideSection, images: ImageSource, se
     title = "Assembly: %s" % section.name if not section.top else section.name
     blocks = [doc.Heading(title, level=1)]
 
-    image = await images.shape_image(section.assembly, alt=section.name)
+    image = await images.shape_image_async(section.assembly, alt=section.name)
     if image is not None:
         blocks.append(doc.ImageRow([image], height=0.5))
 
@@ -648,10 +661,10 @@ async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource
     blocks = [doc.Heading("%s: step %d of %d" % (section.name, step.number, len(section.steps)), level=1)]
 
     row = []
-    item_image = await images.shape_image(step.item, alt=step.item_name, caption=step.item_name)
+    item_image = await images.shape_image_async(step.item, alt=step.item_name, caption=step.item_name)
     if item_image is not None:
         row.append(item_image)
-    counterpart_image = await images.shape_image(
+    counterpart_image = await images.shape_image_async(
         step.counterpart,
         key=_counterpart_key(section, step),
         alt=step.counterpart_name,
@@ -664,7 +677,7 @@ async def _step_page(section: GuideSection, step: GuideStep, images: ImageSource
 
     blocks.append(doc.Paragraph(step.description()))
 
-    exploded = await images.shape_image(
+    exploded = await images.shape_image_async(
         exploded_assembly(step),
         key="%s-step-%d-exploded" % (section.name, step.number),
         alt="%s exploded" % step.item_name,

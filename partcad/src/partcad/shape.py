@@ -670,9 +670,11 @@ class Shape(ShapeConfiguration):
             await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
 
             # The wrapper writes nothing, but every wrapper is invoked with an
-            # output path; give it one it will not use.
-            command = [wrapper.get("bbox.py"), os.path.abspath(tempfile.mktemp(".txt"))]
-            exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+            # output path; give it one inside a directory of our own, which is
+            # removed with the call.
+            with tempfile.TemporaryDirectory(prefix="partcad-bbox-") as unused_dir:
+                command = [wrapper.get("bbox.py"), os.path.join(unused_dir, "unused.txt")]
+                exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
             if exitcode != 0 and len(errors) == 0:
                 errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
             if errors:
@@ -705,6 +707,9 @@ class Shape(ShapeConfiguration):
         if box is None:
             return None
         return max(box[3] - box[0], box[4] - box[1], box[5] - box[2])
+
+    def get_max_dimension(self, ctx):
+        return asyncio.run(self.get_max_dimension_async(ctx))
 
     async def _get_svg_path(self, ctx, project):
         async with self.svg_lock:

@@ -13,6 +13,7 @@ the illustrations. So the document travels there as plain data, and comes back
 as a file.
 """
 
+import asyncio
 import os
 
 from . import document as pc_document
@@ -55,3 +56,7 @@ async def render_pdf_async(ctx, document: pc_document.Document, path, page_size=
         raise Exception("Failed to generate the PDF document: %s" % result.get("exception", "Unknown error"))
 
     return path
+
+
+def render_pdf(ctx, document: pc_document.Document, path, page_size=DEFAULT_PAGE_SIZE):
+    return asyncio.run(render_pdf_async(ctx, document, path, page_size))

@@ -1405,9 +1405,10 @@ class Project(project_config.Configuration):
         assembly, path, dir_path, return_path, render_cfg, output_dir = target
 
         images = assembly_guide.PackageImages(self, render_cfg, output_dir, return_path)
-        document = await assembly_guide.build_readme_document(self, assembly, images, dir_path)
+        document = await assembly_guide.build_readme_document_async(self, assembly, images, dir_path)
 
         lines = pc_document.render_markdown(document)
+        self.ctx.ensure_dirs_for_file(path)
         with open(path, "w") as f:
             f.writelines(map(lambda s: s + "\n", lines))
         return path
@@ -1450,7 +1451,7 @@ class Project(project_config.Configuration):
             # rendered into a directory of their own and thrown away with it.
             with tempfile.TemporaryDirectory() as assets_dir:
                 images = assembly_guide.RenderedImages(self.ctx, self, assets_dir)
-                document = await assembly_guide.build_guide_document(self.ctx, self, assembly, images, dir_path)
+                document = await assembly_guide.build_guide_document_async(self.ctx, self, assembly, images, dir_path)
 
                 self.ctx.ensure_dirs_for_file(path)
                 if format == "html":

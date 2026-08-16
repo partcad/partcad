@@ -100,7 +100,8 @@ Object commands
   that uses them — a page showing each (sub-)assembly as it should look once it is together, followed by one
   page per assembly step. A step page shows the two items being joined, and below them an exploded view of the
   joint with a line drawn across the gap it opens. That gap is half of the largest dimension of the two items,
-  unless the step sets ``exploded:`` in its ``connect:`` section (see :doc:`assy`). The last page collects
+  unless the step sets ``exploded:`` in its ``connect:`` or ``connectPorts:`` section (see :doc:`assy`). The
+  last page collects
   links: to this assembly and its package, to every other package that supplies at least three of its parts,
   and to PartCAD. The HTML is one self-contained file that shows a single page at a time, with arrows on
   either side (and the arrow keys) to flip through it. As with ``readme``, an assembly can ask for either

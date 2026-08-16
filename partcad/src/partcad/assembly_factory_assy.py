@@ -861,10 +861,33 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             #              view of this step, in millimeters
             # values: number
             # default: half of the largest dimension of the two items
-            "exploded": connect.get("exploded", None),
+            "exploded": self._exploded_distance(connect.get("exploded", None), connect_to_name),
         }
         if target_port is not None and target_part_location is not None:
             port_location = target_part_location * target_port.location
             info["point"] = list(port_location.translation)
             info["direction"] = list(port_location.rotate_vector((0, 0, 1)))
         return info
+
+    def _exploded_distance(self, value, connect_to_name):
+        """The 'exploded' override of a connection, as a number of millimeters.
+
+        Checked here rather than where the document is generated: an ASSY file is
+        not validated against a schema, and a value that is not a number would
+        otherwise surface much later, as a ValueError from inside the renderer,
+        naming neither the file nor the step it came from. A bad value is
+        reported and dropped: it decides how a picture looks, and is no reason to
+        refuse to build the assembly.
+        """
+        if value is None or isinstance(value, bool):
+            if isinstance(value, bool):
+                pc_logging.error("%s: 'exploded' must be a number, got %r" % (self.name, value))
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            pc_logging.error(
+                "%s: 'exploded' must be a number of millimeters, got %r (connecting to %s)"
+                % (self.name, value, connect_to_name)
+            )
+            return None
