@@ -10,7 +10,7 @@ links:
       comment: |
         Start this screw by hand: the plate flexes if it is torqued down first.
       how:
-        pushTorqueMax: 2.5
+        pushForceMax: 2.5
         turnDirection: ccw
         turnTorqueMax: 1.2
         threadStep: 0.5

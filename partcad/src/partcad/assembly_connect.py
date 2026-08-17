@@ -19,9 +19,11 @@ that the assembler needs must be codified in the other ASSY fields.
 from . import logging as pc_logging
 
 # 'how' defaults. See 'docs/source/assy.rst' for the units and the semantics.
-DEFAULT_PUSH_TORQUE_MAX = 5.0  # N
+# The units are SI, except for lengths, which are in millimetres like everywhere
+# else in PartCAD. A push is a linear force (N); a turn is a torque (N*m).
+DEFAULT_PUSH_FORCE_MAX = 5.0  # N
 DEFAULT_TURN_DIRECTION = "cw"  # clockwise
-DEFAULT_TURN_TORQUE_MAX = 0.0  # N
+DEFAULT_TURN_TORQUE_MAX = 0.0  # N*m
 DEFAULT_THREAD_STEP = 0.0  # mm
 
 TURN_DIRECTION_CW = "cw"
@@ -30,7 +32,7 @@ TURN_DIRECTIONS = (TURN_DIRECTION_CW, TURN_DIRECTION_CCW)
 
 # The fields of 'how' that are recognized. Anything else is a typo worth reporting.
 HOW_FIELDS = (
-    "pushTorqueMax",
+    "pushForceMax",
     "turnDirection",
     "turnTorqueMax",
     "threadStep",
@@ -39,6 +41,15 @@ HOW_FIELDS = (
     "holdTo",
     "holdToInstance",
 )
+
+# Fields that were renamed, and the field that replaces each of them. They are
+# still accepted, so that the ASSY files written against the earlier spelling
+# keep working, but they are reported so that they can be fixed.
+HOW_FIELDS_DEPRECATED = {
+    # A push is a force, not a torque: the value is in newtons either way, but
+    # the name said otherwise.
+    "pushTorqueMax": "pushForceMax",
+}
 
 # The object-level ('parts' and 'assemblies' in 'partcad.yaml') defaults for
 # 'holdWith'/'holdTo' and 'holdWithInstance'/'holdToInstance'.
@@ -81,6 +92,10 @@ class ConnectHow:
 
     Everything here is optional in the ASSY file: an omitted field, and an
     omitted 'how' section altogether, mean the documented default.
+
+    Units: 'pushForceMax' is a linear force in newtons (N), 'turnTorqueMax' is a
+    torque in newton-metres (N*m), and 'threadStep' is a length in millimetres
+    (mm), matching the length unit used everywhere else in PartCAD.
     """
 
     def __init__(self, config=None, where: str = "connect"):
@@ -93,11 +108,19 @@ class ConnectHow:
             pc_logging.error("%s: 'how' must be a section, ignoring: %s" % (where, config))
             config = {}
 
+        config = dict(config)
+        for old_field, new_field in HOW_FIELDS_DEPRECATED.items():
+            if old_field not in config:
+                continue
+            pc_logging.warning("%s: 'how.%s' is deprecated, use 'how.%s'" % (where, old_field, new_field))
+            # The new spelling wins if the file happens to carry both.
+            config.setdefault(new_field, config.pop(old_field))
+
         for field in config.keys():
             if field not in HOW_FIELDS:
                 pc_logging.error("%s: unknown 'how' field, ignoring: %s" % (where, field))
 
-        self.push_torque_max = self._number(config, "pushTorqueMax", DEFAULT_PUSH_TORQUE_MAX)
+        self.push_force_max = self._number(config, "pushForceMax", DEFAULT_PUSH_FORCE_MAX)
         self.turn_direction = self._turn_direction(config)
         self.turn_torque_max = self._number(config, "turnTorqueMax", DEFAULT_TURN_TORQUE_MAX)
         self.thread_step = self._number(config, "threadStep", DEFAULT_THREAD_STEP)
@@ -166,7 +189,7 @@ class ConnectHow:
 
     def info(self):
         info = {
-            "pushTorqueMax": self.push_torque_max,
+            "pushForceMax": self.push_force_max,
             "turnDirection": self.turn_direction,
             "turnTorqueMax": self.turn_torque_max,
             "threadStep": self.thread_step,

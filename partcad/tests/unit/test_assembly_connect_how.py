@@ -9,10 +9,11 @@ import asyncio
 
 import partcad as pc
 from partcad.assembly_connect import (
-    DEFAULT_PUSH_TORQUE_MAX,
+    DEFAULT_PUSH_FORCE_MAX,
     DEFAULT_THREAD_STEP,
     DEFAULT_TURN_DIRECTION,
     DEFAULT_TURN_TORQUE_MAX,
+    HOW_FIELDS_DEPRECATED,
     ConnectHold,
     ConnectHow,
 )
@@ -54,7 +55,7 @@ def test_connect_how_defaults():
     how = ConnectHow(None).resolve()
     assert how.specified is False
     assert how.is_default()
-    assert how.push_torque_max == DEFAULT_PUSH_TORQUE_MAX == 5.0
+    assert how.push_force_max == DEFAULT_PUSH_FORCE_MAX == 5.0
     assert how.turn_direction == DEFAULT_TURN_DIRECTION == "cw"
     assert how.turn_torque_max == DEFAULT_TURN_TORQUE_MAX == 0.0
     assert how.thread_step == DEFAULT_THREAD_STEP == 0.0
@@ -69,25 +70,25 @@ def test_connect_how_partial():
     assert not how.is_default()
     assert how.turn_direction == "ccw"
     assert how.turn_torque_max == 1.5
-    assert how.push_torque_max == DEFAULT_PUSH_TORQUE_MAX
+    assert how.push_force_max == DEFAULT_PUSH_FORCE_MAX
     assert how.thread_step == DEFAULT_THREAD_STEP
 
 
 def test_connect_how_all_fields():
     how = ConnectHow(
         {
-            "pushTorqueMax": 2.5,
+            "pushForceMax": 2.5,
             "turnDirection": "ccw",
             "turnTorqueMax": 1.2,
             "threadStep": 0.5,
         }
     ).resolve()
-    assert how.push_torque_max == 2.5
+    assert how.push_force_max == 2.5
     assert how.turn_direction == "ccw"
     assert how.turn_torque_max == 1.2
     assert how.thread_step == 0.5
     assert how.info() == {
-        "pushTorqueMax": 2.5,
+        "pushForceMax": 2.5,
         "turnDirection": "ccw",
         "turnTorqueMax": 1.2,
         "threadStep": 0.5,
@@ -98,17 +99,35 @@ def test_connect_how_invalid_values_fall_back_to_defaults():
     """Invalid values are reported, but they never break the assembly"""
     how = ConnectHow(
         {
-            "pushTorqueMax": "a lot",
+            "pushForceMax": "a lot",
             "turnDirection": "widdershins",
             "turnTorqueMax": -1.0,
             "threadStep": None,
             "typo": 1,
         }
     ).resolve()
-    assert how.push_torque_max == DEFAULT_PUSH_TORQUE_MAX
+    assert how.push_force_max == DEFAULT_PUSH_FORCE_MAX
     assert how.turn_direction == DEFAULT_TURN_DIRECTION
     assert how.turn_torque_max == DEFAULT_TURN_TORQUE_MAX
     assert how.thread_step == DEFAULT_THREAD_STEP
+
+
+def test_connect_how_deprecated_field_still_works():
+    """A push is a force: the old 'pushTorqueMax' spelling still means it"""
+    assert HOW_FIELDS_DEPRECATED["pushTorqueMax"] == "pushForceMax"
+    how = ConnectHow({"pushTorqueMax": 2.5}).resolve()
+    assert how.push_force_max == 2.5
+    assert how.info() == {
+        "pushForceMax": 2.5,
+        "turnDirection": DEFAULT_TURN_DIRECTION,
+        "turnTorqueMax": DEFAULT_TURN_TORQUE_MAX,
+        "threadStep": DEFAULT_THREAD_STEP,
+    }
+
+
+def test_connect_how_new_field_wins_over_the_deprecated_one():
+    how = ConnectHow({"pushTorqueMax": 2.5, "pushForceMax": 7.5}).resolve()
+    assert how.push_force_max == 7.5
 
 
 def test_connect_how_hold_explicit():
@@ -209,7 +228,7 @@ def test_assy_connect_comment_and_how():
 
     explicit = children["screw-tl"]
     assert explicit.comment.startswith("Start this screw by hand")
-    assert explicit.how.push_torque_max == 2.5
+    assert explicit.how.push_force_max == 2.5
     assert explicit.how.turn_direction == "ccw"
     assert explicit.how.turn_torque_max == 1.2
     assert explicit.how.thread_step == 0.5

@@ -91,10 +91,10 @@ the connection rather than place it:
     name: <target instance already in the assembly>
     comment: <free form context for a human or an LLM; never parsed>
     how:
-      pushTorqueMax: <N, default 5>
+      pushForceMax: <force in N, default 5>
       turnDirection: <cw (default) or ccw>
-      turnTorqueMax: <N, default 0>
-      threadStep: <mm per full turn, default 0.00>
+      turnTorqueMax: <torque in N*m, default 0>
+      threadStep: <lead in mm per full turn, default 0.00>
       holdWith: <interface(s) to hold the part being added by>
       holdWithInstance: <instance(s) of holdWith>
       holdTo: <interface(s) to hold the target by>

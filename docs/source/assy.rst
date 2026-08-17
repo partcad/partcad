@@ -114,19 +114,44 @@ and so is the section itself: an omitted field means the default below.
   .. code-block:: yaml
 
     how:
-      pushTorqueMax: <(optional) maximum pushing force, in N, default: 5>
+      pushForceMax: <(optional) maximum linear force, in N, default: 5>
       turnDirection: <(optional) "cw" (clockwise) or "ccw" (counterclockwise), default: "cw">
-      turnTorqueMax: <(optional) maximum turning torque, in N, default: 0>
-      threadStep: <(optional) thread step, in mm, default: 0.00>
+      turnTorqueMax: <(optional) maximum torque, in N*m, default: 0>
+      threadStep: <(optional) axial distance per full turn, in mm, default: 0.00>
       holdWith: <(optional) interface, or list of interfaces, to hold this object by>
       holdWithInstance: <(optional) instance of each interface listed in "holdWith">
       holdTo: <(optional) interface, or list of interfaces, to hold the target object by>
       holdToInstance: <(optional) instance of each interface listed in "holdTo">
 
-`threadStep` is the distance the object advances per full turn.
-When it is non-zero, the assembler manages the pushing and the turning torques
-together, so that the resulting motion reproduces the given thread (or, more
-generally, rotation) pattern, staying within `pushTorqueMax` and
+The units are SI, with the exception of lengths, which are in millimetres like
+everywhere else in PartCAD:
+
++--------------------+------------------------+-----------------------------------------+
+| Field              | Quantity               | Unit                                    |
++====================+========================+=========================================+
+| ``pushForceMax``   | force                  | ``N`` (newton)                          |
++--------------------+------------------------+-----------------------------------------+
+| ``turnTorqueMax``  | torque                 | ``N*m`` (newton-metre)                  |
++--------------------+------------------------+-----------------------------------------+
+| ``threadStep``     | length                 | ``mm`` (millimetre)                     |
++--------------------+------------------------+-----------------------------------------+
+
+Pushing an object into place is a linear motion, so ``pushForceMax`` bounds a
+**force** in newtons. Turning it is a rotation, so ``turnTorqueMax`` bounds a
+**torque** in newton-metres.
+
+.. note::
+
+   ``pushForceMax`` was called ``pushTorqueMax`` in the first draft of this
+   section. The old spelling is still accepted, with a warning, and means the
+   same thing.
+
+`threadStep` is the **lead**: the axial distance the object advances per full
+turn. For a multi-start thread that is the pitch multiplied by the number of
+starts, not the pitch itself.
+When it is non-zero, the assembler manages the pushing force and the turning
+torque together, so that the resulting motion reproduces the given thread (or,
+more generally, rotation) pattern, staying within `pushForceMax` and
 `turnTorqueMax`. The default of `0.00` means a straight push with no turning.
 
 `holdWith` names the interface of the object that is getting added to the
