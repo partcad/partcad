@@ -174,13 +174,45 @@ class Assembly(Shape):
             entry[shape_envelope.KEY_LOCATION] = composed.as_packed()
         return entry
 
+    def connected_children(self):
+        """Every child of this assembly, including those of the sub-assemblies it embeds.
+
+        An ASSY file's top level 'links:' becomes a child assembly of the object
+        the file defines, and so does every nested 'links:'. Those embedded
+        assemblies are not objects of any package - exactly as in the grouped
+        BoM, what they hold belongs to the assembly that embeds them - so the
+        connections inside them are this assembly's connections.
+        """
+        for child in self.children:
+            yield child
+            item = child.item
+            if isinstance(item, Assembly) and item.config.get("child", False):
+                yield from item.connected_children()
+
+    async def resolve_connect_metadata(self, ctx):
+        """Fill in the parts of the connection metadata that need the geometry.
+
+        Only 'how.pushDistance' does, and only when the ASSY file left it to be
+        derived from the object being connected. Instantiating an assembly
+        deliberately does not build any geometry, so this is a separate step for
+        the callers that have a context and want the numbers.
+        """
+        await self.do_instantiate()
+        await asyncio.gather(
+            *[child.how.resolve_push_distance(ctx) for child in self.connected_children() if child.how is not None]
+        )
+
     def shape_info(self, ctx):
         info = super().shape_info(ctx)
         # The connection metadata lives on the children, and a cached shape is
         # returned without ever populating them.
         if not self.children:
             asyncio.run(self.do_instantiate())
-        connections = [child.connect_info() for child in self.children]
+        try:
+            asyncio.run(self.resolve_connect_metadata(ctx))
+        except Exception as e:
+            pc_logging.debug("Failed to resolve the connection metadata: %s" % e)
+        connections = [child.connect_info() for child in self.connected_children()]
         connections = [connection for connection in connections if connection is not None]
         if connections:
             info["Connections"] = connections

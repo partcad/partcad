@@ -15,7 +15,7 @@ import yaml
 
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
-from .assembly_connect import ConnectHow
+from .assembly_connect import ConnectHow, check_stage_sequence
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from . import logging as pc_logging
@@ -102,6 +102,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
     async def handle_node_list(self, assembly, node_list):
         tasks = []
+
+        check_stage_sequence(node_list, self.name)
 
         async def wait_for_tasks():
             nonlocal tasks
@@ -831,7 +833,13 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
                 # Now that both ends of the connection are known, the interfaces
                 # to hold them by can be matched against what they implement.
-                connect_how.resolve(item, target_part)
+                # The source port is the frame a derived "pushDistance" is
+                # measured along, so it goes along too.
+                connect_how.resolve(
+                    item,
+                    target_part,
+                    source_frame=None if source_port is None else source_port.location,
+                )
 
         if not item is None:
             return AssemblyChild(item, name, location, connect_comment, connect_how)

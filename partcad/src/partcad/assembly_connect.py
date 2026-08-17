@@ -26,13 +26,20 @@ DEFAULT_TURN_DIRECTION = "cw"  # clockwise
 DEFAULT_TURN_TORQUE_MAX = 0.0  # N*m
 DEFAULT_THREAD_STEP = 0.0  # mm
 
+# 'pushDistance' has no fixed default: it is derived from the object that is
+# being connected, as this multiple of its own length along the Z axis of the
+# interface that it is connected by.
+PUSH_DISTANCE_FACTOR = 1.5
+
 TURN_DIRECTION_CW = "cw"
 TURN_DIRECTION_CCW = "ccw"
 TURN_DIRECTIONS = (TURN_DIRECTION_CW, TURN_DIRECTION_CCW)
 
 # The fields of 'how' that are recognized. Anything else is a typo worth reporting.
 HOW_FIELDS = (
+    "stage",
     "pushForceMax",
+    "pushDistance",
     "turnDirection",
     "turnTorqueMax",
     "threadStep",
@@ -120,10 +127,20 @@ class ConnectHow:
             if field not in HOW_FIELDS:
                 pc_logging.error("%s: unknown 'how' field, ignoring: %s" % (where, field))
 
+        self.stage = self._stage(config)
         self.push_force_max = self._number(config, "pushForceMax", DEFAULT_PUSH_FORCE_MAX)
         self.turn_direction = self._turn_direction(config)
         self.turn_torque_max = self._number(config, "turnTorqueMax", DEFAULT_TURN_TORQUE_MAX)
         self.thread_step = self._number(config, "threadStep", DEFAULT_THREAD_STEP)
+
+        # 'pushDistance' is derived from the object's own geometry when the ASSY
+        # file does not give it. That needs a CAD runtime, which instantiating an
+        # assembly otherwise does not, so it is left for 'resolve_push_distance()'
+        # to fill in on demand rather than computed here.
+        self.push_distance = self._number(config, "pushDistance", None)
+        self.push_distance_specified = self.push_distance is not None
+        self._push_item = None
+        self._push_frame = None
 
         # The requested holds, before they are matched against the objects being
         # connected. 'resolve()' turns these into 'ConnectHold' lists.
@@ -147,6 +164,19 @@ class ConnectHow:
             return default
         return float(value)
 
+    def _stage(self, config):
+        value = config.get("stage", None)
+        if value is None:
+            return None
+        if isinstance(value, str) and value != "":
+            return value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            # A stage is a label, not a quantity, but a bare number in YAML is a
+            # natural thing to write and unambiguous to name.
+            return str(value)
+        pc_logging.error("%s: 'how.stage' must be a non-empty string, ignoring: %s" % (self.where, value))
+        return None
+
     def _turn_direction(self, config):
         value = config.get("turnDirection", None)
         if value is None:
@@ -159,14 +189,22 @@ class ConnectHow:
         )
         return DEFAULT_TURN_DIRECTION
 
-    def resolve(self, source_item=None, target_item=None):
+    def resolve(self, source_item=None, target_item=None, source_frame=None):
         """Match the requested holds against the objects that are being connected.
 
         'source_item' is the object that is being added to the assembly (the
         'with' end), 'target_item' is the object it is connected to (the 'to'
         end). Either may be missing, in which case that end is resolved as far
         as the ASSY file alone allows.
+
+        'source_frame' is the placement of the interface that the source object
+        is connected by, in that object's own coordinates. It is what a derived
+        'pushDistance' is measured along, and is remembered rather than used
+        here: see 'resolve_push_distance()'.
         """
+        self._push_item = source_item
+        self._push_frame = source_frame
+
         self.hold_with = _resolve_holds(
             self._hold_with_spec,
             self._hold_with_instance_spec,
@@ -183,6 +221,34 @@ class ConnectHow:
         )
         return self
 
+    async def resolve_push_distance(self, ctx):
+        """Fill in 'push_distance' from the object's geometry, if it was not given.
+
+        The default is 'PUSH_DISTANCE_FACTOR' times the object's own length
+        along the Z axis of the interface it is connected by. Measuring that
+        needs the object's geometry, and therefore a CAD runtime, so this is
+        never done while the assembly is merely being instantiated. Failure to
+        measure leaves the distance unresolved rather than failing the assembly:
+        'how' is guidance for the assembler, not geometry.
+        """
+        if self.push_distance is not None:
+            return self.push_distance
+        if ctx is None or self._push_item is None:
+            return None
+
+        try:
+            shape = await self._push_item.get_wrapped(ctx)
+            if shape is None:
+                return None
+            length = await _measure_extent_z(ctx, self._push_item, shape, self._push_frame)
+            if length is None:
+                return None
+            self.push_distance = PUSH_DISTANCE_FACTOR * length
+        except Exception as e:
+            pc_logging.debug("%s: failed to derive 'how.pushDistance': %s" % (self.where, e))
+            return None
+        return self.push_distance
+
     def is_default(self):
         """Whether the ASSY file said nothing at all about how to connect."""
         return not self.specified and not self.hold_with and not self.hold_to
@@ -190,15 +256,77 @@ class ConnectHow:
     def info(self):
         info = {
             "pushForceMax": self.push_force_max,
+            # None means "not derived yet": see 'resolve_push_distance()'.
+            "pushDistance": self.push_distance,
             "turnDirection": self.turn_direction,
             "turnTorqueMax": self.turn_torque_max,
             "threadStep": self.thread_step,
         }
+        if self.stage is not None:
+            info["stage"] = self.stage
         if self.hold_with:
             info["holdWith"] = [hold.info() for hold in self.hold_with]
         if self.hold_to:
             info["holdTo"] = [hold.info() for hold in self.hold_to]
         return info
+
+
+def check_stage_sequence(node_list, where: str):
+    """Report a 'how.stage' that is not one uninterrupted run of nodes.
+
+    Consecutive nodes sharing a stage are the ones expected to be connected at
+    the same time, so a stage that starts, is interrupted by another one, and
+    then resumes does not mean what its author is likely to think it means.
+    """
+    seen = set()
+    previous = None
+    for node in node_list:
+        if not isinstance(node, dict):
+            continue
+        connect = node.get("connect", None) or node.get("connectPorts", None)
+        how = connect.get("how", None) if isinstance(connect, dict) else None
+        stage = how.get("stage", None) if isinstance(how, dict) else None
+
+        if stage != previous:
+            if stage is not None and stage in seen:
+                pc_logging.warning(
+                    "%s: 'how.stage' is not contiguous, so its steps are not sequential: %s" % (where, stage)
+                )
+            if stage is not None:
+                seen.add(stage)
+            previous = stage
+
+
+# Derived push distances, keyed by the object measured and the frame it was
+# measured in. One assembly typically connects the very same part through the
+# very same interface many times over (every screw in a bolt pattern), and each
+# measurement is a round trip to a sandboxed CAD runtime.
+_extent_cache = {}
+
+
+def _measure_key(item, shape, frame):
+    shape_hash = getattr(item, "hash", None)
+    identity = None
+    if shape_hash is not None:
+        try:
+            identity = shape_hash.get()
+        except Exception:
+            identity = None
+    if identity is None:
+        identity = "%s:%s" % (getattr(item, "project_name", None), getattr(item, "name", None))
+    return (identity, None if frame is None else tuple(map(tuple, frame.as_packed()[:2])) + (frame.as_packed()[2],))
+
+
+async def _measure_extent_z(ctx, item, shape, frame):
+    """The object's length along the Z axis of 'frame', measured at most once."""
+    from . import measure
+
+    key = _measure_key(item, shape, frame)
+    if key in _extent_cache:
+        return _extent_cache[key]
+    length = await measure.extent_z(ctx, shape, frame)
+    _extent_cache[key] = length
+    return length
 
 
 def _resolve_holds(interfaces_spec, instances_spec, item, where, field):

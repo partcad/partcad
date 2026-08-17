@@ -91,7 +91,9 @@ the connection rather than place it:
     name: <target instance already in the assembly>
     comment: <free form context for a human or an LLM; never parsed>
     how:
+      stage: <label; consecutive nodes sharing it are connected at the same time>
       pushForceMax: <force in N, default 5>
+      pushDistance: <staging distance in mm; default 1.5x the part's length along the interface Z>
       turnDirection: <cw (default) or ccw>
       turnTorqueMax: <torque in N*m, default 0>
       threadStep: <lead in mm per full turn, default 0.00>

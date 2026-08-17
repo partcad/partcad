@@ -114,7 +114,9 @@ and so is the section itself: an omitted field means the default below.
   .. code-block:: yaml
 
     how:
+      stage: <(optional) name of the group of steps performed at the same time>
       pushForceMax: <(optional) maximum linear force, in N, default: 5>
+      pushDistance: <(optional) staging distance, in mm, derived from the object by default>
       turnDirection: <(optional) "cw" (clockwise) or "ccw" (counterclockwise), default: "cw">
       turnTorqueMax: <(optional) maximum torque, in N*m, default: 0>
       threadStep: <(optional) axial distance per full turn, in mm, default: 0.00>
@@ -130,6 +132,8 @@ everywhere else in PartCAD:
 | Field              | Quantity               | Unit                                    |
 +====================+========================+=========================================+
 | ``pushForceMax``   | force                  | ``N`` (newton)                          |
++--------------------+------------------------+-----------------------------------------+
+| ``pushDistance``   | length                 | ``mm`` (millimetre)                     |
 +--------------------+------------------------+-----------------------------------------+
 | ``turnTorqueMax``  | torque                 | ``N*m`` (newton-metre)                  |
 +--------------------+------------------------+-----------------------------------------+
@@ -153,6 +157,45 @@ When it is non-zero, the assembler manages the pushing force and the turning
 torque together, so that the resulting motion reproduces the given thread (or,
 more generally, rotation) pattern, staying within `pushForceMax` and
 `turnTorqueMax`. The default of `0.00` means a straight push with no turning.
+
+`pushDistance` is how far away from its final place the object starts: the
+distance, along the axis of the connection, between the staging pose and the
+pose where its `with` ports coincide with the target's `to` ports.
+When it is omitted, it is derived from the object being connected, as **1.5
+times that object's own length along the Z axis of the interface location** it
+is connected by - far enough for the object to clear the target before the
+insertion move begins. That measurement needs the object's geometry, so it is
+made only when something asks for it, never while the assembly is merely being
+instantiated. If the geometry cannot be built at all, the distance is reported
+as unset rather than guessed.
+
+`stage` names a group of steps that are expected to be connected **at the same
+time** rather than one after another: consecutive nodes carrying the same
+`stage` form one such group.
+It is a free-form label, so it can say what the group is for.
+A `stage` that is interrupted by another one and then resumes is reported, since
+the steps it names are then not consecutive and will not be performed together.
+
+  .. code-block:: yaml
+
+    links:
+      - part: example-bracket
+
+      # Both screws are snugged at the same time, not one after the other.
+      - part: socket-head-m3-screw-6mm
+        name: screw-tl
+        connect:
+          name: example-bracket
+          to: m3-thru-3
+          toInstance: outer-TL
+          how: { stage: snug, turnTorqueMax: 0.2 }
+      - part: socket-head-m3-screw-6mm
+        name: screw-br
+        connect:
+          name: example-bracket
+          to: m3-thru-3
+          toInstance: outer-BR
+          how: { stage: snug, turnTorqueMax: 0.2 }
 
 `holdWith` names the interface of the object that is getting added to the
 assembly, to be used to hold that object while it is connected.
