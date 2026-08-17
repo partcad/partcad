@@ -645,7 +645,15 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
+      # How to hold this part while it is connected to another object.
+      hold: <(optional) name of an interface, or the list of them>
+      holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
+
 Depending on the type of the part, the configuration may have different options.
+
+The ``hold`` and ``holdInstance`` fields are the defaults for the ``holdWith``,
+``holdWithInstance``, ``holdTo`` and ``holdToInstance`` fields of the ``how``
+section of an Assembly YAML ``connect``/``connectPorts`` node. See :doc:`assy`.
 
 See :ref:`location` for more information on the OCCT Location object.
 
@@ -903,6 +911,10 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         - <macros.j2>
         - <other.assy>
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
+
+      # How to hold this assembly while it is connected to another object.
+      hold: <(optional) name of an interface, or the list of them>
+      holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
 
 The ``assy`` type is used to define assemblies in `Assembly YAML` format.
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.

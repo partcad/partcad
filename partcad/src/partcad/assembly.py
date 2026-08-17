@@ -22,10 +22,31 @@ from . import logging as pc_logging
 
 
 class AssemblyChild:
-    def __init__(self, item, name=None, location=None):
+    def __init__(self, item, name=None, location=None, comment=None, how=None):
         self.item = item
         self.name = name
         self.location = location
+        # The non-geometric half of the 'connect'/'connectPorts' section that
+        # placed this child: free-form context ('comment') and the assembly
+        # instructions ('how'). Both are None unless the child was connected.
+        self.comment = comment
+        self.how = how
+
+    def connect_info(self):
+        """What the ASSY file says about connecting this child, or None.
+
+        Connections that carry neither a comment nor anything but the default
+        'how' are left out: they add nothing to what the defaults already say.
+        """
+        has_how = self.how is not None and not self.how.is_default()
+        if self.comment is None and not has_how:
+            return None
+        info = {"name": self.name}
+        if self.comment is not None:
+            info["comment"] = self.comment
+        if has_how:
+            info["how"] = self.how.info()
+        return info
 
 
 @telemetry.instrument()
@@ -54,8 +75,10 @@ class Assembly(Shape):
         child_item: Shape,  # pc.Part or pc.Assembly
         name=None,
         loc=Location((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.0),
+        comment=None,
+        how=None,
     ):
-        self.children.append(AssemblyChild(child_item, name, loc))
+        self.children.append(AssemblyChild(child_item, name, loc, comment, how))
         self._wrapped = None  # Invalidate if any
 
     async def get_shape(self, ctx):
@@ -150,6 +173,18 @@ class Assembly(Shape):
             composed = placement if own is None else (placement * Location(own))
             entry[shape_envelope.KEY_LOCATION] = composed.as_packed()
         return entry
+
+    def shape_info(self, ctx):
+        info = super().shape_info(ctx)
+        # The connection metadata lives on the children, and a cached shape is
+        # returned without ever populating them.
+        if not self.children:
+            asyncio.run(self.do_instantiate())
+        connections = [child.connect_info() for child in self.children]
+        connections = [connection for connection in connections if connection is not None]
+        if connections:
+            info["Connections"] = connections
+        return info
 
     async def get_bom(self):
         with self.lock:

@@ -1,0 +1,55 @@
+desc: A package to exercise "comment" and "how" in ASSY "connect*" sections
+
+sketches:
+  m3:
+    type: basic
+    circle: 1.5
+
+interfaces:
+  m3:
+    desc: Abstract 3mm circular interface
+    abstract: True
+    ports:
+      m3:
+        sketch: m3
+  m3-thru:
+    desc: 3mm through hole
+    inherits:
+      m3: thru
+  m3-screw:
+    desc: M3 screw
+    inherits:
+      m3: screw
+    mates: m3-thru
+  grip:
+    desc: A surface to hold the object by while it is connected
+    ports:
+      grip:
+        sketch: m3
+
+parts:
+  plate:
+    type: cadquery
+    desc: A plate with two through holes
+    implements:
+      m3-thru:
+        TL: [[-10.0, 10.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+        TR: [[10.0, 10.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+      grip:
+        left: [[-20.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+        right: [[20.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]
+    hold: grip
+    holdInstance: right
+
+  screw:
+    type: cadquery
+    desc: An M3 screw
+    implements:
+      m3-screw: [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], 180.0]
+      grip: [[0.0, 0.0, 5.0], [0.0, 0.0, 1.0], 0.0]
+    hold: grip
+
+assemblies:
+  connect_how:
+    type: assy
+    desc: Two screws connected to a plate, with assembly instructions

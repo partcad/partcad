@@ -82,6 +82,30 @@ links:
 per node. `with` names the interface/port on the part being added; `to` names it
 on the part already in the assembly.
 
+Both `connectPorts` and `connect` also take two optional sections that describe
+the connection rather than place it:
+
+```yaml
+- part: <...>
+  connect:
+    name: <target instance already in the assembly>
+    comment: <free form context for a human or an LLM; never parsed>
+    how:
+      pushTorqueMax: <N, default 5>
+      turnDirection: <cw (default) or ccw>
+      turnTorqueMax: <N, default 0>
+      threadStep: <mm per full turn, default 0.00>
+      holdWith: <interface(s) to hold the part being added by>
+      holdWithInstance: <instance(s) of holdWith>
+      holdTo: <interface(s) to hold the target by>
+      holdToInstance: <instance(s) of holdTo>
+```
+
+Everything that is **required** to perform the assembly must be codified in
+`how` and the other fields — never only in `comment`, which no tool reads. The
+`hold*` fields default to the `hold`/`holdInstance` fields of the part or
+assembly definition in `partcad.yaml`.
+
 **Sub-assembly node** — identical to a part node but with `assembly:` instead of
 `part:`, and it may carry its own nested `links:`.
 

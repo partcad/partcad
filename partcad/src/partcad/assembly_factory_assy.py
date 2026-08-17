@@ -15,6 +15,7 @@ import yaml
 
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
+from .assembly_connect import ConnectHow
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from . import logging as pc_logging
@@ -93,7 +94,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
             result = await self.handle_node(assembly, assy)
             if result is not None:
-                assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
+                assembly.children.append(result)
             else:
                 pc_logging.warning("Assembly is empty")
 
@@ -109,7 +110,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 f = await asyncio.tasks.wait([task])
                 result = f[0].pop().result()
                 if result is not None:
-                    assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
+                    assembly.children.append(result)
 
         for link in node_list:
             if "connect" in link or "connectPorts" in link:
@@ -126,6 +127,10 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             name = None
 
         connect = None
+        # The non-geometric half of a "connect*" section: free-form context and
+        # the instructions for whoever (or whatever) performs the assembly.
+        connect_comment = None
+        connect_how = None
         connect_with_iface = None
         connect_with_params = None
         connect_with_instance = None
@@ -169,6 +174,21 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             location = None
         else:
             location = Location((0, 0, 0), (0, 0, 1), 0)
+
+        if connect is not None:
+            # "comment" is free-form context for a human or an LLM. Nothing in
+            # PartCAD interprets it: all instructions that are required to
+            # perform the assembly belong in the other fields.
+            connect_comment = connect.get("comment", None)
+            connect_how = ConnectHow(
+                connect.get("how", None),
+                where="%s: connect %s to %s"
+                % (
+                    self.name,
+                    name or node.get("part", None) or node.get("assembly", None),
+                    connect.get("name", None),
+                ),
+            )
 
         if connect_with_instance is not None and "*" in connect_with_instance:
             connect_with_instance_pattern = connect_with_instance
@@ -809,7 +829,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         pc_logging.error("Not enough data to connect %s" % name)
                         location = Location((0, 0, 0), (0, 0, 1), 0)
 
+                # Now that both ends of the connection are known, the interfaces
+                # to hold them by can be matched against what they implement.
+                connect_how.resolve(item, target_part)
+
         if not item is None:
-            return [item, name, location]
+            return AssemblyChild(item, name, location, connect_comment, connect_how)
         else:
             return None
