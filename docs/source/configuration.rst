@@ -1077,6 +1077,28 @@ Declaring an assembly purchasable does not stop it from being modelled and
 rendered as usual: the links between its parts still describe what is inside the
 box.
 
+This is also where ``pc supply find`` and ``pc supply quote`` stop looking
+inside. An assembly is otherwise procured as the objects it is made of, and the
+same question is asked about each sub-assembly in turn: one that is sold
+assembled is ordered as a single item, and one that is not is broken down
+further. Pass ``--recursive`` to order the parts even where the assembly holding
+them could have been bought whole -- for example to compare the cost of building
+it against the cost of buying it.
+
+.. code-block:: shell
+
+  # A chassis that uses the gearbox above: the gearbox is quoted as one unit,
+  # and everything nobody sells assembled is quoted as the parts it is made of
+  $ pc supply quote //robot:chassis
+
+  # Quote every part of the chassis instead, the gearbox taken apart too
+  $ pc supply quote --recursive //robot:chassis
+
+An assembly embedded in the parent's own source file (the nested ``links:`` of
+an Assembly YAML file) is not an object of any package, so there is no name to
+order it by. Such an assembly is always procured as its contents, and declaring
+a vendor for it has no effect.
+
 .. _providers:
 
 =========

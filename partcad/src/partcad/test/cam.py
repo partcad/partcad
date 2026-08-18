@@ -44,7 +44,7 @@ class CamTest(Test):
         # Test if it can be purchased at a store
         can_be_purchased = False
         store_data = part.get_store_data()
-        if store_data.vendor and store_data.sku:
+        if store_data.is_purchasable:
             self.debug(part, "Can be purchased")
             # TODO(clairbee): Verify that at least one provider is available
             # TODO(clairbee): Verify that at least one provider is available where it is in stock
@@ -85,7 +85,7 @@ class CamTest(Test):
         # Test if it can be purchased at a store
         can_be_purchased = False
         store_data = assembly.get_store_data()
-        if store_data.vendor and store_data.sku:
+        if store_data.is_purchasable:
             self.debug(assembly, "Can be purchased")
             # TODO(clairbee): Verify that at least one provider is available
             # TODO(clairbee): Verify that at least one provider is available where it is in stock

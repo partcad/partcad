@@ -31,9 +31,29 @@ def resolve_cart_item(item_spec: str):
     return name, count
 
 
+def resolve_cart_object(ctx, name: str):
+    """Resolve the name of a cart item to the object it refers to.
+
+    A cart item is a part most of the time, but it is an assembly whenever one
+    is supplied assembled. The name alone does not say which, and it is all that
+    survives a cart item being persisted, so both are looked up here.
+    """
+    project_name, object_name = resolve_resource_path(ctx.current_project_path, name)
+    prj = ctx.get_project(project_name)
+    if prj is None:
+        pc_logging.error(f"Package '{project_name}' not found")
+        return None
+
+    object = prj.get_part(object_name, quiet=True)
+    if object is None:
+        object = prj.get_assembly(object_name)
+    return object
+
+
 class ProviderCartItem:
     """
-    Describes a single part in a cart.
+    Describes a single object in a cart: a part, or an assembly that is
+    supplied assembled.
     It must be serializable for persistence.
     It must be deterministic: it must not be possible
     to imply a different CAD model after deserialization,
@@ -56,8 +76,8 @@ class ProviderCartItem:
         self.count = 0
         self.format = "none"
 
-    def _set_store_data(self, part):
-        store_data = part.get_store_data()
+    def _set_store_data(self, object):
+        store_data = object.get_store_data()
         self.vendor = store_data.vendor
         self.sku = store_data.sku
         self.count_per_sku = store_data.count_per_sku
@@ -65,13 +85,13 @@ class ProviderCartItem:
     async def set_spec(self, ctx, spec: str):
         self.name, self.count = resolve_cart_item(spec)
 
-        part = ctx.get_part(self.name)
-        assert part is not None
-        self._set_store_data(part)
+        object = resolve_cart_object(ctx, self.name)
+        assert object is not None, f"Part or assembly '{self.name}' not found"
+        self._set_store_data(object)
 
-        self.material = await part.get_mcftt("material")
-        self.color = await part.get_mcftt("color")
-        self.finish = await part.get_mcftt("finish")
+        self.material = await object.get_mcftt("material")
+        self.color = await object.get_mcftt("color")
+        self.finish = await object.get_mcftt("finish")
 
     def compose(self):
         result = {
@@ -102,7 +122,7 @@ class ProviderCartItem:
 
 @telemetry.instrument(exclude=["__repr__"])
 class ProviderCart:
-    """Describes a cart of parts"""
+    """Describes a cart of parts and of assemblies supplied assembled"""
 
     # TODO(clairbee): add a lock
 
@@ -113,15 +133,21 @@ class ProviderCart:
         self.parts = {}
         self.qos = qos
 
-    async def add_objects(self, ctx, objects: list[str]):
+    async def add_objects(self, ctx, objects: list[str], recursive: bool = False):
         """Add parts or assemblies"""
         for object in objects:
-            await self.add_object(ctx, object)
+            await self.add_object(ctx, object, recursive=recursive)
 
-    async def add_object(self, ctx, object: str):
-        """Add a part or an assembly"""
-        # The input object may be an assembly
-        # But self.cart must contain parts only
+    async def add_object(self, ctx, object: str, recursive: bool = False):
+        """Add a part or an assembly.
+
+        An assembly that can be supplied assembled is added as a single item,
+        the way it is ordered. Any other assembly is broken down into what it is
+        made of, and the same question is asked about each sub-assembly in turn.
+
+        Pass 'recursive=True' to break every assembly down to its parts,
+        including the ones that could have been ordered assembled.
+        """
         name, count = resolve_cart_item(object)
         project_name, object_name = resolve_resource_path(
             ctx.current_project_path,
@@ -139,13 +165,20 @@ class ProviderCart:
         else:
             assembly = prj.get_assembly(object_name)
             if assembly:
-                pc_logging.debug(f"Adding assembly '{object_name}' to the cart")
-                bom = await assembly.get_bom()
+                if not recursive and assembly.can_be_supplied():
+                    pc_logging.debug(f"Adding assembly '{object_name}' to the cart as is")
+                    item = ProviderCartItem()
+                    await item.set_spec(ctx, name)
+                    self.add_item(item, count)
+                    return
+
+                pc_logging.debug(f"Adding the contents of assembly '{object_name}' to the cart")
+                bom = await (assembly.get_bom() if recursive else assembly.get_supply_bom())
                 tasks = []
-                for part_name, part_count in bom.items():
-                    pc_logging.debug(f"Adding part '{part_name}' to the cart")
-                    part_spec = part_name + "#" + str(part_count)
-                    tasks.append(asyncio.create_task(self.add_item_from_spec(ctx, part_spec, count)))
+                for item_name, item_count in bom.items():
+                    pc_logging.debug(f"Adding '{item_name}' to the cart")
+                    item_spec = item_name + "#" + str(item_count)
+                    tasks.append(asyncio.create_task(self.add_item_from_spec(ctx, item_spec, count)))
                 await asyncio.gather(*tasks)
             else:
                 # TODO(clairbee): turn it into an error() and recover nicely
