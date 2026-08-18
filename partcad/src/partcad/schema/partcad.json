@@ -70,6 +70,18 @@
       "type": "number",
       "minimum": 0
     },
+    "connect": {
+      "description": "What this part or assembly contributes to every connection it takes part in. The defaults for the 'how' section of an ASSY 'connect*' node.",
+      "type": "object",
+      "properties": {
+        "hold": { "$ref": "#/definitions/hold" },
+        "holdInstance": { "$ref": "#/definitions/holdInstance" },
+        "holdForce": { "$ref": "#/definitions/holdForce" },
+        "holdForceMin": { "$ref": "#/definitions/holdForce" },
+        "holdForceMax": { "$ref": "#/definitions/holdForce" }
+      },
+      "additionalProperties": false
+    },
     "interface-parameter": {
       "oneOf": [
         {
@@ -405,11 +417,8 @@
                   },
                   "additionalProperties": false
                 },
-                "hold": { "$ref": "#/definitions/hold" },
-                "holdInstance": { "$ref": "#/definitions/holdInstance" },
-                "holdForce": { "$ref": "#/definitions/holdForce" },
-                "holdForceMin": { "$ref": "#/definitions/holdForce" },
-                "holdForceMax": { "$ref": "#/definitions/holdForce" }
+                "manufacturable": { "type": "boolean" },
+                "connect": { "$ref": "#/definitions/connect" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -463,11 +472,8 @@
                 },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "render": { "$ref": "#/definitions/render" },
-                "hold": { "$ref": "#/definitions/hold" },
-                "holdInstance": { "$ref": "#/definitions/holdInstance" },
-                "holdForce": { "$ref": "#/definitions/holdForce" },
-                "holdForceMin": { "$ref": "#/definitions/holdForce" },
-                "holdForceMax": { "$ref": "#/definitions/holdForce" }
+                "manufacturable": { "type": "boolean" },
+                "connect": { "$ref": "#/definitions/connect" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -614,6 +620,16 @@
             "desc": { "type": "string", "maxLength": 1000 },
             "path": { "type": "string", "minLength": 1 },
             "leadPort": { "type": "string", "minLength": 1 },
+            "threadStep": {
+              "description": "The axial distance a connection made through this interface advances per full turn, in mm. Inherited by the interfaces that inherit this one, and by the connections that use it.",
+              "type": "number",
+              "minimum": 0
+            },
+            "selfScrew": {
+              "description": "Whether this interface cuts its own thread rather than matching one, so that it may be connected to an interface with a different 'threadStep' or none.",
+              "type": "boolean",
+              "default": false
+            },
             "inherits":{
               "type": "object",
               "patternProperties":{

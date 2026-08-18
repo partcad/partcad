@@ -111,8 +111,33 @@ incoming part travels) and reported with the rest.
 
 Everything that is **required** to perform the assembly must be codified in
 `how` and the other fields — never only in `comment`, which no tool reads. The
-`hold*` fields default to the `hold`/`holdInstance`/`holdForce*` fields of the
-part or assembly definition in `partcad.yaml`.
+`hold*` fields default to the `connect:` section of the part or assembly
+definition in `partcad.yaml`:
+
+```yaml
+parts:
+  <name>:
+    type: step
+    connect: # (optional) what this part contributes to every connection
+      hold: <interface(s) to hold it by>
+      holdInstance: <instance(s) of hold>
+      holdForceMin/Max: <force in N; holdForce sets both>
+```
+
+`threadStep` defaults to the thread of the interfaces being connected, declared
+once on the interface that introduces it:
+
+```yaml
+interfaces:
+  m3:
+    threadStep: 0.5   # inherited by every interface that inherits m3
+    selfScrew: false  # true when it cuts its own thread instead of matching one
+```
+
+Two connected interfaces must agree on `threadStep` unless one declares
+`selfScrew`. Run `pc test -a <name>` to check that: it fails an assembly whose
+instructions contradict themselves — a mismatched thread, or a `*Min` above its
+`*Max` — and passes one that takes every default.
 
 **Sub-assembly node** — identical to a part node but with `assembly:` instead of
 `part:`, and it may carry its own nested `links:`.

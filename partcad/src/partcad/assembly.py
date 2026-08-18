@@ -189,6 +189,21 @@ class Assembly(Shape):
             if isinstance(item, Assembly) and item.config.get("child", False):
                 yield from item.connected_children()
 
+    async def get_connect_problems(self):
+        """What makes this assembly's connection instructions invalid, if anything.
+
+        Each entry is '(child name, problem)'. The instructions are repaired in
+        place as they are resolved - an assembly still builds - so this is what
+        'pc test' looks at to tell a repaired one from a sound one.
+        """
+        await self.do_instantiate()
+        problems = []
+        for child in self.connected_children():
+            if child.how is None:
+                continue
+            problems.extend([(child.name, problem) for problem in child.how.problems])
+        return problems
+
     async def resolve_connect_metadata(self, ctx):
         """Fill in the parts of the connection metadata that need the geometry.
 

@@ -180,8 +180,8 @@ def test_connect_how_hold_defaults_to_the_object_definition():
     """An omitted 'holdWith'/'holdTo' falls back to the object's own 'hold'"""
     how = ConnectHow({})
     how.resolve(
-        _plate({"hold": "grip", "holdInstance": "right"}),
-        _plate({"hold": ["m3-thru"], "holdInstance": ["TL"]}),
+        _plate({"connect": {"hold": "grip", "holdInstance": "right"}}),
+        _plate({"connect": {"hold": ["m3-thru"], "holdInstance": ["TL"]}}),
     )
     assert how.hold_with == [ConnectHold("//test:grip", "right")]
     assert how.hold_to == [ConnectHold("//test:m3-thru", "TL")]
@@ -199,7 +199,7 @@ def test_connect_how_hold_instance_defaults_to_the_first_one():
 def test_connect_how_hold_instance_from_the_object_definition():
     """'holdInstance' applies even when the ASSY file overrides the interface"""
     how = ConnectHow({"holdWith": "grip"})
-    how.resolve(_plate({"hold": "grip", "holdInstance": "right"}), None)
+    how.resolve(_plate({"connect": {"hold": "grip", "holdInstance": "right"}}), None)
     assert how.hold_with == [ConnectHold("//test:grip", "right")]
 
 
@@ -402,8 +402,8 @@ def test_connect_how_hold_force_bounds_win_over_the_alias():
 def test_connect_how_hold_force_inherited_from_the_object():
     """'holdForce*' on the part or assembly is what the connection inherits"""
     how = ConnectHow({}).resolve(
-        _FakeItem({"holdForce": 4.0}),
-        _FakeItem({"holdForceMin": 1.0, "holdForceMax": 12.0}),
+        _FakeItem({"connect": {"holdForce": 4.0}}),
+        _FakeItem({"connect": {"holdForceMin": 1.0, "holdForceMax": 12.0}}),
     )
     assert (how.hold_with_force_min, how.hold_with_force_max) == (4.0, 4.0)
     assert (how.hold_to_force_min, how.hold_to_force_max) == (1.0, 12.0)
@@ -414,7 +414,7 @@ def test_connect_how_hold_force_inherited_from_the_object():
 
 def test_connect_how_hold_force_the_assy_file_wins():
     """The ASSY file overrides the bound it names, the object supplies the other"""
-    how = ConnectHow({"holdWithForceMin": 6.0}).resolve(_FakeItem({"holdForce": 8.0}), _FakeItem())
+    how = ConnectHow({"holdWithForceMin": 6.0}).resolve(_FakeItem({"connect": {"holdForce": 8.0}}), _FakeItem())
     assert (how.hold_with_force_min, how.hold_with_force_max) == (6.0, 8.0)
 
 
@@ -431,6 +431,99 @@ def test_connect_how_hold_force_in_info():
     assert info["holdWithForceMax"] == 5.0
     assert info["holdToForceMin"] == DEFAULT_HOLD_FORCE_MIN
     assert info["holdToForceMax"] == DEFAULT_HOLD_FORCE_MAX
+
+
+class _FakeInterface:
+    """The bare minimum of an interface that a connection reads."""
+
+    def __init__(self, thread_step=None, self_screw=False):
+        self.thread_step = thread_step
+        self.self_screw = self_screw
+
+    def get_thread_step(self):
+        return self.thread_step
+
+    def get_self_screw(self):
+        return self.self_screw
+
+
+def test_connect_how_thread_step_inherited_from_the_interfaces():
+    """Interfaces that agree about their thread give it to the connection"""
+    how = ConnectHow({}).resolve(
+        source_interface=_FakeInterface(0.5),
+        target_interface=_FakeInterface(0.5),
+    )
+    assert how.thread_step == 0.5
+    assert how.problems == []
+
+
+def test_connect_how_thread_step_from_one_interface_only():
+    how = ConnectHow({}).resolve(source_interface=_FakeInterface(0.7), target_interface=_FakeInterface())
+    assert how.thread_step == 0.7
+
+
+def test_connect_how_thread_step_explicit_wins():
+    """What the ASSY file says about one connection beats the interfaces"""
+    how = ConnectHow({"threadStep": 0.35}).resolve(
+        source_interface=_FakeInterface(0.5),
+        target_interface=_FakeInterface(0.5),
+    )
+    assert how.thread_step == 0.35
+    assert how.problems == []
+
+
+def test_connect_how_thread_step_mismatch_is_a_problem():
+    """Two threads that do not match cannot be screwed together"""
+    how = ConnectHow({}).resolve(
+        source_interface=_FakeInterface(0.5),
+        target_interface=_FakeInterface(0.35),
+    )
+    assert len(how.problems) == 1
+    assert "threadStep" in how.problems[0]
+    # Left unset rather than guessed: the connection cannot be made as described.
+    assert how.thread_step == DEFAULT_THREAD_STEP
+
+
+def test_connect_how_thread_step_mismatch_allowed_by_self_screw():
+    """A hole that takes a self-tapping screw does not have to match its thread"""
+    how = ConnectHow({}).resolve(
+        source_interface=_FakeInterface(0.5),
+        target_interface=_FakeInterface(0.35, self_screw=True),
+    )
+    assert how.problems == []
+    # The end that has to match a thread is the one whose thread gets cut.
+    assert how.thread_step == 0.5
+
+
+def test_connect_how_thread_step_from_a_self_tapping_screw():
+    """Marking the screw instead works too: it brings the thread with it"""
+    how = ConnectHow({}).resolve(
+        source_interface=_FakeInterface(0.5, self_screw=True),
+        target_interface=_FakeInterface(),
+    )
+    assert how.problems == []
+    assert how.thread_step == 0.5
+
+
+def test_connect_how_hold_force_out_of_order_is_a_problem():
+    """The repaired range is reported so that 'pc test' can fail on it"""
+    how = ConnectHow({"holdWithForceMin": 9.0, "holdWithForceMax": 2.0}).resolve(_FakeItem(), _FakeItem())
+    assert len(how.problems) == 1
+    assert "holdWithForceMin" in how.problems[0]
+    assert ConnectHow({}).resolve(_FakeItem(), _FakeItem()).problems == []
+
+
+def test_connect_config_subsection():
+    """The object level defaults live under 'connect:', not at the top level"""
+    from partcad.assembly_connect import connect_config
+
+    assert connect_config(_FakeItem({"connect": {"hold": "grip"}})) == {"hold": "grip"}
+    assert connect_config(_FakeItem({})) == {}
+    # A stray field is reported rather than silently taken.
+    assert connect_config(_FakeItem({"connect": {"typo": 1}})) == {"connect": {"typo": 1}}["connect"]
+    # The old top level spelling is no longer read.
+    how = ConnectHow({}).resolve(_plate({"hold": "grip"}), None)
+    assert how.hold_with == []
 
 
 def test_measure_in_frame_moves_the_shape_into_the_frame():
@@ -491,7 +584,7 @@ def test_assy_connect_comment_and_how():
     assert explicit.how.push_distance == 12.0
     assert explicit.how.turn_direction == "ccw"
     assert explicit.how.turn_torque_max == 1.2
-    assert explicit.how.thread_step == 0.5
+    assert explicit.how.thread_step == 0.35  # explicit, overriding the interfaces' 0.5
     assert [hold.interface.split(":")[-1] for hold in explicit.how.hold_with] == ["grip"]
     assert [hold.interface.split(":")[-1] for hold in explicit.how.hold_to] == ["grip"]
     assert [hold.instance for hold in explicit.how.hold_to] == ["left"]
@@ -503,7 +596,7 @@ def test_assy_connect_comment_and_how():
     info = explicit.connect_info()
     assert info["name"] == "screw-tl"
     assert info["comment"] == explicit.comment
-    assert info["how"]["threadStep"] == 0.5
+    assert info["how"]["threadStep"] == 0.35
 
 
 def test_assy_connect_how_defaults_from_the_part_definition():
@@ -514,7 +607,7 @@ def test_assy_connect_how_defaults_from_the_part_definition():
 
     implicit = _get_children(assembly)["screw-tr"]
     assert implicit.comment is None
-    assert implicit.how.thread_step == 0.5
+    assert implicit.how.thread_step == 0.5  # inherited from the "m3" interface
     # Not given in the ASSY file: the screw is held by its own "hold: grip",
     # and the plate by "hold: grip" with "holdInstance: right".
     assert [hold.interface.split(":")[-1] for hold in implicit.how.hold_with] == ["grip"]
@@ -559,3 +652,47 @@ def test_assy_connect_push_distance_is_derived_from_the_part(monkeypatch):
     # The explicit distance is left alone, so only the derived one was measured.
     assert children["screw-tl"].how.push_distance == 12.0
     assert len(calls) == 1
+
+
+def test_interface_thread_step_is_inherited():
+    """'threadStep' declared on one interface reaches the ones that inherit it"""
+    ctx = pc.init(CONNECT_HOW_PACKAGE)
+    base = ctx.get_interface(":m3")
+    assert base.thread_step == 0.5
+    for name in (":m3-thru", ":m3-screw"):
+        derived = ctx.get_interface(name)
+        assert derived.thread_step is None  # not declared on this one...
+        assert derived.get_thread_step() == 0.5  # ...but inherited from "m3"
+        assert derived.get_self_screw() is False
+
+
+def test_assy_connect_problems_are_reported():
+    """A sound assembly has nothing for 'pc test' to report"""
+    ctx = pc.init(CONNECT_HOW_PACKAGE)
+    assembly = ctx._get_assembly(":connect_how")
+    assert asyncio.run(assembly.get_connect_problems()) == []
+
+
+def test_assy_connect_problems_of_a_broken_assembly():
+    """An assembly whose instructions had to be repaired reports what was wrong"""
+    ctx = pc.init(CONNECT_HOW_PACKAGE)
+    assembly = ctx._get_assembly(":connect_how_broken")
+    problems = asyncio.run(assembly.get_connect_problems())
+    assert len(problems) == 1
+    name, problem = problems[0]
+    assert name == "screw-bad"
+    assert "holdWithForceMin" in problem
+
+
+def test_connect_test_passes_and_fails():
+    """The 'connect' test follows those problems"""
+    from partcad.test.connect import ConnectTest
+
+    ctx = pc.init(CONNECT_HOW_PACKAGE)
+    test = ConnectTest()
+    good = ctx._get_assembly(":connect_how")
+    bad = ctx._get_assembly(":connect_how_broken")
+    assert asyncio.run(test.test([], ctx, good)) == test.TEST_PASSED
+    assert asyncio.run(test.test([], ctx, bad)) == test.TEST_FAILED
+    # Anything that is not an assembly has no connections to check.
+    assert asyncio.run(test.test([], ctx, ctx.get_part(":screw"))) == test.TEST_PASSED

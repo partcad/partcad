@@ -9,6 +9,8 @@ interfaces:
   m3:
     desc: Abstract 3mm circular interface
     abstract: True
+    # Declared once here and inherited by everything below it.
+    threadStep: 0.5
     ports:
       m3:
         sketch: m3
@@ -38,10 +40,11 @@ parts:
       grip:
         left: [[-20.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]
         right: [[20.0, 0.0, 0.0], [0.0, 0.0, 1.0], 0.0]
-    hold: grip
-    holdInstance: right
-    holdForceMin: 2.0
-    holdForceMax: 9.0
+    connect:
+      hold: grip
+      holdInstance: right
+      holdForceMin: 2.0
+      holdForceMax: 9.0
 
   screw:
     type: cadquery
@@ -49,10 +52,16 @@ parts:
     implements:
       m3-screw: [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], 180.0]
       grip: [[0.0, 0.0, 5.0], [0.0, 0.0, 1.0], 0.0]
-    hold: grip
-    holdForce: 4.5
+    connect:
+      hold: grip
+      holdForce: 4.5
 
 assemblies:
   connect_how:
     type: assy
     desc: Two screws connected to a plate, with assembly instructions
+  connect_how_broken:
+    type: assy
+    desc: |
+      An assembly whose connection instructions contradict themselves, so that
+      the "connect" test has something to fail on.

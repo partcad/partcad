@@ -15,7 +15,7 @@ links:
         pushDistance: 12.0
         turnDirection: ccw
         turnTorqueMax: 1.2
-        threadStep: 0.5
+        threadStep: 0.35
         holdWith: grip
         holdWithForce: 6.0
         holdTo: grip
@@ -30,4 +30,3 @@ links:
       toInstance: TR
       how:
         stage: snug
-        threadStep: 0.5

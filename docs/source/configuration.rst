@@ -443,6 +443,8 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
       abstract: <(optional) whether the interface is abstract>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{interface name}.{ext}" otherwise>
+      threadStep: <(optional) axial distance per full turn of a connection made through this interface, in mm>
+      selfScrew: <(optional) whether this interface cuts its own thread instead of matching one>
       inherits: # (optional) the list of other interfaces to inherit from
         <parent interface name>: <instance name>
         <other interface name>: # instance name is implied to be empty ("")
@@ -645,18 +647,24 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
-      # How to hold this part while it is connected to another object.
-      hold: <(optional) name of an interface, or the list of them>
-      holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
-      holdForceMin: <(optional) least force to hold this part with, in N, default: 3>
-      holdForceMax: <(optional) most force to hold this part with, in N, default: 7>
-      holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
+      # What this part contributes to every connection it takes part in.
+      connect: # (optional)
+        hold: <(optional) name of an interface, or the list of them, to hold this part by>
+        holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
+        holdForceMin: <(optional) least force to hold this part with, in N, default: 3>
+        holdForceMax: <(optional) most force to hold this part with, in N, default: 7>
+        holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
 
 Depending on the type of the part, the configuration may have different options.
 
-The ``hold``, ``holdInstance`` and ``holdForce*`` fields are the defaults for
-the ``holdWith*`` and ``holdTo*`` fields of the ``how`` section of an Assembly
-YAML ``connect``/``connectPorts`` node. See :doc:`assy`.
+The ``threadStep`` and ``selfScrew`` fields of an interface are inherited by the
+interfaces that inherit it, and by the connections made through it. Two
+interfaces that are connected have to agree on their thread unless one of them
+cuts its own. See :doc:`assy`.
+
+The fields of the ``connect`` section are the defaults for the ``holdWith*`` and
+``holdTo*`` fields of the ``how`` section of an Assembly YAML
+``connect``/``connectPorts`` node. See :doc:`assy`.
 
 See :ref:`location` for more information on the OCCT Location object.
 
@@ -915,12 +923,13 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         - <other.assy>
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
-      # How to hold this assembly while it is connected to another object.
-      hold: <(optional) name of an interface, or the list of them>
-      holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
-      holdForceMin: <(optional) least force to hold this assembly with, in N, default: 3>
-      holdForceMax: <(optional) most force to hold this assembly with, in N, default: 7>
-      holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
+      # What this assembly contributes to every connection it takes part in.
+      connect: # (optional) same as for parts
+        hold: <(optional) name of an interface, or the list of them, to hold this assembly by>
+        holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
+        holdForceMin: <(optional) least force to hold this assembly with, in N, default: 3>
+        holdForceMax: <(optional) most force to hold this assembly with, in N, default: 7>
+        holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
 
 The ``assy`` type is used to define assemblies in `Assembly YAML` format.
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.

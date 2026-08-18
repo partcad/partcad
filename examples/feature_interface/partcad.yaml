@@ -1,7 +1,8 @@
 desc: |
   This example demonstrates how the same parametrized assembly
   can be defined in three slightly different ways
-  using three approaches to connect parts to each other.
+  using three approaches to connect parts to each other,
+  and a fourth one that carries the instructions to assemble it.
 cover:
   assembly: connect-mates
 
@@ -12,6 +13,10 @@ docs:
     pc inspect -a connect-ports
     pc inspect -a connect-interfaces
     pc inspect -a connect-mates
+
+    # the same mount, with the instructions needed to actually assemble it
+    pc info -a connect-instructions
+    pc test -a connect-instructions
 
     # placement == "inner"
     pc inspect -a -p placement=inner connect-ports
@@ -34,6 +39,7 @@ interfaces:
   m3:
     desc: Abstract 3mm circular interface
     abstract: True
+    threadStep: 0.5 # M3 x 0.5mm: the coarse pitch, inherited by everything below
     ports:
       m3:
         location: [[0, 0, 0], [0, 0, 1], 0] # redundant, for demonstration
@@ -59,6 +65,7 @@ interfaces:
   m4:
     desc: Abstract 4mm circular interface
     abstract: True
+    threadStep: 0.7 # M4 x 0.7mm
     ports:
       m4:
         sketch: m4
@@ -186,28 +193,58 @@ parts:
   socket-head-m3-screw-6mm:
     desc: M3 socket head screw, 6mm long
     url: https://www.gobilda.com/zinc-plated-steel-socket-head-screw-m3-x-0-5mm-6mm-length-6-pack/
+    vendor: gobilda
+    sku: 2800-0003-0006
     type: step
     implements:
       m3-screw-6mm: [[0.0, 0.0, -12.0], [0.0, 1.0, 0.0], 180.0]
+    connect:
+      # A screw is held by its own head, and gently: the driver has to be able
+      # to turn it.
+      hold: m3-screw-6mm
+      holdForceMin: 2.0
+      holdForceMax: 5.0
 
   socket-head-m4-screw-6mm:
     desc: M4 socket head screw, 6mm long
     url: https://www.gobilda.com/2800-series-zinc-plated-steel-socket-head-screw-m4-x-0-7mm-6mm-length-25-pack/
+    vendor: gobilda
+    sku: 2800-0004-0006
     type: step
     implements:
       m4-screw-6mm: [[0.0, 0.0, -6.0], [0.0, 1.0, 0.0], 180.0]
+    connect:
+      hold: m4-screw-6mm
+      holdForceMin: 2.0
+      holdForceMax: 6.0
 
   example-motor:
     desc: NEMA 17 motor bracket
     url: https://www.omc-stepperonline.com/nema-17-bipolar-1-8deg-65ncm-92oz-in-2-1a-3-36v-42x42x60mm-4-wires-17hs24-2104s
+    vendor: omc-stepperonline
+    sku: 17HS24-2104S
     type: step
     implements:
       nema-17-motor: [[0.0, 0.0, 60.0], [1.0, 0.0, 0.0], 180.0]
+    connect:
+      # The motor is held by its own mounting face, firmly: it is heavy.
+      hold: nema-17-motor-mount
+      holdForceMin: 8.0
+      holdForceMax: 20.0
 
   example-bracket:
     desc: NEMA 17 motor bracket
     url: https://www.omc-stepperonline.com/nema-17-bracket-for-stepper-motor-and-geared-stepper-motor-alloy-steel-bracket-st-m1
+    vendor: omc-stepperonline
+    sku: ST-M1
     type: step
+    connect:
+      # The bracket is the fixture everything else is connected to: it is held
+      # by its foot, which is the part of it nothing else needs.
+      hold: m4-slotted-30-thru-3
+      holdInstance: L
+      holdForceMin: 10.0
+      holdForceMax: 25.0
     implements:
       nema-17-motor-bracket-3:
         inner: [[0.0, 0.0, 3.0], [0.0, 1.0, 0.0], 180.0]
@@ -263,6 +300,47 @@ assemblies:
         type: string
         enum: [TR, TL, BR, BL]
         default: TR
+
+  connect-instructions:
+    type: assy
+    desc: |
+      The same motor mount, assembled rather than only placed: every connection
+      carries the instructions needed to actually perform it.
+    # A product that can be built, so "pc test" holds it to that: the parts have
+    # to be obtainable and the connection instructions have to be followable.
+    manufacturable: true
+    manufacturing:
+      method: basic
+    parameters:
+      placement:
+        desc: Place the motor inside the bracket or outside
+        type: string
+        enum: [inner, outer]
+        default: outer
+
+# Where the purchased hardware comes from. A file rather than an online service,
+# which is what "examples/provider_store" demonstrates in more detail.
+suppliers:
+  localStock:
+
+providers:
+  localStock:
+    type: enrich
+    source: csvFile
+    with:
+      currency: USD
+      file: stock.csv
+
+  csvFile:
+    type: store
+    abstract: True
+    parameters:
+      file:
+        type: string
+        default: stock.csv
+      currency:
+        type: string
+        default: USD
 
 render:
   readme:

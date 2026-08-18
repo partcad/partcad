@@ -69,13 +69,41 @@ HOW_FIELDS_DEPRECATED = {
     "pushTorqueMax": "pushForceMax",
 }
 
-# The object-level ('parts' and 'assemblies' in 'partcad.yaml') defaults that
-# the 'holdWith*'/'holdTo*' fields inherit when the ASSY file does not give one.
+# The 'connect:' subsection of a part or an assembly in 'partcad.yaml': what
+# that object contributes to every connection it takes part in, and what the
+# 'holdWith*'/'holdTo*' fields inherit when the ASSY file does not give one.
+CONFIG_CONNECT = "connect"
 CONFIG_HOLD = "hold"
 CONFIG_HOLD_INSTANCE = "holdInstance"
 CONFIG_HOLD_FORCE = "holdForce"
 CONFIG_HOLD_FORCE_MIN = "holdForceMin"
 CONFIG_HOLD_FORCE_MAX = "holdForceMax"
+
+# The fields that subsection may carry. Anything else is a typo worth reporting.
+CONNECT_FIELDS = (
+    CONFIG_HOLD,
+    CONFIG_HOLD_INSTANCE,
+    CONFIG_HOLD_FORCE,
+    CONFIG_HOLD_FORCE_MIN,
+    CONFIG_HOLD_FORCE_MAX,
+)
+
+
+def connect_config(item, where: str = None):
+    """The 'connect:' subsection of a part or assembly definition, or an empty one."""
+    config = getattr(item, "config", None) or {}
+    if not isinstance(config, dict):
+        return {}
+    section = config.get(CONFIG_CONNECT, None)
+    if section is None:
+        return {}
+    if not isinstance(section, dict):
+        pc_logging.error("%s: 'connect' must be a section, ignoring: %s" % (where or "connect", section))
+        return {}
+    for field in section.keys():
+        if field not in CONNECT_FIELDS:
+            pc_logging.error("%s: unknown 'connect' field, ignoring: %s" % (where or "connect", field))
+    return section
 
 
 def _as_number(value, field, where):
@@ -184,7 +212,10 @@ class ConnectHow:
         self.push_force_max = self._number(config, "pushForceMax", DEFAULT_PUSH_FORCE_MAX)
         self.turn_direction = self._turn_direction(config)
         self.turn_torque_max = self._number(config, "turnTorqueMax", DEFAULT_TURN_TORQUE_MAX)
+        # 'threadStep' is inherited from the interfaces being connected when the
+        # ASSY file does not give one: see 'resolve()'.
         self.thread_step = self._number(config, "threadStep", DEFAULT_THREAD_STEP)
+        self.thread_step_specified = config.get("threadStep", None) is not None
 
         # 'pushDistance' is derived from the object's own geometry when the ASSY
         # file does not give it. That needs a CAD runtime, which instantiating an
@@ -228,6 +259,11 @@ class ConnectHow:
         self.hold_to_force_max = DEFAULT_HOLD_FORCE_MAX
         self.hold_force_specified = False
 
+        # What makes these instructions invalid, for 'pc test' to report. Every
+        # one of them is also repaired in place, so that an assembly still
+        # builds; the list is what says the repair happened.
+        self.problems: list[str] = []
+
     def _number(self, config, field, default):
         value = config.get(field, None)
         if value is None:
@@ -260,7 +296,15 @@ class ConnectHow:
         )
         return DEFAULT_TURN_DIRECTION
 
-    def resolve(self, source_item=None, target_item=None, source_frame=None, mated_frame=None):
+    def resolve(
+        self,
+        source_item=None,
+        target_item=None,
+        source_frame=None,
+        mated_frame=None,
+        source_interface=None,
+        target_interface=None,
+    ):
         """Match the requested holds against the objects that are being connected.
 
         'source_item' is the object that is being added to the assembly (the
@@ -275,10 +319,15 @@ class ConnectHow:
 
         'mated_frame' is that same interface once the object is in place, in the
         assembly's coordinates. It is what the push direction is deduced from.
+
+        'source_interface' and 'target_interface' are the two interface objects
+        being mated. They are what an unspecified 'threadStep' is inherited from.
         """
+        self.problems = []
         self._push_item = source_item
         self._push_frame = source_frame
         self.push_direction = _push_direction(mated_frame)
+        self._resolve_thread_step(source_interface, target_interface)
 
         self.hold_with = _resolve_holds(
             self._hold_with_spec,
@@ -306,6 +355,50 @@ class ConnectHow:
         self.hold_force_specified = specified
         return self
 
+    def _resolve_thread_step(self, source_interface, target_interface):
+        """Inherit 'threadStep' from the interfaces, and check that they agree.
+
+        Two interfaces that are screwed together have to share a thread, unless
+        one of them cuts its own - a self-tapping screw, or the plain hole it
+        goes into. When they disagree and neither does, the connection cannot be
+        made as described, so it is reported and the thread is left unset.
+        """
+        ends = []
+        for side, interface in (("with", source_interface), ("to", target_interface)):
+            if interface is None:
+                continue
+            step = interface.get_thread_step() if hasattr(interface, "get_thread_step") else None
+            self_screw = bool(interface.get_self_screw()) if hasattr(interface, "get_self_screw") else False
+            ends.append((side, None if step is None else float(step), self_screw))
+
+        declared = {side: step for side, step, _ in ends if step is not None}
+        cuts_its_own = any(self_screw for _, _, self_screw in ends)
+        if len(set(declared.values())) > 1 and not cuts_its_own:
+            self._problem(
+                "the interfaces disagree about 'threadStep' (%s) and neither declares 'selfScrew'"
+                % ", ".join("%s: %s" % (side, step) for side, step in sorted(declared.items()))
+            )
+            return
+
+        if self.thread_step_specified:
+            # What the ASSY file says about this one connection wins.
+            return
+
+        # The thread of the end that has to match one is the thread that gets
+        # cut; failing that, the one the self-tapping end brings with it. The
+        # object being added comes first, so a screw defines the thread of the
+        # plain hole it goes into rather than the other way round.
+        matched = [step for _, step, self_screw in ends if step is not None and not self_screw]
+        brought = [step for _, step, _ in ends if step is not None]
+        candidates = matched or brought
+        if candidates:
+            self.thread_step = candidates[0]
+
+    def _problem(self, message):
+        """Record what makes these instructions invalid, and report it."""
+        self.problems.append(message)
+        pc_logging.error("%s: %s" % (self.where, message))
+
     def _hold_force(self, side, item):
         """The force range to hold one end of the connection with, in newtons.
 
@@ -314,9 +407,7 @@ class ConnectHow:
         once. Failing all four, the documented defaults apply.
         """
         how_min, how_max, how_both = self._hold_force_spec[side]
-        config = getattr(item, "config", None) or {}
-        if not isinstance(config, dict):
-            config = {}
+        config = connect_config(item, self.where)
         object_both = (config.get(CONFIG_HOLD_FORCE, None), CONFIG_HOLD_FORCE)
         how_both = (how_both, "how.%sForce" % side)
 
@@ -340,9 +431,8 @@ class ConnectHow:
         )
 
         if minimum > maximum:
-            pc_logging.error(
-                "%s: '%sForce' has a minimum above its maximum (%s > %s), using the defaults"
-                % (self.where, side, minimum, maximum)
+            self._problem(
+                "'%sForceMin' is above '%sForceMax' (%s > %s), using the defaults" % (side, side, minimum, maximum)
             )
             return DEFAULT_HOLD_FORCE_MIN, DEFAULT_HOLD_FORCE_MAX, False
         return minimum, maximum, min_specified or max_specified
@@ -511,9 +601,7 @@ class _HoldDefaults:
     """The 'hold' and 'holdInstance' fields of a part or assembly definition."""
 
     def __init__(self, item):
-        config = getattr(item, "config", None) or {}
-        if not isinstance(config, dict):
-            config = {}
+        config = connect_config(item)
 
         self.interfaces = _as_list(config.get(CONFIG_HOLD, None))
         instances = _as_list(config.get(CONFIG_HOLD_INSTANCE, None))

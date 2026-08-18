@@ -843,6 +843,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     target_part,
                     source_frame=source_frame,
                     mated_frame=mated_frame,
+                    source_interface=source_iface_obj,
+                    target_interface=target_iface_obj,
                 )
 
         if not item is None:

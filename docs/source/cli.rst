@@ -64,6 +64,9 @@ Object commands
 ``pc test``
   Run tests on a part, assembly, or scene. Use ``-r`` to test imported packages recursively, ``-f`` to filter
   by name prefix, and ``-s``/``-i``/``-a``/``-S`` to indicate a sketch, interface, assembly, or scene.
+  The tests cover whether the object builds (``cad``), whether it can be manufactured or purchased
+  (``cam`` and the methods below it), and whether an assembly's connection instructions can be followed
+  (``connect``); see "Testing the instructions" in :doc:`assy`.
 
 ``pc inspect``
   View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) description instead of a visual

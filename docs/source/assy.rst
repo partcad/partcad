@@ -168,6 +168,10 @@ torque together, so that the resulting motion reproduces the given thread (or,
 more generally, rotation) pattern, staying within `pushForceMax` and
 `turnTorqueMax`. The default of `0.00` means a straight push with no turning.
 
+A thread belongs to the interfaces rather than to any one connection, so it is
+normally declared there and left out here - see :ref:`interface-thread` below.
+Given on a connection, it overrides what the interfaces say for that one step.
+
 `pushDirection` is not a field: it is deduced from the connection itself and
 reported alongside the rest. It is the direction, in the assembly's
 coordinates, that the object travels while it is pushed into place - so the
@@ -243,16 +247,16 @@ Either may be a single interface name or a list of them.
           holdTo: nema-17-motor-bracket-3
           holdToInstance: outer
 
-When `holdWith` is omitted, it defaults to the `hold` field of the part or the
-assembly being added (see :ref:`hold`). When `holdTo` is omitted, it defaults to
-the `hold` field of the object being connected to. When neither is set, the
+When `holdWith` is omitted, it defaults to the `hold` field of the `connect`
+section of the part or the assembly being added (see :ref:`hold`). When `holdTo`
+is omitted, it defaults to the `hold` field of the object being connected to. When neither is set, the
 assembler is free to hold the object however it sees fit.
 
 `holdWithInstance` and `holdToInstance` select which instance of the interface
 to hold by, for the cases where the object implements more than one instance of
 it. They are matched positionally against `holdWith` and `holdTo`. When omitted,
-the instance defaults to the `holdInstance` field of the part or the assembly,
-and, failing that, to the first instance of the interface.
+the instance defaults to the `holdInstance` field of that same section, and,
+failing that, to the first instance of the interface.
 
 `holdWithForceMin` and `holdWithForceMax` bound the force each end is held
 with, in newtons - enough to keep the object from moving, not so much as to
@@ -262,12 +266,79 @@ first of these that gives it:
 
 1. the bound itself, `holdWithForceMin` or `holdWithForceMax`;
 2. `holdWithForce`, which sets both;
-3. the `holdForceMin`/`holdForceMax` field of the part or the assembly;
-4. its `holdForce` field, which sets both;
+3. the `holdForceMin`/`holdForceMax` field of the `connect` section of the part
+   or the assembly (see :ref:`hold`);
+4. the `holdForce` field of that same section, which sets both;
 5. the defaults, **3 N** for the minimum and **7 N** for the maximum.
 
 A minimum that ends up above its maximum is a contradiction rather than a
 range: it is reported, and both bounds fall back to the defaults.
+
+.. _interface-thread:
+
+The thread of an interface
+--------------------------
+
+An interface may declare the thread that connections made through it advance
+along, and whether it cuts its own:
+
+  .. code-block:: yaml
+
+    interfaces:
+      m3:
+        abstract: True
+        threadStep: <(optional) axial distance per full turn, in mm>
+        selfScrew: <(optional) whether this interface cuts its own thread, default: false>
+
+Both are inherited by the interfaces that inherit this one, so a thread is
+spelled out once, on the interface that introduces it. In
+`examples/feature_interface` the abstract `m3` interface carries `0.5` and the
+abstract `m4` carries `0.7` - the real pitches of those screws - and every
+opening, screw and hole pattern derived from them connects with the right
+thread without repeating it.
+
+A connection inherits `threadStep` from the two interfaces it mates. They have
+to agree on it: two different threads cannot be screwed together, and a
+connection whose ends disagree is reported and fails ``pc test``. Unless, that
+is, one of them declares `selfScrew` - a self-tapping screw, or the plain hole
+one goes into. Then the thread of the end that does have to match one is the
+thread that gets cut, and failing that the one the self-tapping end brings with
+it.
+
+Reading the instructions back
+-----------------------------
+
+Everything resolved from the sections above - the inherited threads, the
+deduced push direction, the forces each end is held with - is reported by
+
+.. code-block:: shell
+
+    pc info -a <assembly>
+
+under ``Connections``, one entry per connected object. That is the assembly's
+own account of how it is built, for a person or for whatever performs it.
+
+Testing the instructions
+------------------------
+
+Everything above is resolved leniently: a field that is missing takes its
+default, and one that contradicts itself is reported and replaced with a
+default, so that an assembly always builds. ``pc test`` is what looks past that
+leniency. Its ``connect`` test fails an assembly whose instructions had to be
+repaired to be usable, and passes one that is sound - **including one that says
+nothing at all** and takes every default.
+
+What it rejects today:
+
+* a ``*Min`` above its corresponding ``*Max`` - ``holdWithForceMin`` above
+  ``holdWithForceMax``, or ``holdToForceMin`` above ``holdToForceMax``. A
+  minimum above a maximum is a contradiction rather than a range.
+* two interfaces that disagree about their `threadStep` with neither declaring
+  `selfScrew`.
+
+.. code-block:: shell
+
+    pc test -a connect-instructions
 
 .. _hold:
 
@@ -282,15 +353,19 @@ the assembly itself, in `partcad.yaml`:
     parts:
       example-bracket:
         type: step
-        hold: <(optional) interface, or list of interfaces, to hold this part by>
-        holdInstance: <(optional) instance of each interface listed in "hold">
-        holdForceMin: <(optional) least force to hold this part with, in N>
-        holdForceMax: <(optional) most force to hold this part with, in N>
-        holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
+        connect: # (optional)
+          hold: <(optional) interface, or list of interfaces, to hold this part by>
+          holdInstance: <(optional) instance of each interface listed in "hold">
+          holdForceMin: <(optional) least force to hold this part with, in N>
+          holdForceMax: <(optional) most force to hold this part with, in N>
+          holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
 
     assemblies:
       motor-mount:
         type: assy
-        hold: <(optional) same as for parts>
-        holdInstance: <(optional) same as for parts>
-        holdForce: <(optional) same as for parts>
+        connect: # (optional) same as for parts
+          hold: <...>
+
+Everything an object contributes to every connection it takes part in lives in
+that one `connect` section, rather than among the fields that describe the
+object itself.
