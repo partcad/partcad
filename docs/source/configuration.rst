@@ -1068,10 +1068,11 @@ parts, with the assembly itself being what is ordered.
       sku: "3103-0001-0001"  # shipped assembled
 
 An assembly that has both ``vendor`` and ``sku`` set is considered purchasable,
-and is not required to declare how it is manufactured. An assembly without them
-is manufactured by producing its parts and putting them together, which requires
-every part in its bill of materials to be manufacturable or purchasable by
-itself.
+and is not required to declare how it is manufactured: ``pc test`` only checks
+that a supplier carries it. An assembly without them is manufactured by producing
+its parts and putting them together, which requires everything it is procured
+from -- its parts, and the sub-assemblies that are sold assembled -- to be
+obtainable by itself.
 
 Declaring an assembly purchasable does not stop it from being modelled and
 rendered as usual: the links between its parts still describe what is inside the

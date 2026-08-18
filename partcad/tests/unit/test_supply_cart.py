@@ -59,6 +59,19 @@ def test_bom_still_flattens_everything():
     assert asyncio.run(top.get_bom()) == {"//sub:cube": 8, "//sub:bolt": 1}
 
 
+def test_supply_bom_matches_bom_where_nothing_is_sold_assembled():
+    """The two walks agree on a package that has no purchasable assembly in it
+
+    This is what keeps 'pc supply' and 'pc test' behaving exactly as they used
+    to for every package written before assemblies could be bought at all.
+    """
+    ctx = pc.Context("partcad/tests/unit/data/assembly_bom/partcad.yaml")
+    top = ctx._get_assembly("//:top")
+    assert top is not None
+
+    assert asyncio.run(top.get_supply_bom()) == asyncio.run(top.get_bom())
+
+
 def test_cart_stops_at_supplyable_assembly():
     """By default the cart stops drilling down at the first assembly it can order"""
     assert _counts(_cart("//:top")) == {

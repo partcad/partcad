@@ -65,6 +65,12 @@ Object commands
   Run tests on a part, assembly, or scene. Use ``-r`` to test imported packages recursively, ``-f`` to filter
   by name prefix, and ``-s``/``-i``/``-a``/``-S`` to indicate a sketch, interface, assembly, or scene.
 
+  The manufacturability test asks for exactly what ``pc supply`` would order. An assembly that is sold
+  assembled (see :ref:`procurement`) passes once a supplier carries it, and is not taken apart: the parts
+  inside it are the seller's problem. Every other assembly has to declare how it is assembled, and everything
+  it is procured from -- its parts, and the sub-assemblies that are ordered assembled -- has to be obtainable
+  on its own.
+
 ``pc inspect``
   View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) description instead of a visual
   one, and ``-p <name>=<value>`` to set parameters.
