@@ -896,6 +896,30 @@ The MCFTT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type
 ``store``.
 
+Manufacturing methods
+---------------------
+
+The ``manufacturing.method`` field says how a part is made:
+
++------------------+-----------------------------------------------------------+
+| Method           | Meaning                                                   |
++==================+===========================================================+
+| ``additive``     | Built up, e.g. 3D printed                                 |
++------------------+-----------------------------------------------------------+
+| ``subtractive``  | Cut away from stock, e.g. machined                        |
++------------------+-----------------------------------------------------------+
+| ``forming``      | Shaped without adding or removing material                |
++------------------+-----------------------------------------------------------+
+| ``pcbBasic``     | A printed circuit board (**not implemented yet**)         |
++------------------+-----------------------------------------------------------+
+
+These are ways of making a **part**, and apply to parts only. An assembly is put
+together rather than made, and has a single method of its own -- see
+:ref:`assembly-manufacturing` below.
+
+A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
+a method.
+
 .. _assemblies:
 
 ==========
@@ -933,6 +957,25 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
 The ``assy`` type is used to define assemblies in `Assembly YAML` format.
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
+
+.. _assembly-manufacturing:
+
+**Manufacturing.** ``assy`` is the only manufacturing method an assembly has:
+it is put together by following the instructions in its own Assembly YAML file,
+rather than made the way a part is. Every assembly of type ``assy`` gets that
+method with the type, so ``manufacturing`` never has to be spelled out:
+
+.. code-block:: yaml
+
+  assemblies:
+    motor-mount:
+      type: assy
+      manufacturable: true
+      # manufacturing: { method: assy } is implied by the type
+
+Whether an assembly is *held to* that -- whether ``pc test`` checks that its
+parts can be obtained and its connection instructions followed -- is what
+``manufacturable`` says, exactly as for parts.
 The optional ``offset`` parameter specifies the location of the assembly using an OCCT Location object.
 See "Implementation Detail" for more information on the OCCT Location object.
 

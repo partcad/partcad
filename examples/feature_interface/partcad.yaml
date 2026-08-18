@@ -308,9 +308,8 @@ assemblies:
       carries the instructions needed to actually perform it.
     # A product that can be built, so "pc test" holds it to that: the parts have
     # to be obtainable and the connection instructions have to be followable.
+    # The "assy" manufacturing method comes with the type.
     manufacturable: true
-    manufacturing:
-      method: basic
     parameters:
       placement:
         desc: Place the motor inside the bracket or outside
@@ -318,29 +317,11 @@ assemblies:
         enum: [inner, outer]
         default: outer
 
-# Where the purchased hardware comes from. A file rather than an online service,
-# which is what "examples/provider_store" demonstrates in more detail.
+# Where the purchased hardware comes from. This example is about interfaces, so
+# it defines no provider of its own: it buys from the store next door, which is
+# what "examples/provider_store" is for and which stocks these very parts.
 suppliers:
-  localStock:
-
-providers:
-  localStock:
-    type: enrich
-    source: csvFile
-    with:
-      currency: USD
-      file: stock.csv
-
-  csvFile:
-    type: store
-    abstract: True
-    parameters:
-      file:
-        type: string
-        default: stock.csv
-      currency:
-        type: string
-        default: USD
+  //pub/examples/partcad/provider_store:myGarage:
 
 render:
   readme:

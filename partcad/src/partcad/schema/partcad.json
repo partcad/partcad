@@ -231,12 +231,13 @@
       "uniqueItems": true
     },
     "suppliers":{
+      "description": "The providers to consider for the parts and assemblies of this package. A name is a provider of this package unless it is qualified with a package path, which lets a package buy from a provider defined elsewhere.",
       "oneOf":[
         { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
         {
           "type": "object",
           "patternProperties": {
-            "^[a-zA-Z0-9_/./-]+$": { "type": "null" }
+            "^[a-zA-Z0-9_/.:-]+$": { "type": "null" }
           },
           "additionalProperties": false
         }
@@ -370,7 +371,7 @@
                 "manufacturing": {
                   "type": "object",
                   "properties": {
-                    "method": { "type": "string", "enum": ["basic", "additive", "pcbBasic"] }
+                    "method": { "type": "string", "enum": ["additive", "subtractive", "forming", "pcbBasic"] }
                   },
                   "required":["method"],
                   "additionalProperties": false
@@ -457,7 +458,7 @@
                 "manufacturing": {
                   "type": "object",
                   "properties": {
-                    "method": { "type": "string", "enum": ["basic", "additive", "pcbBasic"] }
+                    "method": { "type": "string", "enum": ["assy"], "default": "assy" }
                   },
                   "required":["method"],
                   "additionalProperties": false

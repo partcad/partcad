@@ -156,6 +156,12 @@ assemblies:
     manufacturable: false
 ```
 
+Do not add a `manufacturing:` section: `assy` is the only method an assembly has
+and it comes with the type. (`additive`/`subtractive`/`forming` are ways of
+making a *part* and mean nothing here.) Marking it manufacturable instead makes
+`pc test` require that every part in it can be bought or made from a declared
+supplier — only do that when that is true.
+
 ## 4. Validate, render, iterate
 
 ```sh
