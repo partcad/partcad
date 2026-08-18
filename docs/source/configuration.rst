@@ -648,12 +648,15 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       # How to hold this part while it is connected to another object.
       hold: <(optional) name of an interface, or the list of them>
       holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
+      holdForceMin: <(optional) least force to hold this part with, in N, default: 3>
+      holdForceMax: <(optional) most force to hold this part with, in N, default: 7>
+      holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
 
 Depending on the type of the part, the configuration may have different options.
 
-The ``hold`` and ``holdInstance`` fields are the defaults for the ``holdWith``,
-``holdWithInstance``, ``holdTo`` and ``holdToInstance`` fields of the ``how``
-section of an Assembly YAML ``connect``/``connectPorts`` node. See :doc:`assy`.
+The ``hold``, ``holdInstance`` and ``holdForce*`` fields are the defaults for
+the ``holdWith*`` and ``holdTo*`` fields of the ``how`` section of an Assembly
+YAML ``connect``/``connectPorts`` node. See :doc:`assy`.
 
 See :ref:`location` for more information on the OCCT Location object.
 
@@ -915,6 +918,9 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
       # How to hold this assembly while it is connected to another object.
       hold: <(optional) name of an interface, or the list of them>
       holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
+      holdForceMin: <(optional) least force to hold this assembly with, in N, default: 3>
+      holdForceMax: <(optional) most force to hold this assembly with, in N, default: 7>
+      holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
 
 The ``assy`` type is used to define assemblies in `Assembly YAML` format.
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.

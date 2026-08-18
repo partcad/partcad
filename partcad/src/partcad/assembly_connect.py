@@ -16,6 +16,8 @@ It is never parsed and never required to assemble anything: every instruction
 that the assembler needs must be codified in the other ASSY fields.
 """
 
+import math
+
 from . import logging as pc_logging
 
 # 'how' defaults. See 'docs/source/assy.rst' for the units and the semantics.
@@ -31,6 +33,9 @@ DEFAULT_THREAD_STEP = 0.0  # mm
 # interface that it is connected by.
 PUSH_DISTANCE_FACTOR = 1.5
 
+DEFAULT_HOLD_FORCE_MIN = 3.0  # N
+DEFAULT_HOLD_FORCE_MAX = 7.0  # N
+
 TURN_DIRECTION_CW = "cw"
 TURN_DIRECTION_CCW = "ccw"
 TURN_DIRECTIONS = (TURN_DIRECTION_CW, TURN_DIRECTION_CCW)
@@ -45,8 +50,14 @@ HOW_FIELDS = (
     "threadStep",
     "holdWith",
     "holdWithInstance",
+    "holdWithForce",
+    "holdWithForceMin",
+    "holdWithForceMax",
     "holdTo",
     "holdToInstance",
+    "holdToForce",
+    "holdToForceMin",
+    "holdToForceMax",
 )
 
 # Fields that were renamed, and the field that replaces each of them. They are
@@ -58,10 +69,52 @@ HOW_FIELDS_DEPRECATED = {
     "pushTorqueMax": "pushForceMax",
 }
 
-# The object-level ('parts' and 'assemblies' in 'partcad.yaml') defaults for
-# 'holdWith'/'holdTo' and 'holdWithInstance'/'holdToInstance'.
+# The object-level ('parts' and 'assemblies' in 'partcad.yaml') defaults that
+# the 'holdWith*'/'holdTo*' fields inherit when the ASSY file does not give one.
 CONFIG_HOLD = "hold"
 CONFIG_HOLD_INSTANCE = "holdInstance"
+CONFIG_HOLD_FORCE = "holdForce"
+CONFIG_HOLD_FORCE_MIN = "holdForceMin"
+CONFIG_HOLD_FORCE_MAX = "holdForceMax"
+
+
+def _as_number(value, field, where):
+    """The value as a non-negative float, or None with the problem reported."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        pc_logging.error("%s: '%s' must be a number, using the default: %s" % (where, field, value))
+        return None
+    if value < 0.0:
+        pc_logging.error("%s: '%s' must not be negative, using the default: %s" % (where, field, value))
+        return None
+    return float(value)
+
+
+def _push_direction(mated_frame):
+    """The direction an object travels while it is pushed into place.
+
+    'mated_frame' is the interface the object is connected by, once the object
+    is in place, in the assembly's coordinates. The connection puts that frame
+    face to face with the target's - 'assembly_factory_assy' turns the object
+    around to mate the two - so the object arrives travelling along the frame's
+    **negative** Z axis, which is the target interface's positive Z.
+
+    That the positive Z of an interface points into the object it belongs to is
+    what the examples encode: 'examples/feature_interface' places both faces of
+    the same 3mm bracket as instances of one interface, the 'outer' one at z=0
+    unrotated and the 'inner' one at z=3 turned around, so the two axes point at
+    each other through the material. A screw connected to either face therefore
+    travels along that face's positive Z to get in.
+    """
+    if mated_frame is None:
+        return None
+    axis = mated_frame.rotate((0.0, 0.0, -1.0))
+    length = math.sqrt(sum(value * value for value in axis))
+    if length == 0.0:
+        return None
+    # Rounded because the quaternion math leaves 1e-17 dust on the components
+    # that are meant to be zero, and this ends up in the assembly's documents.
+    unit = [round(value / length, 12) for value in axis]
+    return tuple(0.0 if value == 0.0 else value for value in unit)
 
 
 def _as_list(value):
@@ -142,6 +195,10 @@ class ConnectHow:
         self._push_item = None
         self._push_frame = None
 
+        # The direction the object travels while it is pushed into place, in the
+        # assembly's coordinates. Deduced from the connection: see 'resolve()'.
+        self.push_direction = None
+
         # The requested holds, before they are matched against the objects being
         # connected. 'resolve()' turns these into 'ConnectHold' lists.
         self._hold_with_spec = _as_list(config.get("holdWith", None))
@@ -152,17 +209,31 @@ class ConnectHow:
         self.hold_with: list[ConnectHold] = []
         self.hold_to: list[ConnectHold] = []
 
+        # The holding forces, before the object-level defaults are folded in.
+        self._hold_force_spec = {
+            "holdWith": (
+                config.get("holdWithForceMin", None),
+                config.get("holdWithForceMax", None),
+                config.get("holdWithForce", None),
+            ),
+            "holdTo": (
+                config.get("holdToForceMin", None),
+                config.get("holdToForceMax", None),
+                config.get("holdToForce", None),
+            ),
+        }
+        self.hold_with_force_min = DEFAULT_HOLD_FORCE_MIN
+        self.hold_with_force_max = DEFAULT_HOLD_FORCE_MAX
+        self.hold_to_force_min = DEFAULT_HOLD_FORCE_MIN
+        self.hold_to_force_max = DEFAULT_HOLD_FORCE_MAX
+        self.hold_force_specified = False
+
     def _number(self, config, field, default):
         value = config.get(field, None)
         if value is None:
             return default
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            pc_logging.error("%s: 'how.%s' must be a number, using the default: %s" % (self.where, field, value))
-            return default
-        if value < 0.0:
-            pc_logging.error("%s: 'how.%s' must not be negative, using the default: %s" % (self.where, field, value))
-            return default
-        return float(value)
+        number = _as_number(value, "how." + field, self.where)
+        return default if number is None else number
 
     def _stage(self, config):
         value = config.get("stage", None)
@@ -189,7 +260,7 @@ class ConnectHow:
         )
         return DEFAULT_TURN_DIRECTION
 
-    def resolve(self, source_item=None, target_item=None, source_frame=None):
+    def resolve(self, source_item=None, target_item=None, source_frame=None, mated_frame=None):
         """Match the requested holds against the objects that are being connected.
 
         'source_item' is the object that is being added to the assembly (the
@@ -201,9 +272,13 @@ class ConnectHow:
         is connected by, in that object's own coordinates. It is what a derived
         'pushDistance' is measured along, and is remembered rather than used
         here: see 'resolve_push_distance()'.
+
+        'mated_frame' is that same interface once the object is in place, in the
+        assembly's coordinates. It is what the push direction is deduced from.
         """
         self._push_item = source_item
         self._push_frame = source_frame
+        self.push_direction = _push_direction(mated_frame)
 
         self.hold_with = _resolve_holds(
             self._hold_with_spec,
@@ -219,7 +294,68 @@ class ConnectHow:
             self.where,
             "holdTo",
         )
+
+        specified = False
+        for side, item in (("holdWith", source_item), ("holdTo", target_item)):
+            minimum, maximum, was_specified = self._hold_force(side, item)
+            specified = specified or was_specified
+            if side == "holdWith":
+                self.hold_with_force_min, self.hold_with_force_max = minimum, maximum
+            else:
+                self.hold_to_force_min, self.hold_to_force_max = minimum, maximum
+        self.hold_force_specified = specified
         return self
+
+    def _hold_force(self, side, item):
+        """The force range to hold one end of the connection with, in newtons.
+
+        The ASSY file wins over the object's own definition, and the bound
+        specific field ('...Min'/'...Max') wins over the one that sets both at
+        once. Failing all four, the documented defaults apply.
+        """
+        how_min, how_max, how_both = self._hold_force_spec[side]
+        config = getattr(item, "config", None) or {}
+        if not isinstance(config, dict):
+            config = {}
+        object_both = (config.get(CONFIG_HOLD_FORCE, None), CONFIG_HOLD_FORCE)
+        how_both = (how_both, "how.%sForce" % side)
+
+        minimum, min_specified = self._first_number(
+            [
+                (how_min, "how.%sForceMin" % side),
+                how_both,
+                (config.get(CONFIG_HOLD_FORCE_MIN, None), CONFIG_HOLD_FORCE_MIN),
+                object_both,
+            ],
+            DEFAULT_HOLD_FORCE_MIN,
+        )
+        maximum, max_specified = self._first_number(
+            [
+                (how_max, "how.%sForceMax" % side),
+                how_both,
+                (config.get(CONFIG_HOLD_FORCE_MAX, None), CONFIG_HOLD_FORCE_MAX),
+                object_both,
+            ],
+            DEFAULT_HOLD_FORCE_MAX,
+        )
+
+        if minimum > maximum:
+            pc_logging.error(
+                "%s: '%sForce' has a minimum above its maximum (%s > %s), using the defaults"
+                % (self.where, side, minimum, maximum)
+            )
+            return DEFAULT_HOLD_FORCE_MIN, DEFAULT_HOLD_FORCE_MAX, False
+        return minimum, maximum, min_specified or max_specified
+
+    def _first_number(self, candidates, default):
+        """The first of '(value, field)' that is a usable number, and whether there was one."""
+        for value, field in candidates:
+            if value is None:
+                continue
+            number = _as_number(value, field, self.where)
+            if number is not None:
+                return number, True
+        return default, False
 
     async def resolve_push_distance(self, ctx):
         """Fill in 'push_distance' from the object's geometry, if it was not given.
@@ -251,16 +387,21 @@ class ConnectHow:
 
     def is_default(self):
         """Whether the ASSY file said nothing at all about how to connect."""
-        return not self.specified and not self.hold_with and not self.hold_to
+        return not self.specified and not self.hold_with and not self.hold_to and not self.hold_force_specified
 
     def info(self):
         info = {
             "pushForceMax": self.push_force_max,
             # None means "not derived yet": see 'resolve_push_distance()'.
             "pushDistance": self.push_distance,
+            "pushDirection": None if self.push_direction is None else list(self.push_direction),
             "turnDirection": self.turn_direction,
             "turnTorqueMax": self.turn_torque_max,
             "threadStep": self.thread_step,
+            "holdWithForceMin": self.hold_with_force_min,
+            "holdWithForceMax": self.hold_with_force_max,
+            "holdToForceMin": self.hold_to_force_min,
+            "holdToForceMax": self.hold_to_force_max,
         }
         if self.stage is not None:
             info["stage"] = self.stage

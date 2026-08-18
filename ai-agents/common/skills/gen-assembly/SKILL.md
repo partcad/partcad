@@ -99,14 +99,20 @@ the connection rather than place it:
       threadStep: <lead in mm per full turn, default 0.00>
       holdWith: <interface(s) to hold the part being added by>
       holdWithInstance: <instance(s) of holdWith>
+      holdWithForceMin/Max: <force in N to hold it with, default 3/7; holdWithForce sets both>
       holdTo: <interface(s) to hold the target by>
       holdToInstance: <instance(s) of holdTo>
+      holdToForceMin/Max: <force in N to hold the target with, default 3/7; holdToForce sets both>
 ```
+
+`pushDirection` is not a field: it is deduced from the interfaces (an
+interface's +Z points into the object it belongs to, which is the way an
+incoming part travels) and reported with the rest.
 
 Everything that is **required** to perform the assembly must be codified in
 `how` and the other fields — never only in `comment`, which no tool reads. The
-`hold*` fields default to the `hold`/`holdInstance` fields of the part or
-assembly definition in `partcad.yaml`.
+`hold*` fields default to the `hold`/`holdInstance`/`holdForce*` fields of the
+part or assembly definition in `partcad.yaml`.
 
 **Sub-assembly node** — identical to a part node but with `assembly:` instead of
 `part:`, and it may carry its own nested `links:`.

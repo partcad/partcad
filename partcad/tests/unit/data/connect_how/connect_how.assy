@@ -17,8 +17,10 @@ links:
         turnTorqueMax: 1.2
         threadStep: 0.5
         holdWith: grip
+        holdWithForce: 6.0
         holdTo: grip
         holdToInstance: left
+        holdToForceMax: 8.0
 
   - part: screw
     name: screw-tr

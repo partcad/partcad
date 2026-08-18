@@ -65,6 +65,11 @@
         }
       ]
     },
+    "holdForce": {
+      "description": "A force to hold this object with, in N. The default for the 'holdWithForce*'/'holdToForce*' fields in the 'how' section of an ASSY 'connect*' node.",
+      "type": "number",
+      "minimum": 0
+    },
     "interface-parameter": {
       "oneOf": [
         {
@@ -401,7 +406,10 @@
                   "additionalProperties": false
                 },
                 "hold": { "$ref": "#/definitions/hold" },
-                "holdInstance": { "$ref": "#/definitions/holdInstance" }
+                "holdInstance": { "$ref": "#/definitions/holdInstance" },
+                "holdForce": { "$ref": "#/definitions/holdForce" },
+                "holdForceMin": { "$ref": "#/definitions/holdForce" },
+                "holdForceMax": { "$ref": "#/definitions/holdForce" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -456,7 +464,10 @@
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "render": { "$ref": "#/definitions/render" },
                 "hold": { "$ref": "#/definitions/hold" },
-                "holdInstance": { "$ref": "#/definitions/holdInstance" }
+                "holdInstance": { "$ref": "#/definitions/holdInstance" },
+                "holdForce": { "$ref": "#/definitions/holdForce" },
+                "holdForceMin": { "$ref": "#/definitions/holdForce" },
+                "holdForceMax": { "$ref": "#/definitions/holdForce" }
               },
               "required": ["type"],
               "additionalProperties": false

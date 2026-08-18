@@ -834,11 +834,15 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 # Now that both ends of the connection are known, the interfaces
                 # to hold them by can be matched against what they implement.
                 # The source port is the frame a derived "pushDistance" is
-                # measured along, so it goes along too.
+                # measured along, and that same port once the object is in place
+                # is what the push direction is deduced from, so both go along.
+                source_frame = None if source_port is None else source_port.location
+                mated_frame = location if source_frame is None else location * source_frame
                 connect_how.resolve(
                     item,
                     target_part,
-                    source_frame=None if source_port is None else source_port.location,
+                    source_frame=source_frame,
+                    mated_frame=mated_frame,
                 )
 
         if not item is None:

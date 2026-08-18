@@ -10,6 +10,8 @@ import asyncio
 import partcad as pc
 from partcad import measure
 from partcad.assembly_connect import (
+    DEFAULT_HOLD_FORCE_MAX,
+    DEFAULT_HOLD_FORCE_MIN,
     DEFAULT_PUSH_FORCE_MAX,
     DEFAULT_THREAD_STEP,
     DEFAULT_TURN_DIRECTION,
@@ -99,9 +101,14 @@ def test_connect_how_all_fields():
     assert how.info() == {
         "pushForceMax": 2.5,
         "pushDistance": None,
+        "pushDirection": None,
         "turnDirection": "ccw",
         "turnTorqueMax": 1.2,
         "threadStep": 0.5,
+        "holdWithForceMin": DEFAULT_HOLD_FORCE_MIN,
+        "holdWithForceMax": DEFAULT_HOLD_FORCE_MAX,
+        "holdToForceMin": DEFAULT_HOLD_FORCE_MIN,
+        "holdToForceMax": DEFAULT_HOLD_FORCE_MAX,
     }
 
 
@@ -130,9 +137,14 @@ def test_connect_how_deprecated_field_still_works():
     assert how.info() == {
         "pushForceMax": 2.5,
         "pushDistance": None,
+        "pushDirection": None,
         "turnDirection": DEFAULT_TURN_DIRECTION,
         "turnTorqueMax": DEFAULT_TURN_TORQUE_MAX,
         "threadStep": DEFAULT_THREAD_STEP,
+        "holdWithForceMin": DEFAULT_HOLD_FORCE_MIN,
+        "holdWithForceMax": DEFAULT_HOLD_FORCE_MAX,
+        "holdToForceMin": DEFAULT_HOLD_FORCE_MIN,
+        "holdToForceMax": DEFAULT_HOLD_FORCE_MAX,
     }
 
 
@@ -320,6 +332,107 @@ def test_connect_how_push_distance_measurement_failure_is_not_fatal(monkeypatch)
     assert asyncio.run(how.resolve_push_distance(ctx=object())) is None
 
 
+def test_connect_how_push_direction_is_the_frame_reversed():
+    """The object arrives travelling along the negative Z of its mated interface"""
+    how = ConnectHow({})
+    how.resolve(mated_frame=Location((0, 0, 0), (0, 0, 1), 0))
+    assert how.push_direction == (0.0, 0.0, -1.0)
+
+    # Turned around: the object comes from the other side.
+    how = ConnectHow({})
+    how.resolve(mated_frame=Location((0, 0, 3), (0, 1, 0), 180))
+    assert [round(v, 6) for v in how.push_direction] == [0.0, 0.0, 1.0]
+
+    # Without a connection there is no direction to deduce.
+    assert ConnectHow({}).resolve().push_direction is None
+
+
+def test_connect_how_push_direction_points_into_the_joint():
+    """The direction deduced from 'examples/feature_interface' screw connections
+
+    The four M3 screws hold the motor onto the bracket from the opposite face,
+    so their push direction has to point from the screw towards the motor - and
+    has to flip when the motor is placed on the other side of the bracket.
+    """
+    ctx = pc.init("examples")
+    seen = {}
+    for placement in ("outer", "inner"):
+        assembly = ctx._get_assembly("//feature_interface:connect-interfaces", {"placement": placement})
+        asyncio.run(assembly.do_instantiate())
+        children = list(assembly.connected_children())
+
+        motor = [child for child in children if child.name == "example-motor"][0]
+        motor_origin = motor.location.as_packed()[0]
+        screws = [child for child in children if child.name == "socket-head-m3-screw-6mm"]
+        assert len(screws) == 4
+
+        for screw in screws:
+            direction = screw.how.push_direction
+            assert direction is not None
+            assert abs(sum(v * v for v in direction) - 1.0) < 1e-9
+            origin = screw.location.as_packed()[0]
+            towards_motor = [motor_origin[i] - origin[i] for i in range(3)]
+            assert sum(direction[i] * towards_motor[i] for i in range(3)) > 0.0
+        seen[placement] = screws[0].how.push_direction
+
+    # Mounting the motor on the other face reverses where the screws come from.
+    assert [round(v, 6) for v in seen["outer"]] == [-round(v, 6) for v in seen["inner"]]
+
+
+def test_connect_how_hold_force_defaults():
+    """Nothing said anywhere means the documented 3 N to 7 N"""
+    how = ConnectHow({}).resolve(_FakeItem(), _FakeItem())
+    assert (how.hold_with_force_min, how.hold_with_force_max) == (DEFAULT_HOLD_FORCE_MIN, DEFAULT_HOLD_FORCE_MAX)
+    assert (how.hold_to_force_min, how.hold_to_force_max) == (3.0, 7.0)
+    assert not how.hold_force_specified
+
+
+def test_connect_how_hold_force_alias_sets_both():
+    how = ConnectHow({"holdWithForce": 5.0, "holdToForce": 6.0}).resolve(_FakeItem(), _FakeItem())
+    assert (how.hold_with_force_min, how.hold_with_force_max) == (5.0, 5.0)
+    assert (how.hold_to_force_min, how.hold_to_force_max) == (6.0, 6.0)
+    assert how.hold_force_specified
+
+
+def test_connect_how_hold_force_bounds_win_over_the_alias():
+    how = ConnectHow({"holdWithForce": 5.0, "holdWithForceMax": 9.0}).resolve(_FakeItem(), _FakeItem())
+    assert (how.hold_with_force_min, how.hold_with_force_max) == (5.0, 9.0)
+
+
+def test_connect_how_hold_force_inherited_from_the_object():
+    """'holdForce*' on the part or assembly is what the connection inherits"""
+    how = ConnectHow({}).resolve(
+        _FakeItem({"holdForce": 4.0}),
+        _FakeItem({"holdForceMin": 1.0, "holdForceMax": 12.0}),
+    )
+    assert (how.hold_with_force_min, how.hold_with_force_max) == (4.0, 4.0)
+    assert (how.hold_to_force_min, how.hold_to_force_max) == (1.0, 12.0)
+    assert how.hold_force_specified
+    # Worth reporting even though the ASSY file said nothing itself.
+    assert not how.is_default()
+
+
+def test_connect_how_hold_force_the_assy_file_wins():
+    """The ASSY file overrides the bound it names, the object supplies the other"""
+    how = ConnectHow({"holdWithForceMin": 6.0}).resolve(_FakeItem({"holdForce": 8.0}), _FakeItem())
+    assert (how.hold_with_force_min, how.hold_with_force_max) == (6.0, 8.0)
+
+
+def test_connect_how_hold_force_out_of_order_falls_back():
+    """A minimum above the maximum is a contradiction, not a range"""
+    how = ConnectHow({"holdWithForceMin": 9.0, "holdWithForceMax": 2.0}).resolve(_FakeItem(), _FakeItem())
+    assert (how.hold_with_force_min, how.hold_with_force_max) == (DEFAULT_HOLD_FORCE_MIN, DEFAULT_HOLD_FORCE_MAX)
+
+
+def test_connect_how_hold_force_in_info():
+    how = ConnectHow({"holdWithForce": 5.0}).resolve(_FakeItem(), _FakeItem())
+    info = how.info()
+    assert info["holdWithForceMin"] == 5.0
+    assert info["holdWithForceMax"] == 5.0
+    assert info["holdToForceMin"] == DEFAULT_HOLD_FORCE_MIN
+    assert info["holdToForceMax"] == DEFAULT_HOLD_FORCE_MAX
+
+
 def test_measure_in_frame_moves_the_shape_into_the_frame():
     """Measuring in a frame is measuring the shape moved by that frame's inverse"""
     shape = {"brep": "..."}
@@ -382,6 +495,10 @@ def test_assy_connect_comment_and_how():
     assert [hold.interface.split(":")[-1] for hold in explicit.how.hold_with] == ["grip"]
     assert [hold.interface.split(":")[-1] for hold in explicit.how.hold_to] == ["grip"]
     assert [hold.instance for hold in explicit.how.hold_to] == ["left"]
+    # "holdWithForce" sets both bounds; "holdToForceMax" overrides just the one,
+    # leaving the plate's own "holdForceMin" for the other.
+    assert (explicit.how.hold_with_force_min, explicit.how.hold_with_force_max) == (6.0, 6.0)
+    assert (explicit.how.hold_to_force_min, explicit.how.hold_to_force_max) == (2.0, 8.0)
 
     info = explicit.connect_info()
     assert info["name"] == "screw-tl"
@@ -403,6 +520,9 @@ def test_assy_connect_how_defaults_from_the_part_definition():
     assert [hold.interface.split(":")[-1] for hold in implicit.how.hold_with] == ["grip"]
     assert [hold.interface.split(":")[-1] for hold in implicit.how.hold_to] == ["grip"]
     assert [hold.instance for hold in implicit.how.hold_to] == ["right"]
+    # Inherited too: the screw's "holdForce: 4.5" and the plate's 2.0 to 9.0.
+    assert (implicit.how.hold_with_force_min, implicit.how.hold_with_force_max) == (4.5, 4.5)
+    assert (implicit.how.hold_to_force_min, implicit.how.hold_to_force_max) == (2.0, 9.0)
 
 
 def _stub_geometry(monkeypatch):

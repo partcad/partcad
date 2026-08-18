@@ -193,6 +193,14 @@ class Location:
         axis, angle = _quat_to_axis_angle(self._q)
         return [list(self._t), list(axis), angle]
 
+    def rotate(self, vector: Sequence[float]):
+        """This location's rotation applied to 'vector', ignoring the translation.
+
+        Turning an axis of a frame into the coordinates the frame is expressed
+        in: 'location.rotate((0, 0, 1))' is that frame's Z axis.
+        """
+        return _rotate_vec(self._q, (float(vector[0]), float(vector[1]), float(vector[2])))
+
     def inverse(self) -> "Location":
         """Return the location that undoes this one."""
         q_inv = _quat_conj(self._q)

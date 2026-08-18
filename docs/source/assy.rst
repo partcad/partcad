@@ -122,23 +122,33 @@ and so is the section itself: an omitted field means the default below.
       threadStep: <(optional) axial distance per full turn, in mm, default: 0.00>
       holdWith: <(optional) interface, or list of interfaces, to hold this object by>
       holdWithInstance: <(optional) instance of each interface listed in "holdWith">
+      holdWithForceMin: <(optional) least force to hold this object with, in N, default: 3>
+      holdWithForceMax: <(optional) most force to hold this object with, in N, default: 7>
+      holdWithForce: <(optional) sets both "holdWithForceMin" and "holdWithForceMax">
       holdTo: <(optional) interface, or list of interfaces, to hold the target object by>
       holdToInstance: <(optional) instance of each interface listed in "holdTo">
+      holdToForceMin: <(optional) least force to hold the target object with, in N, default: 3>
+      holdToForceMax: <(optional) most force to hold the target object with, in N, default: 7>
+      holdToForce: <(optional) sets both "holdToForceMin" and "holdToForceMax">
 
 The units are SI, with the exception of lengths, which are in millimetres like
 everywhere else in PartCAD:
 
-+--------------------+------------------------+-----------------------------------------+
-| Field              | Quantity               | Unit                                    |
-+====================+========================+=========================================+
-| ``pushForceMax``   | force                  | ``N`` (newton)                          |
-+--------------------+------------------------+-----------------------------------------+
-| ``pushDistance``   | length                 | ``mm`` (millimetre)                     |
-+--------------------+------------------------+-----------------------------------------+
-| ``turnTorqueMax``  | torque                 | ``N*m`` (newton-metre)                  |
-+--------------------+------------------------+-----------------------------------------+
-| ``threadStep``     | length                 | ``mm`` (millimetre)                     |
-+--------------------+------------------------+-----------------------------------------+
++-------------------------+------------------------+-----------------------------------------+
+| Field                   | Quantity               | Unit                                    |
++=========================+========================+=========================================+
+| ``pushForceMax``        | force                  | ``N`` (newton)                          |
++-------------------------+------------------------+-----------------------------------------+
+| ``pushDistance``        | length                 | ``mm`` (millimetre)                     |
++-------------------------+------------------------+-----------------------------------------+
+| ``turnTorqueMax``       | torque                 | ``N*m`` (newton-metre)                  |
++-------------------------+------------------------+-----------------------------------------+
+| ``threadStep``          | length                 | ``mm`` (millimetre)                     |
++-------------------------+------------------------+-----------------------------------------+
+| ``hold*Force``          | force                  | ``N`` (newton)                          |
+| ``hold*ForceMin``       |                        |                                         |
+| ``hold*ForceMax``       |                        |                                         |
++-------------------------+------------------------+-----------------------------------------+
 
 Pushing an object into place is a linear motion, so ``pushForceMax`` bounds a
 **force** in newtons. Turning it is a rotation, so ``turnTorqueMax`` bounds a
@@ -158,9 +168,24 @@ torque together, so that the resulting motion reproduces the given thread (or,
 more generally, rotation) pattern, staying within `pushForceMax` and
 `turnTorqueMax`. The default of `0.00` means a straight push with no turning.
 
+`pushDirection` is not a field: it is deduced from the connection itself and
+reported alongside the rest. It is the direction, in the assembly's
+coordinates, that the object travels while it is pushed into place - so the
+object starts at `pushDistance` back along it.
+
+The interfaces are what it is deduced from. The positive Z axis of an interface
+points **into** the object the interface belongs to, which is exactly the way a
+part coming to meet it has to travel. `examples/feature_interface` shows this
+directly: both faces of the same 3mm bracket are instances of one interface,
+the ``outer`` one at ``z=0`` unrotated and the ``inner`` one at ``z=3`` turned
+around, so the two axes point at each other through the material. Each of the
+four M3 screws in that example is connected to one of those faces, and its
+deduced direction points from the screw through the bracket towards the motor -
+reversing, as it must, when the motor is placed on the other side.
+
 `pushDistance` is how far away from its final place the object starts: the
-distance, along the axis of the connection, between the staging pose and the
-pose where its `with` ports coincide with the target's `to` ports.
+distance, along `pushDirection`, between the staging pose and the pose where
+its `with` ports coincide with the target's `to` ports.
 When it is omitted, it is derived from the object being connected, as **1.5
 times that object's own length along the Z axis of the interface location** it
 is connected by - far enough for the object to clear the target before the
@@ -229,6 +254,21 @@ it. They are matched positionally against `holdWith` and `holdTo`. When omitted,
 the instance defaults to the `holdInstance` field of the part or the assembly,
 and, failing that, to the first instance of the interface.
 
+`holdWithForceMin` and `holdWithForceMax` bound the force each end is held
+with, in newtons - enough to keep the object from moving, not so much as to
+damage it. `holdWithForce` sets both at once, and `holdToForce*` are the same
+for the object being connected to. Each bound is resolved on its own, from the
+first of these that gives it:
+
+1. the bound itself, `holdWithForceMin` or `holdWithForceMax`;
+2. `holdWithForce`, which sets both;
+3. the `holdForceMin`/`holdForceMax` field of the part or the assembly;
+4. its `holdForce` field, which sets both;
+5. the defaults, **3 N** for the minimum and **7 N** for the maximum.
+
+A minimum that ends up above its maximum is a contradiction rather than a
+range: it is reported, and both bounds fall back to the defaults.
+
 .. _hold:
 
 Holding an object
@@ -244,9 +284,13 @@ the assembly itself, in `partcad.yaml`:
         type: step
         hold: <(optional) interface, or list of interfaces, to hold this part by>
         holdInstance: <(optional) instance of each interface listed in "hold">
+        holdForceMin: <(optional) least force to hold this part with, in N>
+        holdForceMax: <(optional) most force to hold this part with, in N>
+        holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
 
     assemblies:
       motor-mount:
         type: assy
         hold: <(optional) same as for parts>
         holdInstance: <(optional) same as for parts>
+        holdForce: <(optional) same as for parts>
