@@ -64,6 +64,10 @@ Besides the package properties and, optionally, a list of imported dependencies,
           subfolder: <(external only) location within the repository, for hierarchies>
           includePaths: <(optional) Jinja2 include path>
 
+  suppliers:
+      <(optional) the providers to consider for this package's objects; a bare
+       name is one of this package's own, "../sibling:name" is one next door>
+
   parts:
       <part declarations, see below>
 

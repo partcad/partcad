@@ -94,9 +94,29 @@ def test_the_interface_example_buys_from_the_store_next_door():
     interfaces = ctx.get_project("//feature_interface")
     assert "providers" not in interfaces.config_obj
 
+    # Named the way the package sees it: the store is the one next door.
+    assert list(interfaces.config_obj["suppliers"].keys()) == ["../provider_store:myGarage"]
+
     suppliers = list(interfaces.get_suppliers().keys())
     assert suppliers == ["//pub/examples/partcad/provider_store:myGarage"]
     assert ctx.get_provider(suppliers[0]) is not None
+
+
+def test_suppliers_resolve_against_the_package_that_lists_them():
+    """A bare name, one next door and an absolute one all reach a provider"""
+    ctx = pc.init("examples")
+    interfaces = ctx.get_project("//feature_interface")
+    store = ctx.get_project("//provider_store")
+    absolute = "//pub/examples/partcad/provider_store:myGarage"
+
+    # A bare name is one of the listing package's own providers...
+    assert list(store.get_suppliers().keys()) == [absolute]
+    # ...and both of the qualified forms name that same one from next door.
+    for spelling in ("../provider_store:myGarage", absolute):
+        interfaces.suppliers = {spelling: None}
+        resolved = list(interfaces.get_suppliers().keys())
+        assert resolved == [absolute], spelling
+        assert ctx.get_provider(resolved[0]) is not None
 
     # And the store stocks what that example is assembled from.
     for name in ("bracket", "motor", "screw_m3_6mm", "screw_m4_6mm"):

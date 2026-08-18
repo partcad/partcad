@@ -321,7 +321,7 @@ assemblies:
 # it defines no provider of its own: it buys from the store next door, which is
 # what "examples/provider_store" is for and which stocks these very parts.
 suppliers:
-  //pub/examples/partcad/provider_store:myGarage:
+  ../provider_store:myGarage:
 
 render:
   readme:

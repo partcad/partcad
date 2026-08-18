@@ -79,12 +79,14 @@ the parts are declared:
 .. code-block:: yaml
 
   suppliers:
-    myGarage:                                    # a provider of this package
-    //pub/examples/partcad/provider_store:myGarage:  # or one defined elsewhere
+    myGarage:                     # a provider of this package
+    ../provider_store:myGarage:   # one next door
+    //vendor/store:myGarage:      # one anywhere
 
-A supplier name is a provider of the same package unless it is qualified with a
-package path, which lets a package buy from a provider defined elsewhere instead
-of declaring one of its own. In the future PartCAD will be able to select providers
+A supplier is written from the point of view of the package that lists it, and
+is resolved against that package the way every other reference it makes is: a
+bare name is one of its own providers, while a qualified one lets it buy from a
+provider defined elsewhere instead of declaring one of its own. In the future PartCAD will be able to select providers
 based on the location and preferences of the requester, while leaving the
 possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).

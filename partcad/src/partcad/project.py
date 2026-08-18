@@ -903,10 +903,14 @@ class Project(project_config.Configuration):
             return objects[result_name]
 
     def get_suppliers(self):
-        return {
-            supplier_name if ":" in supplier_name else f"{self.name}:{supplier_name}": supplier
-            for supplier_name, supplier in self.suppliers.items()
-        }
+        """The providers to consider for this package's objects, by absolute path.
+
+        A supplier is written from the point of view of the package that lists
+        it, so it is resolved against that package the way every other reference
+        this package makes is: a bare name is one of its own providers,
+        '../sibling:name' is one next door, and an absolute path is itself.
+        """
+        return {self.normalize(supplier_name): supplier for supplier_name, supplier in self.suppliers.items()}
 
     def init_suppliers(self):
         cfg = self.config_obj.get("suppliers", {})
