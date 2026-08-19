@@ -15,6 +15,8 @@ jobs:
   # The standalone bundles: the same tools packaged with their own Python
   # interpreter, for users who have none. They are attached to the same GitHub
   # release as the wheels, which is where "install.sh" downloads them from.
+  # That workflow also packages the Linux bundle as a snap, attached to the
+  # same release.
   build-standalone:
     uses: ./.github/workflows/build-standalone.yml
 
@@ -162,11 +164,19 @@ jobs:
           merge-multiple: true
           path: standalone
 
+      # Also kept out of "dist": the snap is a GitHub release asset, not a PyPI
+      # one. Built by the same "Standalone" workflow, from the Linux bundle.
+      - name: Download the snap package
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-snap-amd64
+          path: snap-package
+
       # "install.sh" derives an asset name from `uname` and fails for the user
       # if that asset is not on the release. Downloading artifacts does not fail
       # when none match, so check here, before the release exists, rather than
       # discovering a platform is missing after it is published.
-      - name: Check the standalone bundles are complete
+      - name: Check the standalone bundles and the snap are complete
         run: |
           missing=0
           # The platforms built by "build-standalone.yml".
@@ -180,6 +190,16 @@ jobs:
               echo "${archive} $(stat -c%s "${archive}") bytes"
             fi
           done
+          # Same reasoning for the snap: an absent artifact is not an error at
+          # download time, so a release could quietly ship without it.
+          snap=$(find snap-package -type f -name "partcad_*_amd64.snap")
+          snap_checksum=$(find snap-package -type f -name "partcad_*_amd64.snap.sha256")
+          if [ -z "${snap}" ] || [ -z "${snap_checksum}" ]; then
+            echo "::error::no snap package was built"
+            missing=1
+          else
+            echo "${snap} $(stat -c%s "${snap}") bytes"
+          fi
           exit "${missing}"
 
       - name: Determine the release tag
@@ -197,6 +217,7 @@ jobs:
           gh release create '${{ env.MERGED_TAG }}' --repo '${{ github.repository }}' --notes "";
           gh release upload '${{ env.MERGED_TAG }}' dist/** --repo '${{ github.repository }}'
           gh release upload '${{ env.MERGED_TAG }}' standalone/** --repo '${{ github.repository }}'
+          gh release upload '${{ env.MERGED_TAG }}' snap-package/** --repo '${{ github.repository }}'
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

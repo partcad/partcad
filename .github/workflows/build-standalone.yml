@@ -15,6 +15,8 @@ on:
     branches: ["devel"]
     paths:
       - "dev-tools/pyinstaller/**"
+      - "dev-tools/snap/**"
+      - "snap/**"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "partcad/src/**"
@@ -25,6 +27,8 @@ on:
     branches: ["main", "devel"]
     paths:
       - "dev-tools/pyinstaller/**"
+      - "dev-tools/snap/**"
+      - "snap/**"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "partcad/src/**"
@@ -169,6 +173,82 @@ jobs:
             --bin-dir "${HOME}/partcad-bin"
           test ! -e "${HOME}/partcad-bin/pc"
           test ! -d "${HOME}/partcad-standalone"
+
+  # The snap package: the Linux bundle above, wrapped so that `snap install` is
+  # an option next to `install.sh` and `pip`. It packages the artifact rather
+  # than freezing a second time, so what the snap carries is exactly what the
+  # archive carries. See "dev-tools/snap/README.md".
+  snap:
+    name: "Snap (amd64)"
+    needs: build
+    runs-on: ubuntu-24.04
+    # Squashing ~875MB of frozen bundle is most of this.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the Linux bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-standalone-linux-x86_64
+          path: archives
+
+      # "snap/snapcraft.yaml" packages "dist/standalone/partcad", which is where
+      # a local "dev-tools/pyinstaller/build.sh" leaves the bundle. Unpacking the
+      # archive there puts the artifact in the same place -- and checks in
+      # passing that the archive the release ships is intact.
+      - name: Unpack the bundle
+        run: |
+          mkdir -p dist/standalone
+          tar -xzf archives/partcad-*-linux-x86_64.tar.gz -C dist/standalone
+          test -x dist/standalone/partcad/pc
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
+
+      # Destructive mode, so no LXD to set up: it builds straight on the runner,
+      # which is why this job is pinned to ubuntu-24.04 rather than
+      # ubuntu-latest -- snapcraft requires the host to be the release of the
+      # snap's base, and core24 is Ubuntu 24.04.
+      - name: Build the snap
+        run: dev-tools/snap/build.sh --no-bundle --destructive-mode
+
+      # The bundle is frozen on the "build" job's runner (ubuntu-latest) and
+      # then runs on the core24 libraries inside the snap. Those agree today.
+      # This step is what fails, loudly and before a release, if ubuntu-latest
+      # ever moves ahead of the base and the bundle starts linking against a
+      # glibc core24 does not have.
+      - name: Install the snap and run it
+        run: |
+          sudo snap install --dangerous --classic dist/snap/partcad_*_amd64.snap
+          # Only the app named after the snap gets the bare name; `pc` is
+          # `partcad.pc` until aliased. Users do this too (see the README).
+          sudo snap alias partcad.pc pc
+          # Where snapd puts the commands. On the hosted images it is already on
+          # PATH; say so anyway, so this does not depend on the image.
+          export PATH="/snap/bin:${PATH}"
+          # From a directory that is not the checkout, so nothing can resolve
+          # against the sources by accident.
+          cd "${HOME}"
+          pc version
+          partcad --help
+          partcad.json-rpc --version
+          pc init
+          pc list
+
+      - name: Remove the snap
+        run: sudo snap remove --purge partcad
+
+      - name: Upload the snap
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-snap-amd64
+          path: |
+            dist/snap/*.snap
+            dist/snap/*.sha256
+          if-no-files-found: error
+          retention-days: 14
 
   # The wheel-based "Examples (PartCAD)" and "Examples (All)" jobs in test.yml,
   # cloned to run the same commands through the *bundled* `pc` rather than

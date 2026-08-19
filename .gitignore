@@ -16,6 +16,12 @@ __pycache__
 **/.DS_Store
 /build
 /dist
+# snapcraft's working directories, and the .snap it writes into the project
+# root before `dev-tools/snap/build.sh` moves it into `dist/snap/`
+/parts
+/stage
+/prime
+/*.snap
 /partcad-cli/build
 /partcad-cli/dist
 # Copied in from the repository root by the wheel and standalone builds

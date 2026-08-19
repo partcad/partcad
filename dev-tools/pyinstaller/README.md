@@ -135,7 +135,14 @@ A missing entry does not fail the build. It fails at runtime, on the one code pa
 only. The `Standalone` workflow (`.github/workflows/build-standalone.yml`) builds every platform and then
 installs and runs the result, which is what catches this; run it with `workflow_dispatch` when in doubt.
 
+## The snap
+
+On Linux the same bundle is also wrapped as a snap, so that `snap install` is an option next to `install.sh`.
+It is packaging only -- the snap carries this bundle unchanged, and adds nothing to freeze -- so nothing in
+this directory has to change when it is built. See [`../snap/README.md`](../snap/README.md).
+
 ## Releasing
 
 `deploy.yml` calls the `Standalone` workflow on a push to `main` and uploads the archives to the same GitHub
-release as the wheels. `install.sh` downloads from there by default.
+release as the wheels. `install.sh` downloads from there by default. The snap built by the same workflow is
+attached to that release too.

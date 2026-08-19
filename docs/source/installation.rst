@@ -18,7 +18,8 @@ getting tested on Linux, MacOS and Windows.
 
   No Python on the machine, or no interest in maintaining a Python environment?
   Install the :ref:`standalone command line tools <standalone-cli>` instead. They are
-  the same tools, shipped with their own interpreter.
+  the same tools, shipped with their own interpreter. On Linux they are also available
+  :ref:`as a snap <snap-package>`.
 
 .. note::
 
@@ -264,6 +265,56 @@ Run ``pc healthcheck`` to see what is missing on the current machine.
 
 The bundle provides the command line tools only. The ``partcad`` Python module for CAD-as-code scripts is
 a wheel: ``python -m pip install -U partcad``.
+
+
+.. _snap-package:
+
+============
+Snap (Linux)
+============
+
+On Linux, the standalone tools are also packaged as a `snap <https://snapcraft.io/docs>`_. It is the same
+bundle as the ``linux-x86_64`` archive above, so everything said about that one applies here too -- what it
+carries, what it still expects from the machine, the bundled OpenSCAD. What the snap adds is the packaging:
+snapd installs it, keeps it up to date on its own, and removes it cleanly.
+
+The snap is attached to every `GitHub release <https://github.com/partcad/partcad/releases>`_ as
+``partcad_<version>_amd64.snap``, together with its ``.sha256``:
+
+.. code-block:: shell
+
+  $ sudo snap install --dangerous --classic partcad_<version>_amd64.snap
+  $ sudo snap alias partcad.pc pc
+  $ pc version
+
+Two flags need explaining, and both are temporary:
+
+* ``--classic`` is the confinement. PartCAD works on your own files -- it reads and writes CAD projects
+  anywhere on disk, clones git repositories, builds conda sandboxes under ``~/.partcad`` and runs CAD scripts
+  in them, and serves a daemon over a socket that the Visual Studio Code extension connects to. A strictly
+  confined snap could do none of that.
+* ``--dangerous`` is only needed while installing the ``.snap`` file directly. It says the package is not
+  signed by the Snap Store, which a downloaded file is not. Publishing to the store is pending the manual
+  review that classic snaps require; once that is done, ``sudo snap install --classic partcad`` is the whole
+  command and updates arrive by themselves.
+
+``snap alias`` is there because a snap only gives the bare command name to the app named after the snap
+itself. Without it, the commands are ``partcad``, ``partcad.pc`` and ``partcad.json-rpc``.
+
+To remove it, including the snap's own data:
+
+.. code-block:: shell
+
+  $ sudo snap remove --purge partcad
+
+.. note::
+
+  The snap covers x86_64 Linux only, as the standalone bundle does. It also does not replace ``git`` and
+  ``conda``/``mamba`` as prerequisites: they are run as external programs, and a classic snap uses the ones
+  on the host. Run ``pc healthcheck`` to see what is missing.
+
+  To try the snap a branch or pull request built, download the ``partcad-snap-amd64`` artifact from that
+  run of the ``Standalone`` workflow on GitHub, unzip it, and install the ``.snap`` inside as above.
 
 
 =====================================
