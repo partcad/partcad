@@ -46,6 +46,19 @@ env:
   OSES:
     '["ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "windows-latest", "windows-2022",
     "macos-latest", "macos-26"]'
+  # Of those, the ones a pull request does not pay for by default. They are
+  # dropped unless the run is deep -- the nightly schedule, a manual dispatch,
+  # a push, or "#deepTest" in the pull request; see
+  # ".github/actions/test-depth".
+  #
+  # Which ones, and why these:
+  #  * both Ubuntu 22.04 images. 24.04 is what 'ubuntu-latest' is, and a
+  #    breakage specific to the older release is rare enough to be worth
+  #    finding nightly rather than on every push.
+  #  * macos-26, leaving one macOS. macOS minutes bill at 10x, so this is the
+  #    single largest saving here. The one that stays is 'macos-latest',
+  #    because that is the version most contributors and most users are on.
+  OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm", "macos-26"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # Number of parallel shards the behave suite is split into. Keep in sync with
   # the "shard" list in the set-matrix job's matrix-behave output.
@@ -148,10 +161,31 @@ jobs:
       matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
       matrix-ide: ${{ steps.set-matrix.outputs.matrix-ide }}
     steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+
       - name: Set matrix
         id: set-matrix
+        env:
+          DEEP: ${{ steps.depth.outputs.deep }}
         run: |
-          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> $GITHUB_OUTPUT
+          # The OS axis of the full matrix, with the deep-only images removed
+          # when this is not a deep run. 'matrix-slim' is untouched: it is
+          # already the '*-latest' images only, none of which are deep-only.
+          if [ "${DEEP}" = "true" ]; then
+            OSES='${{ env.OSES }}'
+          else
+            OSES=$(jq -cn --argjson all '${{ env.OSES }}' --argjson deep_only '${{ env.OSES_DEEP_ONLY }}' '$all - $deep_only')
+          fi
+          echo "Operating systems: ${OSES}"
+          # EXCLUDES still names images that may have just been dropped. That is
+          # harmless -- an exclude for a combination the matrix does not contain
+          # simply matches nothing -- and keeps one list to maintain rather than
+          # two that have to agree.
+          echo 'matrix={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> $GITHUB_OUTPUT
           echo 'matrix-slim={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}}' >> $GITHUB_OUTPUT
           # Behave is single-process and dominates CI wall-clock, so it runs
           # sharded across parallel jobs. The "shard" axis is derived from
@@ -160,9 +194,10 @@ jobs:
           # (like test-pub-repo), so sharding does not multiply the full matrix.
           SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
           echo 'matrix-behave={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> $GITHUB_OUTPUT
-          # Same OS/exclude shape as 'matrix', but only the Python versions the
-          # extension bundle can be built for. See PYTHONS_IDE above.
-          echo 'matrix-ide={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS_IDE }}, "exclude": ${{ env.EXCLUDES }}}' >> $GITHUB_OUTPUT
+          # The same OS axis and excludes as 'matrix', so it follows the depth
+          # too, but only the Python versions the extension bundle can be built
+          # for. See PYTHONS_IDE above.
+          echo 'matrix-ide={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS_IDE }}, "exclude": ${{ env.EXCLUDES }}}' >> $GITHUB_OUTPUT
 
   # cache-preheat:
   #   name: "Update caches"

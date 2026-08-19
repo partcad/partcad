@@ -341,11 +341,8 @@ Your configuration file is the exception, on purpose: ``~/.partcad/config.yaml``
 directory as usual, so one configuration keeps applying whether you installed PartCAD from the snap, the
 standalone bundle, or a wheel.
 
-.. note::
-
-  ``pc system telemetry info`` reports ``Telemetry ID: None`` under the snap. The id is written next to the
-  configuration file and looked up in the state directory, which are the same place everywhere except here.
-  Nothing else is affected by it.
+The telemetry id is kept next to it, for the same reason in reverse: it identifies you, and an id that moved
+with the state directory would count one machine as several.
 
 conda and git
 =============

@@ -43,48 +43,83 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
-jobs:
-  # One bundle per supported OS version, not one per operating system. A frozen
-  # bundle links against the C library and system frameworks of the machine that
-  # froze it, so it runs there and on anything newer, and on nothing older -- a
-  # single "linux" build would silently mean "the newest Linux we happened to
-  # build on". Every image here is pinned for the same reason: "*-latest" moves,
-  # and an artifact name that moves with it is a contract nobody can rely on.
+# One bundle per supported OS version, not one per operating system. A frozen
+# bundle links against the C library and system frameworks of the machine that
+# froze it, so it runs there and on anything newer, and on nothing older -- a
+# single "linux" build would silently mean "the newest Linux we happened to
+# build on". Every image is pinned for the same reason: "*-latest" moves, and an
+# artifact name that moves with it is a contract nobody can rely on.
+#
+# Keep these lists in sync with the platform ids in
+# "dev-tools/pyinstaller/build.sh", with LINUX_BUILDS/MACOS_BUILDS in
+# "install.sh" (which resolves a machine to one of these names), and with the
+# platform loop in the release check in "deploy.yml".
+#
+# ubuntu-26.04 (and -arm) are absent on purpose: still preview images, not
+# covered by the Actions SLA. See the note in test.yml. macOS is arm64 only: an
+# x86_64 bundle would need macos-13, and no macos-13 job has ever started on the
+# current runner plan (again, see test.yml).
+env:
+  # Built on every run.
+  PLATFORMS_CORE: >-
+    [{"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64"},
+    {"os": "ubuntu-24.04-arm", "platform": "ubuntu-24.04-arm64"},
+    {"os": "macos-15", "platform": "macos-15-arm64"},
+    {"os": "windows-2022", "platform": "windows-2022-x86_64"},
+    {"os": "windows-2025", "platform": "windows-2025-x86_64"}]
+  # Added only on a deep run: the nightly schedule, a manual dispatch, a push --
+  # which includes the release path -- or "#deepTest" in the pull request. See
+  # ".github/actions/test-depth", and OSES_DEEP_ONLY in "test.yml", which drops
+  # the same images for the same reasons.
   #
-  # Keep this list in sync with the platform ids in "dev-tools/pyinstaller/build.sh"
-  # and with LINUX_BUILDS/MACOS_BUILDS in "install.sh", which is what resolves a
-  # machine to one of these names.
+  # This workflow is the expensive one to halve: eight freezes of ~875MB, two of
+  # them on macOS runners that bill at 10x. The trade is that a pull request no
+  # longer proves the Ubuntu 22.04 and macOS 26 bundles still build. Nothing
+  # ships unproven, though -- "deploy.yml" runs on a push, which is always deep,
+  # and refuses a release that is missing any platform. Put "#deepTest" on a pull
+  # request that touches the freeze, and the whole set runs before it merges.
+  PLATFORMS_DEEP: >-
+    [{"os": "ubuntu-22.04", "platform": "ubuntu-22.04-x86_64"},
+    {"os": "ubuntu-22.04-arm", "platform": "ubuntu-22.04-arm64"},
+    {"os": "macos-26", "platform": "macos-26-arm64"}]
+
+jobs:
+  set-matrix:
+    name: "Set matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.set-matrix.outputs.build }}
+      install: ${{ steps.set-matrix.outputs.install }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+
+      - name: Set matrix
+        id: set-matrix
+        env:
+          DEEP: ${{ steps.depth.outputs.deep }}
+        run: |
+          if [ "${DEEP}" = "true" ]; then
+            platforms=$(jq -cn --argjson core '${{ env.PLATFORMS_CORE }}' --argjson deep '${{ env.PLATFORMS_DEEP }}' '$core + $deep')
+          else
+            platforms='${{ env.PLATFORMS_CORE }}'
+          fi
+          echo "Platforms: ${platforms}"
+          echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
+          # Everything the "Install" job can exercise, which is everything but
+          # Windows: "install.sh" is a shell installer and there is none there.
+          install=$(jq -c 'map(select(.platform | startswith("windows") | not))' <<<"${platforms}")
+          echo 'install={"include": '"${install}"'}' >> "${GITHUB_OUTPUT}"
+
   build:
     name: "Build (${{ matrix.platform }})"
+    needs: set-matrix
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # Linux: the supported Ubuntu LTS releases, on both architectures.
-          # 22.04 is the oldest supported and therefore the lowest glibc floor,
-          # which is the build every non-Ubuntu Linux is offered.
-          - os: ubuntu-22.04
-            platform: ubuntu-22.04-x86_64
-          - os: ubuntu-22.04-arm
-            platform: ubuntu-22.04-arm64
-          - os: ubuntu-24.04
-            platform: ubuntu-24.04-x86_64
-          - os: ubuntu-24.04-arm
-            platform: ubuntu-24.04-arm64
-          # ubuntu-26.04 (and -arm) are absent on purpose: still preview images,
-          # not covered by the Actions SLA. See the note in test.yml.
-          #
-          # macOS is arm64 only. An x86_64 bundle would need macos-13, and no
-          # macos-13 job has ever started on the current runner plan (again, see
-          # test.yml).
-          - os: macos-15
-            platform: macos-15-arm64
-          - os: macos-26
-            platform: macos-26-arm64
-          - os: windows-2022
-            platform: windows-2022-x86_64
-          - os: windows-2025
-            platform: windows-2025-x86_64
+      matrix: ${{ fromJson(needs.set-matrix.outputs.build) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
 
@@ -125,27 +160,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Every platform "install.sh" can install, which is every platform above
-  # except Windows -- there is no shell installer there.
+  # Every platform this run built that "install.sh" can install, which is every
+  # one except Windows -- there is no shell installer there.
   install:
     name: "Install (${{ matrix.platform }})"
-    needs: build
+    needs: [set-matrix, build]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-22.04
-            platform: ubuntu-22.04-x86_64
-          - os: ubuntu-22.04-arm
-            platform: ubuntu-22.04-arm64
-          - os: ubuntu-24.04
-            platform: ubuntu-24.04-x86_64
-          - os: ubuntu-24.04-arm
-            platform: ubuntu-24.04-arm64
-          - os: macos-15
-            platform: macos-15-arm64
-          - os: macos-26
-            platform: macos-26-arm64
+      matrix: ${{ fromJson(needs.set-matrix.outputs.install) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
@@ -379,8 +401,10 @@ jobs:
     # A representative subset of the build matrix, not all of it: what these
     # exercise is the bundle's behaviour, which does not differ between the
     # 22.04 and the 24.04 build of the same architecture -- only the libraries
-    # it links against do, and the "Install" jobs above cover every platform for
-    # that. So this runs the newest build of each architecture and each OS.
+    # it links against do, and the "Install" jobs above cover every platform
+    # this run built for that. So this runs one build per architecture and per
+    # OS, and only ones from PLATFORMS_CORE, so that the list stays literal and
+    # this job never asks for a bundle a reduced run did not produce.
     strategy:
       fail-fast: false
       matrix:
@@ -400,13 +424,13 @@ jobs:
             suite: PartCAD
             package: "//pub/examples/partcad"
             render: true
-          - os: macos-26
-            platform: macos-26-arm64
+          - os: macos-15
+            platform: macos-15-arm64
             suite: PartCAD
             package: "//pub/examples/partcad"
             render: true
-          - os: macos-26
-            platform: macos-26-arm64
+          - os: macos-15
+            platform: macos-15-arm64
             suite: All
             package: "//pub/examples"
             render: false

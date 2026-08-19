@@ -34,10 +34,16 @@ The Ubuntu names say what built the bundle, not what is required to run it: any 
 what differs between the two is the minimum glibc. `install.sh` offers a machine it cannot identify as Ubuntu
 the 22.04 build, which has the lower floor.
 
-Three lists have to agree, and nothing enforces it: the matrix in `.github/workflows/build-standalone.yml`,
-`LINUX_BUILDS`/`MACOS_BUILDS` in `install.sh`, and the platform loop in the release check in
-`deploy.yml`. A name in the matrix that the installer never asks for is dead weight; one the installer asks for
-that the matrix does not build is a failed install. Each of the three says so at the point where it is defined.
+Three lists have to agree, and nothing enforces it: `PLATFORMS_CORE` plus `PLATFORMS_DEEP` in
+`.github/workflows/build-standalone.yml`, `LINUX_BUILDS`/`MACOS_BUILDS` in `install.sh`, and the platform loop in the
+release check in `deploy.yml`. A name in the matrix that the installer never asks for is dead weight; one the installer
+asks for that the matrix does not build is a failed install. Each of the three says so at the point where it is defined.
+
+The split between `PLATFORMS_CORE` and `PLATFORMS_DEEP` is about cost, not support: a pull request builds the five core
+platforms, and the three in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, and the second macOS) are added on a
+deep run — the nightly schedule, a manual dispatch, a push, or `#deepTest` in the pull request. See
+`.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all eight; `deploy.yml`
+refuses to publish otherwise. Put `#deepTest` on a pull request that changes what is frozen.
 
 `build.sh` detects the platform id from the machine when it is not told one, which is what a local build wants.
 CI passes `--platform=` instead: the runner image label is the authoritative answer to which OS version it is,

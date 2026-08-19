@@ -91,10 +91,11 @@ lint:
 # by revision), and `snap remove --purge` takes it away with the snap.
 #
 # What stays in `~/.partcad` is what PartCAD reads from the home directory
-# without consulting this variable: `config.yaml` and the telemetry id. That is
-# deliberate for the configuration -- one file keeps applying whether PartCAD
-# came from the snap, the standalone bundle, or a wheel. For the telemetry id it
-# is not deliberate; see dev-tools/snap/README.md.
+# without consulting this variable: `config.yaml` and the telemetry id. Both are
+# deliberate. One configuration file keeps applying whether PartCAD came from the
+# snap, the standalone bundle, or a wheel; and the telemetry id identifies a
+# user, so an id that moved with the state directory would make one user look
+# like several.
 environment:
   PC_INTERNAL_STATE_DIR: $SNAP_USER_COMMON
 

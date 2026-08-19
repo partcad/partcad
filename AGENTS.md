@@ -94,6 +94,11 @@ poetry run pytest partcad partcad-cli -x -p no:error-for-skips -p no:warnings --
 poetry run behave                                                                        # integration tests (./features)
 ```
 
+CI fans these out over operating systems, and a pull request runs a reduced matrix: both Ubuntu 22.04 images
+and the second macOS are dropped. The full matrix runs nightly, on a manual dispatch, on any push, and on a
+pull request whose title or description contains `#deepTest`. `.github/actions/test-depth` is the one place
+that decides; `docs/source/contributing.rst` explains it to contributors.
+
 Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
 
 ### Packaging
@@ -104,7 +109,8 @@ not published yet. Adding a runtime dependency, an optional extra, or a file tha
 invisible to the frozen bundle and break it while the wheels stay fine — see `dev-tools/pyinstaller/README.md`
 before doing any of those. Note that the bundles fan out over *OS versions* (`ubuntu-22.04-x86_64`,
 `macos-26-arm64`, …), and that the same platform list appears in three places that nothing keeps in sync; the
-README says which. The snap carries whatever the bundle carries, so it needs nothing extra of its own;
+README says which, and which of them a pull request skips without `#deepTest`. The snap carries whatever the
+bundle carries, so it needs nothing extra of its own;
 `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 
 ### Committing

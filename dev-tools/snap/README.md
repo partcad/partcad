@@ -114,13 +114,11 @@ The user *configuration* file is deliberately not moved with it. PartCAD reads `
 directory directly, without consulting `PC_INTERNAL_STATE_DIR`, so one configuration keeps applying across the snap,
 the standalone bundle and the wheels. Redirecting that too would need a change in `partcad-utils`, not here.
 
-One thing this exposes, which is a pre-existing inconsistency in PartCAD rather than anything the snap introduces:
-the telemetry id is **written** to `UserConfig.get_config_dir()` (`partcad-utils/src/partcad_utils/telemetry_sentry.py`)
-but **read** from `internal_state_dir` (`partcad-cli/.../system/telemetry/info.py`). Those are the same directory
-unless `PC_INTERNAL_STATE_DIR` is set, which no other installation method does — so under the snap the id lands in
-`~/.partcad/.generated_id` and `pc system telemetry info` reports `Telemetry ID: None`. Only that one command is
-affected; telemetry itself still uses the id it wrote. Fixing it means making the two agree in `partcad`, not working
-around it here.
+The telemetry id stays there too, and for a stronger reason: it identifies a user, so an id that moved with the state
+directory would make one machine look like several. `UserConfig.get_generated_id_path()` is the single definition of
+where it lives — it used to be derived independently by the writer and by `pc system telemetry info`/`clear`, which
+agreed only for as long as nothing set `PC_INTERNAL_STATE_DIR`. This snap was the first thing that did, which is how
+the split was found; `partcad/tests/unit/test_telemetry_id_path.py` pins it.
 
 ## conda and git are not found, and that is fine
 
