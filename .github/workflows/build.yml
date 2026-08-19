@@ -25,7 +25,17 @@ jobs:
       matrix:
         # Keep this list in sync with OSES in test.yml, which documents why
         # each image is here and why macos-13/macos-14/ubuntu-26.04 are not.
-        os: [ubuntu-latest, ubuntu-22.04, windows-latest, windows-2022, macos-latest, macos-26]
+        os:
+          [
+            ubuntu-latest,
+            ubuntu-22.04,
+            ubuntu-24.04-arm,
+            ubuntu-22.04-arm,
+            windows-latest,
+            windows-2022,
+            macos-latest,
+            macos-26,
+          ]
         python-version:
           - "3.10"
           - "3.11"
@@ -36,7 +46,7 @@ jobs:
           # Same cost trade-off as test.yml: the full Python range runs on
           # ubuntu-latest only, every other image builds on the oldest and the
           # newest supported Python, plus Windows on 3.12.
-          # 30 -> 17 combinations.
+          # 40 -> 21 combinations.
           #
           # Windows + 3.12 is deliberately back in the matrix. It was excluded
           # for an 'ensurepip' failure (#374); the toolchain underneath has
@@ -45,6 +55,12 @@ jobs:
           - { os: "ubuntu-22.04", python-version: "3.11" }
           - { os: "ubuntu-22.04", python-version: "3.12" }
           - { os: "ubuntu-22.04", python-version: "3.13" }
+          - { os: "ubuntu-24.04-arm", python-version: "3.11" }
+          - { os: "ubuntu-24.04-arm", python-version: "3.12" }
+          - { os: "ubuntu-24.04-arm", python-version: "3.13" }
+          - { os: "ubuntu-22.04-arm", python-version: "3.11" }
+          - { os: "ubuntu-22.04-arm", python-version: "3.12" }
+          - { os: "ubuntu-22.04-arm", python-version: "3.13" }
           - { os: "windows-latest", python-version: "3.11" }
           - { os: "windows-latest", python-version: "3.13" }
           - { os: "windows-2022", python-version: "3.11" }

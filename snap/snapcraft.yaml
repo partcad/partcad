@@ -30,13 +30,12 @@ description: |
   nothing is installed into -- or expected from -- a Python environment on the
   machine. OpenSCAD is bundled as well.
 
-  Two things are still resolved from the host, because PartCAD runs them as
-  external programs rather than importing them:
-
-    * git, to fetch package repositories;
-    * conda (or mamba), to build the sandbox PartCAD runs CAD scripts in.
-
-  Run `partcad.pc healthcheck` to see what is missing on this machine.
+  Two things are run as external programs rather than imported, and are not in
+  the snap: git, to fetch package repositories, and conda (or mamba), to build
+  the sandbox PartCAD runs CAD scripts in. A snap does not carry your shell
+  environment, so a conda installed under your home directory is not visible to
+  it; PartCAD then runs Python scripts without a sandbox. Run
+  `partcad.pc healthcheck` to see what this machine resolved.
 
   The Python module for CAD-as-code scripts is not part of this snap; it is a
   wheel: `pip install -U partcad`.
@@ -61,11 +60,11 @@ grade: stable
 confinement: classic
 
 platforms:
-  # The standalone bundle this packages is built for linux-x86_64 only, so this
-  # is the only architecture there is a snap for. It follows the bundle: see
-  # the "TODO(clairbee): add the linux-arm64 bundle" note in
-  # ".github/workflows/build-standalone.yml".
+  # Both architectures the Linux bundle is built for. Each is packed on a runner
+  # of that architecture -- snapcraft builds the platform matching the host, and
+  # the payload is a frozen native bundle, so there is no cross-building here.
   amd64:
+  arm64:
 
 # Both linters look for problems that do not apply to a frozen bundle:
 #
@@ -83,6 +82,21 @@ lint:
   ignore:
     - classic
     - library
+
+# PartCAD keeps its cache, its conda sandboxes and its git/tar clones in one
+# state directory, `~/.partcad` by default. A packaged application has no
+# business writing there: snapd hands every snap its own per-user directory,
+# `~/snap/partcad/common`, and creates it before the app starts, so that is where
+# this state goes. It survives refreshes (unlike $SNAP_USER_DATA, which is keyed
+# by revision), and `snap remove --purge` takes it away with the snap.
+#
+# What stays in `~/.partcad` is what PartCAD reads from the home directory
+# without consulting this variable: `config.yaml` and the telemetry id. That is
+# deliberate for the configuration -- one file keeps applying whether PartCAD
+# came from the snap, the standalone bundle, or a wheel. For the telemetry id it
+# is not deliberate; see dev-tools/snap/README.md.
+environment:
+  PC_INTERNAL_STATE_DIR: $SNAP_USER_COMMON
 
 parts:
   partcad:

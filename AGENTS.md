@@ -99,11 +99,13 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 ### Packaging
 
 Three artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI), the standalone
-PyInstaller bundles for users who have no Python, and the snap, which wraps the Linux bundle. Adding a runtime
-dependency, an optional extra, or a file that is read at runtime can be invisible to the frozen bundle and
-break it while the wheels stay fine — see `dev-tools/pyinstaller/README.md` before doing any of those. The
-snap carries whatever the bundle carries, so it needs nothing extra of its own; `dev-tools/snap/README.md`
-covers what is specific to it (confinement, aliases, the base).
+PyInstaller bundles for users who have no Python, and the snap, which wraps the Linux bundle and is built but
+not published yet. Adding a runtime dependency, an optional extra, or a file that is read at runtime can be
+invisible to the frozen bundle and break it while the wheels stay fine — see `dev-tools/pyinstaller/README.md`
+before doing any of those. Note that the bundles fan out over *OS versions* (`ubuntu-22.04-x86_64`,
+`macos-26-arm64`, …), and that the same platform list appears in three places that nothing keeps in sync; the
+README says which. The snap carries whatever the bundle carries, so it needs nothing extra of its own;
+`dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 
 ### Committing
 

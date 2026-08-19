@@ -1,15 +1,20 @@
 # The PartCAD snap
 
 A third way to install the PartCAD command line tools, next to the [wheels on PyPI](../../docs/source/installation.rst)
-and the [standalone bundle](../pyinstaller/README.md): `snap install partcad`. It is not a third *build* — the snap
-wraps the very same PyInstaller bundle the standalone archives ship, so there is one frozen artifact and one answer to
-the question of what was released.
+and the [standalone bundle](../pyinstaller/README.md). It is not a third *build* — the snap wraps the very same
+PyInstaller bundle the standalone archives ship, so there is one frozen artifact and one answer to the question of what
+was released.
+
+**Not published yet.** CI builds these snaps and uploads them as workflow artifacts; nothing puts them on the Snap
+Store or on a GitHub release, so `snap install partcad` does not work today. Publishing needs store credentials and,
+because the snap is classic, a manual store review — see [Publishing](#publishing) for the step that is missing.
 
 | | wheels | standalone bundle | snap |
 | --- | --- | --- | --- |
-| Install | `pip install -U partcad-cli` | `curl -fsSL .../install.sh \| sh` | `snap install --classic partcad` |
+| Install | `pip install -U partcad-cli` | `curl -fsSL .../install.sh \| sh` | `snap install --classic partcad`, once published |
 | Needs Python | yes, 3.10-3.14 | no | no |
-| Platforms | Linux, macOS, Windows | linux-x86_64, macos-arm64, windows-x86_64 | linux-x86_64 |
+| Platforms | Linux, macOS, Windows | one build per supported OS version | linux amd64 and arm64 |
+| Sees the host's conda/git | yes | yes | no, see below |
 | Upgrades | `pip install -U` | re-run `install.sh` | automatic, by snapd |
 | Root to install | no | no | yes |
 
@@ -19,6 +24,17 @@ the question of what was released.
   `snapcraft` looks for it and what fixes the project directory it copies into its build environment. Putting it here,
   next to the rest of the build tooling, would leave `dist/standalone/partcad` outside that directory.
 - `build.sh` — makes sure the bundle exists, checks it, and drives `snapcraft`.
+
+## One base, two architectures
+
+The standalone bundles fan out over OS versions because a frozen bundle only runs on the OS version that built it
+and newer. The snap does not need that axis: a `core24` snap carries its own Ubuntu 24.04 runtime onto whatever
+distribution the user has, so one base covers every Linux. What it does fan out over is the architecture, because
+the payload is a native frozen bundle — `amd64` and `arm64`, each packed on a runner of that architecture from the
+matching `ubuntu-24.04` bundle. There is no cross-building.
+
+The build *host* still has to be the base's release, which is why the CI job is pinned to the `ubuntu-24.04` images
+rather than `ubuntu-latest`.
 
 ## Building
 
@@ -41,10 +57,11 @@ keep the build off the host, use LXD instead:
 dev-tools/snap/build.sh --use-lxd
 ```
 
-The result lands in `dist/snap/`: `partcad_<version>_amd64.snap` and its `.sha256`. Install it locally with
+The result lands in `dist/snap/`: `partcad_<version>_<arch>.snap` and its `.sha256`, for the architecture of the
+machine you built on. Install it locally with
 
 ```bash
-sudo snap install --dangerous --classic dist/snap/partcad_<version>_amd64.snap
+sudo snap install --dangerous --classic dist/snap/partcad_<version>_<arch>.snap
 sudo snap alias partcad.pc pc
 ```
 
@@ -67,37 +84,80 @@ that locally, and an automatic alias for `pc` is something the Snap Store has to
 
 The snap is **classic**, and there is no strict-confinement version of it to fall back to. PartCAD is a developer tool
 that works on the user's own files: it reads and writes CAD projects anywhere on disk, clones git repositories,
-provisions conda sandboxes under `~/.partcad` and runs CAD scripts in them, and serves a daemon over a socket that the
-VS Code extension connects to. Strict confinement would cut all of that off at the snap's own directories, and would
-not carry the host's `conda` or `git` on `PATH` either — and those two stay host prerequisites here exactly as they are
-for the wheels and the bundle.
+provisions conda sandboxes and runs CAD scripts in them, and serves a daemon over a socket that the VS Code extension
+connects to. Strict confinement would cut all of that off at the snap's own directories.
 
-The price is a manual review before the Snap Store will publish it. Until that happens, the `.snap` attached to each
-[GitHub release](https://github.com/partcad/partcad/releases) installs with `--dangerous --classic`.
+What it does not buy back is the host's `conda` and `git` — see the section on those below. Classic confinement is
+about reaching the user's *files*, not about inheriting the user's shell.
+
+The price is a manual review before the Snap Store will publish it, which is one of the two reasons nothing is
+published yet. A locally built or CI-built `.snap` installs with `--dangerous --classic` in the meantime.
 
 For the same reason, snapcraft's `classic` and `library` linters are switched off in `snapcraft.yaml`, and its
 `enable-patchelf` build attribute is deliberately left unset: PyInstaller's shared libraries find each other through
 `$ORIGIN` and the bundle's own bootloader, so rewriting their rpaths would break the bundle rather than fix it. The
 comments in `snapcraft.yaml` say the same at the point where it matters.
 
+## Where it keeps its state
+
+PartCAD normally keeps its cache, its conda sandboxes and its git/tar clones in `~/.partcad`. A packaged application
+has no business writing there, so `snapcraft.yaml` sets `PC_INTERNAL_STATE_DIR` to `$SNAP_USER_COMMON` —
+`~/snap/partcad/common`, which snapd creates before the app starts. It survives refreshes (unlike `$SNAP_USER_DATA`,
+which is keyed by revision), and `snap remove --purge` takes it away with the snap.
+
+The CI job checks this from both ends, because nothing about `pc version` succeeding would show that the variable took
+effect, and snapd creates `~/snap/partcad/common` for every snap it runs whether the app uses it or not: it asserts
+that snapd exports the variable, and that none of `cache`, `git`, `tar`, `external`, `sandbox` appeared in
+`~/.partcad`.
+
+The user *configuration* file is deliberately not moved with it. PartCAD reads `~/.partcad/config.yaml` from the home
+directory directly, without consulting `PC_INTERNAL_STATE_DIR`, so one configuration keeps applying across the snap,
+the standalone bundle and the wheels. Redirecting that too would need a change in `partcad-utils`, not here.
+
+One thing this exposes, which is a pre-existing inconsistency in PartCAD rather than anything the snap introduces:
+the telemetry id is **written** to `UserConfig.get_config_dir()` (`partcad-utils/src/partcad_utils/telemetry_sentry.py`)
+but **read** from `internal_state_dir` (`partcad-cli/.../system/telemetry/info.py`). Those are the same directory
+unless `PC_INTERNAL_STATE_DIR` is set, which no other installation method does — so under the snap the id lands in
+`~/.partcad/.generated_id` and `pc system telemetry info` reports `Telemetry ID: None`. Only that one command is
+affected; telemetry itself still uses the id it wrote. Fixing it means making the two agree in `partcad`, not working
+around it here.
+
+## conda and git are not found, and that is fine
+
+A snap does not carry the user's shell environment, so a conda installed under `$HOME` — the usual place — is not
+visible to it, and neither is a git outside the standard system prefixes. This is accepted rather than worked around:
+PartCAD already handles both. `pythonSandbox` defaults to `conda` only when a conda is importable or on `PATH`, and to
+`none` otherwise, so CAD scripts run without a sandbox; git dependencies are simply unavailable. `pc healthcheck`
+reports both as missing, and the CI job runs it for the record without letting it fail the build.
+
+Anyone who needs the conda sandbox or git dependencies should use the standalone bundle or the wheels, which run with
+the user's own environment.
+
 ## What ships in it
 
 Everything the standalone bundle carries, unchanged: the interpreter, every Python dependency including the optional
-extras, the CAD kernel, and OpenSCAD. `git` and `conda`/`mamba` are resolved from the host. `partcad.pc healthcheck`
-reports what is missing.
+extras, the CAD kernel, and OpenSCAD on amd64 (the arm64 bundle carries none — see the standalone README).
 
-## CI and releasing
+## CI
 
-The `Standalone` workflow (`.github/workflows/build-standalone.yml`) builds the snap in its `snap` job, from the
-`partcad-standalone-linux-x86_64` artifact its `build` job produced, then installs it and runs it. `deploy.yml` calls
-that workflow on a push to `main` and uploads the `.snap` to the same GitHub release as the wheels and the archives.
+The `Standalone` workflow (`.github/workflows/build-standalone.yml`) builds both snaps in its `snap` job, from the
+`partcad-standalone-ubuntu-24.04-x86_64` and `partcad-standalone-ubuntu-24.04-arm64` artifacts its `build` job
+produced, then installs each and runs it. Taking the `ubuntu-24.04` bundle rather than whatever `ubuntu-latest` built
+is what keeps the payload and the `core24` runtime on the same libraries; a bundle frozen against a newer glibc than
+the base provides would install and then fail to start, and the "install and run" step is what would catch it.
 
-One coupling is worth knowing about, because nothing declares it: the bundle is frozen on the `build` job's runner
-(`ubuntu-latest`) and then runs inside a `core24` snap, i.e. on Ubuntu 24.04 libraries. Those agree today. If
-`ubuntu-latest` moves ahead of 24.04, the bundle will link against a newer glibc than `core24` provides and the
-installed snap will fail to start — the `snap` job's "install and run" step is what catches that. The fix is to move
-the base forward (`core26` and so on) or to pin the Linux bundle's runner to the base's release.
+The job is skipped on the release path and in the merge queue. Nothing downstream consumes its output, and a job whose
+artifacts no release carries has no business being able to block one.
 
-Publishing to the Snap Store is not wired up: it needs a `SNAPCRAFT_STORE_CREDENTIALS` secret and, for a classic snap,
-that manual review. `snapcraft upload dist/snap/partcad_<version>_amd64.snap --release=stable` is the step to add once
-both exist.
+<a name="publishing"></a>
+
+## Publishing
+
+Not wired up. It needs a `SNAPCRAFT_STORE_CREDENTIALS` secret and, because the snap is classic, a manual review by the
+Snap Store before the first upload is accepted. Once both exist, the step to add to the `snap` job is:
+
+```bash
+snapcraft upload dist/snap/partcad_<version>_<arch>.snap --release=stable
+```
+
+Until then `deploy.yml` deliberately does not download, check for, or upload these artifacts.

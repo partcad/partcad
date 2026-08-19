@@ -18,8 +18,8 @@ getting tested on Linux, MacOS and Windows.
 
   No Python on the machine, or no interest in maintaining a Python environment?
   Install the :ref:`standalone command line tools <standalone-cli>` instead. They are
-  the same tools, shipped with their own interpreter. On Linux they are also available
-  :ref:`as a snap <snap-package>`.
+  the same tools, shipped with their own interpreter. There is also a
+  :ref:`snap package <snap-package>` for Linux, not published yet.
 
 .. note::
 
@@ -124,8 +124,25 @@ Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.loc
 The bundle is around 875MB unpacked and 290MB to download on Linux, somewhat less on MacOS and Windows.
 Most of it is the OpenCASCADE geometry kernel, which the wheels download too, just at ``pip install`` time.
 
-Supported platforms are Linux on x86_64, and MacOS on Apple silicon. Windows is covered by the
-``.zip`` archive under :ref:`manual installation <standalone-manual>`.
+Supported platforms are Linux on x86_64 and arm64, and MacOS on Apple silicon. Windows is covered by the
+``.zip`` archives under :ref:`manual installation <standalone-manual>`.
+
+.. _standalone-os-versions:
+
+There is one build per supported *operating system version*, not one per operating system. A frozen bundle
+links against the C library and the system frameworks of the machine that built it, so it runs there and on
+anything newer, and on nothing older -- a single "Linux" build would quietly mean "whichever Linux the
+builder happened to be". The installer works out which one this machine can run and downloads that:
+
+.. code-block:: text
+
+  Linux, x86_64 and arm64     built on Ubuntu 22.04 and on Ubuntu 24.04
+  MacOS, Apple silicon        built on MacOS 15 and on MacOS 26
+  Windows, x86_64             built on Windows Server 2022 and on Windows Server 2025
+
+The Ubuntu names are not a requirement to run Ubuntu. Any Linux distribution can run these bundles; what
+differs between the two is the minimum glibc, and a machine the installer cannot identify as Ubuntu is
+offered the 22.04 build, which has the lower floor. Pass ``--platform`` to install a specific one.
 
 Options
 =======
@@ -152,6 +169,7 @@ Option                         Environment variable             Default
 ``--bin-dir <dir>``            ``PARTCAD_BIN_DIR``              ``~/.local/bin``
 ``--base-url <url>``           ``PARTCAD_BASE_URL``             the GitHub release for the version
 ``--repository <owner/name>``  ``PARTCAD_REPOSITORY``           ``partcad/partcad``
+``--platform <id>``            ``PARTCAD_PLATFORM``             detected from this machine
 ============================== ================================ ==========================================
 
 Installing several versions side by side is fine: each one unpacks into its own directory, and the
@@ -196,7 +214,7 @@ For a pull request, use the branch it comes from, or its head commit:
 
   .. code-block:: shell
 
-    $ unzip partcad-standalone-linux-x86_64.zip -d /tmp/partcad-build
+    $ unzip partcad-standalone-ubuntu-24.04-x86_64.zip -d /tmp/partcad-build
     $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/devel/install.sh | \
         sh -s -- --version <version> --base-url "file:///tmp/partcad-build"
 
@@ -211,9 +229,14 @@ Manual installation
 The archives are attached to every `GitHub release <https://github.com/partcad/partcad/releases>`_ next to
 the wheels, together with a ``.sha256`` file each:
 
-* ``partcad-<version>-linux-x86_64.tar.gz``
-* ``partcad-<version>-macos-arm64.tar.gz``
-* ``partcad-<version>-windows-x86_64.zip``
+* ``partcad-<version>-ubuntu-22.04-x86_64.tar.gz``, ``partcad-<version>-ubuntu-22.04-arm64.tar.gz``
+* ``partcad-<version>-ubuntu-24.04-x86_64.tar.gz``, ``partcad-<version>-ubuntu-24.04-arm64.tar.gz``
+* ``partcad-<version>-macos-15-arm64.tar.gz``, ``partcad-<version>-macos-26-arm64.tar.gz``
+* ``partcad-<version>-windows-2022-x86_64.zip``, ``partcad-<version>-windows-2025-x86_64.zip``
+
+Pick the newest one your machine is not older than -- see :ref:`the note above <standalone-os-versions>` on
+why there is more than one. When in doubt, the oldest build of your operating system runs everywhere the
+newer one does.
 
 Each one unpacks into a single ``partcad/`` directory holding ``pc``, ``partcad``, and everything they
 need. Put that directory anywhere and run the commands from it, or add it to ``PATH``. On Windows, unpack
@@ -221,7 +244,7 @@ the ``.zip`` and add the resulting directory to ``PATH`` -- there is no shell sc
 
 .. code-block:: shell
 
-  $ tar -xzf partcad-<version>-linux-x86_64.tar.gz -C ~/.local/share
+  $ tar -xzf partcad-<version>-ubuntu-22.04-x86_64.tar.gz -C ~/.local/share
   $ ~/.local/share/partcad/pc version
 
 .. note::
@@ -237,8 +260,8 @@ The bundle carries everything the wheels would install, including the optional e
 to the user: the Python linter (``lint``). A frozen bundle cannot be extended afterwards, so it ships
 complete.
 
-On Linux and Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to build
-``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
+On Linux x86_64 and on Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to
+build ``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
 bundle behaves the same everywhere rather than depending on which version a given host happens to have. Two
 consequences worth knowing:
 
@@ -251,8 +274,9 @@ consequences worth knowing:
   OpenSCAD will not start -- pass ``--ignore-bundled-openscad`` to fall back to a host OpenSCAD if you have
   one.
 
-The macOS bundle carries no OpenSCAD: the last OpenSCAD release predates Apple silicon and ships an
-Intel-only build, which would quietly require Rosetta 2. On macOS, install OpenSCAD yourself and PartCAD
+The macOS bundles carry no OpenSCAD: the last OpenSCAD release predates Apple silicon and ships an
+Intel-only build, which would quietly require Rosetta 2. The Linux arm64 bundles carry none for the same
+reason -- upstream publishes that release for x86_64 only. On both, install OpenSCAD yourself and PartCAD
 will use it.
 
 Two other things are deliberately not in the bundle, because PartCAD runs them as external programs rather
@@ -273,13 +297,19 @@ a wheel: ``python -m pip install -U partcad``.
 Snap (Linux)
 ============
 
-On Linux, the standalone tools are also packaged as a `snap <https://snapcraft.io/docs>`_. It is the same
-bundle as the ``linux-x86_64`` archive above, so everything said about that one applies here too -- what it
-carries, what it still expects from the machine, the bundled OpenSCAD. What the snap adds is the packaging:
-snapd installs it, keeps it up to date on its own, and removes it cleanly.
+On Linux, the standalone tools are also packaged as a `snap <https://snapcraft.io/docs>`_, for x86_64 and
+arm64. It is the same bundle as the ``ubuntu-24.04`` archives above, so everything said about those applies
+here too -- what it carries, what it still expects from the machine, the bundled OpenSCAD. What the snap adds
+is the packaging: snapd installs it, keeps it up to date, and removes it cleanly.
 
-The snap is attached to every `GitHub release <https://github.com/partcad/partcad/releases>`_ as
-``partcad_<version>_amd64.snap``, together with its ``.sha256``:
+.. note::
+
+  **The snap is not published yet.** It is built by CI, but it is not on the Snap Store and it is not attached
+  to GitHub releases, so ``snap install partcad`` does not work today. Publishing needs Snap Store credentials
+  and, because the snap is classic, a manual store review; both are still to come.
+
+  To try it now, download the ``partcad-snap-amd64`` (or ``partcad-snap-arm64``) artifact from a run of the
+  ``Standalone`` workflow on GitHub, unzip it, and install the ``.snap`` inside as below.
 
 .. code-block:: shell
 
@@ -287,34 +317,56 @@ The snap is attached to every `GitHub release <https://github.com/partcad/partca
   $ sudo snap alias partcad.pc pc
   $ pc version
 
-Two flags need explaining, and both are temporary:
+Two flags need explaining:
 
 * ``--classic`` is the confinement. PartCAD works on your own files -- it reads and writes CAD projects
-  anywhere on disk, clones git repositories, builds conda sandboxes under ``~/.partcad`` and runs CAD scripts
-  in them, and serves a daemon over a socket that the Visual Studio Code extension connects to. A strictly
-  confined snap could do none of that.
-* ``--dangerous`` is only needed while installing the ``.snap`` file directly. It says the package is not
-  signed by the Snap Store, which a downloaded file is not. Publishing to the store is pending the manual
-  review that classic snaps require; once that is done, ``sudo snap install --classic partcad`` is the whole
-  command and updates arrive by themselves.
+  anywhere on disk, clones git repositories, builds conda sandboxes and runs CAD scripts in them, and serves
+  a daemon over a socket that the Visual Studio Code extension connects to. A strictly confined snap could do
+  none of that.
+* ``--dangerous`` says the package is not signed by the Snap Store, which a downloaded file is not. It stops
+  being necessary once the snap is published.
 
 ``snap alias`` is there because a snap only gives the bare command name to the app named after the snap
 itself. Without it, the commands are ``partcad``, ``partcad.pc`` and ``partcad.json-rpc``.
 
-To remove it, including the snap's own data:
+Where it keeps its state
+========================
+
+Everywhere else, PartCAD keeps its cache, its conda sandboxes and its git clones in ``~/.partcad``. The snap
+does not write them there. It sets ``PC_INTERNAL_STATE_DIR`` to the per-user directory snapd gives it, so all
+of that lives in ``~/snap/partcad/common`` instead, and ``sudo snap remove --purge partcad`` takes it away
+with the snap.
+
+Your configuration file is the exception, on purpose: ``~/.partcad/config.yaml`` is read from the home
+directory as usual, so one configuration keeps applying whether you installed PartCAD from the snap, the
+standalone bundle, or a wheel.
+
+.. note::
+
+  ``pc system telemetry info`` reports ``Telemetry ID: None`` under the snap. The id is written next to the
+  configuration file and looked up in the state directory, which are the same place everywhere except here.
+  Nothing else is affected by it.
+
+conda and git
+=============
+
+A snap does not carry your shell environment, so a conda installed under your home directory -- the usual
+place -- is not visible to it, and neither is a git outside the standard system prefixes. This is expected
+and accepted rather than worked around: PartCAD notices, falls back to running Python scripts without a
+sandbox (``pythonSandbox: none``), and reports both as missing.
+
+.. code-block:: shell
+
+  $ pc healthcheck
+
+If you need the conda sandbox or git dependencies, use the :ref:`standalone bundle <standalone-cli>` or the
+wheels, which run with your own environment.
+
+To remove the snap, including its data:
 
 .. code-block:: shell
 
   $ sudo snap remove --purge partcad
-
-.. note::
-
-  The snap covers x86_64 Linux only, as the standalone bundle does. It also does not replace ``git`` and
-  ``conda``/``mamba`` as prerequisites: they are run as external programs, and a classic snap uses the ones
-  on the host. Run ``pc healthcheck`` to see what is missing.
-
-  To try the snap a branch or pull request built, download the ``partcad-snap-amd64`` artifact from that
-  run of the ``Standalone`` workflow on GitHub, unzip it, and install the ``.snap`` inside as above.
 
 
 =====================================

@@ -26,26 +26,35 @@ env:
   # available image, so that a change of what '*-latest' points at cannot
   # silently become the only thing we ever tested on.
   #
+  # Linux arm64 is here on both supported LTS releases. There is no
+  # 'ubuntu-latest-arm' alias to follow, so these are named explicitly.
+  # cadquery-ocp publishes aarch64 Linux wheels as of 7.9.3.1.1, which is what
+  # made this possible at all.
+  #
   # Deliberately NOT in this list:
   #  * ubuntu-24.04, windows-2025, macos-15 - these are exactly what
   #    ubuntu-latest / windows-latest / macos-latest alias today, so naming
   #    them as well would run the very same image twice.
   #  * ubuntu-26.04 (and ubuntu-26.04-arm) - still a preview image, not
   #    covered by the Actions SLA, so it would only make CI flaky.
+  #  * windows-11-arm - Windows on arm64 is not a platform PartCAD builds or
+  #    releases for; adding it to CI would test something nothing ships.
   #  * macos-14 - deprecated by GitHub, scheduled for removal.
   #  * macos-13 - no macos-13 job has ever started on the current runner
   #    plan. They queue for hours and are eventually cancelled without
   #    executing, so they only ever left checks pending forever.
-  OSES: '["ubuntu-latest", "ubuntu-22.04", "windows-latest", "windows-2022", "macos-latest", "macos-26"]'
+  OSES:
+    '["ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "windows-latest", "windows-2022",
+    "macos-latest", "macos-26"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # Number of parallel shards the behave suite is split into. Keep in sync with
   # the "shard" list in the set-matrix job's matrix-behave output.
   BEHAVE_SHARDS: 4
-  # 6 OSes x 5 Pythons = 30 combinations per job, and macOS minutes bill at
+  # 8 OSes x 5 Pythons = 40 combinations per job, and macOS minutes bill at
   # 10x, which is not affordable. Only ubuntu-latest runs the full Python
   # range; every other image runs the oldest and the newest supported Python
   # only, which is where a version specific breakage actually shows up, plus
-  # Windows on 3.12 (see the note below). 30 -> 17 combinations.
+  # Windows on 3.12 (see the note below). 40 -> 21 combinations.
   #
   # NOTE: windows + Python 3.12 used to be excluded on its own, for an
   # 'ensurepip' failure (see #374), NOT for a missing cadquery-ocp wheel. It is
@@ -56,6 +65,12 @@ env:
     [{"os": "ubuntu-22.04", "python-version": "3.11"},
     {"os": "ubuntu-22.04", "python-version": "3.12"},
     {"os": "ubuntu-22.04", "python-version": "3.13"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.11"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.12"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.13"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.11"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.12"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.13"},
     {"os": "windows-latest", "python-version": "3.11"},
     {"os": "windows-latest", "python-version": "3.13"},
     {"os": "windows-2022", "python-version": "3.11"},
@@ -69,7 +84,10 @@ env:
   # The sharded 'test-behave' jobs and 'test-pub-repo' (45 min) are by far the
   # most expensive, so they get a reduced matrix: the '*-latest' images only, on
   # the oldest and the newest supported Python. Behave then shards each of those
-  # BEHAVE_SHARDS ways.
+  # BEHAVE_SHARDS ways. Linux arm64 is deliberately not here: it is covered by
+  # 'test-pytest' and both 'test-examples-*' jobs above, which is what would
+  # catch an architecture specific breakage, and adding it here would multiply
+  # the most expensive jobs in the workflow by BEHAVE_SHARDS.
   OSES_SLIM: '["ubuntu-latest", "windows-latest", "macos-latest"]'
   PYTHONS_SLIM: '["3.10", "3.14"]'
   # The VS Code extension pytest job builds the extension bundle, which vendors

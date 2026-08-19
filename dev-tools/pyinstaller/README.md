@@ -13,6 +13,40 @@ with [`install.sh`](../../install.sh) and never see Python.
 | Optional extras (`ai`, `lint`) | installed on demand | always included |
 | Importable as a library | yes | no, it is only the CLI |
 
+## One build per OS version
+
+A wheel is portable because Python is. A frozen bundle is not: it links against the C library and the system
+frameworks of the machine that froze it, so it runs there and on anything newer, and on nothing older. A single
+"linux" bundle would therefore quietly mean "whatever Linux the builder happened to be running", and would stop
+starting for users the day that image moved.
+
+So there is one build per supported OS version, and the archive name carries it. The platform id is
+`<os>-<os-version>-<arch>`, which for the builds CI produces is exactly the runner image label (minus any `-arm`
+suffix) plus the architecture:
+
+| | x86_64 | arm64 |
+| --- | --- | --- |
+| Linux | `ubuntu-22.04-x86_64`, `ubuntu-24.04-x86_64` | `ubuntu-22.04-arm64`, `ubuntu-24.04-arm64` |
+| macOS | — (needs macos-13, see below) | `macos-15-arm64`, `macos-26-arm64` |
+| Windows | `windows-2022-x86_64`, `windows-2025-x86_64` | — |
+
+The Ubuntu names say what built the bundle, not what is required to run it: any distribution can run these, and
+what differs between the two is the minimum glibc. `install.sh` offers a machine it cannot identify as Ubuntu
+the 22.04 build, which has the lower floor.
+
+Three lists have to agree, and nothing enforces it: the matrix in `.github/workflows/build-standalone.yml`,
+`LINUX_BUILDS`/`MACOS_BUILDS` in `install.sh`, and the platform loop in the release check in
+`deploy.yml`. A name in the matrix that the installer never asks for is dead weight; one the installer asks for
+that the matrix does not build is a failed install. Each of the three says so at the point where it is defined.
+
+`build.sh` detects the platform id from the machine when it is not told one, which is what a local build wants.
+CI passes `--platform=` instead: the runner image label is the authoritative answer to which OS version it is,
+and recovering that from the running system is guesswork on Windows in particular.
+
+There is no macOS x86_64 bundle: it would need macos-13, and no macos-13 job has ever started on the current
+runner plan (see the note in `test.yml`). There is no Windows arm64 bundle either -- not a platform PartCAD
+releases for.
+
 ## Files
 
 - `partcad.spec` - the PyInstaller spec. It is the interesting file: it lists what PyInstaller cannot find on
@@ -63,8 +97,9 @@ conda anywhere near it. The same crash in the *wheel*-based CI jobs, whose runne
 separately in `.github/actions/setup-all/action.yml`.
 
 The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
-`partcad-<version>-<os>-<arch>.tar.gz` (`.zip` on Windows), and its `.sha256`. The archive name is a contract
-with `install.sh`, which derives the same name from `uname`.
+`partcad-<version>-<platform>.tar.gz` (`.zip` on Windows), and its `.sha256`. The archive name is a contract
+with `install.sh`, which resolves the machine it runs on to one of the same platform ids. Pass
+`--platform=<id>` to name the archive explicitly rather than after this machine.
 
 The bundle embeds the interpreter it was built with, so `PYTHON` decides the Python version users end up
 running. CI builds with 3.14, the newest version PartCAD supports (`requires-python = ">=3.10,<3.15"`) and
@@ -94,9 +129,14 @@ where the AppImage's library dependencies are absent.
 
 | | what ships | self-contained |
 | --- | --- | --- |
-| Linux | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib, harfbuzz from the host |
+| Linux x86_64 | the AppImage, unpacked | no — needs `libGL`, `libX11`, `libxcb`, fontconfig, freetype, glib, harfbuzz from the host |
+| Linux arm64 | nothing | — |
 | Windows | the portable build | yes — one statically linked `openscad.exe`, no DLLs |
 | macOS | nothing | — |
+
+Linux arm64 carries nothing because upstream publishes the pinned 2021.01 AppImage for x86_64 only; running it
+under emulation is not something a bundle should quietly require. `pc` there uses the host's OpenSCAD, exactly
+as the wheels do.
 
 The AppImage ships *unpacked* because running it as an image needs FUSE, which a minimal host may not have.
 
@@ -137,12 +177,12 @@ installs and runs the result, which is what catches this; run it with `workflow_
 
 ## The snap
 
-On Linux the same bundle is also wrapped as a snap, so that `snap install` is an option next to `install.sh`.
-It is packaging only -- the snap carries this bundle unchanged, and adds nothing to freeze -- so nothing in
-this directory has to change when it is built. See [`../snap/README.md`](../snap/README.md).
+On Linux the `ubuntu-24.04` bundles are also wrapped as snaps, one per architecture. It is packaging only --
+the snap carries the bundle unchanged, and adds nothing to freeze -- so nothing in this directory has to change
+when it is built. The snaps are not published anywhere yet. See [`../snap/README.md`](../snap/README.md).
 
 ## Releasing
 
-`deploy.yml` calls the `Standalone` workflow on a push to `main` and uploads the archives to the same GitHub
-release as the wheels. `install.sh` downloads from there by default. The snap built by the same workflow is
-attached to that release too.
+`deploy.yml` calls the `Standalone` workflow on a push to `main` and uploads every archive to the same GitHub
+release as the wheels; the release is refused if any platform is missing. `install.sh` downloads from there by
+default. The snaps are not part of the release: the `snap` job does not even run on that path.

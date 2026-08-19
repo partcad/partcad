@@ -21,10 +21,13 @@
 # The environment variable PYTHON is passed through to the bundle build, which
 # embeds that interpreter; see dev-tools/pyinstaller/build.sh.
 #
+# The snap is built for the architecture of this machine; there is no
+# cross-building, because the payload is a frozen native bundle.
+#
 # Output (relative to the repository root):
 #
-#   dist/snap/partcad_<version>_amd64.snap
-#   dist/snap/partcad_<version>_amd64.snap.sha256
+#   dist/snap/partcad_<version>_<arch>.snap
+#   dist/snap/partcad_<version>_<arch>.snap.sha256
 
 set -euo pipefail
 
@@ -41,7 +44,7 @@ for arg in "$@"; do
   --use-lxd) SNAPCRAFT_MODE="--use-lxd" ;;
   --destructive-mode) SNAPCRAFT_MODE="--destructive-mode" ;;
   -h | --help)
-    sed -n '7,27p' "${BASH_SOURCE[0]}"
+    sed -n '7,30p' "${BASH_SOURCE[0]}"
     exit 0
     ;;
   *)
@@ -53,16 +56,18 @@ done
 
 ################################################  PLATFORM  ##################################################
 
-# Snaps are a Linux packaging format, and the only bundle there is to package is
-# the x86_64 Linux one -- `snap/snapcraft.yaml` declares that single platform.
+# Snaps are a Linux packaging format. The architecture names are Debian's, which
+# is what snapcraft puts in the file name and what `snap/snapcraft.yaml` lists
+# under `platforms`.
 if [ "$(uname -s)" != "Linux" ]; then
   echo "error: snaps are built on Linux only, this is '$(uname -s)'" >&2
   exit 1
 fi
 case "$(uname -m)" in
-x86_64 | amd64) ;;
+x86_64 | amd64) SNAP_ARCH="amd64" ;;
+aarch64 | arm64) SNAP_ARCH="arm64" ;;
 *)
-  echo "error: the snap is amd64 only, this is '$(uname -m)'" >&2
+  echo "error: no snap platform for '$(uname -m)'" >&2
   exit 1
   ;;
 esac
@@ -79,7 +84,7 @@ source = pathlib.Path('${REPO_ROOT}/partcad/src/partcad/__init__.py').read_text(
 print(re.search(r'__version__: str = \"([^\"]+)\"', source).group(1))
 ")"
 
-echo "==> Packaging PartCAD ${VERSION} as a snap"
+echo "==> Packaging PartCAD ${VERSION} as a ${SNAP_ARCH} snap"
 
 #################################################  BUNDLE  ###################################################
 
@@ -110,7 +115,7 @@ echo "    $(du -sh "${BUNDLE_DIR}" | cut -f1) in ${BUNDLE_DIR}"
 
 #################################################  PACK  #####################################################
 
-SNAP_NAME="partcad_${VERSION}_amd64.snap"
+SNAP_NAME="partcad_${VERSION}_${SNAP_ARCH}.snap"
 
 echo "==> Running snapcraft (${SNAPCRAFT_MODE})"
 mkdir -p "${OUTPUT_DIR}"
