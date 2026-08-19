@@ -186,6 +186,12 @@
         "title": "General",
         "order": 3,
         "properties": {
+          "partcad.lint.enabled": {
+            "default": true,
+            "description": "Check ASSY files for Jinja2, YAML and schema errors while editing, and report them in the Problems view.",
+            "scope": "resource",
+            "type": "boolean"
+          },
           "partcad.verbosity": {
             "default": "info",
             "description": "What level of logs need to be displayed in the PartCAD terminal view?",

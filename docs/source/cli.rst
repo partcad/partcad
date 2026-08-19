@@ -63,7 +63,9 @@ Package commands
 
 ``pc lint``
   Run linting checks on the files within packages. Use ``-r`` to check imported packages recursively and
-  ``-f`` to run only checks whose name starts with a given prefix.
+  ``-f`` to run only checks whose name starts with a given prefix. ``--file PATH`` (repeatable) checks the
+  named files instead, in this process rather than through the daemon; add ``--json`` for machine-readable
+  findings and ``--stdin`` to check unsaved content supplied on standard input.
 
 ***************
 Object commands

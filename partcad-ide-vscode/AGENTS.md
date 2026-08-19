@@ -57,6 +57,28 @@ partcad-json-rpc}`. Installing side by side (rather than over the running copy) 
 itself while it is executing, and is required on Windows, where deleting a running executable fails outright.
 No superseded bundle is left behind: the idle ones go immediately, and the one the updater is running out of is
 removed by a detached reaper once that process exits.
+## ASSY diagnostics
+
+`.assy` files are registered as YAML for highlighting but are not YAML: they are Jinja2 templates that render
+to YAML and then have to match the ASSY schema. `src/PartcadLint.ts` checks the open document (debounced on
+edit, immediately on open/save) through the `partcad.lintFile` command and publishes the answer into a
+`partcad` diagnostic collection.
+
+**The check never reaches the daemon**, and there is no RPC method for it. It is the client's own file --
+usually one the editor has not saved -- and it needs no package graph, no CAD runtime and no loaded context, so
+sending it would mean shipping the buffer across a wire to have it read back, and would leave the editor silent
+exactly when the package fails to load *because* of the file being typed into. Each backend answers
+`partcad.lintFile` from whatever local PartCAD it has:
+
+- `service` — `JsonRpcBackend.lintFile` runs `pc --no-ansi lint --file <path> --stdin --json`, feeding the
+  buffer on stdin. Same reasoning as `pc daemon stop`: defer to the CLI rather than keep a second copy here.
+- `python` — the bundled server's `partcad.lintFile` calls `partcad_client.lint` in its own process.
+
+The checker is `partcad_utils.assy_lint` (schema: `partcad-utils/src/partcad_utils/schema/assy.json`), shared
+with the daemon-side package lint so an editor and CI cannot disagree about a file. It masks each Jinja2
+construct with equally sized filler before parsing, which is what keeps every finding on its source line and
+column; findings that depend on what the mask hid are dropped rather than guessed. Change the schema or the
+message wording there, not here.
 
 ## Setup
 

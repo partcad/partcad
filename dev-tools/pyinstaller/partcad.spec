@@ -41,6 +41,7 @@ REPO_ROOT = SPEC_DIR.parents[1]
 PARTCAD_SRC = REPO_ROOT / "partcad" / "src"
 CLI_SRC = REPO_ROOT / "partcad-cli" / "src"
 SERVICE_SRC = REPO_ROOT / "partcad-service-json-rpc" / "src"
+UTILS_SRC = REPO_ROOT / "partcad-utils" / "src"
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -117,8 +118,12 @@ datas += [
     (str(PARTCAD_SRC / "partcad" / "wrappers"), "partcad/wrappers"),
     # Copied into new packages by `pc init`.
     (str(PARTCAD_SRC / "partcad" / "template"), "partcad/template"),
-    # Read through `importlib.resources` by `pc lint`.
+    # Read through `importlib.resources` by `pc lint`. The ASSY schema is in
+    # `partcad_utils` because both ends check ASSY files -- the daemon over a
+    # package, `pc lint --file` in the client over one file -- so `partcad_utils`
+    # joins `pathex` too, keeping its modules and its data from one checkout.
     (str(PARTCAD_SRC / "partcad" / "schema"), "partcad/schema"),
+    (str(UTILS_SRC / "partcad_utils" / "schema"), "partcad_utils/schema"),
     # The loader lists this directory to enumerate the available subcommands.
     (str(CLI_SRC / "partcad_cli" / "click" / "commands"), "partcad_cli/click/commands"),
     # Redistributing a binary bundle means redistributing its dependencies.
@@ -222,7 +227,7 @@ a = Analysis(
     [str(SPEC_DIR / "entrypoint.py")],
     # The checkout comes first so the bundle matches the working tree rather
     # than whatever copy happens to be installed in the build environment.
-    pathex=[str(PARTCAD_SRC), str(CLI_SRC), str(SERVICE_SRC)],
+    pathex=[str(PARTCAD_SRC), str(CLI_SRC), str(SERVICE_SRC), str(UTILS_SRC)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://partcad.org/schema/assy.json",
+  "title": "PartCAD Assembly YAML (ASSY)",
+  "description": "The schema of an Assembly YAML document, as it looks *after* the file has been rendered as a Jinja2 template. See docs/source/assy.rst.",
+  "definitions": {
+    "OCCTLocation": {
+      "description": "An OCCT location: [[x, y, z], [axis-x, axis-y, axis-z], angle].",
+      "type": "array",
+      "items": [
+        {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        { "type": "number" }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "params": {
+      "description": "Parameter values passed to the referenced part, assembly or interface.",
+      "type": "object"
+    },
+    "connect": {
+      "description": "Placement by mating an interface of this object with an interface of an object already in the assembly.",
+      "type": "object",
+      "properties": {
+        "with": { "type": "string", "minLength": 1 },
+        "withInstance": { "type": "string", "minLength": 1 },
+        "withPort": { "type": "string", "minLength": 1 },
+        "withParams": { "$ref": "#/definitions/params" },
+        "name": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "toInstance": { "type": "string", "minLength": 1 },
+        "toPort": { "type": "string", "minLength": 1 },
+        "toParams": { "$ref": "#/definitions/params" }
+      },
+      "additionalProperties": false
+    },
+    "connectPorts": {
+      "description": "Placement by matching a port of this object with a port of an object already in the assembly.",
+      "type": "object",
+      "properties": {
+        "with": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "node": {
+      "description": "A node of the assembly tree: a reference to a part, a reference to an assembly, or a container of other nodes.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["part", "assembly"] },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "part": { "type": "string", "minLength": 1 },
+        "assembly": { "type": "string", "minLength": 1 },
+        "package": { "type": "string", "minLength": 1 },
+        "location": { "$ref": "#/definitions/OCCTLocation" },
+        "connect": { "$ref": "#/definitions/connect" },
+        "connectPorts": { "$ref": "#/definitions/connectPorts" },
+        "params": { "$ref": "#/definitions/params" },
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/node" }
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "not": { "type": "object", "required": ["part", "assembly"] } },
+        { "not": { "type": "object", "required": ["part", "links"] } },
+        { "not": { "type": "object", "required": ["assembly", "links"] } },
+        { "not": { "type": "object", "required": ["location", "connect"] } },
+        { "not": { "type": "object", "required": ["location", "connectPorts"] } },
+        { "not": { "type": "object", "required": ["connect", "connectPorts"] } },
+        {
+          "anyOf": [
+            { "required": ["links"] },
+            { "required": ["part"] },
+            { "required": ["assembly"] }
+          ]
+        }
+      ]
+    }
+  },
+  "$ref": "#/definitions/node"
+}

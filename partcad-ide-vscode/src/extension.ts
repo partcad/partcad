@@ -33,6 +33,7 @@ import { createOutputChannel, isVirtualWorkspace, onDidChangeConfiguration, regi
 import { PartcadExplorer } from './PartcadExplorer';
 import { PartcadInspector } from './PartcadInspector';
 import { PartcadContext } from './PartcadContext';
+import { PartcadLint } from './PartcadLint';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
 import { terminalInit } from './terminal';
@@ -43,6 +44,7 @@ let partcadExplorer: PartcadExplorer | undefined;
 let partcadExplorerView: vscode.TreeView<PartcadItem.PartcadItem | void>;
 let partcadContext: PartcadContext | undefined;
 let partcadInspector: PartcadInspector | undefined;
+let partcadLint: PartcadLint | undefined;
 let partcadTerminal: vscode.Terminal | undefined;
 let terminalEmitter: vscode.EventEmitter<string> | undefined;
 
@@ -87,6 +89,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     traceLog(`Module: ${serverInfo.module}`);
     traceVerbose(`Full Server Info: ${JSON.stringify(serverInfo)}`);
 
+    // ASSY files are checked through the backend; the checker is created here so
+    // the documents already open when the window came up get checked as soon as
+    // the backend registers `partcad.lintFile`.
+    partcadLint = new PartcadLint();
+    context.subscriptions.push(partcadLint);
+
     const handleRestartServer = async (
         serverId: string,
         serverName: string,
@@ -109,12 +117,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
             await vscode.commands.executeCommand('setContext', 'partcad.beingLoaded', true);
 
+            partcadLint?.refresh();
+
             context.subscriptions.push(
                 lsClient.onNotification('?/partcad/installed', async () => {
                     await vscode.commands.executeCommand('setContext', 'partcad.installed', true);
                     await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
                     await vscode.commands.executeCommand('partcad.activate');
                     await vscode.commands.executeCommand('setContext', 'partcad.needsUpdate', false);
+                    // The Python backend cannot check anything until PartCAD is
+                    // installed into the interpreter; now it can.
+                    partcadLint?.refresh();
                 }),
                 lsClient.onNotification('?/partcad/installFailed', async () => {
                     await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
