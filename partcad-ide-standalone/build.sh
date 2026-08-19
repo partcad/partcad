@@ -21,7 +21,8 @@
 #   dist/ide/partcad-ide/                              the application (Linux, Windows)
 #   dist/ide/PartCAD IDE.app/                          the application (MacOS)
 #   dist/ide/partcad-ide-<version>-<platform>.<ext>    the archive, and its .sha256
-#   dist/ide/PartCAD-IDE-<version>-<platform>.dmg      MacOS only, with --dmg
+#   dist/ide/partcad-ide-<version>-<platform>-setup.exe  Windows only, the installer
+#   dist/ide/partcad-ide-<version>-<platform>.dmg      MacOS only, with --dmg
 #
 # Everything the build does to the VSCodium it downloads is in this file and in
 # `tools/`; `README.md` says why each of those steps exists.
@@ -51,6 +52,7 @@ CLI_BUNDLE=""
 EXTENSION_VSIX=""
 CREATE_ARCHIVE=1
 CREATE_DMG=0
+CREATE_INSTALLER=1
 INSTALL_EXTENSIONS=1
 BRAND_ICONS=1
 RECORD_PIN=0
@@ -75,6 +77,8 @@ Options:
                            branding; the result is not shippable.
   --no-icons               Keep VSCodium's icons.
   --no-archive             Stop after the application, skip the archive.
+  --no-installer           Skip the Windows installer (Windows only). Without
+                           this it is built whenever Inno Setup is installed.
   --dmg                    Also produce a .dmg (MacOS only).
   --record                 Write the VSCodium version and checksum that were
                            used into `vscodium.json`, to be committed as a pin.
@@ -113,6 +117,10 @@ while [ $# -gt 0 ]; do
     ;;
   --no-archive)
     CREATE_ARCHIVE=0
+    shift
+    ;;
+  --no-installer)
+    CREATE_INSTALLER=0
     shift
     ;;
   --dmg)
@@ -624,6 +632,20 @@ fi
 
 ##############################################  THE ARCHIVE  #################################################
 
+# Write "<sha256>  <name>" beside the file, the format `sha256sum -c` reads and
+# the one `install.sh` verifies with.
+checksum() {
+  (cd "$(dirname "$1")" && "${PYTHON}" -c "
+import hashlib, pathlib
+name = '$(basename "$1")'
+digest = hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()
+pathlib.Path(name + '.sha256').write_text(f'{digest}  {name}\n', encoding='utf-8')
+print(digest)
+")
+}
+
+PRODUCED=""
+
 if [ "${CREATE_ARCHIVE}" = "1" ]; then
   ARCHIVE="${OUTPUT_DIR}/partcad-ide-${VERSION}-${PLATFORM}.${ARCHIVE_EXT}"
   log "==> Packing ${ARCHIVE}"
@@ -632,19 +654,13 @@ if [ "${CREATE_ARCHIVE}" = "1" ]; then
   tar.gz) tar -czf "${ARCHIVE}" -C "${OUTPUT_DIR}" "${APP_NAME}" ;;
   zip) (cd "${OUTPUT_DIR}" && zip -qry "$(basename "${ARCHIVE}")" "${APP_NAME}") ;;
   esac
-
-  (cd "${OUTPUT_DIR}" && "${PYTHON}" -c "
-import hashlib, pathlib, sys
-name = '$(basename "${ARCHIVE}")'
-digest = hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()
-pathlib.Path(name + '.sha256').write_text(f'{digest}  {name}\n', encoding='utf-8')
-print(digest)
-")
+  checksum "${ARCHIVE}"
+  PRODUCED="${PRODUCED} $(basename "${ARCHIVE}")"
 
   if [ "${OS_NAME}" = "macos" ] && [ "${CREATE_DMG}" = "1" ]; then
-    DMG="${OUTPUT_DIR}/PartCAD-IDE-${VERSION}-${PLATFORM}.dmg"
+    DMG="${OUTPUT_DIR}/partcad-ide-${VERSION}-${PLATFORM}.dmg"
     log "==> Packing ${DMG}"
-    rm -f "${DMG}"
+    rm -f "${DMG}" "${DMG}.sha256"
     DMG_STAGE="${STAGE_DIR}/dmg"
     rm -rf "${DMG_STAGE}"
     mkdir -p "${DMG_STAGE}"
@@ -653,12 +669,61 @@ print(digest)
     # MacOS user has seen.
     ln -s /Applications "${DMG_STAGE}/Applications"
     hdiutil create -volname "PartCAD IDE" -srcfolder "${DMG_STAGE}" -ov -quiet -format UDZO "${DMG}"
+    checksum "${DMG}"
+    PRODUCED="${PRODUCED} $(basename "${DMG}")"
+  fi
+fi
+
+#############################################  THE INSTALLER  ################################################
+
+# Windows has no equivalent of `install.sh`: a .zip to unpack leaves no Start
+# menu entry, nothing on PATH and nothing to uninstall. This is that, built with
+# Inno Setup, which is what the editors this one is made from use as well.
+if [ "${OS_NAME}" = "windows" ] && [ "${CREATE_INSTALLER}" = "1" ]; then
+  ISCC=""
+  for candidate in \
+    "iscc" \
+    "ISCC.exe" \
+    "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
+    "/c/Program Files/Inno Setup 6/ISCC.exe"; do
+    if command -v "${candidate}" >/dev/null 2>&1; then
+      ISCC="${candidate}"
+      break
+    fi
+  done
+
+  if [ -z "${ISCC}" ]; then
+    warn "no Inno Setup compiler (ISCC) found; built the .zip but no installer.
+         Install it from https://jrsoftware.org/isdl.php, or with:
+           choco install innosetup
+         Inno Setup 6.3 or newer is needed for the architecture directives."
+  else
+    INSTALLER_NAME="partcad-ide-${VERSION}-${PLATFORM}-setup"
+    INSTALLER="${OUTPUT_DIR}/${INSTALLER_NAME}.exe"
+    log "==> Building ${INSTALLER} with ${ISCC}"
+    rm -f "${INSTALLER}" "${INSTALLER}.sha256"
+    # MSYS2_ARG_CONV_EXCL stops Git Bash from rewriting the /D and /O switches
+    # into paths on the way to a native Windows program, which is what turns
+    # "/O<dir>" into "O:\<dir>" and the build into a puzzle.
+    ISCC_ARGS=("/Qp" "/DVersion=${VERSION}")
+    if [ "${ICONS_BUILT}" = "1" ] && [ -f "${APP_ROOT}/partcad-ide.ico" ]; then
+      ISCC_ARGS+=("/DHaveIcon=1")
+    fi
+    ISCC_ARGS+=(
+      "/O$(cygpath -w "${OUTPUT_DIR}")"
+      "/F${INSTALLER_NAME}"
+      "$(cygpath -w "${SCRIPT_DIR}/installer/partcad-ide.iss")"
+    )
+    MSYS2_ARG_CONV_EXCL="*" "${ISCC}" "${ISCC_ARGS[@]}"
+    [ -f "${INSTALLER}" ] || fail "Inno Setup reported success but produced no ${INSTALLER}"
+    checksum "${INSTALLER}"
+    PRODUCED="${PRODUCED} $(basename "${INSTALLER}")"
   fi
 fi
 
 log ""
 log "The PartCAD IDE ${VERSION} for ${PLATFORM} is in ${OUTPUT_DIR}:"
 log "  ${APP_NAME}"
-if [ "${CREATE_ARCHIVE}" = "1" ]; then
-  log "  $(basename "${ARCHIVE}")"
-fi
+for produced in ${PRODUCED}; do
+  log "  ${produced}"
+done

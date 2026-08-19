@@ -19,8 +19,9 @@ partcad-ide-standalone/build.sh --help
 ```
 
 `--with-cli-bundle` takes what `dev-tools/pyinstaller/build.sh --no-archive` leaves in `dist/standalone/partcad`.
-Node.js is needed (the extensions are packaged with `vsce`); `cairosvg`, `Pillow` and `rcedit` are optional and
-the build reports what it skipped without them. Output lands in `dist/ide/`.
+Node.js is needed (the extensions are packaged with `vsce`); `cairosvg`, `Pillow`, `rcedit` and -- on Windows --
+Inno Setup 6.3+ (`ISCC.exe`, for `installer/partcad-ide.iss`) are optional, and the build reports what it
+skipped without them. Output lands in `dist/ide/`.
 
 ## Test
 
@@ -43,6 +44,8 @@ its own result, and the `install` job in that workflow, which installs the archi
   PartCAD version.
 - **What the IDE does on startup**: `bootstrap/extension.js`. It is plain JavaScript, packaged as it is -- no
   compile step, so keep it that way.
+- **What the Windows installer sets up**: `installer/partcad-ide.iss`. Never change its `AppId`: Windows
+  recognizes an upgrade, and an uninstall, by that and nothing else.
 - **The VSCodium release**: `build.sh --vscodium-version <tag> --record`, then restore the comments `--record`
   strips from `vscodium.json`.
 

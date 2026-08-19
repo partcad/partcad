@@ -33,9 +33,9 @@ import jsonc  # noqa: E402  (the path has to be set up first)
 SERVICE_EXECUTABLES = ("partcad-json-rpc", "partcad-json-rpc.exe")
 
 
-def installed_extensions(extensions_dir: pathlib.Path) -> dict[str, str]:
-    """Map `publisher.name` (lowercased) to version for every extension found."""
-    found: dict[str, str] = {}
+def installed_extensions(extensions_dir: pathlib.Path) -> dict[str, dict]:
+    """Map `publisher.name` (lowercased) to its manifest, for every extension found."""
+    found: dict[str, dict] = {}
     if not extensions_dir.is_dir():
         return found
     for entry in sorted(extensions_dir.iterdir()):
@@ -49,8 +49,26 @@ def installed_extensions(extensions_dir: pathlib.Path) -> dict[str, str]:
         publisher = package.get("publisher")
         name = package.get("name")
         if publisher and name:
-            found[f"{publisher}.{name}".lower()] = package.get("version", "?")
+            found[f"{publisher}.{name}".lower()] = package
     return found
+
+
+def activity_bar_containers(extensions: dict[str, dict]) -> list[tuple[str, str, str]]:
+    """The view containers the shipped extensions add to the activity bar.
+
+    The activity bar is the strip of icons down the side of the window, one per
+    view container, and it is what a user sees first. Which icons are on it is
+    decided by what the IDE ships with, so the build reports it: an extension
+    added to the recommendations can put an icon there, and nobody would
+    otherwise notice until the IDE was installed.
+
+    Returns (title, container id, extension id), sorted by title.
+    """
+    containers = []
+    for identifier, package in extensions.items():
+        for container in package.get("contributes", {}).get("viewsContainers", {}).get("activitybar", []):
+            containers.append((container.get("title", "?"), container.get("id", "?"), identifier))
+    return sorted(containers)
 
 
 def check_product(product_path: pathlib.Path, problems: list[str], notes: list[str]) -> None:
@@ -125,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     for entry in plan["install"]:
         identifier = entry["id"].lower()
         if identifier in present:
-            notes.append(f"extension: {entry['id']} {present[identifier]}")
+            notes.append(f"extension: {entry['id']} {present[identifier].get('version', '?')}")
         elif entry["required"]:
             problems.append(f"required extension {entry['id']} is not installed")
         else:
@@ -142,6 +160,9 @@ def main(argv: list[str] | None = None) -> int:
             problems.append(f"the PartCAD command line tools are not embedded at {tools}")
         else:
             check_executable(service, "bundled PartCAD service", problems, notes)
+
+    for title, container, identifier in activity_bar_containers(present):
+        notes.append(f"activity bar: {title} ({container}, from {identifier})")
 
     for note in notes:
         print(f"  ok       {note}")

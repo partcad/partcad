@@ -96,7 +96,9 @@ jobs:
           - os: windows-latest
             platform: windows-x86_64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    # Longer than the command line bundles' hour: this unpacks an editor, has it
+    # install a dozen extensions, and compresses a gigabyte into an installer.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v7
@@ -126,6 +128,19 @@ jobs:
         continue-on-error: true
         run: python -m pip install cairosvg pillow
 
+      # The runner images ship it, so this is a fallback rather than the usual
+      # path. Without it the build produces the .zip and says it produced no
+      # installer, which is not what a release should carry.
+      - name: Make sure Inno Setup is installed
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          if [ -x "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ] || command -v iscc >/dev/null 2>&1; then
+            echo "Inno Setup is already installed"
+          else
+            choco install innosetup --no-progress --yes
+          fi
+
       - name: Download the command line tools
         uses: actions/download-artifact@v8
         with:
@@ -146,7 +161,28 @@ jobs:
 
       - name: Build the IDE
         shell: bash
-        run: partcad-ide-standalone/build.sh --with-cli-bundle dist/standalone/partcad
+        # The .dmg is how a MacOS user expects to install an application; the
+        # .tar.gz beside it is what "install.sh --ide" downloads.
+        run: |
+          extra=""
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            extra="--dmg"
+          fi
+          partcad-ide-standalone/build.sh --with-cli-bundle dist/standalone/partcad ${extra}
+
+      # The build warns and carries on when the platform-specific packaging
+      # tools are missing, which is right for someone building locally and wrong
+      # for a release. Fail here instead.
+      - name: Check the platform packaging was produced
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+          Windows) required="dist/ide/partcad-ide-*-setup.exe" ;;
+          macOS) required="dist/ide/partcad-ide-*.dmg" ;;
+          *) exit 0 ;;
+          esac
+          # shellcheck disable=SC2086
+          ls -la ${required}
 
       - name: Upload the IDE
         uses: actions/upload-artifact@v7
@@ -155,6 +191,8 @@ jobs:
           path: |
             dist/ide/*.tar.gz
             dist/ide/*.zip
+            dist/ide/*.dmg
+            dist/ide/*setup.exe
             dist/ide/*.sha256
           if-no-files-found: error
           retention-days: 14
@@ -232,3 +270,63 @@ jobs:
             --app-dir "${HOME}/Applications"
           test ! -e "${HOME}/partcad-bin/partcad-ide"
           test ! -e "${HOME}/Applications/PartCAD IDE.app"
+
+  # The Windows half of the same idea: run the installer the way a user runs it,
+  # then use what it installed, then uninstall it. Separate from the job above
+  # because there is no shell installer on Windows -- the setup program is the
+  # installer, and it is the thing to test.
+  install-windows:
+    name: "Install (windows-x86_64)"
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Download the IDE
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-ide-windows-x86_64
+          path: archives
+
+      - name: Run the installer
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem archives -Filter "*setup.exe" | Select-Object -First 1
+          if (-not $setup) { throw "no installer in the artifact" }
+          # The switches a user never sees: no wizard, no dialogs, and no
+          # launching the editor at the end (the [Run] entry is skipifsilent).
+          Start-Process -FilePath $setup.FullName -Wait `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/LOG=install.log"
+          Get-Content install.log -Tail 20
+
+      - name: Use what it installed
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          if (-not (Test-Path $app)) { throw "nothing installed at $app" }
+          & (Join-Path $app "bin\partcad-ide.cmd") --version
+          & (Join-Path $app "resources\partcad-cli\pc.exe") version
+          # Matched without regard to case: the editor lowercases the directory
+          # it installs an extension into.
+          $extensions = Join-Path $app "resources\app\extensions"
+          if (-not (Get-ChildItem $extensions -Filter "openvmp.partcad-*")) {
+            throw "the installed IDE has no PartCAD extension"
+          }
+          # The PATH entries the installer adds for a new terminal.
+          $path = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
+          if ($path -notlike "*PartCAD IDE\bin*") { throw "the installer did not add bin to PATH" }
+
+      - name: Uninstall
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA "Programs\PartCAD IDE"
+          # Inno Setup's uninstaller relaunches itself from the temp directory
+          # and the process started here returns before the work is done, so
+          # this waits for the result rather than for the process.
+          Start-Process -FilePath (Join-Path $app "unins000.exe") `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"
+          $deadline = (Get-Date).AddMinutes(5)
+          while ((Test-Path $app) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 5 }
+          if (Test-Path $app) { throw "$app is still there after uninstalling" }
+          $path = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path).Path
+          if ($path -like "*PartCAD IDE*") { throw "the uninstaller left PATH entries behind" }

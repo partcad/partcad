@@ -197,8 +197,8 @@ no extensions to pick, no environment to set up. It opens in the PartCAD workben
 curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --ide
 ```
 
-On Windows, download `partcad-ide-<version>-windows-x86_64.zip` from the
-[releases](https://github.com/partcad/partcad/releases) and unpack it. See
+On Windows, download and run `partcad-ide-<version>-windows-x86_64-setup.exe` from the
+[releases](https://github.com/partcad/partcad/releases); on macOS there is a `.dmg` there too. See
 [Installation](https://partcad.readthedocs.io/en/latest/installation.html) for the details.
 
 ### Extension for Visual Studio Code

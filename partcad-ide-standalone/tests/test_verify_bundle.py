@@ -151,3 +151,24 @@ def test_a_launcher_that_is_not_executable_fails(tmp_path, capsys):
 
     assert run(resources, tmp_path) == 1
     assert "is not executable" in capsys.readouterr().out
+
+
+def test_the_activity_bar_is_reported(tmp_path, capsys):
+    # What the user sees down the side of the window is decided by what the IDE
+    # ships with, so the build says what it will be.
+    resources = make_bundle(tmp_path)
+    extensions = resources / "app" / "extensions"
+    manifest = extensions / "OpenVMP.partcad-1.0.0" / "package.json"
+    package = json.loads(manifest.read_text(encoding="utf-8"))
+    package["contributes"] = {
+        "viewsContainers": {"activitybar": [{"id": "partcad-container", "title": "PartCAD (Beta)"}]}
+    }
+    manifest.write_text(json.dumps(package), encoding="utf-8")
+
+    assert run(resources, tmp_path) == 0
+    assert "activity bar: PartCAD (Beta) (partcad-container, from openvmp.partcad)" in capsys.readouterr().out
+
+
+def test_an_extension_with_no_activity_bar_icon_is_not_reported(tmp_path, capsys):
+    assert run(make_bundle(tmp_path), tmp_path) == 0
+    assert "activity bar" not in capsys.readouterr().out

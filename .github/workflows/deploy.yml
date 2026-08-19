@@ -201,15 +201,21 @@ jobs:
             fi
           done
           # And the same for the IDE, which "install.sh --ide" downloads by a
-          # name derived the same way.
+          # name derived the same way. There is more than one file per platform
+          # here -- the archive, and the .dmg or the installer beside it -- so
+          # this checks for the archive by name and then lists what came with it.
           for platform in linux-x86_64 macos-arm64 windows-x86_64; do
-            archive=$(find ide -type f -name "partcad-ide-*-${platform}.*" ! -name "*.sha256")
-            checksum=$(find ide -type f -name "partcad-ide-*-${platform}.*.sha256")
-            if [ -z "${archive}" ] || [ -z "${checksum}" ]; then
-              echo "::error::no IDE for ${platform}"
+            case "${platform}" in
+            windows-*) extension="zip" ;;
+            *) extension="tar.gz" ;;
+            esac
+            archive="$(find ide -type f -name "partcad-ide-*-${platform}.${extension}" | head -n 1)"
+            if [ -z "${archive}" ] || [ ! -f "${archive}.sha256" ]; then
+              echo "::error::no IDE archive for ${platform}"
               missing=1
             else
-              echo "${archive} $(stat -c%s "${archive}") bytes"
+              find ide -type f -name "partcad-ide-*-${platform}*" ! -name "*.sha256" \
+                -printf "%p %s bytes\n"
             fi
           done
           exit "${missing}"

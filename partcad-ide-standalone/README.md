@@ -15,7 +15,8 @@ first time it starts.
 
 It is built from [VSCodium](https://vscodium.com/), rebranded, with the extensions this repository recommends
 installed into it and the [standalone command line tools](../dev-tools/pyinstaller/README.md) inside it. The
-result is one archive per platform, published on the same GitHub release as everything else.
+result per platform -- an archive everywhere, a `.dmg` on MacOS, a setup program on Windows -- is published on
+the same GitHub release as everything else.
 
 ## Licensing
 
@@ -40,6 +41,7 @@ than dropping it quietly.
 - `extensions.json` - what to do about recommendations that cannot simply be installed. The list itself is
   `../.vscode/extensions.json`.
 - `product.overlay.json` - the branding, merged into the editor's `product.json`.
+- `installer/partcad-ide.iss` - the Windows installer, compiled by Inno Setup.
 - `bootstrap/` - a small extension that ships only in this IDE: it opens the PartCAD workbench on startup and
   points the PartCAD extension at the tools in the same application.
 - `tools/` - the parts of the build that are more than a shell one-liner, each with its own tests.
@@ -62,8 +64,8 @@ dev-tools/pyinstaller/build.sh --no-archive          # produces dist/standalone/
 partcad-ide-standalone/build.sh --with-cli-bundle dist/standalone/partcad
 ```
 
-Useful while iterating: `--no-extensions` (much faster, and not shippable), `--no-archive`, `--no-icons`.
-`--help` lists them all. The VSCodium download is cached in `build/vscodium/`, so a rebuild does not fetch it
+Useful while iterating: `--no-extensions` (much faster, and not shippable), `--no-archive`, `--no-icons`,
+`--no-installer`. `--help` lists them all. The VSCodium download is cached in `build/vscodium/`, so a rebuild does not fetch it
 again.
 
 Two optional dependencies change what the build can do, and it reports what it left out rather than failing:
@@ -72,6 +74,8 @@ Two optional dependencies change what the build can do, and it reports what it l
   them the application keeps VSCodium's icon.
 - `rcedit` (`npm install -g rcedit`) puts the icon into `partcad-ide.exe`. There is no other way to change a
   Windows executable's icon after it is linked.
+- Inno Setup 6.3 or newer (`choco install innosetup`) compiles the Windows installer. Without it the build
+  produces the `.zip` only.
 
 ## What the build does to VSCodium, and why
 
@@ -156,11 +160,34 @@ xattr -dr com.apple.quarantine "/Applications/PartCAD IDE.app"
 Signing and notarizing properly needs an Apple Developer ID, which is an account and a certificate rather than
 a change to this build. When there is one, sign with it here instead of ad-hoc and the step above disappears.
 
-## Windows: no installer
+## Windows: the installer
 
-The Windows artifact is a `.zip` to unpack, not a setup program: `partcad-ide.exe` runs from wherever it lands.
-There is no Start menu entry, no file association and no uninstaller. Producing those means driving Inno Setup
-the way the upstream VS Code build does, which is more than a rebranding step and has not been done.
+Windows has no `install.sh`, so `installer/partcad-ide.iss` is the equivalent: an
+[Inno Setup](https://jrsoftware.org/isinfo.php) script, compiled by `build.sh` into
+`partcad-ide-<version>-windows-x86_64-setup.exe` whenever `ISCC.exe` is on the machine (`choco install
+innosetup`; the build says so and carries on when it is not). It needs Inno Setup 6.3 or newer, for the
+`x64compatible` architecture identifiers.
+
+It installs **per user** by default -- into `%LOCALAPPDATA%\Programs\PartCAD IDE`, with no UAC prompt -- and
+offers "for all users" in the wizard for someone with an administrator account. That choice is what the `HKA`
+registry root in the script follows: the same entries land in `HKCU` or in `HKLM` depending on which install it
+is. What it sets up beyond the files: a Start menu entry, an optional desktop icon, the `partcad-ide://` URL
+scheme, an App Paths entry so `partcad-ide` works from the Run dialog, optional "Open with PartCAD IDE" entries
+in the Explorer context menu for files and folders, and -- on by default -- `PATH` entries for the editor's
+`bin` and for the command line tools inside the application, so `partcad-ide` and `pc` work in a new terminal.
+Uninstalling removes all of it, including the `PATH` entries. `%USERPROFILE%\.partcad-ide` is left alone, the
+way `install.sh` leaves `~/.partcad`.
+
+`AppId` in the script is the identity Windows recognizes an upgrade and an uninstall by. It is fixed for the
+life of the product: regenerating it turns the next release into a second application installed beside this
+one.
+
+The `.zip` is still published next to the installer, for unpacking without installing.
+
+The installer is **not signed**. SmartScreen warns about an unsigned installer from an unknown publisher, and
+the way past that is an authenticode certificate, not a change here. `Compression` is set to `lzma2/fast`
+rather than `max` on purpose: the payload is around a gigabyte, and the difference is minutes of build time
+against a fraction of the download.
 
 ## Updating VSCodium
 

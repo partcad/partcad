@@ -204,10 +204,10 @@ case "$(uname -s)" in
 Linux) OS_NAME="linux" ;;
 Darwin) OS_NAME="macos" ;;
 MINGW* | MSYS* | CYGWIN*)
-  fail "this script does not support Windows. Download the .zip from
-       https://github.com/${REPOSITORY}/releases and unpack it -- both the
-       command line tools and the IDE are published as .zip archives there --
-       or install the wheels with 'pip install -U partcad-cli'."
+  fail "this script does not support Windows. From
+       https://github.com/${REPOSITORY}/releases, run the IDE's
+       'partcad-ide-<version>-windows-x86_64-setup.exe', or unpack the command
+       line tools' .zip, or install the wheels with 'pip install -U partcad-cli'."
   ;;
 *) fail "unsupported operating system '$(uname -s)'" ;;
 esac

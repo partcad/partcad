@@ -301,9 +301,17 @@ The same installer as the command line tools, with the same options: everything 
 ``partcad`` from the copy inside the IDE -- so the command line tools are installed too, without a second
 download.
 
-On Windows, download ``partcad-ide-<version>-windows-x86_64.zip`` from the
-`GitHub release <https://github.com/partcad/partcad/releases>`_, unpack it anywhere, and run
-``partcad-ide.exe``. There is no installer for Windows yet.
+On Windows, download ``partcad-ide-<version>-windows-x86_64-setup.exe`` from the
+`GitHub release <https://github.com/partcad/partcad/releases>`_ and run it. It installs for the current
+user without asking for administrator rights, into ``%LOCALAPPDATA%\Programs\PartCAD IDE``, and offers
+"for all users" as a choice. It adds a Start menu entry, and -- unless you turn the option off -- puts
+``partcad-ide`` and ``pc`` on your ``PATH``. Uninstall it from "Apps & features" like any other
+application.
+
+The installer is not signed, so SmartScreen shows a warning: choose "More info", then "Run anyway".
+
+``partcad-ide-<version>-windows-x86_64.zip`` is published next to it, for unpacking somewhere and running
+``partcad-ide.exe`` without installing anything.
 
 The download is around 1GB: an editor, a Python interpreter, the OpenCASCADE geometry kernel and the
 extensions, all in one archive.
@@ -325,6 +333,9 @@ The IDE keeps its settings, its state and any extension you install in ``~/.part
 nothing with a Visual Studio Code or VSCodium on the same machine. PartCAD's own cache and configuration
 stay in ``~/.partcad``, shared with the command line tools, so a package installed in a terminal is
 there in the IDE.
+
+On MacOS, ``partcad-ide-<version>-macos-arm64.dmg`` is published as well: open it and drag the
+application to Applications, the usual way.
 
 .. note::
 
