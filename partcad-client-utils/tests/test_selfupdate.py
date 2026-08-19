@@ -24,7 +24,7 @@ import tarfile
 import textwrap
 
 import pytest
-from partcad_utils import selfupdate
+from partcad_client_utils import selfupdate
 
 # ---------------------------------------------------------------------------
 # What is installed
@@ -41,14 +41,16 @@ def test_installation_kind_is_wheel_when_under_site_packages(monkeypatch):
     monkeypatch.setattr(
         selfupdate,
         "__file__",
-        os.path.join("/venv", "lib", "python3.12", "site-packages", "partcad_utils", "selfupdate.py"),
+        os.path.join("/venv", "lib", "python3.12", "site-packages", "partcad_client_utils", "selfupdate.py"),
     )
     assert selfupdate.installation_kind() == selfupdate.KIND_WHEEL
 
 
 def test_installation_kind_is_source_for_a_checkout(monkeypatch):
     monkeypatch.delattr(selfupdate.sys, "frozen", raising=False)
-    monkeypatch.setattr(selfupdate, "__file__", "/home/dev/partcad/partcad-utils/src/partcad_utils/selfupdate.py")
+    monkeypatch.setattr(
+        selfupdate, "__file__", "/home/dev/partcad/partcad-client-utils/src/partcad_client_utils/selfupdate.py"
+    )
     assert selfupdate.installation_kind() == selfupdate.KIND_SOURCE
 
 
@@ -221,6 +223,19 @@ def test_a_missing_checksum_is_only_a_warning(monkeypatch, tmp_path):
 
 
 @pytest.fixture
+def no_reaper(monkeypatch):
+    """Record what the running bundle is handed to, instead of spawning a helper.
+
+    The reaper outlives the test process by design, so letting it run would leave
+    a shell looping on the pytest pid. Its own behaviour is tested for real
+    further down, against a throwaway process.
+    """
+    handed = []
+    monkeypatch.setattr(selfupdate, "_reap_after_exit", lambda path, log: handed.append(path))
+    return handed
+
+
+@pytest.fixture
 def standalone(monkeypatch, tmp_path):
     """A fake standalone installation: <root>/0.7.158/pc, linked from <root>/bin.
 
@@ -256,24 +271,26 @@ def standalone(monkeypatch, tmp_path):
     yield root, bin_dir, running
 
 
-def test_install_standalone_installs_beside_the_running_bundle(standalone):
+def test_install_standalone_installs_beside_the_running_bundle(standalone, no_reaper):
     root, _bin_dir, running = standalone
     target = selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
     assert target == str(root / "0.7.159")
     assert os.path.isfile(os.path.join(target, "pc"))
-    # The running bundle is never deleted: on Windows that fails outright, and
-    # everywhere else it is still being executed.
+    # Beside, never over: the running bundle is intact when the install returns,
+    # which is what makes this safe on Windows and safe for a daemon that
+    # outlived the stop. It is handed to the reaper, not deleted here.
     assert running.is_dir()
+    assert no_reaper == [str(running)]
 
 
-def test_install_standalone_repoints_the_launchers(standalone):
+def test_install_standalone_repoints_the_launchers(standalone, no_reaper):
     root, bin_dir, _running = standalone
     selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
     assert os.path.realpath(bin_dir / "pc") == str(root / "0.7.159" / "pc")
     assert os.path.realpath(bin_dir / "partcad") == str(root / "0.7.159" / "partcad")
 
 
-def test_install_standalone_leaves_foreign_launchers_alone(standalone, tmp_path):
+def test_install_standalone_leaves_foreign_launchers_alone(standalone, no_reaper, tmp_path):
     """A `pc` from a wheel on PATH belongs to somebody else."""
     root, bin_dir, _running = standalone
     foreign_dir = tmp_path / "venv-bin"
@@ -289,7 +306,7 @@ def test_install_standalone_leaves_foreign_launchers_alone(standalone, tmp_path)
     assert os.path.realpath(link / "pc") == str(foreign)
 
 
-def test_install_standalone_prunes_superseded_bundles(standalone):
+def test_install_standalone_prunes_superseded_bundles(standalone, no_reaper):
     root, _bin_dir, _running = standalone
     stale = root / "0.7.100"
     stale.mkdir()
@@ -298,7 +315,23 @@ def test_install_standalone_prunes_superseded_bundles(standalone):
     assert not stale.exists()
 
 
-def test_install_standalone_leaves_unrelated_neighbours_alone(standalone):
+def test_no_old_bundle_is_left_behind(standalone, no_reaper):
+    """Every superseded bundle goes: the idle ones now, the running one on exit."""
+    root, _bin_dir, running = standalone
+    for version in ("0.7.100", "0.7.157"):
+        stale = root / version
+        stale.mkdir()
+        (stale / "pc").write_text("ancient")
+
+    target = selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
+
+    on_disk = {p.name for p in root.iterdir() if p.is_dir()}
+    assert on_disk == {os.path.basename(target), running.name}
+    # ...and the one still on disk is the one the reaper was handed.
+    assert no_reaper == [str(running)]
+
+
+def test_install_standalone_leaves_unrelated_neighbours_alone(standalone, no_reaper):
     root, _bin_dir, _running = standalone
     neighbour = root / "notes"
     neighbour.mkdir()
@@ -307,7 +340,7 @@ def test_install_standalone_leaves_unrelated_neighbours_alone(standalone):
     assert (neighbour / "README").exists()
 
 
-def test_install_standalone_replaces_an_existing_copy_of_the_same_version(standalone):
+def test_install_standalone_replaces_an_existing_copy_of_the_same_version(standalone, no_reaper):
     root, _bin_dir, _running = standalone
     existing = root / "0.7.159"
     existing.mkdir()
@@ -385,13 +418,17 @@ def test_update_without_a_before_install_hook_just_installs(monkeypatch):
 def test_the_module_never_reaches_for_a_daemon():
     """Updating is a client-side act; a daemon can be remote, or somebody else's.
 
-    `partcad-utils` does not depend on `partcad-service-json-rpc` and must not
-    start to: a caller that has a daemon passes `before_install`.
+    Even inside `partcad-client-utils`, the updater does not reach for the
+    daemon module next to it: a caller that has daemons passes `before_install`,
+    which is what lets `pc update` stop all the local ones and lets the VS Code
+    extension's Python backend -- which has none -- stop nothing.
     """
     source = pathlib.Path(selfupdate.__file__).read_text(encoding="utf-8")
     body = source.split('"""', 2)[2]  # everything after the module docstring
     assert "partcad_service_json_rpc" not in body
+    assert "from .daemon" not in body
     assert "stop_daemon" not in body
+    assert "stop_all_daemons" not in body
 
 
 def test_update_refuses_a_source_checkout(monkeypatch):
@@ -477,9 +514,9 @@ def test_pip_target_flags_ask_for_user_when_the_environment_is_read_only(monkeyp
 
 def test_module_docstring_documents_the_rules():
     """The invariants above are only safe because they are written down."""
-    doc = textwrap.dedent(selfupdate.__doc__)
-    assert "updating an installation is a client-side operation" in doc
-    assert "never write over the running installation" in doc.lower()
+    doc = textwrap.dedent(selfupdate.__doc__).lower()
+    assert "updating an installation is a\nclient-side operation" in doc
+    assert "never write over the running installation" in doc
 
 
 def test_install_standalone_refuses_to_unpack_into_the_running_bundle(monkeypatch, standalone):
@@ -491,3 +528,54 @@ def test_install_standalone_refuses_to_unpack_into_the_running_bundle(monkeypatc
         # would target the directory currently being executed.
         selfupdate._install_standalone("0.7.158", "partcad/partcad", lambda _m: None)
     assert (running / "pc").read_text() == "old"
+
+
+# ---------------------------------------------------------------------------
+# The reaper: removing the bundle this process is running out of.
+# ---------------------------------------------------------------------------
+
+
+def test_reap_after_exit_removes_the_directory_once_the_process_is_gone(tmp_path, monkeypatch):
+    """For real: a throwaway process stands in for the one being updated."""
+    import subprocess
+    import time
+
+    doomed = tmp_path / "0.7.158"
+    doomed.mkdir()
+    (doomed / "pc").write_text("old")
+    (doomed / "_internal").mkdir()
+    (doomed / "_internal" / "lib.so").write_text("payload")
+
+    victim = subprocess.Popen(["/bin/sh", "-c", "sleep 30"])
+    monkeypatch.setattr(selfupdate.os, "getpid", lambda: victim.pid)
+    try:
+        selfupdate._reap_after_exit(str(doomed), lambda _m: None)
+        # Still there while the process lives: the whole point is not deleting
+        # files out from under a running bundle.
+        time.sleep(0.5)
+        assert doomed.is_dir()
+
+        victim.terminate()
+        victim.wait(timeout=10)
+        deadline = time.monotonic() + 15
+        while doomed.exists() and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert not doomed.exists()
+    finally:
+        if victim.poll() is None:
+            victim.kill()
+
+
+def test_reap_after_exit_reports_rather_than_raises_when_it_cannot_start(tmp_path, monkeypatch):
+    """A machine without /bin/sh keeps its stale bundle; it does not fail the update."""
+    doomed = tmp_path / "0.7.158"
+    doomed.mkdir()
+
+    def no_processes(*args, **kwargs):
+        raise OSError("no such file or directory")
+
+    monkeypatch.setattr(selfupdate.subprocess, "Popen", no_processes)
+    messages = []
+    selfupdate._reap_after_exit(str(doomed), messages.append)
+    assert any("next update will remove it" in m for m in messages)
+    assert doomed.is_dir()

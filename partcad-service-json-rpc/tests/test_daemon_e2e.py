@@ -17,7 +17,7 @@ import pytest
 
 import partcad_service_json_rpc
 from partcad_service_json_rpc import daemon
-from partcad_service_json_rpc.transport.framing import read_message, write_message
+from partcad_utils.framing import read_message, write_message
 
 if not hasattr(socket, "AF_UNIX"):
     pytest.skip("AF_UNIX not available on this platform", allow_module_level=True)

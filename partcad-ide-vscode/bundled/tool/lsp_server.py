@@ -416,7 +416,7 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     service already carries PartCAD.
 
     Once PartCAD *is* installed, the update that happens is the one `pc update`
-    performs: `partcad_utils.selfupdate`, so the extension and the CLI cannot
+    performs: `partcad_client_utils.selfupdate`, so the extension and the CLI cannot
     pick versions differently. The pip bootstrap below only runs when there is
     nothing installed yet to update.
     """
@@ -501,7 +501,7 @@ def _do_self_update() -> bool:
     version up when it is next restarted.
     """
     try:
-        from partcad_utils import selfupdate
+        from partcad_client_utils import selfupdate
     except ImportError:
         return False
 

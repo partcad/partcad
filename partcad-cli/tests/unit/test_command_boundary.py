@@ -101,8 +101,9 @@ CLI_STARTUP_MODULES = (
     "click/service.py",
 )
 
-# `partcad_utils` and `partcad_service_json_rpc` are the deliberately cheap
-# packages the client is allowed to import, so the match has to be exact.
+# `partcad_utils`, `partcad_client_utils` and `partcad_service_json_rpc` are the
+# deliberately cheap packages the client is allowed to import, so the match has
+# to be exact.
 HEAVY_PACKAGE = "partcad"
 
 CommandModule = namedtuple("CommandModule", "rel partcad_imports imports_run run_calls unresolved_run_calls")
@@ -374,7 +375,9 @@ def test_cli_startup_path_does_not_import_partcad_at_module_level():
 
                 Every `pc` invocation pays that ~1.6s, including `pc --help` and the
                 commands that only talk to the daemon. `partcad_utils` carries the pieces
-                the client genuinely needs (logging, telemetry, user_config); anything
-                else belongs behind a function-level import, the way
+                every component shares (logging, telemetry, user_config) and
+                `partcad_client_utils` the ones only a client needs (daemon discovery and
+                connection, self-update); anything else belongs behind a function-level
+                import, the way
                 command.py::get_partcad_context defers `from partcad.globals import init`.
                 """).format(details=details))

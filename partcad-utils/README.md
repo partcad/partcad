@@ -1,7 +1,8 @@
 # partcad-utils
 
 Shared lightweight utilities for the [PartCAD](https://github.com/partcad/partcad)
-ecosystem: logging, telemetry, and user configuration.
+ecosystem: logging, telemetry, user configuration, and the client/daemon
+rendezvous.
 
 These modules are deliberately free of any CAD-kernel dependency, so importing
 them is cheap. That is what lets the thin clients — `partcad-cli`, the
@@ -18,28 +19,24 @@ cost of importing the full `partcad` package on every invocation.
   locally (ANSI or plain).
 - `telemetry`, `telemetry_none`, `telemetry_sentry` — the telemetry subsystem.
 - `user_config` — the user configuration model.
-- `selfupdate` — updating the PartCAD installation itself, whether it is the
-  Python wheels or the standalone bundle (see below).
+- `framing`, `workspace`, `win_pipe` — the client/daemon rendezvous (see below).
 - `utils` — small shared helpers.
 
-## Updating PartCAD itself
+## The client/daemon rendezvous
 
-`selfupdate` is what `pc update` runs, and — through `pc update --partcad-only` —
-what the VS Code extension's "Update PartCAD" runs. It is the only implementation
-of the operation, and it lives here rather than in the service because updating
-an installation is a **client-side** act: it is this machine's copy of PartCAD
-being replaced, by the process running from it. A daemon must not do it. A daemon
-can be remote, where "update PartCAD" would mean updating somebody else's
-installation, and a daemon that went looking for other daemons to stop would be
-racing every client on the machine.
+`framing` is the LSP-style `Content-Length` codec both ends speak. `workspace`
+(and `win_pipe`, its Windows counterpart) says which socket serves which
+workspace and whether anything is answering on it.
 
-So this module knows nothing about daemons. A caller that has one passes
-`before_install`, which runs once a newer version is confirmed and before the
-first byte is written; `pc update` uses it to stop its own workspace's daemon and
-wait for it. Nothing is written over the running installation either: a new
-standalone bundle is installed beside the old one, under
-`<install-dir>/<version>/`, so a daemon that was not stopped keeps serving from
-intact files until it is restarted.
+They are here, rather than on either side, because neither side owns them: a
+daemon binds the address these compute and a client looks for it at the same
+address, so a copy on each side is a copy that can disagree — and a disagreement
+means a client silently starting a second daemon beside the one already serving.
+
+Everything a *client* then does with a daemon — connecting, stopping it, waiting
+for it, enumerating the local ones — is
+[`partcad-client-utils`](../partcad-client-utils/README.md); serving is
+[`partcad-service-json-rpc`](../partcad-service-json-rpc/README.md).
 
 The `partcad` package aliases these modules back under its own namespace
 (`partcad.logging` is `partcad_utils.logging`), so existing code that imports

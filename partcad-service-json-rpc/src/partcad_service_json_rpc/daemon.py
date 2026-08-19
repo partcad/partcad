@@ -3,81 +3,37 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Per-workspace daemon lifecycle for the socket channel.
+"""Starting the per-workspace daemon, and serving from it.
 
-A daemon serves one workspace (keyed by a hash of its root path) over an AF_UNIX
-socket at ``~/.partcad/workspaces/<hash>/socket``. Callers run
-:func:`ensure_daemon`, which prints the socket path to stdout and, if no live
-daemon is found, starts one (double-forked and detached on POSIX) that serves a
-warm shared session.
+This is the daemon's own half. Callers run :func:`ensure_daemon`, which prints
+the endpoint to stdout and, if no live daemon is found, starts one (double-forked
+and detached on POSIX) that serves a warm shared session.
 
-Root discovery here replicates PartCAD's ``Context`` walk-up deliberately, so the
-hot path (a CLI command that only needs to find and connect to a live daemon)
-never imports the heavy ``partcad`` module.
+Where that endpoint is, and whether something is answering on it, is the
+rendezvous both ends have to agree on, so it is defined once in
+``partcad_utils.workspace`` and imported here. Everything a *client* does with a
+daemon -- finding it, connecting, stopping it and waiting for it to go -- lives
+in ``partcad_client_utils``; a daemon has no business doing any of that, least of
+all to daemons other than itself.
 """
 
 import contextlib
-import hashlib
 import os
 import signal
 import socket
 import sys
-import time
 from typing import Callable, Optional
 
+from partcad_utils.workspace import (
+    LIVENESS_TIMEOUT,
+    determine_root_path,
+    is_alive,
+    pid_path,
+    socket_path,
+)
+
 from .rpc.methods import build_registry
-from .transport.framing import read_message, write_message
 from .transport.socket_server import SocketServer
-
-LIVENESS_TIMEOUT = 1.0
-
-# How long to wait for a daemon that acknowledged `daemon.stop` to actually be
-# gone. Generous on purpose: the caller that waits is an update about to replace
-# the files the daemon runs from, and being slow there beats being wrong.
-STOP_TIMEOUT = 30.0
-
-
-def determine_root_path(start: Optional[str] = None) -> str:
-    """Find the workspace root the way ``partcad.Context`` does, without importing
-    partcad. Walks up while a parent ``partcad.yaml`` exists."""
-    root = os.path.abspath(start or os.getcwd())
-    if os.path.isfile(root):
-        root = os.path.dirname(root)
-    while os.path.exists(os.path.join(root, "..", "partcad.yaml")):
-        root = os.path.abspath(os.path.join(root, ".."))
-    return root
-
-
-def workspace_hash(root_path: str) -> str:
-    # Truncated so the AF_UNIX socket path stays under the ~108-char limit.
-    return hashlib.sha256(root_path.encode("utf-8")).hexdigest()[:16]
-
-
-def workspace_dir(root_path: str) -> str:
-    return os.path.join(os.path.expanduser("~"), ".partcad", "workspaces", workspace_hash(root_path))
-
-
-def socket_path(root_path: str) -> str:
-    return os.path.join(workspace_dir(root_path), "socket")
-
-
-def is_alive(path: str, timeout: float = LIVENESS_TIMEOUT) -> bool:
-    """True if a daemon answers ``rpc.discover`` on the socket within ``timeout``."""
-    if not os.path.exists(path):
-        return False
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.settimeout(timeout)
-    try:
-        client.connect(path)
-        stream = client.makefile("rwb")
-        write_message(stream, {"jsonrpc": "2.0", "id": 0, "method": "rpc.discover", "params": {}})
-        response = read_message(stream)
-        return isinstance(response, dict) and response.get("id") == 0 and "result" in response
-    except OSError:
-        return False
-    finally:
-        with contextlib.suppress(OSError):
-            client.close()
 
 
 @contextlib.contextmanager
@@ -194,120 +150,10 @@ def _redirect_std_fds(log_path: str) -> None:
 
 def _write_pid(wdir: str) -> None:
     with contextlib.suppress(OSError):
-        with open(os.path.join(wdir, "pid"), "w", encoding="utf-8") as f:
+        with open(pid_path(wdir), "w", encoding="utf-8") as f:
             f.write(str(os.getpid()))
 
 
 def _cleanup(wdir: str) -> None:
     with contextlib.suppress(OSError):
-        os.unlink(os.path.join(wdir, "pid"))
-
-
-def stop_daemon(
-    root_path: Optional[str] = None,
-    timeout: float = LIVENESS_TIMEOUT,
-    wait: float = 0.0,
-) -> bool:
-    """Ask the workspace daemon to stop. True only if it acknowledged the stop.
-
-    An acknowledgement means the daemon has *decided* to stop, not that it has
-    finished doing so. Pass ``wait`` (seconds) to also block until the process is
-    actually gone -- required before anything replaces the files it runs from.
-    """
-    root = root_path or determine_root_path()
-
-    # As in ensure_daemon: the AF_UNIX path below does not exist on Windows.
-    if os.name == "nt":  # pragma: no cover - exercised only on Windows
-        from .win_pipe import pipe_name, stop_pipe_daemon
-
-        pipe = pipe_name(root)
-        stopped = stop_pipe_daemon(pipe, timeout)
-        if stopped and wait:
-            from .win_pipe import is_pipe_alive
-
-            _wait_until(lambda: not is_pipe_alive(pipe, timeout), wait)
-        return stopped
-
-    sock = socket_path(root)
-    stopped = _stop_socket_daemon(sock, timeout)
-    if stopped and wait:
-        wait_until_stopped(os.path.dirname(sock), timeout=wait, liveness_timeout=timeout)
-    return stopped
-
-
-def _stop_socket_daemon(sock: str, timeout: float = LIVENESS_TIMEOUT) -> bool:
-    """Send ``daemon.stop`` to the daemon listening on ``sock``; True if acked."""
-    if not is_alive(sock, timeout):
-        return False
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.settimeout(timeout)
-    try:
-        client.connect(sock)
-        stream = client.makefile("rwb")
-        write_message(stream, {"jsonrpc": "2.0", "id": 0, "method": "daemon.stop", "params": {}})
-        # Report success only on an acknowledged stop, so the CLI does not
-        # claim "stopped" for a daemon that never answered.
-        reply = read_message(stream)
-        return isinstance(reply, dict) and "result" in reply
-    except OSError:
-        return False
-    finally:
-        with contextlib.suppress(OSError):
-            client.close()
-
-
-def _wait_until(predicate: Callable[[], bool], timeout: float, interval: float = 0.1) -> bool:
-    """Poll ``predicate`` until it is true or ``timeout`` seconds have passed."""
-    deadline = time.monotonic() + timeout
-    while True:
-        if predicate():
-            return True
-        if time.monotonic() >= deadline:
-            return False
-        time.sleep(interval)
-
-
-def _daemon_pid(wdir: str) -> Optional[int]:
-    try:
-        with open(os.path.join(wdir, "pid"), encoding="utf-8") as f:
-            return int(f.read().strip())
-    except (OSError, ValueError):
-        return None
-
-
-def _pid_is_running(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        # Somebody else's process holds the pid; not our daemon, but not proof
-        # it is gone either. Treat it as running rather than declare success.
-        return True
-    except OSError:
-        return False
-    return True
-
-
-def wait_until_stopped(
-    wdir: str,
-    timeout: float = STOP_TIMEOUT,
-    liveness_timeout: float = LIVENESS_TIMEOUT,
-) -> bool:
-    """Block until the daemon serving ``wdir`` is really gone. True if it is.
-
-    A daemon that acknowledged ``daemon.stop`` still has to unwind: finish the
-    in-flight call, tear the warm context down, and exit. Both signals are
-    checked, because either one alone can lie -- the socket stops answering
-    before the process exits, and the pid file is removed by a cleanup handler
-    that a crashed daemon never reaches.
-    """
-    sock = os.path.join(wdir, "socket")
-    pid = _daemon_pid(wdir)
-
-    def gone() -> bool:
-        if is_alive(sock, liveness_timeout):
-            return False
-        return pid is None or not _pid_is_running(pid)
-
-    return _wait_until(gone, timeout)
+        os.unlink(pid_path(wdir))

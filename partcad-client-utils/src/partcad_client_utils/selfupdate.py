@@ -11,24 +11,28 @@ PyInstaller bundle that carries its own interpreter (installed by `install.sh`,
 or downloaded by the VS Code extension). This module is the one place that knows
 the difference.
 
-It lives in `partcad-utils`, the package every thin client already depends on,
-because **updating an installation is a client-side operation**. It is *this*
-machine's copy of PartCAD that gets replaced, by the process that runs from it.
-A daemon must not do it: a daemon can be remote, where "update PartCAD" would
-mean updating somebody else's installation, and a daemon that went looking for
-other daemons to stop would be racing every client on the machine. So nothing
-here knows what a daemon is. A caller that has one passes ``before_install``,
+It lives in `partcad-client-utils` because **updating an installation is a
+client-side operation**: it is *this* machine's copy of PartCAD that gets
+replaced, by the process that runs from it. A daemon must not do it -- a daemon
+can be remote, where "update PartCAD" would mean updating somebody else's
+installation.
+
+Even so, nothing here knows what a daemon is. A caller passes ``before_install``,
 which runs once a newer version is confirmed and before the first byte is
-written -- see `pc update`, which uses it to stop its own workspace's daemon and
-wait for it.
+written; `pc update` uses it to stop every daemon running locally (through
+:mod:`partcad_client_utils.daemon`) and wait for them, because they are all
+executing the files about to be replaced.
 
 The other rule is **never write over the running installation**. The standalone
 bundle is installed side by side, under ``<install-dir>/<version>/``, exactly the
-layout ``install.sh`` produces; the launcher symlinks are then repointed. Nothing
-deletes the directory the current process is executing from -- which is what
-makes the update safe on Windows, where that would fail outright, what lets the
-frozen `pc` update itself, and what leaves any daemon that was not stopped still
-serving from intact files until it is restarted.
+layout ``install.sh`` produces; the launcher symlinks are then repointed. That is
+what makes the update safe on Windows, where overwriting a running executable
+fails outright, what lets the frozen `pc` update itself, and what leaves a daemon
+that outlived the stop still serving from intact files.
+
+Superseded bundles are then removed -- all of them, including the one this
+process is running from, which cannot delete itself and is handed to a detached
+reaper that waits for this process to exit first. See :func:`_reap_after_exit`.
 """
 
 import contextlib
@@ -37,6 +41,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -61,7 +66,13 @@ DEFAULT_REPOSITORY = "partcad/partcad"
 # the ones actually installed are upgraded: `partcad-cli` pulls the rest in, but
 # an environment provisioned for the VS Code extension has
 # `partcad-service-json-rpc` and no CLI at all.
-DISTRIBUTIONS = ("partcad-cli", "partcad-service-json-rpc", "partcad", "partcad-utils")
+DISTRIBUTIONS = (
+    "partcad-cli",
+    "partcad-service-json-rpc",
+    "partcad",
+    "partcad-client-utils",
+    "partcad-utils",
+)
 
 # The executables a standalone bundle contains, which is also what `install.sh`
 # links into the bin directory.
@@ -100,8 +111,8 @@ def installation_kind() -> str:
 def current_version() -> str:
     """The version of the running installation.
 
-    Every component in the monorepo is released under one version, so the
-    service's own is the installation's.
+    Every component in the monorepo is released under one version, so this
+    package's own is the installation's.
     """
     return __version__
 
@@ -354,7 +365,7 @@ def _install_standalone(version: str, repo: str, log: Callable[[str], None]) -> 
 
     _make_executable(target)
     _relink_launchers(target, root, log)
-    _prune_old_versions(root, keep=(target, running), log=log)
+    _prune_old_versions(root, keep=target, running=running, log=log)
     return target
 
 
@@ -426,23 +437,29 @@ def _bin_dirs() -> List[str]:
     return unique
 
 
-def _prune_old_versions(root: str, keep: tuple, log: Callable[[str], None]) -> None:
-    """Delete superseded bundle directories. A bundle is ~875MB unpacked.
+def _prune_old_versions(root: str, keep: str, running: str, log: Callable[[str], None]) -> None:
+    """Delete every superseded bundle. A bundle is ~875MB unpacked, so all of it.
 
-    The directory the current process runs from is always kept -- deleting it
-    fails outright on Windows, and it is still being executed everywhere else.
-    The next update collects it.
+    ``running`` -- the bundle this process is executing out of -- is superseded
+    too, and it is the one directory that cannot simply be removed: on Windows
+    deleting a running executable fails outright, and on POSIX a PyInstaller
+    bundle loads shared libraries out of its own directory as it goes. It is
+    handed to :func:`_reap_after_exit` instead, which removes it once this
+    process is gone. Everything else goes now.
     """
-    protect = {os.path.realpath(path) for path in keep}
-    removed = []
+    protect = os.path.realpath(keep)
+    removed, deferred = [], None
     for entry in sorted(glob.glob(os.path.join(root, "*"))):
         if not os.path.isdir(entry) or os.path.islink(entry):
             continue
-        if os.path.realpath(entry) in protect:
+        if os.path.realpath(entry) == protect:
             continue
         # Only directories that hold a bundle, so an unrelated neighbour of the
         # installation directory is never touched.
         if not os.path.isfile(os.path.join(entry, "pc" + (".exe" if os.name == "nt" else ""))):
+            continue
+        if os.path.realpath(entry) == os.path.realpath(running):
+            deferred = entry
             continue
         try:
             shutil.rmtree(entry)
@@ -451,6 +468,54 @@ def _prune_old_versions(root: str, keep: tuple, log: Callable[[str], None]) -> N
             log("Warning: could not remove the previous bundle %s: %s" % (entry, e))
     if removed:
         log("Removed the previous bundle(s): %s" % ", ".join(removed))
+    if deferred:
+        _reap_after_exit(deferred, log)
+
+
+def _reap_after_exit(path: str, log: Callable[[str], None]) -> None:
+    """Remove ``path`` once this process has exited, from a detached helper.
+
+    The helper is a shell loop rather than a PartCAD executable, deliberately:
+    it must not run out of the directory it is deleting, and it must outlive
+    this process without holding its streams open. `sh` is on every POSIX
+    machine and `cmd` on every Windows one, so this needs nothing installed.
+
+    Best effort by design. If the helper cannot be started the directory simply
+    stays, is reported, and the next update removes it -- the same place this
+    ends up if the machine loses power mid-loop.
+    """
+    pid = os.getpid()
+    try:
+        if os.name == "nt":  # pragma: no cover - exercised only on Windows
+            # `tasklist` filtered by PID prints a header only once the process
+            # is gone, which is what `find` keys on.
+            command = (
+                'for /l %%x in (1,0,2) do @( tasklist /fi "PID eq {pid}" | find "{pid}" >nul '
+                '|| ( rmdir /s /q "{path}" & exit ) ) & timeout /t 1 >nul'
+            ).format(pid=pid, path=path)
+            subprocess.Popen(  # nosec B603 - argv is built here, not from input
+                ["cmd", "/c", command],
+                creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+                close_fds=True,
+            )
+        else:
+            script = "while kill -0 %d 2>/dev/null; do sleep 0.2; done; rm -rf %s" % (
+                pid,
+                shlex.quote(path),
+            )
+            subprocess.Popen(  # nosec B603 - argv is built here, not from input
+                ["/bin/sh", "-c", script],
+                start_new_session=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+            )
+    except OSError as e:
+        log("Warning: %s could not be scheduled for removal (%s); the next update will remove it." % (path, e))
+        return
+    log("The previous bundle %s will be removed when this command exits." % path)
 
 
 def _download(url: str, dest: str) -> None:

@@ -418,10 +418,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 // reconnect afterwards -- to the new executable, which is at a
                 // new path once the update installed one.
                 try {
-                    // Stop this workspace's daemon before anything replaces the
-                    // files it is executing. `pc update` would do it too, but the
-                    // fallback download path does not, and this connection has to
-                    // go either way.
+                    // `pc update` stops every local daemon itself; this covers
+                    // the fallback download path, which does not, and this
+                    // connection has to go either way.
                     await lsClient?.stopDaemon?.();
                     const result = await updateServiceBundle(context, serverId, outputChannel);
                     if (!result.execPath) {

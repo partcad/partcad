@@ -23,7 +23,7 @@ import threading
 from typing import Callable, Mapping, Optional
 
 from ..rpc.dispatcher import Dispatcher, Handler
-from .framing import read_message, write_message
+from partcad_utils.framing import read_message, write_message
 
 STOP_METHOD = "daemon.stop"
 

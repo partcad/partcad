@@ -5,9 +5,15 @@ CLI interface (`pc` / `partcad` commands) to most `partcad` core functionality. 
 the `partcad` package in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
 
 `pc daemon start` / `pc daemon stop` manage the per-workspace background daemon from
-[`partcad-service-json-rpc`](../partcad-service-json-rpc): `start` goes through
-`partcad_service_json_rpc.client.start_daemon()`, while `stop` calls
-`partcad_service_json_rpc.daemon.stop_daemon()` directly.
+[`partcad-service-json-rpc`](../partcad-service-json-rpc), through
+[`partcad-client-utils`](../partcad-client-utils): `start` goes through
+`partcad_client_utils.client.start_daemon()` (forwarding the daemon-affecting globals —
+`--offline`, `--force-update`, `--python-sandbox`, verbosity — which otherwise stop at the client's own
+`user_config`), while `stop` calls `partcad_client_utils.daemon.stop_daemon()`.
+
+These two are also the VS Code extension's way in. It does not derive socket paths or probe liveness itself: it
+runs `pc daemon start`, reads the endpoint from stdout, and connects — so there is one implementation of "where
+is the daemon", not one per language.
 
 ## Command boundary
 
@@ -20,18 +26,19 @@ the output never depends on a working directory. A package-mutating command *mus
 daemon's warm context keeps serving the pre-mutation package.
 
 `pc update` is the one command that is **both**, and deliberately. Its package half is a daemon call like any
-other. Its self-update half (`partcad_utils.selfupdate`) replaces this machine's copy of PartCAD, which only
-the process running from it can do: a daemon can be remote, where "update PartCAD" would mean updating somebody
-else's installation. It stays within the boundary's letter as well as its spirit — `selfupdate` lives in the
-deliberately cheap `partcad-utils`, so the command never imports the heavy `partcad`.
+other. Its self-update half (`partcad_client_utils.selfupdate`) replaces this machine's copy of PartCAD, which
+only the process running from it can do: a daemon can be remote, where "update PartCAD" would mean updating
+somebody else's installation. It stays within the boundary's letter as well as its spirit — `selfupdate` lives
+in the deliberately cheap `partcad-client-utils`, so the command never imports the heavy `partcad`.
 
-This command owns the one bit of daemon handling the update needs, because `selfupdate` deliberately has none:
-its workspace's daemon runs from the files about to be replaced, so `pc update` stops it and waits for it
-(`daemon.stop_daemon(wait=...)`) through the `before_install` hook — after a newer version is confirmed, before
-anything is written. It stops **its** daemon and no others. Enumerating other workspaces' daemons would race
-every other client on the machine, and buys nothing: the new version is installed beside the old one, so a
-daemon left running keeps serving from intact files until it is restarted. The VS Code extension's "Update
-PartCAD" runs this very command, so the two cannot drift apart.
+This command owns the daemon handling the update needs, because `selfupdate` deliberately has none. Every
+daemon on this machine is executing the files about to be replaced, so `pc update` stops **all** of them and
+waits (`daemon.stop_all_daemons()`) through the `before_install` hook — after a newer version is confirmed,
+before anything is written, so a no-op update costs nobody their warm context. Doing that from a client is what
+keeps it simple: one process acting on its own machine, rather than daemons policing each other. A survivor is
+reported rather than fatal, because the new version is installed beside the old one and the old one is not
+removed until this command exits. The VS Code extension's "Update PartCAD" runs this very command, so the two
+cannot drift apart.
 
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
 `init` (creates the workspace, before any package or context exists), `config` (prints the client's resolved

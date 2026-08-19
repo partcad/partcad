@@ -21,13 +21,14 @@ filename = "partcad-cli/requirements.txt"
 search = "partcad=={current_version}"
 replace = "partcad=={new_version}"
 
-# `partcad-utils` and `partcad-service-json-rpc` were added to the monorepo
-# without being added here, so their versions stayed at whatever they were
-# created with while everything else moved. That is not cosmetic: `pc update`
-# compares `partcad_utils.__version__` against the newest release to decide
-# whether to update, so a stale constant means the CLI either never updates or
-# updates forever. `partcad-cli/tests/unit/test_versions.py` fails if any of
-# these fall out of step again.
+# Every package in the monorepo, and every pin between them. `partcad-utils` and
+# `partcad-service-json-rpc` were once added without being added here, so their
+# versions stayed at whatever they were created with while everything else moved.
+# That is not cosmetic: `pc update` compares `partcad_client_utils.__version__`
+# against the newest release to decide whether to update, so a stale constant
+# means the CLI either never updates or updates forever.
+# `partcad-cli/tests/unit/test_versions.py` fails if any of these fall out of
+# step again, or if any entry below stops matching the file it names.
 [[tool.bumpversion.files]]
 filename = "partcad-utils/pyproject.toml"
 search = "version = \"{current_version}\""
@@ -37,6 +38,26 @@ replace = "version = \"{new_version}\""
 filename = "partcad-utils/src/partcad_utils/__init__.py"
 search = "__version__ = \"{current_version}\""
 replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-client-utils/pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-client-utils/src/partcad_client_utils/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-client-utils/requirements.txt"
+search = "partcad-utils=={current_version}"
+replace = "partcad-utils=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "partcad-cli/requirements.txt"
+search = "partcad-client-utils=={current_version}"
+replace = "partcad-client-utils=={new_version}"
 
 [[tool.bumpversion.files]]
 filename = "partcad-service-json-rpc/pyproject.toml"

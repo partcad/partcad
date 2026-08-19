@@ -198,6 +198,7 @@ runs:
         # pin it, and it is not published on PyPI, so it has to be satisfied from
         # this checkout before anything that depends on it.
         python -m pip install --upgrade ./partcad-utils
+        python -m pip install --upgrade ./partcad-client-utils
         # Install all core and a subset of CLI dependencies, that are required for tests.
         # The 'lint' extra brings in ruff, which 'pc lint' needs and the behave suite exercises.
         python -m pip install --upgrade './partcad[lint]'

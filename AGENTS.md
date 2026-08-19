@@ -23,22 +23,32 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
   so a client need not have a CAD environment at all. That is what decides whether a command runs in the client
   or on the daemon — see "Command boundary" in `partcad-cli/AGENTS.md`.
 
-  It does **not** update PartCAD itself: that is `partcad_utils.selfupdate`, run by the client. See
-  `partcad-utils` below.
+  It does **not** update PartCAD itself, and does not discover or stop daemons: those are
+  `partcad_client_utils`, run by the client. See `partcad-client-utils` below.
 
 * [partcad-utils](./partcad-utils/README.md):
 
-  The lightweight pieces every component shares without a CAD-kernel dependency: logging, telemetry, user
-  configuration — and `selfupdate`, the one implementation of "update PartCAD itself", for the wheels and for
-  the standalone bundle alike.
+  The lightweight pieces **every** component shares without a CAD-kernel dependency: logging, telemetry, user
+  configuration — and the client/daemon rendezvous, `framing` and `workspace` (which socket serves which
+  workspace, and whether anything is answering on it). The rendezvous lives here precisely because neither end
+  owns it: a copy on each side is a copy that can disagree, and a disagreement is a client silently starting a
+  second daemon.
 
-  Updating an installation is a **client-side** act: it is this machine's copy of PartCAD being replaced, by
-  the process running from it. It lives here, rather than in the daemon, because a daemon can be remote (where
-  "update PartCAD" would mean updating somebody else's installation) and because a daemon that went looking for
-  other daemons to stop would be racing every client on the machine. So `selfupdate` knows nothing about
-  daemons; a caller that has one passes `before_install`, which is what `pc update` uses to stop its own
-  workspace's daemon and wait for it. `pc update` and the VS Code extension's "Update PartCAD" both end up
-  here — the extension by running `pc update --partcad-only` — so the two cannot drift apart.
+* [partcad-client-utils](./partcad-client-utils/README.md):
+
+  What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to
+  it (`daemon`, `client`), and replacing this installation of PartCAD (`selfupdate`).
+
+  All of it acts on **this machine**, from the process running out of it. A daemon can be remote, where
+  "update PartCAD" would mean updating somebody else's installation and "stop the local daemons" somebody
+  else's daemons; and a daemon that went looking for its neighbours would be racing every client on the
+  machine. A client is one process acting on its own machine, which is what makes `pc update` stopping every
+  local daemon a sane thing to do rather than a distributed algorithm.
+
+  `selfupdate` itself knows nothing even about that: a caller passes `before_install`, which `pc update` uses
+  to stop the local daemons and wait for them. `pc update` and the VS Code extension's "Update PartCAD" both
+  end up here — the extension by running `pc update --partcad-only` — as does the extension's daemon discovery,
+  through `pc daemon start`. Nothing about daemons or updating is reimplemented in TypeScript.
 
 * [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
 
@@ -107,7 +117,8 @@ so this never affects a commit.
 From the repo root, inside the environment:
 
 ```bash
-poetry run pytest partcad partcad-cli -x -p no:error-for-skips -p no:warnings --dist no  # unit tests (matches CI)
+poetry run pytest partcad partcad-cli partcad-utils partcad-client-utils partcad-service-json-rpc \
+  -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```
 

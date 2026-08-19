@@ -3,7 +3,13 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Tests for daemon discovery/liveness (the non-forking parts)."""
+"""Tests for starting the daemon (the non-forking parts).
+
+Where the socket lives and whether anything answers on it is
+`partcad_utils.workspace`, tested there; stopping and enumerating daemons is
+`partcad_client_utils.daemon`, tested there. What is left here is the service's
+own half: `ensure_daemon` reusing a daemon that is already serving.
+"""
 
 import os
 import pathlib
@@ -40,36 +46,6 @@ def socket_dir():
         shutil.rmtree(path, ignore_errors=True)
 
 
-def test_workspace_hash_is_deterministic_and_16_hex():
-    h = daemon.workspace_hash("/some/root")
-    assert h == daemon.workspace_hash("/some/root")
-    assert len(h) == 16
-    assert all(c in "0123456789abcdef" for c in h)
-    assert daemon.workspace_hash("/other") != h
-
-
-def test_socket_path_lives_under_partcad_workspaces(monkeypatch, tmp_path):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    p = daemon.socket_path("/some/root")
-    expected = os.path.join(str(tmp_path), ".partcad", "workspaces", daemon.workspace_hash("/some/root"), "socket")
-    assert p == expected
-
-
-def test_determine_root_path_walks_up_to_the_topmost_partcad_yaml(tmp_path):
-    root = tmp_path / "proj"
-    sub = root / "a" / "b"
-    sub.mkdir(parents=True)
-    (root / "partcad.yaml").write_text("desc: test\n")
-    (root / "a" / "partcad.yaml").write_text("desc: nested\n")
-    assert daemon.determine_root_path(str(sub)) == str(root.resolve())
-
-
-def test_determine_root_path_without_partcad_yaml_is_the_directory_itself(tmp_path):
-    d = tmp_path / "plain"
-    d.mkdir()
-    assert daemon.determine_root_path(str(d)) == str(d.resolve())
-
-
 def _serve(path, registry):
     server = SocketServer(Session(), registry)
     threading.Thread(target=server.serve_unix, args=(path,), daemon=True).start()
@@ -83,25 +59,6 @@ def _serve(path, registry):
             break
         time.sleep(0.01)
     return server
-
-
-def test_is_alive_false_when_socket_absent(tmp_path):
-    assert daemon.is_alive(str(tmp_path / "nope")) is False
-
-
-def test_is_alive_false_when_socket_file_is_stale(socket_dir):
-    stale = socket_dir / "socket"
-    stale.write_text("")  # a plain file, nothing listening
-    assert daemon.is_alive(str(stale)) is False
-
-
-def test_is_alive_true_when_a_daemon_is_serving(socket_dir):
-    path = str(socket_dir / "socket")
-    server = _serve(path, build_registry())
-    try:
-        assert daemon.is_alive(path) is True
-    finally:
-        server.stop()
 
 
 def test_ensure_daemon_returns_existing_socket_when_alive(monkeypatch, capsys):
@@ -120,56 +77,6 @@ def test_ensure_daemon_returns_existing_socket_when_alive(monkeypatch, capsys):
         returned = daemon.ensure_daemon(lambda: Session(), root_path=root)
         assert returned == sock
         assert capsys.readouterr().out.strip() == sock  # path printed to stdout
-    finally:
-        server.stop()
-        shutil.rmtree(home, ignore_errors=True)
-
-
-# ---------------------------------------------------------------------------
-# Stopping a daemon, and waiting for it.
-#
-# `pc update` replaces the files its workspace's daemon is running from, so "it
-# acknowledged the stop" is not good enough: this is what makes the difference
-# between asking and knowing. Only ever this workspace's daemon -- finding other
-# daemons to stop would be racing every other client on the machine.
-# ---------------------------------------------------------------------------
-
-
-def test_wait_until_stopped_returns_immediately_when_nothing_is_running(socket_dir):
-    assert daemon.wait_until_stopped(str(socket_dir), timeout=1.0) is True
-
-
-def test_wait_until_stopped_is_false_while_a_daemon_is_serving(socket_dir):
-    server = _serve(str(socket_dir / "socket"), build_registry())
-    try:
-        assert daemon.wait_until_stopped(str(socket_dir), timeout=0.5) is False
-    finally:
-        server.stop()
-
-
-def test_wait_until_stopped_is_false_while_the_pid_is_still_alive(socket_dir):
-    """The socket goes quiet before the process exits; both are checked."""
-    (socket_dir / "pid").write_text(str(os.getpid()))
-    assert daemon.wait_until_stopped(str(socket_dir), timeout=0.5) is False
-
-
-def test_wait_until_stopped_ignores_a_stale_pid_file(socket_dir):
-    # A daemon killed outright never runs its cleanup handler, so the pid file
-    # outlives it. Waiting forever on that would block every future update.
-    (socket_dir / "pid").write_text("2147483646")
-    assert daemon.wait_until_stopped(str(socket_dir), timeout=1.0) is True
-
-
-def test_stop_daemon_waits_for_the_daemon_to_be_gone(monkeypatch):
-    home = tempfile.mkdtemp(prefix="pch", dir="/tmp")
-    monkeypatch.setenv("HOME", home)
-    root = "/some/root"
-    sock = daemon.socket_path(root)
-    os.makedirs(os.path.dirname(sock), exist_ok=True)
-    server = _serve(sock, build_registry())
-    try:
-        assert daemon.stop_daemon(root, wait=10.0) is True
-        assert daemon.is_alive(sock) is False
     finally:
         server.stop()
         shutil.rmtree(home, ignore_errors=True)

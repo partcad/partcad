@@ -21,7 +21,7 @@ from pathlib import Path
 import partcad_utils.logging_remote_client as _remote_client
 import partcad_utils.telemetry as _telemetry
 import rich_click as click
-from partcad_service_json_rpc import client as _client
+from partcad_client_utils import client as _client
 
 # Deliberate emitter.info()/warn()/error() notifications carry a bare string;
 # render them as log lines through the same client-side renderer as the streamed

@@ -77,6 +77,18 @@ function whichOnPath(exe: string): string | undefined {
     return undefined;
 }
 
+/**
+ * The `pc` executable beside a resolved `partcad-json-rpc`, if there is one.
+ *
+ * The extension defers to the CLI for everything about daemons -- where they
+ * are, whether they are alive, stopping them, and updating the installation
+ * under them -- so this is how it finds the CLI to defer to.
+ */
+export function cliBeside(execPath: string): string | undefined {
+    const candidate = path.join(path.dirname(execPath), process.platform === 'win32' ? 'pc.exe' : 'pc');
+    return isFile(candidate) ? candidate : undefined;
+}
+
 function cachedBundleRoot(context: vscode.ExtensionContext): string {
     return path.join(context.globalStorageUri.fsPath, 'partcad-bundle');
 }
@@ -198,10 +210,11 @@ export async function ensureServiceExecutable(
  *
  * The extension implements none of this: it runs `pc update --partcad-only`
  * from the bundle it is already using, which is the same command a user would
- * type in a terminal. `pc` decides whether anything is newer, stops its
- * workspace's daemon and waits for it, and installs the new version beside the
- * old one. The extension's part is to show what is happening and to hand back
- * the executable to reconnect to -- a different path once a new version is in.
+ * type in a terminal. `pc` decides whether anything is newer, stops every daemon
+ * running on the machine and waits for them, installs the new version beside the
+ * old one, and leaves no superseded bundle behind. The extension's part is to
+ * show what is happening and to hand back the executable to reconnect to -- a
+ * different path once a new version is in.
  *
  * Returns `updated: false` when the installation was already current -- not a
  * failure, and the reason the caller can reconnect to the same executable.
@@ -219,8 +232,8 @@ export async function updateServiceBundle(
         return { updated: !!downloaded, execPath: downloaded };
     }
 
-    const cli = path.join(path.dirname(execPath), process.platform === 'win32' ? 'pc.exe' : 'pc');
-    if (isFile(cli)) {
+    const cli = cliBeside(execPath);
+    if (cli) {
         const env = { ...process.env };
         const repo = getServiceDownloadRepositoryFromSetting(serverId);
         if (repo) {

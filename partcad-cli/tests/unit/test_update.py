@@ -17,7 +17,7 @@ import partcad_cli.click.commands.update as update_command
 import pytest
 from click.testing import CliRunner
 from partcad_cli.click.command import cli
-from partcad_utils import selfupdate
+from partcad_client_utils import selfupdate
 from partcad_utils.user_config import user_config
 
 
@@ -163,32 +163,47 @@ def test_offline_skips_the_version_check_but_not_the_packages(click_runner: Iter
 # ---------------------------------------------------------------------------
 # The daemon half, which is the command's and not the updater's.
 #
-# `pc update` replaces the files its workspace's daemon is executing, so it stops
-# that daemon and waits for it -- and only that one. Hunting for other
-# workspaces' daemons would race every other client on this machine, and is
-# unnecessary: the new version is installed beside the old, not over it.
+# Every daemon on this machine executes the files `pc update` replaces, so it
+# stops all of them and waits. Doing that from a client is what keeps it simple:
+# one process acting on its own machine, rather than daemons policing each other.
 # ---------------------------------------------------------------------------
 
 
-def test_the_daemon_is_stopped_only_when_something_is_installed(
+def test_the_daemons_are_stopped_only_when_something_is_installed(
     click_runner: Iterator[CliRunner], recorder, monkeypatch
 ) -> None:
-    from partcad_service_json_rpc import daemon
+    from partcad_client_utils import daemon
 
-    stops = []
-    monkeypatch.setattr(daemon, "stop_daemon", lambda *a, **kw: stops.append(kw) or True)
+    calls = []
+    monkeypatch.setattr(daemon, "live_daemon_dirs", lambda *a, **kw: ["/tmp/ws-a", "/tmp/ws-b"])
+    monkeypatch.setattr(daemon, "stop_all_daemons", lambda *a, **kw: calls.append(True) or ["/tmp/ws-a", "/tmp/ws-b"])
 
     _invoke(click_runner)
-    assert stops == []  # nothing newer was found
+    assert calls == []  # nothing newer was found
 
     recorder.update_result = {**recorder.update_result, "updated": True}
-    _invoke(click_runner)
-    assert len(stops) == 1
-    assert stops[0]["wait"] == daemon.STOP_TIMEOUT  # asked to stop *and* waited for
+    result = _invoke(click_runner)
+    assert calls == [True]
+    assert "Stopping 2 running PartCAD daemon(s)" in result.output
+
+
+def test_a_daemon_that_will_not_stop_is_reported_not_fatal(
+    click_runner: Iterator[CliRunner], recorder, monkeypatch
+) -> None:
+    """Side-by-side install is what makes a survivor survivable; say so and go on."""
+    from partcad_client_utils import daemon
+
+    monkeypatch.setattr(daemon, "live_daemon_dirs", lambda *a, **kw: ["/tmp/ws-a", "/tmp/ws-b"])
+    monkeypatch.setattr(daemon, "stop_all_daemons", lambda *a, **kw: ["/tmp/ws-a"])
+
+    recorder.update_result = {**recorder.update_result, "updated": True}
+    result = _invoke(click_runner)
+    assert result.exit_code == 0
+    assert "1 PartCAD daemon(s) did not stop" in result.output
 
 
 def test_update_installs_only_after_a_real_daemon_is_gone(click_runner: Iterator[CliRunner], monkeypatch) -> None:
-    """The requirement, end to end: stop it, wait for it, *then* install.
+    """The requirement, end to end: stop them, wait, *then* install.
 
     A real daemon is started and the installer is stubbed to record, at the
     moment it runs, whether anything still answers on the socket.
@@ -203,30 +218,35 @@ def test_update_installs_only_after_a_real_daemon_is_gone(click_runner: Iterator
     if not hasattr(socket_module, "AF_UNIX"):
         pytest.skip("AF_UNIX not available on this platform")
 
-    from partcad_service_json_rpc import daemon
+    from partcad_client_utils import daemon
+    from partcad_client_utils import selfupdate as real_selfupdate
     from partcad_service_json_rpc.core.session import Session
     from partcad_service_json_rpc.rpc.methods import build_registry
     from partcad_service_json_rpc.transport.socket_server import SocketServer
-    from partcad_utils import selfupdate as real_selfupdate
 
     # A short HOME under /tmp keeps the AF_UNIX socket path under ~108 chars.
     home = tempfile.mkdtemp(prefix="pch", dir="/tmp")
     monkeypatch.setenv("HOME", home)
-    root = daemon.determine_root_path()
-    sock = daemon.socket_path(root)
-    os.makedirs(os.path.dirname(sock), exist_ok=True)
-
-    server = SocketServer(Session(), build_registry())
-    threading.Thread(target=server.serve_unix, args=(sock,), daemon=True).start()
-    for _ in range(500):
-        if server._server_sock is not None:
-            break
-        time.sleep(0.01)
+    # Two workspaces, so "all local daemons" is more than "this one".
+    socks = []
+    servers = []
+    for name in ("aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb"):
+        wdir = os.path.join(daemon.workspaces_dir(), name)
+        os.makedirs(wdir, exist_ok=True)
+        sock = os.path.join(wdir, "socket")
+        server = SocketServer(Session(), build_registry())
+        threading.Thread(target=server.serve_unix, args=(sock,), daemon=True).start()
+        for _ in range(500):
+            if server._server_sock is not None:
+                break
+            time.sleep(0.01)
+        socks.append(sock)
+        servers.append(server)
 
     observed = {}
 
     def install(version, repo, log):
-        observed["alive_at_install"] = daemon.is_alive(sock)
+        observed["alive_at_install"] = [s for s in socks if daemon.is_alive(s)]
         return "/installed/%s" % version
 
     monkeypatch.setattr(real_selfupdate, "installation_kind", lambda: real_selfupdate.KIND_STANDALONE)
@@ -235,10 +255,11 @@ def test_update_installs_only_after_a_real_daemon_is_gone(click_runner: Iterator
     monkeypatch.setattr(real_selfupdate, "_install_standalone", install)
 
     try:
-        assert daemon.is_alive(sock) is True
+        assert all(daemon.is_alive(s) for s in socks)
         result = click_runner.invoke(cli, ["--no-ansi", "update", "--partcad-only"])
         assert result.exit_code == 0, result.output
-        assert observed["alive_at_install"] is False
+        assert observed["alive_at_install"] == []
     finally:
-        server.stop()
+        for server in servers:
+            server.stop()
         shutil.rmtree(home, ignore_errors=True)

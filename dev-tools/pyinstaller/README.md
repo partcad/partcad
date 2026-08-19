@@ -66,7 +66,7 @@ separately in `.github/actions/setup-all/action.yml`.
 The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
 `partcad-<version>-<os>-<arch>.tar.gz` (`.zip` on Windows), and its `.sha256`. The archive name is a contract
 with three consumers that derive it independently: `install.sh` (from `uname`),
-`partcad_utils.selfupdate` (from `sys.platform`/`platform.machine()`, which is what `pc update` and
+`partcad_client_utils.selfupdate` (from `sys.platform`/`platform.machine()`, which is what `pc update` and
 the VS Code extension use to update a bundle in place), and the extension's own first-time download
 (`src/common/provision.ts`, from `process.platform`/`process.arch`). So is the archive's single top-level
 `partcad/` directory: all three unpack it and rename that directory to `<install-dir>/<version>/`, which is

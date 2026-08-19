@@ -134,11 +134,13 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-cli/"
   cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-service-json-rpc/"
   cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-utils/"
+  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-client-utils/"
 
   echo "==> Installing PartCAD from this checkout"
   # The shared partcad-utils is installed first: partcad (and the CLI/service)
   # pin it, and it is not on PyPI, so it must come from this checkout.
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-utils" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-client-utils" "${SETUPTOOLS_BOUND}"
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras that the wheels leave to the user are all built in.
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint]" "${SETUPTOOLS_BOUND}"

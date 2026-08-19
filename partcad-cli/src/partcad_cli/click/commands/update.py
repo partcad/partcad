@@ -16,20 +16,24 @@ a client-side act: it is this machine's copy of PartCAD being replaced, by the
 process running from it. A daemon must not do it -- a daemon can be remote,
 where "update PartCAD" would mean updating somebody else's installation.
 
-This command owns the one piece of daemon handling the update needs: its own
-workspace's daemon runs from the files about to be replaced, so it is asked to
-stop and waited for -- but only once a newer version has been found, so a no-op
-`pc update` never costs anybody their warm context. It stops *its* daemon and no
-others: hunting for other workspaces' daemons would race every other client on
-the machine, and is unnecessary, because the new version is installed beside the
-old one rather than over it. A daemon left running keeps serving from intact
-files until it is restarted.
+This command owns the daemon handling the update needs, because the updater
+deliberately has none. **Every** daemon running on this machine executes the
+files about to be replaced, so every one of them is asked to stop and waited for
+-- but only once a newer version has been found, so a no-op `pc update` never
+costs anybody their warm context. Doing that from a client is what makes it
+simple: one process, acting on the machine it runs on, rather than daemons
+trying to police each other.
+
+Any daemon that outlives the stop is not fatal. The new version is installed
+beside the old one, so a survivor keeps serving from intact files -- and the old
+bundle is not removed until this command exits, by which time the survivor is
+the only thing that could still be reading it.
 
 The package half stays a thin daemon call, as it has always been.
 """
 
 import rich_click as click
-from partcad_utils import selfupdate
+from partcad_client_utils import selfupdate
 
 from ..service import run
 
@@ -104,7 +108,7 @@ def _update_partcad(check_only: bool, to_version: str, fatal: bool) -> bool:
         # `update` narrates itself through the log callback: what it found and
         # where the new version landed. `before_install` runs in between, once
         # something newer is confirmed and before anything is written.
-        result = selfupdate.update(to_version=to_version, log=click.echo, before_install=_stop_workspace_daemon)
+        result = selfupdate.update(to_version=to_version, log=click.echo, before_install=_stop_local_daemons)
         return bool(result.get("updated"))
     except selfupdate.SelfUpdateError as e:
         if fatal:
@@ -113,18 +117,30 @@ def _update_partcad(check_only: bool, to_version: str, fatal: bool) -> bool:
         return False
 
 
-def _stop_workspace_daemon() -> None:
-    """Stop this workspace's daemon and wait for it to actually be gone.
+def _stop_local_daemons() -> None:
+    """Stop every daemon running on this machine and wait for them to be gone.
 
-    Run just before the new version is written, because the daemon is executing
-    the files that are about to be replaced. Waiting is the point: an
-    acknowledgement means the daemon has decided to stop, not that it has
-    finished tearing its warm context down.
+    Run just before the new version is written, because each one is executing
+    files that are about to be replaced. Waiting is the point: an
+    acknowledgement means a daemon has decided to stop, not that it has finished
+    tearing its warm context down.
+
+    A daemon that will not go is reported rather than fatal -- see the module
+    docstring for why that is survivable.
     """
-    from partcad_service_json_rpc import daemon
+    from partcad_client_utils import daemon
 
-    if daemon.stop_daemon(wait=daemon.STOP_TIMEOUT):
-        click.echo("Stopped the PartCAD daemon for this workspace.")
+    running = daemon.live_daemon_dirs()
+    if not running:
+        return
+    click.echo("Stopping %d running PartCAD daemon(s)..." % len(running))
+    stopped = daemon.stop_all_daemons()
+    left = len(running) - len(stopped)
+    if left:
+        click.echo(
+            "Warning: %d PartCAD daemon(s) did not stop; they keep running the previous version "
+            "until they are restarted." % left
+        )
 
 
 def _report_check(status: dict) -> None:
