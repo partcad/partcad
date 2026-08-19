@@ -1,0 +1,234 @@
+# The PartCAD IDE: the editor, the PartCAD extension and the command line tools
+# in one application, for users who install an IDE rather than a toolchain.
+name: IDE # Keep the action badge icon short
+
+on:
+  workflow_dispatch:
+  # Called by "deploy.yml", which uploads the archives to the GitHub release.
+  workflow_call:
+    inputs:
+      build_tools:
+        description: >-
+          Build the standalone command line bundles as part of this workflow.
+          Set it to false when the caller has already built them in this run:
+          a called workflow shares the run's artifacts, so building them twice
+          only costs an hour per platform.
+        type: boolean
+        default: true
+  merge_group:
+  # Not on every change: this builds the standalone command line bundles first,
+  # to put them inside the IDE, and those pull ~500MB of OpenCASCADE per runner.
+  # Only the changes that can alter what ships. The two lists are duplicated
+  # because GitHub Actions does not support YAML anchors.
+  push:
+    branches: ["devel"]
+    paths:
+      - "partcad-ide-standalone/**"
+      - "partcad-ide-vscode/**"
+      - ".vscode/extensions.json"
+      - "install.sh"
+      - ".github/workflows/build-ide-standalone.yml"
+  pull_request:
+    branches: ["main", "devel"]
+    paths:
+      - "partcad-ide-standalone/**"
+      - "partcad-ide-vscode/**"
+      - ".vscode/extensions.json"
+      - "install.sh"
+      - ".github/workflows/build-ide-standalone.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  # The build tooling's own tests: the extension policy, the branding, the
+  # checks the build runs on its result. Seconds, and they fail before an hour
+  # of building does.
+  tools:
+    name: "Build tooling"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Install pytest
+        run: python -m pip install pytest
+      # `-o addopts=` because the repository-wide options in pyproject.toml pull
+      # in coverage and reporting plugins this job has no use for.
+      - name: Run the tests
+        run: python -m pytest partcad-ide-standalone/tests -o addopts= -v
+
+  # The command line tools that go inside the IDE. The same bundles that are
+  # published on their own, built by the same workflow, so the IDE cannot ship
+  # tools that differ from the ones `install.sh` installs.
+  bundles:
+    name: "Command line tools"
+    if: ${{ inputs.build_tools != false }}
+    uses: ./.github/workflows/build-standalone.yml
+
+  build:
+    name: "Build (${{ matrix.platform }})"
+    needs: [tools, bundles]
+    # "bundles" is skipped when the caller built the tools itself, and a skipped
+    # dependency would otherwise skip this job with it.
+    if: >-
+      ${{ !cancelled()
+      && needs.tools.result == 'success'
+      && (needs.bundles.result == 'success' || needs.bundles.result == 'skipped') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          # macos-latest is arm64; there is no macos x86_64 bundle to put
+          # inside an x86_64 IDE, so there is no x86_64 IDE either. Same
+          # reasoning as in "build-standalone.yml".
+          - os: macos-latest
+            platform: macos-arm64
+          - os: windows-latest
+            platform: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      # Xvfb: installing an extension runs the editor, which wants a display
+      # even when it never opens a window. Cairo: the icons are rendered from
+      # the project's logo. Neither is available on the Windows runner, and the
+      # build says what it left out rather than failing.
+      - name: Install system prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes xvfb libcairo2-dev
+      - name: Install system prerequisites
+        if: runner.os == 'macOS'
+        run: brew install cairo
+
+      - name: Install the icon renderers
+        continue-on-error: true
+        run: python -m pip install cairosvg pillow
+
+      - name: Download the command line tools
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-standalone-${{ matrix.platform }}
+          path: bundles
+
+      - name: Unpack the command line tools
+        shell: bash
+        run: |
+          mkdir -p dist/standalone
+          archive=$(find bundles -type f \( -name "partcad-*.tar.gz" -o -name "partcad-*.zip" \) ! -name "*.sha256")
+          echo "Unpacking ${archive}"
+          case "${archive}" in
+          *.tar.gz) tar -xzf "${archive}" -C dist/standalone ;;
+          *.zip) unzip -q "${archive}" -d dist/standalone ;;
+          esac
+          test -d dist/standalone/partcad
+
+      - name: Build the IDE
+        shell: bash
+        run: partcad-ide-standalone/build.sh --with-cli-bundle dist/standalone/partcad
+
+      - name: Upload the IDE
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-ide-${{ matrix.platform }}
+          path: |
+            dist/ide/*.tar.gz
+            dist/ide/*.zip
+            dist/ide/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  # What a user does: download the archive this run produced and install it with
+  # the script from the front page, on a machine that has never seen PartCAD.
+  install:
+    name: "Install (${{ matrix.platform }})"
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: macos-latest
+            platform: macos-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the IDE
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-ide-${{ matrix.platform }}
+          path: archives
+
+      - name: Install with install.sh
+        shell: bash
+        run: |
+          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' partcad/src/partcad/__init__.py)
+          sh install.sh --ide \
+            --version "${version}" \
+            --base-url "file://${PWD}/archives" \
+            --install-dir "${HOME}/partcad-standalone" \
+            --bin-dir "${HOME}/partcad-bin" \
+            --app-dir "${HOME}/Applications"
+
+      - name: Run what was installed
+        shell: bash
+        run: |
+          export PATH="${HOME}/partcad-bin:${PATH}"
+          # From a directory that is not the checkout, so nothing can resolve
+          # against the sources by accident.
+          cd "${HOME}"
+          partcad-ide --version
+          # The command line tools the IDE carries, rather than a second copy.
+          pc version
+
+      - name: Check the IDE ships what it is supposed to
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            resources="${HOME}/Applications/PartCAD IDE.app/Contents/Resources"
+          else
+            resources="$(dirname "$(dirname "$(readlink -f "${HOME}/partcad-bin/partcad-ide")")")/resources"
+          fi
+          ls "${resources}/app/extensions"
+          # Matched without regard to case: the editor lowercases the directory
+          # it installs an extension into.
+          find "${resources}/app/extensions" -maxdepth 1 -iname "openvmp.partcad-*" | grep -q . || {
+            echo "::error::the installed IDE has no PartCAD extension"
+            exit 1
+          }
+          test -x "${resources}/partcad-cli/partcad-json-rpc"
+
+      - name: Uninstall with install.sh
+        shell: bash
+        run: |
+          sh install.sh --uninstall \
+            --install-dir "${HOME}/partcad-standalone" \
+            --bin-dir "${HOME}/partcad-bin" \
+            --app-dir "${HOME}/Applications"
+          test ! -e "${HOME}/partcad-bin/partcad-ide"
+          test ! -e "${HOME}/Applications/PartCAD IDE.app"

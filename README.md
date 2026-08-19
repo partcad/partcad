@@ -188,7 +188,22 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 Note, it's not required but highly recommended that you have [conda] installed. If you experience any difficulty
 installing or using any PartCAD tool, then make sure to install [conda].
 
+### PartCAD IDE
+
+The whole thing in one application: the editor, the PartCAD extension, and the command line tools. No Python,
+no extensions to pick, no environment to set up. It opens in the PartCAD workbench.
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --ide
+```
+
+On Windows, download `partcad-ide-<version>-windows-x86_64.zip` from the
+[releases](https://github.com/partcad/partcad/releases) and unpack it. See
+[Installation](https://partcad.readthedocs.io/en/latest/installation.html) for the details.
+
 ### Extension for Visual Studio Code
+
+Already using Visual Studio Code? Install the extension into it instead of the IDE above.
 
 This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing
 [its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad).

@@ -1,0 +1,40 @@
+{
+  "name": "partcad-ide-bootstrap",
+  "displayName": "PartCAD IDE",
+  "description": "Opens the PartCAD workbench and connects the IDE to the PartCAD tools it ships with.",
+  "version": "0.0.0",
+  "publisher": "PartCAD",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/partcad/partcad.git"
+  },
+  "homepage": "https://partcad.org/",
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "PartCAD IDE",
+      "properties": {
+        "partcadIde.openWorkbenchOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the PartCAD workbench when the IDE starts. Turn this off to have the IDE open wherever you left it, like a plain editor."
+        },
+        "partcadIde.useBundledTools": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the PartCAD command line tools that ship with this IDE: point the PartCAD extension at the bundled service, and put `pc` on the PATH of the integrated terminal. Turn this off to use a PartCAD installation of your own."
+        }
+      }
+    }
+  }
+}
