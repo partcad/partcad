@@ -161,12 +161,12 @@ def test_the_activity_bar_is_reported(tmp_path, capsys):
     manifest = extensions / "OpenVMP.partcad-1.0.0" / "package.json"
     package = json.loads(manifest.read_text(encoding="utf-8"))
     package["contributes"] = {
-        "viewsContainers": {"activitybar": [{"id": "partcad-container", "title": "PartCAD (Beta)"}]}
+        "viewsContainers": {"activitybar": [{"id": "partcad-container", "title": "PartCAD"}]}
     }
     manifest.write_text(json.dumps(package), encoding="utf-8")
 
     assert run(resources, tmp_path) == 0
-    assert "activity bar: PartCAD (Beta) (partcad-container, from openvmp.partcad)" in capsys.readouterr().out
+    assert "activity bar: PartCAD (partcad-container, from openvmp.partcad)" in capsys.readouterr().out
 
 
 def test_an_extension_with_no_activity_bar_icon_is_not_reported(tmp_path, capsys):

@@ -751,7 +751,7 @@
       "activitybar": [
         {
           "id": "partcad-container",
-          "title": "PartCAD (Beta)",
+          "title": "PartCAD",
           "icon": "resources/logo.svg"
         }
       ]

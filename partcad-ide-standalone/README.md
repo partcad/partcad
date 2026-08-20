@@ -125,6 +125,10 @@ PartCAD extension contributes -- so the IDE opens on the PartCAD Explorer rather
 also points `partcad.servicePath` at the bundled `partcad-json-rpc` and prepends the tools directory to the
 PATH of the integrated terminal, so `pc` works in it without the user installing anything.
 
+The IDE's other view of PartCAD comes from the package rather than from here: `pc init` adds a **Render**
+command to the repository's `.vscode/launch.json` (see `partcad/src/partcad/launch_config.py`), so "Run and
+Debug" has something in it that renders the package the moment there is a package to render.
+
 Both behaviors have a setting (`partcadIde.openWorkbenchOnStartup`, `partcadIde.useBundledTools`), and both
 notice when they have nothing to work with: in an editor without the PartCAD extension, or without tools next
 to the application, the extension does nothing rather than failing.

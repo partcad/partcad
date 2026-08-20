@@ -81,6 +81,7 @@ from .globals import (
     init,
     render,
 )
+from .launch_config import add_render_configuration
 from .logging_ansi_terminal import fini as logging_ansi_terminal_fini
 from .logging_ansi_terminal import init as logging_ansi_terminal_init
 from .part import Part
@@ -117,6 +118,7 @@ __all__ = [
     "ProviderRequestCaps",
     "Shape",
     "UserConfig",
+    "add_render_configuration",
     "config",
     "context",
     "convert_assembly",

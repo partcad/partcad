@@ -1018,6 +1018,9 @@ def init(session, params):
         if os.path.isdir(path):
             path = os.path.join(path, "partcad.yaml")
         if session.partcad.create_package(path):
+            # The same "Render" command `pc init` adds, for the same reason: the
+            # IDE shows it in "Run and Debug" as soon as the package exists.
+            session.partcad.add_render_configuration(os.path.dirname(os.path.abspath(path)))
             session.partcad_ctx = session.partcad.init(path)
             if session.partcad_ctx and not getattr(session.partcad_ctx, "broken", False):
                 session.emitter.emit(
