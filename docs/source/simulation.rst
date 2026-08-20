@@ -103,6 +103,19 @@ density turns those into a mass. Since PartCAD still has nowhere to record what
 a part is *made of*, that density is a parameter of the export with a default
 rather than a property of the part - the first gap this page proposes to close.
 
+A link's name, and the properties looked up under it, come from the label on the
+shape the exporter is handed - and there is one way that goes wrong today. The
+shape cache is keyed by geometry, deliberately, so that two parts reading the
+same mesh file do not compute it twice; but the entry carries the name and label
+of whichever part wrote it, and the other part reads back wearing a name that is
+not its own. Every consumer of a cached shape has that problem, and the URDF
+export is simply the first to key on the answer. The fix belongs in the cache,
+which should hand a shape back under the name it was asked for, so it is left
+for a change of its own. Until it lands, exporting parts that share geometry
+with other parts in the package can name a link after the wrong one and miss the
+properties declared on it; ``test_export_reports_properties_urdf_cannot_state``
+is marked ``xfail`` for exactly that reason.
+
 Converting between the two
 ==========================
 
