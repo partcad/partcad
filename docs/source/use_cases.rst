@@ -143,8 +143,8 @@ FreeCAD or its paid alternatives.
 
 For FreeCAD there is a plugin: the ``PartCAD`` workbench (``partcad-cad-freecad``
 in the repository, see :doc:`installation`) lists the packages,
-parts and assemblies PartCAD can reach, asks for a part's parameters, and imports
-the result into the open document.
+parts and assemblies PartCAD can reach, asks for the part's or assembly's
+parameters, and imports the result into the open document.
 
 For the other apps, no plugin is available yet. Export the models to STEP or 3MF
 files and import those files into the CAD Design GUI of your choice.

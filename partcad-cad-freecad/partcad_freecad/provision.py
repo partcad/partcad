@@ -260,6 +260,9 @@ def _extract_zip(archive: str, dest: str) -> None:
 
     ``ZipFile.extract`` drops them, which would leave the bundle's executables
     non-executable -- the failure only shows up when the service is launched.
+    It does sanitize the member paths itself (leading separators and ``..``
+    components are removed), so there is no traversal check to add here; the
+    tar path needs one because ``extractall`` does not.
     """
     with zipfile.ZipFile(archive) as zf:
         for info in zf.infolist():
@@ -271,12 +274,31 @@ def _extract_zip(archive: str, dest: str) -> None:
                 os.chmod(path, mode)
 
 
+def _safe_members(tf, dest: str):
+    """The members of ``tf`` that may be written under ``dest``.
+
+    The stand-in for ``filter="data"`` on interpreters that do not have it (it
+    arrived in 3.12, and in the later patch releases of 3.10/3.11 -- FreeCAD
+    embeds its own interpreter, so which one runs this is not ours to choose).
+    Same policy: nothing may escape the destination, and links and device/FIFO
+    entries are dropped rather than recreated.
+    """
+    root = os.path.realpath(dest)
+    for member in tf:
+        if member.issym() or member.islnk() or not (member.isfile() or member.isdir()):
+            continue
+        target = os.path.realpath(os.path.join(root, member.name))
+        if target != root and not target.startswith(root + os.sep):
+            continue
+        yield member
+
+
 def _extract_tar(archive: str, dest: str) -> None:
     with tarfile.open(archive, "r:*") as tf:
         try:
-            tf.extractall(dest, filter="data")  # nosec B202 - trusted, checksum-verified archive
-        except TypeError:  # pragma: no cover - Python < 3.12 has no filter argument
-            tf.extractall(dest)  # nosec B202 - trusted, checksum-verified archive
+            tf.extractall(dest, filter="data")  # nosec B202 - filtered by the stdlib data policy
+        except TypeError:  # pragma: no cover - only on interpreters without 'filter'
+            tf.extractall(dest, members=_safe_members(tf, dest))  # nosec B202 - filtered above
 
 
 def extract(archive: str, dest: str) -> None:

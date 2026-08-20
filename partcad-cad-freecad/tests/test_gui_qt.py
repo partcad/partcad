@@ -214,6 +214,89 @@ def test_the_import_button_uses_the_selected_item(explorer):
     assert controller.imported == ["//:cube"]
 
 
+def test_a_failing_import_is_reported_rather_than_raised(explorer, monkeypatch):
+    from partcad_freecad.gui import explorer as explorer_module
+
+    widget, controller = explorer
+    reported = []
+    monkeypatch.setattr(explorer_module.QtWidgets.QMessageBox, "critical", lambda *args: reported.append(args[2]))
+
+    def failing(_item, parent=None):
+        # The controller guards the export and the insert, but not the dialog it
+        # builds from the object's parameters.
+        raise ValueError("width: expected a number")
+
+    controller.import_item = failing
+    widget.tree.setCurrentItem(widget.tree.topLevelItem(1))
+
+    widget.import_selected()
+
+    assert reported and "expected a number" in reported[0]
+
+
+class FakeService:
+    """A PartCadService stand-in whose load either succeeds or fails."""
+
+    def __init__(self, contents=None, failure=None):
+        self.contents = contents
+        self.failure = failure
+        self.closed = False
+
+    def ensure_loaded(self):
+        pass
+
+    def init_package(self):
+        pass
+
+    def load_package(self):
+        if self.failure is not None:
+            raise self.failure
+        return self.contents
+
+    def close(self):
+        self.closed = True
+
+
+def _controller_with_package(app, monkeypatch, tmp_path, service):  # pylint: disable=unused-argument
+    """A controller pointed at a real package directory, with a stubbed service."""
+    from partcad_freecad.gui import controller as controller_module
+
+    (tmp_path / "partcad.yaml").write_text("name: test\n")
+    monkeypatch.setattr(controller_module.provision, "resolve_service_path", lambda _cache: "/opt/partcad-json-rpc")
+    monkeypatch.setattr(controller_module.settings, "set_package_dir", lambda _path: None)
+    monkeypatch.setattr(controller_module, "PartCadService", lambda *args, **kwargs: service)
+    return controller_module.Controller()
+
+
+def test_a_successful_load_installs_the_service(app, monkeypatch, tmp_path):
+    contents = parse_items({"name": "//", "parts": [{"name": "cube"}]})
+    service = FakeService(contents=contents)
+    controller = _controller_with_package(app, monkeypatch, tmp_path, service)
+
+    assert controller.open_package(str(tmp_path), parent=None) is contents
+    assert controller.service is service
+
+
+def test_a_failed_load_leaves_the_previous_package_in_place(app, monkeypatch, tmp_path):
+    working = FakeService(contents=parse_items({"name": "//", "parts": [{"name": "cube"}]}))
+    broken = FakeService(failure=RuntimeError("Package YAML file is not found"))
+    controller = _controller_with_package(app, monkeypatch, tmp_path, working)
+    controller.open_package(str(tmp_path), parent=None)
+
+    from partcad_freecad.gui import controller as controller_module
+
+    monkeypatch.setattr(controller_module, "PartCadService", lambda *args, **kwargs: broken)
+
+    with pytest.raises(RuntimeError, match="not found"):
+        controller.open_package(str(tmp_path), parent=None)
+
+    # The working package is still the one loaded, and the service that never
+    # loaded has been closed rather than left assigned.
+    assert controller.service is working
+    assert not working.closed
+    assert broken.closed
+
+
 def test_work_runs_off_the_qt_thread_and_returns_its_result(app):  # pylint: disable=unused-argument
     import threading
 

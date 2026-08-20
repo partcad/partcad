@@ -109,7 +109,7 @@ def test_every_command_advertises_an_icon_that_exists(stub_qt):
         assert os.path.isfile(resources["Pixmap"]), resources["Pixmap"]
 
 
-def test_a_failing_command_is_reported_before_it_propagates(stub_qt):
+def test_a_failing_command_is_reported_before_it_propagates(stub_qt, monkeypatch):
     from partcad_freecad.gui import commands
 
     class Failing(commands._Command):
@@ -117,7 +117,9 @@ def test_a_failing_command_is_reported_before_it_propagates(stub_qt):
             raise RuntimeError("no package")
 
     reported = []
-    commands.log.error = reported.append
+    # Through monkeypatch: `log` is the addon's real logging module, shared with
+    # every other test, not one of this fixture's stand-ins.
+    monkeypatch.setattr(commands.log, "error", reported.append)
 
     with pytest.raises(RuntimeError):
         Failing().Activated()

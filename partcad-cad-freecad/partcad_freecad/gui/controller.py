@@ -127,20 +127,30 @@ class Controller:
         if not executable:
             return None
 
-        if self.service is not None:
-            self.service.close()
-        self.service = PartCadService(executable, path, log=log.log)
+        # Kept local until the load succeeds. Assigning it up front would, on a
+        # failure, leave a service that never loaded in place of the working one
+        # -- with the explorer still showing the old tree and the Refresh/Import
+        # commands still enabled, because they only test `service is not None`.
+        service = PartCadService(executable, path, log=log.log)
 
         def work(progress):
             progress("Starting the PartCAD service...")
-            self.service.ensure_loaded()
+            service.ensure_loaded()
             if create:
                 progress("Creating the package...")
-                self.service.init_package()
+                service.init_package()
             progress("Loading %s..." % path)
-            return self.service.load_package()
+            return service.load_package()
 
-        contents = run_busy(parent, "PartCAD", "Loading the package...", work)
+        try:
+            contents = run_busy(parent, "PartCAD", "Loading the package...", work)
+        except Exception:
+            service.close()
+            raise
+
+        if self.service is not None:
+            self.service.close()
+        self.service = service
         settings.set_package_dir(path)
         log.info("loaded the package at %s" % path)
         return contents

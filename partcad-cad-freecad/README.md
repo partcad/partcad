@@ -70,10 +70,10 @@ The addon looks for `partcad-json-rpc` in this order:
 3. an `install.sh` installation (`~/.local/share/partcad/<version>/`, `~/.local/bin/`);
 4. anything named `partcad-json-rpc` on `PATH`.
 
-If none is found, it downloads one: the **latest GitHub release** carrying a bundle for your platform, or —
-when no release does, which is the case today — the **latest `devel` build**. Downloading a `devel` build uses
-the GitHub Actions artifact API, which rejects anonymous requests even for a public repository, so it needs a
-token in `PC_CAD_GITHUB_TOKEN` (or `GITHUB_TOKEN` / `GH_TOKEN`) with public repository read access.
+If none is found, it downloads one: the **latest GitHub release** carrying a bundle for your platform, or — when
+that release publishes no bundle for it — the **latest `devel` build**. Downloading a `devel` build uses the
+GitHub Actions artifact API, which rejects anonymous requests even for a public repository, so it needs a token
+in `PC_CAD_GITHUB_TOKEN` (or `GITHUB_TOKEN` / `GH_TOKEN`) with public repository read access.
 
 ## Environment variables
 

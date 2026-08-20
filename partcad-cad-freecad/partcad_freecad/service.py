@@ -175,7 +175,7 @@ class PartCadService:
         self.call("init", {"path": self.package_dir})
         self._check("failed to create a package in %s" % self.package_dir)
 
-    def export(self, item, path: str, params: Optional[dict] = None, format: str = "step") -> str:
+    def export(self, item, path: str, params: Optional[dict] = None, format_name: str = "step") -> str:
         """Render a part or an assembly to ``path``; return the path.
 
         ``export.part``/``export.assembly`` report a failed render through the
@@ -189,7 +189,7 @@ class PartCadService:
                 "package": item.package,
                 "name": item.name,
                 "params": params or {},
-                "type": format,
+                "type": format_name,
                 "path": path,
             },
         )

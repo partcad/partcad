@@ -17,6 +17,12 @@ from typing import Optional
 # Characters that are legal in a PartCAD object name but awkward in a file name.
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
+# Most filesystems cap one path component at 255 bytes. The stem grows with
+# every parameter name and value, so a part with many parameters (or one long
+# array value) would otherwise reach that cap and fail the export with a bare
+# "File name too long" that says nothing about the cause.
+_MAX_STEM = 120
+
 
 def step_filename(directory: str, item, params: Optional[dict] = None) -> str:
     """A collision-free path for the temporary STEP of one object instance.
@@ -27,6 +33,9 @@ def step_filename(directory: str, item, params: Optional[dict] = None) -> str:
     stem = _UNSAFE.sub("_", item.name).strip("_") or "object"
     if params:
         stem += "_" + "_".join("%s%s" % (name, _UNSAFE.sub("", str(params[name]))) for name in sorted(params))
+    # Truncation can make two variants collide; the loop below still separates
+    # them, and the label in the document carries the full parameter list.
+    stem = stem[:_MAX_STEM]
     candidate = os.path.join(directory, stem + ".step")
     index = 1
     while os.path.exists(candidate):
@@ -80,23 +89,32 @@ def insert_step(path: str, label: str, document=None):
     if document is None:
         document = FreeCAD.ActiveDocument or FreeCAD.newDocument("PartCAD")
 
-    before = {obj.Name for obj in document.Objects}
-    _import_module().insert(path, document.Name)
-    document.recompute()
-    created = [obj for obj in document.Objects if obj.Name not in before]
-    if not created:
-        raise RuntimeError("FreeCAD imported no objects from %s" % path)
+    # One transaction for the whole import, so the user undoes "Import cube" in
+    # a single step rather than object by object, and so a failure part-way
+    # through leaves no half-imported assembly behind.
+    document.openTransaction("PartCAD import %s" % label)
+    try:
+        before = {obj.Name for obj in document.Objects}
+        _import_module().insert(path, document.Name)
+        document.recompute()
+        created = [obj for obj in document.Objects if obj.Name not in before]
+        if not created:
+            raise RuntimeError("FreeCAD imported no objects from %s" % path)
 
-    labels = {obj.Label for obj in document.Objects if obj.Name not in {c.Name for c in created}}
-    roots = [obj for obj in created if not obj.InList]
-    if len(roots) == 1:
-        roots[0].Label = unique_label(labels, label)
-    elif roots:
-        # A multi-solid STEP arrives as several top-level objects; keep them
-        # together so a second import does not interleave with the first.
-        group = document.addObject("App::DocumentObjectGroup", "PartCAD")
-        group.Label = unique_label(labels, label)
-        group.Group = roots
-        created.append(group)
-    document.recompute()
+        labels = {obj.Label for obj in document.Objects if obj.Name not in {c.Name for c in created}}
+        roots = [obj for obj in created if not obj.InList]
+        if len(roots) == 1:
+            roots[0].Label = unique_label(labels, label)
+        elif roots:
+            # A multi-solid STEP arrives as several top-level objects; keep them
+            # together so a second import does not interleave with the first.
+            group = document.addObject("App::DocumentObjectGroup", "PartCAD")
+            group.Label = unique_label(labels, label)
+            group.Group = roots
+            created.append(group)
+        document.recompute()
+    except BaseException:
+        document.abortTransaction()
+        raise
+    document.commitTransaction()
     return created

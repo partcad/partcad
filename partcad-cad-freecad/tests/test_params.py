@@ -81,6 +81,37 @@ def test_values_are_coerced_to_the_declared_type(type_name, raw, expected):
     assert params.ParamSpec("p", type_name).coerce(raw) == expected
 
 
+def test_a_value_outside_a_declared_range_is_rejected():
+    # A spin box clamps an int on its own, but a float goes through a line edit
+    # whose validator lets an out-of-range value be typed, so the bound has to
+    # hold here or it holds for one type only.
+    spec = params.ParamSpec("width", params.TYPE_FLOAT, 5.0, min=1.0, max=10.0)
+
+    assert spec.coerce("10") == 10.0
+    with pytest.raises(ValueError, match="above the maximum"):
+        spec.coerce("10.1")
+    with pytest.raises(ValueError, match="below the minimum"):
+        spec.coerce("0.9")
+
+
+def test_a_parameter_without_a_range_accepts_anything_of_its_type():
+    assert params.ParamSpec("width", params.TYPE_FLOAT).coerce("-1e6") == -1e6
+
+
+def test_a_fractional_bound_on_an_int_is_not_truncated():
+    spec = params.ParamSpec("count", params.TYPE_INT, 2, min=1.5)
+
+    assert spec.coerce("2") == 2
+    with pytest.raises(ValueError, match="below the minimum"):
+        spec.coerce("1")
+
+
+def test_bounds_do_not_apply_to_non_numeric_parameters():
+    spec = params.ParamSpec("label", params.TYPE_STRING, "a", min=1, max=2)
+
+    assert spec.coerce("zzz") == "zzz"
+
+
 def test_a_bad_value_names_the_parameter():
     with pytest.raises(ValueError, match="width"):
         params.ParamSpec("width", params.TYPE_FLOAT).coerce("wide")

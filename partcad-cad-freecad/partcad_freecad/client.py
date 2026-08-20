@@ -25,6 +25,9 @@ from .framing import read_message, write_message
 # Do not pop up a console window for the launcher/service on Windows.
 _NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
+# Seconds to wait for the local daemon socket to accept a connection.
+CONNECT_TIMEOUT = 10.0
+
 
 class ServiceError(RuntimeError):
     """A JSON-RPC error returned by the service."""
@@ -97,7 +100,14 @@ def _connect_socket(executable: str, cwd: Optional[str], extra_args) -> JsonRpcC
         stream = open(path, "r+b", buffering=0)  # pragma: no cover - Windows only
         return JsonRpcClient(stream, stream, closer=stream.close)
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    # Bound the connect: the daemon is local and answers immediately or not at
+    # all, so a hang here means a stale socket, not slow work. The deadline is
+    # then cleared for the session -- PartCAD operations legitimately run for
+    # minutes (cloning a repository, building a sandbox, running a CAD script),
+    # and a read deadline would abort them mid-flight.
+    sock.settimeout(CONNECT_TIMEOUT)
     sock.connect(path)
+    sock.settimeout(None)
     stream = sock.makefile("rwb")
 
     def closer():
@@ -119,15 +129,25 @@ def _connect_stdio(executable: str, cwd: Optional[str], extra_args) -> JsonRpcCl
     )
 
     def closer():
+        # Closing stdin is what asks the service to exit; the rest is making
+        # sure it is actually gone and its pipes are released. A killed child
+        # still has to be waited on to be reaped, and the read pipe is the one
+        # the client held, so nothing else will close it.
         try:
             proc.stdin.close()
         except Exception:  # pylint: disable=broad-except
             pass
         try:
-            proc.wait(timeout=5)
-        except Exception:  # pylint: disable=broad-except
             try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait()
+        except Exception:  # pylint: disable=broad-except
+            pass
+        finally:
+            try:
+                proc.stdout.close()
             except Exception:  # pylint: disable=broad-except
                 pass
 

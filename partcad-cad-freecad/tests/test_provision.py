@@ -151,6 +151,7 @@ def _bundle_tar(path, executable_name):
     return path
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Windows has no executable bit; chmod only toggles read-only")
 def test_a_tar_bundle_unpacks_with_the_executable_bit_intact(tmp_path):
     archive = _bundle_tar(str(tmp_path / "bundle.tar.gz"), provision.EXE)
     dest = str(tmp_path / "out")
@@ -162,6 +163,7 @@ def test_a_tar_bundle_unpacks_with_the_executable_bit_intact(tmp_path):
     assert os.stat(exe).st_mode & stat.S_IXUSR
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Windows has no executable bit; chmod only toggles read-only")
 def test_a_zip_bundle_unpacks_with_the_executable_bit_intact(tmp_path):
     archive = str(tmp_path / "bundle.zip")
     with zipfile.ZipFile(archive, "w") as zf:
@@ -174,6 +176,59 @@ def test_a_zip_bundle_unpacks_with_the_executable_bit_intact(tmp_path):
 
     exe = os.path.join(dest, "partcad", "partcad-json-rpc")
     assert os.stat(exe).st_mode & stat.S_IXUSR
+
+
+def test_a_zip_bundle_unpacks_its_contents(tmp_path):
+    """The part of the zip round trip that is meaningful on every platform."""
+    archive = str(tmp_path / "bundle.zip")
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("partcad/partcad-json-rpc", "#!/bin/sh\n")
+    dest = str(tmp_path / "out")
+
+    provision.extract(archive, dest)
+
+    assert os.path.isfile(os.path.join(dest, "partcad", "partcad-json-rpc"))
+
+
+def test_the_tar_member_policy_drops_what_must_not_be_written(tmp_path):
+    # The stand-in for filter="data" on interpreters that lack it. Anything that
+    # escapes the destination, and every link or special file, has to go.
+    archive = str(tmp_path / "hostile.tar.gz")
+    payload = tmp_path / "payload"
+    payload.write_text("x")
+    with tarfile.open(archive, "w:gz") as tf:
+        tf.add(str(payload), arcname="partcad/ok")
+        for name in ("../escape", "partcad/../../escape"):
+            tf.add(str(payload), arcname=name)
+        # Written through TarInfo rather than add(): add() strips the leading
+        # separator itself, so only a hand-crafted archive carries a genuinely
+        # absolute member -- which is the one worth rejecting.
+        absolute = tarfile.TarInfo("/etc/partcad-escape")
+        absolute.size = 0
+        tf.addfile(absolute)
+        link = tarfile.TarInfo("partcad/link")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "/etc/passwd"
+        tf.addfile(link)
+        fifo = tarfile.TarInfo("partcad/fifo")
+        fifo.type = tarfile.FIFOTYPE
+        tf.addfile(fifo)
+
+    dest = str(tmp_path / "out")
+    with tarfile.open(archive) as tf:
+        kept = [member.name for member in provision._safe_members(tf, dest)]
+
+    assert kept == ["partcad/ok"]
+
+
+def test_the_tar_member_policy_keeps_a_normal_bundle(tmp_path):
+    archive = _bundle_tar(str(tmp_path / "bundle.tar.gz"), provision.EXE)
+    dest = str(tmp_path / "out")
+
+    with tarfile.open(archive) as tf:
+        kept = [member.name for member in provision._safe_members(tf, dest)]
+
+    assert kept == ["partcad/" + provision.EXE]
 
 
 def test_a_checksum_line_is_parsed_the_way_sha256sum_writes_it():
@@ -268,8 +323,9 @@ def test_a_release_with_a_bundle_for_this_platform_is_used(tmp_path, monkeypatch
 def test_a_release_without_a_bundle_falls_back_to_the_devel_build(tmp_path, monkeypatch):
     monkeypatch.setattr(provision, "resolve_service_path", lambda _cache: None)
     monkeypatch.setattr(provision, "platform_archive", lambda: ("linux-x86_64", "tar.gz"))
-    # The latest release ships only the wheels, which is the state of the
-    # repository's own releases today.
+    # A release that publishes the wheels but no standalone bundle for this
+    # platform: the archives are a later addition than the wheels, so a tag can
+    # have none.
     monkeypatch.setattr(provision, "latest_release_tag", lambda repo: "0.7.135")
     monkeypatch.setattr(provision, "url_exists", lambda url: False)
     monkeypatch.setattr(provision, "download_release", lambda *args: pytest.fail("no bundle to download"))

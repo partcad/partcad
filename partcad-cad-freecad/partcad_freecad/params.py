@@ -65,9 +65,29 @@ class ParamSpec:
         dialog shows next to the offending field.
         """
         try:
-            return self._coerce(value)
+            return self._check_bounds(self._coerce(value))
         except (TypeError, ValueError) as e:
             raise ValueError("%s: %s" % (self.name, e)) from e
+
+    def _check_bounds(self, value: Any) -> Any:
+        """Reject a number outside a declared ``min``/``max``.
+
+        A spin box clamps an int to the range on its own, but a float is typed
+        into a line edit whose validator accepts an out-of-range value as
+        "intermediate" -- so without this the bound would hold for one type and
+        not the other, and the export would run with a value the dialog showed
+        as illegal.
+        """
+        if self.type not in (TYPE_INT, TYPE_FLOAT):
+            return value
+        # Compared as floats so a fractional bound on an int parameter is not
+        # truncated into a bound that lets the value through.
+        number = float(value)
+        if self.min is not None and number < float(self.min):
+            raise ValueError("%s is below the minimum of %s" % (value, self.min))
+        if self.max is not None and number > float(self.max):
+            raise ValueError("%s is above the maximum of %s" % (value, self.max))
+        return value
 
     def _coerce(self, value: Any) -> Any:
         if self.type == TYPE_BOOL:

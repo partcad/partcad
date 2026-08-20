@@ -18,13 +18,15 @@ context with them. Nothing in this directory imports `partcad`.
 
 `provision.py` finds that bundle: an `install.sh` installation, one the VS Code extension downloaded, one on
 `PATH`, or one it downloads itself. Downloads come from the latest GitHub release that carries a bundle for the
-host platform, falling back to the newest `devel` CI artifact when there is none (which is the state of the
-repository's releases today) or when `PC_CAD_DEVEL` is set.
+host platform; when the latest release publishes no such bundle — the standalone archives are a later addition
+than the wheels, so a release may have none — it falls back to the newest `devel` CI artifact, as it does
+whenever `PC_CAD_DEVEL` is set.
 
 ## Layout
 
-Only `gui/` and `importer.py` need FreeCAD or Qt to import. Everything else is plain Python, which is what
-makes the suite runnable in CI where neither exists.
+Inside `partcad_freecad`, only `gui/` and `importer.py` need FreeCAD or Qt to import; everything else is plain
+Python, which is what makes the suite runnable in CI where neither exists. `InitGui.py` is not part of that
+package and does import FreeCAD — it is the root entry point FreeCAD itself executes.
 
 - `InitGui.py` / `Init.py` — what FreeCAD executes; registration only.
 - `package.xml` — Addon Manager metadata.

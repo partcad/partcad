@@ -145,7 +145,16 @@ class ExplorerWidget(QtWidgets.QWidget):
                 self.window(), "PartCAD", "Select a part or an assembly in the explorer first."
             )
             return
-        self.controller.import_item(item, parent=self.window())
+        self.import_item(item)
+
+    def import_item(self, item) -> None:
+        """Import one object, reporting a failure rather than raising into Qt.
+
+        The controller guards only the export and the insert; everything before
+        that -- building the dialog from the object's parameters, reading the
+        values back -- would otherwise escape into the signal handler.
+        """
+        self._guard("Failed to import %s" % item.name, lambda: self.controller.import_item(item, parent=self.window()))
 
     def _on_expanded(self, node) -> None:
         item = node.data(0, _ITEM_ROLE)
@@ -175,7 +184,7 @@ class ExplorerWidget(QtWidgets.QWidget):
             node.setExpanded(not node.isExpanded())
             return
         if item.is_importable:
-            self.controller.import_item(item, parent=self.window())
+            self.import_item(item)
 
     def _on_context_menu(self, point) -> None:
         node = self.tree.itemAt(point)
@@ -186,7 +195,10 @@ class ExplorerWidget(QtWidgets.QWidget):
             return
         menu = QtWidgets.QMenu(self)
         if item.is_importable:
-            menu.addAction("Import into the document...", self.import_selected)
+            # Bound to the node under the cursor, like "Expand" below, rather
+            # than to the current item -- a right-click does not have to have
+            # moved the current item to the node it landed on.
+            menu.addAction("Import into the document...", lambda: self.import_item(item))
         if item.kind == model.KIND_PACKAGE:
             menu.addAction("Expand", lambda: node.setExpanded(True))
         menu.addAction("Copy name", lambda: QtWidgets.QApplication.clipboard().setText(item.qualified_name))

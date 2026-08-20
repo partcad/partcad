@@ -5,6 +5,8 @@
 #
 """The FreeCAD-free half of the import: file naming and labelling."""
 
+import os
+
 from partcad_freecad.importer import step_filename, unique_label
 from partcad_freecad.model import KIND_PART, Item
 
@@ -25,6 +27,23 @@ def test_a_name_that_is_awkward_in_a_path_is_sanitized(tmp_path):
     item = Item(KIND_PART, "bracket/left v2", "//", {})
 
     assert step_filename(str(tmp_path), item) == str(tmp_path / "bracket_left_v2.step")
+
+
+def test_a_long_parameter_list_stays_within_the_filesystem_limit(tmp_path):
+    params = {"parameter_number_%d" % index: 1234.5678 for index in range(40)}
+
+    path = step_filename(str(tmp_path), CUBE, params)
+
+    assert len(os.path.basename(path)) <= 128
+
+
+def test_truncated_names_still_do_not_collide(tmp_path):
+    first = step_filename(str(tmp_path), CUBE, {"p%d" % i: "x" * 40 for i in range(10)})
+    open(first, "w", encoding="utf-8").close()
+
+    second = step_filename(str(tmp_path), CUBE, {"p%d" % i: "x" * 40 for i in range(10)})
+
+    assert second != first
 
 
 def test_an_existing_file_is_not_overwritten(tmp_path):

@@ -87,6 +87,10 @@ def connected(tmp_path):
         service.close()
         server_sock.close()
         service_thread.join(timeout=5)
+        # A daemon thread still blocked in read_message would let the suite pass
+        # while leaking the connection, which is exactly the regression the
+        # closer above exists to prevent.
+        assert not service_thread.is_alive()
 
 
 def test_loading_a_package_builds_the_tree(connected):
