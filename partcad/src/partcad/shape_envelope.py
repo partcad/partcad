@@ -49,12 +49,48 @@ def is_shape_envelope(obj) -> bool:
     return is_shape_object(obj) or is_assembly_object(obj)
 
 
-def with_metadata(shape: dict, name=None, label=None) -> dict:
-    """Return a copy of a shape/assembly envelope with its name/label restamped."""
-    out = dict(shape)
-    out["name"] = name
-    out["label"] = label
-    return out
+def payload_key(obj):
+    """The key 'obj' carries its payload under, or None if it is not an envelope."""
+    if isinstance(obj, dict):
+        if KEY_BREP in obj:
+            return KEY_BREP
+        if KEY_ASSEMBLY in obj:
+            return KEY_ASSEMBLY
+    return None
+
+
+def strip_metadata(obj):
+    """Return 'obj' with the outer layer taken off the envelopes it is made of.
+
+    An envelope is a payload ("brep" or "assembly") plus an outer layer that
+    says which object this is and where it sits - "name", "label", an optional
+    placement, and whatever a later version adds next to them. The payload is
+    geometry, which several objects may legitimately share; the outer layer is
+    not. Splitting them is what lets the shape cache key an entry on the
+    geometry alone (see cache_shape.py).
+
+    Only the envelope 'obj' itself is - or the ones a list of them holds - are
+    stripped. The children nested inside an assembly keep their own outer
+    layers: those describe the assembly's structure, not the assembly.
+    """
+    if isinstance(obj, list):
+        return [strip_metadata(item) for item in obj]
+    key = payload_key(obj)
+    if key is None:
+        return obj
+    return {key: obj[key]}
+
+
+def apply_metadata(obj, metadata):
+    """Inverse of 'strip_metadata()': wrap 'metadata' around the payloads in 'obj'."""
+    if isinstance(obj, list):
+        return [apply_metadata(item, metadata) for item in obj]
+    key = payload_key(obj)
+    if key is None:
+        return obj
+    wrapped = dict(metadata or {})
+    wrapped[key] = obj[key]
+    return wrapped
 
 
 def encode(obj, name=None, label=None):

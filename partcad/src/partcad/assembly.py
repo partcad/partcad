@@ -111,12 +111,26 @@ class Assembly(Shape):
         tasks = [asyncio.create_task(per_child(child)) for child in self.children]
         children = list(await asyncio.gather(*tasks))
 
+        envelope = dict(self.get_cache_metadata())
+        envelope[shape_envelope.KEY_ASSEMBLY] = children
+        return envelope
+
+    def get_cache_metadata(self):
+        """The outer layer to wrap around this assembly's cached children.
+
+        It has to be exactly what '_get_shape_real()' stamps on the tree it
+        builds, so that an assembly materialized from the cache is
+        indistinguishable from one just built. Besides the name and the label
+        that every shape carries, an assembly carries its own placement: two
+        assemblies of the same children in different places share the cached
+        children but must not inherit each other's location.
+        """
         name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
-        envelope = {"name": name, "label": self.name, shape_envelope.KEY_ASSEMBLY: children}
+        metadata = {"name": name, "label": self.name}
         root = self._root_location()
         if root is not None:
-            envelope[shape_envelope.KEY_LOCATION] = root.as_packed()
-        return envelope
+            metadata[shape_envelope.KEY_LOCATION] = root.as_packed()
+        return metadata
 
     def _root_location(self):
         """The assembly's own location as a geom.Location, or None."""
