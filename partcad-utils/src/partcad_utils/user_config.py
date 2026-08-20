@@ -304,11 +304,45 @@ class UserConfig(vyper.Vyper):
         # If the filesystem cache is disabled then (by default):
         # - objects from 1 to 100MB are cached in memory only.
         # - object above 100MB are not cached and recomputed on each access.
+        #
+        # The cache is a hierarchy of tiers, and each one has its own switch and
+        # its own size window, because what is worth keeping in RAM is not what
+        # is worth a file, and neither is what is worth a network round trip:
+        #
+        #   cacheMem     this process's memory. Nearest, and lost on exit.
+        #   cacheFiles   a directory under the internal state directory. Local.
+        #   cacheRemote  a memcached server shared by a team or a CI fleet.
+        #                Needs the 'memcache' extra.
+        #   cacheS3      an object store, which outlives all of the above.
+        #                Needs the 'aws' extra.
+        #
+        # A read walks them in that order and stops at the first hit; a write
+        # offers the entry to every tier whose window accepts it. The two remote
+        # tiers are off by default: they need an address that only a deployment
+        # can supply.
+        self.set_default("cacheMem", True)
+        self.set_default("cacheMemoryMaxEntrySize", 100 * 1024 * 1024)
+        self.set_default("cacheMemoryDoubleCacheMaxEntrySize", 1 * 1024 * 1024)
         self.set_default("cacheFiles", True)
         self.set_default("cacheFilesMaxEntrySize", 10 * 1024 * 1024)
         self.set_default("cacheFilesMinEntrySize", 100)
-        self.set_default("cacheMemoryMaxEntrySize", 100 * 1024 * 1024)
-        self.set_default("cacheMemoryDoubleCacheMaxEntrySize", 1 * 1024 * 1024)
+        self.set_default("cacheRemote", False)
+        self.set_default("cacheRemoteServer", "")
+        self.set_default("cacheRemoteNamespace", "partcad")
+        self.set_default("cacheRemoteExpiration", 7 * 24 * 60 * 60)
+        # memcached's own default item size limit. Sending more only earns a
+        # rejection, so a server raised above it has to say so here.
+        self.set_default("cacheRemoteMaxEntrySize", 1024 * 1024)
+        self.set_default("cacheRemoteMinEntrySize", 100)
+        self.set_default("cacheS3", False)
+        self.set_default("cacheS3Bucket", "")
+        self.set_default("cacheS3Prefix", "partcad/")
+        self.set_default("cacheS3Region", "")
+        self.set_default("cacheS3EndpointUrl", "")
+        # S3 takes far larger objects than this, but an entry that big is
+        # slower to fetch than to rebuild, which is not a cache hit worth having.
+        self.set_default("cacheS3MaxEntrySize", 100 * 1024 * 1024)
+        self.set_default("cacheS3MinEntrySize", 100)
         self.set_default("cacheDependenciesIgnore", False)
 
         if shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
@@ -377,6 +411,110 @@ class UserConfig(vyper.Vyper):
         # default: 1*1024*1024 (1MB)
         self.bind_env("cacheMemoryDoubleCacheMaxEntrySize", "PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE")
         self.cache_memory_double_cache_max_entry_size = self.get_int("cacheMemoryDoubleCacheMaxEntrySize")
+
+        # option: cacheMem
+        # description: enable caching of intermediate results in this process's memory
+        # values: [True | False]
+        # default: True
+        self.bind_env("cacheMem", "PC_CACHE_MEM")
+        self.cache_memory = self.get_bool("cacheMem")
+
+        # option: cacheRemote
+        # description: enable the shared remote cache, reached over the memcached
+        #              protocol. Requires the 'memcache' extra:
+        #              pip install 'partcad[memcache]'
+        # values: [True | False]
+        # default: False
+        self.bind_env("cacheRemote", "PC_CACHE_REMOTE")
+        self.cache_remote = self.get_bool("cacheRemote")
+
+        # option: cacheRemoteServer
+        # description: the memcached server backing the remote cache, "host" or "host:port"
+        # values: <string>
+        # default: "" (port 11211 when the port is left out)
+        self.bind_env("cacheRemoteServer", "PC_CACHE_REMOTE_SERVER")
+        self.cache_remote_server = self.get_string("cacheRemoteServer")
+
+        # option: cacheRemoteNamespace
+        # description: prefix for every key this installation stores, so that
+        #              several projects can share one memcached server
+        # values: <string>
+        # default: partcad
+        self.bind_env("cacheRemoteNamespace", "PC_CACHE_REMOTE_NAMESPACE")
+        self.cache_remote_namespace = self.get_string("cacheRemoteNamespace")
+
+        # option: cacheRemoteExpiration
+        # description: how long a remote cache entry lives, in seconds
+        # values: >=0, 0 means no expiration
+        # default: 604800 (7 days)
+        self.bind_env("cacheRemoteExpiration", "PC_CACHE_REMOTE_EXPIRATION")
+        self.cache_remote_expiration = self.get_int("cacheRemoteExpiration")
+
+        # option: cacheRemoteMaxEntrySize
+        # description: the maximum size of a single remote cache entry in bytes
+        # values: >=0, 0 means no limit
+        # default: 1*1024*1024 (1MB, memcached's own default)
+        self.bind_env("cacheRemoteMaxEntrySize", "PC_CACHE_REMOTE_MAX_ENTRY_SIZE")
+        self.cache_remote_max_entry_size = self.get_int("cacheRemoteMaxEntrySize")
+
+        # option: cacheRemoteMinEntrySize
+        # description: the minimum size of a single remote cache entry (except test results) in bytes
+        # values: >=0
+        # default: 100
+        self.bind_env("cacheRemoteMinEntrySize", "PC_CACHE_REMOTE_MIN_ENTRY_SIZE")
+        self.cache_remote_min_entry_size = self.get_int("cacheRemoteMinEntrySize")
+
+        # option: cacheS3
+        # description: enable the object store cache. Requires the 'aws' extra:
+        #              pip install 'partcad[aws]'
+        # values: [True | False]
+        # default: False
+        self.bind_env("cacheS3", "PC_CACHE_S3")
+        self.cache_s3 = self.get_bool("cacheS3")
+
+        # option: cacheS3Bucket
+        # description: the bucket holding the object store cache
+        # values: <string>
+        # default: ""
+        self.bind_env("cacheS3Bucket", "PC_CACHE_S3_BUCKET")
+        self.cache_s3_bucket = self.get_string("cacheS3Bucket")
+
+        # option: cacheS3Prefix
+        # description: the key prefix within the bucket, so that one bucket can
+        #              hold more than this cache
+        # values: <string>
+        # default: partcad/
+        self.bind_env("cacheS3Prefix", "PC_CACHE_S3_PREFIX")
+        self.cache_s3_prefix = self.get_string("cacheS3Prefix")
+
+        # option: cacheS3Region
+        # description: the AWS region of the bucket
+        # values: <string>
+        # default: "" (leave it to the standard AWS resolution chain)
+        self.bind_env("cacheS3Region", "PC_CACHE_S3_REGION")
+        self.cache_s3_region = self.get_string("cacheS3Region")
+
+        # option: cacheS3EndpointUrl
+        # description: an S3 endpoint other than AWS's own - a MinIO or Ceph
+        #              deployment, or a test server
+        # values: <string>
+        # default: "" (AWS)
+        self.bind_env("cacheS3EndpointUrl", "PC_CACHE_S3_ENDPOINT_URL")
+        self.cache_s3_endpoint_url = self.get_string("cacheS3EndpointUrl")
+
+        # option: cacheS3MaxEntrySize
+        # description: the maximum size of a single object store cache entry in bytes
+        # values: >=0, 0 means no limit
+        # default: 100*1024*1024 (100MB)
+        self.bind_env("cacheS3MaxEntrySize", "PC_CACHE_S3_MAX_ENTRY_SIZE")
+        self.cache_s3_max_entry_size = self.get_int("cacheS3MaxEntrySize")
+
+        # option: cacheS3MinEntrySize
+        # description: the minimum size of a single object store cache entry (except test results) in bytes
+        # values: >=0
+        # default: 100
+        self.bind_env("cacheS3MinEntrySize", "PC_CACHE_S3_MIN_ENTRY_SIZE")
+        self.cache_s3_min_entry_size = self.get_int("cacheS3MinEntrySize")
 
         # option: cacheDependenciesIgnore
         # description: ignore broken dependencies and cache at your own risk

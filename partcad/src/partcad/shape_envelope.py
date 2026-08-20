@@ -19,9 +19,19 @@ point of the split:
   * This core codec leaves a shape object as its '{"name", "label", "brep"}'
     dict on 'decode' - the core only ever moves the bytes around.
 
-A single shape is '{"name", "label", "brep"}' (base64 BREP); an assembly is
+A single shape is '{"name", "label", "brep"}'; an assembly is
 '{"name", "label", "assembly": [...]}'. Requests/responses are ordinary JSON
 objects that carry such shape objects under keys like "shape" or "wrapped".
+
+The "brep" payload is zstd-compressed BREP. Which Python type holds it depends
+on the layer, and that is the whole reason this module exists:
+
+  * In memory, in the file cache and in every remote cache it is 'bytes' - the
+    compressed frame itself. Nothing there needs it to be text, and base64
+    would cost a third more space and a copy in each direction.
+  * On the wrapper pipe it is a base64 'str', because that hop is JSON and JSON
+    has no byte type. 'encode()' puts it into that form and 'decode()' takes it
+    straight back out, so the boundary is these two functions and nowhere else.
 """
 
 import base64
@@ -47,6 +57,31 @@ def is_assembly_object(obj) -> bool:
 def is_shape_envelope(obj) -> bool:
     """Whether 'obj' is a shape or assembly envelope this codec carries opaquely."""
     return is_shape_object(obj) or is_assembly_object(obj)
+
+
+def brep_bytes(value) -> bytes:
+    """The zstd-compressed BREP bytes, whether they arrived raw or base64-encoded.
+
+    Bytes are returned as they are rather than copied: this is the hot path for
+    every shape that comes out of a cache.
+    """
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, (bytearray, memoryview)):
+        return bytes(value)
+    return base64.b64decode(value)
+
+
+def brep_base64(value) -> str:
+    """The same payload as the base64 text that JSON - and only JSON - needs."""
+    if isinstance(value, str):
+        return value
+    return base64.b64encode(value).decode("ascii")
+
+
+def make_shape(brep, name=None, label=None) -> dict:
+    """A shape envelope around a zstd-compressed BREP payload."""
+    return {"name": name, "label": label, KEY_BREP: brep_bytes(brep)}
 
 
 def payload_key(obj):
@@ -96,12 +131,13 @@ def apply_metadata(obj, metadata):
 def encode(obj, name=None, label=None):
     """Convert 'obj' into a structure made only of JSON-native values.
 
-    Shape and assembly envelopes are passed through verbatim (their "brep"/
-    "assembly" payload and name/label are preserved; any other value is walked).
-    Dicts, lists, tuples and sets are walked; bytes become a '__bytes__' object;
-    exceptions become their message. A live OCP object is rejected: the core
-    must not hand one to this codec - it has nothing to turn it into bytes, and
-    encoding geometry is a wrapper's job.
+    Shape and assembly envelopes keep their metadata; their "brep" payload is
+    base64-encoded here, which is the one place the core turns the compressed
+    bytes it carries into the text JSON can hold. Dicts, lists, tuples and sets
+    are walked; other bytes become a '__bytes__' object; exceptions become their
+    message. A live OCP object is rejected: the core must not hand one to this
+    codec - it has nothing to turn it into bytes, and encoding geometry is a
+    wrapper's job.
     """
     if obj is None or isinstance(obj, (bool, int, float, str)):
         return obj
@@ -109,14 +145,17 @@ def encode(obj, name=None, label=None):
     if isinstance(obj, dict):
         if KEY_BREP in obj or KEY_ASSEMBLY in obj:
             # An already-built shape/assembly object keeps its metadata verbatim.
-            return {
-                key: (
-                    value
-                    if key in (KEY_BREP, KEY_ASSEMBLY, KEY_LOCATION, "name", "label")
-                    else encode(value, name, label)
-                )
-                for key, value in obj.items()
-            }
+            encoded = {}
+            for key, value in obj.items():
+                if key == KEY_BREP:
+                    encoded[key] = brep_base64(value)
+                elif key == KEY_ASSEMBLY:
+                    encoded[key] = [encode(child, name, label) for child in value]
+                elif key in (KEY_LOCATION, "name", "label"):
+                    encoded[key] = value
+                else:
+                    encoded[key] = encode(value, name, label)
+            return encoded
         return {key: encode(value, name, label) for key, value in obj.items()}
 
     if isinstance(obj, (list, tuple, set, frozenset)):
@@ -142,11 +181,18 @@ def decode(obj):
 
     Unlike the sandbox codec, this never rebuilds a live 'TopoDS_Shape': a shape
     or assembly object is returned as the dict it already is, so the core keeps
-    handling opaque BREP envelopes.
+    handling opaque BREP envelopes. The one thing that does change is the "brep"
+    payload, which comes off the pipe as base64 text and is handed on as the
+    compressed bytes every layer above this one carries.
     """
     if isinstance(obj, dict):
         if KEY_BREP in obj or KEY_ASSEMBLY in obj:
-            return obj
+            decoded = dict(obj)
+            if KEY_BREP in decoded:
+                decoded[KEY_BREP] = brep_bytes(decoded[KEY_BREP])
+            if KEY_ASSEMBLY in decoded:
+                decoded[KEY_ASSEMBLY] = [decode(child) for child in decoded[KEY_ASSEMBLY]]
+            return decoded
         if KEY_BYTES in obj and len(obj) == 1:
             return base64.b64decode(obj[KEY_BYTES])
         return {key: decode(value) for key, value in obj.items()}

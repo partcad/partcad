@@ -37,6 +37,11 @@ dependencies = {file = ["requirements.txt"]}
 # Optional linting dependency. `ruff` ships a native executable that is resolved
 # and launched lazily, so it is only required when `pc lint` actually runs.
 lint = {file = ["requirements-lint.txt"]}
+# The two cache tiers that reach off this machine. Each carries a client
+# library the core imports lazily, so neither is a dependency of the wheel:
+# 'cacheRemote' (memcached) and 'cacheS3' (object storage).
+memcache = {file = ["requirements-memcache.txt"]}
+aws = {file = ["requirements-aws.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"

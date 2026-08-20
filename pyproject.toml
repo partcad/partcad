@@ -213,6 +213,12 @@ ruff = "^0.15.22"
 jsonschema = "^4.26.0"
 # Only below 3.14, where the standard library has no 'compression.zstd'.
 "backports.zstd" = { version = ">=1.6.0", python = "<3.14" }
+# The clients behind the two off-machine cache tiers. They are extras of the
+# published wheel (partcad[memcache] and partcad[aws]), not dependencies of it;
+# they are here so the monorepo test suite, which drives both tiers against
+# local mock servers, has them installed.
+aiomcache = "^0.8.2"
+aioboto3 = "^15.5.0"
 
 [tool.poetry.group.cli.dependencies]
 setuptools = "^83.0.0"

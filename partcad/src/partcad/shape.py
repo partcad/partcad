@@ -293,7 +293,9 @@ class Shape(ShapeConfiguration):
         only the in-process factories still produce - is encoded here, the one
         place in the core that touches a live shape. The OCP codec is imported
         lazily, so a workflow that only uses delegating factories never pulls
-        OCP into the core process.
+        OCP into the core process. The payload is taken as the compressed bytes,
+        not the base64 the same codec produces for the pipe: this envelope stays
+        in this process, and may go straight into a cache from here.
         """
         if shape is None or shape_envelope.is_shape_envelope(shape):
             return shape
@@ -301,7 +303,7 @@ class Shape(ShapeConfiguration):
 
         if name is None and label is None:
             name, label = self._shape_metadata()
-        return ocp_serialize.encode_shape(shape, name=name, label=label)
+        return shape_envelope.make_shape(ocp_serialize.compressed_brep(shape), name=name, label=label)
 
     def _component_to_envelope(self, component):
         """Normalize a component (or nested list of components) into envelopes."""

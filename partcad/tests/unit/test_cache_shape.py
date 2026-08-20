@@ -10,25 +10,18 @@ import asyncio
 import base64
 import json
 
+from cache_config import CacheUserConfig
+
+from partcad import shape_envelope
 from partcad.assembly import Assembly
 from partcad.cache_hash import CacheHash
 from partcad.cache_shape import ShapeCache
 from partcad.shape import Shape
 
-# Not a real BREP, but it starts the way one does, which is all the cache uses
-# to tell a raw payload from a JSON one.
+# Not a real BREP, and not compressed either, but it starts the way an
+# uncompressed payload does - which is all the cache uses to tell a raw payload
+# from a JSON one.
 BREP = b"CASCADE Topology V3, (c) Open Cascade\n\nLocations 0\n"
-BREP_B64 = base64.b64encode(BREP).decode("ascii")
-
-
-class _UserConfig:
-    def __init__(self, internal_state_dir):
-        self.internal_state_dir = internal_state_dir
-        self.cache = True
-        self.cache_min_entry_size = 1
-        self.cache_max_entry_size = 1024 * 1024
-        self.cache_memory_max_entry_size = 0
-        self.cache_memory_double_cache_max_entry_size = 0
 
 
 class _Ctx:
@@ -39,7 +32,7 @@ class _Ctx:
 
 
 def _cache(tmp_path):
-    return ShapeCache(user_config=_UserConfig(str(tmp_path)))
+    return ShapeCache(user_config=CacheUserConfig(tmp_path))
 
 
 def _hash(name="geometry"):
@@ -51,7 +44,7 @@ def _hash(name="geometry"):
 
 
 def _shape(name, label):
-    return {"name": name, "label": label, "brep": BREP_B64}
+    return {"name": name, "label": label, "brep": BREP}
 
 
 def _entry(tmp_path, cache_hash, key):
@@ -100,8 +93,11 @@ def test_an_assembly_keeps_its_children_but_not_its_own_outer_layer(tmp_path):
     }
     asyncio.run(cache.write_async(cache_hash, {"assembly": tree}))
 
+    # JSON cannot hold the compressed payload as bytes, so a tree carries it
+    # base64-encoded - the same form the wrapper pipe uses.
     stored = json.loads(_entry(tmp_path, cache_hash, "assembly").decode("utf-8"))
-    assert stored == {"assembly": [child]}
+    assert stored == {"assembly": [shape_envelope.encode(child)]}
+    assert stored["assembly"][0]["brep"] == base64.b64encode(BREP).decode("ascii")
 
     metadata = {"name": "pkg:second", "label": "second", "location": [[1.0, 2.0, 3.0], [0.0, 0.0, 1.0], 0.0]}
     read, _ = asyncio.run(cache.read_async(cache_hash, ["assembly"], metadata))
@@ -141,7 +137,7 @@ class _Part(Shape):
         self.hash.add_string("identical-geometry")
 
     async def get_shape(self, ctx):
-        return {"name": None, "label": None, "brep": BREP_B64}
+        return {"name": None, "label": None, "brep": BREP}
 
 
 class _Assembly(Assembly):
