@@ -225,15 +225,6 @@ class Shape(ShapeConfiguration):
                     if cache_hash:
                         keys_to_read = [self.kind, "cmps"]
                         cached, to_cache_in_memory = await ctx.cache_shapes.read_async(cache_hash, keys_to_read)
-                        if self.kind in cached and cached[self.kind] is not None:
-                            # Restamped with *this* shape's identity, mirroring
-                            # 'get_cache_value' on the way in. The hash is over
-                            # the geometry, so two parts reading the same mesh
-                            # file share an entry, and without this the second
-                            # one comes back wearing the first one's name - which
-                            # an exporter that keys on it (URDF names its links
-                            # from labels) would then get wrong.
-                            cached[self.kind] = await self.get_cache_value(ctx, cached[self.kind])
                         if to_cache_in_memory.get(self.kind, False):
                             self._wrapped = cached[self.kind]
                         if to_cache_in_memory.get("cmps", False):
