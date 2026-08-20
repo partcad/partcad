@@ -6,7 +6,7 @@
 """Tests for the client's half of daemon handling.
 
 Stopping a daemon, knowing it has actually gone, and finding the ones running on
-this machine. `pc update` replaces the files every one of them is executing, so
+this machine. `pc upgrade` replaces the files every one of them is executing, so
 "it acknowledged the stop" is not good enough: this is what makes the difference
 between asking and knowing.
 

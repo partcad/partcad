@@ -30,11 +30,12 @@ methods and routes the service's notifications back under the legacy `?/partcad/
 
 ## Updating PartCAD
 
-"Update PartCAD" (`partcad.update`) updates the PartCAD installation, not the imported packages — those are
-"Reload the package" (`partcad.refresh`). The extension implements none of it, which is the point: there is one
-updater, `partcad_client_utils.selfupdate`, and the extension reaches it the same way a user would.
+"Update PartCAD" (`partcad.update`) updates the PartCAD installation — `pc upgrade`, not `pc update`, which
+refetches a package's imports and is "Reload the package" (`partcad.refresh`) here. The extension implements
+none of it, which is the point: there is one upgrader, `partcad_client_utils.selfupdate`, and the extension
+reaches it the same way a user would.
 
-- `service` — spawns `<bundle>/pc --no-ansi update --partcad-only` in the workspace folder and streams it to
+- `service` — spawns `<bundle>/pc --no-ansi upgrade` in the workspace folder and streams it to
   the output channel (`updateServiceBundle` in `src/common/provision.ts`). `pc` looks up the latest release
   and, only if something newer exists, stops every daemon running on the machine, waits for them, installs the
   new bundle beside the running one, and removes every superseded bundle. The extension then reconnects, at the
@@ -51,7 +52,7 @@ The Explorer's "install"/"needs to be updated" buttons (`partcad.startInstall`) 
 installing what is missing and updating what is stale is one operation, and a user should not have to know
 which of the two they are asking for.
 
-The standalone layout is shared with `install.sh` and `pc update`: `<install-dir>/<version>/{pc,partcad,
+The standalone layout is shared with `install.sh` and `pc upgrade`: `<install-dir>/<version>/{pc,partcad,
 partcad-json-rpc}`. Installing side by side (rather than over the running copy) is what lets the bundle replace
 itself while it is executing, and is required on Windows, where deleting a running executable fails outright.
 No superseded bundle is left behind: the idle ones go immediately, and the one the updater is running out of is

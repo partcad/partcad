@@ -19,7 +19,7 @@ installation.
 
 Even so, nothing here knows what a daemon is. A caller passes ``before_install``,
 which runs once a newer version is confirmed and before the first byte is
-written; `pc update` uses it to stop every daemon running locally (through
+written; `pc upgrade` uses it to stop every daemon running locally (through
 :mod:`partcad_client_utils.daemon`) and wait for them, because they are all
 executing the files about to be replaced.
 
@@ -237,7 +237,7 @@ def check(repo: Optional[str] = None, to_version: Optional[str] = None) -> dict:
             "update_available": False,
             "reason": (
                 "PartCAD runs from a source checkout (an editable install); "
-                "update it with git rather than with `pc update`"
+                "update it with git rather than with `pc upgrade`"
             ),
         }
     latest = to_version or latest_version(kind, repo)
@@ -271,7 +271,7 @@ def update(
 
     ``before_install`` runs once a newer version has been confirmed and before
     anything is written, and only then -- so a caller can put whatever it needs
-    to quiesce there (`pc update` stops its workspace's daemon and waits for it)
+    to quiesce there (`pc upgrade` stops every local daemon and waits for them)
     without a no-op update costing anybody anything.
     """
     status = check(repo, to_version)

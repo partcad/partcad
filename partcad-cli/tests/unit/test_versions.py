@@ -5,9 +5,9 @@
 #
 """The monorepo releases every component under one version. This checks it.
 
-`pc update` asks `partcad_client_utils.__version__` what is installed and compares it
+`pc upgrade` asks `partcad_client_utils.__version__` what is installed and compares it
 against the newest release. A version constant that stopped moving is therefore
-not cosmetic: it makes the CLI either never update or update forever. Two of
+not cosmetic: it makes the CLI either never upgrade or upgrade forever. Two of
 them had stopped moving -- `partcad-utils` and `partcad-service-json-rpc` were
 added to the monorepo without being added to `dev-tools/bumpversion.toml` -- and
 nothing noticed, because nothing read them.
@@ -32,7 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 BUMPVERSION = REPO_ROOT / "dev-tools" / "bumpversion.toml"
 
 # Every package that reports a version at runtime. `partcad_client_utils` is the
-# one `pc update` actually reads.
+# one `pc upgrade` actually reads.
 PACKAGES = {
     "partcad": partcad,
     "partcad-cli": partcad_cli,

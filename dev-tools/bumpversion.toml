@@ -24,9 +24,9 @@ replace = "partcad=={new_version}"
 # Every package in the monorepo, and every pin between them. `partcad-utils` and
 # `partcad-service-json-rpc` were once added without being added here, so their
 # versions stayed at whatever they were created with while everything else moved.
-# That is not cosmetic: `pc update` compares `partcad_client_utils.__version__`
+# That is not cosmetic: `pc upgrade` compares `partcad_client_utils.__version__`
 # against the newest release to decide whether to update, so a stale constant
-# means the CLI either never updates or updates forever.
+# means the CLI either never upgrades or upgrades forever.
 # `partcad-cli/tests/unit/test_versions.py` fails if any of these fall out of
 # step again, or if any entry below stops matching the file it names.
 [[tool.bumpversion.files]]

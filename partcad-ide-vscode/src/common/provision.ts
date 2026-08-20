@@ -110,7 +110,7 @@ function compareVersions(a: string, b: string): number {
  * The newest bundle installed under `root`, or undefined if there is none.
  *
  * A bundle lives in a directory named after its version -- the layout both
- * `install.sh` and `pc update` produce, and the reason an update can be
+ * `install.sh` and `pc upgrade` produce, and the reason an upgrade can be
  * installed beside the running copy instead of over it. `<root>/partcad/` is the
  * flat layout older versions of this extension downloaded into; it is still
  * accepted so an existing installation keeps working, and it sorts oldest so a
@@ -208,9 +208,10 @@ export async function ensureServiceExecutable(
 /**
  * Update the standalone installation to the latest release.
  *
- * The extension implements none of this: it runs `pc update --partcad-only`
- * from the bundle it is already using, which is the same command a user would
- * type in a terminal. `pc` decides whether anything is newer, stops every daemon
+ * The extension implements none of this: it runs `pc upgrade` from the bundle it
+ * is already using, which is the same command a user would type in a terminal.
+ * (`pc update` is a different thing -- it refetches a package's imports.)
+ * `pc` decides whether anything is newer, stops every daemon
  * running on the machine and waits for them, installs the new version beside the
  * old one, and leaves no superseded bundle behind. The extension's part is to
  * show what is happening and to hand back the executable to reconnect to -- a
@@ -237,7 +238,7 @@ export async function updateServiceBundle(
         const env = { ...process.env };
         const repo = getServiceDownloadRepositoryFromSetting(serverId);
         if (repo) {
-            // The same override install.sh and `pc update` read.
+            // The same override install.sh and `pc upgrade` read.
             env.PARTCAD_REPOSITORY = repo;
         }
         // The workspace folder, because `pc` derives the daemon it stops from
@@ -248,7 +249,7 @@ export async function updateServiceBundle(
         try {
             await vscode.window.withProgress(
                 { location: vscode.ProgressLocation.Notification, title: 'Updating PartCAD', cancellable: false },
-                async () => runStreaming(cli, ['--no-ansi', 'update', '--partcad-only'], outputChannel, { cwd, env }),
+                async () => runStreaming(cli, ['--no-ansi', 'upgrade'], outputChannel, { cwd, env }),
             );
             // Whether anything was installed is a question about the filesystem,
             // not about the command's output: an update lands in a directory
@@ -256,15 +257,15 @@ export async function updateServiceBundle(
             const updatedPath = resolveServicePath(context, serverId);
             return { updated: !!updatedPath && updatedPath !== execPath, execPath: updatedPath ?? execPath };
         } catch (e) {
-            // A bundle older than `pc update --partcad-only` rejects the option
-            // outright -- and that is exactly the installation with the most to
-            // gain from being updated. Fall through to downloading the release.
-            traceInfo(`PartCAD: 'pc update' failed (${e}); downloading the release instead`);
+            // A bundle older than `pc upgrade` rejects the command outright --
+            // and that is exactly the installation with the most to gain from
+            // being upgraded. Fall through to downloading the release.
+            traceInfo(`PartCAD: 'pc upgrade' failed (${e}); downloading the release instead`);
         }
     }
 
     // No `pc` beside the service (a bare wheel install of the service alone), or
-    // one too old to understand the command. Download the release here, the way
+    // one too old to know `pc upgrade`. Download the release here, the way
     // the first install does. No prompt: the user asked for this, and consented
     // to the download size when they installed what is being replaced.
     const downloaded = await downloadLatest(context, serverId);
@@ -327,7 +328,7 @@ async function downloadAndExtract(
     const url = `https://github.com/${repo}/releases/download/${version}/${archive}`;
 
     // Unpacked beside any bundle already there, under a directory named after
-    // its version: the same layout `install.sh` and `pc update` produce, so all
+    // its version: the same layout `install.sh` and `pc upgrade` produce, so all
     // three install and find each other's bundles. Staged first, because a
     // failed download must not take the working installation with it.
     const root = cachedBundleRoot(context);

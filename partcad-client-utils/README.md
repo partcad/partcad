@@ -17,7 +17,7 @@ belongs in the daemon:
 
 The CLI (`partcad-cli`) is the reference caller. The VS Code extension reaches
 the same code by running `pc` — `pc daemon start` to find the daemon,
-`pc daemon stop` to stop it, `pc update --partcad-only` to update — rather than
+`pc daemon stop` to stop it, `pc upgrade` to upgrade the installation — rather than
 reimplementing any of it in TypeScript, because a second copy of these rules is a
 copy that can disagree.
 
@@ -38,13 +38,14 @@ about daemons.
 
 ## Updating PartCAD itself
 
-`selfupdate` is what `pc update` runs, and — through `pc update --partcad-only` —
-what the VS Code extension's "Update PartCAD" runs. It is the only implementation
-of the operation.
+`selfupdate` is what `pc upgrade` runs, and — through `pc upgrade` — what the VS
+Code extension's "Update PartCAD" runs. It is the only implementation of the
+operation. (`pc update` is a different command: it refetches the packages a
+package imports, and has nothing to do with this.)
 
 It knows nothing about daemons, even though it sits beside the module that does.
 A caller passes `before_install`, which runs once a newer version is confirmed
-and before the first byte is written; `pc update` uses it to stop every local
+and before the first byte is written; `pc upgrade` uses it to stop every local
 daemon and wait for them, because they are all executing the files about to be
 replaced.
 

@@ -3,17 +3,17 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Tests for `pc update`.
+"""Tests for `pc upgrade`.
 
-The command does two things that used to be one, and the order matters: PartCAD
-itself is updated first, so a package that needs a newer PartCAD gets one. What
-these pin down is the contract between the two halves -- which of them runs, in
-which order, and which failures are allowed to stop the other.
+`pc upgrade` replaces this machine's copy of PartCAD; `pc update` refetches a
+package's imports. They are separate commands on opposite sides of the command
+boundary, and the first thing checked here is that they stay that way: an upgrade
+must not touch the package graph, and must not need a daemon to do its job --
+beyond stopping the ones that are executing the files it replaces.
 """
 
 from collections.abc import Iterator
 
-import partcad_cli.click.commands.update as update_command
 import pytest
 from click.testing import CliRunner
 from partcad_cli.click.command import cli
@@ -34,10 +34,10 @@ def clean_user_config(monkeypatch):
 
 @pytest.fixture
 def recorder(monkeypatch):
-    """Record what the command does, without letting it reach a daemon or a network.
+    """Record what the command does, without letting it reach a network.
 
-    Both halves are stubbed: `selfupdate` (which would talk to GitHub/PyPI and
-    write to the installation) and `service.run` (which would start a daemon).
+    `selfupdate` is stubbed, since the real one would talk to GitHub/PyPI and
+    write to the installation.
     """
 
     class Recorder:
@@ -70,44 +70,45 @@ def recorder(monkeypatch):
                 raise self.update_error
             return self.check_result
 
-        def fake_run(self, cli_ctx, method, params=None, span_name=None, needs_context=False):
-            self.events.append(("daemon", method))
-            return {}
-
     rec = Recorder()
     monkeypatch.setattr(selfupdate, "update", rec.fake_update)
     monkeypatch.setattr(selfupdate, "check", rec.fake_check)
-    monkeypatch.setattr(update_command, "run", rec.fake_run)
     return rec
 
 
 def _invoke(click_runner, *args):
-    return click_runner.invoke(cli, ["--no-ansi", "update", *args])
+    return click_runner.invoke(cli, ["--no-ansi", "upgrade", *args])
 
 
-def test_update_updates_partcad_before_the_packages(click_runner: Iterator[CliRunner], recorder) -> None:
+def test_upgrade_upgrades_partcad(click_runner: Iterator[CliRunner], recorder) -> None:
     result = _invoke(click_runner)
-    assert result.exit_code == 0
-    assert recorder.events == [("selfupdate", None), ("daemon", "update")]
-
-
-def test_partcad_only_skips_the_packages(click_runner: Iterator[CliRunner], recorder) -> None:
-    result = _invoke(click_runner, "--partcad-only")
     assert result.exit_code == 0
     assert recorder.events == [("selfupdate", None)]
 
 
-def test_packages_only_skips_the_version_check(click_runner: Iterator[CliRunner], recorder) -> None:
-    result = _invoke(click_runner, "--packages-only")
-    assert result.exit_code == 0
-    assert recorder.events == [("daemon", "update")]
+def test_upgrade_never_touches_the_package_graph(click_runner: Iterator[CliRunner], recorder, monkeypatch) -> None:
+    """The reason this is not a flag on `pc update`: it is not that command.
+
+    Refetching a package's imports is `pc update`, a thin daemon client. An
+    upgrade acts on the machine, so it must not open a context, load a package,
+    or send anything to a daemon beyond `daemon.stop`.
+    """
+    from partcad_cli.click import service
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("`pc upgrade` must not call the daemon")
+
+    monkeypatch.setattr(service, "run", unexpected)
+    recorder.update_result = {**recorder.update_result, "updated": True}
+    assert _invoke(click_runner).exit_code == 0
 
 
-def test_check_reports_without_installing_or_updating_packages(click_runner: Iterator[CliRunner], recorder) -> None:
+def test_check_reports_without_installing(click_runner: Iterator[CliRunner], recorder) -> None:
     result = _invoke(click_runner, "--check")
     assert result.exit_code == 0
     assert recorder.events == [("check", None)]
     assert "0.7.159 is available" in result.output
+    assert "Run `pc upgrade` to install it" in result.output
 
 
 def test_check_says_so_when_up_to_date(click_runner: Iterator[CliRunner], recorder) -> None:
@@ -117,53 +118,38 @@ def test_check_says_so_when_up_to_date(click_runner: Iterator[CliRunner], record
 
 
 def test_to_version_is_passed_through(click_runner: Iterator[CliRunner], recorder) -> None:
-    result = _invoke(click_runner, "--partcad-only", "--to-version", "0.7.100")
+    result = _invoke(click_runner, "--to-version", "0.7.100")
     assert result.exit_code == 0
     assert recorder.events == [("selfupdate", "0.7.100")]
 
 
-def test_partcad_only_and_packages_only_are_mutually_exclusive(click_runner: Iterator[CliRunner], recorder) -> None:
-    result = _invoke(click_runner, "--partcad-only", "--packages-only")
-    assert result.exit_code == 2
-    assert recorder.events == []
-
-
-def test_packages_only_rejects_the_self_update_options(click_runner: Iterator[CliRunner], recorder) -> None:
-    result = _invoke(click_runner, "--packages-only", "--check")
-    assert result.exit_code == 2
-    assert recorder.events == []
-
-
-def test_a_failed_self_update_still_updates_the_packages(click_runner: Iterator[CliRunner], recorder) -> None:
-    """A source checkout, or an unreachable index, must not break `pc update`."""
-    recorder.update_error = selfupdate.SelfUpdateError("PartCAD runs from a source checkout")
-    result = _invoke(click_runner)
-    assert result.exit_code == 0
-    assert recorder.events == [("selfupdate", None), ("daemon", "update")]
-    assert "was not updated" in result.output
-
-
-def test_a_failed_self_update_is_fatal_when_it_was_the_whole_request(
-    click_runner: Iterator[CliRunner], recorder
-) -> None:
+def test_a_failed_upgrade_is_fatal(click_runner: Iterator[CliRunner], recorder) -> None:
+    """Upgrading is the whole request, so failing it fails the command."""
     recorder.update_error = selfupdate.SelfUpdateError("could not reach https://pypi.org")
-    result = _invoke(click_runner, "--partcad-only")
+    result = _invoke(click_runner)
     assert result.exit_code == 1
     assert "could not reach" in result.output
 
 
-def test_offline_skips_the_version_check_but_not_the_packages(click_runner: Iterator[CliRunner], recorder) -> None:
+def test_a_source_checkout_is_reported(click_runner: Iterator[CliRunner], recorder) -> None:
+    recorder.update_error = selfupdate.SelfUpdateError("PartCAD runs from a source checkout")
+    result = _invoke(click_runner)
+    assert result.exit_code == 1
+    assert "source checkout" in result.output
+
+
+def test_offline_skips_the_version_check(click_runner: Iterator[CliRunner], recorder) -> None:
     """`--offline` promises nothing is fetched, and a release lookup is a fetch."""
-    result = click_runner.invoke(cli, ["--no-ansi", "--offline", "update"])
+    result = click_runner.invoke(cli, ["--no-ansi", "--offline", "upgrade"])
     assert result.exit_code == 0
-    assert recorder.events == [("daemon", "update")]
+    assert recorder.events == []
     assert "Offline mode" in result.output
 
 
 # ---------------------------------------------------------------------------
-# The daemon half, which is the command's and not the updater's.
+# The daemon half, which is the command's and not the upgrader's.
 #
-# Every daemon on this machine executes the files `pc update` replaces, so it
+# Every daemon on this machine executes the files `pc upgrade` replaces, so it
 # stops all of them and waits. Doing that from a client is what keeps it simple:
 # one process acting on its own machine, rather than daemons policing each other.
 # ---------------------------------------------------------------------------
@@ -202,7 +188,7 @@ def test_a_daemon_that_will_not_stop_is_reported_not_fatal(
     assert "1 PartCAD daemon(s) did not stop" in result.output
 
 
-def test_update_installs_only_after_a_real_daemon_is_gone(click_runner: Iterator[CliRunner], monkeypatch) -> None:
+def test_upgrade_installs_only_after_the_real_daemons_are_gone(click_runner: Iterator[CliRunner], monkeypatch) -> None:
     """The requirement, end to end: stop them, wait, *then* install.
 
     A real daemon is started and the installer is stubbed to record, at the
@@ -256,7 +242,7 @@ def test_update_installs_only_after_a_real_daemon_is_gone(click_runner: Iterator
 
     try:
         assert all(daemon.is_alive(s) for s in socks)
-        result = click_runner.invoke(cli, ["--no-ansi", "update", "--partcad-only"])
+        result = click_runner.invoke(cli, ["--no-ansi", "upgrade"])
         assert result.exit_code == 0, result.output
         assert observed["alive_at_install"] == []
     finally:

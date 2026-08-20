@@ -15,7 +15,7 @@ on, so the daemon reads them from the same place. What is added here are the
 things only a client does -- stopping a daemon, waiting for it to actually be
 gone, and enumerating the ones running on this machine.
 
-Enumeration and stopping *all* of them exists for one caller: `pc update`, which
+Enumeration and stopping *all* of them exists for one caller: `pc upgrade`, which
 is about to replace the files every one of them is executing. It belongs to a
 client for the same reason the update does -- a daemon can be remote, and a
 daemon that went looking for its neighbours would be racing every client on the

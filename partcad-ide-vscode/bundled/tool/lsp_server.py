@@ -415,7 +415,7 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     interpreter. This is specific to the "python" backend: the frozen JSON-RPC
     service already carries PartCAD.
 
-    Once PartCAD *is* installed, the update that happens is the one `pc update`
+    Once PartCAD *is* installed, the update that happens is the one `pc upgrade`
     performs: `partcad_client_utils.selfupdate`, so the extension and the CLI cannot
     pick versions differently. The pip bootstrap below only runs when there is
     nothing installed yet to update.

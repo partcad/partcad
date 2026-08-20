@@ -420,7 +420,7 @@ def test_the_module_never_reaches_for_a_daemon():
 
     Even inside `partcad-client-utils`, the updater does not reach for the
     daemon module next to it: a caller that has daemons passes `before_install`,
-    which is what lets `pc update` stop all the local ones and lets the VS Code
+    which is what lets `pc upgrade` stop all the local ones and lets the VS Code
     extension's Python backend -- which has none -- stop nothing.
     """
     source = pathlib.Path(selfupdate.__file__).read_text(encoding="utf-8")

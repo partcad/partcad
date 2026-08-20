@@ -42,13 +42,14 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
   All of it acts on **this machine**, from the process running out of it. A daemon can be remote, where
   "update PartCAD" would mean updating somebody else's installation and "stop the local daemons" somebody
   else's daemons; and a daemon that went looking for its neighbours would be racing every client on the
-  machine. A client is one process acting on its own machine, which is what makes `pc update` stopping every
+  machine. A client is one process acting on its own machine, which is what makes `pc upgrade` stopping every
   local daemon a sane thing to do rather than a distributed algorithm.
 
-  `selfupdate` itself knows nothing even about that: a caller passes `before_install`, which `pc update` uses
-  to stop the local daemons and wait for them. `pc update` and the VS Code extension's "Update PartCAD" both
-  end up here — the extension by running `pc update --partcad-only` — as does the extension's daemon discovery,
-  through `pc daemon start`. Nothing about daemons or updating is reimplemented in TypeScript.
+  `selfupdate` itself knows nothing even about that: a caller passes `before_install`, which `pc upgrade` uses
+  to stop the local daemons and wait for them. `pc upgrade` (the host-level command; `pc update` refetches a
+  package's imports and is unrelated) and the VS Code extension's "Update PartCAD" both end up here — the
+  extension by running `pc upgrade` — as does the extension's daemon discovery, through `pc daemon start`.
+  Nothing about daemons or upgrading is reimplemented in TypeScript.
 
 * [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
 

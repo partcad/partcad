@@ -43,7 +43,7 @@ Call `rpc.discover` to list the available methods and their summaries.
 
 Not here, deliberately. Updating an installation is a client-side act — it is the client's machine, and its copy
 of PartCAD, that gets replaced — and a daemon can be remote, where "update PartCAD" would mean updating somebody
-else's installation. The implementation is `partcad_client_utils.selfupdate`; the way to run it is `pc update`,
+else's installation. The implementation is `partcad_client_utils.selfupdate`; the way to run it is `pc upgrade`,
 which stops every daemon running on the machine and waits for them before installing. This service neither
 updates itself nor goes looking for other daemons to stop: doing it from the client means one process acting on
 its own machine, rather than daemons racing each other.

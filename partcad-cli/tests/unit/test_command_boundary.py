@@ -59,6 +59,11 @@ IN_PROCESS = {
     "init.py": "creates the workspace itself, before any package (or daemon context) exists",
     "config.py": "prints the client's own resolved user_config, with its --threads-max/PC_* overrides",
     "healthcheck.py": "diagnoses the host the CLI runs on, which is not necessarily the daemon's",
+    # `pc update` updates a package's imports and is a thin client like any
+    # other; `pc upgrade` replaces this machine's copy of PartCAD, which only the
+    # process running from it can do. Two commands, on opposite sides of the
+    # boundary, which is why they are not one command with a flag.
+    "upgrade.py": "replaces this machine's PartCAD installation, and stops the local daemons to do it",
     "daemon/start.py": "manages the daemon process itself",
     "daemon/stop.py": "manages the daemon process itself",
     "system/telemetry/clear.py": "clears the client's own telemetry id under the client's state dir",

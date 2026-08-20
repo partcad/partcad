@@ -412,13 +412,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             await partcadInspector?.clear();
 
             if (getBackendFromSetting(serverId) === 'service') {
-                // The bundle updates itself by running its own `pc update
-                // --partcad-only`, so the extension and the CLI update by the
-                // same code. That takes the workspace's daemon down with it, so
-                // reconnect afterwards -- to the new executable, which is at a
-                // new path once the update installed one.
+                // The bundle upgrades itself by running its own `pc upgrade`,
+                // so the extension and the CLI upgrade by the same code. That
+                // takes the local daemons down with it, so reconnect afterwards
+                // -- to the new executable, which is at a new path once the
+                // upgrade installed one.
                 try {
-                    // `pc update` stops every local daemon itself; this covers
+                    // `pc upgrade` stops every local daemon itself; this covers
                     // the fallback download path, which does not, and this
                     // connection has to go either way.
                     await lsClient?.stopDaemon?.();
