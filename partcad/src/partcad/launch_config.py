@@ -18,7 +18,11 @@ where a command a user is meant to press a button for has to be.
 The file belongs to the user, not to PartCAD: it may already exist, hold other
 commands, and be full of comments explaining them. So the command is inserted
 into the text rather than the file being rewritten from a parsed copy, which
-would drop every comment in it.
+would drop every comment in it. Which is why finding the one array to add to is
+most of the work here: `"configurations"` also appears inside every compound
+launch, and inside any commented-out block that mentions one. PartCAD's own
+`launch.json` has both, and each of them was picked over the real array before
+this file learned to tell them apart.
 """
 
 import json
@@ -44,13 +48,18 @@ LAUNCH_FILE = os.path.join(".vscode", "launch.json")
 LAUNCH_VERSION = "0.2.0"
 
 
-def _strip_json_comments(text: str) -> str:
-    """Return `text` with `//` and `/* */` comments removed.
+def blank_json_comments(text: str) -> str:
+    """Return `text` with every `//` and `/* */` comment replaced by blanks.
 
     `launch.json` is "JSON with comments", which `json` refuses to parse -- and
     Visual Studio Code puts three comment lines in the file it generates, so
     this is the common case rather than the exotic one. String literals are
     tracked so that a `//` inside a URL survives.
+
+    The comments are replaced character for character, and newlines are kept, so
+    that the result is the same length as the input and every offset in it is an
+    offset in the original file. Whitespace is nothing to JSON and everything to
+    an edit that has to land in the right place.
     """
     out: list[str] = []
     index = 0
@@ -79,11 +88,14 @@ def _strip_json_comments(text: str) -> str:
         if char == "/" and index + 1 < length:
             if text[index + 1] == "/":
                 while index < length and text[index] != "\n":
+                    out.append(" ")
                     index += 1
                 continue
             if text[index + 1] == "*":
                 end = text.find("*/", index + 2)
-                index = length if end == -1 else end + 2
+                end = length if end == -1 else end + 2
+                out.extend("\n" if text[i] == "\n" else " " for i in range(index, end))
+                index = end
                 continue
 
         out.append(char)
@@ -99,7 +111,7 @@ def _drop_trailing_commas(text: str) -> str:
 
 def parse_launch_configuration(text: str) -> Any:
     """Parse the contents of a `launch.json`."""
-    return json.loads(_drop_trailing_commas(_strip_json_comments(text)))
+    return json.loads(_drop_trailing_commas(blank_json_comments(text)))
 
 
 def find_repository_root(path: str) -> Optional[str]:
@@ -152,19 +164,71 @@ def render_configuration(package_dir: str, repository_root: str) -> dict:
     }
 
 
+CONFIGURATIONS_KEY = '"configurations"'
+
+
+def _find_configurations_array(blanked: str) -> Optional[tuple]:
+    """Locate the top-level `configurations` array in a comment-blanked file.
+
+    Returns `(offset of the key, offset just past its opening bracket)`, or None
+    when the file has no such array.
+
+    Only the root object's key counts. A compound launch has a `configurations`
+    of its own, listing the names of other launches rather than commands, and
+    adding a command to that array produces a file that no longer describes what
+    its author wrote -- so the nesting depth is tracked rather than the first
+    match being taken.
+    """
+    depth = 0
+    index = 0
+    length = len(blanked)
+    while index < length:
+        char = blanked[index]
+
+        if char == '"':
+            start = index
+            index += 1
+            while index < length:
+                if blanked[index] == "\\":
+                    index += 2
+                    continue
+                if blanked[index] == '"':
+                    break
+                index += 1
+            index += 1  # past the closing quote
+
+            if depth == 1 and blanked[start:index] == CONFIGURATIONS_KEY:
+                opening = re.compile(r"\s*:\s*\[").match(blanked, index)
+                if opening:
+                    return start, opening.end()
+            continue
+
+        if char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+        index += 1
+
+    return None
+
+
 def _insert_configuration(text: str, configuration: dict) -> Optional[str]:
     """Return `text` with `configuration` added to its `configurations` array.
 
     Returns None when the array cannot be found, which means the file is not
     shaped like a launch configuration and is better left alone than guessed at.
     """
-    match = re.search(r'"configurations"\s*:\s*\[', text)
-    if match is None:
+    # Searched in the blanked copy and applied to the original: they are the
+    # same length, so a position in one is a position in the other.
+    blanked = blank_json_comments(text)
+    found = _find_configurations_array(blanked)
+    if found is None:
         return None
+    key_start, end = found
 
     unit = _indent_unit(text)
-    line_start = text.rfind("\n", 0, match.start()) + 1
-    outer = text[line_start : match.start()]
+    line_start = text.rfind("\n", 0, key_start) + 1
+    outer = text[line_start:key_start]
     if outer.strip():
         # The key is not alone on its line; there is nothing to copy the
         # indentation from, so fall back to one level.
@@ -173,10 +237,9 @@ def _insert_configuration(text: str, configuration: dict) -> Optional[str]:
 
     block = "\n".join(element + line for line in json.dumps(configuration, indent=unit).splitlines())
 
-    end = match.end()
-    remainder = text[end:].lstrip()
-    if remainder.startswith("]"):
-        # An empty array: the closing bracket has to move down a line.
+    if blanked[end:].lstrip().startswith("]"):
+        # An empty array: the closing bracket has to move down a line. Whatever
+        # whitespace and comments were between the brackets go with it.
         return text[:end] + "\n" + block + "\n" + outer + text[end:].lstrip()
     # Added first, so that it is also what the editor offers by default.
     return text[:end] + "\n" + block + "," + text[end:]

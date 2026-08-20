@@ -131,6 +131,84 @@ def test_the_file_keeps_its_own_indentation(repository):
     assert names(launch) == ["Render"]
 
 
+def test_a_commented_out_block_is_not_mistaken_for_the_real_one(repository):
+    # This repository's own launch.json opens with a commented-out compound that
+    # names its `configurations`, and inserting the command there wrote it into
+    # the middle of a comment.
+    launch = repository / ".vscode" / "launch.json"
+    launch.parent.mkdir()
+    launch.write_text(
+        """{
+  "version": "0.2.0",
+  "compounds": [
+    // {
+    //   "name": "Everything",
+    //   "configurations": ["One", "Two"]
+    // }
+  ],
+  "configurations": [
+    {
+      "name": "One",
+      "type": "debugpy",
+      "request": "launch"
+    }
+  ]
+}
+""",
+        encoding="utf-8",
+    )
+
+    assert launch_config.add_render_configuration(str(repository))
+
+    text = launch.read_text(encoding="utf-8")
+    assert '//   "configurations": ["One", "Two"]' in text, "the comment was edited"
+    assert names(launch) == ["Render", "One"]
+    assert read(launch)["compounds"] == []
+
+
+def test_a_compound_launch_is_not_mistaken_for_the_real_one(repository):
+    # A compound's `configurations` lists the names of other launches, not
+    # commands. Adding one there produces a file that no longer describes what
+    # its author wrote -- and PartCAD's own launch.json puts compounds first.
+    launch = repository / ".vscode" / "launch.json"
+    launch.parent.mkdir()
+    launch.write_text(
+        """{
+  "version": "0.2.0",
+  "compounds": [
+    {
+      "name": "Everything",
+      "configurations": ["One", "Two"]
+    }
+  ],
+  "configurations": [
+    {
+      "name": "One",
+      "type": "debugpy",
+      "request": "launch"
+    }
+  ]
+}
+""",
+        encoding="utf-8",
+    )
+
+    assert launch_config.add_render_configuration(str(repository))
+
+    parsed = read(launch)
+    assert parsed["compounds"][0]["configurations"] == ["One", "Two"], "the compound was edited"
+    assert names(launch) == ["Render", "One"]
+
+
+def test_a_comment_between_the_brackets_of_an_empty_list(repository):
+    launch = repository / ".vscode" / "launch.json"
+    launch.parent.mkdir()
+    launch.write_text('{\n  "configurations": [\n    // nothing here yet\n  ]\n}\n', encoding="utf-8")
+
+    assert launch_config.add_render_configuration(str(repository))
+    assert names(launch) == ["Render"]
+
+
 def test_a_file_that_cannot_be_parsed_is_left_alone(repository):
     launch = repository / ".vscode" / "launch.json"
     launch.parent.mkdir()
@@ -159,6 +237,17 @@ def test_trailing_commas_do_not_stop_it(repository):
 
     assert launch_config.add_render_configuration(str(repository))
     assert names(launch) == ["Render", "Other"]
+
+
+def test_blanking_comments_keeps_every_offset():
+    # What lets a match in the blanked copy be applied to the file itself.
+    text = '{ // gone\n  "a": /* also gone */ 1, "b": "// kept" }'
+    blanked = launch_config.blank_json_comments(text)
+    assert len(blanked) == len(text)
+    assert blanked.count("\n") == text.count("\n")
+    assert "gone" not in blanked
+    # A comment is what is outside a string, not what looks like one inside it.
+    assert '"// kept"' in blanked
 
 
 def test_a_url_in_a_value_is_not_a_comment():
