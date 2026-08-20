@@ -44,9 +44,31 @@ point at.
 
 A link is built from its **collision** geometry when it states both, since that
 is the shape a simulator resolves contact against; ``ignoreCollision`` reverses
-that per link or wholesale. What the link says that PartCAD does not model - its
-mass and inertia, its materials, the geometry that was not used, its ``<gazebo>``
-blocks - is carried verbatim in the part's ``physics`` section.
+that per link or wholesale. The geometry that was not used is not discarded: it
+becomes the part ``<assembly>/<link>/<visual|collision>``, defined and
+exportable but not placed in the assembly.
+
+What the link says about its physics is **copied field by field into named
+PartCAD properties**, in PartCAD's own units. ``<inertial>`` becomes ``mass``,
+``centerOfMass`` and ``inertia``; the friction and contact settings of a
+``<gazebo>`` block become ``friction``, ``contactStiffness`` and the rest;
+``<material>`` becomes ``material`` and ``color``. A joint's ``<limit>``,
+``<dynamics>``, ``<safety_controller>`` and ``<mimic>`` become the ``motion``
+and ``physics`` sections of the interface it turns into. Nothing is nested under
+the name of the format it came from, and nothing is opaque.
+
+That choice has a cost and it is deliberate: URDF that no property covers stops
+the import, naming what it found. Core URDF is a closed vocabulary, so an
+unknown element there means PartCAD is out of date and the remedy is to extend
+the tables in ``wrapper_import_urdf.py``. ``<gazebo>`` is an open extension
+point, so an unknown setting there is reported rather than fatal unless the
+assembly asks for ``strict: true``. The export mirrors it: a PartCAD property
+URDF cannot state is reported at info level rather than dropped in silence.
+
+Nor does anything record the link's name or its parent. The part *is* named
+after the link, and the joint tree is the URDF file - which is still on disk and
+is read afresh - or, once converted, the ``connect:`` sections of the ASSY. A
+second copy in a properties section would only be a second thing to keep right.
 
 Writing a URDF
 ==============
@@ -57,29 +79,29 @@ carrying that child's placement, and each node with geometry gets an STL written
 next to the URDF. A shape that appears more than once is written once and
 referenced by every link that uses it.
 
-A node that *came from* a URDF link - it carries the link's own name in its
-``physics`` section - and holds shapes beneath it goes back out as one link with
-a ``<visual>`` per shape, at the offset each was placed at, rather than as a
-frame link with a link per shape. So a link of several visuals survives the
-round trip as itself.
+A sub-assembly whose children are named *under* it - ``wrist`` holding
+``wrist/1`` and ``wrist/2`` - goes back out as one link with a ``<visual>`` per
+shape, at the offset each was placed at, rather than as a frame link with a link
+per shape. So a link of several visuals survives the round trip as itself. The
+slash is the whole of the rule, and it needs nothing recorded anywhere: it is
+the same convention the import uses to name those parts in the first place.
 
-The joint *tree*, though, does not: the export mirrors the assembly, and a URDF
-assembly is flat, so what comes out is one root link with every other link fixed
-to it directly. That is an honest reading - the exported joints are all fixed
-because PartCAD dropped the kinematics on the way in, and a star of fixed joints
-is what a static assembly is. The chain is preserved where it means something,
-in ``pc convert assembly -t assy``. Should a faithful re-export ever be wanted,
-each part records the link it came from and that link's parent
-(``physics.urdf.link`` and ``physics.urdf.parent``), which is what an exporter
-would need to put the tree back.
+The joint *tree* does not survive: the export mirrors the assembly, and a URDF
+assembly is flat, so what comes out is a root frame with every link fixed to it
+directly. That is an honest reading - the exported joints are all fixed because
+PartCAD holds one static configuration, and a star of fixed joints is what that
+is. The chain is preserved where it means something, in
+``pc convert assembly -t assy``, and a faithful re-export would read it back
+from there rather than from anything stashed on the parts.
 
-Inertial properties come from the part's ``physics`` section when it has one -
-which is how a URDF's own numbers survive a round trip - and are computed from
-the geometry otherwise: OCCT gives the volume, the centre of mass and the
-inertia tensor about it, and a density turns those into a mass. Since PartCAD
-has nowhere to record what a part is *made of*, that density is a parameter of
-the export with a default rather than a property of the part - the first gap
-this page proposes to close.
+What a part states about itself is written into the URDF element that states it:
+mass, centre of mass and inertia into ``<inertial>``, friction and the contact
+parameters into a ``<gazebo>`` block, ``material``/``color`` into
+``<material>``. Only a part that says nothing gets computed inertial properties:
+OCCT gives the volume, the centre of mass and the inertia tensor about it, and a
+density turns those into a mass. Since PartCAD still has nowhere to record what
+a part is *made of*, that density is a parameter of the export with a default
+rather than a property of the part - the first gap this page proposes to close.
 
 Converting between the two
 ==========================
@@ -118,14 +140,16 @@ what survives.
      - Which part in which package a link came from - the digital thread itself
 
 In the other direction, reading a URDF loses less than it used to but still
-loses. Mass and inertia, materials, the unused geometry and the ``<gazebo>``
-blocks are *carried* in the part's ``physics`` section and put back on export;
-joint types, axes, limits and dynamics are carried on the generated interfaces
-when the assembly is converted to ASSY. What is genuinely gone is the *effect*
-of a joint - the assembly is one configuration, so a movable joint is a
-placement and not a degree of freedom - along with transmissions, sensors and
-``ros2_control`` blocks. PartCAD reports the count of each rather than passing
-over them in silence, so the loss is visible at import time and in ``pc info``.
+loses. Mass, inertia, friction, contact parameters and appearance become named
+properties of the part and are written back on export; joint types, axes, limits
+and dynamics become the ``motion`` and ``physics`` of the generated interfaces
+when the assembly is converted to ASSY; the geometry a link was not built from
+becomes a part of its own. What is genuinely gone is the *effect* of a joint -
+the assembly is one configuration, so a movable joint is a placement and not a
+degree of freedom - along with transmissions, sensors and ``ros2_control``
+blocks, and the ``<origin>`` of geometry that ends up unplaced. PartCAD reports
+the count of each rather than passing over them in silence, so the loss is
+visible at import time and in ``pc info``.
 
 What it took to implement
 =========================
@@ -152,8 +176,15 @@ gap is:
   assembly that owns it. A concept of "a part that exists because an assembly
   produced it" did not exist before, and it turns out to be the right one: those
   parts are ordinary parts, inspectable and exportable, not an internal detail.
-- **Mapping the robot's root link to the assembly itself** is what makes the
-  round trip structurally exact instead of growing a wrapper level each time.
+- **Mapping the robot's root link to the assembly itself was a mistake too.**
+  It made an export come out with one link fewer, which looked like fidelity,
+  but it only worked because each part recorded which link it *was*: the export
+  matched the assembly node against a stored link name. Once that stored name
+  went away - and it had to, since the part is already named after the link -
+  the assembly went back to being what it is, a container. An export now writes
+  a root frame with no geometry and every link fixed to it, which reads back as
+  the same four placed links; the round trip is stable, just one honest link
+  longer.
 - **A link of several shapes is a sub-assembly, and combining them was a
   mistake.** Merging a link's visuals into one generated shape made the joint
   algebra fall out neatly - every part's origin was the link frame - but it
@@ -172,6 +203,30 @@ gap is:
   and only the first is structure. Flattening the second and recording the
   relative placements in a table beside the tree is what let the ASSY conversion
   keep the kinematics *and* the assembly stay shallow.
+- **An opaque properties section was a mistake, and the least obvious one.** The
+  first version carried what a URDF said under ``physics: {urdf: ...}``, keeping
+  the source format's own structure so that an export could hand it straight
+  back. It round-tripped perfectly and told PartCAD nothing: a mass was a mass
+  only to the URDF exporter, and no other part of the system could read it,
+  check it, or state one of its own. Copying each value into a named PartCAD
+  property with a PartCAD unit is more code and a closed list to maintain, and
+  it is what makes the property *PartCAD's* rather than a souvenir of where it
+  came from. The rule that falls out of it - refuse URDF nothing maps, report
+  PartCAD properties URDF cannot state - is what keeps the list honest, because
+  the alternative to a loud failure is a quiet loss.
+- **The same went for the link's identity.** Recording which link a part came
+  from, and which link that link hung off, looked like cheap insurance. It was
+  two more things to keep consistent with the names and the connections that
+  already said it, and it let the exporter take a shortcut that stopped working
+  the moment the record was removed. Hierarchy that has to be preserved belongs
+  in the *name*, where a slash already means containment; relations between two
+  things belong in the connection between them.
+- **A cache entry is keyed by geometry, and carried an identity it should not
+  have.** Two parts that read the same mesh file hash the same, so the second
+  one came back wearing the first one's name and label. Nothing had noticed,
+  because nothing had keyed anything off those; the URDF exporter names its
+  links from them. Restamping on the way out of the cache, exactly as the write
+  path stamps on the way in, was the fix.
 - **Two long-standing gaps in the interface code surfaced.** The schema has
   always allowed ``ports: {name:}`` and ``implements: {iface:}`` with no value,
   and both crashed - nothing had written them before, because nothing had
@@ -211,11 +266,21 @@ So one side has to carry the flip. The mapping is:
        part implements once, at its own origin
    * - the two are the same joint
      - ``mates:`` on the plug, naming the socket
-   * - ``axis`` + ``limit``
-     - an interface ``parameter`` (``angle`` for a revolute joint, ``offset``
-       for a prismatic one) plus a ``motion:`` record
-   * - ``limit`` effort/velocity, ``dynamics``, ``mimic``, ``safety_controller``
-     - ``physics:``, verbatim
+   * - ``axis``, ``limit`` lower/upper
+     - ``motion: {axis, limits}``, in degrees or millimetres, plus an interface
+       ``parameter`` (``angle`` for a revolute joint, ``offset`` for a prismatic
+       one) that makes it move
+   * - ``safety_controller``, ``mimic``
+     - ``motion: {softLimits, mimic}`` - both bound the movement, so both are
+       kinematics
+   * - ``limit`` effort/velocity, ``dynamics``
+     - ``physics: {maxEffort, maxVelocity, damping, friction}`` - what the
+       movement costs
+   * - a joint's ``<gazebo>`` block
+     - ``physics: {springStiffness, springReference, stopCfm, ...}``
+   * - ``calibration``
+     - nothing: a limit-switch reference used when a real robot is
+       commissioned, which says nothing about the model. Counted and reported
    * - a link's attachment
      - ``connect: {with: <plug>, name: <parent>, to: <socket>, toInstance: <joint>}``
 
@@ -234,8 +299,16 @@ against the URDF. It costs one wrinkle, in the axis. The half turn ``T`` is a
 180 degree rotation about ``(1, 1, 0)``, and a rotation conjugated by it is the
 same rotation about the mapped axis, ``(x, y, z) -> (y, x, -z)``. So the
 parameter's ``dir`` is the joint axis under that map, while ``motion.axis``
-keeps the axis as URDF stated it. The record stays readable; the executable half
-stays correct.
+keeps it as URDF stated it - which is also the socket port's own frame, since
+that port sits at the joint origin. The record stays readable; the executable
+half stays correct.
+
+The units change at the boundary and only there. A URDF limit is radians for a
+revolute joint and metres for a prismatic one; what lands in ``motion.limits``
+is degrees and millimetres, because those are PartCAD's units and a property
+that keeps its source format's unit is a property nothing else can use. The
+reader converts once, and every consumer downstream - the generated parameter,
+the schema, a person reading the file - sees one convention.
 
 Two things fall out of this that are worth more than the mapping itself.
 
@@ -381,13 +454,18 @@ invalidates them. This is what the digital thread means here.
 friction. PartCAD should store friction and let each exporter spell it. The
 formats disagree on almost everything except what they are trying to describe.
 
-**Lose nothing, even before modelling it.** Anything PartCAD does not yet
-understand should survive an import as opaque, target-tagged passthrough, so
-that a round trip is lossless long before it is fully modelled. This principle
-is the one already in place: ``physics:`` on a part and ``physics:`` on an
-interface are exactly that, keyed by the format the content came from, and the
-URDF exporter reads them back. Everything below is what it would take to
-*model* what is currently only carried.
+**Lose loudly, never quietly.** The tempting version of this principle is "lose
+nothing": carry whatever PartCAD does not model as opaque, format-tagged
+passthrough so that a round trip is lossless long before it is understood. That
+is what ``physics:`` was at first, and it was the wrong trade. A value stored
+under the name of the format it came from is readable by exactly one exporter;
+it is not a property of the part, it is a souvenir. The version that survived
+copies each value into a named PartCAD property with a PartCAD unit, keeps the
+list of them closed, and makes the two failure modes loud: input nothing maps
+stops the import, and a property the target format cannot state is reported when
+it is written. A round trip is then lossless *and* the values mean something to
+the rest of the system. Everything below extends that list; none of it reopens
+the passthrough.
 
 1. Materials as first-class objects
 ===================================
@@ -413,43 +491,52 @@ property of the model, and it does double duty: the same material drives
 rendering, the manufacturing cost estimate that ``partcad`` already reasons
 about, and the simulation.
 
-2. Physical properties on a part
-================================
+2. Physical properties a part does not have to state
+====================================================
 
-A part already has a ``physics:`` section, but it is a *carrier*: the URDF
-import fills it in and the URDF export reads it back, and PartCAD in between
-neither computes it, checks it, nor lets any other format at it. The modelled
-counterpart sits next to it, and the rule between the two is that ``physics:``
-holds what a format said and ``physical:`` holds what the *model* means:
+A part's ``physics:`` section already holds the modelled properties -
+``mass``, ``centerOfMass``, ``inertia``, ``friction``, the contact parameters -
+each with a PartCAD name and a PartCAD unit. What it does not do is *derive*
+any of them, check any of them, or distinguish a measured value from a guess.
+Three additions, in increasing order of how much they are worth:
 
-.. code-block:: yaml
+- **Derivation.** With a material behind it (item 1), a part that states no
+  ``mass`` has one: the solid's volume times the material's density, cached like
+  any other derived value and invalidated when the CAD changes. The same for
+  ``centerOfMass``, ``inertia`` and the surface properties. Today the URDF
+  exporter computes exactly this, from a density passed on the command line,
+  and throws it away afterwards - it should be a property of the part that every
+  consumer sees.
+- **Provenance.** A declared value should say why it exists, since "measured on
+  the bench" and "copied from a vendor datasheet" and "invented so the
+  simulation would load" are not the same claim:
 
-  parts:
-    bracket:
-      type: step
-      material: //pub/materials:aluminum-6061
-      physical:
-        # Everything here is optional. What is absent is computed from the
-        # solid and the material; what is present overrides it and says why.
-        mass: { value: 0.812 kg, source: measured }
-        centerOfMass: [12.4, 0, 31.0]
-        inertia:                       # about the centre of mass, part frame
-          ixx: ..., ixy: ..., ixz: ..., iyy: ..., iyz: ..., izz: ...
-        surface:
-          friction: { static: 0.8, dynamic: 0.7, anisotropy: { direction: [1,0,0], ratio: 0.4 } }
-          restitution: 0.2
-          contact: { stiffness: 1e6 N/m, damping: 1e3 N*s/m }
+  .. code-block:: yaml
 
-A ``pc info`` on such a part should show the derived values next to the declared
-ones, and ``pc lint`` should flag the classic defects: zero mass, an inertia
-tensor that is not positive definite, one that violates the triangle inequality,
-or a declared mass that disagrees with geometry times density by more than a
-tolerance.
+    physics:
+      mass: 0.812
+      massSource: measured   # measured | datasheet | estimated | derived
+
+- **Checking.** ``pc lint`` should flag the classic defects, all of which are
+  common in published URDFs and all of which load without complaint: zero mass,
+  an inertia tensor that is not positive definite, one that violates the
+  triangle inequality, and a declared mass that disagrees with volume times
+  density by more than a tolerance.
+
+Anisotropic friction is the one property that needs more structure than it has
+today: ``friction``/``friction2``/``frictionDirection`` is ODE's shape of it,
+kept because it is what URDF states. A modelled version would be a static and a
+dynamic coefficient with an optional anisotropy, and the URDF exporter would
+flatten it on the way out.
 
 3. Collision geometry
 =====================
 
-A part gains an optional second shape, declared the same way any other shape is:
+A URDF's collision geometry is not lost today - a link that states both shapes
+is built from the collision one and the visual one becomes a part of its own -
+but the *relation* between the two is: they are two parts that happen to be
+named alike, and nothing says one is the simplified stand-in for the other. A
+part should be able to say it:
 
 .. code-block:: yaml
 
@@ -463,8 +550,10 @@ A part gains an optional second shape, declared the same way any other shape is:
 
 ``convexHull`` and ``convexDecomposition`` are computed in a sandbox and cached
 like any derived shape; ``part`` points at another PartCAD part, which is how a
-hand-simplified collision shape gets version-controlled next to the real one;
-``primitive`` fits a box/cylinder/sphere/capsule to the geometry.
+hand-simplified collision shape gets version-controlled next to the real one -
+and is exactly what a URDF import would then produce instead of a part with a
+suggestive name; ``primitive`` fits a box/cylinder/sphere/capsule to the
+geometry.
 
 4. Named frames
 ===============
@@ -586,34 +675,38 @@ model instances with initial poses, and physics engine settings. A scene is also
 where a *fixed to the world* joint belongs, which is the piece a single assembly
 cannot express.
 
-9. Passthrough, so nothing is lost (in place)
-=============================================
+9. The property tables, and keeping them honest (in place)
+==========================================================
 
 This is the item that is built, and doing it first was right: it makes a URDF
 round trip nearly lossless while the rest of the proposal is still being
 designed, and it is the difference between PartCAD being usable in a robotics
 workflow and being a one-way trip out of one.
 
-A part carries ``physics:`` and an interface carries ``motion:`` and
-``physics:``, each keyed by the format its contents came from. A URDF import
-fills them - inertials, materials, unused geometry, ``<gazebo>`` blocks on a
-part; joint type, axis, limits, dynamics and mimic on an interface - and the
-URDF export reads them back out.
+A part carries ``physics:``, ``material:`` and ``color:``; an interface carries
+``motion:`` and ``physics:``. Every property in them is a PartCAD property with
+a PartCAD unit and a closed definition in the schema. A URDF import reads its
+values into them one at a time and the URDF export writes each one back into the
+element that states it. The two rules that keep the list honest are the loud
+failures: URDF that no property covers stops the import, and a property URDF
+cannot state is reported when the file is written.
 
 What is still missing:
 
 - **``<ros2_control>`` and ``<transmission>``**, which are robot-level rather
-  than link-level, and so have nowhere to attach yet. The assembly needs its own
-  ``physics:`` for them.
-- **Passthrough on the way *out* of a format PartCAD did not import from.**
-  Carried content is tagged ``urdf``; an SDF exporter would have to decide
-  whether to translate it or drop it, and today there is no rule.
-- **Any check at all that carried content still applies.** ``physics:`` does not
-  take part in the shape cache, which is right - it says nothing about the
+  than link-level, and so have nowhere to attach yet. The assembly needs a
+  ``physics:`` of its own - which it deliberately does not have today, because
+  an assembly is a container and every property so far belongs to something
+  inside it.
+- **Properties that are not a link's or a joint's.** A URDF's ``<gazebo>``
+  blocks also carry sensors and simulator plugins, which items 7 and 8 cover;
+  until then they are counted and reported, not carried.
+- **Any check at all that a declared property still applies.** ``physics:`` does
+  not take part in the shape cache, which is right - it says nothing about the
   geometry - but it also means nothing notices when the geometry moves out from
-  under it. A mass carried from a URDF survives an edit to the CAD that
-  invalidates it, silently. ``pc lint`` is where that belongs, and it needs item
-  2 below to have something to compare against.
+  under it. A mass read from a URDF survives an edit to the CAD that invalidates
+  it, silently. ``pc lint`` is where that belongs, and it needs item 2 to have
+  something to compare against.
 
 10. Units
 =========
@@ -679,7 +772,8 @@ Non-goals
 - PartCAD should not become a simulator, or wrap one. It should describe a
   product well enough that a simulator can be handed it.
 - PartCAD should not model every engine-specific solver parameter as a
-  first-class concept. Those are passthrough (item 9) unless they turn out to
-  describe something physical.
+  first-class concept. But the alternative is not a passthrough container: it is
+  to leave them out and say so when one is seen, which is what the import does
+  for an unknown ``<gazebo>`` setting.
 - Reading a URDF should not become lossless by making PartCAD's model a copy of
   URDF's. The point is a model that URDF, SDF, MJCF and USD are all views of.

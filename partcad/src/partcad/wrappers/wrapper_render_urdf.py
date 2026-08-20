@@ -29,11 +29,15 @@ close:
     once in the assembly is written once and referenced by every link that uses
     it, the way a URDF written by hand would.
 
-Inertial properties are computed from the solid where there is one, using the
-configured density. They are a derived convenience, not something PartCAD
-stores: see the URDF section of docs/source/design.rst.
+What the part states about itself wins over anything computed here: mass,
+centre of mass, inertia, friction and the contact parameters are named PartCAD
+properties, and this writes each of them back into the URDF element that states
+it. Only a part that says nothing gets computed inertial properties, from its
+solid and the configured density. A property PartCAD has and URDF has no
+spelling for is reported rather than dropped in silence - see URDF_STATED.
 """
 
+import math
 import os
 import re
 import sys
@@ -65,6 +69,39 @@ MM3_TO_M3 = 1e-9
 # URDF link and joint names end up as XML attributes and as ROS graph names, so
 # anything outside this set is replaced.
 _UNSAFE_NAME = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
+def _bool_text(value):
+    return "true" if value else "false"
+
+
+# PartCAD property -> the Gazebo tag that states it, and how to write the text.
+# The mirror image of wrapper_import_urdf.GAZEBO_LINK_PHYSICS, and to be kept
+# that way: contact and friction are PartCAD properties, and '<gazebo>' is where
+# a URDF states them. 'turnGravityOff' has no entry here because 'gravity' says
+# the same thing and is not deprecated.
+GAZEBO_LINK_PHYSICS = {
+    "friction": ("mu1", repr),
+    "friction2": ("mu2", repr),
+    "frictionDirection": ("fdir1", lambda v: " ".join(repr(float(x)) for x in v)),
+    "contactStiffness": ("kp", repr),
+    "contactDamping": ("kd", repr),
+    "minContactDepth": ("minDepth", lambda v: repr(v / urdf_common.MM_PER_M)),
+    "maxContactVelocity": ("maxVel", lambda v: repr(v / urdf_common.MM_PER_M)),
+    "restitution": ("bounce", repr),
+    "maxContacts": ("maxContacts", lambda v: str(int(v))),
+    "velocityDamping": ("dampingFactor", repr),
+    "selfCollide": ("selfCollide", _bool_text),
+    "gravity": ("gravity", _bool_text),
+}
+
+# Every part property this exporter has a URDF spelling for. A 'physics'
+# property outside this set is one PartCAD supports and URDF does not: it is
+# reported through the response and logged at info level, which is the mirror
+# image of the import refusing URDF that PartCAD has no property for. When
+# PartCAD grows a physical property, either give it a spelling above or let it
+# be reported here - do not let it disappear quietly.
+URDF_STATED = frozenset(("mass", "centerOfMass", "inertiaOrientation", "inertia")) | frozenset(GAZEBO_LINK_PHYSICS)
 
 
 def sanitize_name(name, fallback):
@@ -195,8 +232,6 @@ def combined(placed):
 
 def _toploc(packed):
     """The OCCT location for PartCAD's packed [[t], [axis], angle] form."""
-    import math
-
     from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
     from OCP.TopLoc import TopLoc_Location
 
@@ -208,44 +243,80 @@ def _toploc(packed):
 
 
 def carried_inertial(physics):
-    """The ``<inertial>`` a part carries verbatim, if it has one.
+    """The ``<inertial>`` a part's own properties state, if it has them.
 
-    A part that came from a URDF keeps the link's stated mass and inertia tensor
-    in its 'physics' section. Those are what the model's author meant - a
-    measurement, or the number a simulation was tuned against - so they win over
-    anything recomputed from the geometry and a guessed density.
+    A part carries mass, centre of mass and inertia as named PartCAD properties
+    (see wrapper_import_urdf's tables for the full list and the units). Those
+    are what the model's author meant - a measurement, or the number a
+    simulation was tuned against - so they win over anything recomputed from the
+    geometry and a guessed density.
     """
     from urdf_parser_py.urdf import Inertia, Inertial, Pose
 
-    inertial = (physics or {}).get("urdf", {}).get("inertial")
-    if not inertial:
+    physics = physics or {}
+    if "mass" not in physics and "inertia" not in physics:
         return None
-    origin = inertial.get("origin") or {}
-    inertia = inertial.get("inertia") or {}
+
+    xyz = [v / urdf_common.MM_PER_M for v in physics.get("centerOfMass") or (0.0, 0.0, 0.0)]
+    rpy = [math.radians(v) for v in physics.get("inertiaOrientation") or (0.0, 0.0, 0.0)]
+    inertia = physics.get("inertia") or {}
     return Inertial(
-        mass=float(inertial.get("mass", 0.0)),
-        origin=Pose(xyz=list(origin.get("xyz") or [0.0, 0.0, 0.0]), rpy=list(origin.get("rpy") or [0.0, 0.0, 0.0])),
+        mass=float(physics.get("mass", 0.0)),
+        origin=Pose(xyz=xyz, rpy=rpy),
         inertia=Inertia(**{key: float(inertia.get(key, 0.0)) for key in Inertia.KEYS}) if inertia else None,
     )
 
 
-def carried_material(physics):
-    """The ``<material>`` a part carries verbatim, if any of its geometry had one."""
-    from urdf_parser_py.urdf import Color, LinkMaterial, Texture
+def carried_material(properties, state):
+    """The ``<material>`` a part's own 'material'/'color' properties state."""
+    from urdf_parser_py.urdf import Color, LinkMaterial
 
-    urdf = (physics or {}).get("urdf", {})
-    for kind in ("visual", "collision"):
-        for descriptor in urdf.get(kind) or []:
-            material = descriptor.get("material")
-            if not material:
-                continue
-            built = LinkMaterial(name=material.get("name"))
-            if material.get("rgba"):
-                built.color = Color(rgba=list(material["rgba"]))
-            if material.get("texture"):
-                built.texture = Texture(filename=material["texture"])
-            return built
-    return None
+    name, color = properties.get("material"), properties.get("color")
+    if not name and not color:
+        return None
+    built = LinkMaterial(name=sanitize_name(name or color, "material"))
+    rgba = color_rgba(color, state) if color else None
+    if rgba is not None:
+        # 'Color' takes the components positionally, not by keyword.
+        built.color = Color(rgba)
+    return built
+
+
+def color_rgba(text, state):
+    """A PartCAD colour string as URDF's ``rgba``, or None if it is not one."""
+    digits = str(text).lstrip("#")
+    if len(digits) not in (6, 8):
+        state["warnings"].append("Ignoring the colour '%s', which is not #RRGGBB or #RRGGBBAA" % text)
+        return None
+    try:
+        values = [int(digits[i : i + 2], 16) / 255.0 for i in range(0, len(digits), 2)]
+    except ValueError:
+        state["warnings"].append("Ignoring the colour '%s', which is not #RRGGBB or #RRGGBBAA" % text)
+        return None
+    return [round(v, 6) for v in values] + ([1.0] if len(values) == 3 else [])
+
+
+def gazebo_element(link_name, physics, state):
+    """The ``<gazebo reference="...">`` block a link's physics needs, or None.
+
+    The reverse of wrapper_import_urdf.GAZEBO_LINK_PHYSICS: contact and friction
+    are PartCAD properties, and Gazebo is where a URDF states them.
+
+    A property with no URDF spelling is reported rather than dropped in silence
+    - see UNSUPPORTED. When one of them grows a URDF spelling, move it into a
+    table here; do not let it disappear quietly.
+    """
+    from xml.etree import ElementTree
+
+    element = None
+    for name, (tag, write) in GAZEBO_LINK_PHYSICS.items():
+        if name not in physics:
+            continue
+        if element is None:
+            element = ElementTree.Element("gazebo", {"reference": link_name})
+        child = ElementTree.SubElement(element, tag)
+        child.text = write(physics[name])
+    return element
 
 
 def mesh_reference(shape, node, link_name, state):
@@ -268,28 +339,27 @@ def mesh_reference(shape, node, link_name, state):
 def shape_elements(node, state):
     """The (shape node, placement) pairs one URDF link is built from.
 
-    Usually a node is one shape and that is the whole of it. A node that *came
-    from* a URDF link holds that link's several ``<visual>`` elements, and goes
-    back out as one link with several of them rather than as a frame link with a
+    Usually a node is one shape and that is the whole of it. A sub-assembly
+    whose children are named *under* it - "wrist" holding "wrist/1" and
+    "wrist/2" - is one thing made of several shapes, and goes back out as one
+    link with several ``<visual>`` elements rather than as a frame link with a
     link per shape.
 
-    Which of its children are the link's own shapes and which are links beneath
-    it is decided by name: the import names a link's elements after the link
-    ("wrist", or "wrist/1" and "wrist/2"), and a child link after itself. That
-    name is recorded alongside the properties the node carries, because PartCAD
-    labels are not URDF link names and the two have to be matched deliberately.
+    The slash is the whole of the rule, and it is the only hierarchy PartCAD
+    encodes in a name. It needs nothing recorded anywhere: a URDF link with
+    several ``<visual>`` elements is imported under exactly this convention, and
+    an assembly that was never a URDF but uses it means the same thing by it.
     """
     if ocp_serialize.is_shape_object(node):
         return [(node, None)], []
 
     children = node.get(ocp_serialize.KEY_ASSEMBLY, [])
-    link = (state["physics"].get(node.get("name")) or {}).get("urdf", {}).get("link")
-    if not link:
+    prefix = (node.get("label") or "") + "/"
+    if not prefix.strip("/"):
         return [], children
 
     def belongs(child):
-        label = child.get("label") or ""
-        return ocp_serialize.is_shape_object(child) and (label == link or label.startswith(link + "/"))
+        return ocp_serialize.is_shape_object(child) and (child.get("label") or "").startswith(prefix)
 
     own = [(child, child.get(ocp_serialize.KEY_LOCATION)) for child in children if belongs(child)]
     return own, [child for child in children if not belongs(child)]
@@ -300,9 +370,8 @@ def build_link(node, link_name, elements, state):
     from urdf_parser_py.urdf import Collision, Link, Mesh, Pose, Visual
 
     link = Link(name=link_name)
-    physics = state["physics"].get(node.get("name"))
+    physics = (state["properties"].get(node.get("name")) or {}).get("physics") or {}
 
-    material = carried_material(physics)
     placed = []
     for shape_node, placement in elements:
         shape = node_geometry(shape_node)
@@ -315,6 +384,9 @@ def build_link(node, link_name, elements, state):
         else:
             xyz, rpy = urdf_common.to_urdf_origin(urdf_common.from_packed(placement))
             origin = Pose(xyz=xyz, rpy=rpy)
+        # The appearance belongs to the shape, not to the link: a link built
+        # from several parts may well have a colour per part.
+        material = carried_material(state["properties"].get(shape_node.get("name")) or {}, state)
         link.add_aggregate("visual", Visual(geometry=geometry, origin=origin, material=material))
         link.add_aggregate("collision", Collision(geometry=geometry, origin=origin))
         placed.append((shape, placement))
@@ -328,11 +400,10 @@ def build_link(node, link_name, elements, state):
         link.inertial = carried_inertial(physics) or inertial_of(
             placed, state["options"]["density"], state["warnings"], link_name
         )
-    for block in (physics or {}).get("urdf", {}).get("gazebo") or []:
-        # Re-tagged with the name this link is going out under: PartCAD renames
-        # links (its own names carry package paths), and a '<gazebo>' block that
-        # still references the old name would attach to nothing.
-        state["gazebo"].append((link_name, block))
+    gazebo = gazebo_element(link_name, physics, state)
+    if gazebo is not None:
+        state["gazebo"].append(gazebo)
+    state["unsupported"].update(set(physics) - URDF_STATED)
     return link
 
 
@@ -388,11 +459,14 @@ def process(path, request):
         # itself - what a standalone URDF wants. A ROS package sets this to
         # "package://<pkg>/" so the meshes resolve through the ROS package path.
         "mesh_prefix": request.get("mesh_prefix") or "",
-        # Shape full name -> the 'physics' section its part declares. A part
-        # that came from a URDF carries the link's mass, inertia, material and
-        # Gazebo blocks here, and they go back out rather than being recomputed.
-        "physics": request.get("physics") or {},
+        # Shape full name -> the properties its part declares ('physics',
+        # 'material', 'color'). A part that came from a URDF states the link's
+        # mass, inertia and friction here, and they go back out rather than
+        # being recomputed.
+        "properties": request.get("properties") or {},
         "gazebo": [],
+        # PartCAD properties URDF has no spelling for, reported once at the end.
+        "unsupported": set(),
         "options": {
             "tolerance": request.get("tolerance", 0.1),
             "angularTolerance": request.get("angularTolerance", 0.1),
@@ -415,7 +489,7 @@ def process(path, request):
         emit(root, world.name, root_pose, state)
 
     with open(path, "w", encoding="utf-8") as f:
-        f.write(with_gazebo(state["robot"].to_xml_string(), state["gazebo"], warnings))
+        f.write(with_gazebo(state["robot"].to_xml_string(), state["gazebo"]))
 
     return {
         "success": True,
@@ -424,6 +498,10 @@ def process(path, request):
         "mesh_dir": mesh_dir,
         "meshes": sorted(set(state["meshes"].values())),
         "warnings": warnings,
+        # Properties PartCAD holds and URDF cannot state. Reported at info
+        # level by the caller: nothing is wrong with the file, it just says
+        # less than the package does.
+        "unsupported": sorted(state["unsupported"]),
     }
 
 
@@ -433,33 +511,22 @@ def _world_link(state):
     return Link(name=state["names"].take("world", "world"))
 
 
-def with_gazebo(xml, blocks, warnings):
-    """Put the carried ``<gazebo>`` blocks back into the serialized robot.
+def with_gazebo(xml, blocks):
+    """Add the ``<gazebo>`` blocks to the serialized robot.
 
-    They are re-inserted as text rather than through urdf_parser_py, because
-    PartCAD never parsed them in the first place - they are carried verbatim,
-    and the point is that they come out exactly as they went in, apart from the
-    link name they reference.
+    They are inserted as text because urdf_parser_py serializes what it parsed,
+    and it keeps ``<gazebo>`` as an opaque element it will not build. Each block
+    here was *built* from named PartCAD properties, not carried through, so what
+    lands in the file is a statement of what PartCAD holds.
     """
     if not blocks:
         return xml
 
     from xml.etree import ElementTree
 
-    restored = []
-    for link_name, block in blocks:
-        try:
-            element = ElementTree.fromstring(block)
-            if element.get("reference") is not None:
-                element.set("reference", link_name)
-            restored.append(ElementTree.tostring(element, encoding="unicode").rstrip())
-        except Exception as e:  # pragma: no cover - malformed stored XML
-            warnings.append("Could not restore a Gazebo block for link '%s': %s" % (link_name, e))
-
-    if not restored:
-        return xml
+    rendered = [ElementTree.tostring(block, encoding="unicode").rstrip() for block in blocks]
     closing = xml.rindex("</robot>")
-    return xml[:closing] + "\n".join("  %s" % line for line in restored) + "\n" + xml[closing:]
+    return xml[:closing] + "\n".join("  %s" % line for line in rendered) + "\n" + xml[closing:]
 
 
 if __name__ == "__main__":

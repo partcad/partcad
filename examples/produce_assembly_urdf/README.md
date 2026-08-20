@@ -10,11 +10,20 @@ pc inspect -a robot
 ```
 
 Each link becomes a part of this package, named `<assembly>/<link>`, which
-can be inspected and exported like any other part:
+can be inspected and exported like any other part. So does the geometry a
+link was not built from, as `<assembly>/<link>/<visual|collision>`:
 
 ```shell
 pc inspect robot/forearm
 pc export -t step robot/wrist
+pc inspect robot/base_link/visual
+```
+
+What each link says about its physics becomes named properties of its part -
+`mass`, `centerOfMass`, `inertia`, `friction` - in PartCAD's own units:
+
+```shell
+pc info robot/base_link
 ```
 
 The reverse direction writes a URDF (plus the mesh files it references) from

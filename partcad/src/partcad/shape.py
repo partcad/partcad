@@ -225,6 +225,15 @@ class Shape(ShapeConfiguration):
                     if cache_hash:
                         keys_to_read = [self.kind, "cmps"]
                         cached, to_cache_in_memory = await ctx.cache_shapes.read_async(cache_hash, keys_to_read)
+                        if self.kind in cached and cached[self.kind] is not None:
+                            # Restamped with *this* shape's identity, mirroring
+                            # 'get_cache_value' on the way in. The hash is over
+                            # the geometry, so two parts reading the same mesh
+                            # file share an entry, and without this the second
+                            # one comes back wearing the first one's name - which
+                            # an exporter that keys on it (URDF names its links
+                            # from labels) would then get wrong.
+                            cached[self.kind] = await self.get_cache_value(ctx, cached[self.kind])
                         if to_cache_in_memory.get(self.kind, False):
                             self._wrapped = cached[self.kind]
                         if to_cache_in_memory.get("cmps", False):
@@ -277,13 +286,18 @@ class Shape(ShapeConfiguration):
                     self._wrapped = shape
                 return shape
 
-    async def _physics_index(self):
-        """The 'physics' section of this shape and everything under it.
+    # The properties an exporter may need that are declared rather than derived
+    # from the geometry. 'physics' is the physical ones (mass, inertia,
+    # friction); the other two are appearance.
+    EXPORTED_PROPERTIES = ("physics", "material", "color")
+
+    async def _property_index(self):
+        """The declared properties of this shape and everything under it.
 
         Keyed by the full name ("<package>:<name>") an exporter sees on the
         envelope, so a wrapper that is handed a whole assembly tree can find the
-        properties belonging to each node of it. Only shapes that declare a
-        'physics' section appear.
+        properties belonging to each node of it. Only shapes that declare at
+        least one appear.
 
         An assembly is built first: its geometry may well have come from the
         cache, in which case its children have never been instantiated and there
@@ -297,9 +311,10 @@ class Shape(ShapeConfiguration):
 
         def walk(shape):
             config = getattr(shape, "config", None)
-            physics = config.get("physics") if isinstance(config, dict) else None
-            if physics:
-                index["%s:%s" % (shape.project_name, shape.name)] = physics
+            if isinstance(config, dict):
+                declared = {key: config[key] for key in self.EXPORTED_PROPERTIES if config.get(key)}
+                if declared:
+                    index["%s:%s" % (shape.project_name, shape.name)] = declared
             for child in getattr(shape, "children", None) or []:
                 walk(child.item)
 
@@ -872,11 +887,10 @@ class Shape(ShapeConfiguration):
                     request["mesh_prefix"] = kwargs.get("mesh_prefix", render_opts.get("mesh_prefix"))
                     request["inertial"] = kwargs.get("inertial", render_opts.get("inertial", True))
                     request["density"] = kwargs.get("density", render_opts.get("density"))
-                    # What the parts say about themselves that PartCAD carries
-                    # but does not model - a URDF import puts the link's mass,
-                    # inertia, material and Gazebo blocks here - so the export
-                    # can put it back instead of recomputing or losing it.
-                    request["physics"] = await self._physics_index()
+                    # What the parts state about themselves - mass, inertia,
+                    # friction, colour - so the export writes those rather than
+                    # recomputing them or losing them.
+                    request["properties"] = await self._property_index()
 
                 # CAD formats
                 elif format in ["step", "iges"]:
@@ -937,6 +951,16 @@ class Shape(ShapeConfiguration):
                 # cannot hold everything a PartCAD assembly knows).
                 for warning in result.get("warnings") or []:
                     pc_logging.warning(f"{self.project_name}:{self.name}: {warning}")
+
+                # Properties PartCAD holds that the target format has no way to
+                # state. Not a warning - the file is correct, it just says less
+                # than the package does - but not silent either.
+                unsupported = result.get("unsupported") or []
+                if unsupported:
+                    pc_logging.info(
+                        "%s:%s: %s cannot state these properties, so they are not in the exported file: %s"
+                        % (self.project_name, self.name, format_name.upper(), ", ".join(unsupported))
+                    )
 
     def render(
         self,

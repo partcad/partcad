@@ -2,10 +2,12 @@
 <!--
   A small URDF used as a PartCAD assembly (see partcad.yaml).
 
-  It is deliberately more than PartCAD's assembly representation can hold: it
-  has masses and inertia tensors, materials, a revolute joint with limits and
-  dynamics, and a Gazebo block. Reading it reports what had to be dropped, which
-  is the point of the example - see the URDF section of docs/source/design.rst.
+  It is deliberately more than PartCAD's assembly *geometry* can hold: it has
+  masses and inertia tensors, materials, a revolute joint with limits and
+  dynamics, and a Gazebo block. Most of that becomes named PartCAD properties -
+  see docs/source/simulation.rst for the mapping - and what a static assembly
+  simply cannot show is counted and reported, which is the other half of the
+  point of the example.
 -->
 <robot name="partcad_urdf_example">
 
@@ -16,7 +18,8 @@
     <color rgba="0.9 0.5 0.1 1.0"/>
   </material>
 
-  <!-- The root link. It becomes the PartCAD assembly itself. -->
+  <!-- The root link. It is a part of the assembly like every other link; the
+       assembly itself is the container that holds them. -->
   <link name="base_link">
     <visual>
       <origin xyz="0 0 0.01" rpy="0 0 0"/>
@@ -27,7 +30,8 @@
     </visual>
     <!-- The collision shape is what a simulator resolves contact against, and
          it is what PartCAD builds the link from unless 'ignoreCollision' says
-         otherwise. Here it is deliberately a little larger than the visual one. -->
+         otherwise. Here it is deliberately a little larger than the visual one,
+         which is kept as the part 'robot/base_link/visual'. -->
     <collision>
       <origin xyz="0 0 0.01" rpy="0 0 0"/>
       <geometry>
@@ -42,8 +46,9 @@
   </link>
 
   <!-- A movable joint. A PartCAD assembly is one static configuration, so the
-       shoulder is placed at this joint's zero position and the axis, the limits
-       and the dynamics are dropped. -->
+       shoulder is placed at this joint's zero position; the axis, the limits and
+       the dynamics become the 'motion:' and 'physics:' of the interface this
+       joint turns into under 'pc convert assembly -t assy'. -->
   <joint name="shoulder_pan" type="revolute">
     <origin xyz="0 0 0.02" rpy="0 0 0"/>
     <parent link="base_link"/>

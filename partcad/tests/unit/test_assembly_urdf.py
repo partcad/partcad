@@ -87,9 +87,7 @@ def placement(packed):
         tuple(round(v, 4) for v in packed[0]),
         # The axis only means something when there is a rotation, and an
         # axis/angle pair and its negation are the same rotation.
-        tuple(round(abs(v) * (1 if packed[2] >= 0 else -1), 4) for v in packed[1])
-        if abs(packed[2]) > 1e-6
-        else None,
+        tuple(round(abs(v) * (1 if packed[2] >= 0 else -1), 4) for v in packed[1]) if abs(packed[2]) > 1e-6 else None,
         round(abs(packed[2]), 4),
     )
 
@@ -225,28 +223,56 @@ def test_a_slash_in_a_part_name_is_not_enough():
     assert project._derived_part_owner("wrist") is None
 
 
-def test_urdf_parts_carry_what_partcad_does_not_model():
-    """A link's mass, inertia, materials and geometry are kept verbatim."""
+def test_urdf_physics_becomes_named_partcad_properties():
+    """A link's physics is copied into named properties, not a URDF container.
+
+    Every value has a PartCAD name and a PartCAD unit: millimetres for lengths,
+    degrees for angles, SI for the rest. Nothing is nested under the format it
+    came from, and nothing about the URDF's own structure - the link's name, its
+    parent - is stored, because the part's name is the link and the joint tree
+    is the URDF file itself.
+    """
     ctx = pc.Context(EXAMPLES)
-    urdf = ctx.get_part("//produce_assembly_urdf:robot/shoulder").config["physics"]["urdf"]
+    shoulder = ctx.get_part("//produce_assembly_urdf:robot/shoulder").config
 
-    assert urdf["link"] == "shoulder"
-    assert urdf["inertial"]["mass"] == pytest.approx(0.32)
-    assert urdf["visual"][0]["material"]["name"] == "orange"
+    assert shoulder["physics"]["mass"] == pytest.approx(0.32)
+    # 0.03 m up in the URDF, in millimetres here.
+    assert shoulder["physics"]["centerOfMass"] == pytest.approx([0.0, 0.0, 30.0])
+    assert shoulder["physics"]["inertia"]["izz"] == pytest.approx(1.00e-4)
+    assert set(shoulder["physics"]) <= {"mass", "centerOfMass", "inertia"}
+    # Appearance is a property of its own, not physics.
+    assert shoulder["material"] == "orange"
+    assert shoulder["color"] == "#E6801A"
 
-    # The robot's root link is the assembly itself, so what it said about itself
-    # belongs to the assembly - there is no part above it to hold it.
+    # The assembly is a container: every link's properties are on the part that
+    # link became, the robot's root link included, and are there exactly once.
     robot = ctx._get_assembly(URDF_EXAMPLE)
     asyncio.run(robot.do_instantiate())
-    root = robot.config["physics"]["urdf"]
-    assert root["inertial"]["mass"] == pytest.approx(0.78)
-    assert root["inertial"]["inertia"]["izz"] == pytest.approx(1.87e-3)
-    # Both the geometry the shape was built from and the geometry that was not.
-    assert root["collision"][0]["box"]["size"] == pytest.approx([0.13, 0.13, 0.02])
-    assert root["visual"][0]["box"]["size"] == pytest.approx([0.12, 0.12, 0.02])
-    assert root["visual"][0]["material"]["name"] == "grey"
-    # The Gazebo block, as the XML it was.
-    assert "<mu1>" in root["gazebo"][0]
+    assert "physics" not in robot.config
+
+    base = ctx.get_part("//produce_assembly_urdf:robot/base_link").config["physics"]
+    assert base["mass"] == pytest.approx(0.78)
+    assert base["inertia"]["izz"] == pytest.approx(1.87e-3)
+    # The Gazebo block was read into properties too, one value at a time.
+    assert base["friction"] == pytest.approx(0.9)
+    assert base["friction2"] == pytest.approx(0.9)
+
+
+def test_unused_geometry_becomes_a_part_of_its_own():
+    """The kind of geometry the link was not built from is kept, as a part.
+
+    The base link states a visual box and a slightly larger collision box; the
+    link is built from the collision one, and the visual one is still there to
+    inspect and export - it is simply not placed in the assembly.
+    """
+    ctx = pc.Context(EXAMPLES)
+    visual = ctx.get_part("//produce_assembly_urdf:robot/base_link/visual")
+    assert visual is not None
+    assert asyncio.run(visual.get_wrapped(ctx)) is not None
+
+    robot = ctx._get_assembly(URDF_EXAMPLE)
+    asyncio.run(robot.do_instantiate())
+    assert find_child(robot, "base_link/visual") is None
 
 
 def test_a_link_of_several_shapes_is_a_sub_assembly(tmp_path):
@@ -317,10 +343,54 @@ def test_urdf_reports_what_it_could_not_keep():
     assert info["RootLink"] == "base_link"
 
     dropped = info["UrdfDropped"]
-    for key in ("inertial", "material", "joint_kinematics", "joint_limits", "joint_dynamics", "visual"):
+    # What is genuinely not represented: the kinematics of a movable joint, and
+    # the geometry the links were not built from.
+    for key in ("joint_kinematics", "visual"):
         assert dropped[DROPPED_LABELS[key]] > 0
+    # What became named properties is *not* reported as lost.
+    assert not {"inertial", "material", "joint_limits", "joint_dynamics"} & set(DROPPED_LABELS)
 
     assert info["UrdfMovableJoints"] == ["shoulder_pan (revolute)"]
+
+
+def _urdf_package(tmp_path, body, options=""):
+    """A one-package workspace whose only assembly is the given URDF."""
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "robot.urdf").write_text("<robot name='r'>%s</robot>" % body)
+    (tmp_path / "partcad.yaml").write_text("assemblies:\n  robot:\n    type: urdf\n%s" % options)
+    return pc.Context(str(tmp_path))
+
+
+BOX_LINK = "<link name='a'><visual><geometry><box size='1 1 1'/></geometry></visual></link>"
+
+
+def test_urdf_partcad_has_no_property_for_is_refused(tmp_path):
+    """Core URDF PartCAD does not know about stops the import, loudly.
+
+    Every URDF value PartCAD keeps becomes a named property; an element with no
+    property behind it would be lost in silence, and silence is the one thing
+    this must not do. Core URDF is a closed vocabulary, so this is always fatal
+    - the remedy is to extend the tables, not to carry the value opaquely.
+    """
+    ctx = _urdf_package(tmp_path, BOX_LINK.replace("</link>", "<sausage/></link>"))
+    with pytest.raises(Exception, match="sausage"):
+        asyncio.run(ctx._get_assembly(":robot").do_instantiate())
+
+
+def test_an_unknown_gazebo_setting_is_reported_and_can_be_fatal(tmp_path):
+    """Gazebo's vocabulary is open, so an unknown setting there is not fatal by default."""
+    body = BOX_LINK + "<gazebo reference='a'><mu1>0.4</mu1><stormFactor>3</stormFactor></gazebo>"
+
+    ctx = _urdf_package(tmp_path, body)
+    robot = ctx._get_assembly(":robot")
+    asyncio.run(robot.do_instantiate())
+    # What it did understand became a property; what it did not was reported.
+    assert ctx.get_part(":robot/a").config["physics"]["friction"] == pytest.approx(0.4)
+    assert any("stormFactor" in warning for warning in robot.urdf_factory.urdf_info["warnings"])
+
+    strict = _urdf_package(tmp_path / "strict", body, options="    strict: true\n")
+    with pytest.raises(Exception, match="stormFactor"):
+        asyncio.run(strict._get_assembly(":robot").do_instantiate())
 
 
 #
@@ -387,35 +457,71 @@ def test_export_logo_to_urdf(tmp_path):
             assert float(inertia.get(axis)) > 0.0
 
 
-def test_export_puts_back_what_a_urdf_import_carried(tmp_path):
-    """Exporting a URDF assembly restores what PartCAD carried but did not model."""
+def test_export_states_the_properties_a_part_carries(tmp_path):
+    """Exporting a URDF assembly writes each PartCAD property back where it belongs.
+
+    Not "restores what was carried": nothing was carried. Mass, inertia and
+    friction were read into named properties on the way in, and each is written
+    into the URDF element that states it on the way out.
+    """
     ctx = pc.init(EXAMPLES)
     robot = ctx._get_assembly(URDF_EXAMPLE)
     path = _export_urdf(ctx, robot, str(tmp_path), name="robot")
     exported = ET.parse(path).getroot()
 
-    # One link per link of the source, with its shapes back where they were:
-    # the sub-assembly a link of several shapes becomes does not turn into a
-    # frame link with a link per shape.
-    links = [link.get("name") for link in exported.findall("link")]
-    assert len(links) == 4
-    for link in exported.findall("link"):
-        assert link.find("visual") is not None
+    # One link per link of the source, plus the frame the assembly itself
+    # becomes: an assembly is a container, and URDF needs a single root to hang
+    # its contents off. The frame has no geometry, so reading this back produces
+    # the same four placed links again.
+    links = {link.get("name"): link for link in exported.findall("link")}
+    assert set(links) == {"robot", "base_link", "shoulder", "forearm", "wrist"}
+    assert links["robot"].find("visual") is None
+    for name in ("base_link", "shoulder", "forearm", "wrist"):
+        assert links[name].find("visual") is not None
 
-    # The root link is the assembly itself, so it is what carries what the
-    # URDF's own root link said - the stated mass, not one recomputed from the
-    # geometry and a density.
-    base = exported.find("link")
+    # The stated mass and inertia, not ones recomputed from the geometry and a
+    # density.
+    base = links["base_link"]
     assert float(base.find("inertial/mass").get("value")) == pytest.approx(0.78)
     assert float(base.find("inertial/inertia").get("izz")) == pytest.approx(1.87e-3)
-    assert base.find("visual/material").get("name") == "grey"
-    # The '<origin>' of a shape within its link survived as an origin.
-    assert [float(v) for v in base.find("visual/origin").get("xyz").split()] == pytest.approx([0.0, 0.0, 0.01])
+    # The colour survived, to the eight bits per channel a colour is stated in.
+    rgba = [float(v) for v in links["shoulder"].find("visual/material/color").get("rgba").split()]
+    assert rgba == pytest.approx([0.9, 0.5, 0.1, 1.0], abs=0.005)
 
-    # The Gazebo block came back, pointing at the link it went out on.
+    # Friction is a property of the part; '<gazebo>' is where a URDF states it.
     gazebo = exported.findall("gazebo")
-    assert [element.get("reference") for element in gazebo] == [base.get("name")]
-    assert gazebo[0].find("mu1") is not None
+    assert [element.get("reference") for element in gazebo] == ["base_link"]
+    assert float(gazebo[0].find("mu1").text) == pytest.approx(0.9)
+
+
+def test_export_reports_properties_urdf_cannot_state(tmp_path, caplog):
+    """The mirror image of refusing unknown URDF: what URDF cannot say is said out loud.
+
+    'damping' is a PartCAD property of a connection, and URDF has no place for
+    one on a link. The export writes what it can and reports the rest at info
+    level - the file is correct, it just says less than the package does.
+    """
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    package = root / "produce_part_stl"
+    config = (
+        (package / "partcad.yaml")
+        .read_text()
+        .replace(
+            "    desc: A cube defined in STL\n",
+            "    desc: A cube defined in STL\n    physics:\n      mass: 2.0\n      damping: 0.5\n",
+        )
+    )
+    (package / "partcad.yaml").write_text(config)
+    assert_valid_package_config(yaml.safe_load(config))
+
+    ctx = pc.Context(str(root))
+    cube = ctx.get_part("//produce_part_stl:cube")
+    with caplog.at_level("INFO"):
+        _export_urdf(ctx, cube, str(tmp_path), name="cube")
+
+    exported = ET.parse(tmp_path / "cube.urdf").getroot()
+    assert float(exported.find("link/inertial/mass").get("value")) == pytest.approx(2.0)
+    assert any("damping" in record.message for record in caplog.records)
 
 
 def test_logo_round_trip_through_urdf(tmp_path):
@@ -478,8 +584,10 @@ def test_convert_urdf_to_assy(tmp_path):
         entry = config["parts"]["robot/%s" % link]
         assert entry["type"] == "stl"
         assert (package / entry["path"]).is_file()
-    # What the URDF said about a link travelled with it.
-    assert config["parts"]["robot/base_link"]["physics"]["urdf"]["inertial"]["mass"] == pytest.approx(0.78)
+    # What the URDF said about a link travelled with it, as named properties.
+    assert config["parts"]["robot/base_link"]["physics"]["mass"] == pytest.approx(0.78)
+    assert config["parts"]["robot/base_link"]["physics"]["friction"] == pytest.approx(0.9)
+    assert config["parts"]["robot/shoulder"]["color"] == "#E6801A"
 
     # One interface pair per distinct joint, reused where the joints agree: the
     # two fixed joints share a pair, the revolute one gets its own.
@@ -493,9 +601,12 @@ def test_convert_urdf_to_assy(tmp_path):
     revolute = interfaces["robot/shoulder_pan-socket"]
     assert revolute["motion"]["type"] == "revolute"
     assert revolute["motion"]["axis"] == pytest.approx([0.0, 0.0, 1.0])
-    assert revolute["motion"]["limits"]["upper"] == pytest.approx(3.14)
-    assert revolute["physics"]["urdf"]["limit"]["effort"] == pytest.approx(12.0)
-    assert revolute["physics"]["urdf"]["dynamics"]["damping"] == pytest.approx(0.1)
+    # 3.14 radians in the URDF, degrees here, like every other angle in PartCAD.
+    assert revolute["motion"]["limits"]["upper"] == pytest.approx(179.909, abs=1e-3)
+    assert revolute["physics"]["maxEffort"] == pytest.approx(12.0)
+    assert revolute["physics"]["maxVelocity"] == pytest.approx(114.592, abs=1e-3)
+    assert revolute["physics"]["damping"] == pytest.approx(0.1)
+    assert revolute["physics"]["friction"] == pytest.approx(0.05)
     assert interfaces["robot/shoulder_pan-plug"]["mates"] == "robot/shoulder_pan-socket"
 
     after = pc.Context(str(package))._get_assembly(":robot")

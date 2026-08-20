@@ -250,12 +250,14 @@ class Interface:
         self.abstract = config.get("abstract", False)
         self.lead_port = config.get("leadPort", None)
 
-        # What this connection allows and what it costs, as data PartCAD carries
-        # rather than interprets. 'motion' states the freedom of movement (type,
-        # axis, position limits) and 'physics' the rest of what a simulator
-        # needs (effort and velocity limits, damping, friction, and whatever
-        # else the source format said). Both are open-ended on purpose: a URDF
-        # joint's own spelling survives a round trip through PartCAD unchanged.
+        # What this connection allows and what it costs. 'motion' states the
+        # freedom of movement (type, axis, position and soft limits, mimic) and
+        # 'physics' what moving it costs (effort and velocity limits, damping,
+        # friction, spring and solver parameters). Both are closed sets of named
+        # properties in PartCAD's own units - degrees and millimetres, SI for
+        # the rest - defined in schema/partcad.json; a format that states
+        # something outside them fails the import rather than being carried
+        # under a name of its own.
         #
         # 'parameters' below is the executable counterpart: where 'motion' is a
         # record, a parameter actually moves the parts when a connection names

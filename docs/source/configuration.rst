@@ -472,13 +472,26 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
           dir: [<x>, <y>, <z>] # the vector to move along or rotate around
       motion: # (optional) what freedom of movement this connection allows
         type: <fixed|revolute|continuous|prismatic|planar|floating|ball|screw>
-        axis: [<x>, <y>, <z>]
-        limits:
+        axis: [<x>, <y>, <z>] # in the frame of this interface's port
+        limits: # degrees for a turn, millimetres for a move
           lower: ...
           upper: ...
-          units: <the unit the limits are stated in, e.g. rad or m>
-      physics: # (optional) what the connection costs, keyed by the source format
-        <format name>: ... # e.g. "urdf": effort and velocity limits, damping, friction
+        softLimits: # (optional) limits a controller enforces before the hard ones
+          lower: ...
+          upper: ...
+          kPosition: ...
+          kVelocity: ...
+        mimic: # (optional) a movement that follows another one
+          joint: <the name of the connection it follows>
+          multiplier: ...
+          offset: ...
+      physics: # (optional) what the connection costs
+        maxEffort: ... # N*m for a turn, N for a move
+        maxVelocity: ... # deg/s for a turn, mm/s for a move
+        damping: ...
+        friction: ...
+        springStiffness: ...
+        springReference: ...
 
 Motion and physics
 ------------------
@@ -487,13 +500,18 @@ Motion and physics
 ``parameters`` that make it move. Where a parameter is executable - naming it in
 a connection places the parts - ``motion`` states what kind of joint the
 connection is, about which axis, and between which limits, and ``physics``
-carries everything else a simulation needs (effort and velocity limits, damping,
-friction) as the source format stated it.
+states what a simulation needs to know about the cost of moving it.
 
-Both are deliberately open-ended, and PartCAD does not interpret them: they
-exist so that importing a robot description and exporting it again does not lose
-what PartCAD has no model for. ``pc convert assembly -t assy`` fills them in
-from a URDF's joints - see :doc:`simulation` for the mapping.
+Every property has a PartCAD name and a PartCAD unit, and the set of them is
+closed: angles are degrees and lengths millimetres, as everywhere else in
+PartCAD, and the rest is SI. Nothing is stored under the name of the format it
+came from. A format that states something PartCAD has no property for fails the
+import rather than tucking the value away, and a property PartCAD holds that a
+target format cannot state is reported when it is exported - so the gap is
+always visible in one direction or the other.
+
+``pc convert assembly -t assy`` fills both sections in from a URDF's joints -
+see :doc:`simulation` for the mapping.
 
 Abstract interfaces
 -------------------
@@ -669,23 +687,47 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
-      physics: # (optional) physical properties, keyed by the format they came from
-        urdf:
-          inertial: # mass, centre of mass and inertia tensor, as URDF states them
-            origin: { xyz: [...], rpy: [...] }
-            mass: ...
-            inertia: { ixx: ..., ixy: ..., ixz: ..., iyy: ..., iyz: ..., izz: ... }
-          visual: [...]   # the geometry descriptors, verbatim
-          collision: [...]
-          gazebo: [...]   # '<gazebo>' blocks, as the XML they were
+      material: <(optional) the name of the material this shape is made of>
+      color: <(optional) "#RRGGBB" or "#RRGGBBAA">
+
+      physics: # (optional) physical properties
+        mass: ... # kg
+        centerOfMass: [<x>, <y>, <z>] # mm, in the shape's own frame
+        inertiaOrientation: [<roll>, <pitch>, <yaw>] # (optional) degrees
+        inertia: # kg*m^2, about 'centerOfMass'
+          ixx: ...
+          ixy: ...
+          ixz: ...
+          iyy: ...
+          iyz: ...
+          izz: ...
+        friction: ...        # coefficient, along 'frictionDirection'
+        friction2: ...       # coefficient, across it
+        frictionDirection: [<x>, <y>, <z>]
+        contactStiffness: ... # N/m
+        contactDamping: ...   # N*s/m
+        minContactDepth: ...  # mm
+        maxContactVelocity: ... # mm/s
+        restitution: ...     # 0 is a dead stop, 1 a perfect bounce
+        maxContacts: ...
+        velocityDamping: ...
+        selfCollide: <true|false>
+        gravity: <true|false>
 
 Depending on the type of the part, the configuration may have different options.
 
-``physics`` is carried, not modelled: PartCAD stores it and hands it back to an
-exporter that understands it, without interpreting or checking it. A URDF import
-fills it in for every link and a URDF export puts it back, so a mass or an
-inertia tensor a model's author measured is not replaced by one PartCAD
-computed. It does not take part in the shape cache - it says nothing about the
+Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
+them is closed. Lengths are millimetres and angles degrees, as everywhere else
+in PartCAD; everything else is SI, so a mass is kilograms and an inertia tensor
+kg·m². Nothing is stored under the name of the format it came from: a URDF
+import reads ``<inertial>`` and the friction and contact settings of a
+``<gazebo>`` block into these properties one value at a time, and a URDF export
+writes each of them back into the element that states it. A URDF that says
+something PartCAD has no property for stops the import instead of being carried
+opaquely, and a property PartCAD holds that URDF cannot state is reported when
+it is exported.
+
+``physics`` does not take part in the shape cache - it says nothing about the
 geometry - which also means nothing notices when an edit to the CAD invalidates
 it. See :doc:`simulation`.
 
@@ -982,6 +1024,7 @@ description format of ROS - as an assembly directly, with no conversion step:
       ignoreCollision: <(optional) true, or a list of link names; false by default>
       packagePaths: # (optional) roots to resolve "package://" mesh references against
         - <../meshes>
+      strict: <(optional) fail on an unknown "<gazebo>" setting; false by default>
 
 **One part per shape, in one flat list.** A link that has a single ``<visual>``
 (or ``<collision>``) becomes the part ``<assembly name>/<link name>``. A link
@@ -991,8 +1034,9 @@ child of the assembly, placed where the joints between it and the robot's root
 link put it with **every joint at its zero position**, and each shape keeps the
 offset its own ``<origin>`` gave it. The result is the same in-memory
 representation an `Assembly YAML`_ file produces, so everything else -
-rendering, export, BoM, inspection - treats the two alike. The robot's root link
-is the assembly itself.
+rendering, export, BoM, inspection - treats the two alike. The assembly is the
+container that holds the links, the robot's root link included; it is not one
+of them and carries no properties of its own.
 
 The joint tree deliberately does not become nesting. A URDF's tree is its
 *kinematics*, and an assembly is one static configuration of it, so a link
@@ -1022,20 +1066,33 @@ model that bothers to state both means it to be the physical shape.
 ``ignoreCollision: true`` reverses that for every link, and a list of link names
 reverses it for those links only.
 
-What a link says that PartCAD does not model - its mass and inertia tensor, its
-materials, the geometry the shape was *not* built from, and its ``<gazebo>``
-blocks - is carried verbatim in the part's ``physics`` section rather than
-thrown away, and put back when the assembly is exported to URDF again. What
-cannot be carried at all (joint kinematics, transmissions, sensors) is counted
-and reported; ``pc info`` shows the tally. :doc:`simulation` describes the gap
-and what closing it would take.
+What a link says about its physics becomes **named PartCAD properties** of the
+part, one property per URDF value and in PartCAD's own units: ``<inertial>``
+becomes ``mass``, ``centerOfMass`` and ``inertia``, and the friction and contact
+settings of a ``<gazebo>`` block become ``friction``, ``contactStiffness`` and
+the rest. Its ``<material>`` becomes ``material`` and ``color``. Nothing is
+stashed under a container of its own, nothing records the link's name or its
+parent - the part *is* named after the link, and the joint tree is this very
+file - and URDF that PartCAD has no property for stops the import rather than
+being carried opaquely. ``strict`` extends that to ``<gazebo>``, whose
+vocabulary is open and where an unknown setting is otherwise only reported.
+
+The geometry a link was *not* built from is kept too, as the part
+``<assembly name>/<link name>/<visual|collision>``: defined and exportable, but
+not placed in the assembly. What cannot be represented at all (joint kinematics,
+transmissions, sensors) is counted and reported; ``pc info`` shows the tally.
+:doc:`simulation` describes the gap and what closing it would take.
 
 The reverse direction is ``pc export -t urdf``, which writes a ``.urdf`` file
 plus a directory of the STL files it references, from any part or assembly.
 Each node of the assembly tree becomes a link, each parent/child relation a
-fixed joint, and a shape used more than once is written out once. Inertial
-properties are taken from the part's ``physics`` section when it has them and
-computed from the geometry otherwise (see :doc:`simulation`).
+fixed joint, and a shape used more than once is written out once. What a part
+states about itself is written into the URDF element that states it - the mass
+and inertia into ``<inertial>``, the friction and contact properties into a
+``<gazebo>`` block, the colour into ``<material>`` - and only a part that says
+nothing gets inertial properties computed from its geometry. A property PartCAD
+holds that URDF has no way to state is reported rather than dropped in silence
+(see :doc:`simulation`).
 
 ``pc convert assembly`` goes further than exporting: it rewrites the package
 around the assembly and switches its declared type.

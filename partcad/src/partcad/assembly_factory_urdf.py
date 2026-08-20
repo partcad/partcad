@@ -25,11 +25,14 @@ parsed with ROS's own 'urdf_parser_py', which PartCAD does not depend on, and
 turning URDF geometry into shapes needs OCCT, which the core process never
 loads. What comes back here is plain data.
 
-What a URDF says about a link that PartCAD does not model - mass, inertia,
-materials, the geometry it did not build the shape from, Gazebo extensions - is
-carried verbatim in the part's ``physics`` section rather than thrown away. What
-cannot be carried at all is counted and reported. docs/source/simulation.rst
-describes the gap and what closing it would take.
+What a URDF says about a link's physics - mass, centre of mass, inertia,
+friction, contact - becomes named properties of the part, one PartCAD property
+per URDF value, in PartCAD's own units. Nothing is stashed in a container of
+its own, and URDF content PartCAD has no property for stops the import rather
+than being carried opaquely; the tables that decide this live in
+wrapper_import_urdf.py. What a static assembly simply cannot show - a movable
+joint, a transmission - is counted and reported.
+docs/source/simulation.rst describes the gap and what closing it would take.
 """
 
 import asyncio
@@ -44,17 +47,17 @@ from .geom import Location
 from .part_config import PartConfiguration
 
 # How a counter from the wrapper's 'dropped' summary is worded in the log.
+# Mass, inertia, friction, joint limits and joint dynamics are deliberately
+# absent: they are named PartCAD properties now, so they are kept rather than
+# dropped. See the tables in wrapper_import_urdf.py.
 DROPPED_LABELS = {
-    "inertial": "link inertial properties (mass, centre of mass, inertia tensor)",
-    "material": "materials and colors",
-    "joint_kinematics": "movable joints (flattened to their zero position)",
-    "joint_limits": "joint limits",
-    "joint_dynamics": "joint dynamics (damping, friction)",
-    "collision": "collision geometry",
-    "visual": "visual geometry",
+    "joint_kinematics": "movable joints (the assembly shows them at their zero position)",
+    "collision": "collision geometry (kept as parts of its own, but not placed)",
+    "visual": "visual geometry (kept as parts of its own, but not placed)",
     "transmission": "transmissions",
-    "gazebo": "Gazebo extensions",
+    "gazebo": "Gazebo settings with no PartCAD property",
     "sensor": "sensors",
+    "calibration": "joint calibration references",
 }
 
 
@@ -94,15 +97,17 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             self._report(result)
 
             root = result["root"]
-            # The robot's root link *is* this assembly, so its children become
-            # this assembly's children. Nesting it one level deeper instead
-            # would make a URDF round trip grow a wrapper level every time. By
-            # the same token, what the root link said about itself belongs to
-            # the assembly - otherwise an export would have nowhere to put it
-            # back and would invent a link to hang the rest off.
-            if root.get("physics"):
-                assembly.config["physics"] = root["physics"]
+            # Every link, the robot's root one included, is a child of this
+            # assembly. The assembly is the container, not one of the links: it
+            # holds no properties of its own, because each link's properties
+            # belong to the part that link became.
             await self.handle_node_list(assembly, root.get("links") or [])
+            # Geometry the assembly does not place: the visual shapes of a link
+            # built from its collision geometry, and the other way round. They
+            # are parts like any other - inspectable and exportable - they are
+            # just not part of this static configuration of the robot.
+            for node in root.get("parts") or []:
+                self.part_for(node)
 
             if not assembly.children:
                 pc_logging.warning("Assembly is empty")
@@ -143,6 +148,10 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             "output_folder": self._generated_dir(),
             "package_paths": self._package_paths(),
             "ignoreCollision": self.config.get("ignoreCollision", False),
+            # Core URDF that PartCAD has no property for always stops the
+            # import; 'strict' extends that to '<gazebo>', whose vocabulary is
+            # open and where an unknown setting is otherwise only reported.
+            "strict": self.config.get("strict", False),
             "precision": 6,
         }
 
@@ -203,6 +212,7 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
         self.urdf_info = {
             "robot_name": result.get("robot_name"),
             "root_link": result.get("root_link"),
+            "warnings": result.get("warnings") or [],
             "dropped": result.get("dropped") or {},
             "movable_joints": result.get("movable_joints") or [],
             "links": result.get("links") or {},
@@ -304,10 +314,11 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
         # single factor, which is 1.0 for the millimetre meshes PartCAD writes.
         if abs(scale - 1.0) > 1e-9:
             config["scale"] = scale
-        # What URDF says about this link that PartCAD does not model, carried
-        # verbatim so the export can put it back.
-        if node.get("physics"):
-            config["physics"] = node["physics"]
+        # What the link states about itself, as named PartCAD properties: the
+        # physical ones on the link, the appearance on the shape that has it.
+        for key in ("physics", "material", "color"):
+            if node.get(key):
+                config[key] = node[key]
 
         full_name = "%s:%s" % (self.project.name, part_name)
         config = PartConfiguration.normalize(part_name, config, full_name)

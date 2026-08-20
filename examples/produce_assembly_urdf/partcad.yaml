@@ -9,11 +9,20 @@ docs:
     ```
 
     Each link becomes a part of this package, named `<assembly>/<link>`, which
-    can be inspected and exported like any other part:
+    can be inspected and exported like any other part. So does the geometry a
+    link was not built from, as `<assembly>/<link>/<visual|collision>`:
 
     ```shell
     pc inspect robot/forearm
     pc export -t step robot/wrist
+    pc inspect robot/base_link/visual
+    ```
+
+    What each link says about its physics becomes named properties of its part -
+    `mass`, `centerOfMass`, `inertia`, `friction` - in PartCAD's own units:
+
+    ```shell
+    pc info robot/base_link
     ```
 
     The reverse direction writes a URDF (plus the mesh files it references) from
@@ -39,8 +48,13 @@ assemblies:
     desc: A URDF robot description used directly as a PartCAD assembly
     # A link that states both is built from its collision geometry, which is
     # what a simulator resolves contact against. 'ignoreCollision: true' - or a
-    # list of link names - builds from the visual geometry instead.
+    # list of link names - builds from the visual geometry instead. Either way
+    # the other one is kept, as '<assembly>/<link>/<visual|collision>'.
     ignoreCollision: false
+    # Core URDF that PartCAD has no property for always stops the import.
+    # 'strict: true' extends that to '<gazebo>', whose vocabulary is open and
+    # where an unknown setting is otherwise only reported.
+    strict: false
 
 render:
   readme:

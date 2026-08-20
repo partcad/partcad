@@ -25,7 +25,6 @@ that say the same thing share one pair of interfaces.
 """
 
 import asyncio
-import math
 from pathlib import Path
 
 import ruamel.yaml
@@ -46,11 +45,12 @@ SUPPORTED_FORMATS = ("assy", "urdf")
 FACING = [[0.0, 0.0, 0.0], [0.71, 0.71, 0.0], 180.0]
 
 # What a joint's freedom of movement becomes as a PartCAD interface parameter.
-# 'turn' is degrees about an axis, 'move' is millimetres along one.
+# 'turn' is degrees about an axis, 'move' is millimetres along one - which is
+# what the joint's 'motion' section is already stated in.
 JOINT_PARAMETERS = {
-    "revolute": ("angle", "turn", math.degrees),
-    "continuous": ("angle", "turn", math.degrees),
-    "prismatic": ("offset", "move", lambda v: v * 1000.0),
+    "revolute": "turn",
+    "continuous": "turn",
+    "prismatic": "move",
 }
 
 # How far a continuous joint is allowed to turn in the generated parameter.
@@ -77,6 +77,19 @@ def _location(packed):
     return _flow([_flow(packed[0]), _flow(packed[1]), packed[2]])
 
 
+def _section(values):
+    """A properties section as YAML, with vectors kept on one line."""
+    section = CommentedMap()
+    for key, value in (values or {}).items():
+        if isinstance(value, dict):
+            section[key] = _section(value)
+        elif isinstance(value, (list, tuple)):
+            section[key] = _flow(list(value))
+        else:
+            section[key] = value
+    return section
+
+
 def is_identity(packed):
     """Whether a packed location is a no-op, within rounding noise."""
     translation, _, angle = Location(packed).as_packed()
@@ -98,17 +111,7 @@ def joint_axis_in_port_frame(axis):
 
 def joint_signature(joint):
     """What makes two joints the same connection, and so share one interface."""
-    return repr(
-        [
-            joint.get("type"),
-            [round(float(v), 9) for v in joint.get("axis") or ()],
-            sorted((joint.get("limit") or {}).items()),
-            sorted((joint.get("dynamics") or {}).items()),
-            sorted((joint.get("mimic") or {}).items()),
-            sorted((joint.get("safety_controller") or {}).items()),
-            sorted((joint.get("calibration") or {}).items()),
-        ]
-    )
+    return repr([sorted((joint.get("motion") or {}).items()), sorted((joint.get("physics") or {}).items())])
 
 
 def build_interfaces(assembly_name, joints, used_joints):
@@ -144,28 +147,14 @@ def build_interfaces(assembly_name, joints, used_joints):
         # joint origin, which is where the joint frame sits in the parent link.
         socket_config["ports"] = CommentedMap({"joint": None})
 
-        motion = CommentedMap({"type": joint["type"]})
-        if joint.get("axis"):
-            motion["axis"] = _flow([float(v) for v in joint["axis"]])
-        limit = joint.get("limit") or {}
-        limits = CommentedMap()
-        for key in ("lower", "upper"):
-            if key in limit:
-                limits[key] = limit[key]
-        if limits:
-            # In URDF's own units - radians for a revolute joint, metres for a
-            # prismatic one - because this section is a record of what the URDF
-            # said, not something PartCAD reinterprets.
-            limits["units"] = "rad" if joint["type"] in ("revolute", "continuous") else "m"
-            motion["limits"] = limits
-        socket_config["motion"] = motion
-
-        physics = CommentedMap()
-        for section in ("limit", "dynamics", "mimic", "safety_controller", "calibration"):
-            if joint.get(section):
-                physics[section] = CommentedMap(joint[section])
+        # 'motion' is what the joint can do and 'physics' is what it costs -
+        # both already in PartCAD's names and units (degrees for a revolute
+        # joint, millimetres for a prismatic one), because the reader converted
+        # them once on the way in.
+        socket_config["motion"] = _section(joint.get("motion"))
+        physics = _section(joint.get("physics"))
         if physics:
-            socket_config["physics"] = CommentedMap({"urdf": physics})
+            socket_config["physics"] = physics
 
         parameter = movement_parameter(joint)
         if parameter is not None:
@@ -192,23 +181,24 @@ def movement_parameter(joint):
     connection that names it ("connect: {toParams: {angle: 30}}") places the
     child where the joint at that value puts it.
     """
-    spec = JOINT_PARAMETERS.get(joint["type"])
-    if spec is None or not joint.get("axis"):
+    motion = joint.get("motion") or {}
+    kind = JOINT_PARAMETERS.get(joint["type"])
+    if kind is None or not motion.get("axis"):
         return None
-    name, kind, convert = spec
+    name = "angle" if kind == "turn" else "offset"
 
-    limit = joint.get("limit") or {}
+    limits = motion.get("limits") or {}
     if joint["type"] == "continuous":
         lower, upper = -CONTINUOUS_RANGE, CONTINUOUS_RANGE
-    elif "lower" in limit or "upper" in limit:
-        lower = convert(float(limit.get("lower", 0.0)))
-        upper = convert(float(limit.get("upper", 0.0)))
+    elif "lower" in limits or "upper" in limits:
+        lower = float(limits.get("lower", 0.0))
+        upper = float(limits.get("upper", 0.0))
     else:
         return None
 
     config = CommentedMap()
     config["type"] = kind
-    config["dir"] = _flow(joint_axis_in_port_frame(joint["axis"]))
+    config["dir"] = _flow(joint_axis_in_port_frame(motion["axis"]))
     config["min"] = round(lower, 9)
     config["max"] = round(upper, 9)
     # The assembly shows the joint at zero, which is where URDF's own zero
@@ -334,8 +324,11 @@ def urdf_to_assy(project: Project, assembly_name: str, config: dict, out_dir: Pa
         entry["type"] = "stl"
         entry["path"] = relative
         entry["desc"] = "Link '%s' of '%s'" % (link_name, assembly_name)
-        if links[link_name].get("physics"):
-            entry["physics"] = links[link_name]["physics"]
+        for key, value in (links[link_name].get("appearance") or {}).items():
+            entry[key] = value
+        physics = _section(links[link_name].get("physics"))
+        if physics:
+            entry["physics"] = physics
         parts["%s/%s" % (assembly_name, link_name)] = entry
 
     # Which interface each link implements, and where.
