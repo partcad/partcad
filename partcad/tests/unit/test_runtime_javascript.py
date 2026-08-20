@@ -13,6 +13,8 @@ Nothing here needs a Node.js on the host.
 
 import json
 import os
+import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -66,6 +68,39 @@ def test_the_default_chili3d_is_an_exact_version():
 )
 def test_js_package_name(requirement, expected):
     assert sandbox_versions.js_package_name(requirement) == expected
+
+
+@pytest.mark.parametrize(
+    "requirement",
+    [
+        # The '@' here belongs to the location, not to a version
+        "git+ssh://git@github.com/org/pkg.git",
+        "git+https://github.com/org/pkg.git",
+        "https://host/path/pkg.tgz",
+        "file:../local-pkg",
+        "./local-pkg",
+        "/abs/local-pkg",
+    ],
+)
+def test_a_requirement_naming_a_location_keeps_its_identity(requirement):
+    """Two unrelated git remotes must not collapse onto one package name.
+
+    declare_dependency() treats one name as one package and replaces it, so a
+    mangled name would make unrelated dependencies displace each other.
+    """
+    assert sandbox_versions.js_package_name(requirement) == requirement
+
+
+def test_two_git_remotes_are_two_dependencies(tmp_path):
+    runtime = _bare_runtime(tmp_path)
+    runtime.superseded_requirements = set()
+    session = JavaScriptRuntime.get_session(runtime, "//pub/a")
+
+    runtime.declare_dependency(session, "git+ssh://git@host/org/one.git")
+    runtime.declare_dependency(session, "git+ssh://git@host/org/two.git")
+
+    assert "git+ssh://git@host/org/one.git" in session["deps"]
+    assert "git+ssh://git@host/org/two.git" in session["deps"]
 
 
 @pytest.mark.parametrize(
@@ -190,15 +225,61 @@ def test_prepare_package_dir_is_idempotent(tmp_path):
     assert os.path.isdir(os.path.join(package_path, "node_modules"))
 
 
-def test_link_or_copy_leaves_an_existing_entry_alone(tmp_path):
+def test_link_or_copy_leaves_an_existing_link_alone(tmp_path):
+    """A link already resolves to the source, so there is nothing to do."""
     source = tmp_path / "source"
     source.write_text("source")
     destination = tmp_path / "destination"
-    destination.write_text("destination")
+
+    link_or_copy(str(source), str(destination))
+    link_or_copy(str(source), str(destination))
+
+    assert os.path.islink(str(destination))
+    assert destination.read_text() == "source"
+
+
+def test_link_or_copy_refreshes_a_stale_copy(tmp_path):
+    """The Windows fallback writes a copy, and a copy does go stale.
+
+    Left alone, a package directory would keep a manifest the environment has
+    since rewritten, and npm would resolve differently there than in the
+    environment that directory belongs to.
+    """
+    source = tmp_path / "source"
+    source.write_text("new")
+    destination = tmp_path / "destination"
+    # What the copy fallback leaves behind, from before the source changed
+    destination.write_text("old")
 
     link_or_copy(str(source), str(destination))
 
-    assert destination.read_text() == "destination"
+    assert destination.read_text() == "new"
+
+
+def test_link_or_copy_leaves_a_current_copy_alone(tmp_path):
+    source = tmp_path / "source"
+    source.write_text("same")
+    destination = tmp_path / "destination"
+    destination.write_text("same")
+    before = destination.stat().st_mtime_ns
+
+    link_or_copy(str(source), str(destination))
+
+    assert destination.stat().st_mtime_ns == before
+
+
+def test_an_explicit_path_locks_that_environment(tmp_path):
+    """Otherwise two processes could run npm against the same tree at once."""
+    runtime = _bare_runtime(tmp_path)
+    runtime.lock = threading.RLock()
+    runtime.env_locks = {}
+    runtime.env_locks_lock = threading.Lock()
+    runtime.ctx = SimpleNamespace(user_config=SimpleNamespace(internal_state_dir=str(tmp_path)))
+    runtime.sandbox_dir = "pc-js-none-22"
+    other_env = os.path.join(str(tmp_path), "v-env-deadbeefdeadbeef")
+
+    with runtime.sync_lock(path=other_env):
+        assert list(runtime.env_locks) == ["v-env-deadbeefdeadbeef"]
 
 
 #

@@ -49,6 +49,7 @@ own, and nothing should become so.
 import asyncio
 import contextlib
 import copy
+import filecmp
 import hashlib
 import json
 import os
@@ -190,11 +191,19 @@ def link_or_copy(source: str, destination: str) -> None:
 
     Windows only creates symlinks for a process that is elevated or has
     Developer Mode on, so falling back matters there: a directory falls back to
-    a directory junction (which needs no privilege), and a file to a copy. The
-    copy is safe because the only file linked this way is 'package.json', which
-    the environment rewrites and re-links whenever it changes.
+    a directory junction (which needs no privilege), and a file to a copy.
+
+    A link or a junction always resolves to whatever the source holds now. A
+    copy does not, so it is refreshed when the source has moved on - otherwise
+    a package directory would keep a manifest the environment has since
+    rewritten, and npm would resolve differently there than in the environment
+    it belongs to.
     """
     if os.path.lexists(destination):
+        if not os.path.islink(destination) and os.path.isfile(source) and os.path.isfile(destination):
+            with contextlib.suppress(OSError):
+                if not filecmp.cmp(source, destination, shallow=False):
+                    shutil.copyfile(source, destination)
         return
 
     with contextlib.suppress(OSError, NotImplementedError):
@@ -225,20 +234,21 @@ class NodeEnvLock:
     lock: FileLock
 
     def __init__(self, runtime: "JavaScriptRuntime", env: str):
-        runtime.env_locks_lock.acquire()
-
         # 'env' is the environment directory name, so the lock covers exactly
         # the tree that is about to be installed into or run from; two sessions
         # that share a tree share the lock, and two that do not, do not.
         if env is None:
             env = BASE_ENV_DIR
         env_lock_name = f".{runtime.sandbox_dir}.{env}.lock"
-        if env not in runtime.env_locks:
-            runtime.env_locks[env] = FileLock(
-                os.path.join(runtime.ctx.user_config.internal_state_dir, env_lock_name), thread_local=False
-            )
-        self.lock = runtime.env_locks[env]
-        runtime.env_locks_lock.release()
+        # 'with' rather than acquire/release: 'env_locks_lock' is a plain Lock,
+        # so anything raising in between would leave it held and block every
+        # later construction in the process for good.
+        with runtime.env_locks_lock:
+            if env not in runtime.env_locks:
+                runtime.env_locks[env] = FileLock(
+                    os.path.join(runtime.ctx.user_config.internal_state_dir, env_lock_name), thread_local=False
+                )
+            self.lock = runtime.env_locks[env]
 
     def __enter__(self, *_args):
         self.lock.acquire()
@@ -396,19 +406,29 @@ class JavaScriptRuntime(runtime.Runtime):
         return self.tls.async_locks[self_id][0]
 
     @contextlib.contextmanager
-    def sync_lock(self, session=None):
-        """Lock the runtime and the environment for executing a command"""
+    def sync_lock(self, session=None, path=None):
+        """Lock the runtime and the environment for executing a command
+
+        'path' names the environment directly, for the callers that install
+        into one the session does not point at. Without it the lock would cover
+        the baseline while the work happened somewhere else, and since
+        'self.lock' is process-local that would leave two processes free to run
+        npm against the same tree.
+        """
         with self.lock:
-            env = os.path.basename(self.get_env_path(session))
+            env = os.path.basename(self.get_env_path(session, path))
             with NodeEnvLock(self, env):
                 yield
 
     @contextlib.asynccontextmanager
-    async def async_lock(self, session=None):
-        """Lock the runtime and the environment for executing a command"""
+    async def async_lock(self, session=None, path=None):
+        """Lock the runtime and the environment for executing a command
+
+        See sync_lock() for what 'path' is for.
+        """
         async with self.get_async_lock():
             with self.lock:
-                env = os.path.basename(self.get_env_path(session))
+                env = os.path.basename(self.get_env_path(session, path))
                 with NodeEnvLock(self, env):
                     yield
 
@@ -674,7 +694,7 @@ class JavaScriptRuntime(runtime.Runtime):
             return
         if path is None:
             path = os.path.join(self.path, BASE_ENV_DIR)
-        with self.sync_lock():
+        with self.sync_lock(path=path):
             with self.sync_lock_install():
                 if not os.path.exists(get_guard_path(path, js_package)):
                     self.install_onced_locked(js_package, path, force or needs_reassert(path, js_package))
@@ -698,7 +718,7 @@ class JavaScriptRuntime(runtime.Runtime):
             return
         if path is None:
             path = os.path.join(self.path, BASE_ENV_DIR)
-        async with self.async_lock():
+        async with self.async_lock(path=path):
             with self.sync_lock_install():
                 if not os.path.exists(get_guard_path(path, js_package)):
                     await self.install_async_onced_locked(js_package, path, force or needs_reassert(path, js_package))

@@ -220,9 +220,10 @@ export function prepareScript(scriptPath, patch, directory) {
             continue;
         }
         // 'm' to match the Python wrappers, whose patches are applied with
-        // re.MULTILINE. The replacement is returned from a function so that a
-        // '$' inside it stays a literal '$' rather than a group reference.
-        source = source.replace(new RegExp(pattern, "gm"), () => replacement);
+        // re.MULTILINE. The replacement keeps JavaScript's own semantics, so a
+        // capture group is referenced as '$1' where Python would write '\\1',
+        // and a literal '$' is written '$$'.
+        source = source.replace(new RegExp(pattern, "gm"), replacement);
     }
 
     const scriptDir = path.dirname(path.resolve(scriptPath));

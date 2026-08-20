@@ -4,8 +4,8 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from . import runtime_javascript_none
 from . import runtime_javascript_conda
+from . import runtime_javascript_none
 
 
 def create(ctx, version, javascript_runtime=None):

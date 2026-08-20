@@ -279,16 +279,38 @@ DEFAULT_JS_REQUIREMENTS = (
 )
 
 
+# What npm accepts that is not "<name>[@<range>]": a URL, a git remote, a
+# tarball, or a path. The '@' in one of these is part of the location rather
+# than a version separator - 'git+ssh://git@host/org/pkg.git' would otherwise
+# come out as 'git+ssh://git', which two unrelated remotes would share.
+_NON_REGISTRY_JS_PREFIXES = ("git+", "git:", "http:", "https:", "file:", "./", "../", "/", "~/")
+_NON_REGISTRY_JS_SUFFIXES = (".tgz", ".tar.gz", ".git")
+
+
+def is_registry_js_requirement(requirement: str) -> bool:
+    """Whether a requirement names a registry package rather than a location."""
+    requirement = requirement.strip()
+    if "://" in requirement:
+        return False
+    if requirement.startswith(_NON_REGISTRY_JS_PREFIXES):
+        return False
+    return not requirement.endswith(_NON_REGISTRY_JS_SUFFIXES)
+
+
 def js_package_name(requirement: str) -> str:
     """The npm package a requirement string names.
 
     Handles the spellings npm accepts for a registry dependency: a bare name, a
     name with a version range ("chili3d@1.1.2"), and a scoped name whose leading
     '@' must not be mistaken for the version separator ("@scope/pkg@1.2.3").
-    Anything else - a URL, a tarball, a local path - is returned as given, which
-    is enough to keep it distinct from every name that matters here.
+
+    Anything that names a location rather than a registry package is returned
+    untouched, so it stays distinct from every other requirement instead of
+    being folded together with them by whatever precedes its first '@'.
     """
     requirement = requirement.strip()
+    if not is_registry_js_requirement(requirement):
+        return requirement
     if requirement.startswith("@"):
         name, separator, _ = requirement[1:].partition("@")
         return "@" + name if separator else requirement

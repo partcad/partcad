@@ -34,7 +34,7 @@ needs_node = pytest.mark.skipif(
 def javascript_config():
     user_config = UserConfig()
     # 'none' uses the host's Node.js, which is what the skip above checked for.
-    user_config.set("javascript_sandbox", "none")
+    user_config.javascript_sandbox = "none"
     return user_config
 
 
@@ -64,7 +64,7 @@ def test_the_default_sandbox_is_the_default_node(javascript_config):
 
     ctx.get_part("cube")
 
-    assert list(ctx.runtimes_javascript) == ["none-" + sandbox_versions.DEFAULT_NODE_VERSION]
+    assert "none-" + sandbox_versions.DEFAULT_NODE_VERSION in ctx.runtimes_javascript
 
 
 def test_a_node_below_the_floor_is_raised_to_it(tmp_path, javascript_config):
@@ -82,7 +82,9 @@ def test_a_node_below_the_floor_is_raised_to_it(tmp_path, javascript_config):
 
     ctx.get_part("cube")
 
-    assert list(ctx.runtimes_javascript) == ["none-" + sandbox_versions.MIN_NODE_VERSION]
+    assert "none-" + sandbox_versions.MIN_NODE_VERSION in ctx.runtimes_javascript
+    # ... and the version below the floor was never asked for at all
+    assert "none-18" not in ctx.runtimes_javascript
 
 
 #
@@ -149,7 +151,10 @@ def test_a_part_can_choose_its_node(tmp_path, javascript_config):
 
     ctx.get_part("cube")
 
-    assert list(ctx.runtimes_javascript) == ["none-24"]
+    # The request is what this asserts, not what the host turns out to have:
+    # a 'none' sandbox resolves to whatever Node.js is installed, and registers
+    # under that as well (see Context.get_javascript_runtime).
+    assert "none-24" in ctx.runtimes_javascript
 
 
 @needs_node

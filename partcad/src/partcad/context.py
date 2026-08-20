@@ -1063,9 +1063,16 @@ class Context:
                 javascript_runtime = self.user_config.javascript_sandbox
             runtime_name = javascript_runtime + "-" + version
             if runtime_name not in self.runtimes_javascript:
-                self.runtimes_javascript[runtime_name] = runtime_javascript_all.create(
-                    self, version, javascript_runtime
-                )
+                runtime = runtime_javascript_all.create(self, version, javascript_runtime)
+                # A runtime does not have to end up being the version that was
+                # asked for: the 'none' sandbox is whatever Node.js the host
+                # has, and reports that (see NoneJavaScriptRuntime). Two
+                # requests that resolve to the same one have to be the same
+                # object, or they would hold separate in-process locks over one
+                # sandbox directory and each re-check its install guards.
+                resolved_name = javascript_runtime + "-" + runtime.version
+                runtime = self.runtimes_javascript.setdefault(resolved_name, runtime)
+                self.runtimes_javascript[runtime_name] = runtime
             return self.runtimes_javascript[runtime_name]
 
     def ensure_dirs(self, path):

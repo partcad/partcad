@@ -147,7 +147,12 @@ def package_requirements(project) -> list[str]:
         if isinstance(reqs, str):
             reqs = reqs.strip().split("\n")
         for req in reqs:
-            dependencies.append(req.strip())
+            # Skip blanks and comments, the way the requirements.txt branch
+            # below does: a multiline 'pythonRequirements' can carry both, and
+            # they are neither installable nor part of the environment.
+            req = req.strip()
+            if req and not req.startswith("#"):
+                dependencies.append(req)
     else:
         # TODO-218: @alexanderilyin: Add support for --hash=... in requirements.txt
         requirements_path = os.path.join(project.path, "requirements.txt")

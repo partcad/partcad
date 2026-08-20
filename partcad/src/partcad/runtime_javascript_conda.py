@@ -154,7 +154,11 @@ class CondaJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
                         "--json",
                         "-p",
                         self.path,
-                        "nodejs==%s" % self.version if self.is_mamba else "nodejs=%s" % self.version,
+                        # Fuzzy ('=') rather than exact ('=='), unlike the Python
+                        # twin: self.version is a major line only, and there is no
+                        # conda package whose version is literally "22" - '=22'
+                        # is what matches 22.x. mamba reads it the same way.
+                        "nodejs=%s" % self.version,
                     ]
                     # Strip user home directory from the path, if any
                     sanitized_args = copy.copy(args)

@@ -29,8 +29,8 @@ from partcad_utils import telemetry
 @pytest.fixture
 def config():
     user_config = UserConfig()
-    user_config.set("javascript_sandbox", "none")
-    user_config.set("python_sandbox", "none")
+    user_config.javascript_sandbox = "none"
+    user_config.python_sandbox = "none"
     return user_config
 
 

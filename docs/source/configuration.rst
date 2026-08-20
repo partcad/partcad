@@ -790,8 +790,9 @@ changes nothing for any other package - or for another part of the same one.
 Two notes on how this differs from the Python script types:
 
 * ``patch`` expressions are JavaScript regular expressions rather than Python
-  ones. The syntax is nearly identical, but a backreference in the replacement
-  is written ``$1`` rather than ``\1``.
+  ones. The syntax is nearly identical, but the replacement follows JavaScript's
+  rules: a capture group is referenced as ``$1`` where Python would write
+  ``\1``, and a literal dollar sign is written ``$$``.
 * Chili3D is an input format only. A part can be *defined* by a ``.chili``
   script and then exported to STEP, STL, 3MF and everything else PartCAD
   writes, but no exporter produces a ``.chili`` file.
