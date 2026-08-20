@@ -58,7 +58,20 @@ class PartFactoryFile(PartFactory):
             pc_logging.warning(f"Part path is not set: {self.part.name}")
         super().post_create()
 
-    async def instantiate(self, part):
+    async def download_file_async(self, part) -> None:
+        """Fetch what 'fileFrom' points at, unless the file is already there."""
         if not self.fileFactory is None and not os.path.exists(part.path):
             with pc_logging.Action("File", self.target_project.name, part.name):
                 await self.fileFactory.download(part.path)
+
+    async def prepare_async(self, part) -> None:
+        """Download the source file without building the part.
+
+        The cache key hashes the file's content, so it only means anything once
+        the file is on disk. 'pc install' calls this for every object, which is
+        why the first build after an install is a cache hit and not a miss.
+        """
+        await self.download_file_async(part)
+
+    async def instantiate(self, part):
+        await self.download_file_async(part)

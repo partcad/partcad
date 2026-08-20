@@ -31,6 +31,114 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             for dep in self.config.get("dependencies", []):
                 self.assembly.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
 
+    def read_assy(self) -> dict:
+        """Read, render and parse this assembly's ASSY file.
+
+        Shared by 'instantiate_async()' and 'prepare_async()' so the links the
+        two walk are always the same ones.
+        """
+        if not os.path.exists(self.path):
+            pc_logging.error("ERROR: Assembly file not found: %s" % self.path)
+            return {}
+
+        # Pass the parameter values to the ASSY template as
+        # 'param_<name>'. The configuration has been through
+        # 'AssemblyConfiguration.normalize()' by now, so every
+        # parameter is in the expanded form and carries the value to
+        # use: the declared default, overridden by '~/.partcad/config.yaml'
+        # or '--extra_param', overridden by the values given in the
+        # object name (e.g. '//package:assembly;length=96').
+        params = {}
+        parameters = self.config.get("parameters") or {}
+        for param_name, param in parameters.items():
+            params["param_" + param_name] = param["default"]
+        params["name"] = self.config["name"]
+
+        # Read the body of the configuration file
+        fp = open(self.path, "r")
+        config = fp.read()
+        fp.close()
+
+        # Resolve Jinja templates
+        # NOTE: autoescape must stay off. The rendered document is YAML,
+        # not HTML, so escaping corrupts every parameter value that
+        # contains '&', '<', '>', '"' or "'" (e.g. 'a & b' would reach
+        # the parser as 'a &amp; b'). This matches how 'partcad.yaml'
+        # itself is rendered in 'ProjectLocal'.
+        template = Environment(
+            loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep),
+        ).from_string(config)
+        config = template.render(params)
+
+        # Parse the resulting config
+        assy = None
+        try:
+            assy = yaml.safe_load(config)
+        except Exception:
+            pc_logging.error("ERROR: Failed to parse the assembly file %s" % self.path)
+        return {} if assy is None else assy
+
+    def node_object_name(self, node, kind: str) -> str:
+        """The fully qualified name of the part or assembly a link names."""
+        name = node[kind]
+        if "package" in node:
+            name = node["package"] + ":" + name
+        elif ":" not in name:
+            name = ":" + name
+        return self.project.normalize(name)
+
+    def node_params(self, node) -> dict:
+        """The parameter overrides a link carries, if any."""
+        params = {}
+        if "params" in node:
+            for param_name in node["params"]:
+                params[param_name] = node["params"][param_name]
+        return params
+
+    async def prepare_async(self, assembly) -> None:
+        """Resolve every part and assembly this one links to, without building.
+
+        Walking the links is what pulls in the packages an assembly *really*
+        depends on: a link may name a package that nothing on the way here
+        imported. Each referenced object is resolved - which loads the package
+        holding it - and prepared in turn, so its own files are downloaded too.
+
+        A link that does not resolve does not stop the walk: an install fetches
+        as much as it can, and the whole set of broken links is reported at the
+        end rather than only the first one.
+        """
+        await super().prepare_async(assembly)
+        unresolved = []
+        await self.prepare_node_async(self.read_assy(), unresolved)
+        if unresolved:
+            raise Exception("Failed to resolve the links to: %s" % ", ".join(unresolved))
+
+    async def prepare_node_async(self, node, unresolved: list) -> None:
+        if isinstance(node, list):
+            for item in node:
+                await self.prepare_node_async(item, unresolved)
+            return
+        if not isinstance(node, dict):
+            return
+
+        if "links" in node and node["links"] is not None:
+            await self.prepare_node_async(node["links"], unresolved)
+            return
+
+        if "assembly" in node:
+            name = self.node_object_name(node, "assembly")
+            item = self.ctx._get_assembly(name, self.node_params(node))
+        elif "part" in node:
+            name = self.node_object_name(node, "part")
+            item = self.ctx._get_part(name, self.node_params(node))
+        else:
+            return
+
+        if item is None:
+            unresolved.append(name)
+            return
+        await item.prepare_async()
+
     def instantiate(self, assembly):
         # # This method is best executed on a thread but the current Python version
         # # might not be good enough to do that.
@@ -50,46 +158,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         await super().instantiate(assembly)
 
         with pc_logging.Action("ASSY", assembly.project_name, assembly.name):
-            assy = {}
-            if os.path.exists(self.path):
-                # Pass the parameter values to the ASSY template as
-                # 'param_<name>'. The configuration has been through
-                # 'AssemblyConfiguration.normalize()' by now, so every
-                # parameter is in the expanded form and carries the value to
-                # use: the declared default, overridden by '~/.partcad/config.yaml'
-                # or '--extra_param', overridden by the values given in the
-                # object name (e.g. '//package:assembly;length=96').
-                params = {}
-                parameters = self.config.get("parameters") or {}
-                for param_name, param in parameters.items():
-                    params["param_" + param_name] = param["default"]
-                params["name"] = self.config["name"]
-
-                # Read the body of the configuration file
-                fp = open(self.path, "r")
-                config = fp.read()
-                fp.close()
-
-                # Resolve Jinja templates
-                # NOTE: autoescape must stay off. The rendered document is YAML,
-                # not HTML, so escaping corrupts every parameter value that
-                # contains '&', '<', '>', '"' or "'" (e.g. 'a & b' would reach
-                # the parser as 'a &amp; b'). This matches how 'partcad.yaml'
-                # itself is rendered in 'ProjectLocal'.
-                template = Environment(
-                    loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep),
-                ).from_string(config)
-                config = template.render(params)
-
-                # Parse the resulting config
-                try:
-                    assy = yaml.safe_load(config)
-                except Exception as e:
-                    pc_logging.error("ERROR: Failed to parse the assembly file %s" % self.path)
-                if assy is None:
-                    assy = {}
-            else:
-                pc_logging.error("ERROR: Assembly file not found: %s" % self.path)
+            assy = self.read_assy()
 
             result = await self.handle_node(assembly, assy)
             if result is not None:
@@ -193,41 +262,26 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     "child": True,
                     "cache": self.ctx.user_config.cache,
                     "cache_dependencies_ignore": self.ctx.user_config.cache_dependencies_ignore,
-                }
+                },
             )  # TODO(clairbee): revisit why node["links"]) was used there
             item.cacheable = False  # Keep it uncacheable before parts info is in the hashing context
             item.instantiate = lambda x: True
             await self.handle_node_list(item, node["links"])
         else:
             # This is a node for a part or an assembly
-            params = {}
-            if "params" in node:
-                for paramName in node["params"]:
-                    params[paramName] = node["params"][paramName]
+            params = self.node_params(node)
 
             if "assembly" in node:
-                assy_name = node["assembly"]
                 if name is None:
-                    name = assy_name
-                if "package" in node:
-                    assy_name = node["package"] + ":" + assy_name
-                elif not ":" in assy_name:
-                    assy_name = ":" + assy_name
-                assy_name = self.project.normalize(assy_name)
-                item = self.ctx._get_assembly(assy_name, params)
+                    name = node["assembly"]
+                item = self.ctx._get_assembly(self.node_object_name(node, "assembly"), params)
                 if item is None:
                     pc_logging.error("Assembly not found: %s" % name)
                     raise Exception("Assembly not found")
             elif "part" in node:
-                part_name = node["part"]
                 if name is None:
-                    name = part_name
-                if "package" in node:
-                    part_name = node["package"] + ":" + part_name
-                elif not ":" in part_name:
-                    part_name = ":" + part_name
-                part_name = self.project.normalize(part_name)
-                item = self.ctx._get_part(part_name, params)
+                    name = node["part"]
+                item = self.ctx._get_part(self.node_object_name(node, "part"), params)
                 if item is None:
                     pc_logging.error("Part not found: %s in %s" % (name, self.name))
                     raise Exception("Part not found: %s in %s" % (name, self.name))

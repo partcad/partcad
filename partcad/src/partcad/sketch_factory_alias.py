@@ -66,6 +66,17 @@ class SketchFactoryAlias(SketchFactory):
 
             # pc_logging.debug("Initialized an alias to %s" % self.source)
 
+    async def prepare_async(self, obj) -> None:
+        """Resolve the source, then prepare it.
+
+        Resolving is the point: the source may live in another package, and
+        asking the context for it loads - and so downloads - that package.
+        """
+        source = self.ctx._get_sketch(self.source)
+        if not source:
+            raise Exception(f"The alias source {self.source} is not found")
+        await source.prepare_async()
+
     async def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_sketch_name}"):
 

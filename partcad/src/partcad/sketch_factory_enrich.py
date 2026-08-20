@@ -68,6 +68,23 @@ class SketchFactoryEnrich(pf.SketchFactory):
 
             self.sketch.get_cacheable = self.get_cacheable
 
+    async def prepare_async(self, sketch) -> None:
+        """Resolve the source object, then prepare it.
+
+        Only the source is resolved here, not the enriched clone: an enrich
+        adds nothing of its own to fetch, while resolving the source loads -
+        and so downloads - the package that holds it.
+        """
+        source_project = self.source_project
+        if self.source_project_name != source_project.name:
+            source_project = self.ctx.get_project(self.source_project_name)
+            if source_project is None:
+                raise Exception("Package not found: %s" % self.source_project_name)
+        source = source_project.get_sketch(self.source_sketch_name)
+        if source is None:
+            raise Exception(f"Failed to find the sketch to enrich: {source_project.name}:{self.source_sketch_name}")
+        await source.prepare_async()
+
     async def instantiate(self, sketch):
         with pc_logging.Action("Enrich", sketch.project_name, f"{sketch.name}:{self.source_sketch_name}"):
 

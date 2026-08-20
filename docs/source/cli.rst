@@ -36,7 +36,11 @@ Package commands
   mode, and options such as ``--desc``, ``--url``, and ``--manufacturable`` to prefill package metadata.
 
 ``pc install``
-  Download and set up all packages imported by the current package.
+  Download everything the current package needs to be built - the PartCAD counterpart of ``npm install``.
+  It fetches all imported packages, then prepares every sketch, part and assembly by computing its cache key:
+  that downloads the files behind ``fileFrom`` and resolves each alias, enrich, compound and assembly link,
+  which loads the packages the objects really depend on. Nothing is built. Use ``-P`` to install a package
+  other than the current one and ``-r`` to prepare the objects of the imported packages too.
 
 ``pc update``
   Force update all imported packages to their latest versions.

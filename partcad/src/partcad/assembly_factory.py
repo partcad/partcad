@@ -28,6 +28,7 @@ class AssemblyFactory(ShapeFactory):
     def _create(self, config) -> None:
         self.assembly = Assembly(self.project.name, config)
         self.assembly.instantiate = lambda assembly_self: self.instantiate(assembly_self)
+        self.assembly._prepare = lambda shape_self: self.prepare_async(shape_self)
         self.assembly.info = lambda: self.info(self.assembly)
         self.assembly.with_ports = self.with_ports
         self.project.assemblies[self.name] = self.assembly

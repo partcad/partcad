@@ -41,7 +41,20 @@ class AssemblyFactoryFile(AssemblyFactory):
             pc_logging.warning(f"Assembly path is not set: {self.assembly.name}")
         super().post_create()
 
-    async def instantiate(self, assembly):
+    async def download_file_async(self, assembly) -> None:
+        """Fetch what 'fileFrom' points at, unless the file is already there."""
         if not self.fileFactory is None and not os.path.exists(assembly.path):
             with pc_logging.Action("File", self.target_project.name, assembly.name):
                 await self.fileFactory.download(assembly.path)
+
+    async def prepare_async(self, assembly) -> None:
+        """Download the source file without building the assembly.
+
+        The cache key hashes the file's content, so it only means anything once
+        the file is on disk. 'pc install' calls this for every object, which is
+        why the first build after an install is a cache hit and not a miss.
+        """
+        await self.download_file_async(assembly)
+
+    async def instantiate(self, assembly):
+        await self.download_file_async(assembly)

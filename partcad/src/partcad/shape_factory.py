@@ -35,6 +35,17 @@ class ShapeFactory(factory.Factory):
 
         self.with_ports = WithPorts(config["name"], project, config)
 
+    async def prepare_async(self, shape) -> None:
+        """Fetch what this shape needs before its cache key can be computed.
+
+        Overridden by the factories that have something to fetch: the file
+        factories download whatever 'fileFrom' points at, and the factories
+        that reference another object (alias, enrich, compound, assy) resolve
+        it, which loads the package holding it. The default is to do nothing -
+        a shape defined entirely by its own package has nothing to fetch.
+        """
+        return None
+
     def info(self, shape):
         """This is the default implementation of the get_info method for factories."""
         info: dict = shape.shape_info(self.ctx)

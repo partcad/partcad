@@ -37,6 +37,7 @@ class PartFactory(ShapeFactory):
     def _create_part(self, config: object) -> Part:
         part = Part(self.target_project.name, config)
         part.instantiate = lambda part_self: self.instantiate(part_self)
+        part._prepare = lambda shape_self: self.prepare_async(shape_self)
         part.info = lambda: self.info(part)
         part.with_ports = self.with_ports
         return part

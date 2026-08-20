@@ -21,6 +21,7 @@ import {
     checkIfConfigurationChanged,
     getBackendFromSetting,
     getInterpreterFromSetting,
+    getInstallOnOpenFromSetting,
     getPackagePathFromSetting,
     getReopenTerminalFromSetting,
     getPopupTerminalFromSetting,
@@ -52,6 +53,37 @@ let currentItemName: string = '//';
 let currentItemPackage: string = '//';
 let currentItemParams: { [id: string]: string } = {};
 let itemToSelectOnRestart: string | undefined = undefined;
+
+// Which packages this workspace has already had installed, keyed by the config
+// file the install ran against, so that opening the same directory again is not
+// another download. Stored in the workspace state: "a new workspace directory"
+// has to survive a window reload, and a workspace whose `partcad.packagePath`
+// now points somewhere else is a package that has not been installed yet.
+const INSTALLED_PACKAGES_KEY = 'partcad.installedPackages';
+
+/**
+ * Download the package's dependencies the first time this workspace is opened.
+ *
+ * The PartCAD counterpart of `npm install`: it fetches every imported package
+ * and prepares every sketch, part and assembly, so the first build is not also
+ * the first download. It runs against the package `partcad.packagePath` points
+ * at, because that is the one the service just loaded.
+ */
+async function installPackageOnOpen(
+    context: vscode.ExtensionContext,
+    serverId: string,
+    configPath: string,
+): Promise<void> {
+    if (getInstallOnOpenFromSetting(serverId) !== 'true') {
+        return;
+    }
+    const installed = context.workspaceState.get<string[]>(INSTALLED_PACKAGES_KEY, []);
+    if (installed.includes(configPath)) {
+        return;
+    }
+    await context.workspaceState.update(INSTALLED_PACKAGES_KEY, [...installed, configPath]);
+    await vscode.commands.executeCommand('partcad.installPackage');
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
@@ -182,6 +214,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     }
 
                     partcadExplorer?.setRoot(root);
+
+                    await installPackageOnOpen(context, serverId, configPath);
                 }),
                 lsClient.onNotification('?/partcad/activateFailed', async () => {
                     await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
@@ -412,6 +446,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
             // reload the context
             await vscode.commands.executeCommand('partcad.reinstall');
+        }),
+        registerCommand(`partcad.installPackage`, async () => {
+            await vscode.commands.executeCommand('setContext', 'partcad.packageContentsBeingLoaded', true);
+            try {
+                await vscode.commands.executeCommand('partcad.installPackageReal');
+            } finally {
+                // Installing loads packages that were not there before, so the
+                // tree the Explorer is showing is now out of date.
+                await vscode.commands.executeCommand('partcad.loadPackageContents');
+            }
         }),
         registerCommand(`partcad.promptInitPackage`, async () => {
             if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length === 1) {
