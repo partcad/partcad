@@ -286,7 +286,8 @@ not expected to be a part of the package, PartCAD does not complain about it
 being missing while the package is loaded.
 
 ``fileFrom`` and ``fileUrl`` must be declared together.
-They are recognized in :ref:`parts` and :ref:`sketches`.
+They are recognized in :ref:`parts`, :ref:`sketches` and :ref:`assemblies`
+(the ``.assy`` file of an assembly is pulled the same way a CAD file is).
 
 Parameters
 ----------
@@ -913,6 +914,8 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
     <assembly name>:
       type: assy  # Assembly YAML
       path: <(optional) the source file path>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       parameters:  # (optional)
         <param name>:
           type: <string|float|int|bool>
@@ -925,6 +928,12 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
 The ``assy`` type is used to define assemblies in `Assembly YAML` format.
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
+The ``.assy`` file does not have to be a part of the package: ``fileFrom`` and
+``fileUrl`` pull it from a remote location on first use, exactly as they do for
+:ref:`parts` (see :ref:`files`).
+A CAD file that contains an assembly (a STEP file, for example) is not declared
+as an assembly directly: ``pc import assembly`` splits it into parts and writes
+the ``.assy`` file that links them.
 The optional ``offset`` parameter specifies the location of the assembly using an OCCT Location object.
 See "Implementation Detail" for more information on the OCCT Location object.
 
