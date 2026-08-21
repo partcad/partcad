@@ -1008,6 +1008,9 @@ reads it and uses it as the assembly itself, with no intermediate file:
       path: <(optional) the source file path, "{assembly name}.step" otherwise>
       precision: <(optional) decimal places each component's placement is rounded to, 5 by default>
 
+``pc add assembly step <file>.step`` writes that declaration for an existing
+file.
+
 Every component of the STEP file becomes an ordinary PartCAD part, named
 ``<assembly name>/<component name>``. Those parts are inspected, rendered,
 exported and referenced from other assemblies like any other part -- they are
