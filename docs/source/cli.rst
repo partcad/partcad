@@ -59,7 +59,8 @@ Object commands
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally
   convert its format) and ``assembly`` (import an assembly from a file, creating the parts and an Assembly
-  YAML file).
+  YAML file). ``pc import assembly`` is a one-shot conversion; to keep reading the source file itself,
+  declare it as an assembly of the ``step`` type instead (see :ref:`assembly_step`).
 
 ``pc test``
   Run tests on a part, assembly, or scene. Use ``-r`` to test imported packages recursively, ``-f`` to filter
