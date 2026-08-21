@@ -5,6 +5,17 @@
 #
 """Core-side entry point for 'pc import assembly'.
 
+An import reads a foreign file and leaves the package holding *PartCAD's own*
+objects - parts it can render on their own and an ``.assy`` that places them -
+rather than a declaration that points back at the foreign file. (Declaring one
+is what ``pc add assembly`` is for.) Both supported formats work that way:
+
+  * **STEP** - the file is split into one zeroed STEP part per solid and an
+    ``.assy`` that places them.
+  * **URDF** - each link becomes an ``stl`` part carrying the physical
+    properties the URDF stated, each joint becomes a pair of interfaces, and
+    the ``.assy`` connects the parts through them.
+
 The STEP-CAF reader and every other OCCT operation an assembly import needs run
 in a sandbox (see wrappers/wrapper_import_assy.py), so this module never touches
 a live OCP object: PartCAD does not depend on a CAD library to import an
@@ -49,6 +60,51 @@ async def _run_import(ctx, request):
     return result["root"]
 
 
+def import_urdf_action(project: Project, assembly_file: str, config: dict) -> str:
+    """Import a URDF as the parts, interfaces and .assy that say the same thing.
+
+    This is the same conversion ``pc convert assembly -t assy`` performs on a
+    URDF assembly the package already declares, so it is done the same way: the
+    URDF is registered as an assembly of the package for the length of the
+    conversion and dropped again, leaving only what the conversion produced.
+    Registering it in memory rather than writing it to 'partcad.yaml' first is
+    what lets the source file live anywhere - the STEP import reads its file
+    where it lies too.
+    """
+    from .convert import apply_config, urdf_to_assy
+
+    name = Path(assembly_file).stem
+    if project.get_assembly_config(name) is not None:
+        raise ValueError(
+            "The package already has an assembly named '%s'; rename the URDF file or remove it first" % name
+        )
+
+    urdf_config = {"type": "urdf", "path": str(Path(assembly_file).resolve())}
+    # What the URDF reader takes from an assembly's declaration. An import has
+    # nowhere to put them yet, but they arrive through 'config' when a caller
+    # (the JSON-RPC service, a test) supplies them.
+    for key in ("desc", "ignoreCollision", "packagePaths", "strict"):
+        if config.get(key) is not None:
+            urdf_config[key] = config[key]
+
+    known = project.object_configs("assembly")
+    known[name] = urdf_config
+    try:
+        sections = urdf_to_assy(project, name, urdf_config, Path(project.config_dir).resolve())
+    finally:
+        # Whatever happened, the package must not be left declaring a URDF
+        # assembly that 'partcad.yaml' knows nothing about.
+        known.pop(name, None)
+        project.assemblies.pop(name, None)
+
+    apply_config(project, sections)
+    pc_logging.info(
+        "Imported the URDF '%s' as %d parts and %d interfaces"
+        % (name, len(sections["parts"]), len(sections["interfaces"]))
+    )
+    return name
+
+
 def import_assy_action(
     project: Project,
     file_type: str,
@@ -66,6 +122,7 @@ def import_assy_action(
 
     Supported formats:
       - STEP (.step, .stp)
+      - URDF (.urdf), which takes the path through 'import_urdf_action'
     """
     config = config or {}
 
@@ -74,6 +131,9 @@ def import_assy_action(
         raise FileNotFoundError(f"File '{assembly_file}' not found.")
 
     pc_logging.info(f"Starting import of assembly: {project.rel_path(assembly_file)} (Type: {file_type})")
+
+    if file_type == "urdf":
+        return import_urdf_action(project, assembly_file, config)
 
     assembly_name = Path(assembly_file).stem
     project_root = Path(project.config_dir).resolve()

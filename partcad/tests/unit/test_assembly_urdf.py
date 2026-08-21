@@ -21,7 +21,7 @@ import pytest
 import yaml
 
 import partcad as pc
-from partcad.actions.assembly import convert_assembly_action
+from partcad.actions.assembly import convert_assembly_action, import_assy_action
 from partcad.adhoc.convert import convert_cad_file
 from partcad.assembly_factory_urdf import DROPPED_LABELS
 from partcad.geom import Location
@@ -694,3 +694,127 @@ def test_adhoc_convert_rejects_urdf(tmp_path):
         convert_cad_file(str(source), "urdf", str(tmp_path / "out.stl"), "stl")
     with pytest.raises(ValueError, match="only means anything inside a package"):
         convert_cad_file(str(source), "stl", str(tmp_path / "out.urdf"), "urdf")
+
+
+#
+# 'pc import assembly' and 'pc add assembly'
+#
+
+
+def test_import_assembly_from_a_urdf(tmp_path):
+    """'pc import assembly robot.urdf' leaves the package holding PartCAD objects.
+
+    The same shape as importing a STEP: the source file is read where it lies
+    and what the package gains is parts and an assembly of its own, not a
+    declaration pointing back at the foreign file. For a URDF that means an
+    'stl' part per link and an interface pair per joint, so the '.assy'
+    connects its parts rather than placing them by coordinates.
+    """
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    package = root / "produce_part_stl"
+    # Outside the package it is imported into, the way a STEP file usually is.
+    source = root / "robot.urdf"
+    shutil.copy(os.path.join(EXAMPLES, "produce_assembly_urdf", "robot.urdf"), source)
+
+    ctx = pc.Context(str(root))
+    name = import_assy_action(ctx.get_project("//produce_part_stl"), "urdf", str(source), {})
+    assert name == "robot"
+
+    config = yaml.safe_load((package / "partcad.yaml").read_text())
+    assert_valid_package_config(config)
+    # The URDF is not what the package ends up declaring - the ASSY is.
+    assert config["assemblies"]["robot"] == {"type": "assy", "path": "robot.assy"}
+    assert (package / "robot.assy").is_file()
+
+    for link in ("base_link", "shoulder", "forearm", "wrist"):
+        entry = config["parts"]["robot/%s" % link]
+        assert entry["type"] == "stl"
+        assert (package / entry["path"]).is_file()
+    assert config["parts"]["robot/base_link"]["physics"]["mass"] == pytest.approx(0.78)
+    assert set(config["interfaces"]) == {
+        "robot/fixed-socket",
+        "robot/fixed-plug",
+        "robot/shoulder_pan-socket",
+        "robot/shoulder_pan-plug",
+    }
+
+    # And it builds, putting every link frame where the URDF put it. The parts
+    # sit at the link frames rather than at the shapes' own placements: each
+    # link's mesh is written in its own frame, so what a connection places is
+    # the link, not one of its pieces.
+    direct = pc.Context(EXAMPLES)._get_assembly(URDF_EXAMPLE)
+    asyncio.run(direct.do_instantiate())
+    imported = pc.Context(str(package))._get_assembly(":robot")
+    asyncio.run(imported.do_instantiate())
+    assert absolute_placements(imported) == link_frames(direct)
+
+
+def test_import_leaves_no_urdf_assembly_behind(tmp_path):
+    """The transient declaration the import works through does not survive it.
+
+    Neither when it succeeds - 'partcad.yaml' names the ASSY, not the URDF - nor
+    when it fails, which would otherwise leave the package declaring an assembly
+    the file on disk knows nothing about.
+    """
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    source = root / "broken.urdf"
+    source.write_text("<robot name='broken'><link name='a'/></robot>")
+
+    project = pc.Context(str(root)).get_project("//produce_part_stl")
+    with pytest.raises(Exception):
+        import_assy_action(project, "urdf", str(source), {})
+
+    assert project.get_assembly_config("broken") is None
+    assert "broken" not in (yaml.safe_load((root / "produce_part_stl" / "partcad.yaml").read_text()) or {}).get(
+        "assemblies", {}
+    )
+
+
+def test_import_refuses_to_overwrite_an_existing_assembly(tmp_path):
+    """A name that is taken is a mistake worth reporting, not something to clobber."""
+    root = sandbox(tmp_path, URDF_EXAMPLE_PACKAGES)
+    project = pc.Context(str(root)).get_project("//produce_assembly_urdf")
+    source = root / "produce_assembly_urdf" / "robot.urdf"
+
+    with pytest.raises(ValueError, match="already has an assembly named 'robot'"):
+        import_assy_action(project, "urdf", str(source), {})
+
+
+def test_add_assembly_declares_a_urdf_where_it_lies(tmp_path):
+    """'pc add assembly urdf robot.urdf' declares the file, and does not convert it.
+
+    The mirror image of the import: the package points at the URDF, the URDF
+    stays a URDF, and its links become parts of the package as it is read.
+    """
+    root = sandbox(tmp_path, ("produce_part_stl",))
+    package = root / "produce_part_stl"
+    shutil.copy(os.path.join(EXAMPLES, "produce_assembly_urdf", "robot.urdf"), package / "robot.urdf")
+
+    project = pc.Context(str(root)).get_project("//produce_part_stl")
+    assert project.add_assembly("urdf", str(package / "robot.urdf"), {})
+
+    config = yaml.safe_load((package / "partcad.yaml").read_text())
+    assert_valid_package_config(config)
+    assert config["assemblies"]["robot"]["type"] == "urdf"
+
+    assembly = pc.Context(str(package))._get_assembly(":robot")
+    asyncio.run(assembly.do_instantiate())
+    assert [child.name for child in assembly.children] == ["base_link", "shoulder", "forearm", "wrist"]
+
+
+def test_info_reports_the_urdf_without_building_it():
+    """'pc info' says what the URDF said, whether or not the assembly was built.
+
+    Asking for a shape's info does not necessarily build it - its geometry may
+    come straight from the cache - so the reader is run here if it has not run
+    yet. Otherwise a URDF assembly would report less about itself the more often
+    it had been used.
+    """
+    # A context of its own, on which nothing has been instantiated.
+    robot = pc.Context(EXAMPLES)._get_assembly(URDF_EXAMPLE)
+    info = robot.info()
+
+    assert info["Robot"] == "partcad_urdf_example"
+    assert info["RootLink"] == "base_link"
+    assert info["UrdfMovableJoints"] == ["shoulder_pan (revolute)"]
+    assert DROPPED_LABELS["joint_kinematics"] in info["UrdfDropped"]

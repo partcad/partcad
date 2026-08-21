@@ -22,6 +22,16 @@ What exists today
 Reading a URDF
 ==============
 
+A URDF reaches a package by the same two commands any other foreign file does,
+and they mean the same two things they mean for a STEP file. ``pc add assembly
+urdf <path>`` *declares* it: the package points at the file, the file stays a
+URDF, and its links become parts as it is read. ``pc import assembly <path>``
+*converts* it: the package gains an ``stl`` part per link, an interface pair per
+joint and an ``.assy``, and nothing points at the URDF afterwards. The import is
+the conversion described in `Converting between the two`_, run against a
+declaration that lives only for the length of it - which is what lets the source
+file sit anywhere, the way a STEP file being imported does.
+
 ``AssemblyFactoryUrdf`` drives ``wrapper_import_urdf`` in a python sandbox. The
 sandbox parses the file with ROS's own ``urdf_parser_py``, walks the joint tree
 from the root link with every joint at its zero position, resolves each link's

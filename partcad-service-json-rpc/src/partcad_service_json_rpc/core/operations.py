@@ -320,10 +320,10 @@ def import_object(session, params):
     """Import a part or assembly into a package, copying (and maybe converting) it.
 
     Served by the daemon rather than the client because the work runs through
-    sandboxed wrappers: importing an assembly drives ``wrapper_import_assy`` in
-    a Python runtime, and ``--target-format`` converts through the same
-    machinery. Those runtimes belong to the daemon's environment and need not
-    exist on the client side at all.
+    sandboxed wrappers: importing an assembly drives ``wrapper_import_assy`` or
+    ``wrapper_import_urdf`` in a Python runtime, and ``--target-format``
+    converts through the same machinery. Those runtimes belong to the daemon's
+    environment and need not exist on the client side at all.
     """
     from pathlib import Path
 

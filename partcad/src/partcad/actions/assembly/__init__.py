@@ -9,6 +9,7 @@
 __all__ = [
     "convert_assembly_action",
     "import_assy_action",
+    "import_urdf_action",
 ]
 
 
@@ -17,6 +18,10 @@ def __getattr__(name):
         from .import_assy import import_assy_action
 
         return import_assy_action
+    if name == "import_urdf_action":
+        from .import_assy import import_urdf_action
+
+        return import_urdf_action
     if name == "convert_assembly_action":
         from .convert import convert_assembly_action
 

@@ -8,6 +8,16 @@ docs:
     pc inspect -a robot
     ```
 
+    This package declares it the way `pc add assembly` would. The other way in
+    is `pc import assembly`, which converts instead of declaring - the package
+    ends up with an `stl` part per link and an interface pair per joint, and
+    nothing points at the URDF afterwards:
+
+    ```shell
+    pc add assembly urdf robot.urdf     # declare it, as this package does
+    pc import assembly robot.urdf       # or convert it, as with a STEP file
+    ```
+
     Each link becomes a part of this package, named `<assembly>/<link>`, which
     can be inspected and exported like any other part. So does the geometry a
     link was not built from, as `<assembly>/<link>/<visual|collision>`:

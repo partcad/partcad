@@ -1026,6 +1026,14 @@ description format of ROS - as an assembly directly, with no conversion step:
         - <../meshes>
       strict: <(optional) fail on an unknown "<gazebo>" setting; false by default>
 
+``pc add assembly urdf <path>`` writes that declaration for a URDF that is
+already inside the package. ``pc import assembly <path>`` is the other choice:
+it converts instead of declaring, leaving the package with an ``stl`` part per
+link, an interface pair per joint and an ``.assy``, exactly as
+``pc convert assembly -t assy`` does below. Both commands work the way they do
+for a STEP file - ``add`` points at a file, ``import`` turns one into PartCAD's
+own objects.
+
 **One part per shape, in one flat list.** A link that has a single ``<visual>``
 (or ``<collision>``) becomes the part ``<assembly name>/<link name>``. A link
 that has several becomes a *sub-assembly* of one part each, named
