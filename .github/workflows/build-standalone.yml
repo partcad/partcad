@@ -339,6 +339,7 @@ jobs:
           export PATH="/snap/bin:${PATH}"
           # `tail -n 1` so that anything snapd chooses to print first cannot be
           # mistaken for the value.
+          # shellcheck disable=SC2016  # the expansion has to happen in the snap's shell, not here
           state_dir="$(echo 'echo "$PC_INTERNAL_STATE_DIR"' | snap run --shell partcad.pc | tail -n 1 || true)"
           echo "PC_INTERNAL_STATE_DIR as the snap sees it: '${state_dir}'"
           test "${state_dir}" = "${HOME}/snap/partcad/common" || {

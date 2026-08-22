@@ -350,14 +350,16 @@ conda and git
 A snap does not carry your shell environment, so a conda installed under your home directory -- the usual
 place -- is not visible to it, and neither is a git outside the standard system prefixes. This is expected
 and accepted rather than worked around: PartCAD notices, falls back to running Python scripts without a
-sandbox (``pythonSandbox: none``), and reports both as missing.
+sandbox (``pythonSandbox: none``), and reports both as missing. Packages imported from git repositories are
+still cloned, through ``libgit2`` as everywhere else; what the snap cannot see is your git *configuration*
+(see :ref:`git-configuration`).
 
 .. code-block:: shell
 
   $ pc healthcheck
 
-If you need the conda sandbox or git dependencies, use the :ref:`standalone bundle <standalone-cli>` or the
-wheels, which run with your own environment.
+If you need the conda sandbox, or your own git configuration, use the :ref:`standalone bundle
+<standalone-cli>` or the wheels, which run with your own environment.
 
 To remove the snap, including its data:
 

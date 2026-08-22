@@ -611,8 +611,10 @@ CI fans out over operating systems, and a pull request does not pay for all of t
 Ubuntu 22.04 images and the second macOS, which is most of the cost -- macOS minutes bill at ten times the
 Linux rate. What stays is Ubuntu 24.04 on x86_64 and arm64, both Windows images, and one macOS.
 
-The full matrix runs on the nightly schedule, on a manual workflow run, and on every push, which includes the
-release. To run it on a pull request before it merges, put ``#deepTest`` anywhere in the pull request title or
+The full matrix runs on the nightly schedule, on a manual workflow run, and on a push, which includes the
+release. A push to ``devel`` is the exception: it runs no matrix at all unless its head commit message starts
+with ``Version updated``, which is the release commit.
+To run it on a pull request before it merges, put ``#deepTest`` anywhere in the pull request title or
 description and re-run the checks. Worth doing when the change touches packaging, dependencies, the standalone
 bundle or the snap, or anything else where an older OS version could behave differently.
 

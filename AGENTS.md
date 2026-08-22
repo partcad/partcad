@@ -95,9 +95,11 @@ poetry run behave                                                               
 ```
 
 CI fans these out over operating systems, and a pull request runs a reduced matrix: both Ubuntu 22.04 images
-and the second macOS are dropped. The full matrix runs nightly, on a manual dispatch, on any push, and on a
+and the second macOS are dropped. The full matrix runs nightly, on a manual dispatch, on a push, and on a
 pull request whose title or description contains `#deepTest`. `.github/actions/test-depth` is the one place
-that decides; `docs/source/contributing.rst` explains it to contributors.
+that decides; `docs/source/contributing.rst` explains it to contributors. Note that a push to `devel` runs no
+matrix at all unless its head commit message starts with `Version updated` — the `set-matrix` job, and every
+job that depends on it, is skipped otherwise.
 
 Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
 

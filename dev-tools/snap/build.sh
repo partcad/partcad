@@ -125,7 +125,14 @@ rm -f "${OUTPUT_DIR}/${SNAP_NAME}" "${OUTPUT_DIR}/${SNAP_NAME}.sha256"
 # resolves the part's `source: dist/standalone/partcad` against. The result is
 # moved out afterwards rather than passed through `--output`, whose handling of
 # a directory argument has changed between snapcraft releases.
-(cd "${REPO_ROOT}" && rm -f "${SNAP_NAME}" && snapcraft pack "${SNAPCRAFT_MODE}")
+#
+# `--platform` narrows the build plan to this machine's architecture. It is
+# required in destructive mode, which cannot build the two platforms
+# `snap/snapcraft.yaml` declares one after another in the same host directory,
+# and it is passed in LXD mode too: there is no cross-building here either -- the
+# payload is a frozen native bundle -- and exactly one snap has to come out, the
+# `${SNAP_NAME}` looked for below.
+(cd "${REPO_ROOT}" && rm -f "${SNAP_NAME}" && snapcraft pack "${SNAPCRAFT_MODE}" --platform "${SNAP_ARCH}")
 
 if [ ! -f "${REPO_ROOT}/${SNAP_NAME}" ]; then
   echo "error: snapcraft did not produce '${SNAP_NAME}'" >&2

@@ -185,19 +185,19 @@ jobs:
           # harmless -- an exclude for a combination the matrix does not contain
           # simply matches nothing -- and keeps one list to maintain rather than
           # two that have to agree.
-          echo 'matrix={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> $GITHUB_OUTPUT
-          echo 'matrix-slim={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}}' >> $GITHUB_OUTPUT
+          echo 'matrix={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
+          echo 'matrix-slim={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}}' >> "${GITHUB_OUTPUT}"
           # Behave is single-process and dominates CI wall-clock, so it runs
           # sharded across parallel jobs. The "shard" axis is derived from
           # BEHAVE_SHARDS (1..N) here, so the number of behave jobs can never
           # drift from it, and crosses os/python. Behave uses the slim matrix
           # (like test-pub-repo), so sharding does not multiply the full matrix.
           SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
-          echo 'matrix-behave={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> $GITHUB_OUTPUT
+          echo 'matrix-behave={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> "${GITHUB_OUTPUT}"
           # The same OS axis and excludes as 'matrix', so it follows the depth
           # too, but only the Python versions the extension bundle can be built
           # for. See PYTHONS_IDE above.
-          echo 'matrix-ide={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS_IDE }}, "exclude": ${{ env.EXCLUDES }}}' >> $GITHUB_OUTPUT
+          echo 'matrix-ide={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS_IDE }}, "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
 
   # cache-preheat:
   #   name: "Update caches"
