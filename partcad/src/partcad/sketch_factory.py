@@ -45,6 +45,7 @@ class SketchFactory(ShapeFactory):
         self.sketch = self._create_sketch(config)
         self.target_project.sketches[self.name] = self.sketch
 
+        self.apply_environment_cache_key(self.sketch)
         self.post_create()
 
         self.ctx.stats_sketches += 1

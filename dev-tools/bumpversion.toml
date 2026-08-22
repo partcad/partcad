@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "0.7.158"
+current_version = "0.7.167"
 commit = "true"
 commit_args = "--no-verify"
 tag = "true"
@@ -20,6 +20,79 @@ replace = "version = \"{new_version}\""
 filename = "partcad-cli/requirements.txt"
 search = "partcad=={current_version}"
 replace = "partcad=={new_version}"
+
+# Every package in the monorepo, and every pin between them. `partcad-utils` and
+# `partcad-service-json-rpc` were once added without being added here, so their
+# versions stayed at whatever they were created with while everything else moved.
+# That is not cosmetic: `pc upgrade` compares `partcad_client.__version__`
+# against the newest release to decide whether to update, so a stale constant
+# means the CLI either never upgrades or upgrades forever.
+# `partcad-cli/tests/unit/test_versions.py` fails if any of these fall out of
+# step again, or if any entry below stops matching the file it names.
+[[tool.bumpversion.files]]
+filename = "partcad-utils/pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-utils/src/partcad_utils/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-client/pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-client/src/partcad_client/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-client/requirements.txt"
+search = "partcad-utils=={current_version}"
+replace = "partcad-utils=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "partcad-cli/requirements.txt"
+search = "partcad-client=={current_version}"
+replace = "partcad-client=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "partcad-service-json-rpc/pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-service-json-rpc/src/partcad_service_json_rpc/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad/requirements.txt"
+search = "partcad-utils=={current_version}"
+replace = "partcad-utils=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "partcad-service-json-rpc/requirements.txt"
+search = "partcad-utils=={current_version}"
+replace = "partcad-utils=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "partcad-service-json-rpc/requirements.txt"
+search = "partcad=={current_version}"
+replace = "partcad=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "partcad-cli/requirements.txt"
+search = "partcad-utils=={current_version}"
+replace = "partcad-utils=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "partcad-cli/requirements.txt"
+search = "partcad-service-json-rpc=={current_version}"
+replace = "partcad-service-json-rpc=={new_version}"
 
 [[tool.bumpversion.files]]
 filename = "partcad/src/partcad/__init__.py"
@@ -61,8 +134,11 @@ filename = "partcad-ide-vscode/bundled/tool/lsp_server.py"
 search = "version=\"{current_version}\""
 replace = "version=\"{new_version}\""
 
+# The minimum-version check the extension's activation runs. It moved out of
+# lsp_server.py and into the shared operations core with the JSON-RPC migration;
+# this entry kept naming the old file, so the bound stopped moving with it.
 [[tool.bumpversion.files]]
-filename = "partcad-ide-vscode/bundled/tool/lsp_server.py"
+filename = "partcad-service-json-rpc/src/partcad_service_json_rpc/core/operations.py"
 search = "(\">={current_version}\")"
 replace = "(\">={new_version}\")"
 

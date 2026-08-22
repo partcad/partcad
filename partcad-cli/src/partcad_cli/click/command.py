@@ -71,11 +71,11 @@ option_groups = [
     },
     {
         "name": "Dependency management options",
-        "options": ["--force-update", "--offline", "--internal-state-dir"],
+        "options": ["--force-update", "--offline", "--devel-index", "--internal-state-dir"],
     },
     {
         "name": "Sandbox options",
-        "options": ["--python-sandbox", "--ignore-bundled-openscad"],
+        "options": ["--python-sandbox", "--javascript-sandbox", "--ignore-bundled-openscad"],
     },
     {
         "name": "Telemetry options",
@@ -128,7 +128,7 @@ command_groups = [
     },
     {
         "name": "Object commands",
-        "commands": ["list", "add", "import", "test", "inspect", "info", "convert", "export", "render"],
+        "commands": ["list", "add", "import", "test", "inspect", "info", "bom", "convert", "export", "render"],
     },
     {
         "name": "Workflow commands",
@@ -282,6 +282,13 @@ click.rich_click.COMMAND_GROUPS = {
     help="Sandboxing environment for invoking python scripts(defaults to conda)",
 )
 @click.option(
+    "--javascript-sandbox",
+    default=None,
+    show_envvar=True,
+    type=click.Choice(["none", "conda"]),
+    help="Sandboxing environment for invoking JavaScript scripts (defaults to the host's Node.js)",
+)
+@click.option(
     "--ignore-bundled-openscad",
     is_flag=True,
     default=None,
@@ -312,6 +319,13 @@ click.rich_click.COMMAND_GROUPS = {
     show_envvar=True,
     default=None,
     help="Operate in offline mode, without any repo updates",
+)
+@click.option(
+    "--devel-index",
+    is_flag=True,
+    show_envvar=True,
+    default=None,
+    help="Use the 'devel' branch of the public index instead of the released one",
 )
 @click.option(
     "--telemetry-type",
@@ -410,10 +424,12 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
         ("PC_CACHE_S3_ENDPOINT_URL", "cache_s3_endpoint_url"),
         ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
         ("PC_PYTHON_SANDBOX", "python_sandbox"),
+        ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),
         ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
         ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
         ("PC_FORCE_UPDATE", "force_update"),
         ("PC_OFFLINE", "offline"),
+        ("PC_DEVEL_INDEX", "devel_index"),
         ("PC_TELEMETRY_TYPE", "telemetry_type"),
         ("PC_TELEMETRY_ENV", "telemetry_env"),
         ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),
@@ -502,10 +518,12 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_CACHE_S3_ENDPOINT_URL", "cache_s3_endpoint_url"),
             ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
             ("PC_PYTHON_SANDBOX", "python_sandbox"),
+            ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),
             ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
             ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
             ("PC_FORCE_UPDATE", "force_update"),
             ("PC_OFFLINE", "offline"),
+            ("PC_DEVEL_INDEX", "devel_index"),
             ("PC_TELEMETRY_TYPE", "telemetry_type"),
             ("PC_TELEMETRY_ENV", "telemetry_env"),
             ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),

@@ -18,5 +18,14 @@ class ShapeConfigStore:
         self.sku = final_config.get("sku", None)
         self.count_per_sku = final_config.get("count_per_sku", 1)
 
+    @property
+    def is_purchasable(self) -> bool:
+        """Whether the object can be bought off the shelf.
+
+        Both the vendor and the SKU are needed to order anything: the SKU alone
+        does not say from whom, and the vendor alone does not say what.
+        """
+        return bool(self.vendor and self.sku)
+
     def __str__(self) -> str:
         return f"ShapeConfigStore(vendor={self.vendor}, sku={self.sku}, count_per_sku={self.count_per_sku})"

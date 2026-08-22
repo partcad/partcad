@@ -7,7 +7,7 @@
 import os
 
 import rich_click as click
-from partcad_service_json_rpc import daemon
+from partcad_client import daemon
 
 
 @click.command(help="Stop the PartCAD daemon serving this workspace")

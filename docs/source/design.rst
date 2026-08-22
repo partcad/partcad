@@ -85,10 +85,14 @@ assemblies together.
 
 PartCAD is expected to have an ever-growing list of ways to define assemblies
 using existing parts.
-However, at the moment, only one way is supported.
-It is called ASSY: assembly YAML.
+The native one is called ASSY: assembly YAML.
 The idea behind ASSY is to create a simplistic way to enumerate parts,
 define their parameters and define how parts connect.
+
+An assembly may also be defined by a file another tool produced. A STEP file
+that carries an assembly structure is used as an assembly directly, with its
+components becoming parts of the package; nothing is copied into the package,
+so the file stays the source of truth.
 
 Scenes
 ======

@@ -3,7 +3,7 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Windows named-pipe daemon (the AF_UNIX counterpart for Windows).
+"""Serving the Windows named-pipe daemon (the AF_UNIX counterpart for Windows).
 
 Windows has no ``fork``, so the launcher spawns a *detached* server process
 instead of daemonizing in place, and the transport is a named pipe served with
@@ -11,31 +11,23 @@ the asyncio Proactor event loop. The same ``Content-Length`` framing and JSON-RP
 dispatcher are reused, with dispatch offloaded to a worker thread (PartCAD
 operations are blocking) and notifications routed back to the calling pipe.
 
+The pipe's name, and the client side of talking to it, are in
+``partcad_utils.win_pipe`` -- the rendezvous both ends have to agree on.
+
 NOTE: this module is Windows-only. It is not exercised in the Linux dev
 container / CI; Windows-specific APIs are imported inside functions so the module
 still byte-compiles on POSIX.
 """
 
 import asyncio
-import hashlib
-import json
 import subprocess
 import sys
 import threading
 
+from partcad_utils.win_pipe import STOP_METHOD, pipe_name, read_frame, write_frame
+
 from .rpc.dispatcher import Dispatcher
 from .rpc.methods import build_registry
-
-_HEADER_SEP = b"\r\n\r\n"
-STOP_METHOD = "daemon.stop"
-
-
-def pipe_hash(root_path: str) -> str:
-    return hashlib.sha256(root_path.encode("utf-8")).hexdigest()[:16]
-
-
-def pipe_name(root_path: str) -> str:
-    return r"\\.\pipe\partcad-" + pipe_hash(root_path)
 
 
 def spawn_pipe_daemon(root_path: str) -> None:
@@ -50,69 +42,6 @@ def spawn_pipe_daemon(root_path: str) -> None:
     )
 
 
-def is_pipe_alive(name: str, timeout: float = 1.0) -> bool:
-    """True if a daemon answers rpc.discover on the named pipe."""
-    reply = _pipe_request(name, "rpc.discover", timeout)
-    return isinstance(reply, dict) and reply.get("id") == 0 and "result" in reply
-
-
-def stop_pipe_daemon(name: str, timeout: float = 1.0) -> bool:
-    """Ask the named-pipe daemon to stop. True if it acknowledged.
-
-    The pipe server honors ``STOP_METHOD`` (see ``_PipeProtocol``); this is the
-    client side of it, used by ``daemon.stop_daemon`` on Windows.
-    """
-    reply = _pipe_request(name, STOP_METHOD, timeout)
-    return isinstance(reply, dict) and "result" in reply
-
-
-def _pipe_request(name: str, method: str, timeout: float):
-    """Send one request over the named pipe and return the reply (None on error)."""
-    try:
-        return asyncio.run(_pipe_roundtrip(name, method, timeout))
-    except Exception:  # pylint: disable=broad-except
-        return None
-
-
-async def _pipe_roundtrip(name: str, method: str, timeout: float):
-    loop = asyncio.get_event_loop()
-    transport = None
-    try:
-        # ProactorEventLoop.create_pipe_connection connects to a named pipe.
-        reader = asyncio.StreamReader()
-        protocol = asyncio.StreamReaderProtocol(reader)
-        transport, _ = await asyncio.wait_for(loop.create_pipe_connection(lambda: protocol, name), timeout=timeout)
-        writer = asyncio.StreamWriter(transport, protocol, reader, loop)
-        _write_frame(writer, {"jsonrpc": "2.0", "id": 0, "method": method, "params": {}})
-        await writer.drain()
-        return await asyncio.wait_for(_read_frame(reader), timeout=timeout)
-    finally:
-        if transport is not None:
-            transport.close()
-
-
-def _write_frame(writer, message) -> None:
-    body = json.dumps(message, ensure_ascii=False).encode("utf-8")
-    writer.write(b"Content-Length: %d\r\n\r\n" % len(body) + body)
-
-
-async def _read_frame(reader):
-    raw = b""
-    while _HEADER_SEP not in raw:
-        chunk = await reader.read(1)
-        if not chunk:
-            return None
-        raw += chunk
-    headers = {}
-    for line in raw.split(b"\r\n"):
-        if b":" in line:
-            k, _, v = line.partition(b":")
-            headers[k.strip().lower()] = v.strip()
-    length = int(headers.get(b"content-length", b"0"))
-    body = await reader.readexactly(length)
-    return json.loads(body.decode("utf-8"))
-
-
 def serve_pipe(session, registry=None, name: str = None) -> None:
     """Serve the shared session over a Windows named pipe until stopped."""
     registry = registry if registry is not None else build_registry()
@@ -125,15 +54,15 @@ def serve_pipe(session, registry=None, name: str = None) -> None:
 
     async def handle(reader, writer):
         def sink(event, payload):
-            _write_frame(writer, {"jsonrpc": "2.0", "method": event, "params": payload})
+            write_frame(writer, {"jsonrpc": "2.0", "method": event, "params": payload})
 
         while not stop_event.is_set():
-            request = await _read_frame(reader)
+            request = await read_frame(reader)
             if request is None:
                 break
             if isinstance(request, dict) and request.get("method") == STOP_METHOD:
                 if "id" in request:
-                    _write_frame(writer, {"jsonrpc": "2.0", "id": request["id"], "result": {"stopped": True}})
+                    write_frame(writer, {"jsonrpc": "2.0", "id": request["id"], "result": {"stopped": True}})
                     await writer.drain()
                 stop_event.set()
                 break
@@ -148,7 +77,7 @@ def serve_pipe(session, registry=None, name: str = None) -> None:
 
             response = await loop.run_in_executor(None, _run)
             if response is not None:
-                _write_frame(writer, response)
+                write_frame(writer, response)
                 await writer.drain()
 
     async def _serve():
