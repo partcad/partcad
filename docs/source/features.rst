@@ -57,6 +57,7 @@ by ``vendor`` and ``SKU``.
     existing_part:
       vendor: homedepot # for example
       sku: ...
+      count_per_sku: 25 # if it's sold in packs of 25
       ...
     new_part:
       manufacturing:
@@ -66,7 +67,12 @@ by ``vendor`` and ``SKU``.
         material: //pub/std/manufacturing/material/plastic:pla
       ...
 
-See :ref:`providers` for more information about the providers and how PartCAD selects them.
+Assemblies that are sold in an assembled state are declared the same way, using
+``vendor`` and ``sku`` on the assembly itself.
+
+See :ref:`procurement` for more information about declaring purchasable objects,
+and :ref:`providers` for more information about the providers and how PartCAD
+selects them.
 
 In the future, PartCAD will support ``assembler``, which is supposed to produce
 an assembly given assembly instructions and using parts ordered from

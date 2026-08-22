@@ -195,6 +195,56 @@ class Assembly(Shape):
                     bom[part_name] = 1
         return bom
 
+    def can_be_supplied(self) -> bool:
+        """Whether this assembly can be ordered as a whole, in an assembled state.
+
+        An assembly embedded in its parent's source file (the nested 'links:' of
+        an ASSY file) is not an object of any package, so there is no name to
+        order it by no matter what it declares: its contents are procured
+        instead.
+        """
+        if self.config.get("child", False):
+            return False
+        return self.get_store_data().is_purchasable
+
+    async def get_supply_bom(self):
+        """The bill of materials to procure this assembly from.
+
+        Same shape of result as 'get_bom()', but the walk stops at every
+        sub-assembly that can be supplied assembled (see 'can_be_supplied()'):
+        such a sub-assembly is listed itself, instead of its contents. An
+        assembly nobody sells is still procured as the parts it is made of.
+        """
+        with self.lock:
+            async with self.get_async_lock():
+                await self.do_instantiate()
+                if hasattr(self, "project_name"):
+                    # This is the top level assembly
+                    with pc_logging.Action("SupplyBoM", self.project_name, self.name):
+                        return await self._get_supply_bom_real()
+                else:
+                    return await self._get_supply_bom_real()
+
+    async def _get_supply_bom_real(self):
+        bom = {}
+
+        def account_for(name, count):
+            if name in bom:
+                bom[name] += count
+            else:
+                bom[name] = count
+
+        for child in self.children:
+            item = child.item
+            if isinstance(item, Assembly) and not item.can_be_supplied():
+                # Nobody sells it assembled: procure whatever it is made of
+                for child_name, child_count in (await item.get_supply_bom()).items():
+                    account_for(child_name, child_count)
+            else:
+                account_for(item.project_name + ":" + item.name, 1)
+
+        return bom
+
     async def get_bom_grouped_async(self):
         """The recursive contents of this assembly, grouped by package.
 

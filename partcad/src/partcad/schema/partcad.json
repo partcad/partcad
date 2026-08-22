@@ -359,6 +359,7 @@
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
                 "manufacturing": {
                   "type": "object",
                   "properties": {
@@ -424,7 +425,10 @@
                 "desc": { "type": "string", "maxLength": 1000 },
                 "parameters": { "$ref": "#/definitions/shape-parameter" },
                 "fileFrom": { "type": "string", "enum": ["url"] },
-                "fileUrl": { "$ref": "#/definitions/url" }
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "vendor": { "type": "string", "minLength": 1 },
+                "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 }
               },
               "required": ["type"],
               "additionalProperties": true
@@ -471,10 +475,11 @@
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
                 },
-                "offset": { "$ref": "#/definitions/OCCTLocation" },
-                "render": { "$ref": "#/definitions/render" },
                 "vendor": { "type": "string", "minLength": 1 },
-                "sku": { "type": "string", "minLength": 1 }
+                "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "render": { "$ref": "#/definitions/render" }
               },
               "required": ["type"],
               "additionalProperties": false

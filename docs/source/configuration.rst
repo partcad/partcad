@@ -1017,6 +1017,65 @@ The MCFTT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type
 ``store``.
 
+.. _procurement:
+
+Procurement
+-----------
+
+A part that can be bought off the shelf instead of being manufactured is
+declared using the following syntax:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      # ...
+      vendor: <(optional) the name of the vendor selling the part>
+      sku: <(optional) the vendor's stock keeping unit (SKU) of the part>
+      count_per_sku: <(optional) the number of parts in one SKU, 1 by default>
+
+- ``vendor``
+
+  Optional. The vendor that sells the part.
+
+- ``sku``
+
+  Optional. The vendor's `stock keeping unit
+  <https://en.wikipedia.org/wiki/Stock_keeping_unit>`_ identifying what is
+  ordered from that vendor.
+
+  Both ``vendor`` and ``sku`` must be set for the part to be considered
+  purchasable. If either is missing, the part has to be manufactured instead,
+  which relies on the MCFTT parameters described above.
+
+- ``count_per_sku``
+
+  Optional. Defaults to ``1``. Must be a positive integer.
+
+  The number of parts that come in a single SKU, for the parts that are sold in
+  packs: a bag of 25 nuts is one SKU that yields 25 parts. Providers use it to
+  translate the number of parts requested into the number of SKUs to order, and
+  the number of SKUs a store has in stock into the number of parts it can
+  supply.
+
+These values are passed on to providers of the type ``store`` as
+``request["vendor"]``, ``request["sku"]`` and ``request["count_per_sku"]``
+(see :ref:`providers`).
+
+Note that ``count_per_sku`` is a property of how the part is packaged for sale,
+not of the CAD model. If the same part is sold by several vendors in different
+pack sizes, declare one part per (vendor, SKU) pair, for example using
+``alias``.
+
+.. code-block:: yaml
+
+  parts:
+    nut_m4_0_7mm:
+      type: step
+      vendor: gobilda
+      sku: "2803-0004-0002"
+      count_per_sku: 25  # sold in bags of 25
+
 .. _assemblies:
 
 ==========
@@ -1193,6 +1252,66 @@ assemblies.
 |         |       type: alias                          || make it easier to         |
 |         |       source: </path/to:existing-assembly> || reference it locally.     |
 +---------+--------------------------------------------+----------------------------+
+
+Procurement
+-----------
+
+Not every assembly has to be assembled: some are sold assembled, as a kit or as
+a pre-built module. Such an assembly is declared purchasable the same way a part
+is (see :ref:`procurement`):
+
+.. code-block:: yaml
+
+  assemblies:
+    <assembly name>:
+      # ...
+      vendor: <(optional) the name of the vendor selling the assembly>
+      sku: <(optional) the vendor's stock keeping unit (SKU) of the assembly>
+      count_per_sku: <(optional) the number of assemblies in one SKU, 1 by default>
+
+``vendor``, ``sku`` and ``count_per_sku`` have the same meaning as they do for
+parts, with the assembly itself being what is ordered.
+
+.. code-block:: yaml
+
+  assemblies:
+    gearbox:
+      type: assy
+      vendor: gobilda
+      sku: "3103-0001-0001"  # shipped assembled
+
+An assembly that has both ``vendor`` and ``sku`` set is considered purchasable,
+and is not required to declare how it is manufactured: ``pc test`` only checks
+that a supplier carries it. An assembly without them is manufactured by producing
+its parts and putting them together, which requires everything it is procured
+from -- its parts, and the sub-assemblies that are sold assembled -- to be
+obtainable by itself.
+
+Declaring an assembly purchasable does not stop it from being modelled and
+rendered as usual: the links between its parts still describe what is inside the
+box.
+
+This is also where ``pc supply find`` and ``pc supply quote`` stop looking
+inside. An assembly is otherwise procured as the objects it is made of, and the
+same question is asked about each sub-assembly in turn: one that is sold
+assembled is ordered as a single item, and one that is not is broken down
+further. Pass ``--recursive`` to order the parts even where the assembly holding
+them could have been bought whole -- for example to compare the cost of building
+it against the cost of buying it.
+
+.. code-block:: shell
+
+  # A chassis that uses the gearbox above: the gearbox is quoted as one unit,
+  # and everything nobody sells assembled is quoted as the parts it is made of
+  $ pc supply quote //robot:chassis
+
+  # Quote every part of the chassis instead, the gearbox taken apart too
+  $ pc supply quote --recursive //robot:chassis
+
+An assembly embedded in the parent's own source file (the nested ``links:`` of
+an Assembly YAML file) is not an object of any package, so there is no name to
+order it by. Such an assembly is always procured as its contents, and declaring
+a vendor for it has no effect.
 
 .. _providers:
 
