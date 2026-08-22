@@ -62,6 +62,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
           revision: <(git only) the exact revision to import>
           plugin: <(external only) reference to the repository plugin that serves this package>
           subfolder: <(external only) location within the repository, for hierarchies>
+          cacheVersion: <(external only) non-negative integer; bump to invalidate the on-disk cache>
           includePaths: <(optional) Jinja2 include path>
 
   parts:
@@ -172,6 +173,18 @@ package backed by the same plugin, with a ``subfolder`` that scopes its
 requests within the repository. In this way one plugin can serve an entire tree
 of packages, each with its own sketches, parts, assemblies, providers and
 further children.
+
+Non-null responses from a plugin are cached on disk, keyed by the plugin
+reference and the request; a request the plugin has no answer for is remembered
+only for the run that made it, and is put to the plugin again after a restart.
+The cache does not know when the plugin's code changes, so a plugin that starts
+returning a new shape of data (for example, adding a field to every part it
+serves) would keep being served the stale, pre-change entries. Set
+``cacheVersion`` to a non-negative integer and bump it whenever the plugin's
+output format changes: it is folded into the cache location, so bumping it moves
+the whole repository (and every child in its hierarchy) to a fresh cache
+namespace at once, invalidating the old entries. It defaults to ``0``
+(unversioned).
 
 See ``examples/plugin_repository_basic`` (a package backed by a local file),
 ``examples/plugin_repository_full`` (backed by an HTTP endpoint) and

@@ -228,6 +228,7 @@
             "revision": { "type": "string", "minLength": 1 },
             "plugin": { "type": "string", "minLength": 1 },
             "subfolder": { "type": "string" },
+            "cacheVersion": { "type": "integer", "minimum": 0 },
             "includePaths": {
               "type": "array",
               "items": { "type": "string", "minLength": 1 },
