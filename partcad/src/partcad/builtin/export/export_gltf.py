@@ -1,11 +1,9 @@
 #
-# PartCAD, 2025
+# PartCAD, 2026
 #
 # Licensed under Apache License, Version 2.0.
 #
-
-# This script is executed within a python runtime environment
-# to render a glTF file from wrapped shape
+"""The built-in glTF exporter (see '//builtin/export' in partcad.yaml)."""
 
 import os
 import sys
@@ -61,10 +59,4 @@ def process(path, request):
 
     except Exception as e:
         wrapper_common.handle_exception(e)
-        return {"success": False, "exception": str(e)}
-
-
-if __name__ == "__main__":
-    path, request = wrapper_common.handle_input()
-    response = process(path, request)
-    wrapper_common.handle_output(response)
+        return {"success": False, "exception": wrapper_common.exception_to_str(e)}

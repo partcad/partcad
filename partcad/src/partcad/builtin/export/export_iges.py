@@ -1,5 +1,13 @@
+#
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+"""The built-in IGES exporter (see '//builtin/export' in partcad.yaml)."""
+
 import os
 import sys
+
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
@@ -27,10 +35,4 @@ def process(path, request):
 
     except Exception as e:
         wrapper_common.handle_exception(e)
-        return {"success": False, "exception": str(e)}
-
-
-if __name__ == "__main__":
-    path, request = wrapper_common.handle_input()
-    response = process(path, request)
-    wrapper_common.handle_output(response)
+        return {"success": False, "exception": wrapper_common.exception_to_str(e)}

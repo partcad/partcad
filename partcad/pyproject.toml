@@ -29,6 +29,12 @@ classifiers = [
 # The '.mjs' files are the JavaScript wrappers, read at runtime and handed to a
 # sandboxed Node.js exactly like the '.py' ones are handed to a sandboxed Python.
 "partcad.wrappers" = ["*.py", "*.mjs"]
+# The packages PartCAD ships inside itself and reaches at '//builtin' (see
+# partcad/builtin/). Their 'partcad.yaml' is read and their scripts are executed
+# by path in a sandbox, so both have to land in the wheel as files.
+"partcad.builtin" = ["*.yaml"]
+"partcad.builtin.export" = ["*.py", "*.yaml"]
+"partcad.builtin.render" = ["*.py", "*.yaml"]
 "partcad.template" = ["*.yaml"]
 "partcad.schema" = ["**/partcad.json"]
 

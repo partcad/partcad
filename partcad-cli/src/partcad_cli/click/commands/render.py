@@ -34,8 +34,8 @@ from ..service import run
 @click.option(
     "-t",
     "--format",
-    help="The type of file to export",
-    type=click.Choice(["readme", "pdf", "html", "svg", "png", "jpeg"]),
+    help="The type of file to render: readme, pdf, html, svg, png, jpeg, dxf, or any type a package implements itself",
+    type=str,
     show_envvar=True,
 )
 @click.option(
@@ -48,6 +48,13 @@ from ..service import run
     "-P",
     "--package",
     help="Package to retrieve the object from",
+    type=str,
+    show_envvar=True,
+)
+@click.option(
+    "-e",
+    "--options-package",
+    help="Package to read the export/render options from, in addition to the object's own package",
     type=str,
     show_envvar=True,
 )
@@ -95,6 +102,7 @@ def cli(
     format,
     ignore_manufacturability,
     package,
+    options_package,
     recursive,
     sketch,
     interface,
@@ -113,6 +121,7 @@ def cli(
             "format": format,
             "ignore_manufacturability": ignore_manufacturability,
             "package": package,
+            "options_package": options_package,
             "recursive": recursive,
             "sketch": sketch,
             "interface": interface,

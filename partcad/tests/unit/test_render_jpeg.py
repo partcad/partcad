@@ -6,7 +6,7 @@
 """Unit tests for rendering 2D projections to JPEG.
 
 JPEG shares the whole rasterization path with PNG (see
-'wrappers/wrapper_render_raster.py'); what is specific to it is the file
+'builtin/render/render_raster.py'); what is specific to it is the file
 extension, the encoder options and the background the transparent projection is
 flattened onto. These tests cover that without the sandbox: an end-to-end render
 is exercised by 'test_render.test_render_project' (the 'feature_export' example
@@ -21,22 +21,23 @@ import types
 import pytest
 
 import partcad as pc
+from partcad import output
 from partcad.shape import PART_EXTENSION_MAPPING, RENDER_EXTENSION_MAPPING, SERIALIZED_PART_TYPES
 
-WRAPPERS_DIR = os.path.join(os.path.dirname(pc.__file__), "wrappers")
+RENDER_DIR = output.BUILTIN_PATHS[output.BUILTIN_PACKAGES[output.RENDER]]
 
 
-def _load_wrapper(name, stubs):
-    """Import a render wrapper by path with its sandbox-only imports stubbed.
+def _load_implementation(name, stubs):
+    """Import a built-in render implementation by path, with its imports stubbed.
 
-    The wrappers run inside a render sandbox that has svglib, reportlab and the
-    CAD stack installed; the environment running these tests has none of them,
-    so the modules they import are replaced by recorders.
+    The implementations run inside a render sandbox that has svglib, reportlab
+    and the CAD stack installed; the environment running these tests has none of
+    them, so the modules they import are replaced by recorders.
     """
     saved = {key: sys.modules.get(key) for key in stubs}
     sys.modules.update(stubs)
     try:
-        spec = importlib.util.spec_from_file_location("test_%s" % name, os.path.join(WRAPPERS_DIR, "%s.py" % name))
+        spec = importlib.util.spec_from_file_location("test_%s" % name, os.path.join(RENDER_DIR, "%s.py" % name))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
@@ -49,8 +50,8 @@ def _load_wrapper(name, stubs):
 
 
 def _raster_stub():
-    """A stand-in for 'wrapper_render_raster' that records how it was called."""
-    stub = types.ModuleType("wrapper_render_raster")
+    """A stand-in for 'render_raster' that records how it was called."""
+    stub = types.ModuleType("render_raster")
     stub.calls = []
 
     def process(path, request, fmt, config_pil=None):
@@ -61,11 +62,11 @@ def _raster_stub():
     return stub
 
 
-def _jpeg_wrapper():
+def _jpeg_implementation():
     raster = _raster_stub()
-    module = _load_wrapper(
-        "wrapper_render_jpeg",
-        {"wrapper_common": types.ModuleType("wrapper_common"), "wrapper_render_raster": raster},
+    module = _load_implementation(
+        "render_jpeg",
+        {"wrapper_common": types.ModuleType("wrapper_common"), "render_raster": raster},
     )
     return module, raster
 
@@ -80,23 +81,31 @@ def test_jpeg_extension_is_jpg():
     assert "jpeg" not in SERIALIZED_PART_TYPES
 
 
-def test_jpeg_render_getopts_uses_the_jpg_extension():
+def test_the_builtin_jpeg_declares_the_jpg_extension():
+    """'//builtin/render' is where the '.jpg' now comes from."""
+    ctx = pc.init("examples")
+    declared = output.builtin_formats(ctx, output.RENDER)["jpeg"]
+    assert declared["extension"] == "jpg"
+
+
+def test_jpeg_output_getopts_uses_the_jpg_extension():
     """A package's JPEG render options resolve to a '<name>.jpg' output path."""
     ctx = pc.init("examples")
     prj = ctx.get_project("//feature_export")
     bolt = prj.get_part("bolt")
     assert bolt is not None
 
-    opts, filepath = bolt.render_getopts("jpeg", ".jpg", prj)
+    impl, filepath = bolt.output_getopts(ctx, "jpeg", prj)
     assert filepath.endswith("bolt.jpg")
-    assert opts["quality"] == 90
-    assert opts["width"] == 128
-    assert opts["height"] == 256
+    assert impl.section == output.RENDER
+    assert impl.parameters["quality"] == 90
+    assert impl.parameters["width"] == 128
+    assert impl.parameters["height"] == 256
 
 
-def test_jpeg_wrapper_forwards_the_encoder_options():
+def test_jpeg_implementation_forwards_the_encoder_options():
     """The JPEG-only request fields become PIL's save() keyword arguments."""
-    module, raster = _jpeg_wrapper()
+    module, raster = _jpeg_implementation()
 
     response = module.process(
         "/tmp/shape.jpg",
@@ -126,16 +135,28 @@ def test_jpeg_wrapper_forwards_the_encoder_options():
     assert request["background"] == "#ffffff"
 
 
-def test_jpeg_wrapper_omits_unset_options():
+def test_jpeg_implementation_omits_unset_options():
     """Options the request does not carry are left to Pillow's own defaults."""
-    module, raster = _jpeg_wrapper()
+    module, raster = _jpeg_implementation()
 
     module.process("/tmp/shape.jpg", {"width": 512, "height": 512, "quality": 70})
 
     assert raster.calls[0][3] == {"quality": 70}
 
 
-def _raster_wrapper():
+def test_png_keeps_its_transparent_background():
+    """PNG has an alpha channel, so it does not flatten onto a color."""
+    raster = _raster_stub()
+    module = _load_implementation(
+        "render_png",
+        {"wrapper_common": types.ModuleType("wrapper_common"), "render_raster": raster},
+    )
+    module.process("/tmp/shape.png", {"width": 512, "height": 512})
+    assert raster.calls[0][2] == "PNG"
+    assert raster.calls[0][3] == {"transparent": True}
+
+
+def _raster_implementation():
     """Load the shared rasterizer with svglib, reportlab and the SVG step stubbed."""
     svglib_pkg = types.ModuleType("svglib")
     svglib_mod = types.ModuleType("svglib.svglib")
@@ -146,11 +167,11 @@ def _raster_wrapper():
     reportlab_pkg.graphics = reportlab_graphics
     reportlab_graphics.renderPM = render_pm
 
-    return _load_wrapper(
-        "wrapper_render_raster",
+    return _load_implementation(
+        "render_raster",
         {
             "wrapper_common": types.ModuleType("wrapper_common"),
-            "wrapper_render_svg": types.ModuleType("wrapper_render_svg"),
+            "render_svg": types.ModuleType("render_svg"),
             "svglib": svglib_pkg,
             "svglib.svglib": svglib_mod,
             "reportlab": reportlab_pkg,
@@ -174,12 +195,12 @@ def _raster_wrapper():
 )
 def test_background_color_is_parsed(value, expected):
     """JPEG has no alpha, so the background is a color the config can choose."""
-    assert _raster_wrapper().parse_background(value) == expected
+    assert _raster_implementation().parse_background(value) == expected
 
 
 def test_invalid_background_color_is_rejected():
     with pytest.raises(ValueError):
-        _raster_wrapper().parse_background("#ff")
+        _raster_implementation().parse_background("#ff")
 
 
 def _readme_text(tmp_path):

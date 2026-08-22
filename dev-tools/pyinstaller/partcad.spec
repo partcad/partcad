@@ -116,6 +116,10 @@ def command_modules():
 datas += [
     # Executed by the sandbox interpreter, by path. They must exist as files.
     (str(PARTCAD_SRC / "partcad" / "wrappers"), "partcad/wrappers"),
+    # The packages PartCAD ships inside itself, loaded from disk as '//builtin'
+    # and executed by path in a sandbox. Both their configuration and their
+    # scripts must exist as files.
+    (str(PARTCAD_SRC / "partcad" / "builtin"), "partcad/builtin"),
     # Copied into new packages by `pc init`.
     (str(PARTCAD_SRC / "partcad" / "template"), "partcad/template"),
     # Read through `importlib.resources` by `pc lint`. The ASSY schema is in

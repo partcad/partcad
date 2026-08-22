@@ -1554,13 +1554,39 @@ def search_objects(session, params):
     return None
 
 
+def _validate_output_format(pc, ctx, fmt, packages):
+    """Reject a file type nothing implements, instead of quietly writing nothing.
+
+    The set is not fixed: on top of what `//builtin/export` and `//builtin/render`
+    implement, a package may declare a file type of its own in its `export:` or
+    `render:` section, and that has to be nameable on the command line.
+    """
+    if fmt is None:
+        return
+    known = set(pc.output.all_formats(ctx)) | pc.output.NON_WRAPPER_FORMATS
+    for package in packages:
+        package_obj = ctx.get_project(package)
+        if package_obj is None:
+            continue
+        for section in pc.output.SECTIONS:
+            known.update(pc.output.format_names(package_obj.config_obj.get(section)))
+    if fmt not in known:
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "Unknown output file type '%s'. Known types: %s" % (fmt, ", ".join(sorted(known))),
+        )
+
+
 def render_objects(session, params):
     """Render/export parts, assemblies, sketches, or interfaces to files.
 
     Backs both `pc export` (3D formats) and `pc render` (2D projections); the CLI
     passes the ``format`` and the ``label`` ("Export"/"Render"). ``output_dir``,
     when given, is resolved to an absolute path by the CLI so it lands in the
-    user's working directory (the daemon runs elsewhere).
+    user's working directory (the daemon runs elsewhere). ``options_package``
+    names a further package whose ``export:``/``render:`` sections are read on
+    top of the built-in ones, which is how a custom implementation declared in
+    one package is used against the objects of another.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -1577,13 +1603,28 @@ def render_objects(session, params):
     output_dir = params.get("output_dir")
     object_name = params.get("object")
     ignore_manufacturability = params.get("ignore_manufacturability", False)
+    options_package = params.get("options_package")
+    if options_package:
+        options_package = ctx.resolve_package_path(options_package)
+        if ctx.get_project(options_package) is None:
+            raise JsonRpcError(USAGE_ERROR, "Options package %s is not found" % options_package)
 
     from partcad.exception import AssemblyDocumentError
 
     with pc.logging.Process(params.get("label", "Render"), package):
         ctx.option_create_dirs = params.get("create_dirs", False)
         try:
-            _render_objects(pc, ctx, params, package, fmt, output_dir, object_name, ignore_manufacturability)
+            _render_objects(
+                pc,
+                ctx,
+                params,
+                package,
+                fmt,
+                output_dir,
+                object_name,
+                options_package,
+                ignore_manufacturability,
+            )
         except AssemblyDocumentError as e:
             # Asking for an assembly instruction book of something that has no
             # assembly steps, or that is not meant to be built: what the user
@@ -1592,12 +1633,31 @@ def render_objects(session, params):
     return None
 
 
-def _render_objects(pc, ctx, params, package, fmt, output_dir, object_name, ignore_manufacturability):
+def _render_objects(
+    pc,
+    ctx,
+    params,
+    package,
+    fmt,
+    output_dir,
+    object_name,
+    options_package,
+    ignore_manufacturability,
+):
     """The body of 'render_objects', once the request has been made sense of."""
     if params.get("recursive"):
         packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
     else:
         packages = [package]
+
+    # An object named as '<package>:<name>' is produced by that package, not
+    # by the one '--package' selected, so its file types count as known too.
+    validated_packages = list(packages)
+    if object_name is not None:
+        validated_packages += [pc.utils.resolve_resource_path(p, object_name)[0] for p in packages]
+    if options_package:
+        validated_packages.append(options_package)
+    _validate_output_format(pc, ctx, fmt, validated_packages)
 
     for package in packages:
         if object_name is not None:
@@ -1608,6 +1668,7 @@ def _render_objects(pc, ctx, params, package, fmt, output_dir, object_name, igno
                 project_path=package,
                 format=fmt,
                 output_dir=output_dir,
+                options_package=options_package,
                 ignore_manufacturability=ignore_manufacturability,
             )
         else:
@@ -1628,6 +1689,7 @@ def _render_objects(pc, ctx, params, package, fmt, output_dir, object_name, igno
                 assemblies=assemblies,
                 format=fmt,
                 output_dir=output_dir,
+                options_package=options_package,
                 ignore_manufacturability=ignore_manufacturability,
             )
 

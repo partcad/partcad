@@ -2,6 +2,44 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "definitions": {
+    "output-section": {
+      "type": "object",
+      "properties": {
+        "output_dir": { "type": "string", "minLength": 1 }
+      },
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/output-type" }
+      },
+      "additionalProperties": false
+    },
+    "output-type": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "desc": { "type": "string", "maxLength": 1000 },
+            "path": { "type": "string", "minLength": 1 },
+            "package": { "type": "string", "minLength": 1 },
+            "pythonRequirements": { "type": "array", "items": { "type": "string" } },
+            "pythonVersion": { "type": "string", "minLength": 1 },
+            "extension": { "type": "string", "minLength": 1 },
+            "prefix": { "type": "string", "minLength": 1 },
+            "output_dir": { "type": "string", "minLength": 1 },
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["sketches", "interfaces", "parts", "assemblies"]
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
     "file_path":{
       "type": "string",
       "pattern": "^(?!.*\\.$)(?:(?:[a-zA-Z]:\\|\\\\[^\\/:*?\"<>|\r\n]+\\[^\\/:*?\"<>|\r\n]+\\|\\.{1,2}[\\/]|[a-zA-Z0-9_ -]+[\\/]|[\\/])?(?:[^\\/:*?\"<>|\r\n]+[\\/]?)*)$"
@@ -156,68 +194,42 @@
       }
     },
     "render": {
-      "type": "object",
-      "patternProperties": {
-        "^(readme|pdf|html|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
-          "oneOf": [
-            { "type": "null" },
-            { "type": "string" },
-            {
-              "type": "object",
-              "properties": {
-                "prefix": { "type": "string", "minLength": 1 },
-                "path": { "type": "string", "minLength": 1 },
-                "exclude": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
-                  },
-                  "uniqueItems": true
-                },
-                "width": { "type": "integer", "minimum": 1 },
-                "height": { "type": "integer", "minimum": 1 }
-              },
-              "additionalProperties": false
-            }
-          ]
-        },
-        "^jpeg$": {
-          "oneOf": [
-            { "type": "null" },
-            { "type": "string" },
-            {
-              "type": "object",
-              "properties": {
-                "prefix": { "type": "string", "minLength": 1 },
-                "path": { "type": "string", "minLength": 1 },
-                "exclude": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
-                  },
-                  "uniqueItems": true
-                },
-                "width": { "type": "integer", "minimum": 1 },
-                "height": { "type": "integer", "minimum": 1 },
-                "quality": { "type": "integer", "minimum": 1, "maximum": 100 },
-                "progressive": { "type": "boolean" },
-                "optimize": { "type": "boolean" },
-                "subsampling": {
-                  "oneOf": [
-                    { "type": "string", "enum": ["4:4:4", "4:2:2", "4:2:0", "4:1:1"] },
-                    { "type": "integer", "minimum": -1, "maximum": 2 }
-                  ]
-                },
-                "background": { "type": "string", "pattern": "^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" }
-              },
-              "additionalProperties": false
-            }
-          ]
+      "description": "The 'render:' section: the 2D projections and documents 'pc render' writes. Its file types are open-ended, like every output section, but the raster options of the built-in formats are still checked.",
+      "allOf": [
+        { "$ref": "#/definitions/output-section" },
+        {
+          "type": "object",
+          "properties": {
+            "png": { "$ref": "#/definitions/raster-output-type" },
+            "jpeg": { "$ref": "#/definitions/raster-output-type" }
+          }
         }
-      },
-      "additionalProperties": false
+      ]
+    },
+    "raster-output-type": {
+      "description": "A rasterized projection. Only what the built-in rasterizers understand is typed here; a package that replaces the implementation may add parameters of its own, which is why this does not close the object.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 },
+            "quality": { "type": "integer", "minimum": 1, "maximum": 100 },
+            "progressive": { "type": "boolean" },
+            "optimize": { "type": "boolean" },
+            "subsampling": {
+              "oneOf": [
+                { "type": "string", "enum": ["4:4:4", "4:2:2", "4:2:0", "4:1:1"] },
+                { "type": "integer", "minimum": -1, "maximum": 2 }
+              ]
+            },
+            "background": { "type": "string", "pattern": "^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" }
+          },
+          "additionalProperties": true
+        }
+      ]
     }
   },
   "properties": {
@@ -299,6 +311,7 @@
       "additionalProperties": false
     },
     "render": { "$ref": "#/definitions/render" },
+    "export": { "$ref": "#/definitions/output-section" },
     "dependencies": {
       "type": "object",
       "patternProperties": {
@@ -430,6 +443,8 @@
                   "uniqueItems": true
                 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
@@ -555,6 +570,7 @@
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
                 "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
                 "manufacturable": { "type": "boolean" },
                 "connect": { "$ref": "#/definitions/connect" }
               },
@@ -578,6 +594,8 @@
             "fileUrl": { "$ref": "#/definitions/url" },
             "tolerance": { "type": "number", "minimum": 0 },
             "parameters": { "$ref": "#/definitions/shape-parameter"},
+            "render": { "$ref": "#/definitions/render" },
+            "export": { "$ref": "#/definitions/output-section" },
             "include":{
               "oneOf": [
                 { "type": "string", "minLength": 1 },
