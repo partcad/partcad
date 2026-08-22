@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 15:22+0000\n"
+"POT-Creation-Date: 2026-08-22 10:40+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/use_cases.rst:2
 msgid "Use Cases"
@@ -199,38 +199,55 @@ msgstr "CAD 设计图形界面"
 #: ../../source/use_cases.rst:141
 msgid ""
 "You can use models from the public PartCAD repository in a CAD Design "
-"GUI, such as FreeCAD or its paid alternatives. PartCAD plugins for these "
-"apps are not yet available. For now, export the models to STEP or 3MF "
-"files and import those files into the CAD Design GUI of your choice."
+"GUI, such as FreeCAD or its paid alternatives."
+msgstr ""
+
+#: ../../source/use_cases.rst:144
+msgid ""
+"FreeCAD has a PartCAD add-on. The ``PartCAD`` workbench lists the "
+"packages, parts and assemblies PartCAD can reach as a hierarchy, "
+"generates a dialog from the parameters of the part or assembly you pick, "
+"and imports the result into the open document as a STEP file. It drives "
+"the standalone PartCAD service, so FreeCAD needs no Python environment of"
+" its own. See :ref:`FreeCAD add-on <freecad-addon>` for how to install "
+"it."
+msgstr ""
+
+#: ../../source/use_cases.rst:151
+#, fuzzy
+msgid ""
+"For the other apps, no add-on is available yet. Export the models to STEP"
+" or 3MF files and import those files into the CAD Design GUI of your "
+"choice."
 msgstr ""
 "你可以在 CAD 设计图形界面（例如 FreeCAD 或其付费替代品）中使用来自公共 PartCAD 仓库的模型。针对这些应用的 PartCAD "
 "插件目前尚不可用。就目前而言，请先将模型导出为 STEP 或 3MF 文件，再将这些文件导入到你所选择的 CAD 设计图形界面中。"
 
-#: ../../source/use_cases.rst:153
+#: ../../source/use_cases.rst:161
 msgid "Python: CadQuery"
 msgstr "Python：CadQuery"
 
-#: ../../source/use_cases.rst:155
+#: ../../source/use_cases.rst:163
 msgid ""
 "Here are some examples of how to fetch PartCAD models from within a "
 "``CadQuery`` script:"
 msgstr "下面是一些示例，演示如何在 ``CadQuery`` 脚本中获取 PartCAD 模型："
 
-#: ../../source/use_cases.rst:181
+#: ../../source/use_cases.rst:189
 msgid "Python: build123d"
 msgstr "Python：build123d"
 
-#: ../../source/use_cases.rst:183
+#: ../../source/use_cases.rst:191
 msgid ""
 "Here are some examples of how to fetch PartCAD models from within a "
 "``build123d`` script:"
 msgstr "下面是一些示例，演示如何在 ``build123d`` 脚本中获取 PartCAD 模型："
 
-#: ../../source/use_cases.rst:209
+#: ../../source/use_cases.rst:217
 msgid "Python: any format"
 msgstr "Python：任意格式"
 
-#: ../../source/use_cases.rst:211
+#: ../../source/use_cases.rst:219
 msgid ""
 "``pc.get_part_cadquery()`` and ``pc.get_part_build123d()`` above are thin"
 " aliases for the general conversion API, which returns the result in "
@@ -239,7 +256,7 @@ msgstr ""
 "上面的 ``pc.get_part_cadquery()`` 和 ``pc.get_part_build123d()`` 是通用转换 API "
 "的简单别名，对于任何受支持的格式，它都会在内存中返回结果，而不是写出一个输出文件："
 
-#: ../../source/use_cases.rst:227
+#: ../../source/use_cases.rst:235
 msgid ""
 "The supported part types are ``build123d`` and ``cadquery``, which return"
 " the CAD library's own object, plus the serialized formats ``3mf``, "
@@ -257,7 +274,7 @@ msgstr ""
 "形式返回；本身是或可能是二进制的格式（ ``stl`` 、 ``3mf`` 、 ``gltf`` ）则以 ``bytes`` "
 "形式返回。返回类型仅取决于所请求的零件类型，而与导出选项无关。"
 
-#: ../../source/use_cases.rst:236
+#: ../../source/use_cases.rst:244
 msgid ""
 "``pc.convert_assembly()`` and ``pc.convert_sketch()`` do the same for "
 "assemblies and sketches, and ``Shape.convert()`` is available directly on"
@@ -266,23 +283,23 @@ msgstr ""
 "``pc.convert_assembly()`` 和 ``pc.convert_sketch()`` 对装配体和草图执行同样的操作，而 "
 "``Shape.convert()`` 可直接在任意零件、草图或装配体对象上调用。"
 
-#: ../../source/use_cases.rst:241
+#: ../../source/use_cases.rst:249
 msgid "Python"
 msgstr "Python"
 
-#: ../../source/use_cases.rst:266
+#: ../../source/use_cases.rst:274
 msgid "shell"
 msgstr "shell"
 
-#: ../../source/use_cases.rst:284
+#: ../../source/use_cases.rst:292
 msgid "Produce models"
 msgstr "制作模型"
 
-#: ../../source/use_cases.rst:287
+#: ../../source/use_cases.rst:295
 msgid "Part: Files"
 msgstr "零件：文件"
 
-#: ../../source/use_cases.rst:289
+#: ../../source/use_cases.rst:297
 msgid ""
 "One way to define parts in PartCAD is by providing a file in any of the "
 "currently supported formats: STEP, BREP, STL, 3MF, OBJ. There is no "
@@ -294,11 +311,11 @@ msgstr ""
 "中定义零件的一种方式，是提供一个当前受支持格式的文件：STEP、BREP、STL、3MF、OBJ。我们无意限制受支持文件格式的范围。欢迎你为自己喜爱的文件格式贡献支持（最好是间接地，通过为"
 " build123d 添加相应的支持来实现）。"
 
-#: ../../source/use_cases.rst:310
+#: ../../source/use_cases.rst:318
 msgid "Part: CAD scripts"
 msgstr "零件：CAD 脚本"
 
-#: ../../source/use_cases.rst:312
+#: ../../source/use_cases.rst:320
 msgid ""
 "Another way to define parts is by using CAD scripting technologies such "
 "as OpenSCAD. This is the only CAD scripting language supported at the "
@@ -309,11 +326,11 @@ msgstr ""
 "定义零件的另一种方式，是使用诸如 OpenSCAD 之类的 CAD 脚本技术。这是目前唯一受支持的 CAD 脚本语言。它与上面列出的 CAD "
 "文件的根本区别在于可以使用参数。不过，OpenSCAD 参数目前尚不受支持。"
 
-#: ../../source/use_cases.rst:326
+#: ../../source/use_cases.rst:334
 msgid "Part: Python scripts"
 msgstr "零件：Python 脚本"
 
-#: ../../source/use_cases.rst:328
+#: ../../source/use_cases.rst:336
 msgid ""
 "The most powerful way to define parts is by using modeling frameworks "
 "such as CadQuery and build123d. PartCAD uses CQGI to load models (in "
@@ -322,15 +339,15 @@ msgstr ""
 "定义零件最强大的方式，是使用诸如 CadQuery 和 build123d 之类的建模框架。PartCAD 使用 CQGI "
 "来加载模型（换句话说：拦截 `show_object()` 调用）。"
 
-#: ../../source/use_cases.rst:342
+#: ../../source/use_cases.rst:350
 msgid "Assembly"
 msgstr "装配体"
 
-#: ../../source/use_cases.rst:371
+#: ../../source/use_cases.rst:379
 msgid "Publish packages"
 msgstr "发布包"
 
-#: ../../source/use_cases.rst:373
+#: ../../source/use_cases.rst:381
 msgid ""
 "It's very simple to publish your package to the public PartCAD "
 "repository. First, publish your package as a repo on GitHub. Then create "
@@ -340,3 +357,4 @@ msgstr ""
 "将你的包发布到公共 PartCAD 仓库非常简单。首先，将你的包作为一个仓库发布到 GitHub 上。然后在 `公共 PartCAD 仓库 "
 "<https://github.com/partcad/partcad-index>`_ 中创建一个 pull "
 "request，以添加对你的包的引用。"
+

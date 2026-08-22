@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 15:22+0000\n"
+"POT-Creation-Date: 2026-08-22 10:40+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ru\n"
@@ -18,7 +18,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/installation.rst:2
 msgid "Installation"
@@ -415,8 +415,8 @@ msgid ""
 msgstr ""
 "Бандл несёт всё, что установили бы wheel-пакеты, включая необязательные "
 "дополнения (extras), которые wheel-пакеты оставляют на усмотрение "
-"пользователя: линтер Python (``lint``). Замороженный бандл нельзя расширить"
-" впоследствии, поэтому он поставляется полным."
+"пользователя: линтер Python (``lint``). Замороженный бандл нельзя "
+"расширить впоследствии, поэтому он поставляется полным."
 
 #: ../../source/installation.rst:239
 msgid ""
@@ -595,11 +595,34 @@ msgstr ""
 "страница маркетплейса находится `здесь "
 "<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_."
 
-#: ../../source/installation.rst:336
+#: ../../source/installation.rst:338
+msgid "FreeCAD add-on"
+msgstr ""
+
+#: ../../source/installation.rst:340
+msgid ""
+"The ``PartCAD`` workbench browses packages, parts and assemblies inside "
+"FreeCAD and imports them into the open document. It lives in the "
+"``partcad-cad-freecad`` directory of the repository; copy or link that "
+"directory into FreeCAD's ``Mod`` folder as ``PartCAD`` and restart "
+"FreeCAD:"
+msgstr ""
+
+#: ../../source/installation.rst:349
+msgid ""
+"The ``Mod`` folder is ``~/Library/Preferences/FreeCAD/Mod/`` on MacOS and"
+" ``%APPDATA%\\FreeCAD\\Mod\\`` on Windows. No Python setup is needed: the"
+" add-on drives the standalone ``partcad-json-rpc`` service, using an "
+"existing standalone installation if there is one and offering to download"
+" a bundle if there is not. See ``partcad-cad-freecad/README.md`` for what"
+" it does and which environment variables it reads."
+msgstr ""
+
+#: ../../source/installation.rst:356
 msgid "Public PartCAD repository"
 msgstr "Публичный репозиторий PartCAD"
 
-#: ../../source/installation.rst:338
+#: ../../source/installation.rst:358
 msgid ""
 "The public PartCAD repository is hosted at `GitHub "
 "<https://github.com/partcad/partcad-index>`_. If necessary, PartCAD tools"
@@ -613,7 +636,7 @@ msgstr ""
 " всех других требуемых репозиториев и пакетов. Никаких ручных действий "
 "для его `установки` не требуется."
 
-#: ../../source/installation.rst:342
+#: ../../source/installation.rst:362
 msgid ""
 "However, if you suspect that something is wrong with locally cached "
 "files, use ``pc system status`` to investigate and to determine the "
@@ -622,3 +645,4 @@ msgstr ""
 "Однако, если вы подозреваете, что с локально закэшированными файлами "
 "что-то не так, используйте ``pc system status``, чтобы разобраться и "
 "определить расположение закэшированных файлов."
+

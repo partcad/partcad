@@ -331,9 +331,11 @@ Visual Studio Code extension
 This extension is available through the VS Code marketplace.
 The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_.
 
-===============
+.. _freecad-addon:
+
+==============
 FreeCAD add-on
-===============
+==============
 
 The ``PartCAD`` workbench browses packages, parts and assemblies inside FreeCAD and imports them into the
 open document. It lives in the ``partcad-cad-freecad`` directory of the repository; copy or link that

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 15:22+0000\n"
+"POT-Creation-Date: 2026-08-22 10:40+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/use_cases.rst:2
 msgid "Use Cases"
@@ -225,9 +225,26 @@ msgstr "Interfaces gráficas de diseño CAD"
 #: ../../source/use_cases.rst:141
 msgid ""
 "You can use models from the public PartCAD repository in a CAD Design "
-"GUI, such as FreeCAD or its paid alternatives. PartCAD plugins for these "
-"apps are not yet available. For now, export the models to STEP or 3MF "
-"files and import those files into the CAD Design GUI of your choice."
+"GUI, such as FreeCAD or its paid alternatives."
+msgstr ""
+
+#: ../../source/use_cases.rst:144
+msgid ""
+"FreeCAD has a PartCAD add-on. The ``PartCAD`` workbench lists the "
+"packages, parts and assemblies PartCAD can reach as a hierarchy, "
+"generates a dialog from the parameters of the part or assembly you pick, "
+"and imports the result into the open document as a STEP file. It drives "
+"the standalone PartCAD service, so FreeCAD needs no Python environment of"
+" its own. See :ref:`FreeCAD add-on <freecad-addon>` for how to install "
+"it."
+msgstr ""
+
+#: ../../source/use_cases.rst:151
+#, fuzzy
+msgid ""
+"For the other apps, no add-on is available yet. Export the models to STEP"
+" or 3MF files and import those files into the CAD Design GUI of your "
+"choice."
 msgstr ""
 "Puede usar modelos del repositorio público de PartCAD en una interfaz "
 "gráfica de diseño CAD, como FreeCAD o sus alternativas de pago. Los "
@@ -235,11 +252,11 @@ msgstr ""
 " Por ahora, exporte los modelos a archivos STEP o 3MF e impórtelos en la "
 "interfaz gráfica de diseño CAD que prefiera."
 
-#: ../../source/use_cases.rst:153
+#: ../../source/use_cases.rst:161
 msgid "Python: CadQuery"
 msgstr "Python: CadQuery"
 
-#: ../../source/use_cases.rst:155
+#: ../../source/use_cases.rst:163
 msgid ""
 "Here are some examples of how to fetch PartCAD models from within a "
 "``CadQuery`` script:"
@@ -247,11 +264,11 @@ msgstr ""
 "Aquí hay algunos ejemplos de cómo obtener modelos de PartCAD desde dentro"
 " de un script de ``CadQuery``:"
 
-#: ../../source/use_cases.rst:181
+#: ../../source/use_cases.rst:189
 msgid "Python: build123d"
 msgstr "Python: build123d"
 
-#: ../../source/use_cases.rst:183
+#: ../../source/use_cases.rst:191
 msgid ""
 "Here are some examples of how to fetch PartCAD models from within a "
 "``build123d`` script:"
@@ -259,11 +276,11 @@ msgstr ""
 "Aquí hay algunos ejemplos de cómo obtener modelos de PartCAD desde dentro"
 " de un script de ``build123d``:"
 
-#: ../../source/use_cases.rst:209
+#: ../../source/use_cases.rst:217
 msgid "Python: any format"
 msgstr "Python: cualquier formato"
 
-#: ../../source/use_cases.rst:211
+#: ../../source/use_cases.rst:219
 msgid ""
 "``pc.get_part_cadquery()`` and ``pc.get_part_build123d()`` above are thin"
 " aliases for the general conversion API, which returns the result in "
@@ -274,7 +291,7 @@ msgstr ""
 "devuelve el resultado en memoria para cualquier formato admitido en lugar"
 " de escribir un archivo de salida:"
 
-#: ../../source/use_cases.rst:227
+#: ../../source/use_cases.rst:235
 msgid ""
 "The supported part types are ``build123d`` and ``cadquery``, which return"
 " the CAD library's own object, plus the serialized formats ``3mf``, "
@@ -295,7 +312,7 @@ msgstr ""
 "``bytes``. El tipo de retorno depende únicamente del tipo de pieza "
 "solicitado, nunca de las opciones de exportación."
 
-#: ../../source/use_cases.rst:236
+#: ../../source/use_cases.rst:244
 msgid ""
 "``pc.convert_assembly()`` and ``pc.convert_sketch()`` do the same for "
 "assemblies and sketches, and ``Shape.convert()`` is available directly on"
@@ -305,23 +322,23 @@ msgstr ""
 "ensamblajes y bocetos, y ``Shape.convert()`` está disponible directamente"
 " en cualquier objeto de pieza, boceto o ensamblaje."
 
-#: ../../source/use_cases.rst:241
+#: ../../source/use_cases.rst:249
 msgid "Python"
 msgstr "Python"
 
-#: ../../source/use_cases.rst:266
+#: ../../source/use_cases.rst:274
 msgid "shell"
 msgstr "shell"
 
-#: ../../source/use_cases.rst:284
+#: ../../source/use_cases.rst:292
 msgid "Produce models"
 msgstr "Producir modelos"
 
-#: ../../source/use_cases.rst:287
+#: ../../source/use_cases.rst:295
 msgid "Part: Files"
 msgstr "Pieza: archivos"
 
-#: ../../source/use_cases.rst:289
+#: ../../source/use_cases.rst:297
 msgid ""
 "One way to define parts in PartCAD is by providing a file in any of the "
 "currently supported formats: STEP, BREP, STL, 3MF, OBJ. There is no "
@@ -336,11 +353,11 @@ msgstr ""
 "(idealmente, de forma implícita, agregando el soporte correspondiente a "
 "build123d)."
 
-#: ../../source/use_cases.rst:310
+#: ../../source/use_cases.rst:318
 msgid "Part: CAD scripts"
 msgstr "Pieza: scripts CAD"
 
-#: ../../source/use_cases.rst:312
+#: ../../source/use_cases.rst:320
 msgid ""
 "Another way to define parts is by using CAD scripting technologies such "
 "as OpenSCAD. This is the only CAD scripting language supported at the "
@@ -354,11 +371,11 @@ msgstr ""
 "arriba es la disponibilidad de parámetros. Sin embargo, los parámetros de"
 " OpenSCAD aún no son compatibles."
 
-#: ../../source/use_cases.rst:326
+#: ../../source/use_cases.rst:334
 msgid "Part: Python scripts"
 msgstr "Pieza: scripts de Python"
 
-#: ../../source/use_cases.rst:328
+#: ../../source/use_cases.rst:336
 msgid ""
 "The most powerful way to define parts is by using modeling frameworks "
 "such as CadQuery and build123d. PartCAD uses CQGI to load models (in "
@@ -368,15 +385,15 @@ msgstr ""
 "modelado como CadQuery y build123d. PartCAD usa CQGI para cargar modelos "
 "(en otras palabras: intercepta las llamadas a `show_object()`)."
 
-#: ../../source/use_cases.rst:342
+#: ../../source/use_cases.rst:350
 msgid "Assembly"
 msgstr "Ensamblaje"
 
-#: ../../source/use_cases.rst:371
+#: ../../source/use_cases.rst:379
 msgid "Publish packages"
 msgstr "Publicar paquetes"
 
-#: ../../source/use_cases.rst:373
+#: ../../source/use_cases.rst:381
 msgid ""
 "It's very simple to publish your package to the public PartCAD "
 "repository. First, publish your package as a repo on GitHub. Then create "
@@ -388,3 +405,4 @@ msgstr ""
 "una pull request en `el repositorio público de PartCAD "
 "<https://github.com/partcad/partcad-index>`_ para agregar una referencia "
 "a su paquete."
+
