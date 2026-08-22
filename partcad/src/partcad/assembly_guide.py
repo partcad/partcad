@@ -162,7 +162,7 @@ class RenderedImages(ImageSource):
         if path is None:
             path = os.path.join(self.directory, _slug(key) + ".svg")
             os.makedirs(self.directory, exist_ok=True)
-            await shape.render_svg_somewhere(
+            await shape.render_svg_somewhere_async(
                 ctx=self.ctx,
                 project=self.project,
                 filepath=path,

@@ -563,7 +563,7 @@ class Shape(ShapeConfiguration):
             pc_logging.error(msg)
         self.errors.append(msg)
 
-    async def render_svg_somewhere(
+    async def render_svg_somewhere_async(
         self,
         ctx,
         project=None,
@@ -611,7 +611,7 @@ class Shape(ShapeConfiguration):
         }
         if annotations:
             request["annotations"] = annotations
-        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{shape_envelope.serialize}"):
+        with telemetry.start_as_current_span("*Shape.render_svg_somewhere_async.{shape_envelope.serialize}"):
             request_serialized = shape_envelope.serialize(request)
 
         # We don't care about customer preferences much here
@@ -647,6 +647,26 @@ class Shape(ShapeConfiguration):
             # picture: remembering it here would hand it to every later caller
             # that asks for the shape's SVG.
             self.svg_path = filepath
+
+    def render_svg_somewhere(
+        self,
+        ctx,
+        project=None,
+        filepath=None,
+        line_weight=None,
+        viewport_origin=None,
+        annotations=None,
+    ):
+        return asyncio.run(
+            self.render_svg_somewhere_async(
+                ctx,
+                project=project,
+                filepath=filepath,
+                line_weight=line_weight,
+                viewport_origin=viewport_origin,
+                annotations=annotations,
+            )
+        )
 
     async def get_bounding_box_async(self, ctx):
         """The axis-aligned bounding box of this shape, in its own coordinates.
@@ -714,7 +734,7 @@ class Shape(ShapeConfiguration):
     async def _get_svg_path(self, ctx, project):
         async with self.svg_lock:
             if self.svg_path is None:
-                await self.render_svg_somewhere(ctx=ctx, project=project)
+                await self.render_svg_somewhere_async(ctx=ctx, project=project)
             return self.svg_path
 
     def render_getopts(
