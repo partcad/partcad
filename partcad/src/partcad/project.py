@@ -1274,7 +1274,20 @@ class Project(project_config.Configuration):
                 raise EmptyShapesError
 
             tasks = []
-            render_formats = ["svg", "png", "dxf", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
+            render_formats = [
+                "svg",
+                "png",
+                "jpeg",
+                "dxf",
+                "step",
+                "stl",
+                "3mf",
+                "threejs",
+                "obj",
+                "gltf",
+                "brep",
+                "iges",
+            ]
 
             for shape in shapes:
                 # A deep copy: 'render_cfg_merge()' merges nested dictionaries in
@@ -1398,17 +1411,23 @@ class Project(project_config.Configuration):
         document that links to the image, relative to the document being
         generated, and 'test_path' is where the image file is expected relative
         to the output directory, so that the caller can check whether it has been
-        rendered at all. Both are 'None' when the package renders neither SVG nor
-        PNG.
+        rendered at all. Both are 'None' when the package renders none of the
+        image formats below.
         """
-        if "svg" in render_cfg or (config is not None and config.get("type") == "svg"):
-            image_cfg = render_cfg.get("svg", {})
-            extension = ".svg"
-        elif "png" in render_cfg:
-            image_cfg = render_cfg["png"]
-            extension = ".png"
+        # The first image format the package renders wins, in this order. Each
+        # entry is the render config key and the extension the rendered file
+        # carries, which is not always the key: "jpeg" writes ".jpg".
+        image_formats = [("svg", ".svg"), ("png", ".png"), ("jpeg", ".jpg")]
+
+        if config is not None and config.get("type") == "svg":
+            image_cfg, extension = render_cfg.get("svg", {}), ".svg"
         else:
-            return None, None
+            for image_format, image_extension in image_formats:
+                if image_format in render_cfg:
+                    image_cfg, extension = render_cfg[image_format], image_extension
+                    break
+            else:
+                return None, None
 
         if isinstance(image_cfg, str):
             image_cfg = {"prefix": image_cfg}
@@ -1643,6 +1662,18 @@ class Project(project_config.Configuration):
 
             if "type" in config and config["type"] == "alias" and "aliases" in exclude:
                 return []
+
+            # The same merge 'render_async()' performs when it decides what to
+            # render: a shape's own 'render' section adds to, and overrides, the
+            # package's. Without it a format enabled - or pointed at a different
+            # prefix - on the shape alone renders a file that the README then
+            # fails to find.
+            #
+            # A deep copy, like everywhere else 'render_cfg_merge()' is called:
+            # the merge is in place, and the very same package configuration is
+            # handed to every shape of the package below, so a shallow copy would
+            # let one shape's settings leak into all the ones after it.
+            render_cfg = render_cfg_merge(copy.deepcopy(render_cfg), config.get("render", None) or {})
 
             path = None
             if "path" in config:

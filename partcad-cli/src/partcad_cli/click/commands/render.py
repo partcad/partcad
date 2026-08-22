@@ -35,7 +35,7 @@ from ..service import run
     "-t",
     "--format",
     help="The type of file to export",
-    type=click.Choice(["readme", "pdf", "html", "svg", "png"]),
+    type=click.Choice(["readme", "pdf", "html", "svg", "png", "jpeg"]),
     show_envvar=True,
 )
 @click.option(

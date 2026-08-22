@@ -174,6 +174,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Render 2D and 3D to images
     - [x] `SVG`
     - [x] `PNG`
+    - [x] `JPEG`
   - Export 3D models to CAD files
     - [x] `STEP`
     - [x] `BREP`

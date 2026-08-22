@@ -36,7 +36,7 @@ Export
 ------
 
 Objects can be exported directly from the extension to any of the following formats: **SVG**, **PNG**,
-**STEP**, **STL**, **3MF**, **ThreeJS**, **OBJ**, **IGES**, and **glTF**.
+**JPEG**, **STEP**, **STL**, **3MF**, **ThreeJS**, **OBJ**, **IGES**, and **glTF**.
 
 =============================
 Procurement and Manufacturing

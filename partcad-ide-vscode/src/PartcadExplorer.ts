@@ -48,6 +48,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
         vscode.commands.registerCommand(`partcad.exportToSVG`, (item) => this.exportToSVG(item));
         vscode.commands.registerCommand(`partcad.exportToPNG`, (item) => this.exportToPNG(item));
+        vscode.commands.registerCommand(`partcad.exportToJPEG`, (item) => this.exportToJPEG(item));
         vscode.commands.registerCommand(`partcad.exportToSTEP`, (item) => this.exportToSTEP(item));
         vscode.commands.registerCommand(`partcad.exportToSTL`, (item) => this.exportToSTL(item));
         vscode.commands.registerCommand(`partcad.exportTo3MF`, (item) => this.exportTo3MF(item));
@@ -260,6 +261,11 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
     public async exportToPNG(item: PartcadItem) {
         await this.doExportItem('png', 'PNG files', 'png', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportToJPEG(item: PartcadItem) {
+        await this.doExportItem('jpeg', 'JPEG files', 'jpg', item);
         await vscode.commands.executeCommand('partcad.getStats');
     }
 

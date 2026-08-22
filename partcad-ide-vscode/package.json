@@ -478,6 +478,13 @@
         "icon": "$(export)"
       },
       {
+        "command": "partcad.exportToJPEG",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "JPEG...",
+        "icon": "$(export)"
+      },
+      {
         "command": "partcad.exportToSTEP",
         "category": "PartCAD",
         "group": "Export",
@@ -721,6 +728,10 @@
         },
         {
           "command": "partcad.exportToPNG",
+          "when": "view == partcadExplorer"
+        },
+        {
+          "command": "partcad.exportToJPEG",
           "when": "view == partcadExplorer"
         },
         {

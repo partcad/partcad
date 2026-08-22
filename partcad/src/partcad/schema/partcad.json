@@ -143,6 +143,40 @@
               "additionalProperties": false
             }
           ]
+        },
+        "^jpeg$": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string" },
+            {
+              "type": "object",
+              "properties": {
+                "prefix": { "type": "string", "minLength": 1 },
+                "path": { "type": "string", "minLength": 1 },
+                "exclude": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
+                  },
+                  "uniqueItems": true
+                },
+                "width": { "type": "integer", "minimum": 1 },
+                "height": { "type": "integer", "minimum": 1 },
+                "quality": { "type": "integer", "minimum": 1, "maximum": 100 },
+                "progressive": { "type": "boolean" },
+                "optimize": { "type": "boolean" },
+                "subsampling": {
+                  "oneOf": [
+                    { "type": "string", "enum": ["4:4:4", "4:2:2", "4:2:0", "4:1:1"] },
+                    { "type": "integer", "minimum": -1, "maximum": 2 }
+                  ]
+                },
+                "background": { "type": "string", "pattern": "^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" }
+              },
+              "additionalProperties": false
+            }
+          ]
         }
       },
       "additionalProperties": false

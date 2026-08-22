@@ -145,7 +145,7 @@ Object commands
 
 ``pc render``
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:
-  ``svg``, ``png``, ``readme``, ``pdf``, or ``html``.
+  ``svg``, ``png``, ``jpeg``, ``readme``, ``pdf``, or ``html``.
 
   ``-t readme`` generates a markdown document instead of a projection: the package document (``README.md``,
   listing what the package declares) or, when ``-a`` names an assembly, that assembly's own document

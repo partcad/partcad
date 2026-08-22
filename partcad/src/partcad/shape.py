@@ -64,6 +64,14 @@ SKETCH_EXTENSION_MAPPING = {
     "build123d": "py",
 }
 
+# File extensions for the render formats whose name is not their extension.
+# Deliberately kept apart from the two mappings above: those also enumerate the
+# part types 'Shape.convert()' accepts, and a rasterized projection is not one
+# of them (it cannot be read back in as a part).
+RENDER_EXTENSION_MAPPING = {
+    "jpeg": "jpg",
+}
+
 # The part types 'Shape.convert()' can hand back as a live in-memory CAD object
 # instead of a serialized representation.
 LIVE_OBJECT_PART_TYPES = frozenset({"build123d", "cadquery"})
@@ -876,7 +884,19 @@ class Shape(ShapeConfiguration):
                 sandbox_versions.BUILD123D,
                 sandbox_versions.CADQUERY_OCP,
             ],
+            # JPEG rasterizes through the very same stack as PNG (see
+            # wrappers/wrapper_render_raster.py): reportlab's renderPM hands the
+            # image to Pillow, which reportlab already depends on, so supporting
+            # both formats costs no additional package in the sandbox.
             "png": [
+                sandbox_versions.OCPSVG,
+                sandbox_versions.BUILD123D,
+                sandbox_versions.SVGLIB,
+                sandbox_versions.REPORTLAB,
+                sandbox_versions.RLPYCAIRO,
+                sandbox_versions.CADQUERY_OCP,
+            ],
+            "jpeg": [
                 sandbox_versions.OCPSVG,
                 sandbox_versions.BUILD123D,
                 sandbox_versions.SVGLIB,
@@ -918,7 +938,7 @@ class Shape(ShapeConfiguration):
             formats_to_render = [format_name] if format_name else list(WRAPPER_FORMATS.keys())
 
             for format in formats_to_render:
-                file_extension = PART_EXTENSION_MAPPING.get(format, format)
+                file_extension = RENDER_EXTENSION_MAPPING.get(format) or PART_EXTENSION_MAPPING.get(format, format)
                 render_opts, final_filepath = self.render_getopts(format, f".{file_extension}", project, filepath)
                 final_filepath = os.path.abspath(final_filepath)
                 # Create the output directory for the resolved path. Use
@@ -939,7 +959,7 @@ class Shape(ShapeConfiguration):
                 viewport_up = kwargs.get("viewport_up")
 
                 # 2D formats
-                if format in ["svg", "png"]:
+                if format in ["svg", "png", "jpeg"]:
                     request["viewport_origin"] = viewport_origin or (
                         [0, 0, 100] if self.kind == "sketch" else [100, -100, 100]
                     )
@@ -953,9 +973,23 @@ class Shape(ShapeConfiguration):
                     if self.config.get("type") == "sdf":
                         request["normalize_mesh"] = True
 
-                    if format == "png":
-                        request["width"] = kwargs.get("width", 512)
-                        request["height"] = kwargs.get("height", 512)
+                    # Raster formats
+                    if format in ["png", "jpeg"]:
+                        request["width"] = kwargs.get("width", render_opts.get("width", 512))
+                        request["height"] = kwargs.get("height", render_opts.get("height", 512))
+
+                    if format == "jpeg":
+                        # JPEG has no alpha channel, so the transparent SVG
+                        # background has to be flattened onto some color.
+                        request["background"] = kwargs.get("background", render_opts.get("background", "#ffffff"))
+                        request["quality"] = kwargs.get("quality", render_opts.get("quality", 85))
+                        request["progressive"] = kwargs.get("progressive", render_opts.get("progressive", False))
+                        request["optimize"] = kwargs.get("optimize", render_opts.get("optimize", False))
+                        # A projection is line art: 4:2:0 chroma subsampling
+                        # (what Pillow picks below quality 95) smears color
+                        # across the one-pixel-wide edges, so keep full chroma
+                        # unless the package asks for something smaller.
+                        request["subsampling"] = kwargs.get("subsampling", render_opts.get("subsampling", "4:4:4"))
 
                 # DXF
                 elif format == "dxf":

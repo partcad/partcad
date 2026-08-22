@@ -32,6 +32,11 @@ Feature: `pc render` command
     |    type | filename              |
     |     png | logo_embedded.png     |
 
+  @type-image
+  Examples: Media Type: .jpg
+    |    type | filename              |
+    |    jpeg | logo_embedded.jpg     |
+
   # The assembly instruction book: the same document laid out on paper and as
   # pages to flip through. The examples package declares itself
   # `manufacturable: false`, so generating one takes the flag that says so.
