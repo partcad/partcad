@@ -987,22 +987,59 @@ def ensure_loaded(session, params):
 
 
 def install(session, params):
-    """Download and set up all imported packages."""
+    """Prepare the package the way 'npm install' prepares a Node.js one.
+
+    Two halves. First the imported packages are downloaded, exactly as before.
+    Then every sketch, part and assembly is asked for its cache key, which is
+    what pulls in the rest: the key hashes the files an object is built from,
+    so computing it downloads every 'fileFrom' URL, and getting there resolves
+    each alias, enrich, compound and assembly link - loading the packages the
+    objects really depend on, which are not always the ones 'partcad.yaml'
+    names. Nothing is built; no CAD script runs.
+    """
     ctx = _ctx(session, params)
     if ctx is None:
         return None
-    with session.partcad.logging.Process("Install", "this"):
+    pc = session.partcad
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        # A package the caller named by hand and that does not exist: a usage
+        # error, so the CLI exits non-zero instead of reporting a clean install.
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+    package = package_obj.name
+
+    # "this" (not the package name) is what this process has always been
+    # labelled with, and what scripts watching for "DONE: Install: this:" match.
+    with pc.logging.Process("Install", "this"):
         # Restore force_update afterwards: the daemon keeps this context warm,
         # so leaving it set would make every later command re-fetch everything.
         saved = ctx.user_config.force_update
         ctx.user_config.force_update = True
         try:
-            ctx.get_all_packages()
+            all_packages = ctx.get_all_packages()
         finally:
             ctx.user_config.force_update = saved
         if ctx.stats_git_ops:
             session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
-    return {}
+
+        if params.get("recursive"):
+            # A '/' has to follow the prefix, or '//sub' would also select the
+            # unrelated sibling '//subwidget'.
+            prefix = package if package.endswith("/") else package + "/"
+            packages = [p["name"] for p in all_packages if p["name"] == package or p["name"].startswith(prefix)]
+        else:
+            packages = [package]
+        stats = pc.actions.package.install(ctx, packages)
+
+    session.emitter.info(
+        "Installed %d sketches, %d parts and %d assemblies" % (stats["sketch"], stats["part"], stats["assembly"])
+    )
+    if stats["failed"]:
+        session.emitter.error("Failed to install %d objects" % stats["failed"])
+    if stats["failed_packages"]:
+        session.emitter.error("Failed to install %d packages" % stats["failed_packages"])
+    return stats
 
 
 def update(session, params):

@@ -22,6 +22,7 @@ CAD environment.
 import contextlib
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -129,7 +130,29 @@ class FakeContext:
         return "//" if package in (None, "", ".") else package
 
     def get_project(self, name):
+        # The daemon reads the resolved package's own name back off the package
+        # object; mirror that so a test can tell which one an operation picked.
+        # 'project = None' stands for a package that does not exist.
+        if self.project is not None:
+            self.project.name = name or "//"
         return self.project
+
+
+class FakeInstallAction:
+    """``partcad.actions.package``: records what an install was asked to prepare.
+
+    The action itself (walking a package's objects and computing their cache
+    keys) lives in ``partcad`` and is tested there; what matters here is which
+    packages the operation hands it and what it does with the counts back.
+    """
+
+    def __init__(self):
+        self.calls = []
+        self.stats = {"sketch": 0, "part": 0, "assembly": 0, "failed": 0, "failed_packages": 0}
+
+    def install(self, ctx, packages):
+        self.calls.append((ctx, list(packages)))
+        return dict(self.stats)
 
 
 class FakePartcad:
@@ -147,6 +170,7 @@ class FakePartcad:
 
     def __init__(self, user_config=None):
         self.logging = FakeLogging()
+        self.actions = SimpleNamespace(package=FakeInstallAction())
         self.user_config = user_config if user_config is not None else FakeUserConfig()
         self.contexts_built = []  # every context the daemon constructed, in order
         self.init_calls = []  # pc.init() must never be used to build one
@@ -429,6 +453,74 @@ def test_installing_one_workspace_does_not_force_updates_in_another(tmp_path):
     # fetch must not be in force-update mode.
     session.contexts[second].get_all_packages()
     assert session.contexts[second].force_update_during_fetch is False
+
+
+# ---- install: which packages get their objects prepared ----------------------
+
+
+def test_install_prepares_the_objects_of_the_current_package(tmp_path):
+    """The second half of an install: every object of the package is prepared."""
+    session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+    ctx = session.contexts[context_id]
+
+    operations.install(session, {"context": context_id})
+
+    assert session.partcad.actions.package.calls == [(ctx, ["//"])]
+
+
+def test_install_prepares_only_the_named_package(tmp_path):
+    session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+    ctx = session.contexts[context_id]
+
+    operations.install(session, {"context": context_id, "package": "//sub"})
+
+    assert session.partcad.actions.package.calls == [(ctx, ["//sub"])]
+
+
+def test_install_prepares_the_whole_subtree_when_recursive(tmp_path):
+    """'-r' widens the object pass to the imported packages, not the fetch:
+    the fetch is always the entire tree."""
+    session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+    ctx = session.contexts[context_id]
+    ctx.packages = ["//", "//sub", "//sub/deeper"]
+
+    operations.install(session, {"context": context_id, "recursive": True})
+
+    assert session.partcad.actions.package.calls == [(ctx, ["//", "//sub", "//sub/deeper"])]
+
+
+def test_install_reports_the_objects_it_could_not_prepare(tmp_path):
+    """The count comes back so the CLI can exit non-zero on a partial install."""
+    session, seen = make_session()
+    context_id = create_context(session, tmp_path)
+    session.partcad.actions.package.stats = {
+        "sketch": 1,
+        "part": 2,
+        "assembly": 0,
+        "failed": 3,
+        "failed_packages": 0,
+    }
+
+    result = operations.install(session, {"context": context_id})
+
+    assert result["failed"] == 3
+    assert ("error", "Failed to install 3 objects") in seen
+
+
+def test_install_of_an_unknown_package_is_a_usage_error(tmp_path):
+    """Naming a package that is not there must not report a clean install."""
+    session, _ = make_session()
+    context_id = create_context(session, tmp_path)
+    session.contexts[context_id].project = None
+
+    with pytest.raises(JsonRpcError) as excinfo:
+        operations.install(session, {"context": context_id, "package": "//nope"})
+
+    assert excinfo.value.code == operations.USAGE_ERROR
+    assert session.partcad.actions.package.calls == []
 
 
 def test_update_reports_the_number_of_packages_it_refreshed(tmp_path):

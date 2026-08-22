@@ -153,6 +153,12 @@ class Shape(ShapeConfiguration):
         self._wrapped = None
         self._bounding_box = None
 
+        # Set by the factory (see ShapeFactory.prepare_async): everything that has
+        # to happen before this shape's cache key means anything - 'fileFrom'
+        # downloads and cross-package references - without building the shape.
+        self._prepare = None
+        self._prepared = False
+
         # Filesystem cache
         self.hash = CacheHash(f"{self.project_name}:{self.name}", cache=self.cacheable)
         self.hash.set_dependencies(self.cache_dependencies)
@@ -248,6 +254,51 @@ class Shape(ShapeConfiguration):
                     self.components.append(ports_list)
 
         return self.components
+
+    def prepare(self):
+        return asyncio.run(self.prepare_async())
+
+    async def prepare_async(self):
+        """Fetch everything the cache key depends on, without building the shape.
+
+        This is what makes 'pc install' behave like 'npm install': the factory
+        hook downloads whatever 'fileFrom' points at and resolves every
+        cross-package reference, which loads - and so downloads - the packages
+        this shape really depends on. A later build then finds it all on disk.
+
+        Idempotent, and safe against reference cycles between assemblies: the
+        flag is raised before the hook runs, so a shape that (indirectly) links
+        back to itself stops here instead of recursing.
+        """
+        if self._prepared:
+            return
+        self._prepared = True
+        if self._prepare is not None:
+            try:
+                await self._prepare(self)
+            except BaseException:
+                # A preparation that failed has not happened: leaving the flag
+                # up would make a warm context skip it forever and then hash a
+                # file that was never downloaded.
+                self._prepared = False
+                raise
+
+    async def get_cache_key_async(self) -> Optional[str]:
+        """Prepare this shape and return its cache key, or None if it has none.
+
+        The key hashes the shape's configuration together with the content of
+        the files it is built from, so it is only correct once those files are
+        on disk - which is what 'prepare_async()' above guarantees. Shapes that
+        are not cached in their own right (an alias or an enrich hashes the
+        object it points at, not itself) report no key.
+        """
+        await self.prepare_async()
+        if not self.get_cacheable():
+            return None
+        return self.hash.get()
+
+    def get_cache_key(self) -> Optional[str]:
+        return asyncio.run(self.get_cache_key_async())
 
     async def get_wrapped(self, ctx):
         with self.lock:

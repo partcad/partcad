@@ -214,6 +214,20 @@
             "scope": "resource",
             "type": "string"
           },
+          "partcad.installOnOpen": {
+            "default": "true",
+            "description": "Whether to download the package's dependencies (as `pc install` does) the first time a workspace directory is opened. The package installed is the one `partcad.packagePath` points at.",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "enumDescriptions": [
+              "Install the dependencies when a workspace directory is opened for the first time.",
+              "Never install automatically; run \"PartCAD: Install the package dependencies\" by hand."
+            ],
+            "scope": "resource",
+            "type": "string"
+          },
           "partcad.forceUpdate": {
             "default": "false",
             "description": "Whether to update all dependencies on each run, instead of once a day.",
@@ -360,6 +374,12 @@
         "category": "PartCAD",
         "command": "partcad.refresh",
         "icon": "$(sync)"
+      },
+      {
+        "title": "Install the package dependencies",
+        "category": "PartCAD",
+        "command": "partcad.installPackage",
+        "icon": "$(cloud-download)"
       },
       {
         "title": "PartCAD support",
@@ -601,6 +621,11 @@
         },
         {
           "command": "partcad.refresh",
+          "when": "partcad.packageLoaded && view == partcadExplorer",
+          "group": "additional_commands"
+        },
+        {
+          "command": "partcad.installPackage",
           "when": "partcad.packageLoaded && view == partcadExplorer",
           "group": "additional_commands"
         },

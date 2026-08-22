@@ -28,6 +28,18 @@ The backend abstraction (`src/common/backend.ts`) keeps the extension's command/
 across both; the JSON-RPC backend translates the extension's `partcad.*` commands to the CLI-shaped JSON-RPC
 methods and routes the service's notifications back under the legacy `?/partcad/*` names.
 
+## Installing a package's dependencies
+
+`partcad.installPackage` runs the daemon's `install` operation - the PartCAD counterpart of `npm install`: it
+downloads every imported package and prepares every sketch, part and assembly (see `pc install`). The extension
+runs it automatically the first time a workspace directory is opened, once the package has loaded, against
+whatever `partcad.packagePath` resolves to. "The first time" is remembered per config path in the workspace
+state, so reopening the window is not another download; `partcad.installOnOpen: "false"` turns the automatic
+run off and leaves the palette command.
+
+Do not confuse it with `partcad.install`, which bootstraps the PartCAD *Python module* for the `python`
+backend and is a no-op for the frozen service.
+
 ## Updating PartCAD
 
 "Update PartCAD" (`partcad.update`) updates the PartCAD installation — `pc upgrade`, not `pc update`, which

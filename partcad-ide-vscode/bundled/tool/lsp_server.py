@@ -420,6 +420,24 @@ def do_package_refresh(args) -> None:
     _ops().package_refresh(session, {})
 
 
+@LSP_SERVER.command("partcad.installPackageReal")
+def do_install_package(args=None) -> None:
+    """LSP handler for partcad.installPackageReal command.
+
+    Downloads what the *package* depends on - the PartCAD counterpart of
+    ``npm install``. Not to be confused with ``partcad.install`` below, which
+    bootstraps the PartCAD Python module itself.
+    """
+    session = _active_session()
+    if session is None:
+        LSP_SERVER.send_notification("?/partcad/error", "Installing the package while PartCAD is not loaded")
+        return
+    try:
+        _ops().install(session, {})
+    except Exception as e:  # pylint: disable=broad-except
+        LSP_SERVER.send_notification("?/partcad/error", "Failed to install the package: %s" % e)
+
+
 @LSP_SERVER.command("partcad.loadPackageContents")
 def load_package_contents(args=list()) -> None:
     """LSP handler for partcad.loadPackageContents command."""

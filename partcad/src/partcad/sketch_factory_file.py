@@ -60,7 +60,20 @@ class SketchFactoryFile(SketchFactory):
             pc_logging.warning(f"Sketch path is not set: {self.sketch.name}")
         super().post_create()
 
-    async def instantiate(self, sketch):
-        if not self.fileFactory is None and not os.path.exists(sketch.path):
+    async def download_file_async(self, sketch) -> None:
+        """Fetch what 'fileFrom' points at, unless the file is already there."""
+        if self.fileFactory is not None and not os.path.exists(sketch.path):
             with pc_logging.Action("File", self.target_project.name, sketch.name):
                 await self.fileFactory.download(sketch.path)
+
+    async def prepare_async(self, sketch) -> None:
+        """Download the source file without building the sketch.
+
+        The cache key hashes the file's content, so it only means anything once
+        the file is on disk. 'pc install' calls this for every object, which is
+        why the first build after an install is a cache hit and not a miss.
+        """
+        await self.download_file_async(sketch)
+
+    async def instantiate(self, sketch):
+        await self.download_file_async(sketch)
