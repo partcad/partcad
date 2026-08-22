@@ -84,7 +84,7 @@ env:
   # extension is actually validated against.
   # TODO(clairbee): restore 3.13/3.14 here once the bundle can ship pygit2.
   PYTHONS_IDE: '["3.10", "3.11", "3.12"]'
-  VERSION: 0.7.166
+  VERSION: 0.7.167
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
