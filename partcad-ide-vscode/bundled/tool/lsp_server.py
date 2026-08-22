@@ -71,7 +71,7 @@ RUNNER = pathlib.Path(__file__).parent / "lsp_runner.py"
 
 MAX_WORKERS = 5
 # TODO: Update the language server name and version.
-LSP_SERVER = server.LanguageServer(name="PartCAD", version="0.7.168", max_workers=MAX_WORKERS)
+LSP_SERVER = server.LanguageServer(name="PartCAD", version="0.7.169", max_workers=MAX_WORKERS)
 
 
 # **********************************************************
