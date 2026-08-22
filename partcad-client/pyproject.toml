@@ -1,6 +1,6 @@
 [project]
 name = "partcad-client"
-version = "0.7.176"
+version = "0.7.177"
 description = "The PartCAD client: daemon discovery and connection, and upgrading the installation"
 readme = "README.md"
 keywords = ["cad", "partcad", "client", "daemon", "update"]
