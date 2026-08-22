@@ -36,6 +36,9 @@ logLevel: error
 git:
   clone:
     timeout: 42
+    retry:
+      max: 7
+      patience: 0.5
   auth:
     github.com:
       username: alice
@@ -58,6 +61,11 @@ threadsMax: 9
 pythonSandbox: none
 cacheFiles: true
 logLevel: debug
+git:
+  clone:
+    retry:
+      max: 1
+      patience: 5.0
 """
 
 
@@ -163,6 +171,7 @@ def test_the_rebuilding_process_own_configuration_really_does_disagree(homes):
     assert own.force_update is False
     assert own.devel_index is False
     assert own.threads_max == 9
+    assert own.get_int("git.clone.retry.max") == 1
 
 
 def test_the_nested_sections_travel_too(homes):
@@ -188,6 +197,18 @@ def test_a_nested_section_does_not_clobber_the_flat_key_beside_it(homes):
 
     assert rebuilt.git_clone_timeout == 42
     assert rebuilt.git_auth.to_dict() != {}
+
+
+def test_the_git_clone_retry_settings_travel(homes):
+    """'ProjectFactoryGit' reads these two straight off the configuration, so a
+    daemon keeping its own would retry a caller's clone on its own terms."""
+    build, client_home, daemon_home = homes
+    data = build(client_home).to_dict()
+
+    rebuilt = build(daemon_home, settings=data)
+
+    assert rebuilt.get_int("git.clone.retry.max") == 7
+    assert rebuilt.get_float("git.clone.retry.patience") == 0.5
 
 
 def test_the_copy_round_trips_unchanged(homes):

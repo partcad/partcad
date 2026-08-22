@@ -288,6 +288,8 @@ OPTION_KEYS = (
     "develIndex",
     "offline",
     "git.clone.timeout",
+    "git.clone.retry.max",
+    "git.clone.retry.patience",
     "useDockerPython",
     "useDockerKicad",
 )
@@ -312,8 +314,9 @@ OPTION_KEYS = (
 # TelemetryConfig above is already written around.
 #
 # The sections below are safe for the same reason inverted: none is the parent
-# of an environment-bound key. 'git.clone.timeout' hangs off 'git', which is why
-# 'git' is never read whole -- only 'git.config' and 'git.auth' are.
+# of an environment-bound key. 'git.clone.timeout' and the 'git.clone.retry.*'
+# pair hang off 'git', which is why 'git' is never read whole -- only
+# 'git.config' and 'git.auth' are.
 SECTION_PATHS = (
     "git.config",
     "git.auth",

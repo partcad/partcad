@@ -39,10 +39,11 @@ carries a TODO to gate it behind access control before that happens.)
 
 ## Whose user configuration the daemon works under
 
-The client's, always — as of the moment the command ran. `service.py::run` resolves the CLI's own `user_config`
-(file + `PC_*` environment + command line) and sends a copy of it, `UserConfig.to_dict()`, with every
-`context.create`; the daemon rebuilds it with `UserConfig.from_dict()` and builds the context from *that*,
-never from `pc.user_config`.
+The client's whenever the client sends one — as of the moment the command ran. `service.py::run` resolves the
+CLI's own `user_config` (file + `PC_*` environment + command line) and sends a copy of it,
+`UserConfig.to_dict()`, with every `context.create`; the daemon rebuilds it with `UserConfig.from_dict()` and
+builds the context from *that*, never from `pc.user_config`. A client that sends no `userConfig` leaves the
+daemon on its own configuration instead (see below).
 
 This is not a nicety. The daemon is warm and shared per workspace, so its own configuration is whatever the
 environment held when something first started it — possibly days ago, possibly from a VS Code window. Reading

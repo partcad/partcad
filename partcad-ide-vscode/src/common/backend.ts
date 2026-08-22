@@ -235,6 +235,18 @@ function serviceArgs(serverId: string): string[] {
     return args;
 }
 
+/** The environment the service is launched with. */
+function serviceEnv(serverId: string): NodeJS.ProcessEnv {
+    const config = vscode.workspace.getConfiguration(serverId);
+    const env = { ...process.env };
+    // '--devel-index' is a flag, so it can ask for the development index but
+    // never against it: a 'PC_DEVEL_INDEX=true' inherited from whatever started
+    // VS Code would outrank an extension setting of false. The environment can
+    // spell out both answers, so the setting travels through it either way.
+    env.PC_DEVEL_INDEX = config.get<boolean>('develIndex') === true ? 'true' : 'false';
+    return env;
+}
+
 /** Run the launcher and resolve with the socket/pipe path it prints. */
 function runLauncher(execPath: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -336,7 +348,7 @@ export async function restartBackend(
         }
         const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
         const args = serviceArgs(serverId);
-        const env = { ...process.env };
+        const env = serviceEnv(serverId);
         try {
             if (getServiceChannelFromSetting(serverId) === 'stdio') {
                 return connectStdio(execPath, args, cwd, env, outputChannel);
