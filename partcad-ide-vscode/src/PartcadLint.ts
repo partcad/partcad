@@ -171,6 +171,12 @@ export class PartcadLint implements vscode.Disposable {
             this.schedule(document, 0);
             return;
         }
+        if (!isEnabled() || document.isClosed) {
+            // Checking was turned off, or the document was closed, while this
+            // check was in flight: `refresh()` and `forget()` have already
+            // cleared what was shown, and publishing now would put it back.
+            return;
+        }
         this.collection.set(document.uri, (result?.diagnostics ?? []).map(toDiagnostic));
     }
 }

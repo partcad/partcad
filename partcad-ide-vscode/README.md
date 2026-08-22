@@ -66,8 +66,11 @@ An ASSY file is a Jinja2 template that renders to YAML, and the result has to
 match the ASSY schema. The extension checks all three of those while the file is
 open -- template errors, YAML errors and schema errors, such as a mistyped key or
 a `location` that is not an OCCT location -- and reports them in the Problems
-view at the line they came from, whether or not the file uses `{% for %}` loops
-or `{{ parameters }}`. Set `partcad.lint.enabled` to `false` to turn this off.
+view at the line they came from. A file that uses `{% for %}` loops or
+`{{ parameters }}` is checked too: what those stand in for is unknown until the
+template is rendered, so a schema finding that depends on such a value is left
+out rather than guessed at. Set `partcad.lint.enabled` to `false` to turn this
+off.
 
 ## Inspecting published PartCAD packages
 
