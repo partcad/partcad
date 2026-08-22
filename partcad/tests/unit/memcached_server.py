@@ -127,9 +127,15 @@ def serve_memcached(max_item_size: int = DEFAULT_MAX_ITEM_SIZE):
     loop = asyncio.new_event_loop()
     ready = threading.Event()
 
+    serving = {}
+
     def run():
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(server.serve_forever(ready))
+        serving["task"] = loop.create_task(server.serve_forever(ready))
+        try:
+            loop.run_until_complete(serving["task"])
+        except asyncio.CancelledError:
+            pass
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
@@ -138,6 +144,9 @@ def serve_memcached(max_item_size: int = DEFAULT_MAX_ITEM_SIZE):
     try:
         yield server
     finally:
-        loop.call_soon_threadsafe(loop.stop)
+        # Cancelling the task, not stopping the loop: 'loop.stop()' interrupts
+        # 'run_until_complete' without unwinding 'async with server', so the
+        # listening socket would still be open after 'loop.close()'.
+        loop.call_soon_threadsafe(serving["task"].cancel)
         thread.join(timeout=10)
         loop.close()

@@ -31,6 +31,11 @@ from . import telemetry
 # text, so the namespace is what has to be kept in line.
 MAX_KEY_LENGTH = 250
 
+# 'Cache' prefixes every name with '<hex hash>.' only after 'accepts()' has had
+# its say, so the room the longest digest 'CacheHash' can produce (sha256) takes
+# is reserved here instead.
+HASH_KEY_LENGTH = 64 + len(".")
+
 
 @telemetry.instrument()
 class MemcacheCacheBackend(PooledCacheBackend):
@@ -54,12 +59,24 @@ class MemcacheCacheBackend(PooledCacheBackend):
         self.host, self.port = _split_server(user_config.cache_remote_server)
         self.expiration = user_config.cache_remote_expiration
         self._prefix = "%s:%s:" % (user_config.cache_remote_namespace, data_type)
+        self._prefix_length = len(self._prefix.encode("utf-8"))
+        # The namespace is user text and the key travels in a command line, so a
+        # space or a control character in it would not make the entry unreachable
+        # - it would desynchronize the protocol. Refusing the tier here is what
+        # 'cache_backend.build()' reports and skips.
+        if any(byte <= 0x20 or byte == 0x7F for byte in self._prefix.encode("utf-8")):
+            raise ValueError(
+                "cacheRemoteNamespace must not contain whitespace or control characters: %r"
+                % user_config.cache_remote_namespace
+            )
 
     def _key(self, name: str) -> bytes:
         return (self._prefix + name).encode("utf-8")
 
     def accepts(self, key: str, size: int) -> bool:
-        if len(self._prefix) + len(key) > MAX_KEY_LENGTH:
+        # memcached measures a key in bytes, so a non-ASCII namespace is longer
+        # than it looks, and the hash 'Cache' puts in front of the key counts too.
+        if self._prefix_length + HASH_KEY_LENGTH + len(key.encode("utf-8")) > MAX_KEY_LENGTH:
             return False
         return super().accepts(key, size)
 

@@ -12,6 +12,8 @@ encode on the way in and nothing to decode on the way out.
 """
 
 import asyncio
+import os
+import uuid
 from pathlib import Path
 
 import aiofiles
@@ -55,8 +57,19 @@ class FilesCacheBackend(CacheBackend):
         saved = {}
 
         async def task_item(name: str, value: bytes) -> None:
-            async with aiofiles.open(self.path(name), "wb") as f:
-                await f.write(value)
+            # Through a temporary file in the same directory: opening the entry
+            # itself for writing truncates what is there before the new payload
+            # is complete, and a read running at the same time would come back
+            # with an empty or half-written frame.
+            path = self.path(name)
+            tmp_path = path.with_name("%s.%s.tmp" % (path.name, uuid.uuid4().hex))
+            try:
+                async with aiofiles.open(tmp_path, "wb") as f:
+                    await f.write(value)
+                os.replace(tmp_path, path)
+            except BaseException:
+                tmp_path.unlink(missing_ok=True)
+                raise
             saved[name] = True
 
         await asyncio.gather(*[asyncio.create_task(task_item(name, value)) for name, value in items.items()])

@@ -116,10 +116,12 @@ class PooledCacheBackend(CacheBackend):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._client = None
-        self._users = 0
-        self._lock = None
-        self._loop = None
+        # Keyed by the event loop, because more than one can be live at a time:
+        # PartCAD builds on a thread of its own with 'asyncio.run()' while the
+        # caller's loop is still going. Sharing one client between them would let
+        # the loop that finished first close the other one's socket. An entry
+        # lives only while a request is using it (see 'connected()').
+        self._per_loop = {}
 
     async def _open(self):
         """Build the client. Called with the tier's lock held."""
@@ -129,37 +131,38 @@ class PooledCacheBackend(CacheBackend):
         """Release a client built by '_open()'."""
 
     def _guard(self):
-        """The lock for the loop running now, resetting the state on a new one.
+        """The (loop, state) pair for the loop running now, creating it if new.
 
         Deliberately not a coroutine: it has to notice the loop and install the
         lock without an await in between, or two requests could each decide they
         are the first and open a client apiece.
         """
         loop = asyncio.get_running_loop()
-        if self._loop is not loop:
-            # A different loop means the previous one is done, and so is
-            # anything it opened. There is nothing to close here: closing needs
-            # the loop that owns the socket, and it is gone.
-            self._loop, self._lock = loop, asyncio.Lock()
-            self._client, self._users = None, 0
-        return self._lock
+        state = self._per_loop.get(loop)
+        if state is None:
+            state = self._per_loop[loop] = {"lock": asyncio.Lock(), "client": None, "users": 0}
+        return loop, state
 
     @contextlib.asynccontextmanager
     async def connected(self):
         """The shared client, for the duration of one request."""
-        lock = self._guard()
+        loop, state = self._guard()
+        lock = state["lock"]
         async with lock:
-            if self._client is None:
-                self._client = await self._open()
-            self._users += 1
+            if state["client"] is None:
+                state["client"] = await self._open()
+            state["users"] += 1
         try:
-            yield self._client
+            yield state["client"]
         finally:
             async with lock:
-                self._users -= 1
-                client = self._client if self._users == 0 else None
+                state["users"] -= 1
+                client = state["client"] if state["users"] == 0 else None
                 if client is not None:
-                    self._client = None
+                    state["client"] = None
+                    # The last user of this loop's client: the loop keeps
+                    # nothing between requests, and its entry goes with it.
+                    self._per_loop.pop(loop, None)
             if client is not None:
                 try:
                     await self._close(client)

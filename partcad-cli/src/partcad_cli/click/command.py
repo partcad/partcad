@@ -188,8 +188,12 @@ click.rich_click.COMMAND_GROUPS = {
 )
 @click.option(
     "--cache-mem",
+    # The destination is what the configuration loop below reads, and the
+    # environment variable is named after it unless it is given here.
+    "cache_memory",
     is_flag=True,
     default=None,
+    envvar="PC_CACHE_MEM",
     show_envvar=True,
     help="Enable caching of intermediate results in memory",
 )
