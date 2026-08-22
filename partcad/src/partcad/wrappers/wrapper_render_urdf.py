@@ -419,7 +419,7 @@ def emit(node, parent_link, pose, state):
         xyz, rpy = urdf_common.to_urdf_origin(pose)
         state["robot"].add_joint(
             Joint(
-                name="%s_to_%s" % (parent_link, link_name),
+                name=state["joint_names"].take("%s_to_%s" % (parent_link, link_name), "joint"),
                 parent=parent_link,
                 child=link_name,
                 joint_type="fixed",
@@ -451,6 +451,10 @@ def process(path, request):
     state = {
         "robot": URDF(name=robot_name),
         "names": NameAllocator(),
+        # Joint names live in a namespace of their own, and "<parent>_to_<child>"
+        # collides on its own: "a" -> "b_to_c" and "a_to_b" -> "c" both spell
+        # "a_to_b_to_c".
+        "joint_names": NameAllocator(),
         "mesh_names": NameAllocator(),
         "meshes": {},
         "mesh_dir": mesh_dir,

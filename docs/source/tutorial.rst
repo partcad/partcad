@@ -346,9 +346,13 @@ Import an Assembly
 ------------------
 
 The ``pc import assembly`` command allows you to import an assembly from a STEP
-or URDF file. It reads the file, extracts the individual parts, and creates an
-assembly YAML file that records each part along with its placement. The format
-is taken from the file's extension.
+or URDF file. The format is taken from the file's extension.
+
+From a STEP file it extracts the individual parts and creates an assembly YAML
+file that records each part along with its placement. From a URDF it creates an
+``stl`` part per link carrying the physical properties the URDF stated, a pair
+of interfaces per joint, and an assembly that connects the parts through them
+rather than placing them by coordinates - see :doc:`configuration`.
 
 An import leaves the package holding PartCAD's own objects - parts it can render
 on their own and an assembly that places them - rather than a declaration that

@@ -218,6 +218,12 @@ class Project(project_config.Configuration):
         self.repository_locks = {}
         self.repository_locks_lock = threading.Lock()
 
+        # The assemblies already built to materialize a part of theirs (see
+        # '_materialize_derived_part'), and the lock that keeps two threads from
+        # building the same one.
+        self._derived_parts_attempted: set[str] = set()
+        self._derived_parts_lock = threading.Lock()
+
         if (
             "desc" in self.config_obj
             and not self.config_obj["desc"] is None
@@ -737,6 +743,12 @@ class Project(project_config.Configuration):
 
         A no-op unless the name is unknown *and* names an assembly that produces
         parts, so the common path costs one dictionary lookup.
+
+        Each owner is attempted once. A build that failed, and a URDF with no
+        links, both leave 'children' empty, and repeating the attempt on every
+        later lookup would repeat the whole sandboxed import; taking the
+        attempt under a lock also keeps two threads that resolve two links of
+        the same URDF from building it twice.
         """
         if part_name in self.parts:
             return
@@ -746,6 +758,10 @@ class Project(project_config.Configuration):
         owning_assembly = self.get_assembly(owner)
         if owning_assembly is None or owning_assembly.children:
             return
+        with self._derived_parts_lock:
+            if owner in self._derived_parts_attempted:
+                return
+            self._derived_parts_attempted.add(owner)
 
         pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
 

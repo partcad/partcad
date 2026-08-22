@@ -98,10 +98,12 @@ using existing parts.
   produces, evaluated with every joint at its zero position. PartCAD can also
   write a URDF (plus the meshes it references) from any assembly.
 
-  A URDF is a description of a *simulatable* robot, so most of what it says -
-  mass and inertia, joint kinematics, collision geometry, materials, sensors -
-  has nowhere to go in an assembly built out of rigid placements, and is
-  dropped. :doc:`simulation` describes that gap and what closing it would take.
+  A URDF is a description of a *simulatable* robot. What it says about a link
+  itself - mass, inertia, friction and contact, material and colour - becomes
+  named PartCAD properties of the part that link turns into, and goes back out
+  on export. What an assembly built out of rigid placements has nowhere to put -
+  joint kinematics, collision geometry, sensors, transmissions - is dropped, and
+  reported. :doc:`simulation` describes that gap and what closing it would take.
 
 Scenes
 ======

@@ -106,8 +106,15 @@ def quat_to_rpy(q):
     sin_pitch = max(-1.0, min(1.0, -m31))
     pitch = math.asin(sin_pitch)
     if abs(sin_pitch) > 1.0 - 1e-12:
-        # Gimbal lock: only (roll -+ yaw) is determined, so pin roll at zero.
-        return (0.0, pitch, math.atan2(-2.0 * (x * y - w * z), 1.0 - 2.0 * (y * y + z * z)))
+        # Gimbal lock: only (yaw -+ roll) is determined, so pin roll at zero.
+        # R[0][0] and R[1][0] are both zero here, so the yaw the general case
+        # reads from them has to come from the first row's other two entries
+        # instead - the same choice tf2 makes.
+        m12 = 2.0 * (x * y - w * z)  # R[0][1]
+        m13 = 2.0 * (x * z + w * y)  # R[0][2]
+        if sin_pitch > 0.0:
+            return (0.0, pitch, -math.atan2(m12, m13))
+        return (0.0, pitch, math.atan2(-m12, -m13))
     roll = math.atan2(2.0 * (y * z + w * x), 1.0 - 2.0 * (x * x + y * y))
     yaw = math.atan2(2.0 * (x * y + w * z), 1.0 - 2.0 * (y * y + z * z))
     return (roll, pitch, yaw)

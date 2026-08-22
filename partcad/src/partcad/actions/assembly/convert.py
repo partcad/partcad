@@ -25,6 +25,7 @@ that say the same thing share one pair of interfaces.
 """
 
 import asyncio
+import os
 from pathlib import Path
 
 import ruamel.yaml
@@ -137,6 +138,13 @@ def build_interfaces(assembly_name, joints, used_joints):
 
         base = "%s/%s" % (assembly_name, "fixed" if joint["type"] == "fixed" else joint_name)
         socket, plug = "%s-socket" % base, "%s-plug" % base
+        # Every fixed joint is named "<assembly>/fixed", but two fixed joints
+        # that state different physics are different connections and got here
+        # with different signatures: they must not overwrite one another.
+        suffix = 1
+        while socket in interfaces or plug in interfaces:
+            socket, plug = "%s-%d-socket" % (base, suffix), "%s-%d-plug" % (base, suffix)
+            suffix += 1
 
         socket_config = CommentedMap()
         socket_config["desc"] = "URDF %s joint, as seen from the parent link. Used by: %s" % (
@@ -439,8 +447,13 @@ def apply_config(project: Project, sections: dict) -> None:
         for name, entry in entries.items():
             existing[name] = entry
 
-    with open(project.config_path, "w") as f:
+    # Through a temporary file in the same directory: opening the real one for
+    # writing truncates the user's package configuration before the dump runs,
+    # and what is in it cannot be recovered from the generated files.
+    tmp_path = "%s.tmp" % project.config_path
+    with open(tmp_path, "w") as f:
         yaml.dump(config, f)
+    os.replace(tmp_path, project.config_path)
 
     # Keep the loaded package in step with what was just written, so a daemon
     # that goes on serving this context sees the converted assembly rather than

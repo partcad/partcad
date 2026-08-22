@@ -72,12 +72,25 @@ def test_rpy_is_fixed_axis_zyx():
     assert urdf_common.rotate_vec(both, (1.0, 0.0, 0.0)) == pytest.approx((0.0, 0.0, -1.0), abs=1e-12)
 
 
-def test_rpy_gimbal_lock():
-    """At pitch = 90 degrees only (roll -+ yaw) is determined; roll is pinned to 0."""
-    q = urdf_common.rpy_to_quat((0.5, math.pi / 2, 0.5))
+@pytest.mark.parametrize(
+    "rpy",
+    [
+        (0.5, math.pi / 2, 0.5),
+        # 'rpy="0 1.5708 0.5"' is common in real URDF, and it is the case that
+        # tells a gimbal-lock branch reading the wrong matrix entries apart from
+        # one reading the right ones: the rotation has to survive, not just the
+        # pitch.
+        (0.0, math.pi / 2, math.radians(30.0)),
+        (0.0, -math.pi / 2, math.radians(30.0)),
+        (0.0, -math.pi / 2, math.radians(-120.0)),
+    ],
+)
+def test_rpy_gimbal_lock(rpy):
+    """At pitch = +-90 degrees only (yaw -+ roll) is determined; roll is pinned to 0."""
+    q = urdf_common.rpy_to_quat(rpy)
     roll, pitch, _ = urdf_common.quat_to_rpy(q)
     assert roll == 0.0
-    assert pitch == pytest.approx(math.pi / 2)
+    assert pitch == pytest.approx(rpy[1])
     _assert_same_rotation(q, urdf_common.rpy_to_quat(urdf_common.quat_to_rpy(q)), tolerance=1e-7)
 
 
