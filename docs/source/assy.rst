@@ -47,6 +47,7 @@ The following syntax is used to create a node that places a part in the assembly
       with: <(optional) name of the port in this part, if more than one exists>
       name: <the name of the target part in this assembly to connect to>
       to: <(optional) name of the port in the target part to connect to, if more than one exists>
+      exploded: <(optional) the gap to show in the exploded view of this step, in mm>
     connect: # alternative to "location" and "connectPorts", used to connect by interfaces
       with: <(optional) name of the interface in this part, if more than one exists>
       withInstance: <(optional) name of the instance of the interface in this part, if more than one exists>
@@ -55,6 +56,7 @@ The following syntax is used to create a node that places a part in the assembly
       to: <(optional) name of the interface in the target part to connect to, if more than one compatible one exists>
       toInstance: <(optional) name of the instance of the interface in the target part to connect to, if more than one exists>
       toPort: <(optional) name of the port in the target par to connect to>
+      exploded: <(optional) the gap to show in the exploded view of this step, in mm>
 
 One and only one method for placing the object is acceptable.
 Therefore the sections `location`, `connectPorts` and `connect` are mutually exclusive.
@@ -66,6 +68,11 @@ Where `with` is the interface of the part that is getting added to the assembly,
 and `to` is the interface of the part that is already in the assembly.
 The `withInstance` and `toInstance` fields are used to specify the names of interface instances.
 The `withPort` and `toPort` fields are used to specify the names of ports.
+
+The `exploded` field does not affect the assembly itself: it is how far apart
+the two parts are drawn in the exploded view of this step in the assembly
+instruction book (`pc render -t pdf` and `pc render -t html`).
+Without it, the two are spaced by half of the largest dimension of the two.
 
 Assemblies
 ----------

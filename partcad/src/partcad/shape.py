@@ -143,6 +143,7 @@ class Shape(ShapeConfiguration):
 
         # Memory cache
         self._wrapped = None
+        self._bounding_box = None
 
         # Filesystem cache
         self.hash = CacheHash(f"{self.project_name}:{self.name}", cache=self.cacheable)
@@ -601,15 +602,23 @@ class Shape(ShapeConfiguration):
             pc_logging.error(msg)
         self.errors.append(msg)
 
-    async def render_svg_somewhere(
+    async def render_svg_somewhere_async(
         self,
         ctx,
         project=None,
         filepath=None,
         line_weight=None,
         viewport_origin=None,
+        annotations=None,
     ):
-        """Renders an SVG file somewhere and ignore the project settings"""
+        """Renders an SVG file somewhere and ignore the project settings
+
+        'annotations' are 3D line segments - each a pair of points in the shape's
+        own coordinate system - to draw on top of the projection. An assembly
+        instruction book uses them to show the gap an exploded view introduces
+        (see assembly_guide.py); they are projected together with the shape, so
+        they land where the geometry they point at does.
+        """
         if filepath is None:
             filepath = tempfile.mktemp(".svg")
 
@@ -639,7 +648,9 @@ class Shape(ShapeConfiguration):
             "line_weight": line_weight,
             "viewport_origin": viewport_origin,
         }
-        with telemetry.start_as_current_span("*Shape.render_svg_somewhere.{shape_envelope.serialize}"):
+        if annotations:
+            request["annotations"] = annotations
+        with telemetry.start_as_current_span("*Shape.render_svg_somewhere_async.{shape_envelope.serialize}"):
             request_serialized = shape_envelope.serialize(request)
 
         # We don't care about customer preferences much here
@@ -670,12 +681,99 @@ class Shape(ShapeConfiguration):
         if "exception" in result and not result["exception"] is None:
             pc_logging.exception("RenderSVG exception: %s" % result["exception"])
 
-        self.svg_path = filepath
+        if not annotations:
+            # An annotated projection is a one-off illustration, not this shape's
+            # picture: remembering it here would hand it to every later caller
+            # that asks for the shape's SVG.
+            self.svg_path = filepath
+
+    def render_svg_somewhere(
+        self,
+        ctx,
+        project=None,
+        filepath=None,
+        line_weight=None,
+        viewport_origin=None,
+        annotations=None,
+    ):
+        return asyncio.run(
+            self.render_svg_somewhere_async(
+                ctx,
+                project=project,
+                filepath=filepath,
+                line_weight=line_weight,
+                viewport_origin=viewport_origin,
+                annotations=annotations,
+            )
+        )
+
+    async def get_bounding_box_async(self, ctx):
+        """The axis-aligned bounding box of this shape, in its own coordinates.
+
+        Returned as '(x_min, y_min, z_min, x_max, y_max, z_max)', or 'None' when
+        the shape is empty or failed to instantiate. Measured in a sandbox, like
+        every other operation on geometry, and remembered afterwards: the callers
+        that need a size (exploded views) ask for the same one repeatedly.
+        """
+        if self._bounding_box is not None:
+            return self._bounding_box
+
+        obj = await self.get_wrapped(ctx)
+        if obj is None:
+            return None
+
+        with pc_logging.Action("BoundingBox", self.project_name, self.name):
+            request_serialized = shape_envelope.serialize({"wrapped": obj})
+
+            runtime = ctx.get_python_runtime(version="3.11")
+            await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+
+            # The wrapper writes nothing, but every wrapper is invoked with an
+            # output path; give it one inside a directory of our own, which is
+            # removed with the call.
+            with tempfile.TemporaryDirectory(prefix="partcad-bbox-") as unused_dir:
+                command = [wrapper.get("bbox.py"), os.path.join(unused_dir, "unused.txt")]
+                exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+            if exitcode != 0 and len(errors) == 0:
+                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+            if errors:
+                pc_logging.error(errors)
+                raise Exception(errors)
+
+            response_lines = response_serialized.strip().splitlines()
+            if not response_lines:
+                pc_logging.error("Empty response from wrapper: %s" % command[0])
+                return None
+            result = shape_envelope.deserialize(response_lines[-1].strip())
+
+            if not result.get("success", False):
+                pc_logging.error(
+                    "BoundingBox failed for %s:%s: %s"
+                    % (self.project_name, self.name, result.get("exception", "Unknown error"))
+                )
+                return None
+
+            box = result.get("bounding_box")
+            self._bounding_box = None if box is None else tuple(box)
+            return self._bounding_box
+
+    def get_bounding_box(self, ctx):
+        return asyncio.run(self.get_bounding_box_async(ctx))
+
+    async def get_max_dimension_async(self, ctx):
+        """The largest linear dimension of this shape, or 'None' if unknown."""
+        box = await self.get_bounding_box_async(ctx)
+        if box is None:
+            return None
+        return max(box[3] - box[0], box[4] - box[1], box[5] - box[2])
+
+    def get_max_dimension(self, ctx):
+        return asyncio.run(self.get_max_dimension_async(ctx))
 
     async def _get_svg_path(self, ctx, project):
         async with self.svg_lock:
             if self.svg_path is None:
-                await self.render_svg_somewhere(ctx=ctx, project=project)
+                await self.render_svg_somewhere_async(ctx=ctx, project=project)
             return self.svg_path
 
     def render_getopts(

@@ -1014,19 +1014,27 @@ class Context:
         """Thin alias for convert_assembly(assembly_spec, "build123d", params)."""
         return self.convert_assembly(assembly_spec, "build123d", params)
 
-    async def render_async(self, project_path=None, format=None, output_dir=None):
+    async def render_async(self, project_path=None, format=None, output_dir=None, ignore_manufacturability=False):
         if project_path is None:
             project_path = self.get_current_project_path()
         pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
-        await project.render_async(format=format, output_dir=output_dir)
+        await project.render_async(
+            format=format,
+            output_dir=output_dir,
+            ignore_manufacturability=ignore_manufacturability,
+        )
 
-    def render(self, project_path=None, format=None, output_dir=None):
+    def render(self, project_path=None, format=None, output_dir=None, ignore_manufacturability=False):
         if project_path is None:
             project_path = self.get_current_project_path()
         pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
-        project.render(format=format, output_dir=output_dir)
+        project.render(
+            format=format,
+            output_dir=output_dir,
+            ignore_manufacturability=ignore_manufacturability,
+        )
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})
     def get_python_runtime(self, version=None, python_runtime=None):
