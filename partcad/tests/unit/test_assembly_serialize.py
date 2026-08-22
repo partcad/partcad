@@ -12,6 +12,7 @@ import os
 import sys
 
 import partcad as pc
+from partcad import shape_envelope
 
 from OCP.BRepGProp import BRepGProp
 from OCP.GProp import GProp_GProps
@@ -60,13 +61,41 @@ def test_assembly_cache_value_is_a_nested_tree():
     assert leaf is not None and leaf["name"] and leaf["label"] and leaf["brep"]
 
 
+def _brep_payloads(tree):
+    """Every "brep" field in the tree, the root's own first."""
+    if isinstance(tree, list):
+        for item in tree:
+            yield from _brep_payloads(item)
+        return
+    if not isinstance(tree, dict):
+        return
+    if "brep" in tree:
+        yield tree["brep"]
+    for child in tree.get("assembly", []):
+        yield from _brep_payloads(child)
+
+
 def test_assembly_tree_round_trips_to_the_same_geometry():
     ctx = pc.init("examples")
     asm = ctx._get_assembly("//produce_assembly_assy:logo_embedded")
     compound = asyncio.run(asm.get_wrapped(ctx))
     tree = asyncio.run(asm.get_cache_value(ctx, compound))
 
-    # Through the JSON the cache stores, the tree decodes to the same geometry.
-    # get_wrapped() returns a BREP envelope now, so decode it before measuring.
-    rebuilt = ocp_serialize.decode_shape(json.loads(json.dumps(tree)))
+    # In memory a BREP payload is the compressed bytes themselves; base64 is
+    # applied only where the value has to become JSON text. That boundary is
+    # shape_envelope.dumps()/loads(), which is what the shape cache serializes
+    # through - so the round trip goes through it, not through bare json, which
+    # has no byte type to carry the payload in the first place.
+    text = shape_envelope.dumps(tree)
+
+    # What it produced really is JSON, and every payload in it really is text:
+    # nothing bytes-shaped is left for the cache - or a wrapper - to choke on.
+    raw = json.loads(text)
+    payloads = list(_brep_payloads(raw))
+    assert payloads, "the encoded tree carries no BREP payload at all"
+    assert all(isinstance(payload, str) for payload in payloads), "a BREP payload survived as non-text"
+
+    # And it comes back as the same geometry. get_wrapped() returns a BREP
+    # envelope too, so decode that as well before measuring.
+    rebuilt = ocp_serialize.decode_shape(shape_envelope.loads(text))
     assert abs(_volume(rebuilt) - _volume(ocp_serialize.decode_shape(compound))) < 1e-6
