@@ -43,7 +43,9 @@ removed until the command exits. The VS Code extension's "Update PartCAD" runs `
 drift apart.
 
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
-`init` (creates the workspace, before any package or context exists), `config` (prints the client's resolved
+`init` (creates the workspace, before any package or context exists, and adds the `Render` command to the
+repository's `.vscode/launch.json` — see `partcad/src/partcad/launch_config.py`; the daemon's `init` operation
+does the same, so both entry points leave the same repository behind), `config` (prints the client's resolved
 `user_config` with its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses this host), and **all of
 `pc system ...`** — `system status`, `system reset` and `system set telemetry ...` act on the machine the CLI
 runs on, by definition: its internal state directory, its user configuration — and `upgrade`, which replaces

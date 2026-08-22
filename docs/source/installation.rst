@@ -151,6 +151,10 @@ Option                         Environment variable             Default
 ``--bin-dir <dir>``            ``PARTCAD_BIN_DIR``              ``~/.local/bin``
 ``--base-url <url>``           ``PARTCAD_BASE_URL``             the GitHub release for the version
 ``--repository <owner/name>``  ``PARTCAD_REPOSITORY``           ``partcad/partcad``
+``--ide``                      ``PARTCAD_IDE``                  off, the command line tools alone
+``--app-dir <dir>``            ``PARTCAD_APP_DIR``              MacOS, with ``--ide``: ``/Applications``
+                                                                when it is writable, ``~/Applications``
+                                                                otherwise
 ============================== ================================ ==========================================
 
 Installing several versions side by side is fine: each one unpacks into its own directory, and the
@@ -266,6 +270,97 @@ The bundle provides the command line tools only. The ``partcad`` Python module f
 a wheel: ``python -m pip install -U partcad``.
 
 
+
+.. _partcad-ide:
+
+==================================
+PartCAD IDE (no Python, no editor)
+==================================
+
+The PartCAD IDE is one application that holds all of it: the editor, the PartCAD extension, the
+extensions that go with it, and the same command line tools as the standalone build above. Nothing to
+configure, no Python to install, no list of extensions to work through. It opens in the PartCAD
+workbench.
+
+Use it if PartCAD is what you want to do rather than something you want to add to an editor you already
+have. If you already work in Visual Studio Code, install
+:ref:`the extension <vscode-extension>` there instead.
+
+Install
+=======
+
+On Linux and MacOS:
+
+.. code-block:: shell
+
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --ide
+
+The same installer as the command line tools, with the same options: everything described for the
+:ref:`standalone command line tools <standalone-cli>` applies here too. On Linux it unpacks into
+``~/.local/share/partcad/<version>-ide`` and adds an entry to the applications menu. On MacOS it puts
+``PartCAD IDE.app`` into ``/Applications``, or into ``~/Applications`` when the first is not writable;
+``--app-dir`` chooses. Either way ``partcad-ide`` is linked into ``~/.local/bin``, along with ``pc`` and
+``partcad`` from the copy inside the IDE -- so the command line tools are installed too, without a second
+download.
+
+On Windows, download ``partcad-ide-<version>-windows-x86_64-setup.exe`` from the
+`GitHub release <https://github.com/partcad/partcad/releases>`_ and run it. It installs for the current
+user without asking for administrator rights, into ``%LOCALAPPDATA%\Programs\PartCAD IDE``, and offers
+"for all users" as a choice. It adds a Start menu entry, and -- unless you turn the option off -- puts
+``partcad-ide`` and ``pc`` on your ``PATH``. Uninstall it from "Apps & features" like any other
+application.
+
+The installer is not signed, so SmartScreen shows a warning: choose "More info", then "Run anyway".
+
+``partcad-ide-<version>-windows-x86_64.zip`` is published next to it, for unpacking somewhere and running
+``partcad-ide.exe`` without installing anything.
+
+The download is around 1GB: an editor, a Python interpreter, the OpenCASCADE geometry kernel and the
+extensions, all in one archive.
+
+What is inside
+==============
+
+* The editor: `VSCodium <https://vscodium.com/>`_, the freely licensed build of the same source Visual
+  Studio Code is built from, with its extensions coming from `Open VSX <https://open-vsx.org/>`_.
+* The PartCAD extension, and the extensions PartCAD works with -- Python, the OCP CAD viewer, YAML and
+  the rest of the list in ``.vscode/extensions.json``.
+* The PartCAD command line tools, the same ones the standalone bundle installs, including OpenSCAD on
+  Linux and Windows.
+
+Pylance is not among them: it is proprietary and licensed for use only with Microsoft's products.
+Open-source type checking for Python is included in its place.
+
+The IDE keeps its settings, its state and any extension you install in ``~/.partcad-ide``, so it shares
+nothing with a Visual Studio Code or VSCodium on the same machine. PartCAD's own cache and configuration
+stay in ``~/.partcad``, shared with the command line tools, so a package installed in a terminal is
+there in the IDE.
+
+On MacOS, ``partcad-ide-<version>-macos-arm64.dmg`` is published as well: open it and drag the
+application to Applications, the usual way.
+
+.. note::
+
+  The MacOS application is signed ad-hoc rather than notarized. ``install.sh`` clears the quarantine
+  flag on the copy it installs; if you unpack the archive by hand instead, MacOS refuses to open it
+  until you do the same:
+  ``xattr -dr com.apple.quarantine "/Applications/PartCAD IDE.app"``.
+
+Upgrade and uninstall
+=====================
+
+Upgrading is installing again. Uninstalling is the same command as for the command line tools, and
+removes the application, the links and the menu entry:
+
+.. code-block:: shell
+
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --uninstall
+
+The IDE does not update itself. It is built from a VSCodium release rather than being one, and its
+update server is deliberately absent -- a self-update would replace the PartCAD extension and tools
+inside it with a plain editor.
+
+
 =====================================
 Latest Development Version of PartCAD
 =====================================
@@ -324,9 +419,14 @@ Without the extra, linting Python files reports an error naming the package to
 install. Everything else in PartCAD, including linting of YAML files, works
 without it.
 
+.. _vscode-extension:
+
 ============================
 Visual Studio Code extension
 ============================
+
+For an editor you already have. To get the extension, the tools and an editor in one download instead,
+see :ref:`the PartCAD IDE <partcad-ide>`.
 
 This extension is available through the VS Code marketplace.
 The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_.

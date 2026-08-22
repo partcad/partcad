@@ -55,6 +55,13 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality.
 
+* [partcad-ide-standalone](./partcad-ide-standalone/AGENTS.md):
+
+  The **PartCAD IDE**: a rebranded [VSCodium](https://vscodium.com/) build carrying the extension above, the
+  extensions this repository recommends, and the standalone command line tools -- one application to download,
+  for users who have no Python and no editor set up. It always opens in the PartCAD workbench. Installed with
+  `install.sh --ide`.
+
 * [README.md](./README.md) and [docs](./docs/README.md):
 
   Human-friendly documentation.
@@ -127,10 +134,12 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 
 ### Packaging
 
-Two artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI) and the standalone
-PyInstaller bundles for users who have no Python. Adding a runtime dependency, an optional extra, or a file
-that is read at runtime can be invisible to the frozen bundle and break it while the wheels stay fine — see
-`dev-tools/pyinstaller/README.md` before doing any of those.
+Three artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI), the standalone
+PyInstaller bundles for users who have no Python, and the PartCAD IDE, which carries those bundles inside it.
+Adding a runtime dependency, an optional extra, or a file that is read at runtime can be invisible to the frozen
+bundle and break it while the wheels stay fine — see `dev-tools/pyinstaller/README.md` before doing any of
+those. Changing `.vscode/extensions.json` changes what the IDE ships with — see
+`partcad-ide-standalone/README.md`.
 
 ### Committing
 
