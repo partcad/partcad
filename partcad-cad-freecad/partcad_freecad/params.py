@@ -17,6 +17,7 @@ testable without FreeCAD.
 """
 
 import json
+import math
 from typing import Any, Optional
 
 TYPE_STRING = "string"
@@ -83,6 +84,11 @@ class ParamSpec:
         # Compared as floats so a fractional bound on an int parameter is not
         # truncated into a bound that lets the value through.
         number = float(value)
+        # Every comparison with a NaN is false, so it would pass any bound; an
+        # infinity passes whichever bound is not declared. Neither is a length
+        # a CAD script can use, and neither survives a round trip through JSON.
+        if not math.isfinite(number):
+            raise ValueError("%s is not a finite number" % value)
         if self.min is not None and number < float(self.min):
             raise ValueError("%s is below the minimum of %s" % (value, self.min))
         if self.max is not None and number > float(self.max):

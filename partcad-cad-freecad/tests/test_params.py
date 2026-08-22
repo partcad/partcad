@@ -98,6 +98,16 @@ def test_a_parameter_without_a_range_accepts_anything_of_its_type():
     assert params.ParamSpec("width", params.TYPE_FLOAT).coerce("-1e6") == -1e6
 
 
+def test_a_non_finite_number_is_rejected():
+    # A NaN compares false against every bound, and an infinity only against
+    # the bound that is declared -- so neither is caught by the range checks.
+    spec = params.ParamSpec("width", params.TYPE_FLOAT, 5.0, min=1.0)
+
+    for text in ("nan", "inf", "-inf"):
+        with pytest.raises(ValueError, match="finite"):
+            spec.coerce(text)
+
+
 def test_a_fractional_bound_on_an_int_is_not_truncated():
     spec = params.ParamSpec("count", params.TYPE_INT, 2, min=1.5)
 
