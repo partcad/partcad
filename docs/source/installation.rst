@@ -152,7 +152,9 @@ Option                         Environment variable             Default
 ``--base-url <url>``           ``PARTCAD_BASE_URL``             the GitHub release for the version
 ``--repository <owner/name>``  ``PARTCAD_REPOSITORY``           ``partcad/partcad``
 ``--ide``                      ``PARTCAD_IDE``                  off, the command line tools alone
-``--app-dir <dir>``            ``PARTCAD_APP_DIR``              ``/Applications`` (MacOS, with ``--ide``)
+``--app-dir <dir>``            ``PARTCAD_APP_DIR``              MacOS, with ``--ide``: ``/Applications``
+                                                                when it is writable, ``~/Applications``
+                                                                otherwise
 ============================== ================================ ==========================================
 
 Installing several versions side by side is fine: each one unpacks into its own directory, and the

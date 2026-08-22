@@ -93,18 +93,29 @@ fail() {
   exit 1
 }
 
+# An option that takes a value must be given one: an empty '--with-cli-bundle'
+# would otherwise take the "no tools given" path and only warn, and the released
+# IDE would ship without the command line tools the operator asked for. A missing
+# one would fail in `shift 2` with the shell's message rather than ours.
+require_value() {
+  [ -n "${2:-}" ] || fail "$1 needs a value (try --help)"
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
   --with-cli-bundle)
-    CLI_BUNDLE="${2:-}"
+    require_value "$1" "${2:-}"
+    CLI_BUNDLE="$2"
     shift 2
     ;;
   --vsix)
-    EXTENSION_VSIX="${2:-}"
+    require_value "$1" "${2:-}"
+    EXTENSION_VSIX="$2"
     shift 2
     ;;
   --vscodium-version)
-    VSCODIUM_VERSION="${2:-}"
+    require_value "$1" "${2:-}"
+    VSCODIUM_VERSION="$2"
     shift 2
     ;;
   --no-extensions)
@@ -184,11 +195,14 @@ else
   EXE_SUFFIX=""
 fi
 
+# Every `python -c` below takes its values through `sys.argv`. Interpolating them
+# into the source would break the program on a path or a version that contains a
+# quote or a backslash, and would run whatever such a value spelled out.
 VERSION="$("${PYTHON}" -c "
-import re, pathlib
-source = pathlib.Path('${REPO_ROOT}/partcad/src/partcad/__init__.py').read_text()
+import re, pathlib, sys
+source = pathlib.Path(sys.argv[1]).read_text()
 print(re.search(r'__version__: str = \"([^\"]+)\"', source).group(1))
-")"
+" "${REPO_ROOT}/partcad/src/partcad/__init__.py")"
 
 log "==> Building the PartCAD IDE ${VERSION} for ${PLATFORM}"
 
@@ -206,11 +220,11 @@ fi
 
 if [ -z "${VSCODIUM_VERSION}" ]; then
   VSCODIUM_VERSION="$("${PYTHON}" -c "
-import json, sys
-sys.path.insert(0, '${SCRIPT_DIR}/tools')
+import sys
+sys.path.insert(0, sys.argv[1])
 import jsonc
-print(jsonc.load('${PIN_FILE}').get('version') or '')
-")"
+print(jsonc.load(sys.argv[2]).get('version') or '')
+" "${SCRIPT_DIR}/tools" "${PIN_FILE}")"
 fi
 
 if [ -z "${VSCODIUM_VERSION}" ]; then
@@ -237,16 +251,16 @@ else
 fi
 
 ACTUAL_SHA256="$("${PYTHON}" -c "
-import hashlib, pathlib
-print(hashlib.sha256(pathlib.Path('${VSCODIUM_ARCHIVE}').read_bytes()).hexdigest())
-")"
+import hashlib, pathlib, sys
+print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
+" "${VSCODIUM_ARCHIVE}")"
 
 EXPECTED_SHA256="$("${PYTHON}" -c "
 import sys
-sys.path.insert(0, '${SCRIPT_DIR}/tools')
+sys.path.insert(0, sys.argv[1])
 import jsonc
-print(jsonc.load('${PIN_FILE}').get('checksums', {}).get('${VSCODIUM_ASSET}') or '')
-")"
+print(jsonc.load(sys.argv[2]).get('checksums', {}).get(sys.argv[3]) or '')
+" "${SCRIPT_DIR}/tools" "${PIN_FILE}" "${VSCODIUM_ASSET}")"
 
 if [ -n "${EXPECTED_SHA256}" ]; then
   [ "${EXPECTED_SHA256}" = "${ACTUAL_SHA256}" ] ||
@@ -264,16 +278,16 @@ fi
 if [ "${RECORD_PIN}" = "1" ]; then
   "${PYTHON}" -c "
 import json, sys
-sys.path.insert(0, '${SCRIPT_DIR}/tools')
+sys.path.insert(0, sys.argv[1])
 import jsonc
 
-pin = jsonc.load('${PIN_FILE}')
-pin['version'] = '${VSCODIUM_VERSION}'
-pin.setdefault('checksums', {})['${VSCODIUM_ASSET}'] = '${ACTUAL_SHA256}'
-with open('${PIN_FILE}', 'w', encoding='utf-8') as handle:
+pin = jsonc.load(sys.argv[2])
+pin['version'] = sys.argv[3]
+pin.setdefault('checksums', {})[sys.argv[4]] = sys.argv[5]
+with open(sys.argv[2], 'w', encoding='utf-8') as handle:
     json.dump(pin, handle, indent=2, sort_keys=True)
     handle.write('\n')
-"
+" "${SCRIPT_DIR}/tools" "${PIN_FILE}" "${VSCODIUM_VERSION}" "${VSCODIUM_ASSET}" "${ACTUAL_SHA256}"
   # The comments explaining the file are lost when it is rewritten as plain
   # JSON, and putting them back by hand is the point of showing this.
   warn "vscodium.json was rewritten without its comments; restore them before committing."
@@ -346,12 +360,12 @@ build_bootstrap_vsix() {
   # The bootstrap extension has no version of its own: it is part of the IDE,
   # and saying so makes an installed IDE self-describing in the Extensions view.
   "${PYTHON}" -c "
-import json, pathlib
-manifest = pathlib.Path('${staging}/package.json')
+import json, pathlib, sys
+manifest = pathlib.Path(sys.argv[1])
 package = json.loads(manifest.read_text(encoding='utf-8'))
-package['version'] = '${VERSION}'
+package['version'] = sys.argv[2]
 manifest.write_text(json.dumps(package, indent=2) + '\n', encoding='utf-8')
-"
+" "${staging}/package.json" "${VERSION}"
   (cd "${staging}" && npx --yes @vscode/vsce package --no-dependencies --out "${STAGE_DIR}/partcad-ide-bootstrap.vsix" >/dev/null)
 }
 
@@ -424,11 +438,11 @@ if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
       FAILED_OPTIONAL="${FAILED_OPTIONAL} ${identifier}"
     fi
   done < <("${PYTHON}" -c "
-import json
-plan = json.load(open('${PLAN_FILE}', encoding='utf-8'))
+import json, sys
+plan = json.load(open(sys.argv[1], encoding='utf-8'))
 for entry in plan['install']:
     print('\x1f'.join([entry['id'], entry['source'], entry['url'] or '', entry.get('path', ''), str(entry['required'])]))
-")
+" "${PLAN_FILE}")
 
   [ -z "${FAILED_REQUIRED}" ] || fail "these extensions are required and could not be installed:${FAILED_REQUIRED}"
   if [ -n "${FAILED_OPTIONAL}" ]; then
@@ -504,10 +518,10 @@ macos)
   # bundle, whose name comes from Info.plist and whose directory is renamed as a
   # whole further down.
   BUNDLE_EXECUTABLE="$("${PYTHON}" -c "
-import plistlib
-with open('${APP_ROOT}/Contents/Info.plist', 'rb') as handle:
+import plistlib, sys
+with open(sys.argv[1], 'rb') as handle:
     print(plistlib.load(handle)['CFBundleExecutable'])
-")"
+" "${APP_ROOT}/Contents/Info.plist")"
   EXECUTABLE="${APP_ROOT}/Contents/MacOS/${BUNDLE_EXECUTABLE}"
   ;;
 esac
@@ -592,10 +606,10 @@ if [ "${OS_NAME}" = "macos" ]; then
   # for a user who installs it, and README.md says what to do otherwise.
   if command -v codesign >/dev/null 2>&1; then
     log "==> Signing the application bundle (ad-hoc)"
-    codesign --force --deep --sign - "${APP_ROOT}" >/dev/null 2>&1 ||
-      warn "ad-hoc signing failed; MacOS will refuse to open this bundle"
+    codesign --force --deep --sign - "${APP_ROOT}" >/dev/null ||
+      fail "ad-hoc signing failed; MacOS will refuse to open this bundle"
   else
-    warn "no codesign; MacOS will refuse to open this bundle"
+    fail "no codesign; MacOS will refuse to open this bundle"
   fi
 fi
 
@@ -636,12 +650,12 @@ fi
 # the one `install.sh` verifies with.
 checksum() {
   (cd "$(dirname "$1")" && "${PYTHON}" -c "
-import hashlib, pathlib
-name = '$(basename "$1")'
+import hashlib, pathlib, sys
+name = sys.argv[1]
 digest = hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()
 pathlib.Path(name + '.sha256').write_text(f'{digest}  {name}\n', encoding='utf-8')
 print(digest)
-")
+" "$(basename "$1")")
 }
 
 PRODUCED=""

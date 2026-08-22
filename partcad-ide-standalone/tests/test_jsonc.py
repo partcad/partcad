@@ -6,6 +6,10 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import json
+
+import pytest
+
 import jsonc
 from conftest import REPO_ROOT
 
@@ -16,6 +20,18 @@ def test_line_comments_are_dropped():
 
 def test_block_comments_are_dropped():
     assert jsonc.loads('{/* which */ "a": /* go */ 1 /* anywhere */}') == {"a": 1}
+
+
+def test_a_block_comment_separates_the_tokens_around_it():
+    # Removing it outright would turn this into the number 12 and read back a
+    # value the file never stated.
+    with pytest.raises(json.JSONDecodeError):
+        jsonc.loads('{"a": 1/* between */2}')
+
+
+def test_an_unterminated_block_comment_is_an_error():
+    with pytest.raises(ValueError):
+        jsonc.loads('{"a": 1 /* and the rest of the file')
 
 
 def test_trailing_commas_are_dropped():

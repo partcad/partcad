@@ -357,13 +357,17 @@ if [ "${IDE}" = "1" ]; then
     if [ -f "${TARGET}/partcad-ide.png" ]; then
       cp "${TARGET}/partcad-ide.png" "${ICON_DIR}/partcad-ide.png"
     fi
+    # The Exec value is tokenized on whitespace, so a launcher path that carries
+    # a space -- or any other character the Desktop Entry specification reserves
+    # -- has to be quoted, with '"', '`', '$' and '\\' escaped inside the quotes.
+    IDE_EXEC="$(printf '%s' "${TARGET}/partcad-ide" | sed 's/["`$\\]/\\&/g')"
     cat >"${DESKTOP_DIR}/partcad-ide.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=PartCAD IDE
 GenericName=CAD Editor
 Comment=Design manufacturable products with PartCAD
-Exec=${TARGET}/partcad-ide %F
+Exec="${IDE_EXEC}" %F
 Icon=partcad-ide
 Categories=Development;Engineering;Graphics;
 Keywords=partcad;cad;

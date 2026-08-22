@@ -59,7 +59,13 @@ def strip_json_comments(text: str) -> str:
                 continue
             if text[i + 1] == "*":
                 end = text.find("*/", i + 2)
-                i = length if end == -1 else end + 2
+                if end == -1:
+                    raise ValueError("unterminated block comment")
+                # A space, not nothing: a comment separates the tokens around it,
+                # and dropping it outright turns '1/* c */2' into the number 12
+                # rather than into a parse error.
+                out.append(" ")
+                i = end + 2
                 continue
 
         out.append(char)
