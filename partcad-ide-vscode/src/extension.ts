@@ -551,9 +551,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 // eslint-disable-next-line @typescript-eslint/naming-convention
                 CadQuery: 'cadquery',
                 build123d: 'build123d',
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                Chili3D: 'chili3d',
             };
             const partType = await vscode.window.showQuickPick(
-                ['STEP', 'STL', '3MF', 'OpenSCAD', 'CadQuery', 'build123d'],
+                ['STEP', 'STL', '3MF', 'OpenSCAD', 'CadQuery', 'build123d', 'Chili3D'],
                 {
                     canPickMany: false,
                     title: 'What type of part would you like to create?',
@@ -573,6 +575,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 filters[`${partType}`] = ['3mf'];
             } else if (partType === 'OpenSCAD') {
                 filters[`${partType}`] = ['scad'];
+                hasTemplates = true;
+            } else if (partType === 'Chili3D') {
+                filters[`${partType}`] = ['chili'];
                 hasTemplates = true;
             } else {
                 filters[`${partType}`] = ['py'];

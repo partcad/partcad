@@ -8,7 +8,7 @@ from .exception import PartFactoryError
 
 
 class PartFactoryObj(PartFactoryFile):
-    PYTHON_RUNTIME_VERSION = "3.10"
+    PYTHON_SANDBOX_VERSION = "3.10"
 
     def __init__(self, ctx, source_project, target_project, config):
         """
@@ -31,7 +31,7 @@ class PartFactoryObj(PartFactoryFile):
 
         with pc_logging.Action("OBJ", part.project_name, part.name):
             if self.runtime is None:
-                self.runtime = self.ctx.get_python_runtime(self.PYTHON_RUNTIME_VERSION)
+                self.runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
 
             wrapper_path = wrapper.get("obj.py")
             request = {

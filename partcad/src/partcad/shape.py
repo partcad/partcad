@@ -52,6 +52,7 @@ PART_EXTENSION_MAPPING = {
     "gltf": "json",
     "cadquery": "py",
     "build123d": "py",
+    "chili3d": "chili",
     "sdf": "py",
     "scad": "scad",
 }
@@ -73,6 +74,7 @@ LIVE_OBJECT_PART_TYPES = frozenset({"build123d", "cadquery"})
 UNEXPORTABLE_PART_TYPES = {
     "scad": "PartCAD can read OpenSCAD but cannot write it",
     "sdf": "PartCAD can read SDF scripts but cannot write them",
+    "chili3d": "PartCAD can read Chili3D scripts but cannot write them",
 }
 
 # Every part type named by the extension mappings that 'Shape.convert()' can
@@ -130,6 +132,11 @@ class Shape(ShapeConfiguration):
 
         # Cache behavior
         self.cacheable = config.get("cache", True)
+        # Optional: what the environment this shape is produced in consists
+        # of, for the shapes that are produced in one at all (see
+        # set_environment_cache_key). None for a shape that is composed rather
+        # than rendered, such as an assembly.
+        self.environment_cache_key = None
         self.cache_dependencies = []
         self.cache_dependencies_broken = False
         self.cache_dependencies_ignore = self.config.get("cache_dependencies_ignore", True)
@@ -147,6 +154,34 @@ class Shape(ShapeConfiguration):
                 if key in self.config:
                     cad_config[key] = self.config[key]
             self.hash.add_dict(cad_config)
+
+    def set_environment_cache_key(self, environment_cache_key: str) -> None:
+        """Record the environment this shape is produced in, and cache by it.
+
+        A shape produced by a sandbox comes from an interpreter of some version
+        with dependencies of some versions, and the result belongs to that
+        combination: move the package to another interpreter or another CAD
+        library and the shape has to be built again rather than read back from
+        what the previous one produced.
+
+        Every kind of shape can have one. A part written as a script obviously
+        does, but so does a sketch, and so does a part read from a CAD file -
+        the importer that turns a STEP file into a BREP is itself a script in a
+        sandbox. What does not is a shape that is composed rather than rendered,
+        such as an assembly, whose pieces each carry their own.
+
+        None of it is visible to the hash otherwise. Only 'parameters', 'offset'
+        and 'scale' are taken from the configuration above, and the environment
+        is not spelled out in a shape's configuration anyway - it is resolved
+        from the package's settings, the shape's, and the versions PartCAD
+        itself supplies.
+
+        Set through ShapeFactory.apply_environment_cache_key() as a shape is
+        created, from 'sandbox_versions.environment_cache_key()'. Must happen
+        before the hash is used, which creation time guarantees.
+        """
+        self.environment_cache_key = environment_cache_key
+        self.hash.add_string(environment_cache_key)
 
     def matches(self, keyword: str) -> bool:
         if not keyword:
@@ -553,6 +588,10 @@ class Shape(ShapeConfiguration):
             info["Ports"] = self.with_ports.info()
 
         info["Hash"] = self.hash.get()
+        if self.environment_cache_key is not None:
+            # Part of that hash, and the part of it a user is most likely to be
+            # asking about when a shape re-renders instead of coming from cache.
+            info["Environment"] = self.environment_cache_key
         info["Dependencies"] = self.cache_dependencies
         return info
 
