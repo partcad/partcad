@@ -42,6 +42,17 @@ reported rather than fatal, because the new version is installed beside the old 
 removed until the command exits. The VS Code extension's "Update PartCAD" runs `pc upgrade`, so the two cannot
 drift apart.
 
+**`pc lint` sits on both sides of the line, one mode each.** `pc lint [-P/-r]` checks a *package*: which
+packages, resolved how, with which files, is the package graph, so it is a thin daemon client like any other.
+`pc lint --file` checks the *files named on the command line*, in this process: an ASSY file is a Jinja2
+template rendered to YAML and matched against a schema, which needs no package graph, no CAD runtime and no
+context — and with `--stdin` the content is a buffer an editor has not saved, which the daemon cannot see at
+all. There is deliberately no RPC method for it: sending it would ship the client's own file across a wire to
+have it read back, and would leave the editor silent exactly when the package fails to load *because* of that
+file. The checker (`partcad_client.lint`, over `partcad_utils.assy_lint`) is the same one the daemon runs over a
+package, so an editor and CI cannot disagree. The VS Code extension runs `pc lint --file`, so the two cannot
+drift apart either.
+
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
 `init` (creates the workspace, before any package or context exists, and adds the `Render` command to the
 repository's `.vscode/launch.json` — see `partcad/src/partcad/launch_config.py`; the daemon's `init` operation

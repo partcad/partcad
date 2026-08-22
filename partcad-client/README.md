@@ -1,8 +1,8 @@
 # partcad-client
 
 The client side of the [PartCAD](https://github.com/partcad/partcad) ecosystem:
-finding and talking to the daemon that serves a workspace, and upgrading this
-installation of PartCAD.
+finding and talking to the daemon that serves a workspace, checking the files
+this machine is editing, and upgrading this installation of PartCAD.
 
 Everything here acts on **this machine**, from the process running out of it.
 That is what makes it a client package and not a shared one, and why none of it
@@ -17,9 +17,10 @@ belongs in the daemon:
 
 The CLI (`partcad-cli`) is the reference caller. The VS Code extension reaches
 the same code by running `pc` — `pc daemon start` to find the daemon,
-`pc daemon stop` to stop it, `pc upgrade` to upgrade the installation — rather than
-reimplementing any of it in TypeScript, because a second copy of these rules is a
-copy that can disagree.
+`pc daemon stop` to stop it, `pc upgrade` to upgrade the installation,
+`pc lint --file` to check the file being edited — rather than reimplementing any
+of it in TypeScript, because a second copy of these rules is a copy that can
+disagree.
 
 ## Contents
 
@@ -30,11 +31,30 @@ copy that can disagree.
   to it (`connect`, `DaemonClient`).
 - `selfupdate` — replacing this installation, whether it is the Python wheels or
   the standalone bundle (see below).
+- `lint` — checking the files this process was handed (see below).
 
 The address itself — which socket serves which workspace, and the liveness probe
 — comes from `partcad-utils`, because it is the rendezvous the *daemon* has to
 agree on too. `daemon` re-exports it, so a client has one import for everything
 about daemons.
+
+## Checking a file
+
+`lint` is what `pc lint --file` runs, and — through it — what the VS Code
+extension runs while somebody types in an ASSY file.
+
+It is a client operation for the same reason as the rest of this package. The
+file belongs to this machine and is often not on disk at all, but a buffer an
+editor has not saved; checking it needs no package graph, no CAD runtime and no
+loaded context. Sending it to the daemon would mean shipping the client's own
+file across a wire to have it read back, and would leave the editor silent
+exactly when the package fails to load *because* of the file being typed into.
+There is deliberately no RPC method for it.
+
+The checking itself is `partcad_utils.assy_lint`, shared with the daemon's
+package-wide lint so an editor and CI cannot disagree about a file. What lives
+here is the client's half: which files can be checked, and whether the content
+comes from the disk or from the caller.
 
 ## Updating PartCAD itself
 

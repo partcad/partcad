@@ -521,3 +521,132 @@ Feature: `pc lint` command
     When I run "pc lint"
     Then the command should exit with a status code of "1"
     And STDOUT should contain "$.parts.component.implements.iface1: {'invalid_field': True} is not valid under any of the given schemas"
+
+  @success
+  Scenario: Valid ASSY file passes lint check
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package with an assembly
+      assemblies:
+        logo:
+          type: assy
+      """
+    And a file named "logo.assy" with content:
+      """
+      links:
+        - part: bone
+          package: //pub/examples
+          location: [[0, 0, 0], [0, 0, 1], 0]
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @success
+  Scenario: Jinja2 in an ASSY file is not mistaken for broken YAML
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package with a parametrized assembly
+      assemblies:
+        desk:
+          type: assy
+      """
+    And a file named "desk.assy" with content:
+      """
+      links:
+        {% for x in [0, 1] %}
+        - part: leg
+          location: [[{{ x }}, 0, 0], [0, 0, 1], 0]
+          params:
+            length: {{ param_height }}
+        {% endfor %}
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @failure
+  Scenario: Misspelled ASSY property gives a warning at its line
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package with an assembly
+      assemblies:
+        logo:
+          type: assy
+      """
+    And a file named "logo.assy" with content:
+      """
+      links:
+        - part: bone
+          locaton: [[0, 0, 0], [0, 0, 1], 0]
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "logo.assy:3:5: unexpected property 'locaton'"
+
+  @failure
+  Scenario: Unclosed Jinja2 block in an ASSY file is an error
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package with an assembly
+      assemblies:
+        desk:
+          type: assy
+      """
+    And a file named "desk.assy" with content:
+      """
+      links:
+        {% for x in [0, 1] %}
+        - part: leg
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "desk.assy:2:1: Jinja2 template error"
+
+  @failure
+  Scenario: ASSY node that places nothing is an error
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package with an assembly
+      assemblies:
+        logo:
+          type: assy
+      """
+    And a file named "logo.assy" with content:
+      """
+      links:
+        - name: nothing
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "logo.assy:2:5: expected at least one of 'links', 'part', 'assembly'"
+
+  @success
+  Scenario: `pc lint --file` checks a named file without a package
+    Given a file named "logo.assy" with content:
+      """
+      links:
+        - part: bone
+          location: [[0, 0, 0], [0, 0, 1], 0]
+      """
+    When I run "pc lint --file logo.assy"
+    Then the command should exit with a status code of "0"
+
+  @failure
+  Scenario: `pc lint --file` reports findings at their source position
+    Given a file named "logo.assy" with content:
+      """
+      links:
+        - name: nothing
+      """
+    When I run "pc lint --file logo.assy"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "logo.assy:2:5: expected at least one of 'links', 'part', 'assembly'"
+
+  @failure
+  Scenario: `pc lint --file` rejects being mixed with the package options
+    Given a file named "logo.assy" with content:
+      """
+      links:
+        - part: bone
+      """
+    When I run "pc lint --file logo.assy --recursive"
+    Then the command should exit with a status code of "2"

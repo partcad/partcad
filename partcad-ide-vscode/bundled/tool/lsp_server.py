@@ -255,6 +255,33 @@ def test_obj(params: lsp.ExecuteCommandParams = None):
     _ops().test(session, {"package": arg["packageName"], "object": arg["objectName"]})
 
 
+# partcad.lintFile checks one ASSY file and answers with positioned diagnostics.
+#
+# Deliberately not an operation on the shared core: checking a file is the
+# client's own work on the client's own file -- often an unsaved buffer -- and
+# needs no context, no package graph and no CAD runtime. This server is what the
+# extension runs locally under the "python" backend, so the check happens right
+# here; under the "service" backend the extension runs `pc lint --file` instead.
+# Either way nothing about it crosses a client-to-service boundary, which is also
+# why it keeps working when the package will not load because of this very file.
+@LSP_SERVER.command("partcad.lintFile")
+def lint_file(params: lsp.ExecuteCommandParams = None):
+    arg = params[0]
+    if isinstance(arg, str):
+        arg = {"path": arg}
+    path = arg.get("path") or ""
+    try:
+        from partcad_client import lint as client_lint
+
+        report = client_lint.check_file(path, arg.get("text"))
+        return {"path": path, "diagnostics": [d.to_dict() for d in report.diagnostics]}
+    except Exception as e:  # pylint: disable=broad-except
+        # PartCAD may not be installed yet (pre-bootstrap), or the file may have
+        # gone. Stay silent rather than turn a background check into a popup.
+        log_to_output("Failed to lint %s: %s" % (path, e))
+        return None
+
+
 @LSP_SERVER.command("partcad.getStats")
 def report_stats(params: lsp.ExecuteCommandParams = None):
     session = _active_session()
@@ -412,8 +439,10 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     """LSP handler for partcad.install command.
 
     Bootstraps the PartCAD service module (and, through it, `partcad`) into the
-    interpreter. This is specific to the "python" backend: the frozen JSON-RPC
-    service already carries PartCAD.
+    interpreter, together with the client package this server needs for the work
+    that is not the daemon's -- upgrading the installation, and checking the file
+    being edited. This is specific to the "python" backend: the frozen JSON-RPC
+    service already carries all of it.
 
     Once PartCAD *is* installed, the update that happens is the one `pc upgrade`
     performs: `partcad_client.selfupdate`, so the extension and the CLI cannot
@@ -450,6 +479,10 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
                 "--no-input",
                 "--upgrade",
                 "partcad-service-json-rpc",
+                # The client half: `partcad.lintFile` checks the edited file
+                # through it, and `_do_self_update` upgrades through it. Neither
+                # is a dependency of the service, which is the daemon side.
+                "partcad-client",
             ],
             use_stdin=False,
             add_stdout=partcad_log_w_stream,

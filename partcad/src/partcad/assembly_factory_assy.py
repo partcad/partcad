@@ -872,8 +872,9 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
     def _exploded_distance(self, value, connect_to_name):
         """The 'exploded' override of a connection, as a number of millimeters.
 
-        Checked here rather than where the document is generated: an ASSY file is
-        not validated against a schema, and a value that is not a number would
+        Checked here rather than where the document is generated: the ASSY schema
+        (see partcad_utils/schema/assy.json) is checked by `pc lint`, not while
+        the assembly is being built, so a value that is not a number would
         otherwise surface much later, as a ValueError from inside the renderer,
         naming neither the file nor the step it came from. A bad value is
         reported and dropped: it decides how a picture looks, and is no reason to

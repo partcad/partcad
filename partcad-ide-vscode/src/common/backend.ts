@@ -68,19 +68,39 @@ class LspBackend implements PartcadBackend {
     }
 }
 
+/** How this backend reaches the `pc` CLI, and what that CLI may be used for. */
+type CliAccess = {
+    /** The `pc` beside the service executable, when there is one. */
+    cliPath?: string;
+    /** Where to run it: `pc` derives the workspace it acts on from its cwd. */
+    cwd?: string;
+    /**
+     * Whether the connected service is the workspace daemon `pc` manages. False
+     * for the stdio channel, which owns a private process -- `pc daemon stop`
+     * there would stop a daemon this window never connected to. Linting does not
+     * care either way: it acts on a file, not on a daemon.
+     */
+    sharedDaemon?: boolean;
+};
+
 /** Talks to the standalone `partcad-json-rpc` service over a framed connection. */
 class JsonRpcBackend implements PartcadBackend {
     private readonly handlers = new Map<string, ((params: any) => void)[]>();
     private readonly commandDisposables: Disposable[] = [];
     private running = false;
+    private readonly cliPath: string | undefined;
+    private readonly cwd: string;
+    private readonly sharedDaemon: boolean;
 
     constructor(
         private readonly connection: MessageConnection,
         private readonly cleanup: () => void,
         private readonly outputChannel: vscode.LogOutputChannel,
-        private readonly cliPath: string | undefined = undefined,
-        private readonly cwd: string = process.cwd(),
+        cli: CliAccess = {},
     ) {
+        this.cliPath = cli.cliPath;
+        this.cwd = cli.cwd ?? process.cwd();
+        this.sharedDaemon = cli.sharedDaemon ?? false;
         this.connection.onNotification((method: string, params: any) => this.fire(method, params));
         this.connection.onError((e) => traceError(`PartCAD service connection error: ${JSON.stringify(e)}`));
         this.connection.onClose(() => {
@@ -147,11 +167,13 @@ class JsonRpcBackend implements PartcadBackend {
         // waits for the process to be gone rather than for the acknowledgement.
         // Falls back to asking over the wire if `pc` is not reachable, which
         // still gets the daemon to exit -- just without the wait.
-        try {
-            await runCli(this.cliPath, ['daemon', 'stop'], this.cwd, this.outputChannel);
-            return;
-        } catch (e) {
-            traceInfo(`PartCAD: 'pc daemon stop' unavailable (${e}); asking the daemon directly`);
+        if (this.sharedDaemon) {
+            try {
+                await runCli(this.cliPath, ['daemon', 'stop'], this.cwd, this.outputChannel);
+                return;
+            } catch (e) {
+                traceInfo(`PartCAD: 'pc daemon stop' unavailable (${e}); asking the daemon directly`);
+            }
         }
         try {
             await this.connection.sendRequest('daemon.stop', {});
@@ -162,6 +184,28 @@ class JsonRpcBackend implements PartcadBackend {
 
     private send(method: string, params: any): Promise<any> {
         return Promise.resolve(this.connection.sendRequest(method, params));
+    }
+
+    /**
+     * Check one file with `pc lint --file`, in a process of its own.
+     *
+     * The buffer travels on stdin so what is checked is what is on screen, not
+     * what was last saved. Reported back in the shape the LSP backend's command
+     * returns, so the caller cannot tell the two backends apart.
+     */
+    private async lintFile(arg: { path?: string; text?: string }): Promise<{ path: string; diagnostics: any[] }> {
+        const path = arg?.path ?? '';
+        const args = ['lint', '--file', path, ...(arg?.text === undefined ? [] : ['--stdin'])];
+        const stdout = await runCli(this.cliPath, [...args, '--json'], this.cwd, this.outputChannel, undefined, {
+            stdin: arg?.text,
+            // Findings are reported in the JSON; a non-zero exit only repeats
+            // that this file has errors, and rejecting on it would throw the
+            // findings away.
+            allowFailure: true,
+        });
+        const parsed = JSON.parse(stdout);
+        const file = (parsed?.files ?? [])[0];
+        return { path, diagnostics: file?.diagnostics ?? [] };
     }
 
     /**
@@ -202,6 +246,12 @@ class JsonRpcBackend implements PartcadBackend {
         );
         reg('partcad.packagePath', (a) => this.send('package.path', { package: a.packageName, callback: a.callback }));
         reg('partcad.inspectFile', (path) => this.send('inspect.file', { path: typeof path === 'string' ? path : '' }));
+        // Through the CLI, not over this connection. Checking an ASSY file is
+        // the client's own work on the client's own file -- usually one the
+        // editor has not saved -- so it never goes to the daemon, and it keeps
+        // answering when the daemon is down or the package will not load
+        // because of the very file being typed into.
+        reg('partcad.lintFile', (a) => this.lintFile(typeof a === 'string' ? { path: a } : a));
         reg('partcad.testReal', (a) => this.send('test', { package: a.packageName, object: a.objectName }));
         reg('partcad.getStats', () => this.send('info', {}));
         reg('partcad.activate', () => this.send('activate', {}));
@@ -273,22 +323,27 @@ function runCli(
     cwd: string,
     outputChannel: vscode.LogOutputChannel,
     env?: NodeJS.ProcessEnv,
+    options?: { stdin?: string; allowFailure?: boolean },
 ): Promise<string> {
     return new Promise((resolve, reject) => {
         if (!cliPath) {
             reject(new Error('no `pc` executable beside the PartCAD service'));
             return;
         }
-        cp.execFile(cliPath, ['--no-ansi', ...args], { cwd, env }, (err, stdout, stderr) => {
+        const proc = cp.execFile(cliPath, ['--no-ansi', ...args], { cwd, env }, (err, stdout, stderr) => {
             if (stderr) {
                 outputChannel.append(stderr);
             }
-            if (err) {
+            if (err && !options?.allowFailure) {
                 reject(new Error(`pc ${args.join(' ')} failed: ${err.message}: ${stderr}`));
                 return;
             }
             resolve(stdout);
         });
+        // Always closed, with the content when there is any. `pc` never prompts,
+        // so a child left holding an open stdin would only ever be one that
+        // cannot tell "nothing yet" from "nothing at all".
+        proc.stdin?.end(options?.stdin ?? '');
     });
 }
 
@@ -332,7 +387,7 @@ async function connectSocket(
         s.once('error', reject);
     });
     const connection = createMessageConnection(new StreamMessageReader(socket), new StreamMessageWriter(socket));
-    return new JsonRpcBackend(connection, () => socket.destroy(), outputChannel, cliPath, cwd);
+    return new JsonRpcBackend(connection, () => socket.destroy(), outputChannel, { cliPath, cwd, sharedDaemon: true });
 }
 
 function connectStdio(
@@ -369,6 +424,9 @@ function connectStdio(
             }
         },
         outputChannel,
+        // A private service process, so `pc daemon stop` must not be used on it
+        // -- but `pc lint --file` still is: it acts on a file, not on a daemon.
+        { cliPath: cliBeside(execPath), cwd },
     );
 }
 
