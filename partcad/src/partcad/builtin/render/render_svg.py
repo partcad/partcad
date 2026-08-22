@@ -24,6 +24,9 @@ import build123d as b3d
 sys.path.append(os.path.dirname(__file__))
 import wrapper_common
 
+# Two points closer than this are the same point, as far as a drawn line goes.
+TOLERANCE = 1e-9
+
 
 def viewport_origin(request):
     """Where the shape is looked at from, when the request does not say.
@@ -89,6 +92,27 @@ def needs_mesh_normalization(request):
     return request.get("shape_type") == "sdf"
 
 
+def _annotation_edges(annotations):
+    """The line segments to draw on top of the projection, as build123d edges.
+
+    Each annotation is a pair of 3D points in the coordinate system of the shape
+    being rendered. Segments too short to draw are dropped, with a tolerance
+    rather than by exact equality: 'Edge.make_line' rejects two points that are
+    merely very close, and an annotation is decoration - one that cannot be built
+    must not cost the caller the projection it was going to be drawn on.
+    """
+    edges = []
+    for annotation in annotations:
+        start, end = tuple(annotation[0]), tuple(annotation[1])
+        if all(abs(float(a) - float(b)) < TOLERANCE for a, b in zip(start, end)):
+            continue
+        try:
+            edges.append(b3d.Edge.make_line(start, end))
+        except Exception as e:
+            sys.stderr.write("Skipping an annotation from %s to %s: %s\n" % (start, end, e))
+    return edges
+
+
 def process(path, request):
     try:
         wrapped = request["wrapped"]
@@ -98,9 +122,11 @@ def process(path, request):
         b3d_obj = b3d.Solid.make_box(1, 1, 1)
         b3d_obj.wrapped = wrapped
 
+        origin = viewport_origin(request)
+        up = viewport_up(request)
         visible, _hidden = b3d_obj.project_to_viewport(
-            viewport_origin=viewport_origin(request),
-            viewport_up=viewport_up(request),
+            viewport_origin=origin,
+            viewport_up=up,
         )
         max_dimension = max(*b3d.Compound(children=visible).bounding_box().size)
         if max_dimension == 0:
@@ -124,6 +150,29 @@ def process(path, request):
             exporter.add_shape(visible, layer="Visible")
         except Exception as e:
             wrapper_common.handle_exception(e)
+
+        # The annotations go through the very same projection, so that a line
+        # pointing at a feature of the shape still points at it once both are
+        # flattened. They are projected separately only so that they can be
+        # drawn in their own style.
+        annotations = request.get("annotations") or []
+        edges = _annotation_edges(annotations)
+        if edges:
+            exporter.add_layer(
+                "Annotations",
+                line_color=(192, 64, 64),
+                line_weight=request.get("line_weight", 1.0),
+                line_type=b3d.LineType.ISO_DASH,
+            )
+            try:
+                projected = b3d.Compound(children=edges).project_to_viewport(
+                    viewport_origin=origin,
+                    viewport_up=up,
+                )[0]
+                exporter.add_shape(projected, layer="Annotations")
+            except Exception as e:
+                wrapper_common.handle_exception(e)
+
         exporter.write(path)
 
         return {"success": True, "exception": None}

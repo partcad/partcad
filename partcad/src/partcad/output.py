@@ -57,10 +57,21 @@ BUILTIN_PATHS = {
     BUILTIN_PACKAGES[RENDER]: os.path.join(BUILTIN_ROOT_PATH, RENDER),
 }
 
-# 'readme' is declared in a 'render:' section like a file type, but no wrapper
-# script produces it: PartCAD assembles it out of the images the other formats
-# leave behind (see Project.render_readme_async). 'markdown' is its old name.
-NON_WRAPPER_FORMATS = frozenset({"readme", "markdown"})
+# File types declared in a 'render:' section like any other, but which no
+# implementation script produces: PartCAD assembles them itself out of what the
+# package declares and the images the other formats leave behind.
+#
+#   'readme'          -- the package (or assembly) document, see
+#                        Project.render_readme_async(). 'markdown' is its old name.
+#   'pdf' and 'html'  -- the assembly instruction book, see
+#                        Project.render_assembly_guide_async(). They are
+#                        assembly_guide.GUIDE_FORMATS, repeated here rather than
+#                        imported because 'assembly_guide' imports this module.
+#
+# Held out wherever a section is read as a list of file types to run an
+# implementation for, so that declaring one does not send PartCAD looking for a
+# 'path' that was never meant to exist.
+NON_WRAPPER_FORMATS = frozenset({"readme", "markdown", "pdf", "html"})
 
 # Keys of a section that configure the section itself rather than name a file
 # type. Everything else under 'export:'/'render:' is a file type, so these have

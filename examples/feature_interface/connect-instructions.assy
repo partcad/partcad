@@ -1,0 +1,71 @@
+{% set opposite = {"outer":"inner", "inner":"outer"} %}
+{% set other_placement = opposite[param_placement] %}
+links:
+  # The bracket is the fixture: everything else is connected to it, so it is
+  # placed rather than connected and is held by its own foot.
+  - part: example-bracket
+
+  - part: example-motor
+    connect:
+      with: nema-17-motor-mount
+      name: example-bracket
+      to: nema-17-motor-bracket-3
+      toInstance: {{ param_placement }}
+      toPort: "*TR*"
+      comment: |
+        The motor is heavy enough to fall out of an unclamped bracket, so seat
+        it before any of the screws go in. It is only pushed into place here -
+        the thread the two M3 hole patterns share is cut by the screws below,
+        not by this step.
+      how:
+        stage: seat-the-motor
+        # A straight push: "turnTorqueMax" stays at its default of zero.
+        pushForceMax: 30.0
+        holdWith: nema-17-motor-mount
+        holdWithForceMin: 8.0
+        holdWithForceMax: 20.0
+        holdTo: nema-17-motor-bracket-3
+        holdToInstance: {{ param_placement }}
+
+  {% for corner in ['TL', 'BR', 'TR', 'BL'] %}
+  - part: socket-head-m3-screw-6mm
+    name: m3-{{ corner }}
+    connect:
+      name: example-bracket
+      to: m3-thru-3
+      toInstance: {{ other_placement }}-{{ corner }}
+      {% if corner == 'TL' %}
+      comment: |
+        The four M3 screws go in diagonally opposite pairs and in two passes:
+        every one of them is started before any of them is tightened, so that
+        the motor stays square to the bracket. "threadStep" is not given here -
+        it is inherited from the M3 interfaces, which carry the 0.5mm pitch.
+      {% endif %}
+      how:
+        stage: m3-snug
+        turnDirection: cw
+        turnTorqueMax: 0.4
+  {% endfor %}
+
+  {% for side in ['R', 'L'] %}
+  - part: socket-head-m4-screw-6mm
+    name: m4-{{ side }}
+    connect:
+      with: m4-screw-6mm
+      name: example-bracket
+      to: m4-slotted-30-thru-3
+      toInstance: {{ side }}
+      toParams: { offset: -15 }
+      {% if side == 'R' %}
+      comment: |
+        The foot screws are last: the slots let the bracket slide, so they are
+        left loose until the motor is square, and only then torqued down.
+      {% endif %}
+      how:
+        stage: m4-final
+        turnDirection: cw
+        turnTorqueMax: 1.7
+        # The bracket is held by the other slot while this one is driven.
+        holdTo: m4-slotted-30-thru-3
+        holdToInstance: {{ 'L' if side == 'R' else 'R' }}
+  {% endfor %}

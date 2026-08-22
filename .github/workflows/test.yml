@@ -26,26 +26,48 @@ env:
   # available image, so that a change of what '*-latest' points at cannot
   # silently become the only thing we ever tested on.
   #
+  # Linux arm64 is here on both supported LTS releases. There is no
+  # 'ubuntu-latest-arm' alias to follow, so these are named explicitly.
+  # cadquery-ocp publishes aarch64 Linux wheels as of 7.9.3.1.1, which is what
+  # made this possible at all.
+  #
   # Deliberately NOT in this list:
   #  * ubuntu-24.04, windows-2025, macos-15 - these are exactly what
   #    ubuntu-latest / windows-latest / macos-latest alias today, so naming
   #    them as well would run the very same image twice.
   #  * ubuntu-26.04 (and ubuntu-26.04-arm) - still a preview image, not
   #    covered by the Actions SLA, so it would only make CI flaky.
+  #  * windows-11-arm - Windows on arm64 is not a platform PartCAD builds or
+  #    releases for; adding it to CI would test something nothing ships.
   #  * macos-14 - deprecated by GitHub, scheduled for removal.
   #  * macos-13 - no macos-13 job has ever started on the current runner
   #    plan. They queue for hours and are eventually cancelled without
   #    executing, so they only ever left checks pending forever.
-  OSES: '["ubuntu-latest", "ubuntu-22.04", "windows-latest", "windows-2022", "macos-latest", "macos-26"]'
+  OSES:
+    '["ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "windows-latest", "windows-2022",
+    "macos-latest", "macos-26"]'
+  # Of those, the ones a pull request does not pay for by default. They are
+  # dropped unless the run is deep -- the nightly schedule, a manual dispatch,
+  # a push, or "#deepTest" in the pull request; see
+  # ".github/actions/test-depth".
+  #
+  # Which ones, and why these:
+  #  * both Ubuntu 22.04 images. 24.04 is what 'ubuntu-latest' is, and a
+  #    breakage specific to the older release is rare enough to be worth
+  #    finding nightly rather than on every push.
+  #  * macos-26, leaving one macOS. macOS minutes bill at 10x, so this is the
+  #    single largest saving here. The one that stays is 'macos-latest',
+  #    because that is the version most contributors and most users are on.
+  OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm", "macos-26"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
   # Number of parallel shards the behave suite is split into. Keep in sync with
   # the "shard" list in the set-matrix job's matrix-behave output.
   BEHAVE_SHARDS: 4
-  # 6 OSes x 5 Pythons = 30 combinations per job, and macOS minutes bill at
+  # 8 OSes x 5 Pythons = 40 combinations per job, and macOS minutes bill at
   # 10x, which is not affordable. Only ubuntu-latest runs the full Python
   # range; every other image runs the oldest and the newest supported Python
   # only, which is where a version specific breakage actually shows up, plus
-  # Windows on 3.12 (see the note below). 30 -> 17 combinations.
+  # Windows on 3.12 (see the note below). 40 -> 21 combinations.
   #
   # NOTE: windows + Python 3.12 used to be excluded on its own, for an
   # 'ensurepip' failure (see #374), NOT for a missing cadquery-ocp wheel. It is
@@ -56,6 +78,12 @@ env:
     [{"os": "ubuntu-22.04", "python-version": "3.11"},
     {"os": "ubuntu-22.04", "python-version": "3.12"},
     {"os": "ubuntu-22.04", "python-version": "3.13"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.11"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.12"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.13"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.11"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.12"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.13"},
     {"os": "windows-latest", "python-version": "3.11"},
     {"os": "windows-latest", "python-version": "3.13"},
     {"os": "windows-2022", "python-version": "3.11"},
@@ -69,7 +97,10 @@ env:
   # The sharded 'test-behave' jobs and 'test-pub-repo' (45 min) are by far the
   # most expensive, so they get a reduced matrix: the '*-latest' images only, on
   # the oldest and the newest supported Python. Behave then shards each of those
-  # BEHAVE_SHARDS ways.
+  # BEHAVE_SHARDS ways. Linux arm64 is deliberately not here: it is covered by
+  # 'test-pytest' and both 'test-examples-*' jobs above, which is what would
+  # catch an architecture specific breakage, and adding it here would multiply
+  # the most expensive jobs in the workflow by BEHAVE_SHARDS.
   OSES_SLIM: '["ubuntu-latest", "windows-latest", "macos-latest"]'
   PYTHONS_SLIM: '["3.10", "3.14"]'
   # The VS Code extension pytest job builds the extension bundle, which vendors
@@ -84,7 +115,7 @@ env:
   # extension is actually validated against.
   # TODO(clairbee): restore 3.13/3.14 here once the bundle can ship pygit2.
   PYTHONS_IDE: '["3.10", "3.11", "3.12"]'
-  VERSION: 0.7.158
+  VERSION: 0.7.173
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
   PC_TELEMETRY_PERFORMANCE: false
@@ -130,21 +161,43 @@ jobs:
       matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
       matrix-ide: ${{ steps.set-matrix.outputs.matrix-ide }}
     steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+
       - name: Set matrix
         id: set-matrix
+        env:
+          DEEP: ${{ steps.depth.outputs.deep }}
         run: |
-          echo 'matrix={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> $GITHUB_OUTPUT
-          echo 'matrix-slim={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}}' >> $GITHUB_OUTPUT
+          # The OS axis of the full matrix, with the deep-only images removed
+          # when this is not a deep run. 'matrix-slim' is untouched: it is
+          # already the '*-latest' images only, none of which are deep-only.
+          if [ "${DEEP}" = "true" ]; then
+            OSES='${{ env.OSES }}'
+          else
+            OSES=$(jq -cn --argjson all '${{ env.OSES }}' --argjson deep_only '${{ env.OSES_DEEP_ONLY }}' '$all - $deep_only')
+          fi
+          echo "Operating systems: ${OSES}"
+          # EXCLUDES still names images that may have just been dropped. That is
+          # harmless -- an exclude for a combination the matrix does not contain
+          # simply matches nothing -- and keeps one list to maintain rather than
+          # two that have to agree.
+          echo 'matrix={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
+          echo 'matrix-slim={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}}' >> "${GITHUB_OUTPUT}"
           # Behave is single-process and dominates CI wall-clock, so it runs
           # sharded across parallel jobs. The "shard" axis is derived from
           # BEHAVE_SHARDS (1..N) here, so the number of behave jobs can never
           # drift from it, and crosses os/python. Behave uses the slim matrix
           # (like test-pub-repo), so sharding does not multiply the full matrix.
           SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
-          echo 'matrix-behave={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> $GITHUB_OUTPUT
-          # Same OS/exclude shape as 'matrix', but only the Python versions the
-          # extension bundle can be built for. See PYTHONS_IDE above.
-          echo 'matrix-ide={"os": ${{ env.OSES }}, "python-version": ${{ env.PYTHONS_IDE }}, "exclude": ${{ env.EXCLUDES }}}' >> $GITHUB_OUTPUT
+          echo 'matrix-behave={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> "${GITHUB_OUTPUT}"
+          # The same OS axis and excludes as 'matrix', so it follows the depth
+          # too, but only the Python versions the extension bundle can be built
+          # for. See PYTHONS_IDE above.
+          echo 'matrix-ide={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS_IDE }}, "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
 
   # cache-preheat:
   #   name: "Update caches"
@@ -196,7 +249,7 @@ jobs:
 
           mkdir -pv pytest-test-results
           pytest \
-            partcad partcad-cli partcad-service-json-rpc \
+            partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc \
             -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
           mamba deactivate

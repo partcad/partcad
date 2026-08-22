@@ -12,6 +12,7 @@ import sys
 from . import consts
 from . import logging as pc_logging
 from . import exception as pc_exception
+from . import sandbox_versions
 from . import telemetry
 
 
@@ -127,6 +128,34 @@ class Configuration:
                 sys.version_info.major,
                 sys.version_info.minor,
             )
+
+        # option: "javascriptVersion"
+        # description: the major version of Node.js to use in sandboxed
+        #              environments if any
+        # values: string (e.g. "22")
+        # default: None, meaning sandbox_versions.DEFAULT_NODE_VERSION
+        if "javascriptVersion" in self.config_obj:
+            # Node.js is versioned by major line and that is the granularity a
+            # sandbox is provisioned at, so an unquoted 22 (which YAML parses as
+            # an int) and a "22.11.0" both name the same thing. No warning here,
+            # unlike pythonVersion: there is no trailing digit to lose.
+            self.javascript_version = sandbox_versions.node_major_version(str(self.config_obj["javascriptVersion"]))
+        else:
+            self.javascript_version = None
+
+        # option: "chili3dVersion"
+        # description: the version of Chili3D to install into the sandbox this
+        #              package's Chili3D parts are rendered in
+        # values: string - an exact version ("1.1.2"), or any range or tag npm
+        #         accepts ("^1.1", "latest")
+        # default: None, meaning sandbox_versions.DEFAULT_CHILI3D_VERSION
+        #
+        # Unlike the CAD libraries on the Python side, this really is the
+        # package's to choose: a Node.js environment is identified by the set of
+        # dependencies it holds, so a package on its own Chili3D gets its own
+        # environment and changes nothing for anybody else.
+        chili3d_version = self.config_obj.get("chili3dVersion")
+        self.chili3d_version = None if chili3d_version is None else str(chili3d_version)
 
         # option: "manufacturable"
         # description: whether the objects in this package are designed for manufacturing by default

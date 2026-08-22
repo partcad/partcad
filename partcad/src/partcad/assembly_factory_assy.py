@@ -8,13 +8,15 @@
 #
 
 import asyncio
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import FileSystemLoader
+from jinja2.sandbox import SandboxedEnvironment
 import fnmatch
 import os
 import yaml
 
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
+from .assembly_connect import ConnectHow, check_stage_sequence
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from . import logging as pc_logging
@@ -30,6 +32,118 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             self.assembly.cache_dependencies_broken = True
             for dep in self.config.get("dependencies", []):
                 self.assembly.cache_dependencies.append(os.path.join(self.project.config_dir, dep))
+
+    def read_assy(self) -> dict:
+        """Read, render and parse this assembly's ASSY file.
+
+        Shared by 'instantiate_async()' and 'prepare_async()' so the links the
+        two walk are always the same ones.
+        """
+        if not os.path.exists(self.path):
+            pc_logging.error("ERROR: Assembly file not found: %s" % self.path)
+            return {}
+
+        # Pass the parameter values to the ASSY template as
+        # 'param_<name>'. The configuration has been through
+        # 'AssemblyConfiguration.normalize()' by now, so every
+        # parameter is in the expanded form and carries the value to
+        # use: the declared default, overridden by '~/.partcad/config.yaml'
+        # or '--extra_param', overridden by the values given in the
+        # object name (e.g. '//package:assembly;length=96').
+        params = {}
+        parameters = self.config.get("parameters") or {}
+        for param_name, param in parameters.items():
+            params["param_" + param_name] = param["default"]
+        params["name"] = self.config["name"]
+
+        # Read the body of the configuration file
+        fp = open(self.path, "r")
+        config = fp.read()
+        fp.close()
+
+        # Resolve Jinja templates
+        # NOTE: the environment is sandboxed. An ASSY file comes from a
+        # package, which may well be somebody else's, and a plain Jinja
+        # environment lets a template reach through attribute access into
+        # the interpreter this runs in.
+        # NOTE: autoescape must stay off. The rendered document is YAML,
+        # not HTML, so escaping corrupts every parameter value that
+        # contains '&', '<', '>', '"' or "'" (e.g. 'a & b' would reach
+        # the parser as 'a &amp; b'). This matches how 'partcad.yaml'
+        # itself is rendered in 'ProjectLocal'.
+        template = SandboxedEnvironment(
+            loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep),
+        ).from_string(config)
+        config = template.render(params)
+
+        # Parse the resulting config
+        assy = None
+        try:
+            assy = yaml.safe_load(config)
+        except Exception:
+            pc_logging.error("ERROR: Failed to parse the assembly file %s" % self.path)
+        return {} if assy is None else assy
+
+    def node_object_name(self, node, kind: str) -> str:
+        """The fully qualified name of the part or assembly a link names."""
+        name = node[kind]
+        if "package" in node:
+            name = node["package"] + ":" + name
+        elif ":" not in name:
+            name = ":" + name
+        return self.project.normalize(name)
+
+    def node_params(self, node) -> dict:
+        """The parameter overrides a link carries, if any."""
+        params = {}
+        if "params" in node:
+            for param_name in node["params"]:
+                params[param_name] = node["params"][param_name]
+        return params
+
+    async def prepare_async(self, assembly) -> None:
+        """Resolve every part and assembly this one links to, without building.
+
+        Walking the links is what pulls in the packages an assembly *really*
+        depends on: a link may name a package that nothing on the way here
+        imported. Each referenced object is resolved - which loads the package
+        holding it - and prepared in turn, so its own files are downloaded too.
+
+        A link that does not resolve does not stop the walk: an install fetches
+        as much as it can, and the whole set of broken links is reported at the
+        end rather than only the first one.
+        """
+        await super().prepare_async(assembly)
+        unresolved = []
+        await self.prepare_node_async(self.read_assy(), unresolved)
+        if unresolved:
+            raise Exception("Failed to resolve the links to: %s" % ", ".join(unresolved))
+
+    async def prepare_node_async(self, node, unresolved: list) -> None:
+        if isinstance(node, list):
+            for item in node:
+                await self.prepare_node_async(item, unresolved)
+            return
+        if not isinstance(node, dict):
+            return
+
+        if "links" in node and node["links"] is not None:
+            await self.prepare_node_async(node["links"], unresolved)
+            return
+
+        if "assembly" in node:
+            name = self.node_object_name(node, "assembly")
+            item = self.ctx._get_assembly(name, self.node_params(node))
+        elif "part" in node:
+            name = self.node_object_name(node, "part")
+            item = self.ctx._get_part(name, self.node_params(node))
+        else:
+            return
+
+        if item is None:
+            unresolved.append(name)
+            return
+        await item.prepare_async()
 
     def instantiate(self, assembly):
         # # This method is best executed on a thread but the current Python version
@@ -50,50 +164,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         await super().instantiate(assembly)
 
         with pc_logging.Action("ASSY", assembly.project_name, assembly.name):
-            assy = {}
-            if os.path.exists(self.path):
-                # Pass the parameter values to the ASSY template as
-                # 'param_<name>'. The configuration has been through
-                # 'AssemblyConfiguration.normalize()' by now, so every
-                # parameter is in the expanded form and carries the value to
-                # use: the declared default, overridden by '~/.partcad/config.yaml'
-                # or '--extra_param', overridden by the values given in the
-                # object name (e.g. '//package:assembly;length=96').
-                params = {}
-                parameters = self.config.get("parameters") or {}
-                for param_name, param in parameters.items():
-                    params["param_" + param_name] = param["default"]
-                params["name"] = self.config["name"]
-
-                # Read the body of the configuration file
-                fp = open(self.path, "r")
-                config = fp.read()
-                fp.close()
-
-                # Resolve Jinja templates
-                # NOTE: autoescape must stay off. The rendered document is YAML,
-                # not HTML, so escaping corrupts every parameter value that
-                # contains '&', '<', '>', '"' or "'" (e.g. 'a & b' would reach
-                # the parser as 'a &amp; b'). This matches how 'partcad.yaml'
-                # itself is rendered in 'ProjectLocal'.
-                template = Environment(
-                    loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep),
-                ).from_string(config)
-                config = template.render(params)
-
-                # Parse the resulting config
-                try:
-                    assy = yaml.safe_load(config)
-                except Exception as e:
-                    pc_logging.error("ERROR: Failed to parse the assembly file %s" % self.path)
-                if assy is None:
-                    assy = {}
-            else:
-                pc_logging.error("ERROR: Assembly file not found: %s" % self.path)
+            assy = self.read_assy()
 
             result = await self.handle_node(assembly, assy)
             if result is not None:
-                assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
+                assembly.children.append(result)
             else:
                 pc_logging.warning("Assembly is empty")
 
@@ -102,6 +177,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
     async def handle_node_list(self, assembly, node_list):
         tasks = []
 
+        check_stage_sequence(node_list, self.name)
+
         async def wait_for_tasks():
             nonlocal tasks
             while len(tasks) > 0:
@@ -109,7 +186,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 f = await asyncio.tasks.wait([task])
                 result = f[0].pop().result()
                 if result is not None:
-                    assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
+                    assembly.children.append(result)
 
         for link in node_list:
             if "connect" in link or "connectPorts" in link:
@@ -126,6 +203,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             name = None
 
         connect = None
+        # The non-geometric half of a "connect*" section: free-form context and
+        # the instructions for whoever (or whatever) performs the assembly.
+        connect_comment = None
+        connect_how = None
+        connection = None
         connect_with_iface = None
         connect_with_params = None
         connect_with_instance = None
@@ -170,6 +252,21 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         else:
             location = Location((0, 0, 0), (0, 0, 1), 0)
 
+        if connect is not None:
+            # "comment" is free-form context for a human or an LLM. Nothing in
+            # PartCAD interprets it: all instructions that are required to
+            # perform the assembly belong in the other fields.
+            connect_comment = connect.get("comment", None)
+            connect_how = ConnectHow(
+                connect.get("how", None),
+                where="%s: connect %s to %s"
+                % (
+                    self.name,
+                    name or node.get("part", None) or node.get("assembly", None),
+                    connect.get("name", None),
+                ),
+            )
+
         if connect_with_instance is not None and "*" in connect_with_instance:
             connect_with_instance_pattern = connect_with_instance
             connect_with_instance = None
@@ -193,41 +290,26 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     "child": True,
                     "cache": self.ctx.user_config.cache,
                     "cache_dependencies_ignore": self.ctx.user_config.cache_dependencies_ignore,
-                }
+                },
             )  # TODO(clairbee): revisit why node["links"]) was used there
             item.cacheable = False  # Keep it uncacheable before parts info is in the hashing context
             item.instantiate = lambda x: True
             await self.handle_node_list(item, node["links"])
         else:
             # This is a node for a part or an assembly
-            params = {}
-            if "params" in node:
-                for paramName in node["params"]:
-                    params[paramName] = node["params"][paramName]
+            params = self.node_params(node)
 
             if "assembly" in node:
-                assy_name = node["assembly"]
                 if name is None:
-                    name = assy_name
-                if "package" in node:
-                    assy_name = node["package"] + ":" + assy_name
-                elif not ":" in assy_name:
-                    assy_name = ":" + assy_name
-                assy_name = self.project.normalize(assy_name)
-                item = self.ctx._get_assembly(assy_name, params)
+                    name = node["assembly"]
+                item = self.ctx._get_assembly(self.node_object_name(node, "assembly"), params)
                 if item is None:
                     pc_logging.error("Assembly not found: %s" % name)
                     raise Exception("Assembly not found")
             elif "part" in node:
-                part_name = node["part"]
                 if name is None:
-                    name = part_name
-                if "package" in node:
-                    part_name = node["package"] + ":" + part_name
-                elif not ":" in part_name:
-                    part_name = ":" + part_name
-                part_name = self.project.normalize(part_name)
-                item = self.ctx._get_part(part_name, params)
+                    name = node["part"]
+                item = self.ctx._get_part(self.node_object_name(node, "part"), params)
                 if item is None:
                     pc_logging.error("Part not found: %s in %s" % (name, self.name))
                     raise Exception("Part not found: %s in %s" % (name, self.name))
@@ -809,7 +891,101 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         pc_logging.error("Not enough data to connect %s" % name)
                         location = Location((0, 0, 0), (0, 0, 1), 0)
 
-        if not item is None:
-            return [item, name, location]
+                    connection = self._connection_info(
+                        connect,
+                        connect_to_name,
+                        connect_with_port,
+                        connect_to_port,
+                        connect_with_iface,
+                        connect_to_iface,
+                        target_part_location,
+                        target_port,
+                    )
+
+                # Now that both ends of the connection are known, the interfaces
+                # to hold them by can be matched against what they implement.
+                # The source port is the frame a derived "pushDistance" is
+                # measured along, and that same port once the object is in place
+                # is what the push direction is deduced from, so both go along.
+                source_frame = None if source_port is None else source_port.location
+                mated_frame = location if source_frame is None else location * source_frame
+                connect_how.resolve(
+                    item,
+                    target_part,
+                    source_frame=source_frame,
+                    mated_frame=mated_frame,
+                    source_interface=source_iface_obj,
+                    target_interface=target_iface_obj,
+                )
+
+        if item is not None:
+            return AssemblyChild(item, name, location, connect_comment, connect_how, connection)
         else:
+            return None
+
+    def _connection_info(
+        self,
+        connect,
+        connect_to_name,
+        connect_with_port,
+        connect_to_port,
+        connect_with_iface,
+        connect_to_iface,
+        target_part_location,
+        target_port,
+    ):
+        """What was connected to what, recorded as plain data on the child.
+
+        This is not needed to build the assembly - the placement computed above
+        is - but it is the only place that knows it. An assembly instruction book
+        (see assembly_guide.py) needs to say which two items each step joins,
+        where the joint is, and which way the two have to be pulled apart to show
+        it, and none of that can be recovered from the resulting placements.
+
+        'point' and 'direction' are in the coordinate system of the assembly
+        being built: the point where the two ports meet, and the unit vector
+        along which the item has to be moved to separate them (the port's own
+        normal, since the item was mated onto it facing the other way).
+        """
+        info = {
+            "target": connect_to_name,
+            "with_port": connect_with_port,
+            "to_port": connect_to_port,
+            "with_interface": connect_with_iface,
+            "to_interface": connect_to_iface,
+            # option: "exploded"
+            # description: the gap to show between the two items in the exploded
+            #              view of this step, in millimeters
+            # values: number
+            # default: half of the largest dimension of the two items
+            "exploded": self._exploded_distance(connect.get("exploded", None), connect_to_name),
+        }
+        if target_port is not None and target_part_location is not None:
+            port_location = target_part_location * target_port.location
+            info["point"] = list(port_location.translation)
+            info["direction"] = list(port_location.rotate_vector((0, 0, 1)))
+        return info
+
+    def _exploded_distance(self, value, connect_to_name):
+        """The 'exploded' override of a connection, as a number of millimeters.
+
+        Checked here rather than where the document is generated: the ASSY schema
+        (see partcad_utils/schema/assy.json) is checked by `pc lint`, not while
+        the assembly is being built, so a value that is not a number would
+        otherwise surface much later, as a ValueError from inside the renderer,
+        naming neither the file nor the step it came from. A bad value is
+        reported and dropped: it decides how a picture looks, and is no reason to
+        refuse to build the assembly.
+        """
+        if value is None or isinstance(value, bool):
+            if isinstance(value, bool):
+                pc_logging.error("%s: 'exploded' must be a number, got %r" % (self.name, value))
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            pc_logging.error(
+                "%s: 'exploded' must be a number of millimeters, got %r (connecting to %s)"
+                % (self.name, value, connect_to_name)
+            )
             return None

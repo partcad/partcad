@@ -267,6 +267,7 @@ def _invalidate_context(session, params):
     if context_id is None:
         return
     evicted = session.contexts.pop(context_id, None)
+    session.context_user_configs.pop(context_id, None)
     if evicted is not None and session.partcad_ctx is evicted:
         session.partcad_ctx = None
 
@@ -740,6 +741,7 @@ def daemon_reset(session, params):
 
     # The warm contexts now reference deleted directories; drop them.
     session.contexts.clear()
+    session.context_user_configs.clear()
     session.partcad_ctx = None
     return None
 
@@ -897,6 +899,31 @@ def _url_to_path(url: str) -> str:
     raise JsonRpcError(INVALID_CONFIG, "Unsupported context URL scheme: %s" % (parsed.scheme,))
 
 
+def _caller_user_config(pc, params):
+    """The configuration a context has to be built from, and its fingerprint.
+
+    The daemon's own ``user_config`` is the wrong answer here. It was resolved
+    from the environment that happened to start the daemon, and the daemon then
+    stays warm for every later command, so it says nothing about how *this*
+    command was invoked -- a ``pc --devel-index`` or ``PC_FORCE_UPDATE=1`` would
+    be silently dropped the moment a daemon was already running. A client that
+    knows its own configuration therefore sends a copy of it, and the context is
+    built from that copy instead.
+
+    The fingerprint is what the copy is compared against later. It is the sent
+    data itself rather than a hash of it: the payload is small, comparing it is
+    exact, and a hash would only add a way to be wrong.
+
+    A client that sends nothing -- the VS Code extension, which configures the
+    daemon once through its launch arguments -- keeps the daemon's own
+    configuration, as before.
+    """
+    data = params.get("userConfig")
+    if data is None:
+        return None, pc.user_config
+    return data, pc.UserConfig.from_dict(data)
+
+
 def context_create(session, params):
     """Create (or reuse) a PartCAD context for a repository URL; return its id.
 
@@ -918,6 +945,17 @@ def context_create(session, params):
     root = os.path.abspath(path)
     context_id = hashlib.sha256(root.encode("utf-8")).hexdigest()[:16]
 
+    fingerprint, user_config = _caller_user_config(pc, params)
+
+    # A warm context resolved its package graph -- which dependencies, from
+    # which revisions, through which proxy -- against the configuration it was
+    # built with. Reusing it for a caller configured differently would answer
+    # this command from the other caller's graph, so it is rebuilt instead.
+    # Nothing on disk is discarded: the git cache keys each revision separately,
+    # so switching back and forth re-reads rather than re-clones.
+    if context_id in session.contexts and session.context_user_configs.get(context_id) != fingerprint:
+        session.contexts.pop(context_id, None)
+
     if context_id not in session.contexts:
         try:
             # Instantiate Context directly rather than via pc.init(): pc.init keeps
@@ -925,9 +963,10 @@ def context_create(session, params):
             # path returns the first (now stale) context. The daemon serves many
             # independent, long-lived contexts and must read each one fresh from
             # disk -- especially after add/import mutate partcad.yaml.
-            session.contexts[context_id] = pc.Context(path, user_config=pc.user_config)
+            session.contexts[context_id] = pc.Context(path, user_config=user_config)
         except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
             raise JsonRpcError(INVALID_CONFIG, "Invalid configuration file", data={"detail": str(e)}) from e
+        session.context_user_configs[context_id] = fingerprint
 
     # Keep the most recently created context as the session default so the
     # extension's context-less operations continue to work.
@@ -948,22 +987,59 @@ def ensure_loaded(session, params):
 
 
 def install(session, params):
-    """Download and set up all imported packages."""
+    """Prepare the package the way 'npm install' prepares a Node.js one.
+
+    Two halves. First the imported packages are downloaded, exactly as before.
+    Then every sketch, part and assembly is asked for its cache key, which is
+    what pulls in the rest: the key hashes the files an object is built from,
+    so computing it downloads every 'fileFrom' URL, and getting there resolves
+    each alias, enrich, compound and assembly link - loading the packages the
+    objects really depend on, which are not always the ones 'partcad.yaml'
+    names. Nothing is built; no CAD script runs.
+    """
     ctx = _ctx(session, params)
     if ctx is None:
         return None
-    with session.partcad.logging.Process("Install", "this"):
+    pc = session.partcad
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        # A package the caller named by hand and that does not exist: a usage
+        # error, so the CLI exits non-zero instead of reporting a clean install.
+        raise JsonRpcError(USAGE_ERROR, "Package %s is not found" % package)
+    package = package_obj.name
+
+    # "this" (not the package name) is what this process has always been
+    # labelled with, and what scripts watching for "DONE: Install: this:" match.
+    with pc.logging.Process("Install", "this"):
         # Restore force_update afterwards: the daemon keeps this context warm,
         # so leaving it set would make every later command re-fetch everything.
         saved = ctx.user_config.force_update
         ctx.user_config.force_update = True
         try:
-            ctx.get_all_packages()
+            all_packages = ctx.get_all_packages()
         finally:
             ctx.user_config.force_update = saved
         if ctx.stats_git_ops:
             session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
-    return {}
+
+        if params.get("recursive"):
+            # A '/' has to follow the prefix, or '//sub' would also select the
+            # unrelated sibling '//subwidget'.
+            prefix = package if package.endswith("/") else package + "/"
+            packages = [p["name"] for p in all_packages if p["name"] == package or p["name"].startswith(prefix)]
+        else:
+            packages = [package]
+        stats = pc.actions.package.install(ctx, packages)
+
+    session.emitter.info(
+        "Installed %d sketches, %d parts and %d assemblies" % (stats["sketch"], stats["part"], stats["assembly"])
+    )
+    if stats["failed"]:
+        session.emitter.error("Failed to install %d objects" % stats["failed"])
+    if stats["failed_packages"]:
+        session.emitter.error("Failed to install %d packages" % stats["failed_packages"])
+    return stats
 
 
 def update(session, params):
@@ -992,7 +1068,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.7.158"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.7.173"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -1018,6 +1094,9 @@ def init(session, params):
         if os.path.isdir(path):
             path = os.path.join(path, "partcad.yaml")
         if session.partcad.create_package(path):
+            # The same "Render" command `pc init` adds, for the same reason: the
+            # IDE shows it in "Run and Debug" as soon as the package exists.
+            session.partcad.add_render_configuration(os.path.dirname(os.path.abspath(path)))
             session.partcad_ctx = session.partcad.init(path)
             if session.partcad_ctx and not getattr(session.partcad_ctx, "broken", False):
                 session.emitter.emit(
@@ -1317,6 +1396,100 @@ def list_mates(session, params):
     return None
 
 
+def bom(session, params):
+    """Print the bill of materials of an assembly.
+
+    Returns the line items so the CLI can render them as JSON; the human-readable
+    table is emitted here, through PartCAD logging, the way `pc list` renders its
+    own. ``stop_at_purchasable`` keeps sub-assemblies that can be bought whole
+    from being expanded into their contents.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    object_name = params.get("object")
+    if not object_name:
+        raise JsonRpcError(USAGE_ERROR, "No assembly is given")
+
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+
+    package, object_name = pc.utils.resolve_resource_path(package_obj.name, object_name)
+    path = "%s:%s" % (package, object_name)
+
+    param_dict = {}
+    for kv in params.get("params") or []:
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            param_dict[k] = v
+
+    with pc.logging.Process("BoM", package, object_name):
+        assembly = ctx.get_assembly(path, params=param_dict)
+        if assembly is None:
+            pc.logging.error("Assembly %s is not found" % path)
+            return None
+
+        bom_items = asyncio.run(
+            assembly.get_bom_detailed_async(ctx, stop_at_purchasable=bool(params.get("stop_at_purchasable")))
+        )
+
+        items = [{"name": name, **entry} for name, entry in sorted(bom_items.items())]
+        result = {
+            "assembly": path,
+            "items": items,
+            "total": sum(item["count"] for item in items),
+        }
+
+        if not params.get("json"):
+            pc.logging.info(_bom_output(result))
+    return result
+
+
+def _bom_output(result: dict) -> str:
+    """The human-readable rendering of a BoM: one line item per line.
+
+    The columns are sized from the content, not fixed the way `pc list` sizes
+    its own: every name here carries the package it comes from, so the names are
+    long and their length varies a lot from one BoM to the next.
+    """
+    items = result["items"]
+    output = "Bill of materials of %s:\n" % result["assembly"]
+    if not items:
+        return output + "\t<none>\n"
+
+    rows = []
+    for item in items:
+        # What to order, for the items that say so: buying one needs the vendor
+        # and the SKU, not the name PartCAD knows it by.
+        if item.get("vendor") and item.get("sku"):
+            source = "%s %s" % (item["vendor"], item["sku"])
+        else:
+            source = ""
+        rows.append((item["name"], str(item["count"]), source, item.get("desc") or ""))
+
+    name_width = max(len(row[0]) for row in rows)
+    count_width = max(len(row[1]) for row in rows)
+    source_width = max(len(row[2]) for row in rows)
+
+    # Where a folded description continues, counting the leading tab as one.
+    indent = 1 + name_width + 2 + count_width + 2 + (source_width + 2 if source_width else 0)
+    for name, count, source, desc in rows:
+        line = "\t%s  %s" % (name.ljust(name_width), count.rjust(count_width))
+        if source_width:
+            line += "  %s" % source.ljust(source_width)
+        line += "  " + desc.replace("\n", "\n" + " " * indent)
+        output += line.rstrip() + "\n"
+    output += "Total: %d\n" % result["total"]
+    return output
+
+
 def search_objects(session, params):
     """Search parts/sketches/assemblies/interfaces/packages by keyword."""
     ctx = _ctx(session, params)
@@ -1429,60 +1602,96 @@ def render_objects(session, params):
     fmt = params.get("format")
     output_dir = params.get("output_dir")
     object_name = params.get("object")
+    ignore_manufacturability = params.get("ignore_manufacturability", False)
     options_package = params.get("options_package")
     if options_package:
         options_package = ctx.resolve_package_path(options_package)
         if ctx.get_project(options_package) is None:
             raise JsonRpcError(USAGE_ERROR, "Options package %s is not found" % options_package)
 
+    from partcad.exception import AssemblyDocumentError
+
     with pc.logging.Process(params.get("label", "Render"), package):
         ctx.option_create_dirs = params.get("create_dirs", False)
-        if params.get("recursive"):
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
-        else:
-            packages = [package]
-
-        # An object named as '<package>:<name>' is produced by that package, not
-        # by the one '--package' selected, so its file types count as known too.
-        validated_packages = list(packages)
-        if object_name is not None:
-            validated_packages += [pc.utils.resolve_resource_path(p, object_name)[0] for p in packages]
-        if options_package:
-            validated_packages.append(options_package)
-        _validate_output_format(pc, ctx, fmt, validated_packages)
-
-        for package in packages:
-            if object_name is not None:
-                package, object_name = pc.utils.resolve_resource_path(package, object_name)
-
-            if object_name is None:
-                ctx.render(
-                    project_path=package,
-                    format=fmt,
-                    output_dir=output_dir,
-                    options_package=options_package,
-                )
-            else:
-                sketches, interfaces, parts, assemblies = [], [], [], []
-                if params.get("sketch"):
-                    sketches.append(object_name)
-                elif params.get("interface"):
-                    interfaces.append(object_name)
-                elif params.get("assembly"):
-                    assemblies.append(object_name)
-                else:
-                    parts.append(object_name)
-                prj = ctx.get_project(package)
-                prj.render(
-                    sketches=sketches,
-                    interfaces=interfaces,
-                    parts=parts,
-                    assemblies=assemblies,
-                    format=fmt,
-                    output_dir=output_dir,
-                    options_package=options_package,
-                )
+        try:
+            _render_objects(
+                pc,
+                ctx,
+                params,
+                package,
+                fmt,
+                output_dir,
+                object_name,
+                options_package,
+                ignore_manufacturability,
+            )
+        except AssemblyDocumentError as e:
+            # Asking for an assembly instruction book of something that has no
+            # assembly steps, or that is not meant to be built: what the user
+            # asked for, not a failure of the machinery.
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
     return None
+
+
+def _render_objects(
+    pc,
+    ctx,
+    params,
+    package,
+    fmt,
+    output_dir,
+    object_name,
+    options_package,
+    ignore_manufacturability,
+):
+    """The body of 'render_objects', once the request has been made sense of."""
+    if params.get("recursive"):
+        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+    else:
+        packages = [package]
+
+    # An object named as '<package>:<name>' is produced by that package, not
+    # by the one '--package' selected, so its file types count as known too.
+    validated_packages = list(packages)
+    if object_name is not None:
+        validated_packages += [pc.utils.resolve_resource_path(p, object_name)[0] for p in packages]
+    if options_package:
+        validated_packages.append(options_package)
+    _validate_output_format(pc, ctx, fmt, validated_packages)
+
+    for package in packages:
+        if object_name is not None:
+            package, object_name = pc.utils.resolve_resource_path(package, object_name)
+
+        if object_name is None:
+            ctx.render(
+                project_path=package,
+                format=fmt,
+                output_dir=output_dir,
+                options_package=options_package,
+                ignore_manufacturability=ignore_manufacturability,
+            )
+        else:
+            sketches, interfaces, parts, assemblies = [], [], [], []
+            if params.get("sketch"):
+                sketches.append(object_name)
+            elif params.get("interface"):
+                interfaces.append(object_name)
+            elif params.get("assembly"):
+                assemblies.append(object_name)
+            else:
+                parts.append(object_name)
+            prj = ctx.get_project(package)
+            prj.render(
+                sketches=sketches,
+                interfaces=interfaces,
+                parts=parts,
+                assemblies=assemblies,
+                format=fmt,
+                output_dir=output_dir,
+                options_package=options_package,
+                ignore_manufacturability=ignore_manufacturability,
+            )
 
 
 def convert_object(session, params):

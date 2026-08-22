@@ -19,7 +19,9 @@ from . import consts
 from . import logging as pc_logging
 from .mating import Mating
 from . import output
+from . import runtime_javascript_all
 from . import runtime_python_all
+from . import sandbox_versions
 from . import project_factory_local as rfl
 from . import project_factory_git as rfg
 from . import project_factory_tar as rft
@@ -142,6 +144,8 @@ class Context:
         self.option_create_dirs = False
         self.runtimes_python = {}
         self.runtimes_python_lock = threading.Lock()
+        self.runtimes_javascript = {}
+        self.runtimes_javascript_lock = threading.Lock()
 
         self.stats_packages = 0
         self.stats_packages_instantiated = 0
@@ -1042,19 +1046,43 @@ class Context:
         """Thin alias for convert_assembly(assembly_spec, "build123d", params)."""
         return self.convert_assembly(assembly_spec, "build123d", params)
 
-    async def render_async(self, project_path=None, format=None, output_dir=None, options_package=None):
+    async def render_async(
+        self,
+        project_path=None,
+        format=None,
+        output_dir=None,
+        options_package=None,
+        ignore_manufacturability=False,
+    ):
         if project_path is None:
             project_path = self.get_current_project_path()
         pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
-        await project.render_async(format=format, output_dir=output_dir, options_package=options_package)
+        await project.render_async(
+            format=format,
+            output_dir=output_dir,
+            options_package=options_package,
+            ignore_manufacturability=ignore_manufacturability,
+        )
 
-    def render(self, project_path=None, format=None, output_dir=None, options_package=None):
+    def render(
+        self,
+        project_path=None,
+        format=None,
+        output_dir=None,
+        options_package=None,
+        ignore_manufacturability=False,
+    ):
         if project_path is None:
             project_path = self.get_current_project_path()
         pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
-        project.render(format=format, output_dir=output_dir, options_package=options_package)
+        project.render(
+            format=format,
+            output_dir=output_dir,
+            options_package=options_package,
+            ignore_manufacturability=ignore_manufacturability,
+        )
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})
     def get_python_runtime(self, version=None, python_runtime=None):
@@ -1073,6 +1101,35 @@ class Context:
             if not runtime_name in self.runtimes_python:
                 self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)
             return self.runtimes_python[runtime_name]
+
+    def get_javascript_runtime(self, version=None, javascript_runtime=None):
+        """The sandboxed Node.js of the given major version.
+
+        The JavaScript twin of get_python_runtime(). 'version' is normalized to
+        the major line, which is the granularity Node.js sandboxes are
+        provisioned at (see sandbox_versions.node_major_version).
+        """
+        with self.runtimes_javascript_lock:
+            if version is None:
+                version = sandbox_versions.DEFAULT_NODE_VERSION
+            # A version like 22 declared in YAML arrives as an int, and one like
+            # 22.11 as a float; both name the same major line.
+            version = sandbox_versions.node_major_version(str(version))
+            if javascript_runtime is None:
+                javascript_runtime = self.user_config.javascript_sandbox
+            runtime_name = javascript_runtime + "-" + version
+            if runtime_name not in self.runtimes_javascript:
+                runtime = runtime_javascript_all.create(self, version, javascript_runtime)
+                # A runtime does not have to end up being the version that was
+                # asked for: the 'none' sandbox is whatever Node.js the host
+                # has, and reports that (see NoneJavaScriptRuntime). Two
+                # requests that resolve to the same one have to be the same
+                # object, or they would hold separate in-process locks over one
+                # sandbox directory and each re-check its install guards.
+                resolved_name = javascript_runtime + "-" + runtime.version
+                runtime = self.runtimes_javascript.setdefault(resolved_name, runtime)
+                self.runtimes_javascript[runtime_name] = runtime
+            return self.runtimes_javascript[runtime_name]
 
     def ensure_dirs(self, path):
         if not self.option_create_dirs:

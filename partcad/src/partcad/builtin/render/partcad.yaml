@@ -44,6 +44,32 @@ render:
     width: 512
     height: 512
 
+  jpeg:
+    # The format is named 'jpeg' but the file it writes is a '.jpg'.
+    desc: The SVG projection, rasterized and JPEG-compressed.
+    path: render_jpeg.py
+    extension: jpg
+    pythonRequirements:
+      - ocpsvg==0.6.0
+      - build123d==0.11.1
+      - svglib==1.5.1
+      - reportlab==4.4.3
+      - rlpycairo==0.3.0
+      - cadquery-ocp==7.9.3.1.1
+    line_weight: 1.0
+    width: 512
+    height: 512
+    # JPEG has no alpha channel, so the transparent SVG background has to be
+    # flattened onto some color.
+    background: "#ffffff"
+    quality: 85
+    progressive: false
+    optimize: false
+    # A projection is line art: 4:2:0 chroma subsampling (what Pillow picks
+    # below quality 95) smears color across the one-pixel-wide edges, so keep
+    # full chroma unless the package asks for something smaller.
+    subsampling: "4:4:4"
+
   dxf:
     desc: The SVG projection, converted to DXF.
     path: render_dxf.py

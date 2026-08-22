@@ -193,6 +193,24 @@ class Location:
         axis, angle = _quat_to_axis_angle(self._q)
         return [list(self._t), list(axis), angle]
 
+    @property
+    def translation(self) -> tuple:
+        """The translation part of this transform, as an (x, y, z) tuple."""
+        return self._t
+
+    def transform_point(self, p: Sequence[float]) -> tuple:
+        """Apply this transform to a point: rotate it, then move it."""
+        r = _rotate_vec(self._q, (float(p[0]), float(p[1]), float(p[2])))
+        return (r[0] + self._t[0], r[1] + self._t[1], r[2] + self._t[2])
+
+    def rotate_vector(self, v: Sequence[float]) -> tuple:
+        """Apply this transform's rotation to a vector, ignoring its translation.
+
+        A direction is not a point: the axis a port faces along has to be turned
+        with the port, but not moved with it.
+        """
+        return _rotate_vec(self._q, (float(v[0]), float(v[1]), float(v[2])))
+
     def inverse(self) -> "Location":
         """Return the location that undoes this one."""
         q_inv = _quat_conj(self._q)

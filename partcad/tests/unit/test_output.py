@@ -114,7 +114,7 @@ def _builtin_function(section, script_name, function_name):
 
 
 class _Drawing:
-    """Just enough of a reportlab drawing for '_scale()' to measure."""
+    """Just enough of a reportlab drawing for 'scale_for()' to measure."""
 
     width = 100.0
     height = 50.0
@@ -129,8 +129,8 @@ class _Drawing:
         ({"width": 200, "height": 100}, 2.0),  # both given: the smaller wins
     ],
 )
-def test_the_png_scale_is_bounded_by_the_dimensions_that_were_given(request_obj, expected):
-    scale = _builtin_function(output.RENDER, "render_png.py", "_scale")
+def test_the_raster_scale_is_bounded_by_the_dimensions_that_were_given(request_obj, expected):
+    scale = _builtin_function(output.RENDER, "render_raster.py", "scale_for")
     assert scale(_Drawing(), request_obj) == expected
 
 
@@ -150,9 +150,9 @@ def test_the_png_scale_is_bounded_by_the_dimensions_that_were_given(request_obj,
         {"height": float("-inf")},
     ],
 )
-def test_a_png_dimension_that_is_not_a_positive_finite_number_is_refused(request_obj):
+def test_a_raster_dimension_that_is_not_a_positive_finite_number_is_refused(request_obj):
     """Each of these otherwise scales to something no rasterizer can use."""
-    scale = _builtin_function(output.RENDER, "render_png.py", "_scale")
+    scale = _builtin_function(output.RENDER, "render_raster.py", "scale_for")
     with pytest.raises(Exception, match="positive finite number"):
         scale(_Drawing(), request_obj)
 
@@ -169,7 +169,7 @@ def test_builtin_formats_cover_what_the_exporters_supported(ctx):
         "iges",
         "threejs",
     }
-    assert set(output.builtin_formats(ctx, output.RENDER)) == {"svg", "png", "dxf"}
+    assert set(output.builtin_formats(ctx, output.RENDER)) == {"svg", "png", "jpeg", "dxf"}
 
 
 def test_builtin_requirements_match_the_pinned_cad_stack():

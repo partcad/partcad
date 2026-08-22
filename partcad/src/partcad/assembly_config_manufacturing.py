@@ -10,10 +10,18 @@
 from . import logging as pc_logging
 
 METHOD_NONE = None
-METHOD_ASSEMBLE_PARTCAD_BASIC = 1
+# Note: The assigned numbers are used in APIs and must never change unless the old method is deprecated.
+METHOD_ASSEMBLE_PARTCAD_ASSY = 1
 
+# The one and only way an assembly is put together, and the name it goes by in
+# 'partcad.yaml'.
+METHOD_ASSY = "assy"
+
+# An assembly is put together rather than made, so it shares no methods with a
+# part: "assy" - following the assembly's own instructions - is the only one
+# there is, and every assembly of type "assy" gets it (see AssemblyConfiguration).
 _METHOD_MAP: dict[str, int] = {
-    "basic": METHOD_ASSEMBLE_PARTCAD_BASIC,
+    METHOD_ASSY: METHOD_ASSEMBLE_PARTCAD_ASSY,
 }
 
 
@@ -30,8 +38,8 @@ class AssemblyConfigManufacturing:
             )
 
     def _method_string(self) -> str:
-        if self.method == METHOD_ASSEMBLE_PARTCAD_BASIC:
-            return "basic"
+        if self.method == METHOD_ASSEMBLE_PARTCAD_ASSY:
+            return METHOD_ASSY
         if self.method == METHOD_NONE:
             return "none"
         return "unknown"

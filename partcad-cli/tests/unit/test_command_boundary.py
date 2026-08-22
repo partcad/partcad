@@ -59,6 +59,11 @@ IN_PROCESS = {
     "init.py": "creates the workspace itself, before any package (or daemon context) exists",
     "config.py": "prints the client's own resolved user_config, with its --threads-max/PC_* overrides",
     "healthcheck.py": "diagnoses the host the CLI runs on, which is not necessarily the daemon's",
+    # `pc update` updates a package's imports and is a thin client like any
+    # other; `pc upgrade` replaces this machine's copy of PartCAD, which only the
+    # process running from it can do. Two commands, on opposite sides of the
+    # boundary, which is why they are not one command with a flag.
+    "upgrade.py": "replaces this machine's PartCAD installation, and stops the local daemons to do it",
     "daemon/start.py": "manages the daemon process itself",
     "daemon/stop.py": "manages the daemon process itself",
     "system/telemetry/clear.py": "clears the client's own telemetry id under the client's state dir",
@@ -101,8 +106,9 @@ CLI_STARTUP_MODULES = (
     "click/service.py",
 )
 
-# `partcad_utils` and `partcad_service_json_rpc` are the deliberately cheap
-# packages the client is allowed to import, so the match has to be exact.
+# `partcad_utils`, `partcad_client` and `partcad_service_json_rpc` are the
+# deliberately cheap packages the client is allowed to import, so the match has
+# to be exact.
 HEAVY_PACKAGE = "partcad"
 
 CommandModule = namedtuple("CommandModule", "rel partcad_imports imports_run run_calls unresolved_run_calls")
@@ -374,7 +380,9 @@ def test_cli_startup_path_does_not_import_partcad_at_module_level():
 
                 Every `pc` invocation pays that ~1.6s, including `pc --help` and the
                 commands that only talk to the daemon. `partcad_utils` carries the pieces
-                the client genuinely needs (logging, telemetry, user_config); anything
-                else belongs behind a function-level import, the way
+                every component shares (logging, telemetry, user_config) and
+                `partcad_client` the ones only a client needs (daemon discovery and
+                connection, self-update); anything else belongs behind a function-level
+                import, the way
                 command.py::get_partcad_context defers `from partcad.globals import init`.
                 """).format(details=details))

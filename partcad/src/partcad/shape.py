@@ -24,6 +24,7 @@ from .shape_config import ShapeConfiguration
 from .utils import total_size
 from . import logging as pc_logging
 from .sync_threads import threadpool_manager
+from . import sandbox_versions
 from . import wrapper
 
 if TYPE_CHECKING:
@@ -51,6 +52,7 @@ PART_EXTENSION_MAPPING = {
     "gltf": "json",
     "cadquery": "py",
     "build123d": "py",
+    "chili3d": "chili",
     "sdf": "py",
     "scad": "scad",
 }
@@ -60,6 +62,14 @@ SKETCH_EXTENSION_MAPPING = {
     "dxf": "dxf",
     "cadquery": "py",
     "build123d": "py",
+}
+
+# File extensions for the render formats whose name is not their extension.
+# Deliberately kept apart from the two mappings above: those also enumerate the
+# part types 'Shape.convert()' accepts, and a rasterized projection is not one
+# of them (it cannot be read back in as a part).
+RENDER_EXTENSION_MAPPING = {
+    "jpeg": "jpg",
 }
 
 # The part types 'Shape.convert()' can hand back as a live in-memory CAD object
@@ -72,6 +82,7 @@ LIVE_OBJECT_PART_TYPES = frozenset({"build123d", "cadquery"})
 UNEXPORTABLE_PART_TYPES = {
     "scad": "PartCAD can read OpenSCAD but cannot write it",
     "sdf": "PartCAD can read SDF scripts but cannot write them",
+    "chili3d": "PartCAD can read Chili3D scripts but cannot write them",
 }
 
 # Every part type named by the extension mappings that 'Shape.convert()' can
@@ -129,12 +140,24 @@ class Shape(ShapeConfiguration):
 
         # Cache behavior
         self.cacheable = config.get("cache", True)
+        # Optional: what the environment this shape is produced in consists
+        # of, for the shapes that are produced in one at all (see
+        # set_environment_cache_key). None for a shape that is composed rather
+        # than rendered, such as an assembly.
+        self.environment_cache_key = None
         self.cache_dependencies = []
         self.cache_dependencies_broken = False
         self.cache_dependencies_ignore = self.config.get("cache_dependencies_ignore", True)
 
         # Memory cache
         self._wrapped = None
+        self._bounding_box = None
+
+        # Set by the factory (see ShapeFactory.prepare_async): everything that has
+        # to happen before this shape's cache key means anything - 'fileFrom'
+        # downloads and cross-package references - without building the shape.
+        self._prepare = None
+        self._prepared = False
 
         # Filesystem cache
         self.hash = CacheHash(f"{self.project_name}:{self.name}", cache=self.cacheable)
@@ -146,6 +169,34 @@ class Shape(ShapeConfiguration):
                 if key in self.config:
                     cad_config[key] = self.config[key]
             self.hash.add_dict(cad_config)
+
+    def set_environment_cache_key(self, environment_cache_key: str) -> None:
+        """Record the environment this shape is produced in, and cache by it.
+
+        A shape produced by a sandbox comes from an interpreter of some version
+        with dependencies of some versions, and the result belongs to that
+        combination: move the package to another interpreter or another CAD
+        library and the shape has to be built again rather than read back from
+        what the previous one produced.
+
+        Every kind of shape can have one. A part written as a script obviously
+        does, but so does a sketch, and so does a part read from a CAD file -
+        the importer that turns a STEP file into a BREP is itself a script in a
+        sandbox. What does not is a shape that is composed rather than rendered,
+        such as an assembly, whose pieces each carry their own.
+
+        None of it is visible to the hash otherwise. Only 'parameters', 'offset'
+        and 'scale' are taken from the configuration above, and the environment
+        is not spelled out in a shape's configuration anyway - it is resolved
+        from the package's settings, the shape's, and the versions PartCAD
+        itself supplies.
+
+        Set through ShapeFactory.apply_environment_cache_key() as a shape is
+        created, from 'sandbox_versions.environment_cache_key()'. Must happen
+        before the hash is used, which creation time guarantees.
+        """
+        self.environment_cache_key = environment_cache_key
+        self.hash.add_string(environment_cache_key)
 
     def matches(self, keyword: str) -> bool:
         if not keyword:
@@ -204,6 +255,51 @@ class Shape(ShapeConfiguration):
 
         return self.components
 
+    def prepare(self):
+        return asyncio.run(self.prepare_async())
+
+    async def prepare_async(self):
+        """Fetch everything the cache key depends on, without building the shape.
+
+        This is what makes 'pc install' behave like 'npm install': the factory
+        hook downloads whatever 'fileFrom' points at and resolves every
+        cross-package reference, which loads - and so downloads - the packages
+        this shape really depends on. A later build then finds it all on disk.
+
+        Idempotent, and safe against reference cycles between assemblies: the
+        flag is raised before the hook runs, so a shape that (indirectly) links
+        back to itself stops here instead of recursing.
+        """
+        if self._prepared:
+            return
+        self._prepared = True
+        if self._prepare is not None:
+            try:
+                await self._prepare(self)
+            except BaseException:
+                # A preparation that failed has not happened: leaving the flag
+                # up would make a warm context skip it forever and then hash a
+                # file that was never downloaded.
+                self._prepared = False
+                raise
+
+    async def get_cache_key_async(self) -> Optional[str]:
+        """Prepare this shape and return its cache key, or None if it has none.
+
+        The key hashes the shape's configuration together with the content of
+        the files it is built from, so it is only correct once those files are
+        on disk - which is what 'prepare_async()' above guarantees. Shapes that
+        are not cached in their own right (an alias or an enrich hashes the
+        object it points at, not itself) report no key.
+        """
+        await self.prepare_async()
+        if not self.get_cacheable():
+            return None
+        return self.hash.get()
+
+    def get_cache_key(self) -> Optional[str]:
+        return asyncio.run(self.get_cache_key_async())
+
     async def get_wrapped(self, ctx):
         with self.lock:
             async with self.get_async_lock():
@@ -215,7 +311,9 @@ class Shape(ShapeConfiguration):
                     cache_hash = self.hash
                     if cache_hash:
                         keys_to_read = [self.kind, "cmps"]
-                        cached, to_cache_in_memory = await ctx.cache_shapes.read_async(cache_hash, keys_to_read)
+                        cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
+                            cache_hash, keys_to_read, self.get_cache_metadata()
+                        )
                         if to_cache_in_memory.get(self.kind, False):
                             self._wrapped = cached[self.kind]
                         if to_cache_in_memory.get("cmps", False):
@@ -252,6 +350,13 @@ class Shape(ShapeConfiguration):
                     if "scale" in self.config:
                         shape = await transform.scale(ctx, shape, self.config["scale"])
 
+                # Whatever produced the envelope - a factory, a wrapper, a
+                # transform - the outer layer around it is this shape's own. It
+                # is stamped here rather than left to whoever built the payload,
+                # so that a shape built now and the same shape materialized from
+                # the cache later carry exactly the same name and label.
+                shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
+
                 if cache_hash:
                     if is_cacheable:
                         to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
@@ -283,7 +388,9 @@ class Shape(ShapeConfiguration):
         only the in-process factories still produce - is encoded here, the one
         place in the core that touches a live shape. The OCP codec is imported
         lazily, so a workflow that only uses delegating factories never pulls
-        OCP into the core process.
+        OCP into the core process. The payload is taken as the compressed bytes,
+        not the base64 the same codec produces for the pipe: this envelope stays
+        in this process, and may go straight into a cache from here.
         """
         if shape is None or shape_envelope.is_shape_envelope(shape):
             return shape
@@ -291,7 +398,7 @@ class Shape(ShapeConfiguration):
 
         if name is None and label is None:
             name, label = self._shape_metadata()
-        return ocp_serialize.encode_shape(shape, name=name, label=label)
+        return shape_envelope.make_shape(ocp_serialize.compressed_brep(shape), name=name, label=label)
 
     def _component_to_envelope(self, component):
         """Normalize a component (or nested list of components) into envelopes."""
@@ -300,20 +407,27 @@ class Shape(ShapeConfiguration):
         return self._to_envelope(component)
 
     async def get_cache_value(self, ctx, shape):
-        """The value stored in the shape cache under 'self.kind'.
+        """The value handed to the shape cache under 'self.kind'.
 
-        A plain shape is stored as a single {"name", "label", "brep"} object.
-        Assembly overrides this to store its nested tree so that the hierarchy -
-        names, labels and sub-assemblies - survives caching, which a flat
-        compound would lose.
+        A plain shape is a single BREP envelope; an assembly is the nested tree
+        it was built as, so that the hierarchy - names, labels and
+        sub-assemblies - survives caching, which a flat compound would lose.
 
-        'shape' is already a BREP envelope (get_wrapped normalizes it), so this
-        only restamps the cache's canonical name/label onto it.
+        'shape' is already an envelope (get_wrapped normalizes it) and is passed
+        on as it is: what identifies this particular shape is not cached with
+        the geometry but comes from 'get_cache_metadata()' on the way out.
         """
-        if shape is None:
-            return None
+        return shape
+
+    def get_cache_metadata(self):
+        """The outer layer to wrap around this shape's payload read from the cache.
+
+        A cache entry is keyed on the geometry, so several shapes with identical
+        geometry share one. Everything that says which shape this is therefore
+        lives here rather than in the cache - see ShapeCache.
+        """
         full_name, label = self._shape_metadata()
-        return shape_envelope.with_metadata(shape, name=full_name, label=label)
+        return {"name": full_name, "label": label}
 
     async def convert(self, part_type: str, ctx=None, **kwargs):
         """Convert this shape to 'part_type' and return the result in memory.
@@ -552,6 +666,10 @@ class Shape(ShapeConfiguration):
             info["Ports"] = self.with_ports.info()
 
         info["Hash"] = self.hash.get()
+        if self.environment_cache_key is not None:
+            # Part of that hash, and the part of it a user is most likely to be
+            # asking about when a shape re-renders instead of coming from cache.
+            info["Environment"] = self.environment_cache_key
         info["Dependencies"] = self.cache_dependencies
         return info
 
@@ -672,8 +790,13 @@ class Shape(ShapeConfiguration):
             output_dir, filepath = filepath, None
 
         impl = output.Implementation(section, format_name, opts)
-        default_extension = PART_EXTENSION_MAPPING.get(format_name) or SKETCH_EXTENSION_MAPPING.get(
-            format_name, format_name
+        # 'jpeg' is the format's name but '.jpg' is the file's; the render-only
+        # mapping is consulted first so a format whose extension differs from
+        # its name keeps it even when no configuration spells 'extension' out.
+        default_extension = (
+            RENDER_EXTENSION_MAPPING.get(format_name)
+            or PART_EXTENSION_MAPPING.get(format_name)
+            or SKETCH_EXTENSION_MAPPING.get(format_name, format_name)
         )
         extension = "." + impl.extension(default_extension)
         filepath = self._output_filepath(opts, output_dir, extension, project, filepath)
@@ -877,13 +1000,22 @@ class Shape(ShapeConfiguration):
         filepath=None,
         line_weight=None,
         viewport_origin=None,
+        annotations=None,
     ):
-        """Renders an SVG file somewhere, ignoring where the project wants it."""
+        """Renders an SVG file somewhere, ignoring where the project wants it.
+
+        'annotations' are 3D line segments - each a pair of points in the shape's
+        own coordinate system - to draw on top of the projection. An assembly
+        instruction book uses them to show the gap an exploded view introduces
+        (see assembly_guide.py); they are projected together with the shape, so
+        they land where the geometry they point at does.
+        """
         if filepath is None:
             with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as f:
                 filepath = f.name
 
-        self.svg_path = None
+        if not annotations:
+            self.svg_path = None
         await self.render_async(
             ctx,
             "svg",
@@ -891,8 +1023,12 @@ class Shape(ShapeConfiguration):
             filepath=filepath,
             line_weight=line_weight,
             viewport_origin=viewport_origin,
+            annotations=annotations,
         )
-        if os.path.exists(filepath):
+        if not annotations and os.path.exists(filepath):
+            # An annotated projection is a one-off illustration, not this shape's
+            # picture: remembering it here would hand it to every later caller
+            # that asks for the shape's SVG.
             self.svg_path = filepath
 
     def render_svg_somewhere(
@@ -902,8 +1038,81 @@ class Shape(ShapeConfiguration):
         filepath=None,
         line_weight=None,
         viewport_origin=None,
+        annotations=None,
     ):
-        asyncio.run(self.render_svg_somewhere_async(ctx, project, filepath, line_weight, viewport_origin))
+        asyncio.run(
+            self.render_svg_somewhere_async(
+                ctx,
+                project=project,
+                filepath=filepath,
+                line_weight=line_weight,
+                viewport_origin=viewport_origin,
+                annotations=annotations,
+            )
+        )
+
+    async def get_bounding_box_async(self, ctx):
+        """The axis-aligned bounding box of this shape, in its own coordinates.
+
+        Returned as '(x_min, y_min, z_min, x_max, y_max, z_max)', or 'None' when
+        the shape is empty or failed to instantiate. Measured in a sandbox, like
+        every other operation on geometry, and remembered afterwards: the callers
+        that need a size (exploded views) ask for the same one repeatedly.
+        """
+        if self._bounding_box is not None:
+            return self._bounding_box
+
+        obj = await self.get_wrapped(ctx)
+        if obj is None:
+            return None
+
+        with pc_logging.Action("BoundingBox", self.project_name, self.name):
+            request_serialized = shape_envelope.serialize({"wrapped": obj})
+
+            runtime = ctx.get_python_runtime(version="3.11")
+            await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+
+            # The wrapper writes nothing, but every wrapper is invoked with an
+            # output path; give it one inside a directory of our own, which is
+            # removed with the call.
+            with tempfile.TemporaryDirectory(prefix="partcad-bbox-") as unused_dir:
+                command = [wrapper.get("bbox.py"), os.path.join(unused_dir, "unused.txt")]
+                exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
+            if exitcode != 0 and len(errors) == 0:
+                errors = f"Failed to execute command '{' '.join(command)}' with exit code {exitcode}"
+            if errors:
+                pc_logging.error(errors)
+                raise Exception(errors)
+
+            response_lines = response_serialized.strip().splitlines()
+            if not response_lines:
+                pc_logging.error("Empty response from wrapper: %s" % command[0])
+                return None
+            result = shape_envelope.deserialize(response_lines[-1].strip())
+
+            if not result.get("success", False):
+                pc_logging.error(
+                    "BoundingBox failed for %s:%s: %s"
+                    % (self.project_name, self.name, result.get("exception", "Unknown error"))
+                )
+                return None
+
+            box = result.get("bounding_box")
+            self._bounding_box = None if box is None else tuple(box)
+            return self._bounding_box
+
+    def get_bounding_box(self, ctx):
+        return asyncio.run(self.get_bounding_box_async(ctx))
+
+    async def get_max_dimension_async(self, ctx):
+        """The largest linear dimension of this shape, or 'None' if unknown."""
+        box = await self.get_bounding_box_async(ctx)
+        if box is None:
+            return None
+        return max(box[3] - box[0], box[4] - box[1], box[5] - box[2])
+
+    def get_max_dimension(self, ctx):
+        return asyncio.run(self.get_max_dimension_async(ctx))
 
     async def _run_test_async(self, ctx: Context, tests: list | None = None, use_wrapper: bool = False) -> bool:
         if not self.finalized:

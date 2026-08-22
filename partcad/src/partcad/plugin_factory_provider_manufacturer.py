@@ -8,6 +8,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import os
 import tempfile
 
 from .plugin_request_provider_caps import ProviderRequestCaps
@@ -15,7 +16,7 @@ from .plugin_request_provider_order import ProviderRequestOrder
 from .plugin_request_provider_quote import ProviderRequestQuote
 from .plugin_factory_provider import PluginFactoryProvider
 from .plugin_provider_data_cart import *
-from .part import Part
+from .plugin_provider_data_cart import resolve_cart_object
 from . import logging as pc_logging
 from . import telemetry
 
@@ -79,11 +80,17 @@ class PluginFactoryProviderManufacturer(PluginFactoryProvider):
         caps = await self.plugin.get_caps()
         # TODO(clairbee): Make the below more generic
         if "formats" in caps and "step" in caps["formats"]:
-            part: Part = self.ctx.get_part(cart_item.name)
-            filepath = tempfile.mktemp(".step")
-            await part.render_async(self.ctx, format_name="step", filepath=filepath)
-            with open(filepath, "rb") as f:
-                step = f.read()
+            # A cart item is a part most of the time, but it is an assembly
+            # whenever one is ordered assembled
+            object = resolve_cart_object(self.ctx, cart_item.name)
+            if object is None:
+                pc_logging.error(f"Part or assembly '{cart_item.name}' not found")
+                return
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                filepath = os.path.join(tmp_dir, "cart_item.step")
+                await object.render_async(self.ctx, format_name="step", filepath=filepath)
+                with open(filepath, "rb") as f:
+                    step = f.read()
             cart_item.add_binary("step", step)
         else:
             # TODO(clairbee): add support for other formats

@@ -82,6 +82,63 @@ links:
 per node. `with` names the interface/port on the part being added; `to` names it
 on the part already in the assembly.
 
+Both `connectPorts` and `connect` also take two optional sections that describe
+the connection rather than place it:
+
+```yaml
+- part: <...>
+  connect:
+    name: <target instance already in the assembly>
+    comment: <free form context for a human or an LLM; never parsed>
+    how:
+      stage: <label; consecutive nodes sharing it are connected at the same time>
+      pushForceMax: <force in N, default 5>
+      pushDistance: <staging distance in mm; default 1.5x the part's length along the interface Z>
+      turnDirection: <cw (default) or ccw>
+      turnTorqueMax: <torque in N*m, default 0>
+      threadStep: <lead in mm per full turn, default 0.00>
+      holdWith: <interface(s) to hold the part being added by>
+      holdWithInstance: <instance(s) of holdWith>
+      holdWithForceMin/Max: <force in N to hold it with, default 3/7; holdWithForce sets both>
+      holdTo: <interface(s) to hold the target by>
+      holdToInstance: <instance(s) of holdTo>
+      holdToForceMin/Max: <force in N to hold the target with, default 3/7; holdToForce sets both>
+```
+
+`pushDirection` is not a field: it is deduced from the interfaces (an
+interface's +Z points into the object it belongs to, which is the way an
+incoming part travels) and reported with the rest.
+
+Everything that is **required** to perform the assembly must be codified in
+`how` and the other fields — never only in `comment`, which no tool reads. The
+`hold*` fields default to the `connect:` section of the part or assembly
+definition in `partcad.yaml`:
+
+```yaml
+parts:
+  <name>:
+    type: step
+    connect: # (optional) what this part contributes to every connection
+      hold: <interface(s) to hold it by>
+      holdInstance: <instance(s) of hold>
+      holdForceMin/Max: <force in N; holdForce sets both>
+```
+
+`threadStep` defaults to the thread of the interfaces being connected, declared
+once on the interface that introduces it:
+
+```yaml
+interfaces:
+  m3:
+    threadStep: 0.5   # inherited by every interface that inherits m3
+    selfScrew: false  # true when it cuts its own thread instead of matching one
+```
+
+Two connected interfaces must agree on `threadStep` unless one declares
+`selfScrew`. Run `pc test -a <name>` to check that: it fails an assembly whose
+instructions contradict themselves — a mismatched thread, or a `*Min` above its
+`*Max` — and passes one that takes every default.
+
 **Sub-assembly node** — identical to a part node but with `assembly:` instead of
 `part:`, and it may carry its own nested `links:`.
 
@@ -98,6 +155,12 @@ assemblies:
     path: <name>.assy
     manufacturable: false
 ```
+
+Do not add a `manufacturing:` section: `assy` is the only method an assembly has
+and it comes with the type. (`additive`/`subtractive`/`forming` are ways of
+making a *part* and mean nothing here.) Marking it manufacturable instead makes
+`pc test` require that every part in it can be bought or made from a declared
+supplier — only do that when that is true.
 
 ## 4. Validate, render, iterate
 
