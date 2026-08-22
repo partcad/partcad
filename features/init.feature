@@ -41,6 +41,15 @@ Feature: `pc init` command
       """
     And the package should be marked as private
 
+  @pc-init @launch-configuration
+  Scenario: Add the "Render" command to the editor's launch configuration
+    Given a file named "partcad.yaml" does not exist
+    When I run "pc --no-ansi init"
+    Then the command should exit with a status code of "0"
+    And a file named ".vscode/launch.json" should be created
+    And the file ".vscode/launch.json" should hold the "Render" run command
+    And STDERR should contain "Added the 'Render' command"
+
   @pc-init @option-private @failure
   Scenario: Fail initializing package when `partcad.yaml`already exists
     Given a file named "partcad.yaml" does not exist

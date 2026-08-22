@@ -193,6 +193,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             if (
                 part.type === 'cadquery' ||
                 part.type === 'build123d' ||
+                part.type === 'chili3d' ||
                 part.type === 'scad' ||
                 part.type.startsWith('ai-')
             ) {

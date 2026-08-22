@@ -57,6 +57,7 @@ by ``vendor`` and ``SKU``.
     existing_part:
       vendor: homedepot # for example
       sku: ...
+      count_per_sku: 25 # if it's sold in packs of 25
       ...
     new_part:
       manufacturing:
@@ -66,7 +67,12 @@ by ``vendor`` and ``SKU``.
         material: //pub/std/manufacturing/material/plastic:pla
       ...
 
-See :ref:`providers` for more information about the providers and how PartCAD selects them.
+Assemblies that are sold in an assembled state are declared the same way, using
+``vendor`` and ``sku`` on the assembly itself.
+
+See :ref:`procurement` for more information about declaring purchasable objects,
+and :ref:`providers` for more information about the providers and how PartCAD
+selects them.
 
 In the future, PartCAD will support ``assembler``, which is supposed to produce
 an assembly given assembly instructions and using parts ordered from
@@ -87,7 +93,17 @@ Caching
 
 PartCAD is capable of caching intermediate and final results of all model compilations.
 This can be particularly useful when working with large models or when scripting languages
-(like OpenSCAD, CadQuery, build123d or sdf) are used.
+(like OpenSCAD, CadQuery, build123d, Chili3D or sdf) are used.
+
+Anything PartCAD produces in a sandbox is cached under the environment that
+produced it as well as under its own inputs: the interpreter version and the
+versions of the CAD libraries installed alongside it. That covers parts and
+sketches written as scripts, and equally parts read from CAD files, since the
+importer that turns a ``STEP`` file into geometry is itself a script in a
+sandbox. Moving a package to another Python or Node.js, or to another version of
+Chili3D, therefore re-renders rather than serving what the previous environment
+built. ``pc info`` reports that environment for the objects that have one; an
+assembly does not, because it is composed from objects that each carry theirs.
 
 At the moment code-CAD caching is experimental and can be enabled by using the following configuration:
 
@@ -105,12 +121,13 @@ security and the risk of running arbitrary third-party code is not sufficiently
 addressed. PartCAD aims to close that gap for open-source software in a way
 that exceeds anything commercial software has to offer at the moment.
 
-PartCAD is capable of rendering scripted parts
-(``CadQuery``, ``build123d`` and ``sdf`` use Python) in sandboxed environments.
+PartCAD is capable of rendering scripted parts in sandboxed environments:
+``CadQuery``, ``build123d`` and ``sdf`` use Python, and ``Chili3D`` uses
+JavaScript.
 
 At the moment it is only useful from a dependency management perspective
-(it allows third-party packages to bring their Python dependencies without
-polluting your own Python environment),
+(it allows third-party packages to bring their Python and npm dependencies
+without polluting your own environments),
 in the future, PartCAD aims to achieve security isolation of the sandboxed
 environments. That will fundamentally change the security implications of using
 scripted models shared online.

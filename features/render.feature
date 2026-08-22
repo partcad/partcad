@@ -15,10 +15,12 @@ Feature: `pc render` command
     Then STDERR should not contain "WARN:"
 
   # TODO-63: @alexanderilyin: consider extracting `-t readme` as `pc generate readme` command
-  # @wip @type-text
-  # Examples: Media Types: Text
-    # |    type | filename              |
-    # |  readme | README.md             |
+  # An assembly is the subject of its own document (its bill of materials),
+  # rather than of the package document that `-t readme` generates without `-a`.
+  @type-text
+  Examples: Media Types: Text
+    |    type | filename              |
+    |  readme | logo_embedded.md      |
 
   @type-image
   Examples: Media Type: .svg
@@ -34,6 +36,34 @@ Feature: `pc render` command
   Examples: Media Type: .jpg
     |    type | filename              |
     |    jpeg | logo_embedded.jpg     |
+
+  # The assembly instruction book: the same document laid out on paper and as
+  # pages to flip through. The examples package declares itself
+  # `manufacturable: false`, so generating one takes the flag that says so.
+  #
+  # `primitive` rather than `logo_embedded`: an instruction book renders an
+  # illustration per item and per step, and this one is the smallest assembly
+  # that still has a step in it. What the steps themselves look like is covered
+  # by the unit tests, which do not pay the cost of a CLI round trip.
+  Scenario Outline: `pc render` of an assembly instruction book
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t <type> --ignore-manufacturability -O ./ -a :primitive"
+    Then the command should exit with a status code of "0"
+    Then a file named "<filename>" should be created
+    Given a file named "partcad.yaml" does not exist
+    Then STDERR should contain "DONE: Render: //pub/examples/partcad/produce_assembly_assy:"
+
+    @type-guide
+    Examples: Media Types: Assembly instructions
+      |    type | filename          |
+      |     pdf | primitive.pdf     |
+      |    html | primitive.html    |
+
+  @type-guide
+  Scenario: `pc render -t pdf` refuses an assembly that is not meant to be built
+    When I run "pc --no-ansi -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t pdf -O ./ -a :primitive"
+    Then the command should exit with a status code of "2"
+    Then STDERR should contain "--ignore-manufacturability"
+    Then a file named "primitive.pdf" should not exist
 
 
 # pc -p $PARTCAD_ROOT/examples render --package /produce_assembly_assy -t readme -a :logo_embedded

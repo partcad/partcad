@@ -15,6 +15,7 @@ from ...service import run
 PART_KINDS = [
     "cadquery",
     "build123d",
+    "chili3d",
     "sdf",
     "scad",
     "step",

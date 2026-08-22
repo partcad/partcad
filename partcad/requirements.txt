@@ -6,10 +6,17 @@
 # things that need a CAD library present in this process are handing back live
 # build123d/cadquery objects (convert("build123d"/"cadquery")) and show(); both
 # are opt-in, import their library lazily, and warn if it is not installed.
-partcad-utils==0.7.158
+partcad-utils==0.7.168
 # sdf-fork  # installed on demand into the sandbox runtime (see part_factory_sdf.py)
 pyyaml>=6.0.1
-pygit2>=1.15.0
+# Pinned, not floored. pygit2 follows libgit2 and drops deprecated API across
+# minor releases: 1.20 removed 'Remote.ls_remotes()' (see project_factory_git.py)
+# and reddened every build here the day it was published, because an open floor
+# means a fresh resolve silently picks up such a release. Bump this deliberately,
+# with a test run, instead. 1.18.2 is the last line that supports Python 3.10;
+# 1.19 and later require 3.11, hence the two arms.
+pygit2==1.18.2; python_version < "3.11"
+pygit2==1.20.0; python_version >= "3.11"
 ruamel.yaml>=0.18.5
 packaging>=23.1
 setuptools

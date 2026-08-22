@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.7.158",
+  "version": "0.7.168",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -221,6 +221,12 @@
             ],
             "scope": "machine",
             "type": "string"
+          },
+          "partcad.develIndex": {
+            "default": false,
+            "description": "Whether to take the public PartCAD index from its 'devel' branch instead of the released state on 'main'. Turn this on to work against index changes that have not been released yet.",
+            "scope": "machine",
+            "type": "boolean"
           },
           "partcad.importStrategy": {
             "default": "useBundled",
@@ -762,7 +768,7 @@
       "activitybar": [
         {
           "id": "partcad-container",
-          "title": "PartCAD (Beta)",
+          "title": "PartCAD",
           "icon": "resources/logo.svg"
         }
       ]
@@ -816,12 +822,12 @@
       },
       {
         "view": "partcadExplorer",
-        "contents": "PartCAD Python module v0.7.158 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD Python module](command:partcad.startInstall)",
+        "contents": "PartCAD Python module v0.7.168 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD](command:partcad.startInstall)",
         "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled"
       },
       {
         "view": "partcadExplorer",
-        "contents": "PartCAD Python module needs to be updated for the current package to work properly.\n\n[Update PartCAD Python module](command:partcad.startInstall)",
+        "contents": "PartCAD needs to be updated for the current package to work properly.\n\n[Update PartCAD](command:partcad.startInstall)",
         "when": "partcad.needsUpdate"
       },
       {

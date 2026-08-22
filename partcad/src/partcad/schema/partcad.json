@@ -116,6 +116,70 @@
           ]
         }
       }
+    },
+    "render": {
+      "type": "object",
+      "patternProperties": {
+        "^(readme|pdf|html|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string" },
+            {
+              "type": "object",
+              "properties": {
+                "prefix": { "type": "string", "minLength": 1 },
+                "path": { "type": "string", "minLength": 1 },
+                "exclude": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
+                  },
+                  "uniqueItems": true
+                },
+                "width": { "type": "integer", "minimum": 1 },
+                "height": { "type": "integer", "minimum": 1 }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "^jpeg$": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string" },
+            {
+              "type": "object",
+              "properties": {
+                "prefix": { "type": "string", "minLength": 1 },
+                "path": { "type": "string", "minLength": 1 },
+                "exclude": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
+                  },
+                  "uniqueItems": true
+                },
+                "width": { "type": "integer", "minimum": 1 },
+                "height": { "type": "integer", "minimum": 1 },
+                "quality": { "type": "integer", "minimum": 1, "maximum": 100 },
+                "progressive": { "type": "boolean" },
+                "optimize": { "type": "boolean" },
+                "subsampling": {
+                  "oneOf": [
+                    { "type": "string", "enum": ["4:4:4", "4:2:2", "4:2:0", "4:1:1"] },
+                    { "type": "integer", "minimum": -1, "maximum": 2 }
+                  ]
+                },
+                "background": { "type": "string", "pattern": "^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -162,6 +226,19 @@
       "items": { "type": "string", "minLength": 3 },
       "uniqueItems": true
     },
+    "javascriptVersion": {
+      "type": ["string", "number"],
+      "pattern": "^[0-9]+(\\.[0-9]+)*$"
+    },
+    "javascriptRequirements": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "chili3dVersion": {
+      "type": ["string", "number"],
+      "minLength": 1
+    },
     "suppliers":{
       "oneOf":[
         { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
@@ -182,68 +259,7 @@
       },
       "additionalProperties": false
     },
-    "render": {
-      "type": "object",
-      "patternProperties": {
-        "^(readme|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
-          "oneOf": [
-            { "type": "null" },
-            { "type": "string" },
-            {
-              "type": "object",
-              "properties": {
-                "prefix": { "type": "string", "minLength": 1 },
-                "exclude": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
-                  },
-                  "uniqueItems": true
-                },
-                "width": { "type": "integer", "minimum": 1 },
-                "height": { "type": "integer", "minimum": 1 }
-              },
-              "additionalProperties": false
-            }
-          ]
-        },
-        "^jpeg$": {
-          "oneOf": [
-            { "type": "null" },
-            { "type": "string" },
-            {
-              "type": "object",
-              "properties": {
-                "prefix": { "type": "string", "minLength": 1 },
-                "exclude": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
-                  },
-                  "uniqueItems": true
-                },
-                "width": { "type": "integer", "minimum": 1 },
-                "height": { "type": "integer", "minimum": 1 },
-                "quality": { "type": "integer", "minimum": 1, "maximum": 100 },
-                "progressive": { "type": "boolean" },
-                "optimize": { "type": "boolean" },
-                "subsampling": {
-                  "oneOf": [
-                    { "type": "string", "enum": ["4:4:4", "4:2:2", "4:2:0", "4:1:1"] },
-                    { "type": "integer", "minimum": -1, "maximum": 2 }
-                  ]
-                },
-                "background": { "type": "string", "pattern": "^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" }
-              },
-              "additionalProperties": false
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
+    "render": { "$ref": "#/definitions/render" },
     "dependencies": {
       "type": "object",
       "patternProperties": {
@@ -259,6 +275,7 @@
             "revision": { "type": "string", "minLength": 1 },
             "plugin": { "type": "string", "minLength": 1 },
             "subfolder": { "type": "string" },
+            "cacheVersion": { "type": "integer", "minimum": 0 },
             "includePaths": {
               "type": "array",
               "items": { "type": "string", "minLength": 1 },
@@ -275,6 +292,7 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
           "oneOf": [
             {"type": "string", "minLength": 1},
             {
@@ -283,7 +301,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "cadquery", "build123d", "svg", "dxf", "extrude", "sweep",
+                    "cadquery", "build123d", "chili3d", "svg", "dxf", "extrude", "sweep",
                     "stl", "step", "scad", "3mf", "enrich", "alias", "brep", "obj",
                     "kicad", "compound"
                   ]
@@ -300,6 +318,8 @@
                   }
                 },
                 "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "desc": { "type": "string", "maxLength": 1000 },
@@ -352,6 +372,19 @@
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
                 },
+                "javascriptRequirements": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "javascriptVersion": {
+                  "type": ["string", "number"],
+                  "pattern": "^[0-9]+(\\.[0-9]+)*$"
+                },
+                "chili3dVersion": {
+                  "type": ["string", "number"],
+                  "minLength": 1
+                },
                 "dependencies": {
                   "type": "array",
                   "items": { "type": "string", "minLength": 1 },
@@ -360,6 +393,7 @@
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
                 "manufacturing": {
                   "type": "object",
                   "properties": {
@@ -423,7 +457,12 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
-                "parameters": { "$ref": "#/definitions/shape-parameter" }
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "vendor": { "type": "string", "minLength": 1 },
+                "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 }
               },
               "required": ["type"],
               "additionalProperties": true
@@ -437,14 +476,23 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
           "oneOf": [
             {"type": "string", "minLength": 1},
             {
               "type": "object",
               "properties": {
-                "type": { "type": "string", "enum": ["assy", "alias"] },
+                "type": { "type": "string", "enum": ["assy", "step", "alias"] },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 5,
+                  "description": "The number of decimal places the placement of each component is rounded to ('step' type only)"
+                },
                 "manufacturing": {
                   "type": "object",
                   "properties": {
@@ -461,7 +509,11 @@
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
                 },
-                "offset": { "$ref": "#/definitions/OCCTLocation" }
+                "vendor": { "type": "string", "minLength": 1 },
+                "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "render": { "$ref": "#/definitions/render" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -479,6 +531,8 @@
             "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
             "desc": { "type": "string", "maxLength": 1000 },
             "path": { "type": "string", "minLength": 1 },
+            "fileFrom": { "type": "string", "enum": ["url"] },
+            "fileUrl": { "$ref": "#/definitions/url" },
             "tolerance": { "type": "number", "minimum": 0 },
             "parameters": { "$ref": "#/definitions/shape-parameter"},
             "include":{
@@ -593,6 +647,7 @@
             }
           },
           "required": ["type"],
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
           "additionalProperties": false
         }
       },

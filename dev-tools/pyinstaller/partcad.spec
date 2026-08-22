@@ -133,6 +133,7 @@ hiddenimports += command_modules()
 # import them directly (some, like the telemetry backends, only by name), so
 # collect the whole package.
 hiddenimports += collect_submodules("partcad_utils")
+hiddenimports += collect_submodules("partcad_client")
 
 # The JSON-RPC service (`partcad-json-rpc`). Its HTTP transport imports aiohttp
 # lazily, inside a function that is only reached in HTTP mode, so PyInstaller's
@@ -196,9 +197,16 @@ if _ruff_bin.is_file():
 else:
     print(f"partcad.spec: no ruff executable at '{_ruff_bin}', `pc lint` will not lint Python files")
 
+# The clients of the two off-machine cache tiers. Both are imported inside the
+# backend that needs them (see partcad/cache_backend_memcache.py and
+# cache_backend_s3.py), so PyInstaller cannot see them from the import graph.
+add_package("aiomcache")
+add_package("aioboto3")
+
 # The version PartCAD reports and sends with telemetry.
 add_metadata("partcad")
 add_metadata("partcad-utils")
+add_metadata("partcad-client")
 add_metadata("partcad-cli")
 add_metadata("partcad-service-json-rpc")
 

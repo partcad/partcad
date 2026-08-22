@@ -20,6 +20,8 @@ from . import shape_envelope
 
 @telemetry.instrument()
 class PartFactoryStep(PartFactoryFile):
+    PYTHON_SANDBOX_VERSION = "3.11"
+
     lock = threading.Lock()
 
     def __init__(self, ctx, source_project, target_project, config, can_create=False):
@@ -27,7 +29,7 @@ class PartFactoryStep(PartFactoryFile):
             super().__init__(ctx, source_project, target_project, config, extension=".step", can_create=can_create)
             self._create(config)
 
-            self.runtime = self.ctx.get_python_runtime("3.11")
+            self.runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
 
     async def instantiate(self, part):
         await super().instantiate(part)

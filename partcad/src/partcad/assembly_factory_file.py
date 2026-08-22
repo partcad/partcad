@@ -30,8 +30,14 @@ class AssemblyFactoryFile(AssemblyFactory):
                 "ERROR: The project config directory must be a directory, found: '%s'" % source_project.config_dir
             )
         self.path = os.path.join(source_project.config_dir, self.path)
-        if not os.path.exists(self.path):
-            raise Exception("ERROR: The assembly path must exist")
+
+        if self.fileFactory is None:
+            # If the user did not supply a way to download the file,
+            # check if the file exists
+            if not os.path.exists(self.path):
+                raise Exception("ERROR: The assembly path (%s) must exist" % self.path)
+            if not os.path.isfile(self.path):
+                raise Exception("ERROR: The assembly path (%s) must be a file" % self.path)
 
     def post_create(self) -> None:
         if self.path:
