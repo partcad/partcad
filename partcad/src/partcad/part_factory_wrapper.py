@@ -17,6 +17,7 @@ import base64
 import os
 
 from .part_factory import PartFactory
+from .runtime_python import environment_requirements
 from .utils import resolve_resource_path
 from . import logging as pc_logging
 from . import sandbox_versions
@@ -43,6 +44,20 @@ class PartFactoryWrapper(PartFactory):
             self.session = self.runtime.get_session(source_project.name)
 
             self._create(config)
+
+    def environment_cache_key(self) -> str | None:
+        """The interpreter and the dependency versions this part renders with.
+
+        Deliberately partial: the partType's own 'pythonRequirements' come from
+        a package that is only resolved when the part is instantiated, so they
+        cannot be read here. The interpreter and the pinned stack can be, and
+        they are what a stack upgrade moves, so keying on them is worth having
+        even though a partType changing its own requirements does not move the
+        key - no more than a partType changing its wrapper script does today.
+        """
+        return sandbox_versions.environment_cache_key(
+            "python", self.runtime.version, environment_requirements(self.project, self.config)
+        )
 
     async def _materialize_wrapper_script(self, pt_project, script_rel):
         """Return the on-disk path of the partType's wrapper script.

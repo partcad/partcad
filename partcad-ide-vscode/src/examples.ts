@@ -1457,4 +1457,29 @@ echo(version=version());
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 `,
     },
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    Chili3D: {
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'Example 1: Cube': `// Once PartCAD reloads the package after this example is added,
+// press "Save" to have the result inspected.
+//
+// A '.chili' script gets the Chili3D API as globals: 'chili3d' is the module
+// namespace, 'shapeFactory' a ready-made ShapeFactory, and 'show()' is how the
+// script says which shape is the part.
+
+show(shapeFactory.box(chili3d.Plane.XY, 10, 10, 10).value);
+`,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'Example 2: Cube with a hole': `// Once PartCAD reloads the package after this example is added,
+// press "Save" to have the result inspected.
+
+const { Plane, XYZ } = chili3d;
+
+const size = 10;
+const box = shapeFactory.box(Plane.XY, size, size, size).value;
+const hole = shapeFactory.cylinder(XYZ.unitZ, new XYZ(size / 2, size / 2, 0), 3, size).value;
+
+show(shapeFactory.booleanCut([box], [hole]).value);
+`,
+    },
 };

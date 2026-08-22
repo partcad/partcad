@@ -19,6 +19,8 @@ from . import telemetry
 #                 see Face::_make_from_wires in build123d/topology.py
 @telemetry.instrument()
 class SketchFactoryBasic(SketchFactory):
+    PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
+
     def __init__(self, ctx, source_project, target_project, config):
         super().__init__(
             ctx,
@@ -46,7 +48,7 @@ class SketchFactoryBasic(SketchFactory):
                 # in a sandbox, so the core process never touches a live OCP
                 # object; only the shape parameters and the resulting BREP
                 # envelope cross the boundary.
-                runtime = self.ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
+                runtime = self.ctx.get_python_runtime(version=self.PYTHON_SANDBOX_VERSION)
                 await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
 
                 wrapper_path = wrapper.get("sketch_basic.py")

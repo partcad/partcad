@@ -143,7 +143,7 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-client" "${SETUPTOOLS_BOUND}"
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras that the wheels leave to the user are all built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint]" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint,memcache,aws]" "${SETUPTOOLS_BOUND}"
   # The CAD kernel is NOT a dependency of the 'partcad' wheel - the core runs all
   # CAD in sandboxes. The standalone bundle, however, freezes it in so that 'pc'
   # works on a machine with no Python: 'show'/'pc inspect' (via ocp_vscode) need
@@ -283,6 +283,8 @@ REQUIRED = {
     "build123d": "the geometry kernel",
     "ocp_vscode": "`pc inspect`",
     "ruff.__main__": "`pc lint` of Python files",
+    "aiomcache": "the 'cacheRemote' cache tier",
+    "aioboto3": "the 'cacheS3' cache tier",
 }
 
 # Python 3.14 has zstd in the standard library as 'compression.zstd'; below

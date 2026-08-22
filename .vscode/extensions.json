@@ -22,7 +22,5 @@
     "dbaeumer.vscode-eslint",
     "amodio.tsl-problem-matcher",
     "esbenp.prettier-vscode",
-    // GitHub
-    "SanjulaGanepola.github-local-actions",
   ]
 }

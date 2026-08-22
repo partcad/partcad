@@ -10,7 +10,8 @@
 import os
 
 from .part_factory_file import PartFactoryFile
-from .runtime_python import PythonRuntime
+from .runtime_python import PythonRuntime, environment_requirements
+from . import sandbox_versions
 from . import telemetry
 
 
@@ -44,6 +45,17 @@ class PartFactoryPython(PartFactoryFile):
             python_version = self.project.python_version
         self.runtime = self.ctx.get_python_runtime(python_version)
         self.session = self.runtime.get_session(source_project.name)
+
+    def environment_cache_key(self) -> str | None:
+        """The interpreter and the dependency versions this part renders with.
+
+        Resolved rather than fixed: the interpreter comes from the package's
+        'pythonVersion' and the dependencies from what the package and the part
+        declare, so the base class's constant cannot express it.
+        """
+        return sandbox_versions.environment_cache_key(
+            "python", self.runtime.version, environment_requirements(self.project, self.config)
+        )
 
     def post_create(self) -> None:
         for dep in self.config.get("dependencies", []):

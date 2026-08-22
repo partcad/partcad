@@ -1,0 +1,5 @@
+# The object store cache ('cacheS3'). aioboto3 is what makes the tier async;
+# it pulls aiobotocore, which pins botocore tightly, which is exactly why this
+# is an extra rather than a dependency of the wheel. Imported lazily and only
+# when that cache tier is enabled.
+aioboto3>=13.0,<16.0

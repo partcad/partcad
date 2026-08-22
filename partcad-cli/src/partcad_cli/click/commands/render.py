@@ -35,7 +35,13 @@ from ..service import run
     "-t",
     "--format",
     help="The type of file to export",
-    type=click.Choice(["readme", "svg", "png"]),
+    type=click.Choice(["readme", "pdf", "html", "svg", "png", "jpeg"]),
+    show_envvar=True,
+)
+@click.option(
+    "--ignore-manufacturability",
+    help="Generate the assembly instruction book even if the assembly is not manufacturable",
+    is_flag=True,
     show_envvar=True,
 )
 @click.option(
@@ -87,6 +93,7 @@ def cli(
     create_dirs,
     output_dir,
     format,
+    ignore_manufacturability,
     package,
     recursive,
     sketch,
@@ -104,6 +111,7 @@ def cli(
             # Resolve to absolute so artifacts land in the user's cwd, not the daemon's.
             "output_dir": os.path.abspath(output_dir) if output_dir else None,
             "format": format,
+            "ignore_manufacturability": ignore_manufacturability,
             "package": package,
             "recursive": recursive,
             "sketch": sketch,

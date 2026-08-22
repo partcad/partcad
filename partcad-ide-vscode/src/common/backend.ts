@@ -289,7 +289,25 @@ function serviceArgs(serverId: string): string[] {
     if ((config.get<string>('forceUpdate') ?? 'false') === 'true') {
         args.push('--force-update');
     }
+    // The daemon reads this once, at launch. Toggling the setting restarts the
+    // backend (checkIfConfigurationChanged lists it), so the running daemon
+    // always reflects the current value.
+    if (config.get<boolean>('develIndex') === true) {
+        args.push('--devel-index');
+    }
     return args;
+}
+
+/** The environment the service is launched with. */
+function serviceEnv(serverId: string): NodeJS.ProcessEnv {
+    const config = vscode.workspace.getConfiguration(serverId);
+    const env = { ...process.env };
+    // '--devel-index' is a flag, so it can ask for the development index but
+    // never against it: a 'PC_DEVEL_INDEX=true' inherited from whatever started
+    // VS Code would outrank an extension setting of false. The environment can
+    // spell out both answers, so the setting travels through it either way.
+    env.PC_DEVEL_INDEX = config.get<boolean>('develIndex') === true ? 'true' : 'false';
+    return env;
 }
 
 /**
@@ -440,7 +458,7 @@ export async function restartBackend(
         }
         const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
         const args = serviceArgs(serverId);
-        const env = { ...process.env };
+        const env = serviceEnv(serverId);
         try {
             if (getServiceChannelFromSetting(serverId) === 'stdio') {
                 return connectStdio(execPath, args, cwd, env, outputChannel);

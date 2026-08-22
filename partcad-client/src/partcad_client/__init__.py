@@ -33,4 +33,4 @@ reference caller; the VS Code extension reaches the same code by running `pc`
 rather than by reimplementing it in TypeScript.
 """
 
-__version__ = "0.7.159"
+__version__ = "0.7.169"

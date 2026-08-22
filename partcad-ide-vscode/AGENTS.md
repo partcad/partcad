@@ -57,6 +57,7 @@ partcad-json-rpc}`. Installing side by side (rather than over the running copy) 
 itself while it is executing, and is required on Windows, where deleting a running executable fails outright.
 No superseded bundle is left behind: the idle ones go immediately, and the one the updater is running out of is
 removed by a detached reaper once that process exits.
+
 ## ASSY diagnostics
 
 `.assy` files are registered as YAML for highlighting but are not YAML: they are Jinja2 templates that render

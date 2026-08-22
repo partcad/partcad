@@ -19,6 +19,7 @@ export interface ISettings {
     verbosity: string;
     packagePath: string;
     forceUpdate: string;
+    develIndex: boolean;
     // args: string[];
     path: string[];
     interpreter: string[];
@@ -122,6 +123,7 @@ export async function getWorkspaceSettings(
         verbosity: config.get<string>(`verbosity`) ?? 'info',
         packagePath: config.get<string>(`packagePath`) ?? '.',
         forceUpdate: config.get<string>(`forceUpdate`) ?? 'false',
+        develIndex: config.get<boolean>(`develIndex`) ?? false,
         // args: resolveVariables(config.get<string[]>(`args`) ?? [], workspace),
         path: resolveVariables(config.get<string[]>(`path`) ?? [], workspace),
         interpreter: resolveVariables(interpreter, workspace),
@@ -157,6 +159,7 @@ export async function getGlobalSettings(namespace: string, includeInterpreter?: 
         verbosity: getGlobalValue<string>(config, 'verbosity', 'info'),
         packagePath: getGlobalValue<string>(config, 'packagePath', '.'),
         forceUpdate: getGlobalValue<string>(config, 'forceUpdate', 'false'),
+        develIndex: getGlobalValue<boolean>(config, 'develIndex', false),
         // args: getGlobalValue<string[]>(config, 'args', []),
         path: getGlobalValue<string[]>(config, 'path', []),
         interpreter: interpreter,
@@ -179,6 +182,7 @@ export function checkIfConfigurationChanged(e: ConfigurationChangeEvent, namespa
         `${namespace}.verbosity`,
         `${namespace}.packagePath`,
         `${namespace}.forceUpdate`,
+        `${namespace}.develIndex`,
         // `${namespace}.args`,
         `${namespace}.path`,
         `${namespace}.interpreter`,

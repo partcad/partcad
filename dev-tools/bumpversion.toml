@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "0.7.159"
+current_version = "0.7.169"
 commit = "true"
 commit_args = "--no-verify"
 tag = "true"
@@ -68,6 +68,11 @@ replace = "version = \"{new_version}\""
 filename = "partcad-service-json-rpc/src/partcad_service_json_rpc/__init__.py"
 search = "__version__ = \"{current_version}\""
 replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad/requirements.txt"
+search = "partcad-utils=={current_version}"
+replace = "partcad-utils=={new_version}"
 
 [[tool.bumpversion.files]]
 filename = "partcad-service-json-rpc/requirements.txt"

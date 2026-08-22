@@ -29,6 +29,10 @@
       "description": "Parameter values passed to the referenced part, assembly or interface.",
       "type": "object"
     },
+    "exploded": {
+      "description": "The gap, in millimeters, to show between the two items in the exploded view of this step of the assembly instruction book. Does not affect the assembly itself.",
+      "type": "number"
+    },
     "connect": {
       "description": "Placement by mating an interface of this object with an interface of an object already in the assembly.",
       "type": "object",
@@ -41,7 +45,8 @@
         "to": { "type": "string", "minLength": 1 },
         "toInstance": { "type": "string", "minLength": 1 },
         "toPort": { "type": "string", "minLength": 1 },
-        "toParams": { "$ref": "#/definitions/params" }
+        "toParams": { "$ref": "#/definitions/params" },
+        "exploded": { "$ref": "#/definitions/exploded" }
       },
       "additionalProperties": false
     },
@@ -51,7 +56,8 @@
       "properties": {
         "with": { "type": "string", "minLength": 1 },
         "name": { "type": "string", "minLength": 1 },
-        "to": { "type": "string", "minLength": 1 }
+        "to": { "type": "string", "minLength": 1 },
+        "exploded": { "$ref": "#/definitions/exploded" }
       },
       "additionalProperties": false
     },
