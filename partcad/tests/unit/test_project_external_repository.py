@@ -15,6 +15,7 @@ import shutil
 
 import partcad as pc
 from partcad.cache import Cache
+from partcad.cache_backend_files import FilesCacheBackend
 from partcad.project_external_repository import ProjectExternalRepository
 
 
@@ -126,7 +127,12 @@ def test_on_disk_cache_persists_across_instances():
         assert second.object_names("part") == ["bolt"]
         assert fake2.keys == []  # served from disk, repository never called
     finally:
-        shutil.rmtree(cache.cache_dir, ignore_errors=True)
+        # The entries have to go, or the next run is served from them and never
+        # queries the repository at all. Only the local tier writes a directory;
+        # a developer who has a remote tier switched on gets nothing extra here.
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
 
 
 def test_file_backed_configs_are_tagged_for_materialization():

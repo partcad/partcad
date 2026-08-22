@@ -98,11 +98,17 @@ option_groups = [
     {
         "name": "Caching options",
         "options": [
+            "--cache-mem",
             "--cache",
             "--cache-max-entry-size",
             "--cache-min-entry-size",
             "--cache-memory-max-entry-size",
             "--cache-memory-double-cache-max-entry-size",
+            "--cache-remote",
+            "--cache-remote-server",
+            "--cache-s3",
+            "--cache-s3-bucket",
+            "--cache-s3-endpoint-url",
             "--cache-dependencies-ignore",
         ],
     },
@@ -181,6 +187,17 @@ click.rich_click.COMMAND_GROUPS = {
     help="Maximum number of processing threads to use (not a strict limit)",
 )
 @click.option(
+    "--cache-mem",
+    # The destination is what the configuration loop below reads, and the
+    # environment variable is named after it unless it is given here.
+    "cache_memory",
+    is_flag=True,
+    default=None,
+    envvar="PC_CACHE_MEM",
+    show_envvar=True,
+    help="Enable caching of intermediate results in memory",
+)
+@click.option(
     "--cache",
     is_flag=True,
     default=None,
@@ -214,6 +231,41 @@ click.rich_click.COMMAND_GROUPS = {
     default=None,
     show_envvar=True,
     help="Maximum size of a single memory cache entry in bytes(defaults to 1048576 or 1MB)",
+)
+@click.option(
+    "--cache-remote",
+    is_flag=True,
+    default=None,
+    show_envvar=True,
+    help="Enable the shared remote cache (memcached protocol); needs the 'memcache' extra",
+)
+@click.option(
+    "--cache-remote-server",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help='The memcached server backing the remote cache, "host" or "host:port"',
+)
+@click.option(
+    "--cache-s3",
+    is_flag=True,
+    default=None,
+    show_envvar=True,
+    help="Enable the object store cache; needs the 'aws' extra",
+)
+@click.option(
+    "--cache-s3-bucket",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help="The bucket holding the object store cache",
+)
+@click.option(
+    "--cache-s3-endpoint-url",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help="An S3 endpoint other than AWS's own (a MinIO or Ceph deployment)",
 )
 @click.option(
     "--cache-dependencies-ignore",
@@ -364,6 +416,12 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
         ("PC_CACHE_FILES_MIN_ENTRY_SIZE", "cache_min_entry_size"),
         ("PC_CACHE_MEMORY_MAX_ENTRY_SIZE", "cache_memory_max_entry_size"),
         ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
+        ("PC_CACHE_MEM", "cache_memory"),
+        ("PC_CACHE_REMOTE", "cache_remote"),
+        ("PC_CACHE_REMOTE_SERVER", "cache_remote_server"),
+        ("PC_CACHE_S3", "cache_s3"),
+        ("PC_CACHE_S3_BUCKET", "cache_s3_bucket"),
+        ("PC_CACHE_S3_ENDPOINT_URL", "cache_s3_endpoint_url"),
         ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
         ("PC_PYTHON_SANDBOX", "python_sandbox"),
         ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),
@@ -452,6 +510,12 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_CACHE_FILES_MIN_ENTRY_SIZE", "cache_min_entry_size"),
             ("PC_CACHE_MEMORY_MAX_ENTRY_SIZE", "cache_memory_max_entry_size"),
             ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
+            ("PC_CACHE_MEM", "cache_memory"),
+            ("PC_CACHE_REMOTE", "cache_remote"),
+            ("PC_CACHE_REMOTE_SERVER", "cache_remote_server"),
+            ("PC_CACHE_S3", "cache_s3"),
+            ("PC_CACHE_S3_BUCKET", "cache_s3_bucket"),
+            ("PC_CACHE_S3_ENDPOINT_URL", "cache_s3_endpoint_url"),
             ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
             ("PC_PYTHON_SANDBOX", "python_sandbox"),
             ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),

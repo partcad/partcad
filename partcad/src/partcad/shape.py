@@ -252,7 +252,9 @@ class Shape(ShapeConfiguration):
                     cache_hash = self.hash
                     if cache_hash:
                         keys_to_read = [self.kind, "cmps"]
-                        cached, to_cache_in_memory = await ctx.cache_shapes.read_async(cache_hash, keys_to_read)
+                        cached, to_cache_in_memory = await ctx.cache_shapes.read_async(
+                            cache_hash, keys_to_read, self.get_cache_metadata()
+                        )
                         if to_cache_in_memory.get(self.kind, False):
                             self._wrapped = cached[self.kind]
                         if to_cache_in_memory.get("cmps", False):
@@ -289,6 +291,13 @@ class Shape(ShapeConfiguration):
                     if "scale" in self.config:
                         shape = await transform.scale(ctx, shape, self.config["scale"])
 
+                # Whatever produced the envelope - a factory, a wrapper, a
+                # transform - the outer layer around it is this shape's own. It
+                # is stamped here rather than left to whoever built the payload,
+                # so that a shape built now and the same shape materialized from
+                # the cache later carry exactly the same name and label.
+                shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
+
                 if cache_hash:
                     if is_cacheable:
                         to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
@@ -320,7 +329,9 @@ class Shape(ShapeConfiguration):
         only the in-process factories still produce - is encoded here, the one
         place in the core that touches a live shape. The OCP codec is imported
         lazily, so a workflow that only uses delegating factories never pulls
-        OCP into the core process.
+        OCP into the core process. The payload is taken as the compressed bytes,
+        not the base64 the same codec produces for the pipe: this envelope stays
+        in this process, and may go straight into a cache from here.
         """
         if shape is None or shape_envelope.is_shape_envelope(shape):
             return shape
@@ -328,7 +339,7 @@ class Shape(ShapeConfiguration):
 
         if name is None and label is None:
             name, label = self._shape_metadata()
-        return ocp_serialize.encode_shape(shape, name=name, label=label)
+        return shape_envelope.make_shape(ocp_serialize.compressed_brep(shape), name=name, label=label)
 
     def _component_to_envelope(self, component):
         """Normalize a component (or nested list of components) into envelopes."""
@@ -337,20 +348,27 @@ class Shape(ShapeConfiguration):
         return self._to_envelope(component)
 
     async def get_cache_value(self, ctx, shape):
-        """The value stored in the shape cache under 'self.kind'.
+        """The value handed to the shape cache under 'self.kind'.
 
-        A plain shape is stored as a single {"name", "label", "brep"} object.
-        Assembly overrides this to store its nested tree so that the hierarchy -
-        names, labels and sub-assemblies - survives caching, which a flat
-        compound would lose.
+        A plain shape is a single BREP envelope; an assembly is the nested tree
+        it was built as, so that the hierarchy - names, labels and
+        sub-assemblies - survives caching, which a flat compound would lose.
 
-        'shape' is already a BREP envelope (get_wrapped normalizes it), so this
-        only restamps the cache's canonical name/label onto it.
+        'shape' is already an envelope (get_wrapped normalizes it) and is passed
+        on as it is: what identifies this particular shape is not cached with
+        the geometry but comes from 'get_cache_metadata()' on the way out.
         """
-        if shape is None:
-            return None
+        return shape
+
+    def get_cache_metadata(self):
+        """The outer layer to wrap around this shape's payload read from the cache.
+
+        A cache entry is keyed on the geometry, so several shapes with identical
+        geometry share one. Everything that says which shape this is therefore
+        lives here rather than in the cache - see ShapeCache.
+        """
         full_name, label = self._shape_metadata()
-        return shape_envelope.with_metadata(shape, name=full_name, label=label)
+        return {"name": full_name, "label": label}
 
     async def convert(self, part_type: str, ctx=None, **kwargs):
         """Convert this shape to 'part_type' and return the result in memory.

@@ -36,7 +36,10 @@ BOOLEAN_OPTIONS = [
     ("develIndex", "PC_DEVEL_INDEX", "devel_index"),
     ("forceUpdate", "PC_FORCE_UPDATE", "force_update"),
     ("offline", "PC_OFFLINE", "offline"),
+    ("cacheMem", "PC_CACHE_MEM", "cache_memory"),
     ("cacheFiles", "PC_CACHE_FILES", "cache"),
+    ("cacheRemote", "PC_CACHE_REMOTE", "cache_remote"),
+    ("cacheS3", "PC_CACHE_S3", "cache_s3"),
     ("cacheDependenciesIgnore", "PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
     ("ignoreBundledOpenscad", "IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
 ]
@@ -159,6 +162,9 @@ def test_config_file_values_read_the_same_way(config_home, monkeypatch, key, att
     "attribute,expected",
     [
         ("cache", True),
+        ("cache_memory", True),
+        ("cache_remote", False),
+        ("cache_s3", False),
         ("use_docker_kicad", True),
         ("use_docker_python", False),
         ("force_update", False),

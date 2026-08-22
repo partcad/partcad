@@ -419,6 +419,25 @@ Without the extra, linting Python files reports an error naming the package to
 install. Everything else in PartCAD, including linting of YAML files, works
 without it.
 
+=====================
+Shared caching tiers
+=====================
+
+Beyond memory and the local filesystem, PartCAD can keep its cache of built
+geometry on a memcached server shared by a team or a CI fleet
+(``cacheRemote``), and in an S3 bucket that outlives both (``cacheS3``). Each
+carries a client library that is only imported when that tier is switched on,
+so each is an extra:
+
+.. code-block:: shell
+
+    $ python -m pip install -U 'partcad-cli[memcache]'   # cacheRemote
+    $ python -m pip install -U 'partcad-cli[aws]'        # cacheS3
+
+or on ``partcad`` itself, using the same extra names. Enabling a tier without
+its extra reports an error naming the package to install and leaves the
+remaining tiers working.
+
 .. _vscode-extension:
 
 ============================

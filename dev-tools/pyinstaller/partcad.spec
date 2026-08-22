@@ -197,6 +197,12 @@ if _ruff_bin.is_file():
 else:
     print(f"partcad.spec: no ruff executable at '{_ruff_bin}', `pc lint` will not lint Python files")
 
+# The clients of the two off-machine cache tiers. Both are imported inside the
+# backend that needs them (see partcad/cache_backend_memcache.py and
+# cache_backend_s3.py), so PyInstaller cannot see them from the import graph.
+add_package("aiomcache")
+add_package("aioboto3")
+
 # The version PartCAD reports and sends with telemetry.
 add_metadata("partcad")
 add_metadata("partcad-utils")
