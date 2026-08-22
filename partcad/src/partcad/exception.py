@@ -20,6 +20,22 @@ class EmptyShapesError(Exception):
         super().__init__(self.message)
 
 
+class AssemblyDocumentError(Exception):
+    """Base exception for the documents generated from an assembly."""
+
+
+class NotAnAssemblyFileError(AssemblyDocumentError):
+    """Exception raised when an assembly is not one that can be documented.
+
+    An assembly instruction book is built out of the steps an Assembly YAML
+    (ASSY) file declares; an assembly that comes from anywhere else has none.
+    """
+
+
+class NotManufacturableError(AssemblyDocumentError):
+    """Exception raised when an assembly is not meant to be built at all."""
+
+
 class PartFactoryError(Exception):
     """Base exception for all part factory-related errors."""
 

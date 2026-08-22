@@ -38,6 +38,13 @@ from ...cli_context import CliContext
     type=str,
     show_envvar=True,
 )
+@click.option(
+    "--recursive",
+    "-r",
+    help="Break every assembly down to its parts, instead of stopping at the assemblies that can be supplied assembled",
+    is_flag=True,
+    show_envvar=True,
+)
 @click.argument(
     "specs",
     metavar="object[[,material],count]",
@@ -45,7 +52,7 @@ from ...cli_context import CliContext
     nargs=-1,
 )  # help="Part (default) or assembly to quote, with options",
 @click.pass_obj
-def cli(cli_ctx: CliContext, api, qos, provider, specs):
+def cli(cli_ctx: CliContext, api, qos, provider, recursive, specs):
     """
     TODO-117: Implementing Network Error Handling
     """
@@ -54,7 +61,7 @@ def cli(cli_ctx: CliContext, api, qos, provider, specs):
 
         with pc.logging.Process("SupplyQuote", "this"):
             cart = pc.ProviderCart(qos=qos)
-            asyncio.run(cart.add_objects(ctx, specs))
+            asyncio.run(cart.add_objects(ctx, specs, recursive=recursive))
             pc.logging.debug("Cart: %s" % str(cart.parts))
 
             if provider:

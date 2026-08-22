@@ -36,6 +36,10 @@ class AssemblyFactoryFile(AssemblyFactory):
             # check if the file exists
             if not os.path.exists(self.path):
                 raise Exception("ERROR: The assembly path (%s) must exist" % self.path)
+        # Checked whether or not a download is configured, and so outside the
+        # branch above: a path that exists but is a directory is a broken
+        # configuration either way. When there is no file factory the path is
+        # known to exist by now, so this still covers what devel checked there.
         if os.path.exists(self.path) and not os.path.isfile(self.path):
             raise Exception("ERROR: The assembly path (%s) must be a file" % self.path)
 

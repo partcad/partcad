@@ -15,6 +15,7 @@ import shutil
 
 import partcad as pc
 from partcad.cache import Cache
+from partcad.cache_backend_files import FilesCacheBackend
 from partcad.project_external_repository import ProjectExternalRepository
 
 
@@ -126,7 +127,12 @@ def test_on_disk_cache_persists_across_instances():
         assert second.object_names("part") == ["bolt"]
         assert fake2.keys == []  # served from disk, repository never called
     finally:
-        shutil.rmtree(cache.cache_dir, ignore_errors=True)
+        # The entries have to go, or the next run is served from them and never
+        # queries the repository at all. Only the local tier writes a directory;
+        # a developer who has a remote tier switched on gets nothing extra here.
+        for backend in cache.backends:
+            if isinstance(backend, FilesCacheBackend):
+                shutil.rmtree(backend.cache_dir, ignore_errors=True)
 
 
 def test_file_backed_configs_are_tagged_for_materialization():
@@ -171,6 +177,28 @@ def test_metadata_materializes_from_the_repository():
     assert repo.is_manufacturable is False
     assert repo.config_obj["render"] == {"svg": {}}
     assert repo.name == "//ext"  # identity is never overridden by metadata
+
+
+def test_cache_version_propagates_to_children():
+    """The cache version is inherited by every child of a plugin-backed
+    hierarchy, so the whole tree shares one versioned cache namespace."""
+    ctx = pc.Context("examples")
+    top = ProjectExternalRepository(
+        ctx, "//ext", "/tmp/ext", plugin_ref="//ext:remote", cache_version=3
+    )
+    top._repository = FakeRepository({"deps": ["motors"]})
+    child = top.dependencies()["motors"]
+    assert child["cacheVersion"] == 3
+    assert child["plugin"] == "//ext:remote"
+
+
+def test_no_cache_version_leaves_children_unversioned():
+    """Without a cache version (the default), children carry no cacheVersion,
+    preserving the pre-existing cache namespace."""
+    ctx = pc.Context("examples")
+    top = ProjectExternalRepository(ctx, "//ext", "/tmp/ext", plugin_ref="//ext:remote")
+    top._repository = FakeRepository({"deps": ["motors"]})
+    assert "cacheVersion" not in top.dependencies()["motors"]
 
 
 def test_hierarchy_forwards_under_a_subfolder():

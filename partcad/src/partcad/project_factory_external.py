@@ -25,6 +25,13 @@ class ExternalImportConfiguration:
         # A child of a plugin-backed hierarchy carries the subfolder that scopes
         # its requests within the repository. Empty for a top-level package.
         self.subfolder = self.config_obj.get("subfolder", "")
+        # An optional integer the plugin author bumps whenever the *shape* of the
+        # data the plugin returns changes (e.g. a new field is added to every
+        # part config). It is mixed into the on-disk cache location, so bumping it
+        # invalidates every entry cached by an older version of the plugin - which
+        # a key derived from the plugin reference and the request alone would keep
+        # serving. See 'docs/source/configuration.rst' (external dependencies).
+        self.cache_version = int(self.config_obj.get("cacheVersion", 0) or 0)
 
 
 @telemetry.instrument()
@@ -41,8 +48,11 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
 
         # Find a place to store all temporary artifacts if any. The hash of the
         # resolved plugin reference identifies this repository instance, so two
-        # vendored copies backed by different plugins get separate caches.
-        repo_hash = hashlib.sha256(self.plugin.encode()).hexdigest()[:16]
+        # vendored copies backed by different plugins get separate caches. The
+        # optional 'cacheVersion' is folded in too, so bumping it moves every
+        # child of this repository to a fresh cache namespace at once.
+        repo_key = self.plugin if not self.cache_version else "%s@v%d" % (self.plugin, self.cache_version)
+        repo_hash = hashlib.sha256(repo_key.encode()).hexdigest()[:16]
         self.path = os.path.join(ctx.user_config.internal_state_dir, "external", repo_hash)
         # The package is served by a plugin and has no source tree of its own,
         # but it still needs a real directory: it is the base into which
@@ -67,5 +77,6 @@ class ProjectFactoryExternal(pf.ProjectFactory, ExternalImportConfiguration):
             plugin_ref=self.plugin,
             subfolder=self.subfolder,
             cache=self.cache,
+            cache_version=self.cache_version,
             inherited_config=self.inherited_config,
         )

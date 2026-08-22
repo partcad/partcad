@@ -1,3 +1,3 @@
-partcad-utils==0.7.158
-partcad==0.7.158
+partcad-utils==0.7.172
+partcad==0.7.172
 aiohttp

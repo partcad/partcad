@@ -104,6 +104,32 @@ The result of 2D projection of individual parts, assemblies and scenes onto a pl
 - Raster images
 
   - PNG
+  - JPEG
+
+Both raster formats accept ``width`` and ``height`` (in pixels, ``512`` by
+default); the projection is scaled to fit inside them while keeping its aspect
+ratio. JPEG accepts a few more options, since it is a lossy format without an
+alpha channel:
+
+.. code-block:: yaml
+
+  render:
+    jpeg:
+      prefix: ./images
+      width: 1024
+      height: 1024
+      quality: 85          # 1..100, defaults to 85
+      progressive: false   # write a progressive JPEG
+      optimize: false      # spend more time to produce a smaller file
+      subsampling: "4:4:4" # chroma subsampling: 4:4:4, 4:2:2, 4:2:0 or 4:1:1
+      background: "#ffffff"  # what the transparent background is flattened onto
+
+The default ``4:4:4`` subsampling keeps the full chroma resolution. A projection
+is line art, and the coarser modes smear color across its one-pixel-wide edges;
+switch to ``4:2:0`` when a smaller file matters more than the edges.
+
+The rendered file is named after the object with the format's own extension,
+so ``jpeg`` produces ``<name>.jpg``.
 
 
 =============

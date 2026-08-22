@@ -1,0 +1,135 @@
+# PartCAD, 2026
+#
+# Licensed under Apache License, Version 2.0.
+#
+# The snap package of the PartCAD command line tools: the same PyInstaller
+# bundle that "install.sh" ships, wrapped so that `snap install` is an option
+# too. It is built by `dev-tools/snap/build.sh` and by the "Standalone" GitHub
+# Actions workflow; `dev-tools/snap/README.md` explains what is in it and why.
+#
+# This file has to live in `snap/` at the repository root. That is where
+# `snapcraft` looks for it, and it is also what decides the project directory
+# snapcraft copies into its build environment -- moving this file next to the
+# rest of the build tooling in `dev-tools/` would leave the bundle it packages
+# outside that directory, where the build could not reach it.
+name: partcad
+title: PartCAD
+base: core24
+# The version comes from `partcad/src/partcad/__init__.py`, the same single
+# source the wheels and the standalone archives use. See the part below.
+adopt-info: partcad
+summary: The package manager for CAD-as-code and manufacturable products
+description: |
+  PartCAD is the standard for documenting manufacturable physical products,
+  and the first package manager for hardware. This snap is the command line
+  side of it: `pc` (and its `partcad` alias) to initialize, inspect, test,
+  render and publish PartCAD packages, plus `partcad-json-rpc`, the service
+  the Visual Studio Code extension talks to.
+
+  It carries its own Python interpreter and every Python dependency, so
+  nothing is installed into -- or expected from -- a Python environment on the
+  machine. OpenSCAD is bundled as well.
+
+  Two things are run as external programs rather than imported, and are not in
+  the snap: git, to fetch package repositories, and conda (or mamba), to build
+  the sandbox PartCAD runs CAD scripts in. A snap does not carry your shell
+  environment, so a conda installed under your home directory is not visible to
+  it; PartCAD then runs Python scripts without a sandbox. Run
+  `partcad.pc healthcheck` to see what this machine resolved.
+
+  The Python module for CAD-as-code scripts is not part of this snap; it is a
+  wheel: `pip install -U partcad`.
+license: Apache-2.0
+website: https://partcad.org/
+source-code: https://github.com/partcad/partcad
+issues: https://github.com/partcad/partcad/issues
+contact: https://github.com/partcad/partcad/issues
+
+grade: stable
+# Classic, and it cannot be anything else. PartCAD is a developer tool that
+# operates on the user's own files: it reads and writes CAD projects anywhere
+# on disk, clones git repositories, provisions conda sandboxes under ~/.partcad
+# and executes CAD scripts in them, and serves a daemon over a socket that the
+# VS Code extension connects to. Under strict confinement none of that reaches
+# past the snap's own directories, and PATH would not carry the host's conda or
+# git either.
+#
+# The cost is that classic snaps need a manual review before the Snap Store
+# will publish them; a snap built here installs with
+# `snap install --dangerous --classic` in the meantime.
+confinement: classic
+
+platforms:
+  # Both architectures the Linux bundle is built for. Each is packed on a runner
+  # of that architecture -- snapcraft builds the platform matching the host, and
+  # the payload is a frozen native bundle, so there is no cross-building here.
+  amd64:
+  arm64:
+
+# Both linters look for problems that do not apply to a frozen bundle:
+#
+#  * `classic` reports every ELF file whose rpath does not point into the snap.
+#    PyInstaller's shared libraries resolve their siblings through $ORIGIN and
+#    its bootloader, which is exactly how the bundle is supposed to work, and
+#    is why `enable-patchelf` is deliberately not set on the part below --
+#    letting snapcraft rewrite those rpaths would break the bundle rather than
+#    fix it.
+#  * `library` reports the libraries the bundled OpenSCAD resolves from the
+#    host (libGL, libX11, libxcb, fontconfig, freetype, glib, harfbuzz). That
+#    is documented behaviour of the upstream AppImage, and a classic snap can
+#    see the host's copies.
+lint:
+  ignore:
+    - classic
+    - library
+
+# PartCAD keeps its cache, its conda sandboxes and its git/tar clones in one
+# state directory, `~/.partcad` by default. A packaged application has no
+# business writing there: snapd hands every snap its own per-user directory,
+# `~/snap/partcad/common`, and creates it before the app starts, so that is where
+# this state goes. It survives refreshes (unlike $SNAP_USER_DATA, which is keyed
+# by revision), and `snap remove --purge` takes it away with the snap.
+#
+# What stays in `~/.partcad` is what PartCAD reads from the home directory
+# without consulting this variable: `config.yaml` and the telemetry id. Both are
+# deliberate. One configuration file keeps applying whether PartCAD came from the
+# snap, the standalone bundle, or a wheel; and the telemetry id identifies a
+# user, so an id that moved with the state directory would make one user look
+# like several.
+environment:
+  PC_INTERNAL_STATE_DIR: $SNAP_USER_COMMON
+
+parts:
+  partcad:
+    plugin: dump
+    # The bundle `dev-tools/pyinstaller/build.sh` produces. It is not built
+    # here: freezing needs Python 3.14 and ~875MB of CAD dependencies, neither
+    # of which belongs in a snapcraft build environment, and building it twice
+    # would mean two answers to "what did we ship". `dev-tools/snap/build.sh`
+    # makes sure it exists before calling snapcraft.
+    source: dist/standalone/partcad
+    source-type: local
+    override-pull: |
+      craftctl default
+      craftctl set version="$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' "${CRAFT_PROJECT_DIR}/partcad/src/partcad/__init__.py")"
+    # The three executables have to stay next to `_internal/`: PyInstaller
+    # resolves the payload relative to the executable. They move into
+    # `opt/partcad/` together, so that `$SNAP` keeps holding a bundle rather
+    # than being one.
+    organize:
+      pc: opt/partcad/pc
+      partcad: opt/partcad/partcad
+      partcad-json-rpc: opt/partcad/partcad-json-rpc
+      _internal: opt/partcad/_internal
+
+apps:
+  # `snap install partcad` exposes this one as `partcad`, and the rest as
+  # `partcad.pc` and `partcad.json-rpc`. `pc` is the name users actually type,
+  # so `snap alias partcad.pc pc` is worth doing after install -- an automatic
+  # alias for it has to be granted by the Snap Store.
+  partcad:
+    command: opt/partcad/partcad
+  pc:
+    command: opt/partcad/pc
+  json-rpc:
+    command: opt/partcad/partcad-json-rpc

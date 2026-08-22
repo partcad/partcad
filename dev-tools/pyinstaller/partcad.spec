@@ -41,6 +41,7 @@ REPO_ROOT = SPEC_DIR.parents[1]
 PARTCAD_SRC = REPO_ROOT / "partcad" / "src"
 CLI_SRC = REPO_ROOT / "partcad-cli" / "src"
 SERVICE_SRC = REPO_ROOT / "partcad-service-json-rpc" / "src"
+UTILS_SRC = REPO_ROOT / "partcad-utils" / "src"
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -117,8 +118,12 @@ datas += [
     (str(PARTCAD_SRC / "partcad" / "wrappers"), "partcad/wrappers"),
     # Copied into new packages by `pc init`.
     (str(PARTCAD_SRC / "partcad" / "template"), "partcad/template"),
-    # Read through `importlib.resources` by `pc lint`.
+    # Read through `importlib.resources` by `pc lint`. The ASSY schema is in
+    # `partcad_utils` because both ends check ASSY files -- the daemon over a
+    # package, `pc lint --file` in the client over one file -- so `partcad_utils`
+    # joins `pathex` too, keeping its modules and its data from one checkout.
     (str(PARTCAD_SRC / "partcad" / "schema"), "partcad/schema"),
+    (str(UTILS_SRC / "partcad_utils" / "schema"), "partcad_utils/schema"),
     # The loader lists this directory to enumerate the available subcommands.
     (str(CLI_SRC / "partcad_cli" / "click" / "commands"), "partcad_cli/click/commands"),
     # Redistributing a binary bundle means redistributing its dependencies.
@@ -133,6 +138,7 @@ hiddenimports += command_modules()
 # import them directly (some, like the telemetry backends, only by name), so
 # collect the whole package.
 hiddenimports += collect_submodules("partcad_utils")
+hiddenimports += collect_submodules("partcad_client")
 
 # The JSON-RPC service (`partcad-json-rpc`). Its HTTP transport imports aiohttp
 # lazily, inside a function that is only reached in HTTP mode, so PyInstaller's
@@ -196,9 +202,16 @@ if _ruff_bin.is_file():
 else:
     print(f"partcad.spec: no ruff executable at '{_ruff_bin}', `pc lint` will not lint Python files")
 
+# The clients of the two off-machine cache tiers. Both are imported inside the
+# backend that needs them (see partcad/cache_backend_memcache.py and
+# cache_backend_s3.py), so PyInstaller cannot see them from the import graph.
+add_package("aiomcache")
+add_package("aioboto3")
+
 # The version PartCAD reports and sends with telemetry.
 add_metadata("partcad")
 add_metadata("partcad-utils")
+add_metadata("partcad-client")
 add_metadata("partcad-cli")
 add_metadata("partcad-service-json-rpc")
 
@@ -220,7 +233,7 @@ a = Analysis(
     [str(SPEC_DIR / "entrypoint.py")],
     # The checkout comes first so the bundle matches the working tree rather
     # than whatever copy happens to be installed in the build environment.
-    pathex=[str(PARTCAD_SRC), str(CLI_SRC), str(SERVICE_SRC)],
+    pathex=[str(PARTCAD_SRC), str(CLI_SRC), str(SERVICE_SRC), str(UTILS_SRC)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

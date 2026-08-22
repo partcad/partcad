@@ -21,7 +21,10 @@ from . import logging as pc_logging
 # Bump this whenever the bytes behind a cache key change meaning:
 #   1: BREP payloads are zstd-compressed before being base64-encoded
 #      (see wrappers/ocp_serialize.py).
-VERSION = 1
+#   2: the shape cache stores the payload alone - the outer layer (name, label,
+#      placement) is stripped on write and wrapped back on read (see
+#      cache_shape.py), and a lone shape is stored as raw BREP bytes.
+VERSION = 2
 
 # What the version contributes to a hash. Namespaced so that it cannot be
 # confused with the data hashed after it.

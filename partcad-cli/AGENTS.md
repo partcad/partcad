@@ -5,9 +5,15 @@ CLI interface (`pc` / `partcad` commands) to most `partcad` core functionality. 
 the `partcad` package in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
 
 `pc daemon start` / `pc daemon stop` manage the per-workspace background daemon from
-[`partcad-service-json-rpc`](../partcad-service-json-rpc): `start` goes through
-`partcad_service_json_rpc.client.start_daemon()`, while `stop` calls
-`partcad_service_json_rpc.daemon.stop_daemon()` directly.
+[`partcad-service-json-rpc`](../partcad-service-json-rpc), through
+[`partcad-client`](../partcad-client): `start` goes through
+`partcad_client.client.start_daemon()` (forwarding the daemon-affecting globals —
+`--offline`, `--force-update`, `--python-sandbox`, verbosity — which otherwise stop at the client's own
+`user_config`), while `stop` calls `partcad_client.daemon.stop_daemon()`.
+
+These two are also the VS Code extension's way in. It does not derive socket paths or probe liveness itself: it
+runs `pc daemon start`, reads the endpoint from stdout, and connects — so there is one implementation of "where
+is the daemon", not one per language.
 
 ## Command boundary
 
@@ -19,11 +25,42 @@ daemon rejects anything outside the package, and paths are printed relative to t
 the output never depends on a working directory. A package-mutating command *must* be a daemon client, or the
 daemon's warm context keeps serving the pre-mutation package.
 
+**`pc update` and `pc upgrade` sit on opposite sides of this line, which is why they are two commands and not
+one command with a flag.** `pc update` refetches the packages a package imports — the package graph, so a thin
+daemon client like any other. `pc upgrade` replaces this machine's copy of PartCAD
+(`partcad_client.selfupdate`), which only the process running from it can do: a daemon can be remote,
+where "upgrade PartCAD" would mean upgrading somebody else's installation. It stays within the boundary's
+letter as well as its spirit — `selfupdate` lives in the deliberately cheap `partcad-client`, so the
+command never imports the heavy `partcad`.
+
+`pc upgrade` owns the daemon handling the upgrade needs, because `selfupdate` deliberately has none. Every
+daemon on this machine is executing the files about to be replaced, so it stops **all** of them and waits
+(`daemon.stop_all_daemons()`) through the `before_install` hook — after a newer version is confirmed, before
+anything is written, so a no-op upgrade costs nobody their warm context. Doing that from a client is what keeps
+it simple: one process acting on its own machine, rather than daemons policing each other. A survivor is
+reported rather than fatal, because the new version is installed beside the old one and the old one is not
+removed until the command exits. The VS Code extension's "Update PartCAD" runs `pc upgrade`, so the two cannot
+drift apart.
+
+**`pc lint` sits on both sides of the line, one mode each.** `pc lint [-P/-r]` checks a *package*: which
+packages, resolved how, with which files, is the package graph, so it is a thin daemon client like any other.
+`pc lint --file` checks the *files named on the command line*, in this process: an ASSY file is a Jinja2
+template rendered to YAML and matched against a schema, which needs no package graph, no CAD runtime and no
+context — and with `--stdin` the content is a buffer an editor has not saved, which the daemon cannot see at
+all. There is deliberately no RPC method for it: sending it would ship the client's own file across a wire to
+have it read back, and would leave the editor silent exactly when the package fails to load *because* of that
+file. The checker (`partcad_client.lint`, over `partcad_utils.assy_lint`) is the same one the daemon runs over a
+package, so an editor and CI cannot disagree. The VS Code extension runs `pc lint --file`, so the two cannot
+drift apart either.
+
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
-`init` (creates the workspace, before any package or context exists), `config` (prints the client's resolved
+`init` (creates the workspace, before any package or context exists, and adds the `Render` command to the
+repository's `.vscode/launch.json` — see `partcad/src/partcad/launch_config.py`; the daemon's `init` operation
+does the same, so both entry points leave the same repository behind), `config` (prints the client's resolved
 `user_config` with its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses this host), and **all of
 `pc system ...`** — `system status`, `system reset` and `system set telemetry ...` act on the machine the CLI
-runs on, by definition: its internal state directory, its user configuration. Still unmigrated: `supply/*`,
+runs on, by definition: its internal state directory, its user configuration — and `upgrade`, which replaces
+that machine's installation. Still unmigrated: `supply/*`,
 `add sketch`, `add dep`.
 
 `pc daemon ...` is the other side of that pair, command for command: `daemon start|stop` manage the process,
@@ -37,9 +74,32 @@ in the client, before the call. (The daemon and the CLI share a machine today, s
 coincide; they will not once a daemon can be remote, which is why the commands are separate. `daemon reset`
 carries a TODO to gate it behind access control before that happens.)
 
+## Whose user configuration the daemon works under
+
+The client's whenever the client sends one — as of the moment the command ran. `service.py::run` resolves the
+CLI's own `user_config` (file + `PC_*` environment + command line) and sends a copy of it,
+`UserConfig.to_dict()`, with every `context.create`; the daemon rebuilds it with `UserConfig.from_dict()` and
+builds the context from *that*, never from `pc.user_config`. A client that sends no `userConfig` leaves the
+daemon on its own configuration instead (see below).
+
+This is not a nicety. The daemon is warm and shared per workspace, so its own configuration is whatever the
+environment held when something first started it — possibly days ago, possibly from a VS Code window. Reading
+options there would silently drop every `--devel-index`, `--force-update`, `--offline` and `PC_*` the command
+was actually invoked with, and there is no launch argument that can fix it because the daemon is usually
+already running. Adding a user-configuration option therefore means adding its key to `OPTION_KEYS` (or
+`SECTION_PATHS`) in `partcad_utils/user_config.py`; an option missing from those lists is one the daemon keeps
+resolving from its own environment.
+
+The daemon keeps the configuration each warm context was built from (`session.context_user_configs`) and
+rebuilds the context when a caller's differs, because a package graph resolved under one configuration cannot
+answer for another. A client that sends no configuration — the VS Code extension, which configures the daemon
+once through its launch arguments — keeps getting the daemon's own.
+
 PartCAD **never prompts** for anything mid-operation. Credentials for private Git dependencies are configured
 upfront under `git.auth` in the user configuration, and `GitCallbacks` fails with a message naming that setting
-when they are missing — a prompt inside a background daemon or a CI job is a hang, not a question.
+when they are missing — a prompt inside a background daemon or a CI job is a hang, not a question. `git.auth`
+travels in the configuration copy for the same reason as everything else, and the git helpers take the
+context's configuration rather than the process-wide singleton so the copy is what actually authenticates.
 
 Both halves of this split are enforced by `tests/unit/test_command_boundary.py`, which also checks that every
 method name a command sends exists in the daemon's registry. The in-process and unmigrated lists live at the

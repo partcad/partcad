@@ -20,6 +20,7 @@ export interface ISettings {
     packagePath: string;
     forceUpdate: string;
     installOnOpen: string;
+    develIndex: boolean;
     // args: string[];
     path: string[];
     interpreter: string[];
@@ -128,6 +129,7 @@ export async function getWorkspaceSettings(
         packagePath: config.get<string>(`packagePath`) ?? '.',
         forceUpdate: config.get<string>(`forceUpdate`) ?? 'false',
         installOnOpen: config.get<string>(`installOnOpen`) ?? 'true',
+        develIndex: config.get<boolean>(`develIndex`) ?? false,
         // args: resolveVariables(config.get<string[]>(`args`) ?? [], workspace),
         path: resolveVariables(config.get<string[]>(`path`) ?? [], workspace),
         interpreter: resolveVariables(interpreter, workspace),
@@ -164,6 +166,7 @@ export async function getGlobalSettings(namespace: string, includeInterpreter?: 
         packagePath: getGlobalValue<string>(config, 'packagePath', '.'),
         forceUpdate: getGlobalValue<string>(config, 'forceUpdate', 'false'),
         installOnOpen: getGlobalValue<string>(config, 'installOnOpen', 'true'),
+        develIndex: getGlobalValue<boolean>(config, 'develIndex', false),
         // args: getGlobalValue<string[]>(config, 'args', []),
         path: getGlobalValue<string[]>(config, 'path', []),
         interpreter: interpreter,
@@ -187,6 +190,7 @@ export function checkIfConfigurationChanged(e: ConfigurationChangeEvent, namespa
         `${namespace}.packagePath`,
         `${namespace}.forceUpdate`,
         `${namespace}.installOnOpen`,
+        `${namespace}.develIndex`,
         // `${namespace}.args`,
         `${namespace}.path`,
         `${namespace}.interpreter`,

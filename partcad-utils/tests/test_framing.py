@@ -7,7 +7,7 @@
 
 import io
 
-from partcad_service_json_rpc.transport.framing import read_message, write_message
+from partcad_utils.framing import read_message, write_message
 
 
 def test_write_message_emits_content_length_header_and_blank_line():

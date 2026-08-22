@@ -32,19 +32,26 @@ from ...cli_context import CliContext
     help="Provider to use",
     show_envvar=True,
 )
+@click.option(
+    "--recursive",
+    "-r",
+    help="Break every assembly down to its parts, instead of stopping at the assemblies that can be supplied assembled",
+    is_flag=True,
+    show_envvar=True,
+)
 @click.argument(
     "specs",
     metavar="object[[,material],count]",
     nargs=-1,
 )  # help="Part (default) or assembly to quote, with options"
 @click.pass_obj
-def cli(cli_ctx: CliContext, api: bool, qos: str, provider: str, specs: List[str]) -> None:
+def cli(cli_ctx: CliContext, api: bool, qos: str, provider: str, recursive: bool, specs: List[str]) -> None:
     with pc.telemetry.set_context(cli_ctx.otel_context):
         ctx: pc.Context = cli_ctx.get_partcad_context()
 
         with pc.logging.Process("SupplyFind", "this"):
             cart = pc.ProviderCart()
-            asyncio.run(cart.add_objects(ctx, specs))
+            asyncio.run(cart.add_objects(ctx, specs, recursive=recursive))
 
             suppliers = {}
             if provider:

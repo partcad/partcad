@@ -46,6 +46,19 @@ isort --check partcad
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
+## Schemas and linting
+
+`./src/partcad/schema/partcad.json` is the schema `lint/schema.py` validates `partcad.yaml` against, and
+`lint/all.py` registers the checks — the names it gives them are what `pc lint -f` filters on. Anything added to
+`schema/` ships through `[tool.setuptools.package-data]` in `pyproject.toml` and through the PyInstaller spec's
+copy of the whole directory.
+
+The ASSY schema and its checker are **not** here: they are `partcad_utils.assy_lint` and
+`partcad_utils/schema/assy.json`. `AssySchemaLinting` is the *package* half — walking a package's `.assy` files
+needs the package graph, which is daemon work — while each client checks the one file being edited in its own
+process (`partcad_client.lint`, reached by `pc lint --file`). Two implementations of that check would let an
+editor and CI disagree about a file, so there is one, in the package both ends already depend on.
+
 ## Commit
 
 `pre-commit` hooks (`dev-tools/pre-commit-config.yaml`) run `pytest`, formatting, and lint checks on commit and

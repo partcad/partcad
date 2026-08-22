@@ -11,6 +11,7 @@ import random
 import string
 
 from partcad.shape_config_store import ShapeConfigStore
+from . import logging as pc_logging
 
 
 class ShapeConfiguration:
@@ -52,3 +53,43 @@ class ShapeConfiguration:
     def get_store_data(self) -> ShapeConfigStore:
         final_config = self.get_final_config()
         return ShapeConfigStore(final_config)
+
+    async def get_mcftt(self, property: str):
+        """Get the material, color, finish, texture or tolerance of the object."""
+
+        store_data = self.get_store_data()
+
+        if not store_data.is_purchasable and (
+            "parameters" not in self.config or property not in self.config["parameters"]
+        ):
+            # shape = await self.get_wrapped()
+            # TODO(clairbee): derive the property from the model
+
+            if property == "finish":
+                # By default, the finish is set to "none"
+                value = "none"
+            else:
+                # By default, the parameter is not set
+                value = None
+
+            if value:
+                if "parameters" not in self.config:
+                    self.config["parameters"] = {}
+                self.config["parameters"][property] = {
+                    "type": "string",
+                    "enum": [value],
+                    "default": value,
+                }
+            else:
+                kind = getattr(self, "kind", "object").capitalize()
+                pc_logging.warning(f"{kind} '{self.name}' has no '{property}'")
+
+            return value
+
+        if (
+            "parameters" not in self.config
+            or property not in self.config["parameters"]
+            or "default" not in self.config["parameters"][property]
+        ):
+            return None
+        return self.config["parameters"][property]["default"]
