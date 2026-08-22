@@ -64,9 +64,12 @@ jobs:
       - name: Test building and packaging
         run: |
           # Build the shared partcad-utils wheel first; partcad and the CLI/service
-          # pin it, and it is not published on PyPI.
+          # pin it, and it is not published on PyPI. partcad-client pins it
+          # in turn, and partcad-cli pins that.
           cp LICENSE.txt partcad-utils
           (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad-utils && python -m build && cd .. && deactivate)
+          cp LICENSE.txt partcad-client
+          (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad-client && python -m build && cd .. && deactivate)
           (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad && python -m build && cd .. && deactivate)
           (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install --find-links=partcad-utils/dist partcad-utils && deactivate)
           (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad/requirements.txt && deactivate)
@@ -79,6 +82,7 @@ jobs:
       - name: Test installation
         run: |
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --find-links=partcad-utils/dist partcad-utils && deactivate)
+          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --find-links=partcad-client/dist --find-links=partcad-utils/dist partcad-client && deactivate)
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad/requirements.txt     && deactivate)
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad/dist     partcad && deactivate)
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad-service-json-rpc/dist partcad-service-json-rpc && deactivate)
@@ -91,15 +95,22 @@ jobs:
         with:
           name: python-package-distributions
           path: partcad/dist/
-      # "partcad" pins "partcad-utils" and "partcad-cli" pins both it and
-      # "partcad-service-json-rpc". Neither exists on PyPI, so both have to be
-      # published with this release or the released wheels cannot be installed.
+      # "partcad" pins "partcad-utils"; "partcad-cli" pins that,
+      # "partcad-client" and "partcad-service-json-rpc". None of them
+      # exists on PyPI yet, so all of them have to be published with this release
+      # or the released wheels cannot be installed.
       - name: Upload "partcad-utils"
         if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
         uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions-utils
           path: partcad-utils/dist/
+      - name: Upload "partcad-client"
+        if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-package-distributions-client-utils
+          path: partcad-client/dist/
       - name: Upload "partcad-service-json-rpc"
         if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
         uses: actions/upload-artifact@v7
@@ -140,6 +151,12 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: python-package-distributions-utils
+          path: dist
+
+      - name: Download client-utils dists
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions-client-utils
           path: dist
 
       - name: Download service dists

@@ -33,7 +33,7 @@ import {
 } from 'vscode-jsonrpc/node';
 
 import { traceError, traceInfo } from './log/logging';
-import { ensureServiceExecutable } from './provision';
+import { cliBeside, ensureServiceExecutable } from './provision';
 import { getBackendFromSetting, getServiceChannelFromSetting, setBackendSetting } from './settings';
 import { restartServer } from './server';
 
@@ -78,6 +78,8 @@ class JsonRpcBackend implements PartcadBackend {
         private readonly connection: MessageConnection,
         private readonly cleanup: () => void,
         private readonly outputChannel: vscode.LogOutputChannel,
+        private readonly cliPath: string | undefined = undefined,
+        private readonly cwd: string = process.cwd(),
     ) {
         this.connection.onNotification((method: string, params: any) => this.fire(method, params));
         this.connection.onError((e) => traceError(`PartCAD service connection error: ${JSON.stringify(e)}`));
@@ -140,6 +142,17 @@ class JsonRpcBackend implements PartcadBackend {
     }
 
     async stopDaemon(): Promise<void> {
+        // Through the CLI, not over this connection: `pc daemon stop` is the one
+        // implementation of "stop the daemon serving this workspace", and it
+        // waits for the process to be gone rather than for the acknowledgement.
+        // Falls back to asking over the wire if `pc` is not reachable, which
+        // still gets the daemon to exit -- just without the wait.
+        try {
+            await runCli(this.cliPath, ['daemon', 'stop'], this.cwd, this.outputChannel);
+            return;
+        } catch (e) {
+            traceInfo(`PartCAD: 'pc daemon stop' unavailable (${e}); asking the daemon directly`);
+        }
         try {
             await this.connection.sendRequest('daemon.stop', {});
         } catch {
@@ -229,22 +242,60 @@ function serviceArgs(serverId: string): string[] {
     return args;
 }
 
-/** Run the launcher and resolve with the socket/pipe path it prints. */
-function runLauncher(execPath: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<string> {
+/**
+ * Run a `pc` subcommand and resolve with its stdout.
+ *
+ * `--no-ansi` because the progress renderer would otherwise interleave control
+ * characters into the very line this parses; it also routes logging to stderr,
+ * leaving stdout to the command's own output.
+ */
+function runCli(
+    cliPath: string | undefined,
+    args: string[],
+    cwd: string,
+    outputChannel: vscode.LogOutputChannel,
+    env?: NodeJS.ProcessEnv,
+): Promise<string> {
     return new Promise((resolve, reject) => {
-        cp.execFile(execPath, args, { cwd, env }, (err, stdout, stderr) => {
+        if (!cliPath) {
+            reject(new Error('no `pc` executable beside the PartCAD service'));
+            return;
+        }
+        cp.execFile(cliPath, ['--no-ansi', ...args], { cwd, env }, (err, stdout, stderr) => {
+            if (stderr) {
+                outputChannel.append(stderr);
+            }
             if (err) {
-                reject(new Error(`partcad-json-rpc launcher failed: ${err.message}: ${stderr}`));
+                reject(new Error(`pc ${args.join(' ')} failed: ${err.message}: ${stderr}`));
                 return;
             }
-            const line = stdout.split(/\r?\n/).find((l) => l.trim().length > 0);
-            if (!line) {
-                reject(new Error('partcad-json-rpc launcher did not print a socket path'));
-                return;
-            }
-            resolve(line.trim());
+            resolve(stdout);
         });
     });
+}
+
+/**
+ * Ask the CLI where this workspace's daemon is, starting one if none is running.
+ *
+ * Deliberately not reimplemented here. Which socket serves which workspace, and
+ * whether anything is answering on it, is `partcad_client` -- a second
+ * copy of those rules in TypeScript is a copy that can disagree, and a
+ * disagreement means the extension quietly starting a daemon of its own beside
+ * the one `pc` is using.
+ */
+async function daemonEndpoint(
+    cliPath: string | undefined,
+    args: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+    outputChannel: vscode.LogOutputChannel,
+): Promise<string> {
+    const stdout = await runCli(cliPath, [...args, 'daemon', 'start'], cwd, outputChannel, env);
+    const line = stdout.split(/\r?\n/).find((l) => l.trim().length > 0);
+    if (!line) {
+        throw new Error('`pc daemon start` did not print a socket path');
+    }
+    return line.trim();
 }
 
 async function connectSocket(
@@ -254,7 +305,8 @@ async function connectSocket(
     env: NodeJS.ProcessEnv,
     outputChannel: vscode.LogOutputChannel,
 ): Promise<JsonRpcBackend> {
-    const socketPath = await runLauncher(execPath, ['--socket', ...args], cwd, env);
+    const cliPath = cliBeside(execPath);
+    const socketPath = await daemonEndpoint(cliPath, args, cwd, env, outputChannel);
     traceInfo(`PartCAD service: connecting to daemon at ${socketPath}`);
     const socket: net.Socket = await new Promise((resolve, reject) => {
         const s = net.connect(socketPath);
@@ -262,7 +314,7 @@ async function connectSocket(
         s.once('error', reject);
     });
     const connection = createMessageConnection(new StreamMessageReader(socket), new StreamMessageWriter(socket));
-    return new JsonRpcBackend(connection, () => socket.destroy(), outputChannel);
+    return new JsonRpcBackend(connection, () => socket.destroy(), outputChannel, cliPath, cwd);
 }
 
 function connectStdio(

@@ -27,6 +27,25 @@ Host commands
   - ``pc system set`` — Set system-wide settings, such as the telemetry type, environment, and Sentry DSN.
   - ``pc system telemetry`` — Inspect or clear locally stored telemetry data (``info``, ``clear``).
 
+``pc upgrade``
+  Upgrade PartCAD itself to the latest version. This upgrades the installation on this machine; the packages a
+  package imports are ``pc update``.
+
+  PartCAD upgrades itself whichever way it was installed: the Python wheels are upgraded with ``pip``, and a
+  standalone bundle downloads the matching release, verifies its checksum, and installs it beside the running
+  copy. Nothing is downloaded and no daemon is disturbed until a newer version has actually been found; once
+  one has, every PartCAD daemon running on the machine is asked to stop and waited for, because all of them are
+  executing files that are about to be replaced. The new version goes in beside the old one, and the old one is
+  then removed — including the copy the command is itself running from, which goes as soon as the command
+  exits. An installation that runs from a source checkout is reported and skipped — update that one with
+  ``git``.
+
+  Use ``--check`` to report whether a newer PartCAD is available without installing anything, and
+  ``--to-version`` to install a specific version instead of the latest one. Under the global ``--offline`` flag
+  the version check is skipped entirely.
+
+  The "Update PartCAD" command in the VS Code extension runs exactly this, so the two never drift apart.
+
 ****************
 Package commands
 ****************
@@ -39,7 +58,8 @@ Package commands
   Download and set up all packages imported by the current package.
 
 ``pc update``
-  Force update all imported packages to their latest versions.
+  Force update all imported packages to their latest versions. This updates the packages a package imports;
+  to upgrade the PartCAD installation itself, use ``pc upgrade``.
 
 ``pc lint``
   Run linting checks on the files within packages. Use ``-r`` to check imported packages recursively and

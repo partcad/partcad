@@ -1,0 +1,28 @@
+[project]
+name = "partcad-client"
+version = "0.7.158"
+description = "The PartCAD client: daemon discovery and connection, and upgrading the installation"
+readme = "README.md"
+keywords = ["cad", "partcad", "client", "daemon", "update"]
+requires-python = ">=3.10,<3.15"
+license = {file = "LICENSE.txt"}
+authors = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+maintainers = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+dynamic = ["dependencies"]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project.urls]
+Homepage = "https://github.com/partcad/partcad"
+Issues = "https://github.com/partcad/partcad/issues"
