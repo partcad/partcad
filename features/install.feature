@@ -1,4 +1,8 @@
-@cli @install-packages
+# @cold-state: these assert that `pc install` reports cloning, which it only
+# does for a repository not in the cache yet, and two of them read the clone
+# back out of $HOME/.partcad. Both need the state directory left at its default
+# and empty, so they opt out of the seed the rest of the suite starts from.
+@cli @install-packages @cold-state
 Feature: `pc install` command
 
   Background: Create temporary $HOME and working directory

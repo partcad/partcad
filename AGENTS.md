@@ -123,6 +123,35 @@ poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-servi
 poetry run behave                                                                        # integration tests (./features)
 ```
 
+`behave` gives each scenario a private `$HOME`, so it would start with a cold PartCAD cache every time. The suite
+avoids that by building one internal state directory up front — the `//pub` clone plus the conda sandbox — and
+pointing each scenario at its own via `PC_INTERNAL_STATE_DIR`. Each scenario gets a private copy of the `cache`,
+`git` and `external` subdirectories (~2.8k files, ~0.6s) and **shares** the conda sandbox through a link: the
+sandbox is 36k of the seed's 39k files, and copying it cost ~133s per scenario on a Windows runner against ~2s
+on Linux, which was killing those jobs at the 60-minute cap. PartCAD locks the sandbox across processes, and
+behave is serial within a CI shard, so sharing it is what a developer's own machine does anyway. The first run builds it (~10 min, ~3.5 GB); later runs reuse
+it. Build or rebuild it explicitly with `poetry run python -m features.seed`, relocate it with
+`PARTCAD_BEHAVE_DIR`, and delete that directory to force a rebuild. A scenario that needs a cold cache — one
+asserting that `pc install` clones, or that the state directory is at the default `$HOME/.partcad` — must be
+tagged `@cold-state`. See `features/seed.py`.
+
+The build resumes rather than starting over, which is what lets CI cache the part worth caching: the object
+cache and `.seed-exports.json`, the manifest saying which exports are already covered. That is ~2 MB standing in
+for ~7.5 min of exports. The conda sandbox (~2.3 GB, ~70s to rebuild) and the git clones (~1.2 GB, ~90s) are
+deliberately **not** cached — GitHub allows 10 GB of cache per repository and this repo already uses ~8.9 GB of
+it for conda and pip, so anything cached here evicts those and makes every other job slower. `.seeded` is not
+cached either: restored without the sandbox, the build would be skipped and every scenario would build a sandbox
+inside its own throwaway copy.
+
+Seeding is bounded, because it shares a CI job's deadline with the suite it exists to speed up — unbounded, it took 32 of a Windows job's 60 minutes and the suite was killed. The whole of it gets `PARTCAD_BEHAVE_SEED_BUDGET` seconds (default 1500) and the export phase gets `PARTCAD_BEHAVE_EXPORT_BUDGET` (default 600); exports left over are deferred, not dropped, and a later run picks them up from the manifest. If the budget runs out before the seed is usable, the suite runs unseeded rather than the job failing.
+
+CI parallelises the suite by sharding it across jobs (`BEHAVE_SHARDS` in `test.yml`, split by
+`dev-tools/behave_shard.py`), so each job runs plain serial `behave` over a slice of the feature files. Locally,
+`.devcontainer/behave_hook.sh` instead uses `behavex` to parallelise within one machine:
+`poetry run behavex features --parallel-processes=4 --parallel-scheme=feature`. Note that `behavex` does **not**
+read the `tags` setting from `behave.ini`, so it runs the `@ai` scenarios that plain `behave` excludes. Pass
+`-t '~@ai'` if you want behave.ini's intent; the hook does not, so that it never runs less than it does today.
+
 Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
 
 ### Packaging

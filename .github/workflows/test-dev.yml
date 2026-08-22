@@ -335,6 +335,15 @@ jobs:
             git config --global url."git@github.com:".insteadOf "https://github.com/"
             git config --global protocol.version 2
             mkdir -pv behave-results
+
+            # Warm the shared PartCAD state directory once, before the suite
+            # starts, rather than letting each scenario rebuild the //pub clone
+            # and the conda sandbox in its own private $HOME. Not cached the way
+            # test.yml caches it: this job runs inside devcontainers/ci, where
+            # $HOME is the container's rather than the runner's, so it pays the
+            # full ~10 min build.
+            poetry --no-ansi --no-interaction run python -m features.seed
+
             poetry --no-ansi --no-interaction run coverage run $(poetry run which behave)
             poetry --no-ansi --no-interaction run coverage xml --data-file=./.coverage -o behave-results/coverage.xml
 

@@ -532,6 +532,47 @@ To run tests using ``behave``, execute the following command in an activated env
 
 Feature definitions and step implementations are located in the ``./features`` directory.
 
+Every scenario runs ``pc`` against its own private ``$HOME``, which would otherwise mean a cold PartCAD cache
+each time: re-cloning the ``//pub`` index and rebuilding the conda sandbox that script parts run in. Instead the
+suite builds that state once, in a directory that persists between runs, and points each scenario at its own
+through ``PC_INTERNAL_STATE_DIR``. The ``cache``, ``git`` and ``external`` subdirectories are copied per scenario
+and deleted when it ends, so a scenario is free to write to them. The conda sandbox is shared through a link
+rather than copied: it holds 36k of the seed's 39k files, and copying it cost about 133 seconds per scenario on a
+Windows runner against two on Linux. PartCAD locks the sandbox across processes, and behave runs scenarios
+serially within a CI shard, so sharing it matches what happens on a developer's own machine.
+
+The first run builds the seed and takes around ten minutes; later runs reuse it. To build it ahead of time, or to
+rebuild it after changing what it covers:
+
+.. code-block:: bash
+
+    $ poetry run python -m features.seed
+
+Both the seed and the live copies sit under ``~/.partcad-behave``; set ``PARTCAD_BEHAVE_DIR`` to move them.
+Deleting that directory forces a rebuild.
+
+The build resumes instead of starting over: it skips the exports recorded in ``state/.seed-exports.json`` and
+rebuilds the conda sandbox only if a success marker says it finished. That is what lets CI cache the object
+cache alone - about 2 MB standing in for some seven minutes of exports - and rebuild the rest. Neither the
+~2.3 GB conda sandbox nor the ~1.2 GB of git clones is cached: GitHub allows a repository 10 GB of cache in
+total, this one already uses close to 9 GB of that for conda and pip, and evicting those to speed up one job
+would slow down every other.
+
+Scenarios that assert on cold-cache behaviour - that ``pc install`` reports cloning, or that the state directory
+sits at its default ``$HOME/.partcad`` - must be tagged ``@cold-state``. That leaves ``PC_INTERNAL_STATE_DIR``
+unset for them, so they see an empty state directory in their temporary ``$HOME``.
+
+CI parallelises the suite by sharding it across jobs, so each job runs plain serial ``behave`` over a slice of the
+feature files. Locally, ``.devcontainer/behave_hook.sh`` instead parallelises within one machine using
+``behavex``:
+
+.. code-block:: bash
+
+    $ poetry run behavex features --parallel-processes=4 --parallel-scheme=feature
+
+Note that ``behavex`` does not read the ``tags`` setting from ``behave.ini``, so it runs the ``@ai`` scenarios
+that plain ``behave`` excludes. Pass ``-t '~@ai'`` if you want behave.ini's intent applied.
+
 Commit & Push Changes
 ---------------------
 
