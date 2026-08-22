@@ -18,6 +18,8 @@ import logging
 import sys
 import threading
 
+from partcad_utils.booleans import to_bool
+
 from .events import EventEmitter
 
 _LEVELS = {
@@ -54,6 +56,12 @@ class Session:
         # the warm context by passing the id back.
         # TODO: expire contexts (evict idle/old ones) so this never grows unbounded.
         self.contexts: dict = {}
+
+        # The user configuration each warm context was built from, by the same
+        # id. A caller hands its own configuration over with context.create, and
+        # a context built from a different one cannot answer for it, so this is
+        # what says whether the warm context still applies.
+        self.context_user_configs: dict = {}
 
         self._load_lock = threading.RLock()
 
@@ -159,8 +167,13 @@ class Session:
             user_config = self.partcad.user_config
             if settings.get("pythonSandbox"):
                 user_config.python_runtime = settings["pythonSandbox"]
-            if settings.get("forceUpdate"):
-                user_config.force_update = settings["forceUpdate"] == "true"
+            # Both spellings, one reading: the daemon's own command line turns
+            # a flag into "true", while the VS Code extension forwards its
+            # settings with their JSON types intact.
+            if "forceUpdate" in settings:
+                user_config.force_update = to_bool(settings["forceUpdate"])
+            if "develIndex" in settings:
+                user_config.devel_index = to_bool(settings["develIndex"])
 
             logging.basicConfig()
             logging.getLogger("partcad").propagate = False

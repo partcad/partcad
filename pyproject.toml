@@ -4,10 +4,14 @@
 # test's own directory on the path, so it has to be named here.
 pythonpath = [
     "partcad-utils/src",
+    "partcad-client/src",
     "partcad/src",
     "partcad-ide-client/src",
     "partcad/tests/unit",
     "partcad-service-json-rpc/src",
+    # The FreeCAD addon is not a package that gets installed: FreeCAD loads it
+    # from its own directory, which is what it is importable from here too.
+    "partcad-cad-freecad",
 ]
 addopts = """
     --import-mode importlib
@@ -74,7 +78,7 @@ cache-dir = "/tmp/.prepare_partcad-dev"
 
 [tool.poetry]
 name = "partcad-dev"
-version = "0.7.158"
+version = "0.7.176"
 description = "Development Environment for PartCAD"
 authors = [
   "PartCAD <support@partcad.org>",
@@ -83,6 +87,7 @@ license = "Apache 2.0"
 readme = "README.md"
 packages = [
   { include = "partcad_utils", from = "partcad-utils/src" },
+  { include = "partcad_client", from = "partcad-client/src" },
   { include = "partcad", from = "partcad/src" },
   { include = "partcad_cli", from = "partcad-cli/src" },
   { include = "partcad_ide_client", from = "partcad-ide-client/src" },
@@ -194,7 +199,12 @@ cadquery-ocp = "7.9.3.1.1"
 ocpsvg = "0.6.0"
 build123d = "0.11.1"
 pyyaml = ">=6.0.1"
-pygit2 = ">=1.15.0"
+# Pinned to match partcad/requirements.txt, which explains why. 1.18.2 is the
+# last pygit2 line that supports Python 3.10; 1.19 and later require 3.11.
+pygit2 = [
+  { version = "1.18.2", python = "<3.11" },
+  { version = "1.20.0", python = ">=3.11" },
+]
 ruamel-yaml = ">=0.18.5"
 vyper-config = "^1.2.1"
 packaging = ">=23.1"
@@ -214,6 +224,12 @@ ruff = "^0.15.22"
 jsonschema = "^4.26.0"
 # Only below 3.14, where the standard library has no 'compression.zstd'.
 "backports.zstd" = { version = ">=1.6.0", python = "<3.14" }
+# The clients behind the two off-machine cache tiers. They are extras of the
+# published wheel (partcad[memcache] and partcad[aws]), not dependencies of it;
+# they are here so the monorepo test suite, which drives both tiers against
+# local mock servers, has them installed.
+aiomcache = "^0.8.2"
+aioboto3 = "^15.5.0"
 
 [tool.poetry.group.cli.dependencies]
 setuptools = "^83.0.0"

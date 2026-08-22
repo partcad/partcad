@@ -21,10 +21,12 @@ import {
     checkIfConfigurationChanged,
     getBackendFromSetting,
     getInterpreterFromSetting,
+    getInstallOnOpenFromSetting,
     getPackagePathFromSetting,
     getReopenTerminalFromSetting,
     getPopupTerminalFromSetting,
 } from './common/settings';
+import { updateServiceBundle } from './common/provision';
 import { loadServerDefaults } from './common/setup';
 import { getLSClientTraceLevel } from './common/utilities';
 import { createOutputChannel, isVirtualWorkspace, onDidChangeConfiguration, registerCommand } from './common/vscodeapi';
@@ -32,6 +34,7 @@ import { createOutputChannel, isVirtualWorkspace, onDidChangeConfiguration, regi
 import { PartcadExplorer } from './PartcadExplorer';
 import { PartcadInspector } from './PartcadInspector';
 import { PartcadContext } from './PartcadContext';
+import { PartcadLint } from './PartcadLint';
 import { PartcadViewer } from './viewer/PartcadViewer';
 import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import * as PartcadItem from './PartcadItem';
@@ -44,6 +47,7 @@ let partcadExplorer: PartcadExplorer | undefined;
 let partcadExplorerView: vscode.TreeView<PartcadItem.PartcadItem | void>;
 let partcadContext: PartcadContext | undefined;
 let partcadInspector: PartcadInspector | undefined;
+let partcadLint: PartcadLint | undefined;
 let partcadViewer: PartcadViewer | undefined;
 let partcadViewerServer: PartcadViewerServer | undefined;
 let partcadTerminal: vscode.Terminal | undefined;
@@ -56,6 +60,41 @@ let currentItemName: string = '//';
 let currentItemPackage: string = '//';
 let currentItemParams: { [id: string]: string } = {};
 let itemToSelectOnRestart: string | undefined = undefined;
+
+// Which packages this workspace has already had installed, keyed by the config
+// file the install ran against, so that opening the same directory again is not
+// another download. Stored in the workspace state: "a new workspace directory"
+// has to survive a window reload, and a workspace whose `partcad.packagePath`
+// now points somewhere else is a package that has not been installed yet.
+const INSTALLED_PACKAGES_KEY = 'partcad.installedPackages';
+
+/**
+ * Download the package's dependencies the first time this workspace is opened.
+ *
+ * The PartCAD counterpart of `npm install`: it fetches every imported package
+ * and prepares every sketch, part and assembly, so the first build is not also
+ * the first download. It runs against the package `partcad.packagePath` points
+ * at, because that is the one the service just loaded.
+ */
+async function installPackageOnOpen(
+    context: vscode.ExtensionContext,
+    serverId: string,
+    configPath: string,
+): Promise<void> {
+    // The setting is resource-scoped, so a multi-root workspace can set it per
+    // package: read it against the package this call is about.
+    if (getInstallOnOpenFromSetting(serverId, vscode.Uri.file(configPath)) !== 'true') {
+        return;
+    }
+    const installed = context.workspaceState.get<string[]>(INSTALLED_PACKAGES_KEY, []);
+    if (installed.includes(configPath)) {
+        return;
+    }
+    // Only a completed install counts: an interrupted one has to run again the
+    // next time this workspace is opened.
+    await vscode.commands.executeCommand('partcad.installPackage');
+    await context.workspaceState.update(INSTALLED_PACKAGES_KEY, [...installed, configPath]);
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
@@ -90,6 +129,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     traceLog(`Module: ${serverInfo.module}`);
     traceVerbose(`Full Server Info: ${JSON.stringify(serverInfo)}`);
 
+    // ASSY files are checked through the backend; the checker is created here so
+    // the documents already open when the window came up get checked as soon as
+    // the backend registers `partcad.lintFile`.
+    partcadLint = new PartcadLint();
+    context.subscriptions.push(partcadLint);
+
     const handleRestartServer = async (
         serverId: string,
         serverName: string,
@@ -112,12 +157,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
             await vscode.commands.executeCommand('setContext', 'partcad.beingLoaded', true);
 
+            partcadLint?.refresh();
+
             context.subscriptions.push(
                 lsClient.onNotification('?/partcad/installed', async () => {
                     await vscode.commands.executeCommand('setContext', 'partcad.installed', true);
                     await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
                     await vscode.commands.executeCommand('partcad.activate');
                     await vscode.commands.executeCommand('setContext', 'partcad.needsUpdate', false);
+                    // The Python backend cannot check anything until PartCAD is
+                    // installed into the interpreter; now it can.
+                    partcadLint?.refresh();
                 }),
                 lsClient.onNotification('?/partcad/installFailed', async () => {
                     await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
@@ -186,6 +236,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     }
 
                     partcadExplorer?.setRoot(root);
+
+                    await installPackageOnOpen(context, serverId, configPath);
                 }),
                 lsClient.onNotification('?/partcad/activateFailed', async () => {
                     await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
@@ -406,7 +458,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         registerCommand(`partcad.update`, async () => {
             await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
             await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
-            await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
+            await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', true);
             await vscode.commands.executeCommand('setContext', 'partcad.itemsReceived', false);
             await vscode.commands.executeCommand('setContext', 'partcad.failed', false);
             await vscode.commands.executeCommand('setContext', 'partcad.packageLoaded', false);
@@ -420,8 +472,43 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             partcadExplorer?.clearItems();
             await partcadInspector?.clear();
 
-            // reload the context
-            await vscode.commands.executeCommand('partcad.reinstall');
+            if (getBackendFromSetting(serverId) === 'service') {
+                // The bundle upgrades itself by running its own `pc upgrade`,
+                // so the extension and the CLI upgrade by the same code. That
+                // takes the local daemons down with it, so reconnect afterwards
+                // -- to the new executable, which is at a new path once the
+                // upgrade installed one.
+                try {
+                    // `pc upgrade` stops every local daemon itself; this covers
+                    // the fallback download path, which does not, and this
+                    // connection has to go either way.
+                    await lsClient?.stopDaemon?.();
+                    const result = await updateServiceBundle(context, serverId, outputChannel);
+                    if (!result.execPath) {
+                        await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
+                        return;
+                    }
+                } catch (e: any) {
+                    traceError(`PartCAD update failed: ${e?.stack ?? e}`);
+                    vscode.window.showErrorMessage(`Failed to update PartCAD: ${e?.message ?? e}`);
+                }
+                await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
+                await handleRestartServer(serverId, serverName, outputChannel);
+            } else {
+                // Python backend: the server upgrades its own environment and
+                // reloads the context. `?/partcad/installed` clears the flag.
+                await vscode.commands.executeCommand('partcad.reinstall');
+            }
+        }),
+        registerCommand(`partcad.installPackage`, async () => {
+            await vscode.commands.executeCommand('setContext', 'partcad.packageContentsBeingLoaded', true);
+            try {
+                await vscode.commands.executeCommand('partcad.installPackageReal');
+            } finally {
+                // Installing loads packages that were not there before, so the
+                // tree the Explorer is showing is now out of date.
+                await vscode.commands.executeCommand('partcad.loadPackageContents');
+            }
         }),
         registerCommand(`partcad.promptInitPackage`, async () => {
             if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length === 1) {
@@ -535,9 +622,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 // eslint-disable-next-line @typescript-eslint/naming-convention
                 CadQuery: 'cadquery',
                 build123d: 'build123d',
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                Chili3D: 'chili3d',
             };
             const partType = await vscode.window.showQuickPick(
-                ['STEP', 'STL', '3MF', 'OpenSCAD', 'CadQuery', 'build123d'],
+                ['STEP', 'STL', '3MF', 'OpenSCAD', 'CadQuery', 'build123d', 'Chili3D'],
                 {
                     canPickMany: false,
                     title: 'What type of part would you like to create?',
@@ -557,6 +646,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 filters[`${partType}`] = ['3mf'];
             } else if (partType === 'OpenSCAD') {
                 filters[`${partType}`] = ['scad'];
+                hasTemplates = true;
+            } else if (partType === 'Chili3D') {
+                filters[`${partType}`] = ['chili'];
                 hasTemplates = true;
             } else {
                 filters[`${partType}`] = ['py'];
@@ -766,7 +858,21 @@ connect:
             }
         }),
         registerCommand(`partcad.startInstall`, async () => {
+            // The "not installed" and "needs to be updated" buttons in the
+            // Explorer view. Installing what is missing and updating what is out
+            // of date is one request as far as the user is concerned, so both
+            // buttons end up in the same updater the toolbar's "Update PartCAD"
+            // uses -- reached by the route each backend needs.
             await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', true);
+            if (getBackendFromSetting(serverId) === 'service') {
+                await vscode.commands.executeCommand('partcad.update');
+                return;
+            }
+            // Python backend: `partcad.install` runs the shared updater when the
+            // service module is already installed, and the pip bootstrap when it
+            // is not. Going through it rather than through `partcad.update`
+            // leaves `partcad.activated` alone, so a failed install still shows
+            // the Explorer's install button instead of an empty view.
             await vscode.commands.executeCommand('partcad.install');
         }),
         registerCommand(`partcad.support`, async () => {

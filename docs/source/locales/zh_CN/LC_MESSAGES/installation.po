@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PartCAD \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-03 15:22+0000\n"
+"POT-Creation-Date: 2026-08-22 10:40+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/installation.rst:2
 msgid "Installation"
@@ -370,8 +370,8 @@ msgid ""
 "(``lint``). A frozen bundle cannot be extended afterwards, so it ships "
 "complete."
 msgstr ""
-"该捆绑包携带了 wheel 包会安装的一切内容，包括那些 wheel 包留给用户自行选择的可选附加项（extras）：Python 代码检查器（ ``lint`` "
-"）。冻结的捆绑包在事后无法再扩展，因此它以完整的形式发布。"
+"该捆绑包携带了 wheel 包会安装的一切内容，包括那些 wheel 包留给用户自行选择的可选附加项（extras）：Python 代码检查器（ "
+"``lint`` ）。冻结的捆绑包在事后无法再扩展，因此它以完整的形式发布。"
 
 #: ../../source/installation.rst:239
 msgid ""
@@ -526,11 +526,34 @@ msgstr ""
 "此扩展可通过 VS Code 市场获取。对应的市场页面在 `此处 "
 "<https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_ 。"
 
-#: ../../source/installation.rst:336
+#: ../../source/installation.rst:338
+msgid "FreeCAD add-on"
+msgstr ""
+
+#: ../../source/installation.rst:340
+msgid ""
+"The ``PartCAD`` workbench browses packages, parts and assemblies inside "
+"FreeCAD and imports them into the open document. It lives in the "
+"``partcad-cad-freecad`` directory of the repository; copy or link that "
+"directory into FreeCAD's ``Mod`` folder as ``PartCAD`` and restart "
+"FreeCAD:"
+msgstr ""
+
+#: ../../source/installation.rst:349
+msgid ""
+"The ``Mod`` folder is ``~/Library/Preferences/FreeCAD/Mod/`` on MacOS and"
+" ``%APPDATA%\\FreeCAD\\Mod\\`` on Windows. No Python setup is needed: the"
+" add-on drives the standalone ``partcad-json-rpc`` service, using an "
+"existing standalone installation if there is one and offering to download"
+" a bundle if there is not. See ``partcad-cad-freecad/README.md`` for what"
+" it does and which environment variables it reads."
+msgstr ""
+
+#: ../../source/installation.rst:356
 msgid "Public PartCAD repository"
 msgstr "公共 PartCAD 仓库"
 
-#: ../../source/installation.rst:338
+#: ../../source/installation.rst:358
 msgid ""
 "The public PartCAD repository is hosted at `GitHub "
 "<https://github.com/partcad/partcad-index>`_. If necessary, PartCAD tools"
@@ -541,7 +564,7 @@ msgstr ""
 "公共 PartCAD 仓库托管在 `GitHub <https://github.com/partcad/partcad-index>`_ "
 "上。必要时，PartCAD 工具会自动获取该仓库以及所有其他所需仓库和包的内容。无需任何手动操作即可 `安装` 它。"
 
-#: ../../source/installation.rst:342
+#: ../../source/installation.rst:362
 msgid ""
 "However, if you suspect that something is wrong with locally cached "
 "files, use ``pc system status`` to investigate and to determine the "

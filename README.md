@@ -121,7 +121,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Windows
   - [x] Linux
   - [x] macOS
-- Workflow acceleration by caching rendered models (including OpenSCAD, CadQuery and build123d)
+- Workflow acceleration by caching rendered models (including OpenSCAD, CadQuery, build123d and Chili3D)
   - [x] In memory
   - [x] On disk
   - [ ] Local Server _(in progress)_
@@ -147,6 +147,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Using scripting languages
     - [x] [CadQuery]
     - [x] [build123d]
+    - [x] [Chili3D]
     - [x] [OpenSCAD]
   - Using legacy CAD files
     - [x] `STEP`
@@ -173,6 +174,7 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Render 2D and 3D to images
     - [x] `SVG`
     - [x] `PNG`
+    - [x] `JPEG`
   - Export 3D models to CAD files
     - [x] `STEP`
     - [x] `BREP`
@@ -188,12 +190,41 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
 Note, it's not required but highly recommended that you have [conda] installed. If you experience any difficulty
 installing or using any PartCAD tool, then make sure to install [conda].
 
+### PartCAD IDE
+
+The whole thing in one application: the editor, the PartCAD extension, and the command line tools. No Python,
+no extensions to pick, no environment to set up. It opens in the PartCAD workbench.
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --ide
+```
+
+On Windows, download and run `partcad-ide-<version>-windows-x86_64-setup.exe` from the
+[releases](https://github.com/partcad/partcad/releases); on macOS there is a `.dmg` there too. See
+[Installation](https://partcad.readthedocs.io/en/latest/installation.html) for the details.
+
 ### Extension for Visual Studio Code
+
+Already using Visual Studio Code? Install the extension into it instead of the IDE above.
 
 This extension can be installed by searching for `PartCAD` in the VS Code extension search form, or by browsing
 [its VS Code marketplace page](https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad).
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
+
+### Add-on for FreeCAD
+
+The `PartCAD` workbench browses packages, parts and assemblies inside FreeCAD, asks for an object's parameters,
+and imports the result into the open document. Copy or link
+[`partcad-cad-freecad`](./partcad-cad-freecad/README.md) into FreeCAD's `Mod` folder as `PartCAD` and restart
+FreeCAD:
+
+```shell
+ln -s "$PWD/partcad-cad-freecad" ~/.local/share/FreeCAD/Mod/PartCAD
+```
+
+No Python setup is needed: the add-on uses the standalone PartCAD service, downloading it on first use if no
+standalone installation is present.
 
 ### Command-Line Interface
 
@@ -250,6 +281,7 @@ Give us a star for our hard work!
 [conda]: https://docs.conda.io/
 [CadQuery]: https://github.com/CadQuery/cadquery
 [build123d]: https://github.com/gumyr/build123d
+[Chili3D]: https://github.com/xiangechen/chili3d
 [OpenSCAD]: https://openscad.org/
 [STEP]: https://en.wikipedia.org/wiki/ISO_10303
 [BREP]: https://en.wikipedia.org/wiki/Boundary_representation

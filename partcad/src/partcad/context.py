@@ -19,7 +19,10 @@ from .cache_shape import ShapeCache
 from . import consts
 from . import logging as pc_logging
 from .mating import Mating
+from . import output
+from . import runtime_javascript_all
 from . import runtime_python_all
+from . import sandbox_versions
 from . import project_factory_local as rfl
 from . import project_factory_git as rfg
 from . import project_factory_tar as rft
@@ -142,6 +145,8 @@ class Context:
         self.option_create_dirs = False
         self.runtimes_python = {}
         self.runtimes_python_lock = threading.Lock()
+        self.runtimes_javascript = {}
+        self.runtimes_javascript_lock = threading.Lock()
 
         self.stats_packages = 0
         self.stats_packages_instantiated = 0
@@ -386,8 +391,39 @@ class Context:
 
         return get_child_project_path(project_path, rel_project_path)
 
+    def _get_builtin_project(self, project_path: str) -> Optional[Project]:
+        """Load one of the packages that ship inside 'partcad' itself.
+
+        '//builtin' and its children are not reachable the way every other
+        package is: they have no place in the root package's directory tree and
+        nothing depends on them, yet they have to resolve in every context,
+        whatever the root package is called. They are therefore loaded on demand
+        straight from the 'partcad' installation, and only when something asks
+        for them - a context that never writes an output file never pays for it.
+
+        Returns None for any other path, which is what makes this safe to call
+        on the way into 'get_project()'.
+        """
+        path = output.BUILTIN_PATHS.get(project_path)
+        if path is None:
+            return None
+        if project_path in self.projects:
+            return self.projects[project_path]
+        return self.import_project(
+            None,  # parent: there is nothing above '//builtin'
+            {
+                "name": project_path,
+                "type": "local",
+                "path": path,
+            },
+        )
+
     def get_project(self, rel_project_path: str) -> Optional[Project]:
         project_path = self.get_project_abs_path(rel_project_path)
+
+        builtin_project = self._get_builtin_project(project_path)
+        if builtin_project is not None:
+            return builtin_project
 
         with self.lock:
             # Check if it's an explicit reference outside of the root project
@@ -459,23 +495,17 @@ class Context:
                     result = self._get_project_recursive(next_project, import_list)
                     return result
         else:
-            # Otherwise, iterate all subfolders and check if any of them are packages
-            if "dependencies" in project.config_obj and project.config_obj["dependencies"] is not None:
-                dependencies = project.config_obj["dependencies"]
-                # TODO(clairbee): revisit if this code path is needed when the
-                #                 user explicitly asked for a particular package
-                # if not project.config_obj.get("isRoot", False):
-                #     filtered = filter(
-                #         lambda x: "onlyInRoot" not in dependencies[x]
-                #         or not dependencies[x]["onlyInRoot"],
-                #         dependencies,
-                #     )
-                #     dependencies = list(filtered)
+            # Resolve a declared child dependency. Go through the 'dependencies()'
+            # accessor rather than 'config_obj' directly so that a plugin-backed
+            # package's children - reported by its repository instead of a
+            # 'dependencies' section on disk - are resolvable here too.
+            dependencies = project.dependencies()
+            if dependencies:
                 for prj_name in dependencies:
                     pc_logging.debug(f"Checking the dependency: {prj_name} vs {next_import}...")
                     if prj_name != next_import:
                         continue
-                    prj_conf = project.config_obj["dependencies"][prj_name]
+                    prj_conf = dependencies[prj_name]
                     if prj_conf.get("onlyInRoot", False):
                         next_project_path = "//" + prj_name
                     pc_logging.debug(f"Loading the dependency: {next_project_path}...")
@@ -1023,19 +1053,43 @@ class Context:
         """Thin alias for convert_assembly(assembly_spec, "build123d", params)."""
         return self.convert_assembly(assembly_spec, "build123d", params)
 
-    async def render_async(self, project_path=None, format=None, output_dir=None):
+    async def render_async(
+        self,
+        project_path=None,
+        format=None,
+        output_dir=None,
+        options_package=None,
+        ignore_manufacturability=False,
+    ):
         if project_path is None:
             project_path = self.get_current_project_path()
         pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
-        await project.render_async(format=format, output_dir=output_dir)
+        await project.render_async(
+            format=format,
+            output_dir=output_dir,
+            options_package=options_package,
+            ignore_manufacturability=ignore_manufacturability,
+        )
 
-    def render(self, project_path=None, format=None, output_dir=None):
+    def render(
+        self,
+        project_path=None,
+        format=None,
+        output_dir=None,
+        options_package=None,
+        ignore_manufacturability=False,
+    ):
         if project_path is None:
             project_path = self.get_current_project_path()
         pc_logging.debug("Rendering all objects in %s..." % project_path)
         project = self.get_project(project_path)
-        project.render(format=format, output_dir=output_dir)
+        project.render(
+            format=format,
+            output_dir=output_dir,
+            options_package=options_package,
+            ignore_manufacturability=ignore_manufacturability,
+        )
 
     # TODO(clairbee): convert it into: ctx.get_runtime("python", "conda", {"version": "3.11"})
     def get_python_runtime(self, version=None, python_runtime=None):
@@ -1054,6 +1108,35 @@ class Context:
             if not runtime_name in self.runtimes_python:
                 self.runtimes_python[runtime_name] = runtime_python_all.create(self, version, python_runtime)
             return self.runtimes_python[runtime_name]
+
+    def get_javascript_runtime(self, version=None, javascript_runtime=None):
+        """The sandboxed Node.js of the given major version.
+
+        The JavaScript twin of get_python_runtime(). 'version' is normalized to
+        the major line, which is the granularity Node.js sandboxes are
+        provisioned at (see sandbox_versions.node_major_version).
+        """
+        with self.runtimes_javascript_lock:
+            if version is None:
+                version = sandbox_versions.DEFAULT_NODE_VERSION
+            # A version like 22 declared in YAML arrives as an int, and one like
+            # 22.11 as a float; both name the same major line.
+            version = sandbox_versions.node_major_version(str(version))
+            if javascript_runtime is None:
+                javascript_runtime = self.user_config.javascript_sandbox
+            runtime_name = javascript_runtime + "-" + version
+            if runtime_name not in self.runtimes_javascript:
+                runtime = runtime_javascript_all.create(self, version, javascript_runtime)
+                # A runtime does not have to end up being the version that was
+                # asked for: the 'none' sandbox is whatever Node.js the host
+                # has, and reports that (see NoneJavaScriptRuntime). Two
+                # requests that resolve to the same one have to be the same
+                # object, or they would hold separate in-process locks over one
+                # sandbox directory and each re-check its install guards.
+                resolved_name = javascript_runtime + "-" + runtime.version
+                runtime = self.runtimes_javascript.setdefault(resolved_name, runtime)
+                self.runtimes_javascript[runtime_name] = runtime
+            return self.runtimes_javascript[runtime_name]
 
     def ensure_dirs(self, path):
         if not self.option_create_dirs:

@@ -1,0 +1,85 @@
+# The render implementations PartCAD ships with: the 2D projections that
+# `pc render` writes.
+#
+# The structure is identical to `//builtin/export` -- see that package for what
+# each field means. The only difference is which section a package declares
+# these in: `render:` rather than `export:`.
+#
+# `readme` is deliberately absent. It is not produced by a wrapper script at all
+# but assembled by PartCAD itself out of the images the other formats leave
+# behind, so there is nothing here for a package to replace.
+
+name: //builtin/render
+desc: |
+  The render implementations PartCAD ships with: the 2D projections that
+  `pc render` writes. A package replaces any of them, or adds one of its own, by
+  declaring that file type in its own `render:` section.
+
+render:
+  svg:
+    desc: A 2D projection of the shape, as SVG.
+    path: render_svg.py
+    extension: svg
+    pythonRequirements:
+      - ocpsvg==0.6.0
+      - build123d==0.11.1
+      - cadquery-ocp==7.9.3.1.1
+    line_weight: 1.0
+    # 'viewport_origin' and 'viewport_up' have no defaults here: the wrapper
+    # picks them from the kind of shape it was handed (a sketch is looked at
+    # head-on, a part from a corner). Set either to override that.
+
+  png:
+    desc: The SVG projection, rasterized.
+    path: render_png.py
+    extension: png
+    pythonRequirements:
+      - ocpsvg==0.6.0
+      - build123d==0.11.1
+      - svglib==1.5.1
+      - reportlab==4.4.3
+      - rlpycairo==0.3.0
+      - cadquery-ocp==7.9.3.1.1
+    line_weight: 1.0
+    width: 512
+    height: 512
+
+  jpeg:
+    # The format is named 'jpeg' but the file it writes is a '.jpg'.
+    desc: The SVG projection, rasterized and JPEG-compressed.
+    path: render_jpeg.py
+    extension: jpg
+    pythonRequirements:
+      - ocpsvg==0.6.0
+      - build123d==0.11.1
+      - svglib==1.5.1
+      - reportlab==4.4.3
+      - rlpycairo==0.3.0
+      - cadquery-ocp==7.9.3.1.1
+    line_weight: 1.0
+    width: 512
+    height: 512
+    # JPEG has no alpha channel, so the transparent SVG background has to be
+    # flattened onto some color.
+    background: "#ffffff"
+    quality: 85
+    progressive: false
+    optimize: false
+    # A projection is line art: 4:2:0 chroma subsampling (what Pillow picks
+    # below quality 95) smears color across the one-pixel-wide edges, so keep
+    # full chroma unless the package asks for something smaller.
+    subsampling: "4:4:4"
+
+  dxf:
+    desc: The SVG projection, converted to DXF.
+    path: render_dxf.py
+    extension: dxf
+    pythonRequirements:
+      - ocpsvg==0.6.0
+      - build123d==0.11.1
+      - svgpathtools==1.7.2
+      - ezdxf==1.4.4
+      - cadquery-ocp==7.9.3.1.1
+    line_weight: 1.0
+    viewport_origin: [0, 0, 100]
+    viewport_up: [0, 1, 0]

@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.7.158",
+  "version": "0.7.176",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -184,6 +184,12 @@
         "title": "General",
         "order": 3,
         "properties": {
+          "partcad.lint.enabled": {
+            "default": true,
+            "description": "Check ASSY files for Jinja2, YAML and schema errors while editing, and report them in the Problems view.",
+            "scope": "resource",
+            "type": "boolean"
+          },
           "partcad.verbosity": {
             "default": "info",
             "description": "What level of logs need to be displayed in the PartCAD terminal view?",
@@ -206,6 +212,20 @@
             "scope": "resource",
             "type": "string"
           },
+          "partcad.installOnOpen": {
+            "default": "true",
+            "description": "Whether to download the package's dependencies (as `pc install` does) the first time a workspace directory is opened. The package installed is the one `partcad.packagePath` points at.",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "enumDescriptions": [
+              "Install the dependencies when a workspace directory is opened for the first time.",
+              "Never install automatically; run \"PartCAD: Install the package dependencies\" by hand."
+            ],
+            "scope": "resource",
+            "type": "string"
+          },
           "partcad.forceUpdate": {
             "default": "false",
             "description": "Whether to update all dependencies on each run, instead of once a day.",
@@ -219,6 +239,12 @@
             ],
             "scope": "machine",
             "type": "string"
+          },
+          "partcad.develIndex": {
+            "default": false,
+            "description": "Whether to take the public PartCAD index from its 'devel' branch instead of the released state on 'main'. Turn this on to work against index changes that have not been released yet.",
+            "scope": "machine",
+            "type": "boolean"
           },
           "partcad.importStrategy": {
             "default": "useBundled",
@@ -346,6 +372,12 @@
         "category": "PartCAD",
         "command": "partcad.refresh",
         "icon": "$(sync)"
+      },
+      {
+        "title": "Install the package dependencies",
+        "category": "PartCAD",
+        "command": "partcad.installPackage",
+        "icon": "$(cloud-download)"
       },
       {
         "title": "PartCAD support",
@@ -482,6 +514,13 @@
         "icon": "$(export)"
       },
       {
+        "command": "partcad.exportToJPEG",
+        "category": "PartCAD",
+        "group": "Export",
+        "title": "JPEG...",
+        "icon": "$(export)"
+      },
+      {
         "command": "partcad.exportToSTEP",
         "category": "PartCAD",
         "group": "Export",
@@ -592,6 +631,11 @@
         },
         {
           "command": "partcad.refresh",
+          "when": "partcad.packageLoaded && view == partcadExplorer",
+          "group": "additional_commands"
+        },
+        {
+          "command": "partcad.installPackage",
           "when": "partcad.packageLoaded && view == partcadExplorer",
           "group": "additional_commands"
         },
@@ -728,6 +772,10 @@
           "when": "view == partcadExplorer"
         },
         {
+          "command": "partcad.exportToJPEG",
+          "when": "view == partcadExplorer"
+        },
+        {
           "command": "partcad.exportToSTEP",
           "when": "view == partcadExplorer"
         },
@@ -761,7 +809,7 @@
       "activitybar": [
         {
           "id": "partcad-container",
-          "title": "PartCAD (Beta)",
+          "title": "PartCAD",
           "icon": "resources/logo.svg"
         }
       ]
@@ -815,12 +863,12 @@
       },
       {
         "view": "partcadExplorer",
-        "contents": "PartCAD Python module v0.7.158 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD Python module](command:partcad.startInstall)",
+        "contents": "PartCAD Python module v0.7.176 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD](command:partcad.startInstall)",
         "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled"
       },
       {
         "view": "partcadExplorer",
-        "contents": "PartCAD Python module needs to be updated for the current package to work properly.\n\n[Update PartCAD Python module](command:partcad.startInstall)",
+        "contents": "PartCAD needs to be updated for the current package to work properly.\n\n[Update PartCAD](command:partcad.startInstall)",
         "when": "partcad.needsUpdate"
       },
       {

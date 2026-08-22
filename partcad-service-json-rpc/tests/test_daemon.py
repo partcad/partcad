@@ -3,7 +3,13 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Tests for daemon discovery/liveness (the non-forking parts)."""
+"""Tests for starting the daemon (the non-forking parts).
+
+Where the socket lives and whether anything answers on it is
+`partcad_utils.workspace`, tested there; stopping and enumerating daemons is
+`partcad_client.daemon`, tested there. What is left here is the service's
+own half: `ensure_daemon` reusing a daemon that is already serving.
+"""
 
 import os
 import pathlib
@@ -40,36 +46,6 @@ def socket_dir():
         shutil.rmtree(path, ignore_errors=True)
 
 
-def test_workspace_hash_is_deterministic_and_16_hex():
-    h = daemon.workspace_hash("/some/root")
-    assert h == daemon.workspace_hash("/some/root")
-    assert len(h) == 16
-    assert all(c in "0123456789abcdef" for c in h)
-    assert daemon.workspace_hash("/other") != h
-
-
-def test_socket_path_lives_under_partcad_workspaces(monkeypatch, tmp_path):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    p = daemon.socket_path("/some/root")
-    expected = os.path.join(str(tmp_path), ".partcad", "workspaces", daemon.workspace_hash("/some/root"), "socket")
-    assert p == expected
-
-
-def test_determine_root_path_walks_up_to_the_topmost_partcad_yaml(tmp_path):
-    root = tmp_path / "proj"
-    sub = root / "a" / "b"
-    sub.mkdir(parents=True)
-    (root / "partcad.yaml").write_text("desc: test\n")
-    (root / "a" / "partcad.yaml").write_text("desc: nested\n")
-    assert daemon.determine_root_path(str(sub)) == str(root.resolve())
-
-
-def test_determine_root_path_without_partcad_yaml_is_the_directory_itself(tmp_path):
-    d = tmp_path / "plain"
-    d.mkdir()
-    assert daemon.determine_root_path(str(d)) == str(d.resolve())
-
-
 def _wait_until_listening(path, timeout=5.0):
     """Block until the server at ``path`` accepts connections.
 
@@ -98,25 +74,6 @@ def _serve(path, registry):
     threading.Thread(target=server.serve_unix, args=(path,), daemon=True).start()
     _wait_until_listening(path)
     return server
-
-
-def test_is_alive_false_when_socket_absent(tmp_path):
-    assert daemon.is_alive(str(tmp_path / "nope")) is False
-
-
-def test_is_alive_false_when_socket_file_is_stale(socket_dir):
-    stale = socket_dir / "socket"
-    stale.write_text("")  # a plain file, nothing listening
-    assert daemon.is_alive(str(stale)) is False
-
-
-def test_is_alive_true_when_a_daemon_is_serving(socket_dir):
-    path = str(socket_dir / "socket")
-    server = _serve(path, build_registry())
-    try:
-        assert daemon.is_alive(path) is True
-    finally:
-        server.stop()
 
 
 def test_ensure_daemon_returns_existing_socket_when_alive(monkeypatch, capsys):

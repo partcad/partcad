@@ -54,6 +54,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
         vscode.commands.registerCommand(`partcad.exportToSVG`, (item) => this.exportToSVG(item));
         vscode.commands.registerCommand(`partcad.exportToPNG`, (item) => this.exportToPNG(item));
+        vscode.commands.registerCommand(`partcad.exportToJPEG`, (item) => this.exportToJPEG(item));
         vscode.commands.registerCommand(`partcad.exportToSTEP`, (item) => this.exportToSTEP(item));
         vscode.commands.registerCommand(`partcad.exportToSTL`, (item) => this.exportToSTL(item));
         vscode.commands.registerCommand(`partcad.exportTo3MF`, (item) => this.exportTo3MF(item));
@@ -178,7 +179,8 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         });
         for (const assembly of items.assemblies) {
             let filepath = undefined;
-            if (assembly.type === 'assy') {
+            // The assembly types that *are* a file, so the tree can open one.
+            if (assembly.type === 'assy' || assembly.type === 'urdf') {
                 filepath = assembly.item_path;
             }
             elements.push(new PartcadItem(dir, assembly.name, items.name, assembly, filepath, ITEM_TYPE_ASSEMBLY));
@@ -198,6 +200,7 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
             if (
                 part.type === 'cadquery' ||
                 part.type === 'build123d' ||
+                part.type === 'chili3d' ||
                 part.type === 'scad' ||
                 part.type.startsWith('ai-')
             ) {
@@ -281,6 +284,11 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
 
     public async exportToPNG(item: PartcadItem) {
         await this.doExportItem('png', 'PNG files', 'png', item);
+        await vscode.commands.executeCommand('partcad.getStats');
+    }
+
+    public async exportToJPEG(item: PartcadItem) {
+        await this.doExportItem('jpeg', 'JPEG files', 'jpg', item);
         await vscode.commands.executeCommand('partcad.getStats');
     }
 

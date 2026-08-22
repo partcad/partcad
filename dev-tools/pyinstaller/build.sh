@@ -12,10 +12,16 @@
 #   dev-tools/pyinstaller/build.sh              # install dependencies, then build
 #   dev-tools/pyinstaller/build.sh --no-install # build only, dependencies are in place
 #   dev-tools/pyinstaller/build.sh --no-archive # leave the bundle unpacked, skip the archive
+#   dev-tools/pyinstaller/build.sh --platform=ubuntu-22.04-x86_64   # name it explicitly
 #
 # The environment variable PYTHON selects the interpreter to freeze (default
 # `python3`); the bundle embeds that exact interpreter, so it decides the
 # Python version users end up running.
+#
+# The environment variable PLATFORM (or --platform=) overrides the platform id
+# the archive is named after. It is detected from this machine when unset; CI
+# passes it, because the runner image knows its own OS version and this script
+# would have to guess it back out of the kernel.
 #
 # Output (relative to the repository root):
 #
@@ -53,12 +59,14 @@ OPENSCAD_PAYLOAD_DIR="${OPENSCAD_STAGE_DIR}/payload-${OPENSCAD_VERSION}"
 
 INSTALL_DEPENDENCIES=1
 CREATE_ARCHIVE=1
+PLATFORM="${PLATFORM:-}"
 for arg in "$@"; do
   case "${arg}" in
   --no-install) INSTALL_DEPENDENCIES=0 ;;
   --no-archive) CREATE_ARCHIVE=0 ;;
+  --platform=*) PLATFORM="${arg#*=}" ;;
   -h | --help)
-    sed -n '7,25p' "${BASH_SOURCE[0]}"
+    sed -n '7,31p' "${BASH_SOURCE[0]}"
     exit 0
     ;;
   *)
@@ -70,8 +78,23 @@ done
 
 ################################################  PLATFORM  ##################################################
 
-# The archive name has to say what the bundle runs on, and has to agree with
-# the names `install.sh` derives from `uname`. Keep the two in sync.
+# A frozen bundle is only portable across systems at least as new as the one it
+# was built on: it links against the C library and the system frameworks of that
+# machine. So a bundle is not "for Linux", it is for the OS *version* it was
+# built on and everything newer -- which is why the archive name carries that
+# version, and why there is one build per supported OS version rather than one
+# per operating system.
+#
+# The platform id is `<os>-<os-version>-<arch>`, and for the builds CI produces
+# it is exactly the runner image label (minus the `-arm` suffix) plus the
+# architecture:
+#
+#   ubuntu-22.04-x86_64   ubuntu-22.04-arm64    macos-15-arm64    windows-2022-x86_64
+#   ubuntu-24.04-x86_64   ubuntu-24.04-arm64    macos-26-arm64    windows-2025-x86_64
+#
+# `install.sh` resolves the same ids from the machine it runs on. Keep the two
+# in sync: the list above, the matrix in ".github/workflows/build-standalone.yml",
+# and LINUX_BUILDS/MACOS_BUILDS in "install.sh".
 case "$(uname -s)" in
 Linux*) OS_NAME="linux" ;;
 Darwin*) OS_NAME="macos" ;;
@@ -91,7 +114,54 @@ arm64 | aarch64) ARCH_NAME="arm64" ;;
   ;;
 esac
 
-PLATFORM="${OS_NAME}-${ARCH_NAME}"
+# Only used when PLATFORM was not passed in. CI always passes it: the runner
+# image label is the authoritative answer to "which OS version is this", and
+# recovering it from the running system is guesswork on Windows in particular.
+detect_os_release() {
+  case "${OS_NAME}" in
+  linux)
+    # Every distribution ships this file; `ID`/`VERSION_ID` are the two fields
+    # that are always present. A rolling distribution with no VERSION_ID gets
+    # its ID alone, which still names the build uniquely enough for a local one.
+    if [ -r /etc/os-release ]; then
+      # shellcheck disable=SC1091
+      . /etc/os-release
+      if [ -n "${VERSION_ID:-}" ]; then
+        echo "${ID}-${VERSION_ID}"
+      else
+        echo "${ID}"
+      fi
+      return 0
+    fi
+    echo "error: /etc/os-release is missing, pass --platform=<id>" >&2
+    return 1
+    ;;
+  macos)
+    # The major version is the compatibility boundary; the point release is not.
+    echo "macos-$(sw_vers -productVersion | cut -d. -f1)"
+    ;;
+  windows)
+    # Git Bash reports the NT build number in `uname -s`, e.g.
+    # "MINGW64_NT-10.0-20348". That number identifies the Windows release, but
+    # only through a table -- so map the ones CI builds on and ask for
+    # --platform for anything else, rather than inventing a name.
+    case "$(uname -s)" in
+    *-20348) echo "windows-2022" ;;
+    *-26100) echo "windows-2025" ;;
+    *)
+      echo "error: cannot name this Windows version from '$(uname -s)'," >&2
+      echo "       pass --platform=windows-<year>-${ARCH_NAME}" >&2
+      return 1
+      ;;
+    esac
+    ;;
+  esac
+}
+
+if [ -z "${PLATFORM}" ]; then
+  PLATFORM="$(detect_os_release)-${ARCH_NAME}"
+fi
+
 if [ "${OS_NAME}" = "windows" ]; then
   ARCHIVE_EXT="zip"
   # PyInstaller names the executables `pc.exe` and `partcad.exe` there.
@@ -134,14 +204,16 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-cli/"
   cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-service-json-rpc/"
   cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-utils/"
+  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-client/"
 
   echo "==> Installing PartCAD from this checkout"
   # The shared partcad-utils is installed first: partcad (and the CLI/service)
   # pin it, and it is not on PyPI, so it must come from this checkout.
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-utils" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-client" "${SETUPTOOLS_BOUND}"
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras that the wheels leave to the user are all built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint]" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint,memcache,aws]" "${SETUPTOOLS_BOUND}"
   # The CAD kernel is NOT a dependency of the 'partcad' wheel - the core runs all
   # CAD in sandboxes. The standalone bundle, however, freezes it in so that 'pc'
   # works on a machine with no Python: convert("build123d"/"cadquery") hands back
@@ -180,10 +252,15 @@ fi
 # bundled OpenSCAD still needs those present. Windows takes the upstream portable
 # build, a single statically linked executable that needs nothing at all.
 #
-# macOS is deliberately excluded. The 2021.01 release predates Apple Silicon
-# and ships an x86_64-only .dmg, which on the arm64 bundle would require
-# Rosetta 2 -- absent from a clean machine, and not something an installer
-# should be quietly requiring. The current development snapshots may well be
+# Linux arm64 carries none either: upstream publishes the 2021.01 AppImage for
+# x86_64 only, and running an x86_64 AppImage under emulation is not something
+# a bundle should be quietly requiring. `pc` there uses the host's OpenSCAD,
+# exactly as the wheels do.
+#
+# macOS is deliberately excluded for the same shape of reason. The 2021.01
+# release predates Apple Silicon and ships an x86_64-only .dmg, which on the
+# arm64 bundle would require Rosetta 2 -- absent from a clean machine, and not
+# something an installer should be quietly requiring. The current development snapshots may well be
 # universal binaries, but they are snapshots, and their architecture has not
 # been confirmed. Until that is settled, `pc` on macOS uses the host's
 # OpenSCAD, exactly as the wheels do.
@@ -192,7 +269,10 @@ stage_openscad() {
   download_dir="${OPENSCAD_STAGE_DIR}/download-${OPENSCAD_VERSION}"
   payload_dir="${OPENSCAD_PAYLOAD_DIR}"
 
-  case "${PLATFORM}" in
+  # Keyed on the operating system and architecture rather than on PLATFORM,
+  # which now also carries the OS version: which OpenSCAD to fetch does not
+  # depend on whether this is Ubuntu 22.04 or 24.04.
+  case "${OS_NAME}-${ARCH_NAME}" in
   linux-x86_64)
     artifact="OpenSCAD-${OPENSCAD_VERSION}-x86_64.AppImage"
     entry_point="${payload_dir}/AppRun"
@@ -287,6 +367,8 @@ REQUIRED = {
     "build123d": "the geometry kernel",
     "partcad_ide_client": "`pc inspect` displaying into the PartCAD IDE",
     "ruff.__main__": "`pc lint` of Python files",
+    "aiomcache": "the 'cacheRemote' cache tier",
+    "aioboto3": "the 'cacheS3' cache tier",
 }
 
 # Python 3.14 has zstd in the standard library as 'compression.zstd'; below
@@ -335,7 +417,7 @@ PREFLIGHT
 # ignored (`_clone_ignoring_ambient_config` in `partcad/project_factory_git.py`),
 # which no anonymous clone of a public repository reaches. It would ship, and
 # segfault for users only.
-if [ "${PLATFORM}" = "macos-arm64" ]; then
+if [ "${OS_NAME}-${ARCH_NAME}" = "macos-arm64" ]; then
   echo "==> Checking that _cffi_backend is the PyPI build"
   # Read with macholib rather than `otool`, so this needs no Xcode command line
   # tools; PyInstaller depends on macholib, so it is already installed.

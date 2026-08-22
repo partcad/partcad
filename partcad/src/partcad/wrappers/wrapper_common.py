@@ -22,7 +22,14 @@ _request_name = None
 _request_label = None
 
 
-def handle_input():
+def handle_input(decode=True):
+    """Read the (path, request) pair a wrapper is invoked with.
+
+    'decode' off keeps the request exactly as it travelled, with shape and
+    assembly envelopes left as their dicts instead of being rebuilt into live
+    OCCT geometry. A wrapper that walks an assembly *tree* needs that, because
+    decoding collapses the tree into one compound (see ocp_serialize.decode).
+    """
     if len(sys.argv) < 2:
         sys.stderr.write("Usage: %s <path>\n" % sys.argv[0])
         sys.exit(1)
@@ -49,7 +56,7 @@ def handle_input():
     #   - Read until EOF
     input_str = sys.stdin.read()
     #   - Unpack the content received via stdin
-    request = ocp_serialize.deserialize(input_str)
+    request = ocp_serialize.deserialize(input_str) if decode else ocp_serialize.deserialize_raw(input_str)
     global _request_name, _request_label
     if isinstance(request, dict):
         _request_name = request.get("name")

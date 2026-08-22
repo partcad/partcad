@@ -1,0 +1,54 @@
+name: "Test depth"
+description: >
+  Decides whether this run gets the full test matrix or the reduced one, and
+  says why in the job summary. Used by the "set matrix" job of every workflow
+  that fans out over operating systems.
+
+outputs:
+  deep:
+    description: '"true" for the full matrix, "false" for the reduced one.'
+    value: ${{ steps.decide.outputs.deep }}
+
+runs:
+  using: composite
+  steps:
+    - id: decide
+      shell: bash
+      env:
+        # Through the environment, never interpolated into the script: the title
+        # and the body of a pull request are text a contributor writes, and
+        # "${{ }}" would splice it into the shell.
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        PR_BODY: ${{ github.event.pull_request.body }}
+        EVENT_NAME: ${{ github.event_name }}
+      run: |
+        # A pull request, and the merge queue behind it, run the reduced matrix:
+        # the older OS versions are dropped and only one macOS is kept, which is
+        # most of the cost (macOS minutes bill at 10x). Everything else -- the
+        # nightly schedule, a manual dispatch, and any push, which includes the
+        # release path -- runs everything. That way the complete matrix is never
+        # more than a day, or a "#deepTest", away, and a release is always built
+        # and checked in full.
+        case "${EVENT_NAME}" in
+        pull_request | pull_request_target | merge_group) deep=false ;;
+        *) deep=true ;;
+        esac
+        reason="event '${EVENT_NAME}'"
+
+        # Opt in per pull request, for a change that warrants the full matrix
+        # before it merges -- anything touching packaging, dependencies, or
+        # platform specific code. Matched case-insensitively, in the title as
+        # well as the body, because that is how people will actually type it.
+        if printf '%s\n%s' "${PR_TITLE}" "${PR_BODY}" | grep -qiF '#deeptest'; then
+          deep=true
+          reason="'#deepTest' in the pull request"
+        fi
+
+        echo "deep=${deep}" >> "${GITHUB_OUTPUT}"
+        if [ "${deep}" = "true" ]; then
+          echo "Full matrix (${reason})." >> "${GITHUB_STEP_SUMMARY}"
+        else
+          echo "Reduced matrix (${reason}). Put '#deepTest' in the pull request description for the full one." \
+            >> "${GITHUB_STEP_SUMMARY}"
+        fi
+        cat "${GITHUB_STEP_SUMMARY}"

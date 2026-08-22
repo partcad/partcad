@@ -1,0 +1,35 @@
+// Which extensions the PartCAD IDE ships with.
+//
+// The list itself is not here: it is `../.vscode/extensions.json`, the same
+// recommendations a contributor is prompted to install when they open this
+// repository in Visual Studio Code. This file only says what to do about the
+// entries that cannot simply be installed from the gallery, and adds the ones
+// an end user needs but a contributor already has.
+//
+// `tools/resolve_extensions.py` turns the two into an install plan; run it with
+// `--explain` to see what the build will do.
+{
+  // Overrides for the recommendations in `../.vscode/extensions.json`. Anything
+  // not named here is installed from the gallery (Open VSX, see README.md) and
+  // is not required: if it is missing from the registry the build says so and
+  // continues, rather than blocking a release on a third party's publishing.
+  "extensions": {
+    "ms-python.vscode-pylance": {
+      "action": "skip",
+      "reason": "Proprietary. Its license permits use only with Microsoft's own products, so it cannot be shipped in this IDE, and it is not published on Open VSX. `detachhead.basedpyright` below fills the same role."
+    }
+  },
+
+  // Installed although a contributor does not need them: they come with the
+  // Python environment a contributor already has, or they replace something
+  // above that could not be shipped.
+  "extra": {
+    "ms-python.python": {
+      "required": true,
+      "reason": "An `extensionDependency` of the PartCAD extension, and what runs CadQuery and build123d scripts from the editor."
+    },
+    "detachhead.basedpyright": {
+      "reason": "Open-source type checking and IntelliSense for Python, in place of Pylance. Not required: the IDE is usable without it, only less helpful while editing a CAD script."
+    }
+  }
+}

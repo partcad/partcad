@@ -19,6 +19,8 @@ export interface ISettings {
     verbosity: string;
     packagePath: string;
     forceUpdate: string;
+    installOnOpen: string;
+    develIndex: boolean;
     // args: string[];
     path: string[];
     interpreter: string[];
@@ -89,6 +91,10 @@ export function getPackagePathFromSetting(namespace: string, scope?: Configurati
     return config.get<string>('packagePath');
 }
 
+export function getInstallOnOpenFromSetting(namespace: string, scope?: ConfigurationScope) {
+    return getConfiguration(namespace, scope).get<string>('installOnOpen') ?? 'true';
+}
+
 export function getReopenTerminalFromSetting(namespace: string, scope?: ConfigurationScope) {
     const config = getConfiguration(namespace, scope);
     return config.get<string>('reopenTerminal');
@@ -122,6 +128,8 @@ export async function getWorkspaceSettings(
         verbosity: config.get<string>(`verbosity`) ?? 'info',
         packagePath: config.get<string>(`packagePath`) ?? '.',
         forceUpdate: config.get<string>(`forceUpdate`) ?? 'false',
+        installOnOpen: config.get<string>(`installOnOpen`) ?? 'true',
+        develIndex: config.get<boolean>(`develIndex`) ?? false,
         // args: resolveVariables(config.get<string[]>(`args`) ?? [], workspace),
         path: resolveVariables(config.get<string[]>(`path`) ?? [], workspace),
         interpreter: resolveVariables(interpreter, workspace),
@@ -157,6 +165,8 @@ export async function getGlobalSettings(namespace: string, includeInterpreter?: 
         verbosity: getGlobalValue<string>(config, 'verbosity', 'info'),
         packagePath: getGlobalValue<string>(config, 'packagePath', '.'),
         forceUpdate: getGlobalValue<string>(config, 'forceUpdate', 'false'),
+        installOnOpen: getGlobalValue<string>(config, 'installOnOpen', 'true'),
+        develIndex: getGlobalValue<boolean>(config, 'develIndex', false),
         // args: getGlobalValue<string[]>(config, 'args', []),
         path: getGlobalValue<string[]>(config, 'path', []),
         interpreter: interpreter,
@@ -179,6 +189,8 @@ export function checkIfConfigurationChanged(e: ConfigurationChangeEvent, namespa
         `${namespace}.verbosity`,
         `${namespace}.packagePath`,
         `${namespace}.forceUpdate`,
+        `${namespace}.installOnOpen`,
+        `${namespace}.develIndex`,
         // `${namespace}.args`,
         `${namespace}.path`,
         `${namespace}.interpreter`,

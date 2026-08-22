@@ -48,6 +48,15 @@ ZSTD = "backports.zstd>=1.6.0"
 # The first Python whose standard library makes ZSTD unnecessary.
 MIN_PYTHON_VERSION_ZSTD_STDLIB = "3.14"
 
+# The URDF reader/writer used by the 'urdf' assembly type and by the URDF
+# exporter. This is ROS's own URDF parser (github.com/ros/urdf_parser_py), the
+# same package 'urdfdom_py'/'ros-*-urdfdom-py' ships as, so PartCAD reads and
+# writes exactly what the ROS toolchain does rather than a lookalike of it.
+#
+# Installed only into the sandboxes that touch URDF, so neither PartCAD nor a
+# package that never mentions URDF grows a dependency on the ROS stack.
+URDF_PARSER_PY = "urdf-parser-py==0.0.4"
+
 # Only needed by the sandboxes that rasterize or export 2D formats.
 #
 # Deliberately held at the versions this repo already shipped, not bumped to the
@@ -215,3 +224,149 @@ def zstd_requirement(python_version: str) -> str | None:
     if is_at_least(python_version, MIN_PYTHON_VERSION_ZSTD_STDLIB):
         return None
     return ZSTD
+
+
+#
+# JavaScript (Node.js) sandboxes
+#
+# The npm counterpart of everything above: one place that decides what a
+# JavaScript sandbox gets by default. "By default" is the whole difference from
+# the Python side. There, the CAD stack has to be forced (see
+# reconcile_requirement) because every part of a package shares one flat
+# environment, so one part's choice silently becomes everybody's. A JavaScript
+# environment is instead identified by the very set of dependencies it holds
+# (see runtime_javascript.env_dir_name), so a part that asks for its own Chili3D
+# gets its own tree and cannot reach anyone else's - which means the version can
+# simply be a package's or a part's to choose.
+#
+
+# Chili3D ships its OCCT kernel as a WebAssembly module ('chili-wasm') plus a
+# TypeScript API bundled into 'dist/index.js'. Both live in the one 'chili3d'
+# distribution on npm, so a sandbox needs nothing else to model.
+#
+# An exact version rather than a range: the wrapper reaches into
+# 'chili3d/packages/chili-wasm/lib' for the '.wasm' and its Emscripten loader,
+# which the package's "exports" map does not expose, so a layout change is a
+# breaking change for us even when it is not one for a browser consumer. This is
+# the version a package gets when it does not name one - see
+# chili3d_requirement().
+DEFAULT_CHILI3D_VERSION = "1.1.2"
+CHILI3D = "chili3d@" + DEFAULT_CHILI3D_VERSION
+
+# Chili3D's bundle is built for the browser: importing it evaluates modules that
+# subclass HTMLElement and register custom elements, so a bare Node process
+# fails at import with "HTMLElement is not defined". happy-dom supplies just
+# enough DOM for the import to succeed - it is what Chili3D itself uses for its
+# own tests - and nothing in the modeling path touches it afterwards.
+#
+# A range rather than an exact version: it is only a shim for globals whose
+# shape has been stable for years, and it carries no native code.
+HAPPY_DOM = "happy-dom@^20.11.2"
+
+# What a JavaScript sandbox gets when the package does not ask for a specific
+# Node.js. 22 is the active LTS line.
+DEFAULT_NODE_VERSION = "22"
+
+# The oldest Node.js the Chili3D wrapper is known to load on: it reads the
+# WebAssembly kernel through the Emscripten loader's 'wasmBinary' hook and needs
+# 'node:zlib', 'fs.realpathSync' and top-level await, all of which 20 has.
+MIN_NODE_VERSION = "20"
+
+# Nothing here pins zstd for the JavaScript side. 'node:zlib' grew the zstd
+# helpers in 22.15 and the wrappers feature-detect them: where they are missing
+# a wrapper writes BREP uncompressed, which the Python end accepts because it
+# sniffs the zstd frame header rather than being told (see
+# wrappers/ocp_serialize._decompress).
+
+# What a JavaScript sandbox is provisioned with when nothing asks for anything
+# else. Unlike PINNED_REQUIREMENTS above these are defaults, not pins: a package
+# or a part that names its own version of one of them gets that version, in an
+# environment of its own (see the note at the top of this section).
+DEFAULT_JS_REQUIREMENTS = (
+    CHILI3D,
+    HAPPY_DOM,
+)
+
+
+# What npm accepts that is not "<name>[@<range>]": a URL, a git remote, a
+# tarball, or a path. The '@' in one of these is part of the location rather
+# than a version separator - 'git+ssh://git@host/org/pkg.git' would otherwise
+# come out as 'git+ssh://git', which two unrelated remotes would share.
+_NON_REGISTRY_JS_PREFIXES = ("git+", "git:", "http:", "https:", "file:", "./", "../", "/", "~/")
+_NON_REGISTRY_JS_SUFFIXES = (".tgz", ".tar.gz", ".git")
+
+
+def is_registry_js_requirement(requirement: str) -> bool:
+    """Whether a requirement names a registry package rather than a location."""
+    requirement = requirement.strip()
+    if "://" in requirement:
+        return False
+    if requirement.startswith(_NON_REGISTRY_JS_PREFIXES):
+        return False
+    return not requirement.endswith(_NON_REGISTRY_JS_SUFFIXES)
+
+
+def js_package_name(requirement: str) -> str:
+    """The npm package a requirement string names.
+
+    Handles the spellings npm accepts for a registry dependency: a bare name, a
+    name with a version range ("chili3d@1.1.2"), and a scoped name whose leading
+    '@' must not be mistaken for the version separator ("@scope/pkg@1.2.3").
+
+    Anything that names a location rather than a registry package is returned
+    untouched, so it stays distinct from every other requirement instead of
+    being folded together with them by whatever precedes its first '@'.
+    """
+    requirement = requirement.strip()
+    if not is_registry_js_requirement(requirement):
+        return requirement
+    if requirement.startswith("@"):
+        name, separator, _ = requirement[1:].partition("@")
+        return "@" + name if separator else requirement
+    return requirement.partition("@")[0] or requirement
+
+
+def chili3d_requirement(version=None) -> str:
+    """The npm requirement for a Chili3D version, or for the default one.
+
+    A bare version ("1.1.2") becomes an exact requirement; anything that already
+    looks like a range or a tag ("^1.1", "~1.1.2", "latest") is passed through,
+    so a package that wants to float can say so.
+    """
+    if version is None:
+        return CHILI3D
+    version = str(version).strip()
+    if not version:
+        return CHILI3D
+    return "chili3d@" + version
+
+
+def node_major_version(version: str) -> str:
+    """The major version of a "<major>[.<minor>...]" Node.js version string.
+
+    Node.js is versioned by major line, and that is the granularity a sandbox is
+    provisioned at, so "22", "22.11" and "v22.11.0" all name the same sandbox.
+    """
+    return str(version).lstrip("v").split(".")[0]
+
+
+#
+# Caching
+#
+
+
+def environment_cache_key(interpreter: str, version: str, requirements) -> str:
+    """The identity of a sandbox, as the string a shape is cached under.
+
+    '(interpreter, version)' is what runs the script - "python" and "3.11", or
+    "nodejs" and "22" - and 'requirements' is everything installed alongside it.
+
+    Sorted and de-duplicated, so the key is decided by *what* the environment
+    contains and not by the order the factories happened to ask for it. Empty
+    entries are dropped: a package that declares no dependencies of its own has
+    to key the same as one that declares an empty list.
+
+    See Shape.set_environment_cache_key() for what this is for.
+    """
+    unique = sorted({requirement.strip() for requirement in requirements if requirement and requirement.strip()})
+    return "%s==%s;%s" % (interpreter, version, ";".join(unique))

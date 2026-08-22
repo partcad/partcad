@@ -48,9 +48,23 @@ def register(kind: str, t: str, factory_class: Factory.__class__):
 
 
 def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
+    # A part 'type' that starts with ':' is a short reference to a partType
+    # declared in the part's own package. Expand it to the fully-qualified
+    # '<package path>:<name>' and store it back so the config carries the
+    # resolved reference from here on (see the "partTypes" documentation).
+    if kind == "part" and isinstance(t, str) and t.startswith(":"):
+        t = target_project.name + t
+        config["type"] = t
+
     if t in all[kind]:
         # The return value is not always used
         return all[kind][t](ctx, source_project, target_project, config)
+
+    # A part 'type' that carries a package path ('<package>:<name>') is not a
+    # built-in factory but a reference to a partType. It is constructed by the
+    # generic wrapper factory, which resolves the partType and runs it.
+    if kind == "part" and isinstance(t, str) and ":" in t and "wrapper" in all[kind]:
+        return all[kind]["wrapper"](ctx, source_project, target_project, config)
 
     # An unknown type is a bad declaration, not a bad package: it is raised so
     # the caller records it against the one object and carries on with the rest.

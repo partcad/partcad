@@ -12,6 +12,11 @@ render:
     prefix: ./
     width: 128
     height: 256
+  jpeg:
+    prefix: ./
+    width: 128
+    height: 256
+    quality: 90
   stl: ./
   # step: ./ # TODO(clairbee): fix CadQuery's noisiness
   3mf: ./

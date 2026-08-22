@@ -33,6 +33,10 @@ There are many ways to produce a PartCAD model that can be consumed by others.
   - [3MF files](./produce_part_3mf/)
   - [OBJ files](./produce_part_obj/)
 
+- Combine parts into assemblies:
+  - [Assembly YAML (ASSY) files](./produce_assembly_assy/)
+  - [URDF files](./produce_assembly_urdf/)
+
 ## Get (consume) existing models
 
 Below are some examples of consuming existing modules:

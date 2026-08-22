@@ -70,6 +70,18 @@ This will add the selected part or assembly to the currently edited assembly.
 When you edit ASSY files that are registered in the current PartCAD package,
 saving the file makes it displayed in the PartCAD Viewer view.
 
+### Checking assemblies while you edit
+
+An ASSY file is a Jinja2 template that renders to YAML, and the result has to
+match the ASSY schema. The extension checks all three of those while the file is
+open -- template errors, YAML errors and schema errors, such as a mistyped key or
+a `location` that is not an OCCT location -- and reports them in the Problems
+view at the line they came from. A file that uses `{% for %}` loops or
+`{{ parameters }}` is checked too: what those stand in for is unknown until the
+template is rendered, so a schema finding that depends on such a value is left
+out rather than guessed at. Set `partcad.lint.enabled` to `false` to turn this
+off.
+
 ## Inspecting published PartCAD packages
 
 To see a good example of a package with parts, it is recommended to browse

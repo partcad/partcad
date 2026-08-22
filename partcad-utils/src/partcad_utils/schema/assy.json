@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://partcad.org/schema/assy.json",
+  "title": "PartCAD Assembly YAML (ASSY)",
+  "description": "The schema of an Assembly YAML document, as it looks *after* the file has been rendered as a Jinja2 template. See docs/source/assy.rst.",
+  "definitions": {
+    "OCCTLocation": {
+      "description": "An OCCT location: [[x, y, z], [axis-x, axis-y, axis-z], angle].",
+      "type": "array",
+      "items": [
+        {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        { "type": "number" }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "params": {
+      "description": "Parameter values passed to the referenced part, assembly or interface.",
+      "type": "object"
+    },
+    "exploded": {
+      "description": "The gap, in millimeters, to show between the two items in the exploded view of this step of the assembly instruction book. Does not affect the assembly itself.",
+      "type": "number"
+    },
+    "comment": {
+      "description": "Free-form context about this connection, for a human or an LLM reading the assembly. Nothing in PartCAD parses it or acts upon it: every instruction needed to perform the assembly belongs in the other fields.",
+      "type": "string"
+    },
+    "force": {
+      "description": "A force, in newtons (N).",
+      "type": "number",
+      "minimum": 0
+    },
+    "holdInterfaces": {
+      "description": "An interface to hold an object by, or the list of them.",
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      ]
+    },
+    "how": {
+      "description": "How the object is expected to be brought into place. Every field is optional; an omitted one means its documented default. See docs/source/assy.rst.",
+      "type": "object",
+      "properties": {
+        "stage": {
+          "description": "The name of the group of steps performed at the same time. A label, so a bare number is accepted and read as one.",
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "number" }
+          ]
+        },
+        "pushForceMax": {
+          "description": "The maximum linear force to push the object into place with, in newtons (N). Default: 5.",
+          "$ref": "#/definitions/force"
+        },
+        "pushTorqueMax": {
+          "description": "Deprecated: the earlier spelling of \"pushForceMax\". Still accepted, with a warning.",
+          "$ref": "#/definitions/force"
+        },
+        "pushDistance": {
+          "description": "How far back along the push direction the object starts, in millimeters. Derived from the object being connected when omitted.",
+          "type": "number",
+          "minimum": 0
+        },
+        "turnDirection": {
+          "description": "Which way the object is turned while it is brought into place: \"cw\" (clockwise) or \"ccw\" (counterclockwise), in any case. Default: \"cw\".",
+          "type": "string",
+          "pattern": "^([cC][wW]|[cC][cC][wW])$"
+        },
+        "turnTorqueMax": {
+          "description": "The maximum torque to turn the object with, in newton-metres (N*m). Default: 0.",
+          "type": "number",
+          "minimum": 0
+        },
+        "threadStep": {
+          "description": "The axial distance the object advances per full turn, in millimeters. Inherited from the interfaces being connected when omitted.",
+          "type": "number",
+          "minimum": 0
+        },
+        "holdWith": { "$ref": "#/definitions/holdInterfaces" },
+        "holdWithInstance": { "$ref": "#/definitions/holdInterfaces" },
+        "holdWithForce": { "$ref": "#/definitions/force" },
+        "holdWithForceMin": { "$ref": "#/definitions/force" },
+        "holdWithForceMax": { "$ref": "#/definitions/force" },
+        "holdTo": { "$ref": "#/definitions/holdInterfaces" },
+        "holdToInstance": { "$ref": "#/definitions/holdInterfaces" },
+        "holdToForce": { "$ref": "#/definitions/force" },
+        "holdToForceMin": { "$ref": "#/definitions/force" },
+        "holdToForceMax": { "$ref": "#/definitions/force" }
+      },
+      "additionalProperties": false
+    },
+    "connect": {
+      "description": "Placement by mating an interface of this object with an interface of an object already in the assembly.",
+      "type": "object",
+      "properties": {
+        "with": { "type": "string", "minLength": 1 },
+        "withInstance": { "type": "string", "minLength": 1 },
+        "withPort": { "type": "string", "minLength": 1 },
+        "withParams": { "$ref": "#/definitions/params" },
+        "name": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "toInstance": { "type": "string", "minLength": 1 },
+        "toPort": { "type": "string", "minLength": 1 },
+        "toParams": { "$ref": "#/definitions/params" },
+        "comment": { "$ref": "#/definitions/comment" },
+        "how": { "$ref": "#/definitions/how" },
+        "exploded": { "$ref": "#/definitions/exploded" }
+      },
+      "additionalProperties": false
+    },
+    "connectPorts": {
+      "description": "Placement by matching a port of this object with a port of an object already in the assembly.",
+      "type": "object",
+      "properties": {
+        "with": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "comment": { "$ref": "#/definitions/comment" },
+        "how": { "$ref": "#/definitions/how" },
+        "exploded": { "$ref": "#/definitions/exploded" }
+      },
+      "additionalProperties": false
+    },
+    "node": {
+      "description": "A node of the assembly tree: a reference to a part, a reference to an assembly, or a container of other nodes.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["part", "assembly"] },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "part": { "type": "string", "minLength": 1 },
+        "assembly": { "type": "string", "minLength": 1 },
+        "package": { "type": "string", "minLength": 1 },
+        "location": { "$ref": "#/definitions/OCCTLocation" },
+        "connect": { "$ref": "#/definitions/connect" },
+        "connectPorts": { "$ref": "#/definitions/connectPorts" },
+        "params": { "$ref": "#/definitions/params" },
+        "links": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/node" }
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        { "not": { "type": "object", "required": ["part", "assembly"] } },
+        { "not": { "type": "object", "required": ["part", "links"] } },
+        { "not": { "type": "object", "required": ["assembly", "links"] } },
+        { "not": { "type": "object", "required": ["location", "connect"] } },
+        { "not": { "type": "object", "required": ["location", "connectPorts"] } },
+        { "not": { "type": "object", "required": ["connect", "connectPorts"] } },
+        {
+          "anyOf": [
+            { "required": ["links"] },
+            { "required": ["part"] },
+            { "required": ["assembly"] }
+          ]
+        }
+      ]
+    }
+  },
+  "$ref": "#/definitions/node"
+}

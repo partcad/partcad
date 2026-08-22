@@ -1,0 +1,11 @@
+desc: An assembly built out of another package's parts and assemblies, some of which are sold assembled
+
+dependencies:
+  sub:
+    type: local
+    path: ./sub
+
+assemblies:
+  top:
+    type: assy
+    desc: The top level assembly, which nobody sells

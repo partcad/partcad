@@ -104,6 +104,32 @@ The result of 2D projection of individual parts, assemblies and scenes onto a pl
 - Raster images
 
   - PNG
+  - JPEG
+
+Both raster formats accept ``width`` and ``height`` (in pixels, ``512`` by
+default); the projection is scaled to fit inside them while keeping its aspect
+ratio. JPEG accepts a few more options, since it is a lossy format without an
+alpha channel:
+
+.. code-block:: yaml
+
+  render:
+    jpeg:
+      prefix: ./images
+      width: 1024
+      height: 1024
+      quality: 85          # 1..100, defaults to 85
+      progressive: false   # write a progressive JPEG
+      optimize: false      # spend more time to produce a smaller file
+      subsampling: "4:4:4" # chroma subsampling: 4:4:4, 4:2:2, 4:2:0 or 4:1:1
+      background: "#ffffff"  # what the transparent background is flattened onto
+
+The default ``4:4:4`` subsampling keeps the full chroma resolution. A projection
+is line art, and the coarser modes smear color across its one-pixel-wide edges;
+switch to ``4:2:0`` when a smaller file matters more than the edges.
+
+The rendered file is named after the object with the format's own extension,
+so ``jpeg`` produces ``<name>.jpg``.
 
 
 =============
@@ -139,9 +165,17 @@ CAD Design GUIs
 ---------------
 
 You can use models from the public PartCAD repository in a CAD Design GUI, such as
-FreeCAD or its paid alternatives. PartCAD plugins for these apps are not yet
-available. For now, export the models to STEP or 3MF files and import those files
-into the CAD Design GUI of your choice.
+FreeCAD or its paid alternatives.
+
+FreeCAD has a PartCAD add-on. The ``PartCAD`` workbench lists the packages, parts
+and assemblies PartCAD can reach as a hierarchy, generates a dialog from the
+parameters of the part or assembly you pick, and imports the result into the open
+document as a STEP file. It drives the standalone PartCAD service, so FreeCAD
+needs no Python environment of its own. See :ref:`FreeCAD add-on <freecad-addon>`
+for how to install it.
+
+For the other apps, no add-on is available yet. Export the models to STEP or 3MF
+files and import those files into the CAD Design GUI of your choice.
 
   .. code-block:: shell
 

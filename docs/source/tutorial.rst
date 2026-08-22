@@ -18,6 +18,12 @@ First, the current directory needs to be initialized as a PartCAD package.
 If there is no ``-p`` flag passed to ``pc init``
 then the dependency on the public PartCAD repository is added automatically.
 
+``pc init`` also adds a **Render** command to ``.vscode/launch.json``, at the root of the git
+repository it is run in (next to the package, when there is no repository). It shows up in the
+"Run and Debug" view of the :ref:`PartCAD IDE <partcad-ide>` and of Visual Studio Code, and running
+it renders the package the same way ``pc render`` does from a terminal. An existing
+``launch.json``, with commands and comments of your own in it, is added to rather than replaced.
+
 Alternatively, manually create ``partcad.yaml`` with the following content:
 
   .. code-block:: yaml
@@ -345,9 +351,19 @@ Here is an example of how to use the newly added solid:
 Import an Assembly
 ------------------
 
-The ``pc import assembly`` command allows you to import an assembly from a STEP file.
-This command automatically parses the STEP file, extracts individual parts,
-and creates an assembly YAML file that records each part along with its transformation data.
+The ``pc import assembly`` command allows you to import an assembly from a STEP
+or URDF file. The format is taken from the file's extension.
+
+From a STEP file it extracts the individual parts and creates an assembly YAML
+file that records each part along with its placement. From a URDF it creates an
+``stl`` part per link carrying the physical properties the URDF stated, a pair
+of interfaces per joint, and an assembly that connects the parts through them
+rather than placing them by coordinates - see :doc:`configuration`.
+
+An import leaves the package holding PartCAD's own objects - parts it can render
+on their own and an assembly that places them - rather than a declaration that
+points back at the foreign file. Use ``pc add assembly`` when you want the
+latter: it declares a file where it lies, and the URDF stays a URDF.
 
 Usage
 ^^^^^
@@ -355,14 +371,21 @@ Usage
 .. code-block:: shell
 
    # Import an assembly from a STEP file with an optional description
-   pc import assembly step my_assembly.step --desc "Optional assembly description"
+   pc import assembly my_assembly.step --desc "Optional assembly description"
+
+   # Import a robot description; each link becomes a part, each joint an interface
+   pc import assembly robot.urdf
+
+   # Or keep the URDF as the assembly, reading it in place
+   pc add assembly urdf robot.urdf
 
 Functionality
 ^^^^^^^^^^^^^
 
 - **File Parsing:**
-  The command first attempts to parse the STEP file using an XDE-based approach.
+  For a STEP file, the command first attempts to parse it using an XDE-based approach.
   If no parts are found via XDE, it falls back to a classic STEP parsing method.
+  A URDF is parsed with ROS's own ``urdf_parser_py``.
 
 - **Duplicate Filtering:**
   Unique parts are identified by comparing the geometric data and applied transformations.
@@ -394,6 +417,11 @@ Notes
 - If the file does not represent an assembly (i.e. only a single SOLID is found), the command will raise an error.
 - The transformation data is recorded as a combination of translation and rotation (axis and angle),
   enabling precise placement of each part within the assembly.
+- Importing a URDF produces one ``stl`` part per link, carrying the mass,
+  inertia, friction and colour the URDF stated, and one pair of interfaces per
+  joint - so the generated assembly connects its parts through the joints
+  rather than placing them by coordinates. See :doc:`simulation` for what
+  survives the conversion and what does not.
 
 Create an assembly
 ------------------

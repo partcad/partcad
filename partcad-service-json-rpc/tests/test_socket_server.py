@@ -16,7 +16,7 @@ import time
 import pytest
 from partcad_service_json_rpc.core import events
 from partcad_service_json_rpc.core.session import Session
-from partcad_service_json_rpc.transport.framing import read_message, write_message
+from partcad_utils.framing import read_message, write_message
 from partcad_service_json_rpc.transport.socket_server import SocketServer
 
 if not hasattr(socket, "AF_UNIX"):
@@ -75,6 +75,12 @@ def _serve(socket_dir, registry, session=None):
     server = SocketServer(session or Session(), registry)
     thread = threading.Thread(target=server.serve_unix, args=(path,), daemon=True)
     thread.start()
+    # Wait until the server is *accepting*, not merely until the socket file
+    # exists: serve_unix() binds -- which creates the file -- and only then
+    # calls listen(), so a client that connects in between gets ECONNREFUSED.
+    # A real connect is the only signal that means "ready"; `_server_sock`
+    # being assigned after listen() is close, but it is an internal detail and
+    # still leaves the accept loop unentered.
     _wait_until_listening(path)
     return server, path, thread
 
@@ -123,6 +129,17 @@ def test_daemon_stop_responds_then_shuts_down_and_unlinks(socket_dir):
     c.close()
     thread.join(timeout=3)
     assert not thread.is_alive()
+    # The socket is unlinked by stop(), which the daemon.stop handler runs on
+    # the *connection* thread -- not the accept-loop `thread` joined above. And
+    # stop() sets the stop flag before it unlinks, so the accept loop can see
+    # the flag and exit (ending `thread`) in the window before the unlink runs.
+    # Joining `thread` therefore does not imply the file is gone; poll for it.
+    # Mirror image of the startup race #496 fixed by waiting for listen()
+    # rather than for the socket file to appear.
+    for _ in range(300):
+        if not os.path.exists(path):
+            break
+        time.sleep(0.01)
     assert not os.path.exists(path)
 
 

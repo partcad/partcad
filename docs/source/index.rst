@@ -30,6 +30,7 @@ product development process.**
    design.rst
    configuration.rst
    assy.rst
+   simulation.rst
    use_cases.rst
    features.rst
    troubleshooting.rst

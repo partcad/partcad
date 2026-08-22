@@ -21,7 +21,8 @@ from pathlib import Path
 import partcad_utils.logging_remote_client as _remote_client
 import partcad_utils.telemetry as _telemetry
 import rich_click as click
-from partcad_service_json_rpc import client as _client
+from partcad_client import client as _client
+from partcad_utils.user_config import user_config as _user_config
 
 # Deliberate emitter.info()/warn()/error() notifications carry a bare string;
 # render them as log lines through the same client-side renderer as the streamed
@@ -64,7 +65,20 @@ def run(cli_ctx, method: str, params: dict = None, span_name: str = None, needs_
                 # letters and spaces included) -- "file://" + a raw path does not.
                 path = getattr(cli_ctx, "path", None) or os.getcwd()
                 url = Path(path).resolve().as_uri()
-                result = conn.call("context.create", {"url": url}, on_event=_on_event)
+                # This invocation's resolved user configuration travels with the
+                # request, and the daemon builds the context from it rather than
+                # from its own. The daemon is warm and shared per workspace, so
+                # its own configuration is whatever the environment held when
+                # something first started it -- not what this command was
+                # invoked with. Anything resolved here ('--devel-index',
+                # '--force-update', '--offline', the 'PC_*' environment, the
+                # config file) would otherwise be ignored the moment a daemon
+                # was already running.
+                result = conn.call(
+                    "context.create",
+                    {"url": url, "userConfig": _user_config.to_dict()},
+                    on_event=_on_event,
+                )
                 call_params["context"] = result.get("context")
             return conn.call(method, call_params, on_event=_on_event)
     except _client.DaemonError as e:

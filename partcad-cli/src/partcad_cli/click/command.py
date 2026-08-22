@@ -71,11 +71,11 @@ option_groups = [
     },
     {
         "name": "Dependency management options",
-        "options": ["--force-update", "--offline", "--internal-state-dir"],
+        "options": ["--force-update", "--offline", "--devel-index", "--internal-state-dir"],
     },
     {
         "name": "Sandbox options",
-        "options": ["--python-sandbox", "--ignore-bundled-openscad"],
+        "options": ["--python-sandbox", "--javascript-sandbox", "--ignore-bundled-openscad"],
     },
     {
         "name": "Telemetry options",
@@ -98,11 +98,17 @@ option_groups = [
     {
         "name": "Caching options",
         "options": [
+            "--cache-mem",
             "--cache",
             "--cache-max-entry-size",
             "--cache-min-entry-size",
             "--cache-memory-max-entry-size",
             "--cache-memory-double-cache-max-entry-size",
+            "--cache-remote",
+            "--cache-remote-server",
+            "--cache-s3",
+            "--cache-s3-bucket",
+            "--cache-s3-endpoint-url",
             "--cache-dependencies-ignore",
         ],
     },
@@ -122,7 +128,7 @@ command_groups = [
     },
     {
         "name": "Object commands",
-        "commands": ["list", "add", "import", "test", "inspect", "info", "convert", "export", "render"],
+        "commands": ["list", "add", "import", "test", "inspect", "info", "bom", "convert", "export", "render"],
     },
     {
         "name": "Workflow commands",
@@ -181,6 +187,17 @@ click.rich_click.COMMAND_GROUPS = {
     help="Maximum number of processing threads to use (not a strict limit)",
 )
 @click.option(
+    "--cache-mem",
+    # The destination is what the configuration loop below reads, and the
+    # environment variable is named after it unless it is given here.
+    "cache_memory",
+    is_flag=True,
+    default=None,
+    envvar="PC_CACHE_MEM",
+    show_envvar=True,
+    help="Enable caching of intermediate results in memory",
+)
+@click.option(
     "--cache",
     is_flag=True,
     default=None,
@@ -216,6 +233,41 @@ click.rich_click.COMMAND_GROUPS = {
     help="Maximum size of a single memory cache entry in bytes(defaults to 1048576 or 1MB)",
 )
 @click.option(
+    "--cache-remote",
+    is_flag=True,
+    default=None,
+    show_envvar=True,
+    help="Enable the shared remote cache (memcached protocol); needs the 'memcache' extra",
+)
+@click.option(
+    "--cache-remote-server",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help='The memcached server backing the remote cache, "host" or "host:port"',
+)
+@click.option(
+    "--cache-s3",
+    is_flag=True,
+    default=None,
+    show_envvar=True,
+    help="Enable the object store cache; needs the 'aws' extra",
+)
+@click.option(
+    "--cache-s3-bucket",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help="The bucket holding the object store cache",
+)
+@click.option(
+    "--cache-s3-endpoint-url",
+    type=str,
+    default=None,
+    show_envvar=True,
+    help="An S3 endpoint other than AWS's own (a MinIO or Ceph deployment)",
+)
+@click.option(
     "--cache-dependencies-ignore",
     is_flag=True,
     default=None,
@@ -228,6 +280,13 @@ click.rich_click.COMMAND_GROUPS = {
     show_envvar=True,
     type=click.Choice(["none", "pypy", "conda"]),
     help="Sandboxing environment for invoking python scripts(defaults to conda)",
+)
+@click.option(
+    "--javascript-sandbox",
+    default=None,
+    show_envvar=True,
+    type=click.Choice(["none", "conda"]),
+    help="Sandboxing environment for invoking JavaScript scripts (defaults to the host's Node.js)",
 )
 @click.option(
     "--ignore-bundled-openscad",
@@ -260,6 +319,13 @@ click.rich_click.COMMAND_GROUPS = {
     show_envvar=True,
     default=None,
     help="Operate in offline mode, without any repo updates",
+)
+@click.option(
+    "--devel-index",
+    is_flag=True,
+    show_envvar=True,
+    default=None,
+    help="Use the 'devel' branch of the public index instead of the released one",
 )
 @click.option(
     "--telemetry-type",
@@ -350,12 +416,20 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
         ("PC_CACHE_FILES_MIN_ENTRY_SIZE", "cache_min_entry_size"),
         ("PC_CACHE_MEMORY_MAX_ENTRY_SIZE", "cache_memory_max_entry_size"),
         ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
+        ("PC_CACHE_MEM", "cache_memory"),
+        ("PC_CACHE_REMOTE", "cache_remote"),
+        ("PC_CACHE_REMOTE_SERVER", "cache_remote_server"),
+        ("PC_CACHE_S3", "cache_s3"),
+        ("PC_CACHE_S3_BUCKET", "cache_s3_bucket"),
+        ("PC_CACHE_S3_ENDPOINT_URL", "cache_s3_endpoint_url"),
         ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
         ("PC_PYTHON_SANDBOX", "python_sandbox"),
+        ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),
         ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
         ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
         ("PC_FORCE_UPDATE", "force_update"),
         ("PC_OFFLINE", "offline"),
+        ("PC_DEVEL_INDEX", "devel_index"),
         ("PC_TELEMETRY_TYPE", "telemetry_type"),
         ("PC_TELEMETRY_ENV", "telemetry_env"),
         ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),
@@ -436,12 +510,20 @@ def cli(ctx: click.Context, verbose: bool, quiet: bool, no_ansi: bool, path: str
             ("PC_CACHE_FILES_MIN_ENTRY_SIZE", "cache_min_entry_size"),
             ("PC_CACHE_MEMORY_MAX_ENTRY_SIZE", "cache_memory_max_entry_size"),
             ("PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE", "cache_memory_double_cache_max_entry_size"),
+            ("PC_CACHE_MEM", "cache_memory"),
+            ("PC_CACHE_REMOTE", "cache_remote"),
+            ("PC_CACHE_REMOTE_SERVER", "cache_remote_server"),
+            ("PC_CACHE_S3", "cache_s3"),
+            ("PC_CACHE_S3_BUCKET", "cache_s3_bucket"),
+            ("PC_CACHE_S3_ENDPOINT_URL", "cache_s3_endpoint_url"),
             ("PC_CACHE_DEPENDENCIES_IGNORE", "cache_dependencies_ignore"),
             ("PC_PYTHON_SANDBOX", "python_sandbox"),
+            ("PC_JAVASCRIPT_SANDBOX", "javascript_sandbox"),
             ("IGNORE_BUNDLED_OPENSCAD", "ignore_bundled_openscad"),
             ("PC_INTERNAL_STATE_DIR", "internal_state_dir"),
             ("PC_FORCE_UPDATE", "force_update"),
             ("PC_OFFLINE", "offline"),
+            ("PC_DEVEL_INDEX", "devel_index"),
             ("PC_TELEMETRY_TYPE", "telemetry_type"),
             ("PC_TELEMETRY_ENV", "telemetry_env"),
             ("PC_TELEMETRY_PERFORMANCE", "telemetry_performance"),

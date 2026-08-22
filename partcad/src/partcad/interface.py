@@ -260,6 +260,38 @@ class Interface:
         self.abstract = config.get("abstract", False)
         self.lead_port = config.get("leadPort", None)
 
+        # What this connection allows and what it costs. 'motion' states the
+        # freedom of movement (type, axis, position and soft limits, mimic) and
+        # 'physics' what moving it costs (effort and velocity limits, damping,
+        # friction, spring and solver parameters). Both are closed sets of named
+        # properties in PartCAD's own units - degrees and millimetres, SI for
+        # the rest - defined in schema/partcad.json; a format that states
+        # something outside them fails the import rather than being carried
+        # under a name of its own.
+        #
+        # 'parameters' below is the executable counterpart: where 'motion' is a
+        # record, a parameter actually moves the parts when a connection names
+        # it. A URDF import writes both, so the joint is described *and* usable.
+        self.motion = config.get("motion", None)
+        self.physics = config.get("physics", None)
+
+        # How a connection made through this interface advances: the axial
+        # distance per full turn, in mm, and whether the interface cuts its own
+        # thread rather than matching one. Both are inherited from the parent
+        # interfaces when this one does not declare them, so a thread only has
+        # to be spelled out once, on the interface that introduces it.
+        self.thread_step = config.get("threadStep", None)
+        if self.thread_step is not None:
+            if isinstance(self.thread_step, bool) or not isinstance(self.thread_step, (int, float)):
+                pc_logging.error("Interface %s: 'threadStep' must be a number, ignoring: %s" % (name, self.thread_step))
+                self.thread_step = None
+            elif self.thread_step < 0.0:
+                pc_logging.error("Interface %s: 'threadStep' must not be negative, ignoring" % name)
+                self.thread_step = None
+            else:
+                self.thread_step = float(self.thread_step)
+        self.self_screw = bool(config.get("selfScrew", False))
+
         self.ports = None
         self.inherits = None
         self.compatible_with = set()
@@ -316,7 +348,12 @@ class Interface:
                 raise Exception("Invalid 'ports' section in the interface '%s'" % self.name)
 
             for port_name, port_config in ports_config.items():
-                if isinstance(port_config, list):
+                if port_config is None:
+                    # A port declared by name alone ("joint:"), which the schema
+                    # allows: it sits at the interface origin and whatever
+                    # implements the interface decides where that is.
+                    port_config = {}
+                elif isinstance(port_config, list):
                     port_config = {"location": port_config}
                 self.ports[port_name] = InterfacePort(port_name, self.project, port_config)
 
@@ -324,6 +361,37 @@ class Interface:
         if self.inherits is None:
             self.instantiate()
         return self.inherits
+
+    def get_thread_step(self):
+        """This interface's thread step, its own or the one it inherits."""
+        return self._inherited("thread_step")
+
+    def get_self_screw(self):
+        """Whether this interface cuts its own thread, its own setting or inherited."""
+        return bool(self._inherited("self_screw"))
+
+    def _inherited(self, attribute, seen=None):
+        """The attribute as declared here, or the first one found among the parents."""
+        value = getattr(self, attribute, None)
+        if value is not None and value is not False:
+            return value
+
+        # An interface hierarchy is a DAG rather than a tree, so the same parent
+        # can be reached twice; the 'seen' set keeps that from looping.
+        if seen is None:
+            seen = set()
+        if self.full_name in seen:
+            return value
+        seen.add(self.full_name)
+
+        for inherit in (self.get_parents() or {}).values():
+            parent = getattr(inherit, "interface", None)
+            if parent is None:
+                continue
+            inherited = parent._inherited(attribute, seen)
+            if inherited is not None and inherited is not False:
+                return inherited
+        return value
 
     def instantiate(self):
         self.project.ctx.stats_interfaces_instantiated += 1
@@ -336,12 +404,14 @@ class Interface:
             if isinstance(inherits_config, str):
                 inherits_config = {inherits_config: ""}  # {}???
 
-            if len(inherits_config.keys()) == 1 and (
-                isinstance(list(inherits_config.values())[0], str) or len(list(inherits_config.values())[0]) == 1
-            ):
-                compatible_with_parents = True
-            else:
-                compatible_with_parents = False
+            # Inheriting exactly one interface, exactly once, makes this one a
+            # drop-in for it. 'None' is that case spelled shortest: a single
+            # unnamed instance at the origin ("implements: {m3-screw:}").
+            values = list(inherits_config.values())
+            only = values[0] if len(values) == 1 else None
+            compatible_with_parents = len(inherits_config.keys()) == 1 and (
+                only is None or isinstance(only, str) or len(only) == 1
+            )
 
             for interface_name, interface_config in inherits_config.items():
                 # Resolve the parameter values in the interface name
@@ -487,6 +557,10 @@ class Interface:
             info["abstract"] = True
         if self.lead_port is not None:
             info["leadPort"] = self.lead_port
+        if self.motion is not None:
+            info["motion"] = self.motion
+        if self.physics is not None:
+            info["physics"] = self.physics
         return info
 
     async def get_components(self, ctx):
