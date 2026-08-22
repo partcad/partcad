@@ -119,6 +119,19 @@ filename = "examples/partcad.yaml"
 search = "partcad: \">={current_version}\""
 replace = "partcad: \">={new_version}\""
 
+# The FreeCAD addon. It is not installed from PyPI -- FreeCAD's Addon Manager
+# reads "package.xml" -- but it is released under the monorepo's one version like
+# everything else, so both places that state it have to move with it.
+[[tool.bumpversion.files]]
+filename = "partcad-cad-freecad/partcad_freecad/__init__.py"
+search = "__version__: str = \"{current_version}\""
+replace = "__version__: str = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "partcad-cad-freecad/package.xml"
+search = "<version>{current_version}</version>"
+replace = "<version>{new_version}</version>"
+
 [[tool.bumpversion.files]]
 filename = "partcad-ide-vscode/package.json"
 search = "version\": \"{current_version}\""

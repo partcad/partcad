@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- PartCAD, 2026. Licensed under Apache License, Version 2.0. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g fill="none" stroke="#40c040" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M32 6 V38"/>
+    <path d="M20 27 L32 39 L44 27"/>
+    <path d="M10 46 v10 h44 v-10"/>
+  </g>
+</svg>

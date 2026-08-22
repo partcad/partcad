@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PartCAD, 2026
+  Licensed under Apache License, Version 2.0.
+
+  FreeCAD Addon Manager metadata. See
+  https://wiki.freecad.org/Package_Metadata for the schema.
+-->
+<package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
+  <name>PartCAD</name>
+  <description>
+    Browse PartCAD packages, parts and assemblies as a hierarchy, set an
+    object's parameters, and import the result into the active FreeCAD
+    document as a STEP file. Talks to the standalone PartCAD service
+    (partcad-json-rpc), which the addon downloads on first use, so FreeCAD's
+    Python needs no PartCAD installation of its own.
+  </description>
+  <version>0.7.175</version>
+  <date>2026-08-12</date>
+
+  <maintainer email="support@partcad.org">PartCAD</maintainer>
+  <!-- No 'file' attribute: the license lives at the root of the monorepo, which
+       is not inside the directory a user copies into FreeCAD's Mod folder. -->
+  <license>Apache-2.0</license>
+
+  <url type="repository" branch="devel">https://github.com/partcad/partcad</url>
+  <url type="bugtracker">https://github.com/partcad/partcad/issues</url>
+  <url type="documentation">https://partcad.readthedocs.io/</url>
+  <url type="website">https://partcad.org/</url>
+
+  <icon>resources/icons/partcad.svg</icon>
+
+  <content>
+    <workbench>
+      <classname>PartCADWorkbench</classname>
+      <name>PartCAD</name>
+      <description>
+        Explore PartCAD packages and import their parts and assemblies.
+      </description>
+      <icon>resources/icons/partcad.svg</icon>
+      <subdirectory>./</subdirectory>
+      <freecadmin>0.21</freecadmin>
+    </workbench>
+  </content>
+</package>

@@ -165,9 +165,17 @@ CAD Design GUIs
 ---------------
 
 You can use models from the public PartCAD repository in a CAD Design GUI, such as
-FreeCAD or its paid alternatives. PartCAD plugins for these apps are not yet
-available. For now, export the models to STEP or 3MF files and import those files
-into the CAD Design GUI of your choice.
+FreeCAD or its paid alternatives.
+
+FreeCAD has a PartCAD add-on. The ``PartCAD`` workbench lists the packages, parts
+and assemblies PartCAD can reach as a hierarchy, generates a dialog from the
+parameters of the part or assembly you pick, and imports the result into the open
+document as a STEP file. It drives the standalone PartCAD service, so FreeCAD
+needs no Python environment of its own. See :ref:`FreeCAD add-on <freecad-addon>`
+for how to install it.
+
+For the other apps, no add-on is available yet. Export the models to STEP or 3MF
+files and import those files into the CAD Design GUI of your choice.
 
   .. code-block:: shell
 

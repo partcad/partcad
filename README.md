@@ -212,6 +212,20 @@ This extension can be installed by searching for `PartCAD` in the VS Code extens
 
 Make sure to have Python configured and a [conda] environment set up in VS Code before using PartCAD.
 
+### Add-on for FreeCAD
+
+The `PartCAD` workbench browses packages, parts and assemblies inside FreeCAD, asks for an object's parameters,
+and imports the result into the open document. Copy or link
+[`partcad-cad-freecad`](./partcad-cad-freecad/README.md) into FreeCAD's `Mod` folder as `PartCAD` and restart
+FreeCAD:
+
+```shell
+ln -s "$PWD/partcad-cad-freecad" ~/.local/share/FreeCAD/Mod/PartCAD
+```
+
+No Python setup is needed: the add-on uses the standalone PartCAD service, downloading it on first use if no
+standalone installation is present.
+
 ### Command-Line Interface
 
 The recommended method to install PartCAD CLI tools for most users is:

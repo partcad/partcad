@@ -8,6 +8,9 @@ pythonpath = [
     "partcad/src",
     "partcad/tests/unit",
     "partcad-service-json-rpc/src",
+    # The FreeCAD addon is not a package that gets installed: FreeCAD loads it
+    # from its own directory, which is what it is importable from here too.
+    "partcad-cad-freecad",
 ]
 addopts = """
     --import-mode importlib
