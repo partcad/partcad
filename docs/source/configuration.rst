@@ -328,8 +328,6 @@ Assemblies declare parameters the same way. Their values are passed to the
     - part: //package:part
       location: [[0, 0, {{ param_offset }}], [0, 0, 1], 0]
 
-.. _sketches:
-
 Other
 -----
 
@@ -348,6 +346,8 @@ There are other optional fields that are common to all objects:
   The value `false` indicates the intent to exclude this object from any caching behavior.
   It may be due to storage size or time considerations, or due to known issues with dependency tracking.
   It does not override any global caching settings.
+
+.. _sketches:
 
 ========
 Sketches

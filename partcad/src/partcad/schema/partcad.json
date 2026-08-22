@@ -395,7 +395,9 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
-                "parameters": { "$ref": "#/definitions/shape-parameter" }
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" }
               },
               "required": ["type"],
               "additionalProperties": true
