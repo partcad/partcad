@@ -105,7 +105,11 @@ SCRIPT_KEY = "__script__"
 # The request key that says whether the sandbox rebuilds the shape and assembly
 # envelopes into live OCCT geometry before the implementation sees them. It
 # travels beside the script path for the same reason: the wrapper has to know
-# before it deserializes anything. Declared on a file type as 'decode: false'.
+# before it deserializes anything. Declared on a file type as 'decode: false',
+# which is what an implementation asks for when it needs what an envelope says
+# *about* a node: decoding mirrors the assembly tree in nested compounds, but
+# geometry is all it keeps - every node's 'name' and 'label' is dropped, and its
+# placement is baked into the shape instead of staying readable as data.
 DECODE_KEY = "__decode__"
 
 # A parameter, not a reserved key: a file type declares 'properties: true' to be

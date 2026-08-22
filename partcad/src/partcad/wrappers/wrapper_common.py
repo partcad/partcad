@@ -27,8 +27,10 @@ def handle_input(decode=True):
 
     'decode' off keeps the request exactly as it travelled, with shape and
     assembly envelopes left as their dicts instead of being rebuilt into live
-    OCCT geometry. A wrapper that walks an assembly *tree* needs that, because
-    decoding collapses the tree into one compound (see ocp_serialize.decode).
+    OCCT geometry. A wrapper that needs a node's 'name' or 'label', or its
+    location as separate data, needs that: decoding mirrors the tree in nested
+    compounds but keeps geometry alone, dropping the names and baking the
+    placements in (see ocp_serialize.decode_shape).
     """
     if len(sys.argv) < 2:
         sys.stderr.write("Usage: %s <path>\n" % sys.argv[0])

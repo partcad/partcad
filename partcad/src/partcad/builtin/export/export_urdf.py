@@ -7,14 +7,16 @@
 
 Writes a PartCAD shape or assembly as a URDF file plus its mesh files.
 
-Unlike the other exporters, this one is handed the assembly *tree* rather than
-the compound it decodes to - which is what 'decode: false' on this format's
-declaration asks for, see wrapper_export.DECODE_KEY: URDF is a tree of links
-joined by joints, and one link per node is exactly what makes the export
-reversible. Each node becomes a link, each parent/child edge a
-fixed joint carrying that child's placement, and each node that has geometry
-gets a mesh written next to the URDF and referenced from its ``<visual>`` and
-``<collision>``.
+Unlike the other exporters, this one is handed the assembly *tree* itself
+rather than the geometry it decodes to - which is what 'decode: false' on this
+format's declaration asks for, see wrapper_export.DECODE_KEY. Decoding would
+keep the tree's shape, and nothing else about it: every node's 'name' and
+'label' is dropped and its placement is baked into the geometry rather than
+staying readable as data. This exporter needs all three - the link names, the
+mesh names, the properties lookup and every joint origin come from them. Each
+node becomes a link, each parent/child edge a fixed joint carrying that child's
+placement, and each node that has geometry gets a mesh written next to the URDF
+and referenced from its ``<visual>`` and ``<collision>``.
 
 The URDF is built with ROS's own 'urdf_parser_py' and serialized by it, so what
 lands on disk is what the ROS toolchain itself would write and reads back

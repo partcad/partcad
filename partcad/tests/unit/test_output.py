@@ -456,10 +456,11 @@ def test_parameters_exclude_the_reserved_fields():
 def test_a_format_decodes_its_envelopes_unless_it_declares_otherwise(ctx):
     """'decode' is off for URDF alone, and nothing else may lose it silently.
 
-    The URDF exporter is handed the assembly tree, one link per node; decoding
-    would collapse it into a single compound and the export would quietly write
-    a one-link robot. It is the only built-in format that asks for that, so this
-    also guards the other direction.
+    The URDF exporter is handed the assembly tree, one link per node; decoded
+    geometry carries no node names, labels or separate placements to build those
+    links from, so 'export_urdf.process()' rejects it outright and the export
+    fails with "needs a shape or an assembly to export". It is the only built-in
+    format that asks for that, so this also guards the other direction.
     """
     off = set()
     for section in output.SECTIONS:
