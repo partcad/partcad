@@ -177,7 +177,7 @@ class ProviderCart:
         else:
             assembly = prj.get_assembly(object_name)
             if assembly:
-                if not recursive and assembly.can_be_supplied():
+                if not recursive and assembly.is_declared_purchasable():
                     pc_logging.debug(f"Adding assembly '{object_name}' to the cart as is")
                     item = ProviderCartItem()
                     await item.set_spec(ctx, name)
