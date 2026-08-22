@@ -74,15 +74,19 @@ async function installPackageOnOpen(
     serverId: string,
     configPath: string,
 ): Promise<void> {
-    if (getInstallOnOpenFromSetting(serverId) !== 'true') {
+    // The setting is resource-scoped, so a multi-root workspace can set it per
+    // package: read it against the package this call is about.
+    if (getInstallOnOpenFromSetting(serverId, vscode.Uri.file(configPath)) !== 'true') {
         return;
     }
     const installed = context.workspaceState.get<string[]>(INSTALLED_PACKAGES_KEY, []);
     if (installed.includes(configPath)) {
         return;
     }
-    await context.workspaceState.update(INSTALLED_PACKAGES_KEY, [...installed, configPath]);
+    // Only a completed install counts: an interrupted one has to run again the
+    // next time this workspace is opened.
     await vscode.commands.executeCommand('partcad.installPackage');
+    await context.workspaceState.update(INSTALLED_PACKAGES_KEY, [...installed, configPath]);
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {

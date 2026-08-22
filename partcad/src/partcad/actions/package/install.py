@@ -78,10 +78,17 @@ async def install_async(ctx, packages: list[str]) -> dict:
             stats["failed_packages"] += 1
             continue
 
-        await project.ensure_enumerated_async()
-        await asyncio.gather(
-            *[prepare_one(project, kind, name) for kind in _KINDS for name in project.object_names(kind)]
-        )
+        try:
+            await project.ensure_enumerated_async()
+            objects = [(kind, name) for kind in _KINDS for name in project.object_names(kind)]
+        except Exception as e:  # pylint: disable=broad-except
+            # A package that cannot even be enumerated must not cost the user
+            # the packages after it.
+            pc_logging.error("Failed to install the package %s: %s" % (package_name, e))
+            stats["failed_packages"] += 1
+            continue
+
+        await asyncio.gather(*[prepare_one(project, kind, name) for kind, name in objects])
 
     return stats
 

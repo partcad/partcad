@@ -62,7 +62,7 @@ class SketchFactoryFile(SketchFactory):
 
     async def download_file_async(self, sketch) -> None:
         """Fetch what 'fileFrom' points at, unless the file is already there."""
-        if not self.fileFactory is None and not os.path.exists(sketch.path):
+        if self.fileFactory is not None and not os.path.exists(sketch.path):
             with pc_logging.Action("File", self.target_project.name, sketch.name):
                 await self.fileFactory.download(sketch.path)
 

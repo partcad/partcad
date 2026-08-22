@@ -60,7 +60,7 @@ class PartFactoryFile(PartFactory):
 
     async def download_file_async(self, part) -> None:
         """Fetch what 'fileFrom' points at, unless the file is already there."""
-        if not self.fileFactory is None and not os.path.exists(part.path):
+        if self.fileFactory is not None and not os.path.exists(part.path):
             with pc_logging.Action("File", self.target_project.name, part.name):
                 await self.fileFactory.download(part.path)
 

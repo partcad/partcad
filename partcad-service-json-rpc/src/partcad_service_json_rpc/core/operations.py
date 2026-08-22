@@ -985,7 +985,10 @@ def install(session, params):
             session.emitter.info("Git operations: %s" % ctx.stats_git_ops)
 
         if params.get("recursive"):
-            packages = [p["name"] for p in all_packages if p["name"].startswith(package)]
+            # A '/' has to follow the prefix, or '//sub' would also select the
+            # unrelated sibling '//subwidget'.
+            prefix = package if package.endswith("/") else package + "/"
+            packages = [p["name"] for p in all_packages if p["name"] == package or p["name"].startswith(prefix)]
         else:
             packages = [package]
         stats = pc.actions.package.install(ctx, packages)

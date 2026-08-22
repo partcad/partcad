@@ -8,7 +8,8 @@
 #
 
 import asyncio
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import FileSystemLoader
+from jinja2.sandbox import SandboxedEnvironment
 import fnmatch
 import os
 import yaml
@@ -60,12 +61,16 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
         fp.close()
 
         # Resolve Jinja templates
+        # NOTE: the environment is sandboxed. An ASSY file comes from a
+        # package, which may well be somebody else's, and a plain Jinja
+        # environment lets a template reach through attribute access into
+        # the interpreter this runs in.
         # NOTE: autoescape must stay off. The rendered document is YAML,
         # not HTML, so escaping corrupts every parameter value that
         # contains '&', '<', '>', '"' or "'" (e.g. 'a & b' would reach
         # the parser as 'a &amp; b'). This matches how 'partcad.yaml'
         # itself is rendered in 'ProjectLocal'.
-        template = Environment(
+        template = SandboxedEnvironment(
             loader=FileSystemLoader(os.path.dirname(self.path) + os.path.sep),
         ).from_string(config)
         config = template.render(params)

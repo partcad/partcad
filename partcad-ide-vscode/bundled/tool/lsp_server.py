@@ -396,11 +396,14 @@ def do_install_package(args=None) -> None:
     ``npm install``. Not to be confused with ``partcad.install`` below, which
     bootstraps the PartCAD Python module itself.
     """
-    session = _get_session()
+    session = _active_session()
     if session is None:
         LSP_SERVER.send_notification("?/partcad/error", "Installing the package while PartCAD is not loaded")
         return
-    _ops().install(session, {})
+    try:
+        _ops().install(session, {})
+    except Exception as e:  # pylint: disable=broad-except
+        LSP_SERVER.send_notification("?/partcad/error", "Failed to install the package: %s" % e)
 
 
 @LSP_SERVER.command("partcad.loadPackageContents")

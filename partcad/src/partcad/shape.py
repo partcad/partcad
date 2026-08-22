@@ -230,7 +230,14 @@ class Shape(ShapeConfiguration):
             return
         self._prepared = True
         if self._prepare is not None:
-            await self._prepare(self)
+            try:
+                await self._prepare(self)
+            except BaseException:
+                # A preparation that failed has not happened: leaving the flag
+                # up would make a warm context skip it forever and then hash a
+                # file that was never downloaded.
+                self._prepared = False
+                raise
 
     async def get_cache_key_async(self) -> Optional[str]:
         """Prepare this shape and return its cache key, or None if it has none.
