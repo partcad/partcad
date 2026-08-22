@@ -1,2 +1,2 @@
-partcad-utils==0.7.159
+partcad-utils==0.7.160
 packaging>=23.0
