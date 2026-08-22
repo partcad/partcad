@@ -18,6 +18,7 @@ from pathlib import Path
 import vyper
 
 from . import logging as pc_logging
+from .booleans import to_bool
 from .utils import is_editable_install
 
 # IMPORTANT:
@@ -160,10 +161,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.performance" in self.v._override:
-                return self.v._override["telemetry.performance"]
+                return to_bool(self.v._override["telemetry.performance"])
             telemetry = self.v._config.get("telemetry", {})
             if "performance" in telemetry:
-                return telemetry["performance"]
+                return to_bool(telemetry["performance"])
 
         return True
 
@@ -175,10 +176,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.failures" in self.v._override:
-                return self.v._override["telemetry.failures"]
+                return to_bool(self.v._override["telemetry.failures"])
             telemetry = self.v._config.get("telemetry", {})
             if "failures" in telemetry:
-                return telemetry["failures"]
+                return to_bool(telemetry["failures"])
 
         return True
 
@@ -190,10 +191,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.debug" in self.v._override:
-                return self.v._override["telemetry.debug"]
+                return to_bool(self.v._override["telemetry.debug"])
             telemetry = self.v._config.get("telemetry", {})
             if "debug" in telemetry:
-                return telemetry["debug"]
+                return to_bool(telemetry["debug"])
 
         return False
 
@@ -237,10 +238,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.sentryAttachStacktrace" in self.v._override:
-                return self.v._override["telemetry.sentryAttachStacktrace"]
+                return to_bool(self.v._override["telemetry.sentryAttachStacktrace"])
             telemetry = self.v._config.get("telemetry", {})
             if "sentryAttachStacktrace" in telemetry:
-                return telemetry["sentryAttachStacktrace"]
+                return to_bool(telemetry["sentryAttachStacktrace"])
 
         return False
 
@@ -267,7 +268,84 @@ class TelemetryConfig(dict):
         return str({k: v for k, v in properties})
 
 
+# The options a user configuration resolves to, by their configuration-file
+# names. This is what travels when one process hands its configuration to
+# another; a new option belongs here, or the daemon will keep resolving it from
+# its own environment instead of the caller's.
+OPTION_KEYS = (
+    "threadsMax",
+    "cacheFiles",
+    "cacheFilesMaxEntrySize",
+    "cacheFilesMinEntrySize",
+    "cacheMemoryMaxEntrySize",
+    "cacheMemoryDoubleCacheMaxEntrySize",
+    "cacheDependenciesIgnore",
+    "pythonSandbox",
+    "ignoreBundledOpenscad",
+    "internalStateDir",
+    "logLevel",
+    "forceUpdate",
+    "develIndex",
+    "offline",
+    "git.clone.timeout",
+    "git.clone.retry.max",
+    "git.clone.retry.patience",
+    "useDockerPython",
+    "useDockerKicad",
+)
+
+# The nested sections, by the path each configuration view reads. 'git.auth'
+# carries credentials for private dependencies; it travels because the daemon is
+# meant to ignore its own configuration, and a caller whose configuration is the
+# only one holding those credentials would otherwise fail to clone.
+#
+# 'telemetry' is deliberately absent, on two counts. It is a property of a
+# process rather than of a package: it is initialized once at import
+# (telemetry.init) long before any context exists, and nothing in context
+# creation or dependency resolution reads it, so a copy of it would be inert --
+# and a daemon reporting under a caller's DSN and environment would be wrong
+# even if it were not. It is also the one key that cannot be read safely:
+# reading a parent that has environment-bound children makes vyper merge each of
+# those children into the mapping the config file gave, and raise KeyError when
+# the mapping does not already carry that child. 'PC_TELEMETRY_ENV=test' over a
+# config file without a 'telemetry.env' is enough, which is what CI runs under.
+# The same happens when reading a 'telemetry.*' leaf that is not set, because
+# the lookup descends to that parent. It is the vyper bug that the try/except in
+# TelemetryConfig above is already written around.
+#
+# The sections below are safe for the same reason inverted: none is the parent
+# of an environment-bound key. 'git.clone.timeout' and the 'git.clone.retry.*'
+# pair hang off 'git', which is why 'git' is never read whole -- only
+# 'git.config' and 'git.auth' are.
+SECTION_PATHS = (
+    "git.config",
+    "git.auth",
+    "parameters",
+    "user",
+)
+
+
 class UserConfig(vyper.Vyper):
+    def get_bool(self, key):
+        """Read a boolean option, believing "0", "no" and "off".
+
+        vyper's own implementation treats every string but "false" as true,
+        because it never converts a value -- it hands back what it was given and
+        falls through to ``bool()``. That is a fine default for a library that
+        does not know where its values came from, but PartCAD does: every one of
+        these keys is bound to a ``PC_*`` environment variable, and an
+        environment variable can only carry a string. Under vyper's reading,
+        ``PC_FORCE_UPDATE=0`` turned the flag *on*.
+
+        The conversion is therefore PartCAD's to make, and making it here makes
+        it once: every boolean option, including the ones ``TelemetryConfig``
+        reads through this same object, gets the same answer. It is also the
+        answer ``pc`` already gave, since click converts the same variable with
+        its own BOOL type -- so ``pc`` and the daemon it launches stop
+        disagreeing about what the environment said.
+        """
+        return to_bool(self.get(key))
+
     @staticmethod
     def get_config_dir():
         home = os.environ.get("HOME", Path.home())
@@ -277,7 +355,39 @@ class UserConfig(vyper.Vyper):
     def get_cache_dir():
         return os.path.join(Path.home(), ".cache", "partcad")
 
-    def __init__(self):
+    def to_dict(self) -> dict:
+        """This configuration as plain data, ready to hand to another process.
+
+        A PartCAD client resolves its own configuration -- a config file, the
+        ``PC_*`` environment, and the command line on top of each other -- and
+        then asks the daemon to do the work. The daemon has a configuration of
+        its own, resolved from its own environment when it was launched and warm
+        ever since, which is not the one the command was invoked with. Sending
+        this alongside the request is what lets the daemon build the context
+        from the caller's configuration instead of its own.
+
+        Only the resolved options are copied, keyed by their configuration-file
+        names, plus the nested sections. A value that resolved to nothing is
+        left out rather than sent as null, so that reconstructing it falls back
+        to the same default rather than overriding the option with an empty one.
+        """
+        data = {}
+        for key in OPTION_KEYS:
+            value = self.get(key)
+            if value is not None:
+                data[key] = value
+        for path in SECTION_PATHS:
+            value = self.get(path)
+            if value:
+                data[path] = value
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "UserConfig":
+        """Rebuild a configuration from what :meth:`to_dict` produced."""
+        return cls(settings=data)
+
+    def __init__(self, settings: dict = None):
         super().__init__()
         self.set_config_type("yaml")
 
@@ -293,6 +403,16 @@ class UserConfig(vyper.Vyper):
                     self.read_config(f)
             except Exception as e:
                 pc_logging.error("ERROR: Failed to parse %s: %s" % (config_path, str(e)))
+
+        # A configuration handed over by another process, applied before
+        # anything below reads a value back. These land as vyper overrides,
+        # which outrank the file just read and the environment bound further
+        # down, so every option resolves to what the caller resolved it to and
+        # this process's own environment is ignored -- which is the point when
+        # the caller is a CLI and this process is the daemon serving it.
+        if settings:
+            for key, value in settings.items():
+                self.set(key, value)
 
         # If the filesystem cache is enabled, then (by default):
         # - objects of 1 byte bytes are cached both in memory and on the filesystem (to cache test results)
@@ -331,6 +451,7 @@ class UserConfig(vyper.Vyper):
 
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
+        self.set_default("develIndex", False)
 
         # option: git.clone.timeout
         # description: how long a single git network operation (clone, fetch,
@@ -449,6 +570,20 @@ class UserConfig(vyper.Vyper):
         self.bind_env("forceUpdate", "PC_FORCE_UPDATE")
         self.force_update = self.get_bool("forceUpdate")
 
+        # option: develIndex
+        # description: take the public PartCAD index ("//pub") from its 'devel'
+        #              branch instead of the released state on 'main'. The index
+        #              lives in its own repository, so its version is not pinned
+        #              by anything in the package that imports it; this is how a
+        #              change staged there is exercised before it is released.
+        #              Applies to every dependency whose URL names that
+        #              repository, wherever in the dependency tree it appears,
+        #              and leaves every other dependency alone.
+        # values: [True | False]
+        # default: False
+        self.bind_env("develIndex", "PC_DEVEL_INDEX")
+        self.devel_index = self.get_bool("develIndex")
+
         # option: git.clone.timeout
         # description: seconds a single git network operation may take
         # values: <int>
@@ -513,8 +648,13 @@ class UserConfig(vyper.Vyper):
         # description: offline mode
         # values: [True | False]
         # default: False
-        self.offline = False
+        # The read has to come after the binding, not before it: assigning the
+        # default first and binding afterwards left 'PC_OFFLINE' bound to a key
+        # nothing ever looked up, so the variable had no effect at all outside
+        # the CLI (which sets this attribute from its own '--offline' option).
+        self.set_default("offline", False)
         self.bind_env("offline", "PC_OFFLINE")
+        self.offline = self.get_bool("offline")
 
         # option: useDockerPython
         # description: use a Docker container for running Python scripts

@@ -7,6 +7,29 @@ same tool. Run ``pc <command> --help`` at any time to see the full, up-to-date o
 Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text logs), ``--offline``,
 ``--threads-max``, and ``-p PATH`` (select the package), apply to every command.
 
+``--devel-index`` is one of those common options, and is worth calling out. The public index (the ``pub``
+dependency, published at `partcad-index <https://github.com/partcad/partcad-index>`_) lives in a repository of
+its own, so nothing in your package pins which version of it you get: an ordinary run imports its default
+branch, which is the released state. ``--devel-index`` imports its ``devel`` branch instead — the branch that a
+release fast-forwards ``main`` to — so a change staged there can be exercised before it is released. The
+redirect follows the repository rather than the dependency name, so it applies wherever the index appears in
+the dependency tree and leaves every other dependency alone. The same switch is available as the
+``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user configuration, and as the ``partcad.develIndex``
+setting of the VS Code extension.
+
+Every boolean ``PC_*`` variable (``PC_DEVEL_INDEX``, ``PC_FORCE_UPDATE``, ``PC_OFFLINE``, ``PC_CACHE_FILES``, the
+``PC_TELEMETRY_*`` switches, …) is read the same way: ``1``, ``true``, ``yes``, ``on`` turn it on, and ``0``,
+``false``, ``no``, ``off`` or an empty value turn it off, ignoring case. Setting one to anything else turns it
+on.
+
+Most commands are served by a background daemon that stays warm between invocations, which raises the question
+of *whose* configuration the work runs under. It is always yours, as of the moment you ran the command: ``pc``
+resolves its user configuration — the config file, the ``PC_*`` environment and the options on the command line,
+layered — and hands a copy to the daemon with every request, and the daemon builds the package context from
+that copy rather than from the configuration it was started with. So ``pc --devel-index list`` means what it
+says even when a daemon has been running since before you set it, and there is no daemon to restart after
+changing a setting.
+
 *************
 Host commands
 *************

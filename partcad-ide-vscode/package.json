@@ -222,6 +222,12 @@
             "scope": "machine",
             "type": "string"
           },
+          "partcad.develIndex": {
+            "default": false,
+            "description": "Whether to take the public PartCAD index from its 'devel' branch instead of the released state on 'main'. Turn this on to work against index changes that have not been released yet.",
+            "scope": "machine",
+            "type": "boolean"
+          },
           "partcad.importStrategy": {
             "default": "useBundled",
             "description": "Defines where `partcad` is imported from. This setting may be ignored if `partcad.path` is set.",
