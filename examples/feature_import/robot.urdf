@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!--
+  A small robot description for the 'pc import assembly' and 'pc add assembly'
+  scenarios. Deliberately built from primitives alone: it has no mesh files to
+  resolve, so it can be copied into a sandbox on its own.
+-->
+<robot name="feature_import_robot">
+
+  <link name="base">
+    <collision>
+      <origin xyz="0 0 0.01" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.1 0.1 0.02"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0.01" rpy="0 0 0"/>
+      <mass value="0.5"/>
+      <inertia ixx="4.5e-4" ixy="0" ixz="0" iyy="4.5e-4" iyz="0" izz="8.3e-4"/>
+    </inertial>
+  </link>
+
+  <joint name="pan" type="revolute">
+    <origin xyz="0 0 0.02" rpy="0 0 0"/>
+    <parent link="base"/>
+    <child link="arm"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.57" upper="1.57" effort="8.0" velocity="1.5"/>
+    <dynamics damping="0.2" friction="0.1"/>
+  </joint>
+
+  <link name="arm">
+    <collision>
+      <origin xyz="0 0 0.04" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.02" length="0.08"/>
+      </geometry>
+    </collision>
+  </link>
+
+</robot>

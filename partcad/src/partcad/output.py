@@ -91,7 +91,7 @@ def format_names(section_obj) -> list:
 # The first group picks the implementation, the second places the output file.
 # What is left over is what the implementation is handed, so adding a field here
 # hides it from every implementation - including the ones packages write.
-IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion"})
+IMPLEMENTATION_KEYS = frozenset({"path", "package", "pythonRequirements", "pythonVersion", "decode"})
 OUTPUT_KEYS = frozenset({"extension", "prefix", "exclude", "output_dir"})
 RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 
@@ -101,6 +101,18 @@ RESERVED_KEYS = IMPLEMENTATION_KEYS | OUTPUT_KEYS | frozenset({"desc"})
 # directory (see wrappers/wrapper_export.py, which spells this out again -- a
 # wrapper runs in a sandbox and cannot import 'partcad').
 SCRIPT_KEY = "__script__"
+
+# The request key that says whether the sandbox rebuilds the shape and assembly
+# envelopes into live OCCT geometry before the implementation sees them. It
+# travels beside the script path for the same reason: the wrapper has to know
+# before it deserializes anything. Declared on a file type as 'decode: false'.
+DECODE_KEY = "__decode__"
+
+# A parameter, not a reserved key: a file type declares 'properties: true' to be
+# handed what the shapes state about themselves ('physics', 'material',
+# 'color'), keyed by full name, instead of the flag. Named here so the core and
+# the implementations agree on the spelling.
+PROPERTIES_KEY = "properties"
 
 
 class Implementation:
@@ -118,6 +130,10 @@ class Implementation:
         self.project = project
         self.script = config.get("path")
         self.python_requirements = list(config.get("pythonRequirements") or [])
+        # Whether the sandbox decodes the envelopes into live geometry for this
+        # implementation. Off for one that needs the assembly tree's structure
+        # rather than the compound it decodes to.
+        self.decode = config.get("decode", True) is not False
 
     @property
     def parameters(self) -> dict:

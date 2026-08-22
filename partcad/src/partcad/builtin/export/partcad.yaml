@@ -109,3 +109,39 @@ export:
       - cadquery-ocp==7.9.3.1.1
     tolerance: 0.1
     angularTolerance: 0.1
+
+  urdf:
+    desc: |
+      Unified Robot Description Format: a URDF file plus the mesh files it
+      references. Unlike every other format here it is handed the assembly
+      *tree* rather than the compound it decodes to (`decode: false`), because
+      one URDF link per assembly node is what makes the export reversible.
+    path: export_urdf.py
+    extension: urdf
+    # 'decode: false' -- see wrappers/wrapper_export.py. The exporter walks the
+    # assembly envelopes itself; decoding them into live geometry would collapse
+    # the tree into a single compound and there would be no links left to write.
+    decode: false
+    pythonRequirements:
+      - cadquery-ocp==7.9.3.1.1
+      - urdf-parser-py==0.0.4
+    # The meshes are written by this exporter itself, so it takes the mesh
+    # options too.
+    tolerance: 0.1
+    angularTolerance: 0.1
+    ascii: false
+    # Write an '<inertial>' for every link, computing one from the solid and
+    # 'density' (kg/m^3) for a part that does not state its own.
+    inertial: true
+    # 'robot_name' defaults to the object's label, 'mesh_dir' to
+    # '<file stem>_meshes' next to the URDF, 'mesh_prefix' to empty (which makes
+    # the mesh references relative to the URDF file; a ROS package sets it to
+    # 'package://<pkg>/'), and 'density' to the exporter's own default.
+    # robot_name: <name>
+    # mesh_dir: <directory>
+    # mesh_prefix: <prefix>
+    # density: 2700.0
+    # Hand the exporter what the parts state about themselves - mass, inertia,
+    # friction, colour - so that it writes those rather than recomputing them or
+    # losing them. See 'output.PROPERTIES_KEY'.
+    properties: true

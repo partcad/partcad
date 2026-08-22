@@ -173,7 +173,8 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
         });
         for (const assembly of items.assemblies) {
             let filepath = undefined;
-            if (assembly.type === 'assy') {
+            // The assembly types that *are* a file, so the tree can open one.
+            if (assembly.type === 'assy' || assembly.type === 'urdf') {
                 filepath = assembly.item_path;
             }
             elements.push(new PartcadItem(dir, assembly.name, items.name, assembly, filepath, ITEM_TYPE_ASSEMBLY));

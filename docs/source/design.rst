@@ -85,14 +85,34 @@ assemblies together.
 
 PartCAD is expected to have an ever-growing list of ways to define assemblies
 using existing parts.
-The native one is called ASSY: assembly YAML.
-The idea behind ASSY is to create a simplistic way to enumerate parts,
-define their parameters and define how parts connect.
 
-An assembly may also be defined by a file another tool produced. A STEP file
-that carries an assembly structure is used as an assembly directly, with its
-components becoming parts of the package; nothing is copied into the package,
-so the file stays the source of truth.
+- ASSY: assembly YAML
+
+  The native format. The idea behind ASSY is to create a simplistic way to
+  enumerate parts, define their parameters and define how parts connect.
+
+- STEP
+
+  A STEP file that carries an assembly structure, used as an assembly directly,
+  with its components becoming parts of the package.
+
+- URDF
+
+  A `URDF <https://wiki.ros.org/urdf>`_ robot description used as an assembly
+  directly. Its links become the same tree of placed parts an ASSY file
+  produces, evaluated with every joint at its zero position. PartCAD can also
+  write a URDF (plus the meshes it references) from any assembly.
+
+  A URDF is a description of a *simulatable* robot. What it says about a link
+  itself - mass, inertia, friction and contact, material and colour - becomes
+  named PartCAD properties of the part that link turns into, and goes back out
+  on export. What an assembly built out of rigid placements has nowhere to put -
+  joint kinematics, collision geometry, sensors, transmissions - is dropped, and
+  reported. :doc:`simulation` describes that gap and what closing it would take.
+
+For an assembly defined by a file another tool produced - the STEP and the URDF
+above - nothing is copied into the package, so the file stays the source of
+truth.
 
 Scenes
 ======
@@ -100,7 +120,7 @@ Scenes
 PartCAD does not yet implement scenes. But the idea is to be able to reproduce
 the same features as worlds in Gazebo to the extent that PartCAD scenes can be
 exported to and simulated in Gazebo, but without using XML while creating the
-scene.
+scene. See :doc:`simulation`.
 
 Monorepos
 =========

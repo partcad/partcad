@@ -50,6 +50,7 @@ PART_EXTENSION_MAPPING = {
     "obj": "obj",
     "iges": "iges",
     "gltf": "json",
+    "urdf": "urdf",
     "cadquery": "py",
     "build123d": "py",
     "chili3d": "chili",
@@ -83,6 +84,13 @@ UNEXPORTABLE_PART_TYPES = {
     "scad": "PartCAD can read OpenSCAD but cannot write it",
     "sdf": "PartCAD can read SDF scripts but cannot write them",
     "chili3d": "PartCAD can read Chili3D scripts but cannot write them",
+    # URDF is exportable, but not *in memory*: the export is a .urdf file plus
+    # the directory of mesh files it references, and convert() hands back a
+    # single payload. Returning only the XML would quietly lose the geometry.
+    "urdf": (
+        "a URDF export is a .urdf file plus the mesh files it references, so it cannot be "
+        "returned in memory; export it to a path instead ('pc export -t urdf')"
+    ),
 }
 
 # Every part type named by the extension mappings that 'Shape.convert()' can
@@ -372,6 +380,41 @@ class Shape(ShapeConfiguration):
                     # Let the file cache tell us if we need to cache this in memory
                     self._wrapped = shape
                 return shape
+
+    # The properties an exporter may need that are declared rather than derived
+    # from the geometry. 'physics' is the physical ones (mass, inertia,
+    # friction); the other two are appearance.
+    EXPORTED_PROPERTIES = ("physics", "material", "color")
+
+    async def _property_index(self):
+        """The declared properties of this shape and everything under it.
+
+        Keyed by the full name ("<package>:<name>") an exporter sees on the
+        envelope, so a wrapper that is handed a whole assembly tree can find the
+        properties belonging to each node of it. Only shapes that declare at
+        least one appear.
+
+        An assembly is built first: its geometry may well have come from the
+        cache, in which case its children have never been instantiated and there
+        would be nothing to walk.
+        """
+        instantiate = getattr(self, "do_instantiate", None)
+        if instantiate is not None:
+            await instantiate()
+
+        index = {}
+
+        def walk(shape):
+            config = getattr(shape, "config", None)
+            if isinstance(config, dict):
+                declared = {key: config[key] for key in self.EXPORTED_PROPERTIES if config.get(key)}
+                if declared:
+                    index["%s:%s" % (shape.project_name, shape.name)] = declared
+            for child in getattr(shape, "children", None) or []:
+                walk(child.item)
+
+        walk(self)
+        return index
 
     def _shape_metadata(self):
         """The (full_name, label) stamped onto this shape's envelope."""
@@ -852,7 +895,7 @@ class Shape(ShapeConfiguration):
             f.write(content)
         return script_abs
 
-    def _output_request(self, obj, impl, kwargs):
+    async def _output_request(self, obj, impl, kwargs):
         """What the implementation is handed.
 
         The shape, every parameter the layered configuration ended up with, and
@@ -872,6 +915,17 @@ class Shape(ShapeConfiguration):
         # one: 'render_async(**kwargs)' is called with a fixed set of keyword
         # arguments defaulting to None by several callers.
         request.update({key: value for key, value in kwargs.items() if value is not None})
+
+        # A format that has a way to state what the parts say about themselves -
+        # mass, inertia, friction, colour - asks for it with 'properties: true'
+        # in its declaration, and is handed the index instead of the flag. It is
+        # built only on request: collecting it instantiates the whole assembly
+        # tree, which an exporter that has no use for the properties should not
+        # pay for. URDF is the one built-in format that asks (see
+        # '//builtin/export').
+        if request.get(output.PROPERTIES_KEY) is True:
+            request[output.PROPERTIES_KEY] = await self._property_index()
+
         return request
 
     async def _render_one_async(self, ctx, obj, format_name, project, filepath, options_project, output_dir, kwargs):
@@ -887,8 +941,13 @@ class Shape(ShapeConfiguration):
 
         script = await self._materialize_output_script(ctx, impl)
 
-        request = self._output_request(obj, impl, kwargs)
+        request = await self._output_request(obj, impl, kwargs)
         request[output.SCRIPT_KEY] = os.path.abspath(script)
+        # Whether the sandbox rebuilds the envelopes into live geometry before
+        # the implementation sees them. Off for an implementation that walks the
+        # assembly *tree* (the URDF exporter turns each node into a link of its
+        # own), which decoding would have collapsed into one compound.
+        request[output.DECODE_KEY] = impl.decode
         request_serialized = shape_envelope.serialize(request)
 
         runtime = ctx.get_python_runtime(version=impl.python_version())
@@ -930,6 +989,22 @@ class Shape(ShapeConfiguration):
             )
         if result.get("exception"):
             pc_logging.exception("Render %s exception: %s" % (format_name.upper(), result["exception"]))
+
+        # An implementation may report what it could not represent in the target
+        # format without that being a failure (URDF, for one, cannot hold
+        # everything a PartCAD assembly knows).
+        for warning in result.get("warnings") or []:
+            pc_logging.warning("%s:%s: %s" % (self.project_name, self.name, warning))
+
+        # Properties PartCAD holds that the target format has no way to state.
+        # Not a warning - the file is correct, it just says less than the package
+        # does - but not silent either.
+        unsupported = result.get("unsupported") or []
+        if unsupported:
+            pc_logging.info(
+                "%s:%s: %s cannot state these properties, so they are not in the exported file: %s"
+                % (self.project_name, self.name, format_name.upper(), ", ".join(unsupported))
+            )
 
     async def render_async(
         self,

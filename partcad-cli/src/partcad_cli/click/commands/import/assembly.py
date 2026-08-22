@@ -14,6 +14,7 @@ from ...service import run
 # assembly_type: [file_extensions]
 SUPPORTED_ASSEMBLY_FORMATS_WITH_EXT = {
     "step": ["step", "stp"],
+    "urdf": ["urdf"],
 }
 
 
@@ -33,8 +34,15 @@ def cli(cli_ctx, package: str, assembly_file: str, desc: str):
     CLI command to import an assembly from a file.
     Automatically creates multiple parts and an assembly.
 
-    Served by the daemon: the STEP-CAF read runs in a sandboxed wrapper
-    (`wrapper_import_assy`), whose Python runtime belongs to the daemon.
+    A STEP file becomes one part per solid; a URDF becomes one part per link
+    plus an interface pair per joint, so the assembly connects its parts
+    instead of placing them by coordinates. Either way the package ends up
+    holding PartCAD's own objects - `pc add assembly` is what declares a file
+    where it lies instead.
+
+    Served by the daemon: the reads run in sandboxed wrappers
+    (`wrapper_import_assy`, `wrapper_import_urdf`), whose Python runtimes
+    belong to the daemon.
     """
     file_path = Path(assembly_file)
     if not file_path.exists():

@@ -48,3 +48,8 @@ Feature: `pc export` command
   Examples: Media Type: .iges
     |    type | filename              |
     |    iges | logo_embedded.iges    |
+
+  @type-object
+  Examples: Media Type: .urdf
+    |    type | filename              |
+    |    urdf | logo_embedded.urdf    |

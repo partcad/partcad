@@ -507,6 +507,48 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
           default: ...
           type: <move (default)|turn>
           dir: [<x>, <y>, <z>] # the vector to move along or rotate around
+      motion: # (optional) what freedom of movement this connection allows
+        type: <fixed|revolute|continuous|prismatic|planar|floating|ball|screw>
+        axis: [<x>, <y>, <z>] # in the frame of this interface's port
+        limits: # degrees for a turn, millimetres for a move
+          lower: ...
+          upper: ...
+        softLimits: # (optional) limits a controller enforces before the hard ones
+          lower: ...
+          upper: ...
+          kPosition: ...
+          kVelocity: ...
+        mimic: # (optional) a movement that follows another one
+          joint: <the name of the connection it follows>
+          multiplier: ...
+          offset: ...
+      physics: # (optional) what the connection costs
+        maxEffort: ... # N*m for a turn, N for a move
+        maxVelocity: ... # deg/s for a turn, mm/s for a move
+        damping: ...
+        friction: ...
+        springStiffness: ...
+        springReference: ...
+
+Motion and physics
+------------------
+
+``motion`` and ``physics`` are a *record* of a connection, next to the
+``parameters`` that make it move. Where a parameter is executable - naming it in
+a connection places the parts - ``motion`` states what kind of joint the
+connection is, about which axis, and between which limits, and ``physics``
+states what a simulation needs to know about the cost of moving it.
+
+Every property has a PartCAD name and a PartCAD unit, and the set of them is
+closed: angles are degrees and lengths millimetres, as everywhere else in
+PartCAD, and the rest is SI. Nothing is stored under the name of the format it
+came from. A format that states something PartCAD has no property for fails the
+import rather than tucking the value away, and a property PartCAD holds that a
+target format cannot state is reported when it is exported - so the gap is
+always visible in one direction or the other.
+
+``pc convert assembly -t assy`` fills both sections in from a URDF's joints -
+see :doc:`simulation` for the mapping.
 
 Abstract interfaces
 -------------------
@@ -684,6 +726,33 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
+      material: <(optional) the name of the material this shape is made of>
+      color: <(optional) "#RRGGBB" or "#RRGGBBAA">
+
+      physics: # (optional) physical properties
+        mass: ... # kg
+        centerOfMass: [<x>, <y>, <z>] # mm, in the shape's own frame
+        inertiaOrientation: [<roll>, <pitch>, <yaw>] # (optional) degrees
+        inertia: # kg*m^2, about 'centerOfMass'
+          ixx: ...
+          ixy: ...
+          ixz: ...
+          iyy: ...
+          iyz: ...
+          izz: ...
+        friction: ...        # coefficient, along 'frictionDirection'
+        friction2: ...       # coefficient, across it
+        frictionDirection: [<x>, <y>, <z>]
+        contactStiffness: ... # N/m
+        contactDamping: ...   # N*s/m
+        minContactDepth: ...  # mm
+        maxContactVelocity: ... # mm/s
+        restitution: ...     # 0 is a dead stop, 1 a perfect bounce
+        maxContacts: ...
+        velocityDamping: ...
+        selfCollide: <true|false>
+        gravity: <true|false>
+
       # What this part contributes to every connection it takes part in.
       connect: # (optional)
         hold: <(optional) name of an interface, or the list of them, to hold this part by>
@@ -702,6 +771,21 @@ cuts its own. See :doc:`assy`.
 The fields of the ``connect`` section are the defaults for the ``holdWith*`` and
 ``holdTo*`` fields of the ``how`` section of an Assembly YAML
 ``connect``/``connectPorts`` node. See :doc:`assy`.
+
+Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
+them is closed. Lengths are millimetres and angles degrees, as everywhere else
+in PartCAD; everything else is SI, so a mass is kilograms and an inertia tensor
+kg·m². Nothing is stored under the name of the format it came from: a URDF
+import reads ``<inertial>`` and the friction and contact settings of a
+``<gazebo>`` block into these properties one value at a time, and a URDF export
+writes each of them back into the element that states it. A URDF that says
+something PartCAD has no property for stops the import instead of being carried
+opaquely, and a property PartCAD holds that URDF cannot state is reported when
+it is exported.
+
+``physics`` does not take part in the shape cache - it says nothing about the
+geometry - which also means nothing notices when an edit to the CAD invalidates
+it. See :doc:`simulation`.
 
 See :ref:`location` for more information on the OCCT Location object.
 
@@ -1205,6 +1289,114 @@ Here is an example of an assembly definition:
       offset: [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
 
 In this example, an assembly named ``example_assembly`` is defined with a parameter ``length`` and an offset.
+
+URDF
+----
+
+The ``urdf`` type uses a `URDF <https://wiki.ros.org/urdf>`_ file - the robot
+description format of ROS - as an assembly directly, with no conversion step:
+
+.. code-block:: yaml
+
+  assemblies:
+    robot:
+      type: urdf
+      path: <(optional) the source file path, "<assembly name>.urdf" by default>
+      ignoreCollision: <(optional) true, or a list of link names; false by default>
+      packagePaths: # (optional) roots to resolve "package://" mesh references against
+        - <../meshes>
+      strict: <(optional) fail on an unknown "<gazebo>" setting; false by default>
+
+``pc add assembly urdf <path>`` writes that declaration for a URDF that is
+already inside the package. ``pc import assembly <path>`` is the other choice:
+it converts instead of declaring, leaving the package with an ``stl`` part per
+link, an interface pair per joint and an ``.assy``, exactly as
+``pc convert assembly -t assy`` does below. Both commands work the way they do
+for a STEP file - ``add`` points at a file, ``import`` turns one into PartCAD's
+own objects.
+
+**One part per shape, in one flat list.** A link that has a single ``<visual>``
+(or ``<collision>``) becomes the part ``<assembly name>/<link name>``. A link
+that has several becomes a *sub-assembly* of one part each, named
+``<assembly name>/<link name>/<element name or index>``. Every link is a direct
+child of the assembly, placed where the joints between it and the robot's root
+link put it with **every joint at its zero position**, and each shape keeps the
+offset its own ``<origin>`` gave it. The result is the same in-memory
+representation an `Assembly YAML`_ file produces, so everything else -
+rendering, export, BoM, inspection - treats the two alike. The assembly is the
+container that holds the links, the robot's root link included; it is not one
+of them and carries no properties of its own.
+
+The joint tree deliberately does not become nesting. A URDF's tree is its
+*kinematics*, and an assembly is one static configuration of it, so a link
+hanging off another says nothing that the link's own placement does not already
+say - while nesting per joint would make an arm as deep as it has joints. The
+relative placements are not lost: they are what ``pc convert assembly -t assy``
+turns into joints, below. The only nesting left is the one that means something,
+a link whose several shapes group together.
+
+Those parts are ordinary parts. ``pc inspect robot/forearm`` and
+``pc export -t step robot/wrist`` work on them like on any other. They are not
+declared in ``partcad.yaml`` - the URDF is what declares them - so a package
+handed one of these names builds the assembly that owns it first.
+
+**Nothing is rewritten that does not have to be.** A ``mesh`` reference becomes
+a part that reads the very file the URDF named (``package://``, ``file://`` and
+paths relative to the URDF file are all resolved), for the mesh formats PartCAD
+reads - ``stl``, ``obj``, ``step``, ``brep`` and ``3mf``. The ``<origin>`` that
+places it becomes a PartCAD location, not a transform baked into a copy of the
+geometry. A mesh ``scale`` is honoured: URDF reads mesh coordinates as metres
+after scaling, PartCAD works in millimetres. Only ``box``, ``cylinder`` and
+``sphere`` are generated, because there is no file to point at.
+
+A link that states both a visual and a collision shape is built from the
+**collision** one: that is what a simulator resolves contact against, and a
+model that bothers to state both means it to be the physical shape.
+``ignoreCollision: true`` reverses that for every link, and a list of link names
+reverses it for those links only.
+
+What a link says about its physics becomes **named PartCAD properties** of the
+part, one property per URDF value and in PartCAD's own units: ``<inertial>``
+becomes ``mass``, ``centerOfMass`` and ``inertia``, and the friction and contact
+settings of a ``<gazebo>`` block become ``friction``, ``contactStiffness`` and
+the rest. Its ``<material>`` becomes ``material`` and ``color``. Nothing is
+stashed under a container of its own, nothing records the link's name or its
+parent - the part *is* named after the link, and the joint tree is this very
+file - and URDF that PartCAD has no property for stops the import rather than
+being carried opaquely. ``strict`` extends that to ``<gazebo>``, whose
+vocabulary is open and where an unknown setting is otherwise only reported.
+
+The geometry a link was *not* built from is kept too, as the part
+``<assembly name>/<link name>/<visual|collision>``: defined and exportable, but
+not placed in the assembly. What cannot be represented at all (joint kinematics,
+transmissions, sensors) is counted and reported; ``pc info`` shows the tally.
+:doc:`simulation` describes the gap and what closing it would take.
+
+The reverse direction is ``pc export -t urdf``, which writes a ``.urdf`` file
+plus a directory of the STL files it references, from any part or assembly.
+Each node of the assembly tree becomes a link, each parent/child relation a
+fixed joint, and a shape used more than once is written out once. What a part
+states about itself is written into the URDF element that states it - the mass
+and inertia into ``<inertial>``, the friction and contact properties into a
+``<gazebo>`` block, the colour into ``<material>`` - and only a part that says
+nothing gets inertial properties computed from its geometry. A property PartCAD
+holds that URDF has no way to state is reported rather than dropped in silence
+(see :doc:`simulation`).
+
+``pc convert assembly`` goes further than exporting: it rewrites the package
+around the assembly and switches its declared type.
+
+.. code-block:: shell
+
+  pc convert assembly -t assy robot   # urdf -> assy
+  pc convert assembly -t urdf logo    # assy -> urdf
+
+Converting to ASSY writes an ``stl`` part for every link, an interface pair for
+every joint, and an ``.assy`` that places its parts with ``connect:`` rather
+than with coordinates. Converting to URDF writes the ``.urdf`` and its meshes.
+Neither direction has an ad-hoc equivalent: ``pc adhoc convert`` refuses both
+formats, because an ASSY file is a set of references to the parts of a package
+and a URDF becomes a part per link - neither means anything without one.
 
 Assembly YAML
 -------------
@@ -1734,8 +1926,8 @@ package that sets a single parameter keeps the built-in implementation for
 everything else, and a package that sets ``path`` replaces it.
 
 ``//builtin/export`` implements ``step``, ``brep``, ``stl``, ``3mf``, ``obj``,
-``gltf``, ``iges`` and ``threejs``. ``//builtin/render`` implements ``svg``,
-``png``, ``jpeg`` and ``dxf``. Reading their ``partcad.yaml`` is the most direct
+``gltf``, ``iges``, ``threejs`` and ``urdf``. ``//builtin/render`` implements
+``svg``, ``png``, ``jpeg`` and ``dxf``. Reading their ``partcad.yaml`` is the most direct
 way to see what parameters each file type takes and what a package's own
 implementation should look like.
 
@@ -1743,3 +1935,10 @@ implementation should look like.
 implementation writes: PartCAD assembles them itself out of what the package
 declares and the images the other file types leave behind (see ``pc render`` in
 :doc:`cli`).
+
+``urdf`` is the one built-in file type that is not a single file: it writes a
+``.urdf`` plus the directory of mesh files it references, which is why
+``Shape.convert()`` refuses it (there is no single payload to hand back) and why
+it declares ``decode: false`` - it is handed the assembly *tree*, one URDF link
+per node, rather than the single compound the tree decodes to. See
+:doc:`simulation`.

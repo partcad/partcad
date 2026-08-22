@@ -24,6 +24,11 @@
             "package": { "type": "string", "minLength": 1 },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } },
             "pythonVersion": { "type": "string", "minLength": 1 },
+            "decode": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the shape and assembly envelopes are rebuilt into live CAD geometry before the implementation sees them. Set to false by an implementation that needs the assembly tree's structure rather than the single compound it decodes to (the built-in URDF exporter is the one that does)"
+            },
             "extension": { "type": "string", "minLength": 1 },
             "prefix": { "type": "string", "minLength": 1 },
             "output_dir": { "type": "string", "minLength": 1 },
@@ -47,6 +52,118 @@
     "url": {
       "type": "string",
       "pattern": "((http|https)://)(www.)?[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)"
+    },
+    "physics": {
+      "type": "object",
+      "description": "Physical properties, each with a documented name and unit. Lengths are millimetres and angles are degrees, as everywhere else in PartCAD; everything else is SI. A property that has no entry here is not carried: a format that states one PartCAD does not support fails the import, and a property PartCAD holds that the target format cannot state is reported on export.",
+      "properties": {
+        "mass": { "type": "number", "description": "Mass, in kilograms.", "minimum": 0 },
+        "centerOfMass": {
+          "type": "array",
+          "description": "Centre of mass in the shape's own frame, in millimetres.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "inertiaOrientation": {
+          "type": "array",
+          "description": "Orientation of the frame the inertia tensor is stated in, as roll/pitch/yaw in degrees. Absent means aligned with the shape's own frame.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "inertia": {
+          "type": "object",
+          "description": "The inertia tensor about 'centerOfMass', in kg*m^2.",
+          "properties": {
+            "ixx": { "type": "number" },
+            "ixy": { "type": "number" },
+            "ixz": { "type": "number" },
+            "iyy": { "type": "number" },
+            "iyz": { "type": "number" },
+            "izz": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "friction": { "type": "number", "description": "Coefficient of friction, along the first friction direction.", "minimum": 0 },
+        "friction2": { "type": "number", "description": "Coefficient of friction, along the second friction direction.", "minimum": 0 },
+        "frictionDirection": {
+          "type": "array",
+          "description": "The first friction direction, in the shape's own frame.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "contactStiffness": { "type": "number", "description": "Contact stiffness, in N/m." },
+        "contactDamping": { "type": "number", "description": "Contact damping, in N*s/m." },
+        "minContactDepth": { "type": "number", "description": "Penetration allowed before a contact force is applied, in millimetres." },
+        "maxContactVelocity": { "type": "number", "description": "The largest velocity a contact correction may impart, in mm/s." },
+        "restitution": { "type": "number", "description": "Coefficient of restitution: 0 is a dead stop, 1 is a perfect bounce.", "minimum": 0, "maximum": 1 },
+        "maxContacts": { "type": "integer", "description": "The largest number of contact points to resolve at once.", "minimum": 1 },
+        "velocityDamping": { "type": "number", "description": "Velocity damping applied to the body itself.", "minimum": 0 },
+        "selfCollide": { "type": "boolean", "description": "Whether this body collides with the others of the same model." },
+        "gravity": { "type": "boolean", "description": "Whether gravity acts on this body." },
+        "maxEffort": { "type": "number", "description": "The largest effort a connection may exert: N*m for a turn, N for a move." },
+        "maxVelocity": { "type": "number", "description": "The largest velocity a connection allows: deg/s for a turn, mm/s for a move." },
+        "damping": { "type": "number", "description": "Damping resisting the movement a connection allows." },
+        "springStiffness": { "type": "number", "description": "Stiffness of a spring returning a connection to 'springReference'." },
+        "springReference": { "type": "number", "description": "The position a spring returns a connection to: degrees for a turn, millimetres for a move." },
+        "stopCfm": { "type": "number", "description": "Constraint force mixing used at a connection's limits." },
+        "stopErp": { "type": "number", "description": "Error reduction used at a connection's limits." },
+        "fudgeFactor": { "type": "number", "description": "Solver scaling applied to a connection, between 0 and 1." },
+        "implicitSpringDamper": { "type": "boolean", "description": "Whether the spring and damper are applied implicitly by the solver." },
+        "provideFeedback": { "type": "boolean", "description": "Whether the simulator reports the forces at this connection." }
+      },
+      "additionalProperties": false
+    },
+    "motion": {
+      "type": "object",
+      "description": "The freedom of movement a connection allows. Angles are degrees and lengths millimetres, as everywhere else in PartCAD.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["fixed", "revolute", "continuous", "prismatic", "planar", "floating", "ball", "screw"]
+        },
+        "axis": {
+          "type": "array",
+          "description": "The axis moved about or along, in the frame of this interface's port.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "limits": {
+          "type": "object",
+          "description": "How far the movement may go: degrees for a turn, millimetres for a move.",
+          "properties": {
+            "lower": { "type": "number" },
+            "upper": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "softLimits": {
+          "type": "object",
+          "description": "Limits a controller enforces before the hard ones, and the gains it does it with.",
+          "properties": {
+            "lower": { "type": "number" },
+            "upper": { "type": "number" },
+            "kPosition": { "type": "number" },
+            "kVelocity": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "mimic": {
+          "type": "object",
+          "description": "A movement that follows another one: value = multiplier * other + offset.",
+          "properties": {
+            "joint": { "type": "string", "minLength": 1 },
+            "multiplier": { "type": "number" },
+            "offset": { "type": "number" }
+          },
+          "required": ["joint"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "OCCTLocation":{
       "type": "array",
@@ -146,6 +263,7 @@
                 "min": { "type": "number" },
                 "max": { "type": "number" },
                 "default": { "type": "number" },
+                "type": { "type": "string", "enum": ["move", "turn"], "default": "move" },
                 "dir": {
                   "type": "array",
                   "items": { "type": "number" },
@@ -499,7 +617,14 @@
                   "additionalProperties": false
                 },
                 "manufacturable": { "type": "boolean" },
-                "connect": { "$ref": "#/definitions/connect" }
+                "connect": { "$ref": "#/definitions/connect" },
+                "physics": { "$ref": "#/definitions/physics" },
+                "material": { "type": "string", "minLength": 1, "description": "The name of the material this shape is made of." },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
+                  "description": "The colour of this shape, as #RRGGBB or #RRGGBBAA."
+                }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -538,7 +663,7 @@
             {
               "type": "object",
               "properties": {
-                "type": { "type": "string", "enum": ["assy", "step", "alias"] },
+                "type": { "type": "string", "enum": ["assy", "step", "urdf", "alias"] },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
@@ -548,6 +673,25 @@
                   "minimum": 0,
                   "default": 5,
                   "description": "The number of decimal places the placement of each component is rounded to ('step' type only)"
+                },
+                "ignoreCollision": {
+                  "oneOf": [
+                    { "type": "boolean" },
+                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                  ],
+                  "default": false,
+                  "description": "Build a URDF link from its visual geometry rather than its collision geometry: true for every link, or a list of the link names it applies to ('urdf' type only)"
+                },
+                "packagePaths": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true,
+                  "description": "Roots to resolve 'package://' mesh references against ('urdf' type only)"
+                },
+                "strict": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Fail on a Gazebo setting that has no PartCAD property, instead of reporting it. URDF outside Gazebo's extension blocks always fails, whatever this says ('urdf' type only)"
                 },
                 "manufacturing": {
                   "type": "object",
@@ -773,7 +917,9 @@
                 }
               ]
             },
-            "parameters": { "$ref": "#/definitions/interface-parameter"}
+            "parameters": { "$ref": "#/definitions/interface-parameter"},
+            "motion": { "$ref": "#/definitions/motion" },
+            "physics": { "$ref": "#/definitions/physics" }
           },
           "additionalProperties": false
         }

@@ -40,6 +40,7 @@ import runpy
 import sys
 
 sys.path.append(os.path.dirname(__file__))
+import ocp_serialize
 import wrapper_common
 
 # The key the request carries the implementation script under. Passed in the
@@ -47,6 +48,14 @@ import wrapper_common
 # already spends both positional arguments on the output path and the working
 # directory.
 SCRIPT_KEY = "__script__"
+
+# The key that says whether the envelopes are rebuilt into live OCCT geometry
+# before the implementation sees them. It has to travel in the request and be
+# read before anything is decoded, which is why the request is always read raw
+# here and decoded afterwards. An implementation that walks an assembly *tree*
+# (the URDF exporter turns each node into a link of its own) declares
+# 'decode: false', because decoding collapses the tree into one compound.
+DECODE_KEY = "__decode__"
 
 
 def _failed(exception):
@@ -84,12 +93,24 @@ def process(script, path, request):
     # reports neither, is normalized here so the core only ever sees the two
     # consistent shapes.
     exception = wrapper_common.exception_to_str(output.get("exception"))
-    return {"success": bool(output.get("success")) and exception is None, "exception": exception}
+    result = {"success": bool(output.get("success")) and exception is None, "exception": exception}
+    # What the implementation could not represent in the target format, which is
+    # not a failure: the file is correct, it just says less than the package
+    # does. Reported by 'Shape._render_one_async()'.
+    for key in ("warnings", "unsupported"):
+        if output.get(key):
+            result[key] = output[key]
+    return result
 
 
 if __name__ == "__main__":
-    path, request = wrapper_common.handle_input()
+    # Read raw, then decode unless the implementation asked not to: whether the
+    # envelopes become live geometry is the implementation's choice, and that
+    # choice travels inside the request itself.
+    path, request = wrapper_common.handle_input(decode=False)
     script = request.pop(SCRIPT_KEY, None)
+    if request.pop(DECODE_KEY, True) is not False:
+        request = ocp_serialize.decode(request)
     if script is None:
         result = _failed(Exception("No implementation script was passed to the export wrapper"))
     else:

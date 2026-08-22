@@ -11,7 +11,11 @@ import rich_click as click
 from ....service import run
 
 # PartCAD part types (partcad.shape.PART_EXTENSION_MAPPING keys), inlined so the
-# thin CLI does not import the heavy partcad package.
+# thin CLI does not import the heavy partcad package. 'urdf' is deliberately
+# absent: it describes an assembly, not a shape, and only means anything inside
+# a package - see partcad.adhoc.convert.PACKAGE_ONLY_TYPES and
+# 'pc convert assembly'. It is still inferable from a '.urdf' filename, which is
+# where that rejection is reported from.
 PART_TYPES = [
     "step",
     "brep",
@@ -30,7 +34,9 @@ PART_TYPES = [
 
 # What PartCAD can write. The rest are input formats only: PartCAD reads a
 # Chili3D, SDF or OpenSCAD script and has no exporter that produces one (see
-# partcad.shape.UNEXPORTABLE_PART_TYPES, inlined here for the same reason).
+# partcad.shape.UNEXPORTABLE_PART_TYPES, inlined here for the same reason - it
+# also holds 'urdf', which is absent from the list above for the reason given
+# there).
 INPUT_ONLY_PART_TYPES = ["chili3d", "sdf", "scad"]
 OUTPUT_PART_TYPES = [part_type for part_type in PART_TYPES if part_type not in INPUT_ONLY_PART_TYPES]
 

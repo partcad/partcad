@@ -70,10 +70,10 @@ OBJECT_KIND_SECTIONS = {
 
 # Assembly types whose parts the assembly itself materializes, rather than the
 # package declaring them: a STEP assembly's components become the parts
-# '<assembly>/<component>'. Such a part is only in 'Project.parts' once the
-# assembly has been built, so 'get_part' builds it on demand (see
-# '_materialize_derived_part').
-PART_PRODUCING_ASSEMBLY_TYPES = ("step",)
+# '<assembly>/<component>', and a URDF's links the parts '<assembly>/<link>'.
+# Such a part is only in 'Project.parts' once the assembly has been built, so
+# 'get_part' builds it on demand (see '_materialize_derived_part').
+PART_PRODUCING_ASSEMBLY_TYPES = ("step", "urdf")
 
 
 @telemetry.instrument()
@@ -221,6 +221,12 @@ class Project(project_config.Configuration):
         self.repositories = {}
         self.repository_locks = {}
         self.repository_locks_lock = threading.Lock()
+
+        # The assemblies already built to materialize a part of theirs (see
+        # '_materialize_derived_part'), and the lock that keeps two threads from
+        # building the same one.
+        self._derived_parts_attempted: set[str] = set()
+        self._derived_parts_lock = threading.Lock()
 
         if (
             "desc" in self.config_obj
@@ -696,11 +702,11 @@ class Project(project_config.Configuration):
         )
 
     def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
-        # A part an assembly materializes (a STEP component, for one) is not
-        # declared in 'partcad.yaml' - the assembly's own source file is what
-        # declares it - so it only exists once that assembly has been built.
-        # Build it now, rather than report a part that the package can perfectly
-        # well produce as missing.
+        # A part an assembly materializes (a STEP component or a URDF link) is
+        # not declared in 'partcad.yaml' - the assembly's own source file is
+        # what declares it - so it only exists once that assembly has been
+        # built. Build it now, rather than report a part that the package can
+        # perfectly well produce as missing.
         self._materialize_derived_part(part_name)
         return self.get_object(
             "part",
@@ -741,6 +747,12 @@ class Project(project_config.Configuration):
 
         A no-op unless the name is unknown *and* names an assembly that produces
         parts, so the common path costs one dictionary lookup.
+
+        Each owner is attempted once. A build that failed, and a source file
+        with nothing in it (a URDF with no links), both leave 'children' empty,
+        and repeating the attempt on every later lookup would repeat the whole
+        sandboxed import; taking the attempt under a lock also keeps two threads
+        that resolve two children of the same assembly from building it twice.
         """
         if part_name in self.parts:
             return
@@ -750,6 +762,10 @@ class Project(project_config.Configuration):
         owning_assembly = self.get_assembly(owner)
         if owning_assembly is None or owning_assembly.children:
             return
+        with self._derived_parts_lock:
+            if owner in self._derived_parts_attempted:
+                return
+            self._derived_parts_attempted.add(owner)
 
         pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
 
@@ -1311,6 +1327,12 @@ class Project(project_config.Configuration):
             # packages involved implement themselves.
             output_formats = output.all_formats(self.ctx)
 
+            # Only the objects the package declares. Building the assemblies
+            # below may materialize more parts - a URDF's links become the parts
+            # '<assembly>/<link>' - but those are named with a '/' and so would
+            # need a directory created for each one, which is exactly what
+            # PartCAD does not do without '--create-dirs'. They stay reachable
+            # and exportable by name; they are simply not part of a bulk render.
             for shape in shapes:
                 shape_cfg = self._output_cfg(shape, options_project)
                 formats = output_formats + [
@@ -1813,8 +1835,11 @@ class Project(project_config.Configuration):
                 lines += add_section(name, display_name, shape, render_cfg)
 
         if self.parts and not "parts" in exclude:
-            lines += ["## Parts"]
-            lines += [""]
+            # Built first, and the heading only emitted if anything came of it:
+            # 'add_section' skips a part with no rendered image, and a package
+            # where that is true of every part would otherwise get a "## Parts"
+            # heading with nothing under it.
+            part_lines = []
             shape_names = sorted(self.parts.keys())
             for name in shape_names:
                 shape = self.parts[name]
@@ -1824,7 +1849,10 @@ class Project(project_config.Configuration):
                     display_name = name + " (alias to " + shape.name + ")"
                 else:
                     display_name = name
-                lines += add_section(name, display_name, shape, render_cfg)
+                part_lines += add_section(name, display_name, shape, render_cfg)
+            if part_lines:
+                lines += ["## Parts", ""]
+                lines += part_lines
 
         if self.interfaces and not "interfaces" in exclude:
             lines += ["## Interfaces"]

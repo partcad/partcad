@@ -453,11 +453,11 @@ def serialize(obj, name=None, label=None) -> str:
     return dumps(obj, name=name, label=label)
 
 
-def deserialize(data) -> object:
-    """Deserialize the form produced by 'serialize()'.
+def _payload_line(data) -> str:
+    """The single JSON line carrying the payload.
 
-    The response is taken as the last non-empty line of 'data', so any leading
-    progress a wrapper wrote to stdout is ignored.
+    It is taken as the last non-empty line of 'data', so any leading progress a
+    wrapper wrote to stdout is ignored.
     """
     if isinstance(data, (bytes, bytearray)):
         data = data.decode("utf-8")
@@ -468,4 +468,20 @@ def deserialize(data) -> object:
             if candidate:
                 line = candidate
                 break
-    return loads(line)
+    return line
+
+
+def deserialize(data) -> object:
+    """Deserialize the form produced by 'serialize()'."""
+    return loads(_payload_line(data))
+
+
+def deserialize_raw(data) -> object:
+    """Deserialize without decoding shapes - envelopes stay as their dicts.
+
+    The counterpart of the core-side 'shape_envelope.deserialize()', for the
+    wrappers that need the *structure* of an assembly envelope rather than the
+    compound it decodes to: the URDF exporter turns each node of the tree into a
+    link of its own, which the flattening in 'decode()' would have thrown away.
+    """
+    return json.loads(_payload_line(data))

@@ -28,7 +28,7 @@ from ..service import run
     "-t",
     "--format",
     help=(
-        "The type of file to export: step, brep, stl, 3mf, threejs, obj, gltf, iges, "
+        "The type of file to export: step, brep, stl, 3mf, threejs, obj, gltf, iges, urdf, "
         "or any type a package implements itself"
     ),
     type=str,

@@ -168,6 +168,7 @@ def test_builtin_formats_cover_what_the_exporters_supported(ctx):
         "gltf",
         "iges",
         "threejs",
+        "urdf",
     }
     assert set(output.builtin_formats(ctx, output.RENDER)) == {"svg", "png", "jpeg", "dxf"}
 
@@ -190,6 +191,7 @@ def test_builtin_requirements_match_the_pinned_cad_stack():
         "rlpycairo": sandbox_versions.RLPYCAIRO,
         "svgpathtools": sandbox_versions.SVGPATHTOOLS,
         "ezdxf": sandbox_versions.EZDXF,
+        "urdf-parser-py": sandbox_versions.URDF_PARSER_PY,
     }
     seen = set()
     for section in output.SECTIONS:
@@ -436,11 +438,37 @@ def test_parameters_exclude_the_reserved_fields():
     impl = output.Implementation(
         output.EXPORT,
         "step",
-        {"path": "s.py", "package": "//p", "pythonRequirements": [], "extension": "step", "comment": "x"},
+        {
+            "path": "s.py",
+            "package": "//p",
+            "pythonRequirements": [],
+            "extension": "step",
+            "decode": False,
+            "comment": "x",
+        },
     )
     assert impl.parameters == {"comment": "x"}
     assert impl.extension("brep") == "step"
     assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
+    assert impl.decode is False
+
+
+def test_a_format_decodes_its_envelopes_unless_it_declares_otherwise(ctx):
+    """'decode' is off for URDF alone, and nothing else may lose it silently.
+
+    The URDF exporter is handed the assembly tree, one link per node; decoding
+    would collapse it into a single compound and the export would quietly write
+    a one-link robot. It is the only built-in format that asks for that, so this
+    also guards the other direction.
+    """
+    off = set()
+    for section in output.SECTIONS:
+        project = ctx.get_project(output.BUILTIN_PACKAGES[section])
+        for format_name, config in project.config_obj[section].items():
+            impl = output.Implementation(section, format_name, config)
+            if not impl.decode:
+                off.add(format_name)
+    assert off == {"urdf"}
 
 
 # --------------------------------------------------------------------------- #
