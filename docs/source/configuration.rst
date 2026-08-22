@@ -265,6 +265,8 @@ This section exclusively covers the requirements used to create the design.
         esthetic: |
           The part has to look like ...
 
+.. _files:
+
 Files
 -----
 
@@ -281,17 +283,28 @@ can be defined explicitly using the `path` parameter:
       type: step
       path: alternative-path.step # Instead of "part-name.step"
 
-When the source file is not present in the package source repository
-but needs to be pulled from a remote location, the following options can be used:
+When the source file is not kept in the package source repository but has to be
+pulled from a remote location (a STEP file published by the part vendor, for
+example), declare where to get it from using ``fileFrom`` and ``fileUrl``:
 
 .. code-block:: yaml
 
-  fileFrom: url
-  fileUrl: <url to pull the file from>
-  # fileCompressed: <(optional) whether the file needs to be decompressed before use>
-  # fileMd5Sum: <(optional) the MD5 checksum of the file>
-  # fileSha1Sum: <(optional) the SHA1 checksum of the file>
-  # fileSha2Sum: <(optional) the SHA2 checksum of the file>
+  parts:
+    bolt:
+      type: step
+      path: bolt.step # (optional) where to place the file once it is downloaded
+      fileFrom: url # "url" is the only source supported so far
+      fileUrl: https://example.com/vendor/catalog/bolt.step
+
+The file is fetched lazily: nothing is downloaded until the object is used for
+the first time, and the downloaded file is reused afterwards. Since the file is
+not expected to be a part of the package, PartCAD does not complain about it
+being missing while the package is loaded.
+
+``fileFrom`` and ``fileUrl`` must be declared together.
+They are recognized in :ref:`parts`, :ref:`sketches` and :ref:`assemblies`
+(an assembly's source file is pulled the same way, whether it is an ``.assy``
+file or a CAD file).
 
 Parameters
 ----------
@@ -331,8 +344,6 @@ Assemblies declare parameters the same way. Their values are passed to the
     - part: //package:part
       location: [[0, 0, {{ param_offset }}], [0, 0, 1], 0]
 
-.. _sketches:
-
 Other
 -----
 
@@ -352,6 +363,8 @@ There are other optional fields that are common to all objects:
   It may be due to storage size or time considerations, or due to known issues with dependency tracking.
   It does not override any global caching settings.
 
+.. _sketches:
+
 ========
 Sketches
 ========
@@ -365,6 +378,8 @@ Sketches are declared in ``partcad.yaml`` using the following syntax:
       type: <basic|dxf|svg|cadquery|build123d>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{sketch name}.{ext}" otherwise>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
 
 Basic
@@ -644,6 +659,8 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
       type: <openscad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
@@ -821,6 +838,10 @@ Define parts with CAD files using the following syntax:
     <part name>:
       type: <step|brep|stl|3mf|obj>
       binary: <(stl only) use the binary format>
+
+A CAD file published elsewhere (in a vendor's catalog, for example) does not
+have to be committed to the package: see :ref:`files` for how to have PartCAD
+download it on demand.
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
@@ -1070,8 +1091,10 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
   assemblies:
     <assembly name>:
-      type: assy  # Assembly YAML
+      type: <assy|step>  # Assembly YAML, or a STEP file with an assembly structure
       path: <(optional) the source file path>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       parameters:  # (optional)
         <param name>:
           type: <string|float|int|bool>
@@ -1082,8 +1105,13 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         - <other.assy>
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
-The ``assy`` type is used to define assemblies in `Assembly YAML` format.
+The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
+the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
+The source file does not have to be a part of the package: ``fileFrom`` and
+``fileUrl`` pull it from a remote location on first use, exactly as they do for
+:ref:`parts` (see :ref:`files`). This holds for every assembly type -- a vendor's
+STEP assembly is declared with its URL and read from there.
 The optional ``offset`` parameter specifies the location of the assembly using an OCCT Location object.
 See "Implementation Detail" for more information on the OCCT Location object.
 
@@ -1140,6 +1168,72 @@ Here is an example of an assembly defined using `Assembly YAML`:
 The example above shows an assembly created using ``Assembly YAML``.
 Other methods to define assemblies are coming soon (e.g. using ``CadQuery`` or ``build123d``).
 The assembly file syntax is described in the ``Assembly YAML`` section of this documentation.
+
+.. _assembly_step:
+
+STEP
+----
+
+A STEP file that carries an assembly structure already says what an assembly
+says: a tree of named components, each placed by a transform. The ``step`` type
+reads it and uses it as the assembly itself, with no intermediate file:
+
+.. code-block:: yaml
+
+  assemblies:
+    gearbox:
+      type: step
+      path: <(optional) the source file path, "{assembly name}.step" otherwise>
+      precision: <(optional) decimal places each component's placement is rounded to, 5 by default>
+
+``pc add assembly step <file>.step`` writes that declaration for an existing
+file.
+
+Every component of the STEP file becomes an ordinary PartCAD part, named
+``<assembly name>/<component name>``. Those parts are inspected, rendered,
+exported and referenced from other assemblies like any other part -- they are
+simply declared by the STEP file rather than by ``partcad.yaml``:
+
+.. code-block:: shell
+
+  pc inspect -a :gearbox            # the assembly
+  pc inspect :gearbox/output_shaft  # one component of it
+
+A group inside the STEP file becomes a nested assembly, so the tree PartCAD
+shows is the tree the CAD tool exported. Components that are the same geometry
+in several places are recognized as one part placed several times, which is what
+makes the bill of materials come out right.
+
+Nothing is written into the package: the geometry PartCAD extracts for each
+component is derived data and lives in PartCAD's own internal state directory.
+The source file itself does not have to be in the package either -- with
+``fileFrom``/``fileUrl`` (see :ref:`files`) a vendor's STEP assembly is declared
+by its URL and downloaded the first time it is used:
+
+.. code-block:: yaml
+
+  assemblies:
+    gearbox:
+      type: step
+      fileFrom: url
+      fileUrl: https://example.com/vendor/catalog/gearbox.step
+
+Compared to ``pc import assembly``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``pc import assembly`` reads the very same file with the very same reader, but
+it is a one-shot conversion: it writes a STEP file per component and an
+``Assembly YAML`` file into the package, and from then on the package owns them
+and the original file is never consulted again.
+
+Use ``type: step`` when the STEP file is to remain the source of truth: a
+vendor's file, a file regenerated by another CAD tool, or a file pulled from a
+URL. Every change to it is picked up on the next use, and nothing has to be
+kept in sync by hand.
+
+Use ``pc import assembly`` when the structure is to be taken over: the resulting
+parts and ``.assy`` file are ordinary package content that can be renamed,
+re-arranged, given interfaces and connections, or replaced part by part.
 
 References
 ----------
