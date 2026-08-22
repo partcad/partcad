@@ -68,6 +68,10 @@ Besides the package properties and, optionally, a list of imported dependencies,
           cacheVersion: <(external only) non-negative integer; bump to invalidate the on-disk cache>
           includePaths: <(optional) Jinja2 include path>
 
+  suppliers:
+      <(optional) the providers to consider for this package's objects; a bare
+       name is one of this package's own, "../sibling:name" is one next door>
+
   parts:
       <part declarations, see below>
 
@@ -474,6 +478,8 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
       abstract: <(optional) whether the interface is abstract>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{interface name}.{ext}" otherwise>
+      threadStep: <(optional) axial distance per full turn of a connection made through this interface, in mm>
+      selfScrew: <(optional) whether this interface cuts its own thread instead of matching one>
       inherits: # (optional) the list of other interfaces to inherit from
         <parent interface name>: <instance name>
         <other interface name>: # instance name is implied to be empty ("")
@@ -678,7 +684,24 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
+      # What this part contributes to every connection it takes part in.
+      connect: # (optional)
+        hold: <(optional) name of an interface, or the list of them, to hold this part by>
+        holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
+        holdForceMin: <(optional) least force to hold this part with, in N, default: 3>
+        holdForceMax: <(optional) most force to hold this part with, in N, default: 7>
+        holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
+
 Depending on the type of the part, the configuration may have different options.
+
+The ``threadStep`` and ``selfScrew`` fields of an interface are inherited by the
+interfaces that inherit it, and by the connections made through it. Two
+interfaces that are connected have to agree on their thread unless one of them
+cuts its own. See :doc:`assy`.
+
+The fields of the ``connect`` section are the defaults for the ``holdWith*`` and
+``holdTo*`` fields of the ``how`` section of an Assembly YAML
+``connect``/``connectPorts`` node. See :doc:`assy`.
 
 See :ref:`location` for more information on the OCCT Location object.
 
@@ -1017,6 +1040,30 @@ The MCFTT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type
 ``store``.
 
+Manufacturing methods
+---------------------
+
+The ``manufacturing.method`` field says how a part is made:
+
++------------------+-----------------------------------------------------------+
+| Method           | Meaning                                                   |
++==================+===========================================================+
+| ``additive``     | Built up, e.g. 3D printed                                 |
++------------------+-----------------------------------------------------------+
+| ``subtractive``  | Cut away from stock, e.g. machined                        |
++------------------+-----------------------------------------------------------+
+| ``forming``      | Shaped without adding or removing material                |
++------------------+-----------------------------------------------------------+
+| ``pcbBasic``     | A printed circuit board (**not implemented yet**)         |
++------------------+-----------------------------------------------------------+
+
+These are ways of making a **part**, and apply to parts only. An assembly is put
+together rather than made, and has a single method of its own -- see
+:ref:`assembly-manufacturing` below.
+
+A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
+a method.
+
 .. _procurement:
 
 Procurement
@@ -1105,6 +1152,14 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         - <other.assy>
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
+      # What this assembly contributes to every connection it takes part in.
+      connect: # (optional) same as for parts
+        hold: <(optional) name of an interface, or the list of them, to hold this assembly by>
+        holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
+        holdForceMin: <(optional) least force to hold this assembly with, in N, default: 3>
+        holdForceMax: <(optional) most force to hold this assembly with, in N, default: 7>
+        holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
+
 The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
 the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
@@ -1112,6 +1167,26 @@ The source file does not have to be a part of the package: ``fileFrom`` and
 ``fileUrl`` pull it from a remote location on first use, exactly as they do for
 :ref:`parts` (see :ref:`files`). This holds for every assembly type -- a vendor's
 STEP assembly is declared with its URL and read from there.
+
+.. _assembly-manufacturing:
+
+**Manufacturing.** ``assy`` is the only manufacturing method an assembly has:
+it is put together by following the instructions in its own Assembly YAML file,
+rather than made the way a part is. Every assembly of type ``assy`` gets that
+method with the type, so ``manufacturing`` never has to be spelled out:
+
+.. code-block:: yaml
+
+  assemblies:
+    motor-mount:
+      type: assy
+      manufacturable: true
+      # manufacturing: { method: assy } is implied by the type
+
+Whether an assembly is *held to* that -- whether ``pc test`` checks that its
+parts can be obtained and its connection instructions followed -- is what
+``manufacturable`` says, exactly as for parts.
+
 The optional ``offset`` parameter specifies the location of the assembly using an OCCT Location object.
 See "Implementation Detail" for more information on the OCCT Location object.
 

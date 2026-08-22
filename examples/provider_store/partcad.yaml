@@ -88,6 +88,22 @@ parts:
     type: alias
     source: //pub/robotics/parts/gobilda:hardware/nut_m4_0_7mm
 
+  # The hardware "examples/feature_interface" is assembled from. That example
+  # defines no provider of its own and buys from this one, so what it needs has
+  # to be on the shelf here.
+  bracket:
+    type: alias
+    source: //pub/examples/partcad/feature_interface:example-bracket
+  motor:
+    type: alias
+    source: //pub/examples/partcad/feature_interface:example-motor
+  screw_m3_6mm:
+    type: alias
+    source: //pub/examples/partcad/feature_interface:socket-head-m3-screw-6mm
+  screw_m4_6mm:
+    type: alias
+    source: //pub/examples/partcad/feature_interface:socket-head-m4-screw-6mm
+
 render:
   svg:
   readme:

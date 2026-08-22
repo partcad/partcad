@@ -15,6 +15,7 @@ import yaml
 
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
+from .assembly_connect import ConnectHow, check_stage_sequence
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from . import logging as pc_logging
@@ -93,7 +94,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
             result = await self.handle_node(assembly, assy)
             if result is not None:
-                assembly.children.append(AssemblyChild(*result))
+                assembly.children.append(result)
             else:
                 pc_logging.warning("Assembly is empty")
 
@@ -102,6 +103,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
     async def handle_node_list(self, assembly, node_list):
         tasks = []
 
+        check_stage_sequence(node_list, self.name)
+
         async def wait_for_tasks():
             nonlocal tasks
             while len(tasks) > 0:
@@ -109,7 +112,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 f = await asyncio.tasks.wait([task])
                 result = f[0].pop().result()
                 if result is not None:
-                    assembly.children.append(AssemblyChild(*result))
+                    assembly.children.append(result)
 
         for link in node_list:
             if "connect" in link or "connectPorts" in link:
@@ -126,6 +129,10 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             name = None
 
         connect = None
+        # The non-geometric half of a "connect*" section: free-form context and
+        # the instructions for whoever (or whatever) performs the assembly.
+        connect_comment = None
+        connect_how = None
         connection = None
         connect_with_iface = None
         connect_with_params = None
@@ -170,6 +177,21 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             location = None
         else:
             location = Location((0, 0, 0), (0, 0, 1), 0)
+
+        if connect is not None:
+            # "comment" is free-form context for a human or an LLM. Nothing in
+            # PartCAD interprets it: all instructions that are required to
+            # perform the assembly belong in the other fields.
+            connect_comment = connect.get("comment", None)
+            connect_how = ConnectHow(
+                connect.get("how", None),
+                where="%s: connect %s to %s"
+                % (
+                    self.name,
+                    name or node.get("part", None) or node.get("assembly", None),
+                    connect.get("name", None),
+                ),
+            )
 
         if connect_with_instance is not None and "*" in connect_with_instance:
             connect_with_instance_pattern = connect_with_instance
@@ -821,8 +843,24 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         target_port,
                     )
 
-        if not item is None:
-            return [item, name, location, connection]
+                # Now that both ends of the connection are known, the interfaces
+                # to hold them by can be matched against what they implement.
+                # The source port is the frame a derived "pushDistance" is
+                # measured along, and that same port once the object is in place
+                # is what the push direction is deduced from, so both go along.
+                source_frame = None if source_port is None else source_port.location
+                mated_frame = location if source_frame is None else location * source_frame
+                connect_how.resolve(
+                    item,
+                    target_part,
+                    source_frame=source_frame,
+                    mated_frame=mated_frame,
+                    source_interface=source_iface_obj,
+                    target_interface=target_iface_obj,
+                )
+
+        if item is not None:
+            return AssemblyChild(item, name, location, connect_comment, connect_how, connection)
         else:
             return None
 

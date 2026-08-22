@@ -61,6 +61,7 @@ telemetry.init(__version__)
 
 from . import actions, exception, healthcheck, logging, utils
 from .assembly import Assembly
+from .assembly_connect import ConnectHold, ConnectHow
 from .consts import *
 from .context import Context
 from .geom import Location
@@ -106,6 +107,8 @@ plugins = PluginExportPngReportlab()
 
 __all__ = [
     "Assembly",
+    "ConnectHold",
+    "ConnectHow",
     "Context",
     "Location",
     "Part",

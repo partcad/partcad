@@ -80,7 +80,19 @@ an assembly given assembly instructions and using parts ordered from
 
 Currently, the provider has to be explicitly specified in the quote or order
 request, or explicitly specified as one of the suppliers in the package where
-the parts are declared. In the future PartCAD will be able to select providers
+the parts are declared:
+
+.. code-block:: yaml
+
+  suppliers:
+    myGarage:                     # a provider of this package
+    ../provider_store:myGarage:   # one next door
+    //vendor/store:myGarage:      # one anywhere
+
+A supplier is written from the point of view of the package that lists it, and
+is resolved against that package the way every other reference it makes is: a
+bare name is one of its own providers, while a qualified one lets it buy from a
+provider defined elsewhere instead of declaring one of its own. In the future PartCAD will be able to select providers
 based on the location and preferences of the requester, while leaving the
 possibility to enforce the use of a specific provider for corresponding parts
 (for example, for parts that are using a patented design).

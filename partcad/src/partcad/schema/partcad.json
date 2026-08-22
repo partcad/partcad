@@ -44,6 +44,44 @@
         }
       ]
     },
+    "hold": {
+      "description": "The interface, or the list of interfaces, to hold this object by while it is connected to another one. The default for 'holdWith'/'holdTo' in the 'how' section of an ASSY 'connect*' node.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      ]
+    },
+    "holdInstance": {
+      "description": "The instance of each interface listed in 'hold' to hold this object by, in the same order. The default for 'holdWithInstance'/'holdToInstance' in the 'how' section of an ASSY 'connect*' node.",
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      ]
+    },
+    "holdForce": {
+      "description": "A force to hold this object with, in N. The default for the 'holdWithForce*'/'holdToForce*' fields in the 'how' section of an ASSY 'connect*' node.",
+      "type": "number",
+      "minimum": 0
+    },
+    "connect": {
+      "description": "What this part or assembly contributes to every connection it takes part in. The defaults for the 'how' section of an ASSY 'connect*' node.",
+      "type": "object",
+      "properties": {
+        "hold": { "$ref": "#/definitions/hold" },
+        "holdInstance": { "$ref": "#/definitions/holdInstance" },
+        "holdForce": { "$ref": "#/definitions/holdForce" },
+        "holdForceMin": { "$ref": "#/definitions/holdForce" },
+        "holdForceMax": { "$ref": "#/definitions/holdForce" }
+      },
+      "additionalProperties": false
+    },
     "interface-parameter": {
       "oneOf": [
         {
@@ -240,12 +278,13 @@
       "minLength": 1
     },
     "suppliers":{
+      "description": "The providers to consider for the parts and assemblies of this package. A name is a provider of this package unless it is qualified with a package path, which lets a package buy from a provider defined elsewhere.",
       "oneOf":[
         { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
         {
           "type": "object",
           "patternProperties": {
-            "^[a-zA-Z0-9_/./-]+$": { "type": "null" }
+            "^[a-zA-Z0-9_/.:-]+$": { "type": "null" }
           },
           "additionalProperties": false
         }
@@ -397,7 +436,7 @@
                 "manufacturing": {
                   "type": "object",
                   "properties": {
-                    "method": { "type": "string", "enum": ["basic", "additive", "pcbBasic"] }
+                    "method": { "type": "string", "enum": ["additive", "subtractive", "forming", "pcbBasic"] }
                   },
                   "required":["method"],
                   "additionalProperties": false
@@ -443,7 +482,9 @@
                     "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/port" }
                   },
                   "additionalProperties": false
-                }
+                },
+                "manufacturable": { "type": "boolean" },
+                "connect": { "$ref": "#/definitions/connect" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -496,7 +537,7 @@
                 "manufacturing": {
                   "type": "object",
                   "properties": {
-                    "method": { "type": "string", "enum": ["basic", "additive", "pcbBasic"] }
+                    "method": { "type": "string", "enum": ["assy"], "default": "assy" }
                   },
                   "required":["method"],
                   "additionalProperties": false
@@ -513,7 +554,9 @@
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
                 "offset": { "$ref": "#/definitions/OCCTLocation" },
-                "render": { "$ref": "#/definitions/render" }
+                "render": { "$ref": "#/definitions/render" },
+                "manufacturable": { "type": "boolean" },
+                "connect": { "$ref": "#/definitions/connect" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -663,6 +706,16 @@
             "desc": { "type": "string", "maxLength": 1000 },
             "path": { "type": "string", "minLength": 1 },
             "leadPort": { "type": "string", "minLength": 1 },
+            "threadStep": {
+              "description": "The axial distance a connection made through this interface advances per full turn, in mm. Inherited by the interfaces that inherit this one, and by the connections that use it.",
+              "type": "number",
+              "minimum": 0
+            },
+            "selfScrew": {
+              "description": "Whether this interface cuts its own thread rather than matching one, so that it may be connected to an interface with a different 'threadStep' or none.",
+              "type": "boolean",
+              "default": false
+            },
             "inherits":{
               "type": "object",
               "patternProperties":{
