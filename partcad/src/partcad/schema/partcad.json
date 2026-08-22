@@ -116,6 +116,36 @@
           ]
         }
       }
+    },
+    "render": {
+      "type": "object",
+      "patternProperties": {
+        "^(readme|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string" },
+            {
+              "type": "object",
+              "properties": {
+                "prefix": { "type": "string", "minLength": 1 },
+                "path": { "type": "string", "minLength": 1 },
+                "exclude": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
+                  },
+                  "uniqueItems": true
+                },
+                "width": { "type": "integer", "minimum": 1 },
+                "height": { "type": "integer", "minimum": 1 }
+              },
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -182,35 +212,7 @@
       },
       "additionalProperties": false
     },
-    "render": {
-      "type": "object",
-      "patternProperties": {
-        "^(readme|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
-          "oneOf": [
-            { "type": "null" },
-            { "type": "string" },
-            {
-              "type": "object",
-              "properties": {
-                "prefix": { "type": "string", "minLength": 1 },
-                "exclude": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
-                  },
-                  "uniqueItems": true
-                },
-                "width": { "type": "integer", "minimum": 1 },
-                "height": { "type": "integer", "minimum": 1 }
-              },
-              "additionalProperties": false
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
+    "render": { "$ref": "#/definitions/render" },
     "dependencies": {
       "type": "object",
       "patternProperties": {
@@ -428,7 +430,8 @@
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
                 },
-                "offset": { "$ref": "#/definitions/OCCTLocation" }
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "render": { "$ref": "#/definitions/render" }
               },
               "required": ["type"],
               "additionalProperties": false

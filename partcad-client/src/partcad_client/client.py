@@ -3,9 +3,10 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Client helpers for talking to the PartCAD service.
+"""Connecting to the PartCAD service.
 
-Used by the CLI (a thin client) and available to any other Python caller.
+Used by the CLI (a thin client), by the VS Code extension through
+`pc daemon start`/`pc daemon stop`, and available to any other Python caller.
 
 On POSIX, :func:`connect` uses the shared per-workspace **socket daemon** (a warm
 context): ``start_daemon`` runs the ``partcad-json-rpc`` launcher and returns its
@@ -22,7 +23,7 @@ import subprocess
 import sys
 from typing import Callable, Optional
 
-from .transport.framing import read_message, write_message
+from partcad_utils.framing import read_message, write_message
 
 
 class DaemonError(RuntimeError):
@@ -37,8 +38,11 @@ class DaemonError(RuntimeError):
 def launcher_argv() -> list:
     """Command that runs the ``partcad-json-rpc`` executable for this install."""
     if getattr(sys, "frozen", False):
+        # The bundle's own service executable, beside whichever of its
+        # executables is running -- resolved, because `pc` is normally reached
+        # through the launcher symlink `install.sh` puts on PATH.
         exe = "partcad-json-rpc" + (".exe" if os.name == "nt" else "")
-        return [os.path.join(os.path.dirname(sys.executable), exe)]
+        return [os.path.join(os.path.dirname(os.path.realpath(sys.executable)), exe)]
     return [sys.executable, "-m", "partcad_service_json_rpc"]
 
 

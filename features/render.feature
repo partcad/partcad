@@ -15,10 +15,12 @@ Feature: `pc render` command
     Then STDERR should not contain "WARN:"
 
   # TODO-63: @alexanderilyin: consider extracting `-t readme` as `pc generate readme` command
-  # @wip @type-text
-  # Examples: Media Types: Text
-    # |    type | filename              |
-    # |  readme | README.md             |
+  # An assembly is the subject of its own document (its bill of materials),
+  # rather than of the package document that `-t readme` generates without `-a`.
+  @type-text
+  Examples: Media Types: Text
+    |    type | filename              |
+    |  readme | logo_embedded.md      |
 
   @type-image
   Examples: Media Type: .svg

@@ -2,7 +2,13 @@
 # partcad/tests/unit carries helper modules that tests import by name (see
 # git_http_server.py). With --import-mode importlib pytest does not put the
 # test's own directory on the path, so it has to be named here.
-pythonpath = ["partcad-utils/src", "partcad/src", "partcad/tests/unit", "partcad-service-json-rpc/src"]
+pythonpath = [
+    "partcad-utils/src",
+    "partcad-client/src",
+    "partcad/src",
+    "partcad/tests/unit",
+    "partcad-service-json-rpc/src",
+]
 addopts = """
     --import-mode importlib
     --alluredir=allure-results
@@ -68,7 +74,7 @@ cache-dir = "/tmp/.prepare_partcad-dev"
 
 [tool.poetry]
 name = "partcad-dev"
-version = "0.7.158"
+version = "0.7.159"
 description = "Development Environment for PartCAD"
 authors = [
   "PartCAD <support@partcad.org>",
@@ -77,6 +83,7 @@ license = "Apache 2.0"
 readme = "README.md"
 packages = [
   { include = "partcad_utils", from = "partcad-utils/src" },
+  { include = "partcad_client", from = "partcad-client/src" },
   { include = "partcad", from = "partcad/src" },
   { include = "partcad_cli", from = "partcad-cli/src" },
   { include = "partcad_service_json_rpc", from = "partcad-service-json-rpc/src" }

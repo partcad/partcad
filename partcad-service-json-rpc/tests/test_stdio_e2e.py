@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 import partcad_service_json_rpc
-from partcad_service_json_rpc.transport.framing import read_message, write_message
+from partcad_utils.framing import read_message, write_message
 
 
 def test_module_serves_rpc_discover_over_stdio():

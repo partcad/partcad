@@ -50,6 +50,25 @@ Host commands
   - ``pc system set`` — Set system-wide settings, such as the telemetry type, environment, and Sentry DSN.
   - ``pc system telemetry`` — Inspect or clear locally stored telemetry data (``info``, ``clear``).
 
+``pc upgrade``
+  Upgrade PartCAD itself to the latest version. This upgrades the installation on this machine; the packages a
+  package imports are ``pc update``.
+
+  PartCAD upgrades itself whichever way it was installed: the Python wheels are upgraded with ``pip``, and a
+  standalone bundle downloads the matching release, verifies its checksum, and installs it beside the running
+  copy. Nothing is downloaded and no daemon is disturbed until a newer version has actually been found; once
+  one has, every PartCAD daemon running on the machine is asked to stop and waited for, because all of them are
+  executing files that are about to be replaced. The new version goes in beside the old one, and the old one is
+  then removed — including the copy the command is itself running from, which goes as soon as the command
+  exits. An installation that runs from a source checkout is reported and skipped — update that one with
+  ``git``.
+
+  Use ``--check`` to report whether a newer PartCAD is available without installing anything, and
+  ``--to-version`` to install a specific version instead of the latest one. Under the global ``--offline`` flag
+  the version check is skipped entirely.
+
+  The "Update PartCAD" command in the VS Code extension runs exactly this, so the two never drift apart.
+
 ****************
 Package commands
 ****************
@@ -62,7 +81,8 @@ Package commands
   Download and set up all packages imported by the current package.
 
 ``pc update``
-  Force update all imported packages to their latest versions.
+  Force update all imported packages to their latest versions. This updates the packages a package imports;
+  to upgrade the PartCAD installation itself, use ``pc upgrade``.
 
 ``pc lint``
   Run linting checks on the files within packages. Use ``-r`` to check imported packages recursively and
@@ -107,6 +127,16 @@ Object commands
 ``pc render``
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:
   ``svg``, ``png``, or ``readme``.
+
+  ``-t readme`` generates a markdown document instead of a projection: the package document (``README.md``,
+  listing what the package declares) or, when ``-a`` names an assembly, that assembly's own document
+  (``<assembly>.md``, listing the bill of materials — every part and sub-assembly it is made of, recursively,
+  grouped by the package they come from and counted). An assembly can also ask for its own document in the
+  package configuration, by declaring ``readme`` in its ``render`` section.
+
+  Only assemblies that a package declares are listed as sub-assemblies. An assembly embedded in an Assembly
+  YAML file's nested ``links:`` section belongs to no package, so it is not listed on its own: the parts it
+  holds are counted towards the assembly that embeds it.
 
 *****************
 Workflow commands

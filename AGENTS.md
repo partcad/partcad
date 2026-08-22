@@ -23,6 +23,34 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
   so a client need not have a CAD environment at all. That is what decides whether a command runs in the client
   or on the daemon — see "Command boundary" in `partcad-cli/AGENTS.md`.
 
+  It does **not** update PartCAD itself, and does not discover or stop daemons: those are
+  `partcad_client`, run by the client. See `partcad-client` below.
+
+* [partcad-utils](./partcad-utils/README.md):
+
+  The lightweight pieces **every** component shares without a CAD-kernel dependency: logging, telemetry, user
+  configuration — and the client/daemon rendezvous, `framing` and `workspace` (which socket serves which
+  workspace, and whether anything is answering on it). The rendezvous lives here precisely because neither end
+  owns it: a copy on each side is a copy that can disagree, and a disagreement is a client silently starting a
+  second daemon.
+
+* [partcad-client](./partcad-client/README.md):
+
+  What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to
+  it (`daemon`, `client`), and replacing this installation of PartCAD (`selfupdate`).
+
+  All of it acts on **this machine**, from the process running out of it. A daemon can be remote, where
+  "update PartCAD" would mean updating somebody else's installation and "stop the local daemons" somebody
+  else's daemons; and a daemon that went looking for its neighbours would be racing every client on the
+  machine. A client is one process acting on its own machine, which is what makes `pc upgrade` stopping every
+  local daemon a sane thing to do rather than a distributed algorithm.
+
+  `selfupdate` itself knows nothing even about that: a caller passes `before_install`, which `pc upgrade` uses
+  to stop the local daemons and wait for them. `pc upgrade` (the host-level command; `pc update` refetches a
+  package's imports and is unrelated) and the VS Code extension's "Update PartCAD" both end up here — the
+  extension by running `pc upgrade` — as does the extension's daemon discovery, through `pc daemon start`.
+  Nothing about daemons or upgrading is reimplemented in TypeScript.
+
 * [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality.
@@ -90,7 +118,8 @@ so this never affects a commit.
 From the repo root, inside the environment:
 
 ```bash
-poetry run pytest partcad partcad-cli -x -p no:error-for-skips -p no:warnings --dist no  # unit tests (matches CI)
+poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc \
+  -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```
 
