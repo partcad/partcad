@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-__version__: str = "0.7.170"
+__version__: str = "0.7.171"
 
 # Must come before anything that can pull OCP in. VTK, which the OCP build we
 # use links against, bundles its own older copy of expat and exports it under
