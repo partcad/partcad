@@ -37,6 +37,7 @@ _OPERATIONS = {
     "list.packages": operations.list_packages,
     "list.providers": operations.list_providers,
     "list.mates": operations.list_mates,
+    "bom": operations.bom,
     "search.objects": operations.search_objects,
     "render.objects": operations.render_objects,
     "convert.object": operations.convert_object,

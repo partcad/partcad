@@ -60,9 +60,23 @@ class FakeUserConfig:
     the daemon serves.
     """
 
-    def __init__(self, force_update=False, internal_state_dir=None):
+    def __init__(self, force_update=False, internal_state_dir=None, devel_index=False, settings=None):
         self.force_update = force_update
         self.internal_state_dir = internal_state_dir
+        self.devel_index = devel_index
+        # What UserConfig.from_dict() was handed, so a test can tell a context
+        # built from the caller's configuration from one built from the
+        # daemon's own.
+        self.settings = settings
+
+    @classmethod
+    def from_dict(cls, data):
+        """``partcad.UserConfig.from_dict``: the caller's configuration, rebuilt."""
+        return cls(
+            force_update=bool(data.get("forceUpdate")),
+            devel_index=bool(data.get("develIndex")),
+            settings=dict(data),
+        )
 
 
 class FakePackage:
@@ -126,6 +140,10 @@ class FakePartcad:
     """
 
     __version__ = "0.7.158"
+
+    # partcad exports the class next to the singleton; the daemon builds the
+    # caller's configuration through it.
+    UserConfig = FakeUserConfig
 
     def __init__(self, user_config=None):
         self.logging = FakeLogging()
@@ -531,3 +549,132 @@ def test_daemon_reset_drops_every_warm_context(tmp_path):
 
     assert session.contexts == {}
     assert session.partcad_ctx is None
+
+
+# ---- context.create: whose user configuration the context is built from ------
+#
+# The daemon's own configuration was resolved from the environment that happened
+# to start it, and it then stays warm for every later command -- so it says
+# nothing about how the command being served was invoked. A client that knows
+# its own configuration sends a copy, and the context is built from that.
+
+
+def create_with_config(session, path, **options):
+    """The handshake a configured client performs before every command."""
+    return operations.context_create(session, {"url": workspace_url(path), "userConfig": dict(options)})
+
+
+def test_the_context_is_built_from_the_caller_s_configuration(tmp_path):
+    session, _ = make_session(FakeUserConfig(devel_index=False, force_update=False))
+
+    create_with_config(session, tmp_path, develIndex=True, forceUpdate=True)
+
+    built = session.partcad.contexts_built[0]
+    assert built.user_config is not session.partcad.user_config
+    assert built.user_config.devel_index is True
+    assert built.user_config.force_update is True
+
+
+def test_the_daemon_s_own_configuration_is_ignored_when_one_is_sent(tmp_path):
+    """The daemon says the opposite of the caller; the caller has to win."""
+    session, _ = make_session(FakeUserConfig(devel_index=True, force_update=True))
+
+    create_with_config(session, tmp_path, develIndex=False, forceUpdate=False)
+
+    assert session.partcad.contexts_built[0].user_config.devel_index is False
+    # ...and the daemon's own is left exactly as it was, not mutated in passing.
+    assert session.partcad.user_config.devel_index is True
+
+
+def test_the_whole_configuration_travels_not_just_the_options_read_here(tmp_path):
+    """Whatever the client resolved reaches the context, credentials included."""
+    session, _ = make_session()
+
+    create_with_config(session, tmp_path, **{"git.auth": {"github.com": {"username": "alice"}}})
+
+    settings = session.partcad.contexts_built[0].user_config.settings
+    assert settings["git.auth"] == {"github.com": {"username": "alice"}}
+
+
+def test_a_context_built_from_another_configuration_is_rebuilt(tmp_path):
+    """A warm context resolved its package graph against the other config."""
+    session, _ = make_session()
+    first = create_with_config(session, tmp_path, develIndex=False)
+
+    second = create_with_config(session, tmp_path, develIndex=True)
+
+    assert first["context"] == second["context"]  # same workspace, same id
+    assert len(session.partcad.contexts_built) == 2  # rebuilt, not reused
+    assert session.contexts[second["context"]] is session.partcad.contexts_built[1]
+    assert session.contexts[second["context"]].user_config.devel_index is True
+
+
+def test_the_same_configuration_still_reuses_the_warm_context(tmp_path):
+    """Every command sends one, so an unchanged one must cost nothing."""
+    session, _ = make_session()
+    create_with_config(session, tmp_path, develIndex=True, forceUpdate=False)
+
+    create_with_config(session, tmp_path, develIndex=True, forceUpdate=False)
+
+    assert len(session.partcad.contexts_built) == 1
+
+
+def test_switching_back_reuses_nothing_stale(tmp_path):
+    """Off, on, off again: the last one must not be served the middle graph."""
+    session, _ = make_session()
+    create_with_config(session, tmp_path, develIndex=False)
+    create_with_config(session, tmp_path, develIndex=True)
+
+    create_with_config(session, tmp_path, develIndex=False)
+
+    assert len(session.partcad.contexts_built) == 3
+    assert session.partcad.contexts_built[-1].user_config.devel_index is False
+
+
+def test_a_client_that_sends_no_configuration_gets_the_daemon_s_own(tmp_path):
+    """The VS Code extension configures the daemon once, at launch."""
+    own = FakeUserConfig(devel_index=True)
+    session, _ = make_session(own)
+
+    operations.context_create(session, {"url": workspace_url(tmp_path)})
+
+    assert session.partcad.contexts_built[0].user_config is own
+    # And it stays reusable rather than rebuilding on every call.
+    operations.context_create(session, {"url": workspace_url(tmp_path)})
+    assert len(session.partcad.contexts_built) == 1
+
+
+def test_two_workspaces_keep_their_own_configurations(tmp_path):
+    """The fingerprint is per context, not one global 'last config seen'."""
+    session, _ = make_session()
+    first_dir, second_dir = tmp_path / "one", tmp_path / "two"
+    first_dir.mkdir()
+    second_dir.mkdir()
+
+    a = create_with_config(session, first_dir, develIndex=True)
+    b = create_with_config(session, second_dir, develIndex=False)
+
+    assert session.contexts[a["context"]].user_config.devel_index is True
+    assert session.contexts[b["context"]].user_config.devel_index is False
+    # Revisiting the first with its own configuration reuses it.
+    create_with_config(session, first_dir, develIndex=True)
+    assert len(session.partcad.contexts_built) == 2
+
+
+def test_evicting_a_context_forgets_the_configuration_it_was_built_from(tmp_path):
+    """A mutation drops the context; its configuration must not outlive it."""
+    session, _ = make_session()
+    context_id = create_with_config(session, tmp_path, develIndex=True)["context"]
+
+    operations._invalidate_context(session, {"context": context_id})
+
+    assert context_id not in session.context_user_configs
+
+
+def test_a_daemon_reset_forgets_every_configuration(tmp_path):
+    session, _ = make_session(FakeUserConfig(internal_state_dir=str(tmp_path / "state")))
+    create_with_config(session, tmp_path, develIndex=True)
+
+    operations.daemon_reset(session, {})
+
+    assert session.context_user_configs == {}

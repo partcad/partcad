@@ -1,0 +1,67 @@
+// Branding for the PartCAD IDE, merged into the `product.json` of the VSCodium
+// build the IDE is made from (`tools/brand.py product`).
+//
+// A key set to `null` is *removed* from `product.json` rather than set to null.
+// `${VERSION}` is replaced with the PartCAD version being built.
+{
+  // What the application calls itself: window titles, the About dialog, the
+  // process name, the macOS menu bar.
+  "nameShort": "PartCAD IDE",
+  "nameLong": "PartCAD IDE",
+  // The command line name, and the name of the executable `build.sh` renames
+  // the VSCodium binary to.
+  "applicationName": "partcad-ide",
+  // Where user data lives (`~/.partcad-ide`), which is what keeps this IDE from
+  // sharing settings, extensions and state with a VSCodium or VS Code install
+  // on the same machine.
+  "dataFolderName": ".partcad-ide",
+  "urlProtocol": "partcad-ide",
+  "serverApplicationName": "partcad-ide-server",
+  "serverDataFolderName": ".partcad-ide-server",
+  "darwinBundleIdentifier": "org.partcad.ide",
+  "win32AppUserModelId": "PartCAD.PartCADIDE",
+  "win32DirName": "PartCAD IDE",
+  "win32MutexName": "partcadide",
+  "win32NameVersion": "PartCAD IDE ${VERSION}",
+  "win32RegValueName": "PartCADIDE",
+  "win32ShellNameShort": "PartCAD IDE",
+
+  // Where "Help" points.
+  "documentationUrl": "https://partcad.readthedocs.io/",
+  "licenseUrl": "https://github.com/partcad/partcad/blob/main/LICENSE.txt",
+  "releaseNotesUrl": "https://github.com/partcad/partcad/releases",
+  "reportIssueUrl": "https://github.com/partcad/partcad/issues/new",
+  "requestFeatureUrl": "https://github.com/partcad/partcad/issues/new",
+  "twitterUrl": null,
+  "introductoryVideosUrl": null,
+  "tipsAndTricksUrl": null,
+  "newsletterSignupUrl": null,
+
+  // Removed, not disabled: VSCodium's update server serves VSCodium, and
+  // installing that over this IDE would replace the branding, the built-in
+  // extensions and the PartCAD tools with a plain editor. The IDE is updated by
+  // installing a newer PartCAD IDE. `update.mode` below stops the editor from
+  // asking about it.
+  "updateUrl": null,
+  "quality": null,
+
+  // `extensionsGallery` is deliberately left as VSCodium set it: Open VSX. See
+  // "Licensing" in README.md for why it is not pointed at Microsoft's
+  // marketplace.
+
+  // Defaults, not settings: they are the values the IDE starts from, and a user
+  // who changes any of them in their own settings.json wins.
+  "configurationDefaults": {
+    "update.mode": "none",
+    "telemetry.telemetryLevel": "off",
+    // The PartCAD workbench is what this IDE opens into (see
+    // `bootstrap/extension.js`), so an editor tab covering it on every start is
+    // in the way.
+    "workbench.startupEditor": "none",
+    // The backend that needs no Python environment on the user's machine. The
+    // IDE ships the executable it runs, and the bootstrap extension points the
+    // setting below at it.
+    "partcad.backend": "service",
+    "partcad.serviceChannel": "socket"
+  }
+}

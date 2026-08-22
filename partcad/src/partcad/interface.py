@@ -250,6 +250,23 @@ class Interface:
         self.abstract = config.get("abstract", False)
         self.lead_port = config.get("leadPort", None)
 
+        # How a connection made through this interface advances: the axial
+        # distance per full turn, in mm, and whether the interface cuts its own
+        # thread rather than matching one. Both are inherited from the parent
+        # interfaces when this one does not declare them, so a thread only has
+        # to be spelled out once, on the interface that introduces it.
+        self.thread_step = config.get("threadStep", None)
+        if self.thread_step is not None:
+            if isinstance(self.thread_step, bool) or not isinstance(self.thread_step, (int, float)):
+                pc_logging.error("Interface %s: 'threadStep' must be a number, ignoring: %s" % (name, self.thread_step))
+                self.thread_step = None
+            elif self.thread_step < 0.0:
+                pc_logging.error("Interface %s: 'threadStep' must not be negative, ignoring" % name)
+                self.thread_step = None
+            else:
+                self.thread_step = float(self.thread_step)
+        self.self_screw = bool(config.get("selfScrew", False))
+
         self.ports = None
         self.inherits = None
         self.compatible_with = set()
@@ -314,6 +331,37 @@ class Interface:
         if self.inherits is None:
             self.instantiate()
         return self.inherits
+
+    def get_thread_step(self):
+        """This interface's thread step, its own or the one it inherits."""
+        return self._inherited("thread_step")
+
+    def get_self_screw(self):
+        """Whether this interface cuts its own thread, its own setting or inherited."""
+        return bool(self._inherited("self_screw"))
+
+    def _inherited(self, attribute, seen=None):
+        """The attribute as declared here, or the first one found among the parents."""
+        value = getattr(self, attribute, None)
+        if value is not None and value is not False:
+            return value
+
+        # An interface hierarchy is a DAG rather than a tree, so the same parent
+        # can be reached twice; the 'seen' set keeps that from looping.
+        if seen is None:
+            seen = set()
+        if self.full_name in seen:
+            return value
+        seen.add(self.full_name)
+
+        for inherit in (self.get_parents() or {}).values():
+            parent = getattr(inherit, "interface", None)
+            if parent is None:
+                continue
+            inherited = parent._inherited(attribute, seen)
+            if inherited is not None and inherited is not False:
+                return inherited
+        return value
 
     def instantiate(self):
         self.project.ctx.stats_interfaces_instantiated += 1

@@ -71,7 +71,7 @@ RUNNER = pathlib.Path(__file__).parent / "lsp_runner.py"
 
 MAX_WORKERS = 5
 # TODO: Update the language server name and version.
-LSP_SERVER = server.LanguageServer(name="PartCAD", version="0.7.158", max_workers=MAX_WORKERS)
+LSP_SERVER = server.LanguageServer(name="PartCAD", version="0.7.171", max_workers=MAX_WORKERS)
 
 
 # **********************************************************
@@ -255,6 +255,33 @@ def test_obj(params: lsp.ExecuteCommandParams = None):
     _ops().test(session, {"package": arg["packageName"], "object": arg["objectName"]})
 
 
+# partcad.lintFile checks one ASSY file and answers with positioned diagnostics.
+#
+# Deliberately not an operation on the shared core: checking a file is the
+# client's own work on the client's own file -- often an unsaved buffer -- and
+# needs no context, no package graph and no CAD runtime. This server is what the
+# extension runs locally under the "python" backend, so the check happens right
+# here; under the "service" backend the extension runs `pc lint --file` instead.
+# Either way nothing about it crosses a client-to-service boundary, which is also
+# why it keeps working when the package will not load because of this very file.
+@LSP_SERVER.command("partcad.lintFile")
+def lint_file(params: lsp.ExecuteCommandParams = None):
+    arg = params[0]
+    if isinstance(arg, str):
+        arg = {"path": arg}
+    path = arg.get("path") or ""
+    try:
+        from partcad_client import lint as client_lint
+
+        report = client_lint.check_file(path, arg.get("text"))
+        return {"path": path, "diagnostics": [d.to_dict() for d in report.diagnostics]}
+    except Exception as e:  # pylint: disable=broad-except
+        # PartCAD may not be installed yet (pre-bootstrap), or the file may have
+        # gone. Stay silent rather than turn a background check into a popup.
+        log_to_output("Failed to lint %s: %s" % (path, e))
+        return None
+
+
 @LSP_SERVER.command("partcad.getStats")
 def report_stats(params: lsp.ExecuteCommandParams = None):
     session = _active_session()
@@ -332,9 +359,14 @@ def do_activate(params: lsp.ExecuteCommandParams = None) -> None:
 
 @LSP_SERVER.command("partcad.reinstall")
 def do_update(params: lsp.ExecuteCommandParams = None) -> None:
-    """LSP handler for partcad.reinstall command."""
+    """LSP handler for partcad.reinstall command.
+
+    Install (or update), and let the `?/partcad/installed` notification drive the
+    activation: the extension answers it with `partcad.activate`, so calling
+    `do_activate` here as well loaded the package twice -- and loaded it even
+    when the install had just reported failure.
+    """
     do_install_partcad(params)
-    do_activate(params)
 
 
 @LSP_SERVER.command("partcad.initPackage")
@@ -407,10 +439,20 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     """LSP handler for partcad.install command.
 
     Bootstraps the PartCAD service module (and, through it, `partcad`) into the
-    interpreter. This is specific to the "python" backend: the frozen JSON-RPC
-    service already carries PartCAD.
+    interpreter, together with the client package this server needs for the work
+    that is not the daemon's -- upgrading the installation, and checking the file
+    being edited. This is specific to the "python" backend: the frozen JSON-RPC
+    service already carries all of it.
+
+    Once PartCAD *is* installed, the update that happens is the one `pc upgrade`
+    performs: `partcad_client.selfupdate`, so the extension and the CLI cannot
+    pick versions differently. The pip bootstrap below only runs when there is
+    nothing installed yet to update.
     """
     global partcad_log_w_stream
+
+    if _do_self_update():
+        return
 
     try:
         import lsp_utils as utils
@@ -437,6 +479,10 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
                 "--no-input",
                 "--upgrade",
                 "partcad-service-json-rpc",
+                # The client half: `partcad.lintFile` checks the edited file
+                # through it, and `_do_self_update` upgrades through it. Neither
+                # is a dependency of the service, which is the daemon side.
+                "partcad-client",
             ],
             use_stdin=False,
             add_stdout=partcad_log_w_stream,
@@ -473,6 +519,43 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     except Exception as e:  # pylint: disable=broad-except
         LSP_SERVER.send_notification("?/partcad/installFailed")
         LSP_SERVER.send_notification("?/partcad/error", "Failed to install PartCAD: %s" % e)
+
+
+def _do_self_update() -> bool:
+    """Update an already-installed PartCAD. False when there is nothing to update.
+
+    Returning False hands the caller back to the pip bootstrap: either PartCAD is
+    not installed yet (the first run, which is what the bootstrap is for) or it
+    is too old to carry `selfupdate`.
+
+    No daemon is stopped here, and none needs to be: this backend serves the
+    extension in-process and never starts one. A daemon belonging to some `pc` on
+    this machine keeps running the code it already imported, and picks the new
+    version up when it is next restarted.
+    """
+    try:
+        from partcad_client import selfupdate
+    except ImportError:
+        return False
+
+    def log(message: str) -> None:
+        if partcad_log_w_stream is not None:
+            partcad_log_w_stream.write(message.replace("\n", "\r\n") + "\r\n")
+            partcad_log_w_stream.flush()
+
+    try:
+        selfupdate.update(log=log)
+    except selfupdate.SelfUpdateError as e:
+        # A source checkout, or an unreachable index. Neither is a reason to
+        # leave the extension unusable: what is installed still works.
+        LSP_SERVER.send_notification("?/partcad/warn", "PartCAD was not updated: %s" % e)
+    except Exception as e:  # pylint: disable=broad-except
+        LSP_SERVER.send_notification("?/partcad/installFailed")
+        LSP_SERVER.send_notification("?/partcad/error", "Failed to update PartCAD: %s" % e)
+        return True
+
+    LSP_SERVER.send_notification("?/partcad/installed")
+    return True
 
 
 # **********************************************************
@@ -573,6 +656,7 @@ def _get_global_defaults():
         "verbosity": GLOBAL_SETTINGS.get("verbosity", "info"),
         "packagePath": GLOBAL_SETTINGS.get("packagePath", "."),
         "forceUpdate": GLOBAL_SETTINGS.get("forceUpdate", "false"),
+        "develIndex": GLOBAL_SETTINGS.get("develIndex", False),
         "path": GLOBAL_SETTINGS.get("path", []),
         "interpreter": GLOBAL_SETTINGS.get("interpreter", [sys.executable]),
         "importStrategy": GLOBAL_SETTINGS.get("importStrategy", "useBundled"),

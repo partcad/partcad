@@ -8,6 +8,7 @@ with [`install.sh`](../../install.sh) and never see Python.
 | | wheels | standalone bundle |
 | --- | --- | --- |
 | Install | `pip install -U partcad-cli` | `curl -fsSL .../install.sh \| sh` |
+| Upgrade | `pc upgrade` (runs `pip`) | `pc upgrade` (fetches the release archive) |
 | Needs Python | yes, 3.10-3.14 | no |
 | Size | ~15MB plus whatever pip resolves | ~875MB unpacked, ~290MB compressed (Linux, OpenSCAD included) |
 | Optional extras (`ai`, `lint`) | installed on demand | always included |
@@ -103,9 +104,21 @@ conda anywhere near it. The same crash in the *wheel*-based CI jobs, whose runne
 separately in `.github/actions/setup-all/action.yml`.
 
 The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
-`partcad-<version>-<platform>.tar.gz` (`.zip` on Windows), and its `.sha256`. The archive name is a contract
-with `install.sh`, which resolves the machine it runs on to one of the same platform ids. Pass
-`--platform=<id>` to name the archive explicitly rather than after this machine.
+`partcad-<version>-<platform>.tar.gz` (`.zip` on Windows), and its `.sha256`, where `<platform>` is the
+`<os>-<os-version>-<arch>` id above. Pass `--platform=<id>` to name the archive explicitly rather than after
+this machine. The archive name is a contract with three consumers that derive it independently:
+`install.sh` (from `uname` and `/etc/os-release`, resolving the machine to one of the published builds),
+`partcad_client.selfupdate` (which is what `pc upgrade` and the VS Code extension use to update a bundle in
+place), and the extension's own first-time download (`src/common/provision.ts`). So is the archive's single
+top-level `partcad/` directory: all three unpack it and rename that directory to `<install-dir>/<version>/`,
+which is what lets a new bundle be installed beside a running one instead of over it.
+
+> **Out of sync.** Only `install.sh` derives the `<os>-<os-version>-<arch>` id. `partcad_client.selfupdate`
+> (`platform_archive()`, from `sys.platform`/`platform.machine()`) and `provision.ts` (`platformArchive()`,
+> from `process.platform`/`process.arch`) still ask for the older `<os>-<arch>` name -- `linux-x86_64`,
+> `macos-arm64`, `windows-x86_64` -- which no release publishes any more. Both have to learn the OS-version
+> ids, or the release has to publish an alias under the old name, before `pc upgrade` and the extension's
+> first-time download work again.
 
 The bundle embeds the interpreter it was built with, so `PYTHON` decides the Python version users end up
 running. CI builds with 3.14, the newest version PartCAD supports (`requires-python = ">=3.10,<3.15"`) and

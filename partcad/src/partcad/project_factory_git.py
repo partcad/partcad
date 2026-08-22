@@ -23,6 +23,7 @@ from filelock import FileLock
 from pygit2.enums import CheckoutStrategy, ConfigLevel, CredentialType, ReferenceType, ResetMode
 
 from .project_local import ProjectLocal
+from . import consts
 from . import project_factory as pf
 from . import logging as pc_logging
 from . import telemetry
@@ -248,6 +249,32 @@ def looks_like_commit_id(revision: str) -> bool:
     return bool(_SHA_RE.match(revision.strip()))
 
 
+def repo_path(url: str) -> str:
+    """The "<owner>/<name>" that a repository URL names, lowercased.
+
+    Every spelling of the same repository has to normalize alike, because a
+    dependency may be written in any of them: the https and ssh URLs, the
+    scp-like "git@host:owner/name" form, with or without a trailing slash and
+    with or without the optional ".git" suffix. What is left identifies the
+    repository; the host is deliberately dropped, so a mirror of the same
+    repository is recognized as well.
+    """
+    url = (url or "").strip()
+    if _SCP_LIKE_RE.match(url):
+        path = url.split(":", 1)[1]
+    else:
+        path = urlparse(url).path
+    path = path.strip("/")
+    if path.endswith(".git"):
+        path = path[: -len(".git")]
+    return path.lower()
+
+
+def is_pub_index_url(url: str) -> bool:
+    """Whether 'url' names the repository the public PartCAD index lives in."""
+    return repo_path(url) in consts.DEVEL_INDEX_REPO_PATHS
+
+
 @dataclass(frozen=True)
 class CloneOptions:
     """How much of a repository has to be downloaded to reach a revision."""
@@ -376,7 +403,7 @@ def _create_origin(repo: pygit2.Repository, repo_url: str, revision) -> None:
         repo.remotes.add_fetch("origin", refspec)
 
 
-def _single_branch_remote():
+def _single_branch_remote(user_config=None):
     """Configure a clone's remote to follow the default branch alone.
 
     A clone left to itself configures "+refs/heads/*:refs/remotes/origin/*",
@@ -393,7 +420,7 @@ def _single_branch_remote():
 
     def create(repo, name, url):
         head = None
-        for ref in repo.remotes.create_anonymous(url).list_heads(callbacks=GitCallbacks(), proxy=True):
+        for ref in repo.remotes.create_anonymous(url).list_heads(callbacks=GitCallbacks(user_config), proxy=True):
             if ref.name == "HEAD":
                 head = ref.symref_target
                 break
@@ -412,17 +439,17 @@ def _single_branch_remote():
     return create
 
 
-def _clone(repo_url, cache_path, git_config, options: CloneOptions) -> pygit2.Repository:
+def _clone(repo_url, cache_path, git_config, options: CloneOptions, user_config=None) -> pygit2.Repository:
     """Clone 'repo_url' into 'cache_path', taking as few branches as will do."""
     return pygit2.clone_repository(
         repo_url,
         cache_path,
         depth=options.depth if _supports_shallow(repo_url) else 0,
-        callbacks=GitCallbacks(),
+        callbacks=GitCallbacks(user_config),
         repository=_repository_factory(git_config),
         # A commit id can be on any branch, so that search needs the wildcard
         # refspec a clone configures by default.
-        remote=None if options.all_branches else _single_branch_remote(),
+        remote=None if options.all_branches else _single_branch_remote(user_config),
         # Honour http.proxy from the config written above and the http_proxy
         # environment, the way the git command line did through curl. Without
         # this libgit2 ignores both and talks to the remote directly.
@@ -430,13 +457,13 @@ def _clone(repo_url, cache_path, git_config, options: CloneOptions) -> pygit2.Re
     )
 
 
-def _fetch(repo: pygit2.Repository, revision: str, depth: int = 1) -> pygit2.Oid:
+def _fetch(repo: pygit2.Repository, revision: str, depth: int = 1, user_config=None) -> pygit2.Oid:
     """Fetch 'revision' from origin, returning the commit it resolved to."""
     remote = repo.remotes["origin"]
     remote.fetch(
         [revision],
         depth=depth if _supports_shallow(remote.url) else 0,
-        callbacks=GitCallbacks(),
+        callbacks=GitCallbacks(user_config),
         proxy=True,
     )
     return _fetched_commit(repo, revision)
@@ -532,7 +559,7 @@ def _default_branch(repo: pygit2.Repository) -> str:
     raise pygit2.GitError("Could not determine the default branch of 'origin'")
 
 
-def clone_single_commit(repo_url, cache_path, revision, git_config=()) -> pygit2.Repository:
+def clone_single_commit(repo_url, cache_path, revision, git_config=(), user_config=None) -> pygit2.Repository:
     """Make one commit available without downloading any history.
 
     A clone cannot check out a commit id by name, and a shallow clone of a
@@ -552,7 +579,7 @@ def clone_single_commit(repo_url, cache_path, revision, git_config=()) -> pygit2
     _apply_git_config(repo, git_config)
     _create_origin(repo, repo_url, revision)
     try:
-        _checkout(repo, _fetch(repo, revision, depth=get_clone_options(revision).depth))
+        _checkout(repo, _fetch(repo, revision, depth=get_clone_options(revision).depth, user_config=user_config))
         return repo
     except GIT_ERRORS as e:
         if is_retryable(e):
@@ -565,7 +592,7 @@ def clone_single_commit(repo_url, cache_path, revision, git_config=()) -> pygit2
         )
 
     shutil.rmtree(cache_path, ignore_errors=True)
-    repo = _clone(repo_url, cache_path, git_config, get_fallback_clone_options(revision))
+    repo = _clone(repo_url, cache_path, git_config, get_fallback_clone_options(revision), user_config)
     _checkout(repo, revision)
     return repo
 
@@ -664,6 +691,37 @@ class GitImportConfiguration:
                 if value in self.import_config_url:
                     self.import_config_url = self.import_config_url.replace(value, key)
 
+        self._apply_devel_index_override()
+
+    def _apply_devel_index_override(self):
+        """Point the public index at its unreleased branch when asked to.
+
+        The public index lives in a repository of its own, so nothing in the
+        package that imports it says which version of it to use: a plain import
+        gets whatever its default branch holds, which is the released state.
+        'develIndex' is how the staged state is exercised instead, and it names no
+        dependency: the index is recognized by the repository its URL points at,
+        so it is redirected wherever in the dependency tree it appears and under
+        whatever name the importing package gave it.
+
+        Run after the url overrides above so that a URL rewritten there is still
+        recognized. A revision the package pinned itself is replaced rather than
+        respected -- this is an override, and a pin is exactly what it exists to
+        get past.
+        """
+        if not getattr(self.ctx.user_config, "devel_index", False):
+            return
+        if not is_pub_index_url(self.import_config_url):
+            return
+        if self.import_revision == consts.DEVEL_INDEX_REVISION:
+            return
+        pc_logging.info(
+            "Using the '%s' revision of the public index: %s",
+            consts.DEVEL_INDEX_REVISION,
+            self.import_config_url,
+        )
+        self.import_revision = consts.DEVEL_INDEX_REVISION
+
     def _git_config(self) -> dict[str, str]:
         params = {}
         for key, value in self.ctx.user_config.git_config.items():
@@ -693,7 +751,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
     def _download(self, repo_url, cache_path, options: CloneOptions) -> pygit2.Repository:
         """Fill 'cache_path' from 'repo_url', with the revision checked out."""
         if options.revision is None:
-            return _clone(repo_url, cache_path, self.git_config, options)
+            return _clone(repo_url, cache_path, self.git_config, options, self.ctx.user_config)
 
         # A branch or a tag. Ask the server for that ref alone: a clone can only
         # check out a branch, so reaching a tag through one would mean taking
@@ -701,7 +759,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         repo = pygit2.init_repository(cache_path)
         _apply_git_config(repo, self.git_config)
         _create_origin(repo, repo_url, options.revision)
-        _checkout(repo, _fetch(repo, options.revision, options.depth))
+        _checkout(repo, _fetch(repo, options.revision, options.depth, self.ctx.user_config))
         return repo
 
     def _clone_repo(self, repo_url, cache_path, options: CloneOptions) -> pygit2.Repository:
@@ -727,7 +785,11 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
         if options.single_commit:
             # One commit, no history. Handles its own fallback for the servers
             # that refuse the request.
-            return attempt(lambda: clone_single_commit(repo_url, cache_path, options.revision, self.git_config))
+            return attempt(
+                lambda: clone_single_commit(
+                    repo_url, cache_path, options.revision, self.git_config, self.ctx.user_config
+                )
+            )
 
         try:
             return attempt(lambda: self._download(repo_url, cache_path, options))
@@ -845,7 +907,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                     with telemetry.start_as_current_span(
                                         "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
                                     ):
-                                        fetched = _fetch(repo, short_branch_name)
+                                        fetched = _fetch(repo, short_branch_name, user_config=self.ctx.user_config)
                                         repo.reset(fetched, ResetMode.HARD)
                                 self.ctx.stats_git_ops += 1
                                 os.utime(guard_path, (now, now))
@@ -881,7 +943,7 @@ class ProjectFactoryGit(pf.ProjectFactory, GitImportConfiguration):
                                     with telemetry.start_as_current_span(
                                         "*ProjectFactoryGit._clone_or_update_repo.{Remote.fetch}"
                                     ):
-                                        fetched = _fetch(repo, self.import_revision)
+                                        fetched = _fetch(repo, self.import_revision, user_config=self.ctx.user_config)
                                         repo.reset(fetched, ResetMode.HARD)
 
                                 self.ctx.stats_git_ops += 1

@@ -19,6 +19,8 @@ from . import shape_envelope
 
 @telemetry.instrument()
 class PartFactoryStl(PartFactoryFile):
+    PYTHON_SANDBOX_VERSION = "3.11"
+
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitSTL", target_project.name, config["name"]):
             super().__init__(ctx, source_project, target_project, config, extension=".stl")
@@ -35,7 +37,7 @@ class PartFactoryStl(PartFactoryFile):
             request["label"] = part.name
             request_serialized = shape_envelope.serialize(request)
 
-            runtime = self.ctx.get_python_runtime("3.11")
+            runtime = self.ctx.get_python_runtime(self.PYTHON_SANDBOX_VERSION)
             with telemetry.start_as_current_span("*PartFactoryStl.instantiate.{runtime.run_async}"):
                 command = [wrapper_path, os.path.abspath(self.path)]
                 exitcode, response_serialized, errors = await runtime.run_async(

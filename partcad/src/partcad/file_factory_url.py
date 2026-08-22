@@ -23,6 +23,11 @@ class FileFactoryUrl(FileFactory):
     def __init__(self, ctx, source_project, target_project, config):
         super().__init__(ctx, source_project, target_project, config)
 
+        # 'fileUrl' is what this factory exists for, so say which object is
+        # missing it. Left to itself this is a bare KeyError with a traceback
+        # and no hint of which declaration in 'partcad.yaml' is at fault.
+        if "fileUrl" not in config:
+            raise Exception("ERROR: '%s' declares 'fileFrom: url' but no 'fileUrl'" % config.get("name", "<unnamed>"))
         self.url = config["fileUrl"]
 
     async def download(self, path):

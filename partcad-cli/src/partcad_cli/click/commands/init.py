@@ -158,5 +158,10 @@ def cli(cli_ctx: CliContext, click_ctx: click.rich_context.RichContext, **kwargs
         config_options = {key: value for key, value in kwargs.items() if key != "interactive"}
         if pc.create_package(dst_path, config_options):
             pc.logging.info(f"Successfully created package at '{dst_path}'")
+            # A button to press next to the package that was just created: the
+            # "Render" command, in the launch configuration of the repository
+            # this was run in. It reports what it did, and a failure to add it
+            # is not a failure to create the package.
+            pc.add_render_configuration(os.path.dirname(os.path.abspath(dst_path)))
         else:
             pc.logging.error(f"Failed creating '{dst_path}'!")

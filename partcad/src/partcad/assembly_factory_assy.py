@@ -15,6 +15,7 @@ import yaml
 
 from . import telemetry
 from .assembly import Assembly, AssemblyChild
+from .assembly_connect import ConnectHow, check_stage_sequence
 from .assembly_factory_file import AssemblyFactoryFile
 from .geom import Location
 from . import logging as pc_logging
@@ -93,7 +94,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
 
             result = await self.handle_node(assembly, assy)
             if result is not None:
-                assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
+                assembly.children.append(result)
             else:
                 pc_logging.warning("Assembly is empty")
 
@@ -102,6 +103,8 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
     async def handle_node_list(self, assembly, node_list):
         tasks = []
 
+        check_stage_sequence(node_list, self.name)
+
         async def wait_for_tasks():
             nonlocal tasks
             while len(tasks) > 0:
@@ -109,7 +112,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                 f = await asyncio.tasks.wait([task])
                 result = f[0].pop().result()
                 if result is not None:
-                    assembly.children.append(AssemblyChild(result[0], result[1], result[2]))
+                    assembly.children.append(result)
 
         for link in node_list:
             if "connect" in link or "connectPorts" in link:
@@ -126,6 +129,11 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             name = None
 
         connect = None
+        # The non-geometric half of a "connect*" section: free-form context and
+        # the instructions for whoever (or whatever) performs the assembly.
+        connect_comment = None
+        connect_how = None
+        connection = None
         connect_with_iface = None
         connect_with_params = None
         connect_with_instance = None
@@ -169,6 +177,21 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             location = None
         else:
             location = Location((0, 0, 0), (0, 0, 1), 0)
+
+        if connect is not None:
+            # "comment" is free-form context for a human or an LLM. Nothing in
+            # PartCAD interprets it: all instructions that are required to
+            # perform the assembly belong in the other fields.
+            connect_comment = connect.get("comment", None)
+            connect_how = ConnectHow(
+                connect.get("how", None),
+                where="%s: connect %s to %s"
+                % (
+                    self.name,
+                    name or node.get("part", None) or node.get("assembly", None),
+                    connect.get("name", None),
+                ),
+            )
 
         if connect_with_instance is not None and "*" in connect_with_instance:
             connect_with_instance_pattern = connect_with_instance
@@ -809,7 +832,101 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                         pc_logging.error("Not enough data to connect %s" % name)
                         location = Location((0, 0, 0), (0, 0, 1), 0)
 
-        if not item is None:
-            return [item, name, location]
+                    connection = self._connection_info(
+                        connect,
+                        connect_to_name,
+                        connect_with_port,
+                        connect_to_port,
+                        connect_with_iface,
+                        connect_to_iface,
+                        target_part_location,
+                        target_port,
+                    )
+
+                # Now that both ends of the connection are known, the interfaces
+                # to hold them by can be matched against what they implement.
+                # The source port is the frame a derived "pushDistance" is
+                # measured along, and that same port once the object is in place
+                # is what the push direction is deduced from, so both go along.
+                source_frame = None if source_port is None else source_port.location
+                mated_frame = location if source_frame is None else location * source_frame
+                connect_how.resolve(
+                    item,
+                    target_part,
+                    source_frame=source_frame,
+                    mated_frame=mated_frame,
+                    source_interface=source_iface_obj,
+                    target_interface=target_iface_obj,
+                )
+
+        if item is not None:
+            return AssemblyChild(item, name, location, connect_comment, connect_how, connection)
         else:
+            return None
+
+    def _connection_info(
+        self,
+        connect,
+        connect_to_name,
+        connect_with_port,
+        connect_to_port,
+        connect_with_iface,
+        connect_to_iface,
+        target_part_location,
+        target_port,
+    ):
+        """What was connected to what, recorded as plain data on the child.
+
+        This is not needed to build the assembly - the placement computed above
+        is - but it is the only place that knows it. An assembly instruction book
+        (see assembly_guide.py) needs to say which two items each step joins,
+        where the joint is, and which way the two have to be pulled apart to show
+        it, and none of that can be recovered from the resulting placements.
+
+        'point' and 'direction' are in the coordinate system of the assembly
+        being built: the point where the two ports meet, and the unit vector
+        along which the item has to be moved to separate them (the port's own
+        normal, since the item was mated onto it facing the other way).
+        """
+        info = {
+            "target": connect_to_name,
+            "with_port": connect_with_port,
+            "to_port": connect_to_port,
+            "with_interface": connect_with_iface,
+            "to_interface": connect_to_iface,
+            # option: "exploded"
+            # description: the gap to show between the two items in the exploded
+            #              view of this step, in millimeters
+            # values: number
+            # default: half of the largest dimension of the two items
+            "exploded": self._exploded_distance(connect.get("exploded", None), connect_to_name),
+        }
+        if target_port is not None and target_part_location is not None:
+            port_location = target_part_location * target_port.location
+            info["point"] = list(port_location.translation)
+            info["direction"] = list(port_location.rotate_vector((0, 0, 1)))
+        return info
+
+    def _exploded_distance(self, value, connect_to_name):
+        """The 'exploded' override of a connection, as a number of millimeters.
+
+        Checked here rather than where the document is generated: the ASSY schema
+        (see partcad_utils/schema/assy.json) is checked by `pc lint`, not while
+        the assembly is being built, so a value that is not a number would
+        otherwise surface much later, as a ValueError from inside the renderer,
+        naming neither the file nor the step it came from. A bad value is
+        reported and dropped: it decides how a picture looks, and is no reason to
+        refuse to build the assembly.
+        """
+        if value is None or isinstance(value, bool):
+            if isinstance(value, bool):
+                pc_logging.error("%s: 'exploded' must be a number, got %r" % (self.name, value))
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            pc_logging.error(
+                "%s: 'exploded' must be a number of millimeters, got %r (connecting to %s)"
+                % (self.name, value, connect_to_name)
+            )
             return None

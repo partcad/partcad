@@ -25,6 +25,16 @@ jobs:
   build-standalone:
     uses: ./.github/workflows/build-standalone.yml
 
+  # The PartCAD IDE: the editor with the PartCAD extension and the command line
+  # bundles above inside it, attached to the same release. It waits for the
+  # bundles and is told not to build them again -- a called workflow shares this
+  # run's artifacts, so it downloads what the job above produced.
+  build-ide:
+    needs: build-standalone
+    uses: ./.github/workflows/build-ide-standalone.yml
+    with:
+      build_tools: false
+
   # Keep the "build" job identical to "python-build.yml".
   # TODO(clairbee): include "python-build.yml" instead
   build:
@@ -71,9 +81,12 @@ jobs:
       - name: Test building and packaging
         run: |
           # Build the shared partcad-utils wheel first; partcad and the CLI/service
-          # pin it, and it is not published on PyPI.
+          # pin it, and it is not published on PyPI. partcad-client pins it
+          # in turn, and partcad-cli pins that.
           cp LICENSE.txt partcad-utils
           (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad-utils && python -m build && cd .. && deactivate)
+          cp LICENSE.txt partcad-client
+          (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad-client && python -m build && cd .. && deactivate)
           (. .venv/build/${{ env.BIN_DIR }}/activate && cd partcad && python -m build && cd .. && deactivate)
           (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install --find-links=partcad-utils/dist partcad-utils && deactivate)
           (. .venv/build-cli/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad/requirements.txt && deactivate)
@@ -86,6 +99,7 @@ jobs:
       - name: Test installation
         run: |
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --find-links=partcad-utils/dist partcad-utils && deactivate)
+          (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --find-links=partcad-client/dist --find-links=partcad-utils/dist partcad-client && deactivate)
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install -r partcad/requirements.txt     && deactivate)
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad/dist     partcad && deactivate)
           (. .venv/install/${{ env.BIN_DIR }}/activate && python -m pip install --no-index --find-links=partcad-service-json-rpc/dist partcad-service-json-rpc && deactivate)
@@ -98,15 +112,22 @@ jobs:
         with:
           name: python-package-distributions
           path: partcad/dist/
-      # "partcad" pins "partcad-utils" and "partcad-cli" pins both it and
-      # "partcad-service-json-rpc". Neither exists on PyPI, so both have to be
-      # published with this release or the released wheels cannot be installed.
+      # "partcad" pins "partcad-utils"; "partcad-cli" pins that,
+      # "partcad-client" and "partcad-service-json-rpc". None of them
+      # exists on PyPI yet, so all of them have to be published with this release
+      # or the released wheels cannot be installed.
       - name: Upload "partcad-utils"
         if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
         uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions-utils
           path: partcad-utils/dist/
+      - name: Upload "partcad-client"
+        if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-package-distributions-client-utils
+          path: partcad-client/dist/
       - name: Upload "partcad-service-json-rpc"
         if: ${{ matrix.os == 'ubuntu-24.04' && matrix.python-version == '3.13' }}
         uses: actions/upload-artifact@v7
@@ -127,6 +148,9 @@ jobs:
       # Deliberately blocking: a release that carries the wheels but not the
       # bundles is a release "install.sh" cannot install.
       - build-standalone
+      # Blocking for the same reason: "install.sh --ide" installs from this
+      # release too.
+      - build-ide
     runs-on: ubuntu-24.04
     environment:
       name: pypi
@@ -149,6 +173,12 @@ jobs:
           name: python-package-distributions-utils
           path: dist
 
+      - name: Download client-utils dists
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions-client-utils
+          path: dist
+
       - name: Download service dists
         uses: actions/download-artifact@v8
         with:
@@ -168,6 +198,13 @@ jobs:
           pattern: partcad-standalone-*
           merge-multiple: true
           path: standalone
+
+      - name: Download the IDE
+        uses: actions/download-artifact@v8
+        with:
+          pattern: partcad-ide-*
+          merge-multiple: true
+          path: ide
 
       # "install.sh" derives an asset name from `uname` and fails for the user
       # if that asset is not on the release. Downloading artifacts does not fail
@@ -194,6 +231,24 @@ jobs:
               echo "${archive} $(stat -c%s "${archive}") bytes"
             fi
           done
+          # And the same for the IDE, which "install.sh --ide" downloads by a
+          # name derived the same way. There is more than one file per platform
+          # here -- the archive, and the .dmg or the installer beside it -- so
+          # this checks for the archive by name and then lists what came with it.
+          for platform in linux-x86_64 macos-arm64 windows-x86_64; do
+            case "${platform}" in
+            windows-*) extension="zip" ;;
+            *) extension="tar.gz" ;;
+            esac
+            archive="$(find ide -type f -name "partcad-ide-*-${platform}.${extension}" | head -n 1)"
+            if [ -z "${archive}" ] || [ ! -f "${archive}.sha256" ]; then
+              echo "::error::no IDE archive for ${platform}"
+              missing=1
+            else
+              find ide -type f -name "partcad-ide-*-${platform}*" ! -name "*.sha256" \
+                -printf "%p %s bytes\n"
+            fi
+          done
           exit "${missing}"
 
       - name: Determine the release tag
@@ -211,6 +266,7 @@ jobs:
           gh release create '${{ env.MERGED_TAG }}' --repo '${{ github.repository }}' --notes "";
           gh release upload '${{ env.MERGED_TAG }}' dist/** --repo '${{ github.repository }}'
           gh release upload '${{ env.MERGED_TAG }}' standalone/** --repo '${{ github.repository }}'
+          gh release upload '${{ env.MERGED_TAG }}' ide/** --repo '${{ github.repository }}'
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

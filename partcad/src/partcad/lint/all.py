@@ -4,7 +4,7 @@ import importlib
 
 from .lint import Linting
 from .python import PythonLinting
-from .schema import SchemaLinting
+from .schema import AssySchemaLinting, SchemaLinting
 
 PARTCAD_SCHEMA = None
 _global_lint_checks = []
@@ -24,6 +24,7 @@ def get_linting_checks(concurrency_cap: int) -> list[Linting]:
     if len(_global_lint_checks) == 0:
         _global_lint_checks.extend([
             SchemaLinting("PartcadSchema", get_partcad_schema()),
+            AssySchemaLinting("AssySchema"),
             PythonLinting("Python")
         ])
     return _global_lint_checks

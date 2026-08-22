@@ -10,6 +10,11 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh
 #
+# With `--ide`, installs the PartCAD IDE instead: the editor, the PartCAD
+# extension and those same command line tools, in one application.
+#
+#   curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --ide
+#
 # Run `... | sh -s -- --help` for the options.
 #
 # This script is written for POSIX `sh` on purpose: it has to run on whatever
@@ -23,22 +28,37 @@ BASE_URL="${PARTCAD_BASE_URL:-}"
 INSTALL_DIR="${PARTCAD_INSTALL_DIR:-}"
 BIN_DIR="${PARTCAD_BIN_DIR:-}"
 PLATFORM="${PARTCAD_PLATFORM:-}"
+APP_DIR="${PARTCAD_APP_DIR:-}"
+IDE="${PARTCAD_IDE:-0}"
 UNINSTALL=0
+
+# The name of the application bundle, as `partcad-ide-standalone/build.sh` packs
+# it. Used on MacOS, where installing means putting this in an Applications
+# directory.
+IDE_APP_NAME="PartCAD IDE.app"
 
 usage() {
   cat <<'EOF'
-Install the standalone PartCAD command line tools.
+Install the standalone PartCAD command line tools, or the PartCAD IDE.
 
 Usage:
   curl -fsSL <this script> | sh
   curl -fsSL <this script> | sh -s -- [options]
 
 Options:
+  --ide                 Install the PartCAD IDE: the editor with the PartCAD
+                        extension and the command line tools inside it, rather
+                        than the command line tools alone. `pc` and `partcad`
+                        are linked from the copy the IDE carries, so nothing is
+                        downloaded twice.
   --version <version>   Version to install (default: the latest release).
   --install-dir <dir>   Where to unpack the bundle
                         (default: ${XDG_DATA_HOME:-~/.local/share}/partcad).
   --bin-dir <dir>       Where to link the `pc` and `partcad` commands
                         (default: ~/.local/bin).
+  --app-dir <dir>       MacOS, with --ide: where to put the application
+                        (default: /Applications, or ~/Applications when that is
+                        not writable).
   --base-url <url>      Directory holding the archives, instead of the GitHub
                         release. Use it to install a build that is not
                         released, such as one produced by a pull request.
@@ -51,8 +71,8 @@ Options:
   --help                Show this message.
 
 Every option also has an environment variable: PARTCAD_VERSION,
-PARTCAD_INSTALL_DIR, PARTCAD_BIN_DIR, PARTCAD_BASE_URL, PARTCAD_REPOSITORY,
-PARTCAD_PLATFORM.
+PARTCAD_INSTALL_DIR, PARTCAD_BIN_DIR, PARTCAD_APP_DIR, PARTCAD_BASE_URL,
+PARTCAD_REPOSITORY, PARTCAD_IDE, PARTCAD_PLATFORM.
 EOF
 }
 
@@ -76,6 +96,14 @@ while [ $# -gt 0 ]; do
   --bin-dir)
     BIN_DIR="${2:-}"
     shift 2
+    ;;
+  --app-dir)
+    APP_DIR="${2:-}"
+    shift 2
+    ;;
+  --ide)
+    IDE=1
+    shift
     ;;
   --base-url)
     BASE_URL="${2:-}"
@@ -106,8 +134,25 @@ done
 
 ##############################################  UNINSTALL  ###################################################
 
+# An application bundle is this script's only if it says it is a PartCAD IDE.
+# Somebody else's application that happens to share the name is left alone.
+is_our_app() {
+  [ -d "$1" ] && grep -q '"applicationName": *"partcad-ide"' "$1/Contents/Resources/app/product.json" 2>/dev/null
+}
+
 if [ "${UNINSTALL}" = "1" ]; then
-  for command_name in pc partcad; do
+  # Where an installed IDE can be: the directory asked for, then the two an
+  # --ide install picks between on MacOS.
+  APP_PATH=""
+  for directory in "${APP_DIR}" "/Applications" "${HOME}/Applications"; do
+    [ -n "${directory}" ] || continue
+    if is_our_app "${directory}/${IDE_APP_NAME}"; then
+      APP_PATH="${directory}/${IDE_APP_NAME}"
+      break
+    fi
+  done
+
+  for command_name in pc partcad partcad-ide; do
     link="${BIN_DIR}/${command_name}"
     # Only remove links this script owns. Anything else on PATH by that name,
     # a wheel install of `pc` above all, is somebody else's.
@@ -119,10 +164,37 @@ if [ "${UNINSTALL}" = "1" ]; then
         rm -f "${link}"
         log "Removed ${link}"
         ;;
-      *) warn "left ${link} alone: it does not point into ${INSTALL_DIR}" ;;
+      *)
+        if [ -n "${APP_PATH}" ]; then
+          case "$(readlink "${link}")" in
+          "${APP_PATH}"/*)
+            rm -f "${link}"
+            log "Removed ${link}"
+            continue
+            ;;
+          esac
+        fi
+        warn "left ${link} alone: it does not point into ${INSTALL_DIR}"
+        ;;
       esac
     fi
   done
+
+  if [ -n "${APP_PATH}" ]; then
+    rm -rf "${APP_PATH}"
+    log "Removed ${APP_PATH}"
+  fi
+
+  # The desktop entry an --ide install writes on Linux, and its icon.
+  DESKTOP_FILE="${XDG_DATA_HOME:-${HOME}/.local/share}/applications/partcad-ide.desktop"
+  DESKTOP_ICON="${XDG_DATA_HOME:-${HOME}/.local/share}/icons/hicolor/512x512/apps/partcad-ide.png"
+  for path in "${DESKTOP_FILE}" "${DESKTOP_ICON}"; do
+    if [ -f "${path}" ]; then
+      rm -f "${path}"
+      log "Removed ${path}"
+    fi
+  done
+
   if [ -d "${INSTALL_DIR}" ]; then
     rm -rf "${INSTALL_DIR}"
     log "Removed ${INSTALL_DIR}"
@@ -139,9 +211,10 @@ case "$(uname -s)" in
 Linux) OS_NAME="linux" ;;
 Darwin) OS_NAME="macos" ;;
 MINGW* | MSYS* | CYGWIN*)
-  fail "this script does not support Windows. Download the .zip from
-       https://github.com/${REPOSITORY}/releases and unpack it, or install the
-       wheels with 'pip install -U partcad-cli'."
+  fail "this script does not support Windows. From
+       https://github.com/${REPOSITORY}/releases, run the IDE's
+       'partcad-ide-<version>-windows-x86_64-setup.exe', or unpack the command
+       line tools' .zip, or install the wheels with 'pip install -U partcad-cli'."
   ;;
 *) fail "unsupported operating system '$(uname -s)'" ;;
 esac
@@ -232,6 +305,13 @@ candidate_releases() {
 
 if [ -n "${PLATFORM}" ]; then
   PLATFORMS="${PLATFORM}"
+elif [ "${IDE}" = "1" ]; then
+  # The IDE is built once per operating system and architecture, not once per
+  # OS version: it carries its own Electron runtime, and
+  # "partcad-ide-standalone/build.sh" names its archive "<os>-<arch>". The
+  # command line tools inside it are the per-OS-version bundle, but that is the
+  # IDE build's choice, not something this script names.
+  PLATFORMS="${OS_NAME}-${ARCH_NAME}"
 else
   case "${OS_NAME}" in
   linux) BUILDS="${LINUX_BUILDS}" ;;
@@ -270,6 +350,14 @@ if [ -z "${VERSION}" ]; then
   [ -n "${VERSION}" ] || fail "could not determine the latest release of ${REPOSITORY}"
 fi
 
+if [ "${IDE}" = "1" ]; then
+  ARCHIVE_PREFIX="partcad-ide"
+  WHAT="the PartCAD IDE"
+else
+  ARCHIVE_PREFIX="partcad"
+  WHAT="PartCAD"
+fi
+
 : "${BASE_URL:=https://github.com/${REPOSITORY}/releases/download/${VERSION}}"
 
 TMP_DIR="$(mktemp -d)"
@@ -279,11 +367,12 @@ trap cleanup EXIT INT TERM
 # The candidates are tried in order. A build can be absent from a release --
 # an older release predates a platform, or a builder failed -- and every
 # candidate after the first is still a bundle this machine can run, so a
-# missing one moves on instead of ending the install.
+# missing one moves on instead of ending the install. With --ide there is only
+# ever one candidate, so this is a single download that reports the same way.
 ARCHIVE=""
 for candidate_platform in ${PLATFORMS}; do
-  candidate="partcad-${VERSION}-${candidate_platform}.tar.gz"
-  log "Downloading PartCAD ${VERSION} for ${candidate_platform}..."
+  candidate="${ARCHIVE_PREFIX}-${VERSION}-${candidate_platform}.tar.gz"
+  log "Downloading ${WHAT} ${VERSION} for ${candidate_platform}..."
   log "  ${BASE_URL}/${candidate}"
   if download "${BASE_URL}/${candidate}" "${TMP_DIR}/${candidate}"; then
     ARCHIVE="${candidate}"
@@ -320,32 +409,128 @@ fi
 
 log "Unpacking..."
 tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "${TMP_DIR}"
-[ -x "${TMP_DIR}/partcad/pc" ] || fail "the archive does not look like a PartCAD bundle"
 
-TARGET="${INSTALL_DIR}/${VERSION}"
-mkdir -p "${INSTALL_DIR}"
-# Replacing an existing copy of the same version: move the old one aside first,
-# so a failure here cannot leave a half-deleted installation behind.
-if [ -e "${TARGET}" ]; then
-  rm -rf "${TARGET}.old"
-  mv "${TARGET}" "${TARGET}.old"
-fi
-mv "${TMP_DIR}/partcad" "${TARGET}"
-rm -rf "${TARGET}.old"
+# Replace an existing copy by moving the old one aside first, so that a failure
+# part way through cannot leave a half-deleted installation behind.
+replace() {
+  if [ -e "$2" ]; then
+    rm -rf "$2.old"
+    mv "$2" "$2.old"
+  fi
+  mv "$1" "$2"
+  rm -rf "$2.old"
+}
 
-mkdir -p "${BIN_DIR}"
-for command_name in pc partcad; do
-  link="${BIN_DIR}/${command_name}"
+# Link a command into BIN_DIR, unless something that is not ours is there.
+link_command() {
+  link="${BIN_DIR}/$2"
   if [ -e "${link}" ] && [ ! -L "${link}" ]; then
     warn "${link} exists and is not a symlink, leaving it alone.
-         The standalone command is at ${TARGET}/${command_name}."
-    continue
+         The standalone command is at $1."
+    return 0
   fi
-  ln -sf "${TARGET}/${command_name}" "${link}"
-done
+  ln -sf "$1" "${link}"
+}
+
+mkdir -p "${BIN_DIR}"
+
+if [ "${IDE}" = "1" ]; then
+  if [ "${OS_NAME}" = "macos" ]; then
+    [ -d "${TMP_DIR}/${IDE_APP_NAME}" ] || fail "the archive does not look like a PartCAD IDE"
+    if [ -z "${APP_DIR}" ]; then
+      # /Applications when this account may write there, which is the usual case
+      # for the first account on a Mac, and the per-user directory otherwise. No
+      # sudo either way: this installer never asks for a password.
+      if [ -w "/Applications" ]; then
+        APP_DIR="/Applications"
+      else
+        APP_DIR="${HOME}/Applications"
+      fi
+    fi
+    mkdir -p "${APP_DIR}"
+    TARGET="${APP_DIR}/${IDE_APP_NAME}"
+    if [ -e "${TARGET}" ] && ! is_our_app "${TARGET}"; then
+      fail "${TARGET} exists and was not installed by this script. Move it aside,
+       or install elsewhere with --app-dir."
+    fi
+    replace "${TMP_DIR}/${IDE_APP_NAME}" "${TARGET}"
+
+    # The bundle is signed ad-hoc rather than with a Developer ID, so MacOS
+    # would refuse to open it while it carries the "downloaded from the
+    # internet" flag. The user just asked for it by running this script, which
+    # is the judgement Gatekeeper is asking for.
+    if command -v xattr >/dev/null 2>&1; then
+      xattr -dr com.apple.quarantine "${TARGET}" 2>/dev/null || true
+    fi
+
+    IDE_LAUNCHER="${TARGET}/Contents/Resources/app/bin/partcad-ide"
+    TOOLS_DIR="${TARGET}/Contents/Resources/partcad-cli"
+  else
+    [ -x "${TMP_DIR}/partcad-ide/partcad-ide" ] || fail "the archive does not look like a PartCAD IDE"
+    mkdir -p "${INSTALL_DIR}"
+    TARGET="${INSTALL_DIR}/${VERSION}-ide"
+    replace "${TMP_DIR}/partcad-ide" "${TARGET}"
+
+    IDE_LAUNCHER="${TARGET}/bin/partcad-ide"
+    TOOLS_DIR="${TARGET}/resources/partcad-cli"
+
+    # So that the IDE appears in the desktop environment's application menu,
+    # which is where someone who installed an editor looks for it.
+    DESKTOP_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/applications"
+    ICON_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/icons/hicolor/512x512/apps"
+    mkdir -p "${DESKTOP_DIR}" "${ICON_DIR}"
+    if [ -f "${TARGET}/partcad-ide.png" ]; then
+      cp "${TARGET}/partcad-ide.png" "${ICON_DIR}/partcad-ide.png"
+    fi
+    # The Exec value is tokenized on whitespace, so a launcher path that carries
+    # a space -- or any other character the Desktop Entry specification reserves
+    # -- has to be quoted, with '"', '`', '$' and '\\' escaped inside the quotes.
+    IDE_EXEC="$(printf '%s' "${TARGET}/partcad-ide" | sed 's/["`$\\]/\\&/g')"
+    cat >"${DESKTOP_DIR}/partcad-ide.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=PartCAD IDE
+GenericName=CAD Editor
+Comment=Design manufacturable products with PartCAD
+Exec="${IDE_EXEC}" %F
+Icon=partcad-ide
+Categories=Development;Engineering;Graphics;
+Keywords=partcad;cad;
+StartupNotify=false
+StartupWMClass=partcad-ide
+MimeType=inode/directory;text/plain;
+EOF
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "${DESKTOP_DIR}" 2>/dev/null || true
+    fi
+  fi
+
+  link_command "${IDE_LAUNCHER}" partcad-ide
+
+  # The IDE carries the same command line tools as the standalone bundle, so
+  # `pc` comes from inside it rather than from a second download.
+  for command_name in pc partcad; do
+    if [ -x "${TOOLS_DIR}/${command_name}" ]; then
+      link_command "${TOOLS_DIR}/${command_name}" "${command_name}"
+    fi
+  done
+else
+  [ -x "${TMP_DIR}/partcad/pc" ] || fail "the archive does not look like a PartCAD bundle"
+  mkdir -p "${INSTALL_DIR}"
+  TARGET="${INSTALL_DIR}/${VERSION}"
+  replace "${TMP_DIR}/partcad" "${TARGET}"
+
+  for command_name in pc partcad; do
+    link_command "${TARGET}/${command_name}" "${command_name}"
+  done
+fi
 
 log ""
-log "PartCAD ${VERSION} (${PLATFORM}) is installed in ${TARGET}."
+log "Installed ${WHAT} ${VERSION} (${PLATFORM}) in ${TARGET}."
+
+if [ "${IDE}" = "1" ]; then
+  log "Start it from your applications, or run 'partcad-ide'."
+fi
 
 case ":${PATH}:" in
 *":${BIN_DIR}:"*)

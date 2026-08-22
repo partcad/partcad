@@ -23,9 +23,44 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
   so a client need not have a CAD environment at all. That is what decides whether a command runs in the client
   or on the daemon — see "Command boundary" in `partcad-cli/AGENTS.md`.
 
+  It does **not** update PartCAD itself, and does not discover or stop daemons: those are
+  `partcad_client`, run by the client. See `partcad-client` below.
+
+* [partcad-utils](./partcad-utils/README.md):
+
+  The lightweight pieces **every** component shares without a CAD-kernel dependency: logging, telemetry, user
+  configuration — and the client/daemon rendezvous, `framing` and `workspace` (which socket serves which
+  workspace, and whether anything is answering on it). The rendezvous lives here precisely because neither end
+  owns it: a copy on each side is a copy that can disagree, and a disagreement is a client silently starting a
+  second daemon.
+
+* [partcad-client](./partcad-client/README.md):
+
+  What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to
+  it (`daemon`, `client`), and replacing this installation of PartCAD (`selfupdate`).
+
+  All of it acts on **this machine**, from the process running out of it. A daemon can be remote, where
+  "update PartCAD" would mean updating somebody else's installation and "stop the local daemons" somebody
+  else's daemons; and a daemon that went looking for its neighbours would be racing every client on the
+  machine. A client is one process acting on its own machine, which is what makes `pc upgrade` stopping every
+  local daemon a sane thing to do rather than a distributed algorithm.
+
+  `selfupdate` itself knows nothing even about that: a caller passes `before_install`, which `pc upgrade` uses
+  to stop the local daemons and wait for them. `pc upgrade` (the host-level command; `pc update` refetches a
+  package's imports and is unrelated) and the VS Code extension's "Update PartCAD" both end up here — the
+  extension by running `pc upgrade` — as does the extension's daemon discovery, through `pc daemon start`.
+  Nothing about daemons or upgrading is reimplemented in TypeScript.
+
 * [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality.
+
+* [partcad-ide-standalone](./partcad-ide-standalone/AGENTS.md):
+
+  The **PartCAD IDE**: a rebranded [VSCodium](https://vscodium.com/) build carrying the extension above, the
+  extensions this repository recommends, and the standalone command line tools -- one application to download,
+  for users who have no Python and no editor set up. It always opens in the PartCAD workbench. Installed with
+  `install.sh --ide`.
 
 * [README.md](./README.md) and [docs](./docs/README.md):
 
@@ -90,7 +125,8 @@ so this never affects a commit.
 From the repo root, inside the environment:
 
 ```bash
-poetry run pytest partcad partcad-cli -x -p no:error-for-skips -p no:warnings --dist no  # unit tests (matches CI)
+poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc \
+  -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```
 
@@ -105,15 +141,17 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 
 ### Packaging
 
-Three artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI), the standalone
-PyInstaller bundles for users who have no Python, and the snap, which wraps the Linux bundle and is built but
-not published yet. Adding a runtime dependency, an optional extra, or a file that is read at runtime can be
-invisible to the frozen bundle and break it while the wheels stay fine — see `dev-tools/pyinstaller/README.md`
-before doing any of those. Note that the bundles fan out over *OS versions* (`ubuntu-22.04-x86_64`,
-`macos-26-arm64`, …), and that the same platform list appears in three places that nothing keeps in sync; the
-README says which, and which of them a pull request skips without `#deepTest`. The snap carries whatever the
-bundle carries, so it needs nothing extra of its own;
-`dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
+Four artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI), the standalone
+PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those bundles inside it, and
+the snap, which wraps the Linux bundle and is built but not published yet. Adding a runtime dependency, an
+optional extra, or a file that is read at runtime can be invisible to the frozen bundle and break it while the
+wheels stay fine — see `dev-tools/pyinstaller/README.md` before doing any of those. Note that the bundles fan
+out over *OS versions* (`ubuntu-22.04-x86_64`, `macos-26-arm64`, …), and that the same platform list appears in
+three places that nothing keeps in sync; the README says which, and which of them a pull request skips without
+`#deepTest`. Changing `.vscode/extensions.json` changes what the IDE ships with — see
+`partcad-ide-standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of
+its own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state
+directory).
 
 ### Committing
 

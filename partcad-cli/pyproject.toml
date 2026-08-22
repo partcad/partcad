@@ -1,6 +1,6 @@
 [project]
 name = "partcad-cli"
-version = "0.7.158"
+version = "0.7.171"
 description = "Command-line interface to PartCAD"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
@@ -35,6 +35,11 @@ dependencies = {file = ["requirements.txt"]}
 # Pass-through extras: they pull in the matching `partcad` extra.
 [tool.setuptools.dynamic.optional-dependencies]
 lint = {file = ["requirements-lint.txt"]}
+# The two cache tiers that reach off this machine. Each carries a client
+# library the core imports lazily, so neither is a dependency of the wheel:
+# 'cacheRemote' (memcached) and 'cacheS3' (object storage).
+memcache = {file = ["requirements-memcache.txt"]}
+aws = {file = ["requirements-aws.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"
