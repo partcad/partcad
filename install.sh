@@ -27,6 +27,7 @@ VERSION="${PARTCAD_VERSION:-}"
 BASE_URL="${PARTCAD_BASE_URL:-}"
 INSTALL_DIR="${PARTCAD_INSTALL_DIR:-}"
 BIN_DIR="${PARTCAD_BIN_DIR:-}"
+PLATFORM="${PARTCAD_PLATFORM:-}"
 APP_DIR="${PARTCAD_APP_DIR:-}"
 IDE="${PARTCAD_IDE:-0}"
 UNINSTALL=0
@@ -64,12 +65,14 @@ Options:
   --repository <owner/name>
                         GitHub repository to install from
                         (default: partcad/partcad).
+  --platform <id>       Install this exact build instead of the one that
+                        matches this machine, e.g. ubuntu-22.04-x86_64.
   --uninstall           Remove an installation made by this script.
   --help                Show this message.
 
 Every option also has an environment variable: PARTCAD_VERSION,
 PARTCAD_INSTALL_DIR, PARTCAD_BIN_DIR, PARTCAD_APP_DIR, PARTCAD_BASE_URL,
-PARTCAD_REPOSITORY, PARTCAD_IDE.
+PARTCAD_REPOSITORY, PARTCAD_IDE, PARTCAD_PLATFORM.
 EOF
 }
 
@@ -108,6 +111,10 @@ while [ $# -gt 0 ]; do
     ;;
   --repository)
     REPOSITORY="${2:-}"
+    shift 2
+    ;;
+  --platform)
+    PLATFORM="${2:-}"
     shift 2
     ;;
   --uninstall)
@@ -218,7 +225,109 @@ arm64 | aarch64) ARCH_NAME="arm64" ;;
 *) fail "unsupported architecture '$(uname -m)'" ;;
 esac
 
-PLATFORM="${OS_NAME}-${ARCH_NAME}"
+# A frozen bundle links against the C library and system frameworks of the
+# machine it was built on, so it runs on that OS version and everything newer,
+# and on nothing older. There is therefore one build per supported OS version,
+# and the archive name carries it. These lists say which builds exist, newest
+# first; keep them in sync with the matrix in
+# ".github/workflows/build-standalone.yml".
+#
+# Both lists are Ubuntu/macOS releases because those are what the builders run.
+# The Ubuntu ones are not a statement about which distribution you need: the
+# older build has the lower glibc floor, which is all that a non-Ubuntu Linux
+# cares about, and that is the one such a machine is offered.
+LINUX_BUILDS="ubuntu-24.04 ubuntu-22.04"
+MACOS_BUILDS="macos-26 macos-15"
+
+# True when $1 <= $2, comparing dotted version numbers field by field.
+# Note `test` rather than `$(( ))`: a leading zero makes shell arithmetic read
+# "04" as octal, and Ubuntu version numbers are full of leading zeros.
+version_le() {
+  vl_left="$1"
+  vl_right="$2"
+  while [ -n "${vl_left}" ] || [ -n "${vl_right}" ]; do
+    vl_l="${vl_left%%.*}"
+    vl_r="${vl_right%%.*}"
+    [ -n "${vl_l}" ] || vl_l=0
+    [ -n "${vl_r}" ] || vl_r=0
+    [ "${vl_l}" -lt "${vl_r}" ] && return 0
+    [ "${vl_l}" -gt "${vl_r}" ] && return 1
+    case "${vl_left}" in *.*) vl_left="${vl_left#*.}" ;; *) vl_left="" ;; esac
+    case "${vl_right}" in *.*) vl_right="${vl_right#*.}" ;; *) vl_right="" ;; esac
+  done
+  return 0
+}
+
+# Which release this machine is, in the same "<name>-<version>" shape as the
+# build lists above, or empty when it cannot be established.
+host_release() {
+  case "${OS_NAME}" in
+  linux)
+    # Every distribution ships /etc/os-release. Only Ubuntu can be lined up
+    # against the build list by version; anything else is left empty on
+    # purpose, and gets the oldest build below.
+    [ -r /etc/os-release ] || return 0
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    [ "${ID:-}" = "ubuntu" ] || return 0
+    [ -n "${VERSION_ID:-}" ] || return 0
+    printf 'ubuntu-%s' "${VERSION_ID}"
+    ;;
+  macos)
+    # The major version is the compatibility boundary; the point release is not.
+    printf 'macos-%s' "$(sw_vers -productVersion | cut -d. -f1)"
+    ;;
+  esac
+}
+
+# The builds worth trying on this machine, best first. A build newer than this
+# machine cannot run on it, so those are dropped rather than offered and left to
+# fail at first start; if that leaves nothing -- an OS older than every build --
+# the oldest build is offered anyway, as the only one with a chance.
+candidate_releases() {
+  cr_builds="$1"
+  cr_host="$2"
+  cr_oldest=""
+  cr_result=""
+  for cr_build in ${cr_builds}; do
+    cr_oldest="${cr_build}"
+    if [ -z "${cr_host}" ]; then
+      # An unidentified system: offer the builds oldest first, so the widest
+      # compatible one is tried before anything that needs a newer libc.
+      cr_result="${cr_build} ${cr_result}"
+    elif version_le "${cr_build#*-}" "${cr_host#*-}"; then
+      cr_result="${cr_result} ${cr_build}"
+    fi
+  done
+  [ -n "${cr_result}" ] || cr_result="${cr_oldest}"
+  printf '%s' "${cr_result}"
+}
+
+if [ -n "${PLATFORM}" ]; then
+  PLATFORMS="${PLATFORM}"
+elif [ "${IDE}" = "1" ]; then
+  # The IDE is built once per operating system and architecture, not once per
+  # OS version: it carries its own Electron runtime, and
+  # "partcad-ide-standalone/build.sh" names its archive "<os>-<arch>". The
+  # command line tools inside it are the per-OS-version bundle, but that is the
+  # IDE build's choice, not something this script names.
+  PLATFORMS="${OS_NAME}-${ARCH_NAME}"
+else
+  case "${OS_NAME}" in
+  linux) BUILDS="${LINUX_BUILDS}" ;;
+  macos) BUILDS="${MACOS_BUILDS}" ;;
+  esac
+  HOST_RELEASE="$(host_release)"
+  PLATFORMS=""
+  for release in $(candidate_releases "${BUILDS}" "${HOST_RELEASE}"); do
+    PLATFORMS="${PLATFORMS} ${release}-${ARCH_NAME}"
+  done
+  if [ -n "${HOST_RELEASE}" ]; then
+    log "This machine is ${HOST_RELEASE} on ${ARCH_NAME}."
+  else
+    log "Could not identify this system's release; trying the most portable build first."
+  fi
+fi
 
 ################################################  FETCH  #####################################################
 
@@ -242,24 +351,40 @@ if [ -z "${VERSION}" ]; then
 fi
 
 if [ "${IDE}" = "1" ]; then
-  ARCHIVE="partcad-ide-${VERSION}-${PLATFORM}.tar.gz"
+  ARCHIVE_PREFIX="partcad-ide"
   WHAT="the PartCAD IDE"
 else
-  ARCHIVE="partcad-${VERSION}-${PLATFORM}.tar.gz"
+  ARCHIVE_PREFIX="partcad"
   WHAT="PartCAD"
 fi
+
 : "${BASE_URL:=https://github.com/${REPOSITORY}/releases/download/${VERSION}}"
-ARCHIVE_URL="${BASE_URL}/${ARCHIVE}"
 
 TMP_DIR="$(mktemp -d)"
 cleanup() { rm -rf "${TMP_DIR}"; }
 trap cleanup EXIT INT TERM
 
-log "Downloading ${WHAT} ${VERSION} for ${PLATFORM}..."
-log "  ${ARCHIVE_URL}"
-download "${ARCHIVE_URL}" "${TMP_DIR}/${ARCHIVE}" || fail "download failed.
-       There may be no build of ${VERSION} for ${PLATFORM}. See
-       https://github.com/${REPOSITORY}/releases for what is available."
+# The candidates are tried in order. A build can be absent from a release --
+# an older release predates a platform, or a builder failed -- and every
+# candidate after the first is still a bundle this machine can run, so a
+# missing one moves on instead of ending the install. With --ide there is only
+# ever one candidate, so this is a single download that reports the same way.
+ARCHIVE=""
+for candidate_platform in ${PLATFORMS}; do
+  candidate="${ARCHIVE_PREFIX}-${VERSION}-${candidate_platform}.tar.gz"
+  log "Downloading ${WHAT} ${VERSION} for ${candidate_platform}..."
+  log "  ${BASE_URL}/${candidate}"
+  if download "${BASE_URL}/${candidate}" "${TMP_DIR}/${candidate}"; then
+    ARCHIVE="${candidate}"
+    PLATFORM="${candidate_platform}"
+    break
+  fi
+  warn "there is no ${candidate} at ${BASE_URL}"
+done
+[ -n "${ARCHIVE}" ] || fail "no build of ${VERSION} for this machine. Tried:${PLATFORMS}
+       See https://github.com/${REPOSITORY}/releases for what is available,
+       and use --platform to install a specific build."
+ARCHIVE_URL="${BASE_URL}/${ARCHIVE}"
 
 # The download itself is authenticated by HTTPS; the checksum is here to catch
 # a truncated or corrupted transfer, so a machine without a checksum tool gets
@@ -401,7 +526,7 @@ else
 fi
 
 log ""
-log "Installed ${WHAT} ${VERSION} in ${TARGET}."
+log "Installed ${WHAT} ${VERSION} (${PLATFORM}) in ${TARGET}."
 
 if [ "${IDE}" = "1" ]; then
   log "Start it from your applications, or run 'partcad-ide'."

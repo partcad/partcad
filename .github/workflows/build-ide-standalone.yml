@@ -86,15 +86,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `platform` names the IDE archive; `bundle` names the command line
+          # bundle that goes inside it. They differ: the IDE carries its own
+          # Electron runtime and is built once per operating system and
+          # architecture, while the frozen command line bundle links against
+          # the C library of the machine that froze it and is therefore built
+          # once per OS *version* ("build-standalone.yml" explains why). Each
+          # `bundle` must be one of PLATFORMS_CORE there -- the deep-only
+          # platforms are absent from a shallow run, and this job would then
+          # find no artifact to download.
           - os: ubuntu-latest
             platform: linux-x86_64
+            bundle: ubuntu-24.04-x86_64
           # macos-latest is arm64; there is no macos x86_64 bundle to put
           # inside an x86_64 IDE, so there is no x86_64 IDE either. Same
           # reasoning as in "build-standalone.yml".
           - os: macos-latest
             platform: macos-arm64
+            bundle: macos-15-arm64
           - os: windows-latest
             platform: windows-x86_64
+            bundle: windows-2022-x86_64
     runs-on: ${{ matrix.os }}
     # Longer than the command line bundles' hour: this unpacks an editor, has it
     # install a dozen extensions, and compresses a gigabyte into an installer.
@@ -144,7 +156,7 @@ jobs:
       - name: Download the command line tools
         uses: actions/download-artifact@v8
         with:
-          name: partcad-standalone-${{ matrix.platform }}
+          name: partcad-standalone-${{ matrix.bundle }}
           path: bundles
 
       - name: Unpack the command line tools

@@ -369,6 +369,23 @@ class UserConfig(vyper.Vyper):
     def get_cache_dir():
         return os.path.join(Path.home(), ".cache", "partcad")
 
+    @staticmethod
+    def get_generated_id_path():
+        """Where the telemetry id lives: one identifier per user, generated once.
+
+        Next to the configuration file, not in `internalStateDir`. That
+        directory holds caches, sandboxes and clones, and can be pointed
+        somewhere else per installation or per run -- the snap package points it
+        at the snap's own per-user directory -- and an identity that moved with
+        it would make one user look like several.
+
+        Defined in one place because it used to be defined in two: the id was
+        written here and read back from `internalStateDir` by `pc system
+        telemetry info` and `pc system telemetry clear`, which agreed only for as
+        long as nothing set PC_INTERNAL_STATE_DIR.
+        """
+        return os.path.join(UserConfig.get_config_dir(), ".generated_id")
+
     def to_dict(self) -> dict:
         """This configuration as plain data, ready to hand to another process.
 

@@ -130,16 +130,28 @@ poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-servi
 poetry run behave                                                                        # integration tests (./features)
 ```
 
+CI fans these out over operating systems, and a pull request runs a reduced matrix: both Ubuntu 22.04 images
+and the second macOS are dropped. The full matrix runs nightly, on a manual dispatch, on a push, and on a
+pull request whose title or description contains `#deepTest`. `.github/actions/test-depth` is the one place
+that decides; `docs/source/contributing.rst` explains it to contributors. Note that a push to `devel` runs no
+matrix at all unless its head commit message starts with `Version updated` — the `set-matrix` job, and every
+job that depends on it, is skipped otherwise.
+
 Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
 
 ### Packaging
 
-Three artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI), the standalone
-PyInstaller bundles for users who have no Python, and the PartCAD IDE, which carries those bundles inside it.
-Adding a runtime dependency, an optional extra, or a file that is read at runtime can be invisible to the frozen
-bundle and break it while the wheels stay fine — see `dev-tools/pyinstaller/README.md` before doing any of
-those. Changing `.vscode/extensions.json` changes what the IDE ships with — see
-`partcad-ide-standalone/README.md`.
+Four artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI), the standalone
+PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those bundles inside it, and
+the snap, which wraps the Linux bundle and is built but not published yet. Adding a runtime dependency, an
+optional extra, or a file that is read at runtime can be invisible to the frozen bundle and break it while the
+wheels stay fine — see `dev-tools/pyinstaller/README.md` before doing any of those. Note that the bundles fan
+out over *OS versions* (`ubuntu-22.04-x86_64`, `macos-26-arm64`, …), and that the same platform list appears in
+three places that nothing keeps in sync; the README says which, and which of them a pull request skips without
+`#deepTest`. Changing `.vscode/extensions.json` changes what the IDE ships with — see
+`partcad-ide-standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of
+its own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state
+directory).
 
 ### Committing
 

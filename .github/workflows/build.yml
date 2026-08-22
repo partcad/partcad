@@ -18,43 +18,83 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
 
+# The same four lists as "test.yml", with the same meanings, because this
+# workflow builds what that one tests. Keep them in sync; that file carries the
+# reasoning for which images are here and which are not.
+env:
+  OSES:
+    '["ubuntu-latest", "ubuntu-22.04", "ubuntu-24.04-arm", "ubuntu-22.04-arm", "windows-latest", "windows-2022",
+    "macos-latest", "macos-26"]'
+  # Dropped unless the run is deep: the Ubuntu 22.04 images and the second
+  # macOS. See ".github/actions/test-depth" and OSES_DEEP_ONLY in "test.yml".
+  OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm", "macos-26"]'
+  PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
+  # Same cost trade-off as test.yml: the full Python range runs on
+  # ubuntu-latest only, every other image builds on the oldest and the newest
+  # supported Python, plus Windows on 3.12. 40 -> 21 combinations, and 15 on a
+  # run that is not deep.
+  #
+  # Windows + 3.12 is deliberately back in the matrix. It was excluded for an
+  # 'ensurepip' failure (#374); the toolchain underneath has since moved a long
+  # way, so this run is what tells us whether that is still real. Re-exclude it
+  # if it is.
+  EXCLUDES: >-
+    [{"os": "ubuntu-22.04", "python-version": "3.11"},
+    {"os": "ubuntu-22.04", "python-version": "3.12"},
+    {"os": "ubuntu-22.04", "python-version": "3.13"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.11"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.12"},
+    {"os": "ubuntu-24.04-arm", "python-version": "3.13"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.11"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.12"},
+    {"os": "ubuntu-22.04-arm", "python-version": "3.13"},
+    {"os": "windows-latest", "python-version": "3.11"},
+    {"os": "windows-latest", "python-version": "3.13"},
+    {"os": "windows-2022", "python-version": "3.11"},
+    {"os": "windows-2022", "python-version": "3.13"},
+    {"os": "macos-latest", "python-version": "3.11"},
+    {"os": "macos-latest", "python-version": "3.12"},
+    {"os": "macos-latest", "python-version": "3.13"},
+    {"os": "macos-26", "python-version": "3.11"},
+    {"os": "macos-26", "python-version": "3.12"},
+    {"os": "macos-26", "python-version": "3.13"}]
+
 jobs:
+  # Composed here rather than written out below, so that a pull request can run
+  # a reduced matrix. Mirrors the job of the same name in "test.yml".
+  set-matrix:
+    name: "Set matrix"
+    runs-on: ubuntu-latest
+    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+
+      - name: Set matrix
+        id: set-matrix
+        env:
+          DEEP: ${{ steps.depth.outputs.deep }}
+        run: |
+          if [ "${DEEP}" = "true" ]; then
+            OSES='${{ env.OSES }}'
+          else
+            OSES=$(jq -cn --argjson all '${{ env.OSES }}' --argjson deep_only '${{ env.OSES_DEEP_ONLY }}' '$all - $deep_only')
+          fi
+          echo "Operating systems: ${OSES}"
+          # Leftover excludes for dropped images match nothing; see the note in
+          # the same step in "test.yml".
+          echo 'matrix={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
+
   build:
+    needs: set-matrix
     strategy:
       fail-fast: false
-      matrix:
-        # Keep this list in sync with OSES in test.yml, which documents why
-        # each image is here and why macos-13/macos-14/ubuntu-26.04 are not.
-        os: [ubuntu-latest, ubuntu-22.04, windows-latest, windows-2022, macos-latest, macos-26]
-        python-version:
-          - "3.10"
-          - "3.11"
-          - "3.12"
-          - "3.13"
-          - "3.14"
-        exclude:
-          # Same cost trade-off as test.yml: the full Python range runs on
-          # ubuntu-latest only, every other image builds on the oldest and the
-          # newest supported Python, plus Windows on 3.12.
-          # 30 -> 17 combinations.
-          #
-          # Windows + 3.12 is deliberately back in the matrix. It was excluded
-          # for an 'ensurepip' failure (#374); the toolchain underneath has
-          # since moved a long way, so this run is what tells us whether that
-          # is still real. Re-exclude it if it is.
-          - { os: "ubuntu-22.04", python-version: "3.11" }
-          - { os: "ubuntu-22.04", python-version: "3.12" }
-          - { os: "ubuntu-22.04", python-version: "3.13" }
-          - { os: "windows-latest", python-version: "3.11" }
-          - { os: "windows-latest", python-version: "3.13" }
-          - { os: "windows-2022", python-version: "3.11" }
-          - { os: "windows-2022", python-version: "3.13" }
-          - { os: "macos-latest", python-version: "3.11" }
-          - { os: "macos-latest", python-version: "3.12" }
-          - { os: "macos-latest", python-version: "3.13" }
-          - { os: "macos-26", python-version: "3.11" }
-          - { os: "macos-26", python-version: "3.12" }
-          - { os: "macos-26", python-version: "3.13" }
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}

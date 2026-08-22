@@ -13,8 +13,15 @@ permissions:
 
 jobs:
   # The standalone bundles: the same tools packaged with their own Python
-  # interpreter, for users who have none. They are attached to the same GitHub
-  # release as the wheels, which is where "install.sh" downloads them from.
+  # interpreter, for users who have none. One per supported OS version, all
+  # attached to the same GitHub release as the wheels, which is where
+  # "install.sh" downloads them from.
+  #
+  # That workflow also packs the Linux bundles as snaps. Those are deliberately
+  # NOT part of this release: publishing them needs Snap Store credentials and,
+  # because the snap is classic, a manual store review. Until that exists they
+  # stay build artifacts of the "Standalone" workflow, and nothing here
+  # downloads or uploads them.
   build-standalone:
     uses: ./.github/workflows/build-standalone.yml
 
@@ -206,8 +213,15 @@ jobs:
       - name: Check the standalone bundles are complete
         run: |
           missing=0
-          # The platforms built by "build-standalone.yml".
-          for platform in linux-x86_64 macos-arm64 windows-x86_64; do
+          # The platforms built by "build-standalone.yml". Keep in sync with the
+          # matrix there, and with LINUX_BUILDS/MACOS_BUILDS in "install.sh":
+          # a name published here that the installer never asks for is dead
+          # weight, and one it asks for that is not here is a failed install.
+          for platform in \
+            ubuntu-22.04-x86_64 ubuntu-22.04-arm64 \
+            ubuntu-24.04-x86_64 ubuntu-24.04-arm64 \
+            macos-15-arm64 macos-26-arm64 \
+            windows-2022-x86_64 windows-2025-x86_64; do
             archive=$(find standalone -type f -name "partcad-*-${platform}.*" ! -name "*.sha256")
             checksum=$(find standalone -type f -name "partcad-*-${platform}.*.sha256")
             if [ -z "${archive}" ] || [ -z "${checksum}" ]; then
