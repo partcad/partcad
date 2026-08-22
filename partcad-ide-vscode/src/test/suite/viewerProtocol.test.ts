@@ -112,6 +112,13 @@ suite('PartCAD Viewer protocol', () => {
         assert.strictEqual(listenPort(env(undefined)), PARTCAD_IDE_PORT);
         // 0 would bind an arbitrary free port, which the client could not find.
         assert.strictEqual(listenPort(env('0')), PARTCAD_IDE_PORT);
+        // Spellings Number() would take and Python's _port() would not: the two
+        // parsers have to agree on the grammar, not just on the range.
+        assert.strictEqual(listenPort(env('1e4')), PARTCAD_IDE_PORT);
+        assert.strictEqual(listenPort(env('0x270f')), PARTCAD_IDE_PORT);
+        assert.strictEqual(listenPort(env(' 9999 ')), PARTCAD_IDE_PORT);
+        assert.strictEqual(listenPort(env('+9999')), PARTCAD_IDE_PORT);
+        assert.strictEqual(listenPort(env('99.5')), PARTCAD_IDE_PORT);
     });
 
     test('glTF payloads written by the Python client are readable here', () => {

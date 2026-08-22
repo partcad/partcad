@@ -17,6 +17,7 @@ IDE's tree. The connection is re-established transparently if the IDE restarts.
 """
 
 import os
+import re
 import socket
 import threading
 import uuid
@@ -40,19 +41,30 @@ class ViewerNotAvailable(Exception):
     """No IDE is listening on the PartCAD viewer port."""
 
 
+# Decimal digits only: 'int()' would also take "+9999", " 9999 " and "1_0",
+# none of which the JS side reads the same way.
+_PORT_RE = re.compile(r"\A[0-9]+\Z")
+
+
 def _port() -> int:
     """The port to talk to.
 
     Constant by design (see 'protocol'), with an environment override so that a
     developer running two IDE windows, or a test running against a throwaway
     server, can point a process somewhere else without a rebuild.
+
+    The grammar is plain decimal digits and the range is 1..65535, which is what
+    'listenPort()' in 'partcad-ide-vscode/src/viewer/protocol.ts' accepts too:
+    the two ends have to read the same variable the same way, or one of them
+    binds a port the other does not connect to. Port 0 is excluded because it
+    means "any free port", which the far end of this protocol cannot find.
+    Anything else falls back to the constant rather than failing.
     """
     override = os.environ.get("PARTCAD_IDE_PORT")
-    if override:
-        try:
-            return int(override)
-        except ValueError:
-            pass
+    if override is not None and _PORT_RE.match(override):
+        port = int(override)
+        if 1 <= port <= 65535:
+            return port
     return PARTCAD_IDE_PORT
 
 

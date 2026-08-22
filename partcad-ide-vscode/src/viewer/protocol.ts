@@ -39,17 +39,23 @@ export const PARTCAD_IDE_HOST = '127.0.0.1';
  * developer running two IDE windows, or pointing a process at a throwaway
  * server, sets it once in the environment. An unparseable or out-of-range value
  * falls back to the constant rather than failing to bind, matching the client.
+ *
+ * The grammar has to match '_port()' in
+ * 'partcad-ide-client/src/partcad_ide_client/client.py' exactly, or the two
+ * ends read the same variable differently and this one binds a port the client
+ * never connects to: plain decimal digits only (Number() would also take
+ * "1e4" and "0x270f"), and 1..65535.
  */
 export function listenPort(env: NodeJS.ProcessEnv = process.env): number {
     const raw = env.PARTCAD_IDE_PORT;
-    if (!raw) {
-        // Unset or empty. Checked before Number(), which reads "" as 0.
+    if (!raw || !/^[0-9]+$/.test(raw)) {
+        // Unset, empty, or not a decimal number.
         return PARTCAD_IDE_PORT;
     }
     const override = Number(raw);
     // From 1: port 0 means "any free port", which cannot be the far end of a
     // protocol whose whole point is that the client knows where to connect.
-    if (Number.isInteger(override) && override >= 1 && override <= 65535) {
+    if (override >= 1 && override <= 65535) {
         return override;
     }
     return PARTCAD_IDE_PORT;

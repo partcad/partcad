@@ -29,6 +29,18 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
 
     private _showResolve?: (value: any) => void;
 
+    /**
+     * Renders asked for and not yet reported done.
+     *
+     * '?/partcad/showPartDone' carries no inspection identifier, so a
+     * completion cannot be matched to its request by name. It can be matched by
+     * count: PartCAD reports one completion per render it was asked for, so
+     * only once every earlier render has reported in is the completion this
+     * inspection's own. Without the count, a render superseded by a faster
+     * click resolves the newer inspection instead of its own.
+     */
+    private _pendingShows: number = 0;
+
     private shownPackage: string = '';
     private shownItem: string = '';
 
@@ -48,8 +60,13 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
      * showDone is called when lsp_server tells the extension that the show command is complete
      */
     public showDone() {
-        if (this._showResolve) {
-            this._showResolve(undefined);
+        if (this._pendingShows > 0) {
+            this._pendingShows -= 1;
+        }
+        if (this._pendingShows === 0 && this._showResolve) {
+            const resolve = this._showResolve;
+            this._showResolve = undefined;
+            resolve(undefined);
         }
     }
 
@@ -106,16 +123,27 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
                 // the command below returns.
                 const done = new Promise((resolve) => {
                     // A previous inspection that is still pending is superseded
-                    // by this one rather than left to hang.
+                    // by this one rather than left to hang. Its render is still
+                    // running, though, so it is still owed a completion, which
+                    // '_pendingShows' keeps this one from taking for its own.
                     if (this._showResolve) {
                         this._showResolve(undefined);
                     }
                     this._showResolve = resolve;
+                    this._pendingShows += 1;
                 });
 
                 progress.report({ message: progressMessage, increment: 20 });
                 const rendered = (async () => {
-                    await vscode.commands.executeCommand(command, { pkg: packageName, name: itemName, params });
+                    try {
+                        await vscode.commands.executeCommand(command, { pkg: packageName, name: itemName, params });
+                    } catch (error) {
+                        // A render that never started will never be reported
+                        // done; drop its share of the count so it cannot leave
+                        // a later inspection waiting forever.
+                        this.showDone();
+                        throw error;
+                    }
                     // Wait for an outside call of this._showResolve()
                     await done;
                 })();

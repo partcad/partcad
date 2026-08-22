@@ -192,3 +192,30 @@ def test_port_override_falls_back_when_unparseable(monkeypatch):
 
     monkeypatch.delenv("PARTCAD_IDE_PORT")
     assert client._port() == protocol.PARTCAD_IDE_PORT
+
+
+@pytest.mark.parametrize(
+    "override, expected",
+    [
+        ("9999", 9999),
+        ("65535", 65535),
+        ("1", 1),
+        # Out of range: 0 means "any free port", which the IDE cannot bind and
+        # still be findable, and 65536 is not a port at all.
+        ("0", protocol.PARTCAD_IDE_PORT),
+        ("70000", protocol.PARTCAD_IDE_PORT),
+        # Spellings 'int()' would take and the JS 'listenPort()' would not.
+        ("+9999", protocol.PARTCAD_IDE_PORT),
+        (" 9999 ", protocol.PARTCAD_IDE_PORT),
+        ("1_0", protocol.PARTCAD_IDE_PORT),
+        # Spellings 'Number()' would take and 'int()' would not; both ends have
+        # to reject them, or one moves off the default port alone.
+        ("1e4", protocol.PARTCAD_IDE_PORT),
+        ("0x270f", protocol.PARTCAD_IDE_PORT),
+        ("99.5", protocol.PARTCAD_IDE_PORT),
+        ("", protocol.PARTCAD_IDE_PORT),
+    ],
+)
+def test_port_override_matches_the_js_parser(monkeypatch, override, expected):
+    monkeypatch.setenv("PARTCAD_IDE_PORT", override)
+    assert client._port() == expected

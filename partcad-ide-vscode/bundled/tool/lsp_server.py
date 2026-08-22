@@ -449,13 +449,15 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
         # PartCAD itself down with it, since pip installs nothing when any
         # requirement in a single invocation cannot be resolved.
         try:
-            client_result = pip_install("partcad-ide-client")
-            if client_result.stderr:
-                LSP_SERVER.send_notification(
-                    "?/partcad/warn",
-                    "PartCAD is installed, but 'partcad-ide-client' is not, so the PartCAD Viewer "
-                    "will not receive anything: %s" % client_result.stderr,
-                )
+            pip_install("partcad-ide-client")
+            # Whether the install worked is decided by importing what it was
+            # supposed to install, not by looking at 'stderr': 'run_module'
+            # swallows pip's SystemExit, so no exit status survives, and pip
+            # writes notices to 'stderr' on a perfectly successful run.
+            # 'invalidate_caches' is needed because the package has just
+            # appeared in a directory the import system has already scanned.
+            importlib.invalidate_caches()
+            importlib.import_module("partcad_ide_client")
         except Exception as e:  # pylint: disable=broad-except
             LSP_SERVER.send_notification(
                 "?/partcad/warn",
