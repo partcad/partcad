@@ -30,7 +30,8 @@ def handle_input(decode=True):
     OCCT geometry. A wrapper that needs a node's 'name' or 'label', or its
     location as separate data, needs that: decoding mirrors the tree in nested
     compounds but keeps geometry alone, dropping the names and baking the
-    placements in (see ocp_serialize.decode_shape).
+    placements in (see ocp_serialize.decode, which hands each envelope it finds
+    to decode_shape - the per-node walk that does this).
     """
     if len(sys.argv) < 2:
         sys.stderr.write("Usage: %s <path>\n" % sys.argv[0])
