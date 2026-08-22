@@ -70,6 +70,11 @@ search = "__version__ = \"{current_version}\""
 replace = "__version__ = \"{new_version}\""
 
 [[tool.bumpversion.files]]
+filename = "partcad/requirements.txt"
+search = "partcad-utils=={current_version}"
+replace = "partcad-utils=={new_version}"
+
+[[tool.bumpversion.files]]
 filename = "partcad-service-json-rpc/requirements.txt"
 search = "partcad-utils=={current_version}"
 replace = "partcad-utils=={new_version}"
