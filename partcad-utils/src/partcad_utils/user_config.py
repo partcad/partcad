@@ -18,6 +18,7 @@ from pathlib import Path
 import vyper
 
 from . import logging as pc_logging
+from .booleans import to_bool
 from .utils import is_editable_install
 
 # IMPORTANT:
@@ -160,10 +161,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.performance" in self.v._override:
-                return self.v._override["telemetry.performance"]
+                return to_bool(self.v._override["telemetry.performance"])
             telemetry = self.v._config.get("telemetry", {})
             if "performance" in telemetry:
-                return telemetry["performance"]
+                return to_bool(telemetry["performance"])
 
         return True
 
@@ -175,10 +176,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.failures" in self.v._override:
-                return self.v._override["telemetry.failures"]
+                return to_bool(self.v._override["telemetry.failures"])
             telemetry = self.v._config.get("telemetry", {})
             if "failures" in telemetry:
-                return telemetry["failures"]
+                return to_bool(telemetry["failures"])
 
         return True
 
@@ -190,10 +191,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.debug" in self.v._override:
-                return self.v._override["telemetry.debug"]
+                return to_bool(self.v._override["telemetry.debug"])
             telemetry = self.v._config.get("telemetry", {})
             if "debug" in telemetry:
-                return telemetry["debug"]
+                return to_bool(telemetry["debug"])
 
         return False
 
@@ -237,10 +238,10 @@ class TelemetryConfig(dict):
         except Exception:  # pragma: no cover
             # Workaround for https://github.com/alexferl/vyper/pull/71
             if "telemetry.sentryAttachStacktrace" in self.v._override:
-                return self.v._override["telemetry.sentryAttachStacktrace"]
+                return to_bool(self.v._override["telemetry.sentryAttachStacktrace"])
             telemetry = self.v._config.get("telemetry", {})
             if "sentryAttachStacktrace" in telemetry:
-                return telemetry["sentryAttachStacktrace"]
+                return to_bool(telemetry["sentryAttachStacktrace"])
 
         return False
 
@@ -267,7 +268,98 @@ class TelemetryConfig(dict):
         return str({k: v for k, v in properties})
 
 
+# The options a user configuration resolves to, by their configuration-file
+# names. This is what travels when one process hands its configuration to
+# another; a new option belongs here, or the daemon will keep resolving it from
+# its own environment instead of the caller's.
+OPTION_KEYS = (
+    "threadsMax",
+    "cacheMem",
+    "cacheFiles",
+    "cacheFilesMaxEntrySize",
+    "cacheFilesMinEntrySize",
+    "cacheMemoryMaxEntrySize",
+    "cacheMemoryDoubleCacheMaxEntrySize",
+    "cacheRemote",
+    "cacheRemoteServer",
+    "cacheRemoteNamespace",
+    "cacheRemoteExpiration",
+    "cacheRemoteMaxEntrySize",
+    "cacheRemoteMinEntrySize",
+    "cacheS3",
+    "cacheS3Bucket",
+    "cacheS3Prefix",
+    "cacheS3Region",
+    "cacheS3EndpointUrl",
+    "cacheS3MaxEntrySize",
+    "cacheS3MinEntrySize",
+    "cacheDependenciesIgnore",
+    "pythonSandbox",
+    "ignoreBundledOpenscad",
+    "internalStateDir",
+    "logLevel",
+    "forceUpdate",
+    "develIndex",
+    "offline",
+    "git.clone.timeout",
+    "git.clone.retry.max",
+    "git.clone.retry.patience",
+    "useDockerPython",
+    "useDockerKicad",
+)
+
+# The nested sections, by the path each configuration view reads. 'git.auth'
+# carries credentials for private dependencies; it travels because the daemon is
+# meant to ignore its own configuration, and a caller whose configuration is the
+# only one holding those credentials would otherwise fail to clone.
+#
+# 'telemetry' is deliberately absent, on two counts. It is a property of a
+# process rather than of a package: it is initialized once at import
+# (telemetry.init) long before any context exists, and nothing in context
+# creation or dependency resolution reads it, so a copy of it would be inert --
+# and a daemon reporting under a caller's DSN and environment would be wrong
+# even if it were not. It is also the one key that cannot be read safely:
+# reading a parent that has environment-bound children makes vyper merge each of
+# those children into the mapping the config file gave, and raise KeyError when
+# the mapping does not already carry that child. 'PC_TELEMETRY_ENV=test' over a
+# config file without a 'telemetry.env' is enough, which is what CI runs under.
+# The same happens when reading a 'telemetry.*' leaf that is not set, because
+# the lookup descends to that parent. It is the vyper bug that the try/except in
+# TelemetryConfig above is already written around.
+#
+# The sections below are safe for the same reason inverted: none is the parent
+# of an environment-bound key. 'git.clone.timeout' and the 'git.clone.retry.*'
+# pair hang off 'git', which is why 'git' is never read whole -- only
+# 'git.config' and 'git.auth' are.
+SECTION_PATHS = (
+    "git.config",
+    "git.auth",
+    "parameters",
+    "user",
+)
+
+
 class UserConfig(vyper.Vyper):
+    def get_bool(self, key):
+        """Read a boolean option, believing "0", "no" and "off".
+
+        vyper's own implementation treats every string but "false" as true,
+        because it never converts a value -- it hands back what it was given and
+        falls through to ``bool()``. That is a fine default for a library that
+        does not know where its values came from, but PartCAD does: every one of
+        these keys is bound to a ``PC_*`` environment variable, and an
+        environment variable can only carry a string. Under vyper's reading,
+        ``PC_FORCE_UPDATE=0`` turned the flag *on*.
+
+        The conversion is therefore PartCAD's to make, and making it here makes
+        it once: every boolean option, including the ones ``TelemetryConfig``
+        reads through this same object, gets the same answer. It is also the
+        answer ``pc`` already gave, since click converts the same variable with
+        its own BOOL type -- so ``pc`` and the daemon it launches stop
+        disagreeing about what the environment said.
+        """
+        return to_bool(self.get(key))
+
     @staticmethod
     def get_config_dir():
         home = os.environ.get("HOME", Path.home())
@@ -277,7 +369,39 @@ class UserConfig(vyper.Vyper):
     def get_cache_dir():
         return os.path.join(Path.home(), ".cache", "partcad")
 
-    def __init__(self):
+    def to_dict(self) -> dict:
+        """This configuration as plain data, ready to hand to another process.
+
+        A PartCAD client resolves its own configuration -- a config file, the
+        ``PC_*`` environment, and the command line on top of each other -- and
+        then asks the daemon to do the work. The daemon has a configuration of
+        its own, resolved from its own environment when it was launched and warm
+        ever since, which is not the one the command was invoked with. Sending
+        this alongside the request is what lets the daemon build the context
+        from the caller's configuration instead of its own.
+
+        Only the resolved options are copied, keyed by their configuration-file
+        names, plus the nested sections. A value that resolved to nothing is
+        left out rather than sent as null, so that reconstructing it falls back
+        to the same default rather than overriding the option with an empty one.
+        """
+        data = {}
+        for key in OPTION_KEYS:
+            value = self.get(key)
+            if value is not None:
+                data[key] = value
+        for path in SECTION_PATHS:
+            value = self.get(path)
+            if value:
+                data[path] = value
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "UserConfig":
+        """Rebuild a configuration from what :meth:`to_dict` produced."""
+        return cls(settings=data)
+
+    def __init__(self, settings: dict = None):
         super().__init__()
         self.set_config_type("yaml")
 
@@ -294,6 +418,16 @@ class UserConfig(vyper.Vyper):
             except Exception as e:
                 pc_logging.error("ERROR: Failed to parse %s: %s" % (config_path, str(e)))
 
+        # A configuration handed over by another process, applied before
+        # anything below reads a value back. These land as vyper overrides,
+        # which outrank the file just read and the environment bound further
+        # down, so every option resolves to what the caller resolved it to and
+        # this process's own environment is ignored -- which is the point when
+        # the caller is a CLI and this process is the daemon serving it.
+        if settings:
+            for key, value in settings.items():
+                self.set(key, value)
+
         # If the filesystem cache is enabled, then (by default):
         # - objects of 1 byte bytes are cached both in memory and on the filesystem (to cache test results)
         # - objects from 2 bytes to 100 bytes are cached in memory only (avoid filesystem polution and overhead),
@@ -304,11 +438,45 @@ class UserConfig(vyper.Vyper):
         # If the filesystem cache is disabled then (by default):
         # - objects from 1 to 100MB are cached in memory only.
         # - object above 100MB are not cached and recomputed on each access.
+        #
+        # The cache is a hierarchy of tiers, and each one has its own switch and
+        # its own size window, because what is worth keeping in RAM is not what
+        # is worth a file, and neither is what is worth a network round trip:
+        #
+        #   cacheMem     this process's memory. Nearest, and lost on exit.
+        #   cacheFiles   a directory under the internal state directory. Local.
+        #   cacheRemote  a memcached server shared by a team or a CI fleet.
+        #                Needs the 'memcache' extra.
+        #   cacheS3      an object store, which outlives all of the above.
+        #                Needs the 'aws' extra.
+        #
+        # A read walks them in that order and stops at the first hit; a write
+        # offers the entry to every tier whose window accepts it. The two remote
+        # tiers are off by default: they need an address that only a deployment
+        # can supply.
+        self.set_default("cacheMem", True)
+        self.set_default("cacheMemoryMaxEntrySize", 100 * 1024 * 1024)
+        self.set_default("cacheMemoryDoubleCacheMaxEntrySize", 1 * 1024 * 1024)
         self.set_default("cacheFiles", True)
         self.set_default("cacheFilesMaxEntrySize", 10 * 1024 * 1024)
         self.set_default("cacheFilesMinEntrySize", 100)
-        self.set_default("cacheMemoryMaxEntrySize", 100 * 1024 * 1024)
-        self.set_default("cacheMemoryDoubleCacheMaxEntrySize", 1 * 1024 * 1024)
+        self.set_default("cacheRemote", False)
+        self.set_default("cacheRemoteServer", "")
+        self.set_default("cacheRemoteNamespace", "partcad")
+        self.set_default("cacheRemoteExpiration", 7 * 24 * 60 * 60)
+        # memcached's own default item size limit. Sending more only earns a
+        # rejection, so a server raised above it has to say so here.
+        self.set_default("cacheRemoteMaxEntrySize", 1024 * 1024)
+        self.set_default("cacheRemoteMinEntrySize", 100)
+        self.set_default("cacheS3", False)
+        self.set_default("cacheS3Bucket", "")
+        self.set_default("cacheS3Prefix", "partcad/")
+        self.set_default("cacheS3Region", "")
+        self.set_default("cacheS3EndpointUrl", "")
+        # S3 takes far larger objects than this, but an entry that big is
+        # slower to fetch than to rebuild, which is not a cache hit worth having.
+        self.set_default("cacheS3MaxEntrySize", 100 * 1024 * 1024)
+        self.set_default("cacheS3MinEntrySize", 100)
         self.set_default("cacheDependenciesIgnore", False)
 
         if shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
@@ -316,8 +484,22 @@ class UserConfig(vyper.Vyper):
         else:
             self.set_default("pythonSandbox", "none")
 
+        # Unlike Python, whose sandbox has to be provisioned because PartCAD's
+        # own interpreter is the wrong one to render in, a host Node.js is
+        # simply used when there is one: it costs nothing, and the dependency
+        # tree - which is what actually has to be isolated - is provisioned
+        # either way. conda is the fallback, so a host without Node.js still
+        # works if conda can supply one.
+        if shutil.which("node") is not None:
+            self.set_default("javascriptSandbox", "none")
+        elif shutil.which("conda") is not None or importlib.util.find_spec("conda") is not None:
+            self.set_default("javascriptSandbox", "conda")
+        else:
+            self.set_default("javascriptSandbox", "none")
+
         self.set_default("internalStateDir", UserConfig.get_config_dir())
         self.set_default("forceUpdate", False)
+        self.set_default("develIndex", False)
 
         # option: git.clone.timeout
         # description: how long a single git network operation (clone, fetch,
@@ -378,6 +560,110 @@ class UserConfig(vyper.Vyper):
         self.bind_env("cacheMemoryDoubleCacheMaxEntrySize", "PC_CACHE_MEMORY_DOUBLE_CACHE_MAX_ENTRY_SIZE")
         self.cache_memory_double_cache_max_entry_size = self.get_int("cacheMemoryDoubleCacheMaxEntrySize")
 
+        # option: cacheMem
+        # description: enable caching of intermediate results in this process's memory
+        # values: [True | False]
+        # default: True
+        self.bind_env("cacheMem", "PC_CACHE_MEM")
+        self.cache_memory = self.get_bool("cacheMem")
+
+        # option: cacheRemote
+        # description: enable the shared remote cache, reached over the memcached
+        #              protocol. Requires the 'memcache' extra:
+        #              pip install 'partcad[memcache]'
+        # values: [True | False]
+        # default: False
+        self.bind_env("cacheRemote", "PC_CACHE_REMOTE")
+        self.cache_remote = self.get_bool("cacheRemote")
+
+        # option: cacheRemoteServer
+        # description: the memcached server backing the remote cache, "host" or "host:port"
+        # values: <string>
+        # default: "" (port 11211 when the port is left out)
+        self.bind_env("cacheRemoteServer", "PC_CACHE_REMOTE_SERVER")
+        self.cache_remote_server = self.get_string("cacheRemoteServer")
+
+        # option: cacheRemoteNamespace
+        # description: prefix for every key this installation stores, so that
+        #              several projects can share one memcached server
+        # values: <string>
+        # default: partcad
+        self.bind_env("cacheRemoteNamespace", "PC_CACHE_REMOTE_NAMESPACE")
+        self.cache_remote_namespace = self.get_string("cacheRemoteNamespace")
+
+        # option: cacheRemoteExpiration
+        # description: how long a remote cache entry lives, in seconds
+        # values: >=0, 0 means no expiration
+        # default: 604800 (7 days)
+        self.bind_env("cacheRemoteExpiration", "PC_CACHE_REMOTE_EXPIRATION")
+        self.cache_remote_expiration = self.get_int("cacheRemoteExpiration")
+
+        # option: cacheRemoteMaxEntrySize
+        # description: the maximum size of a single remote cache entry in bytes
+        # values: >=0, 0 means no limit
+        # default: 1*1024*1024 (1MB, memcached's own default)
+        self.bind_env("cacheRemoteMaxEntrySize", "PC_CACHE_REMOTE_MAX_ENTRY_SIZE")
+        self.cache_remote_max_entry_size = self.get_int("cacheRemoteMaxEntrySize")
+
+        # option: cacheRemoteMinEntrySize
+        # description: the minimum size of a single remote cache entry (except test results) in bytes
+        # values: >=0
+        # default: 100
+        self.bind_env("cacheRemoteMinEntrySize", "PC_CACHE_REMOTE_MIN_ENTRY_SIZE")
+        self.cache_remote_min_entry_size = self.get_int("cacheRemoteMinEntrySize")
+
+        # option: cacheS3
+        # description: enable the object store cache. Requires the 'aws' extra:
+        #              pip install 'partcad[aws]'
+        # values: [True | False]
+        # default: False
+        self.bind_env("cacheS3", "PC_CACHE_S3")
+        self.cache_s3 = self.get_bool("cacheS3")
+
+        # option: cacheS3Bucket
+        # description: the bucket holding the object store cache
+        # values: <string>
+        # default: ""
+        self.bind_env("cacheS3Bucket", "PC_CACHE_S3_BUCKET")
+        self.cache_s3_bucket = self.get_string("cacheS3Bucket")
+
+        # option: cacheS3Prefix
+        # description: the key prefix within the bucket, so that one bucket can
+        #              hold more than this cache
+        # values: <string>
+        # default: partcad/
+        self.bind_env("cacheS3Prefix", "PC_CACHE_S3_PREFIX")
+        self.cache_s3_prefix = self.get_string("cacheS3Prefix")
+
+        # option: cacheS3Region
+        # description: the AWS region of the bucket
+        # values: <string>
+        # default: "" (leave it to the standard AWS resolution chain)
+        self.bind_env("cacheS3Region", "PC_CACHE_S3_REGION")
+        self.cache_s3_region = self.get_string("cacheS3Region")
+
+        # option: cacheS3EndpointUrl
+        # description: an S3 endpoint other than AWS's own - a MinIO or Ceph
+        #              deployment, or a test server
+        # values: <string>
+        # default: "" (AWS)
+        self.bind_env("cacheS3EndpointUrl", "PC_CACHE_S3_ENDPOINT_URL")
+        self.cache_s3_endpoint_url = self.get_string("cacheS3EndpointUrl")
+
+        # option: cacheS3MaxEntrySize
+        # description: the maximum size of a single object store cache entry in bytes
+        # values: >=0, 0 means no limit
+        # default: 100*1024*1024 (100MB)
+        self.bind_env("cacheS3MaxEntrySize", "PC_CACHE_S3_MAX_ENTRY_SIZE")
+        self.cache_s3_max_entry_size = self.get_int("cacheS3MaxEntrySize")
+
+        # option: cacheS3MinEntrySize
+        # description: the minimum size of a single object store cache entry (except test results) in bytes
+        # values: >=0
+        # default: 100
+        self.bind_env("cacheS3MinEntrySize", "PC_CACHE_S3_MIN_ENTRY_SIZE")
+        self.cache_s3_min_entry_size = self.get_int("cacheS3MinEntrySize")
+
         # option: cacheDependenciesIgnore
         # description: ignore broken dependencies and cache at your own risk
         # values: [True | False]
@@ -391,6 +677,13 @@ class UserConfig(vyper.Vyper):
         # default: conda
         self.bind_env("pythonSandbox", "PC_PYTHON_SANDBOX")
         self.python_sandbox = self.get_string("pythonSandbox")
+
+        # option: javascriptSandbox
+        # description: sandboxing environment for invoking JavaScript scripts
+        # values: [none | conda]
+        # default: none if the host has Node.js, else conda
+        self.bind_env("javascriptSandbox", "PC_JAVASCRIPT_SANDBOX")
+        self.javascript_sandbox = self.get_string("javascriptSandbox")
 
         # option: ignoreBundledOpenscad
         # description: ignore the OpenSCAD that the standalone bundle carries and
@@ -428,6 +721,20 @@ class UserConfig(vyper.Vyper):
         # default: False
         self.bind_env("forceUpdate", "PC_FORCE_UPDATE")
         self.force_update = self.get_bool("forceUpdate")
+
+        # option: develIndex
+        # description: take the public PartCAD index ("//pub") from its 'devel'
+        #              branch instead of the released state on 'main'. The index
+        #              lives in its own repository, so its version is not pinned
+        #              by anything in the package that imports it; this is how a
+        #              change staged there is exercised before it is released.
+        #              Applies to every dependency whose URL names that
+        #              repository, wherever in the dependency tree it appears,
+        #              and leaves every other dependency alone.
+        # values: [True | False]
+        # default: False
+        self.bind_env("develIndex", "PC_DEVEL_INDEX")
+        self.devel_index = self.get_bool("develIndex")
 
         # option: git.clone.timeout
         # description: seconds a single git network operation may take
@@ -493,8 +800,13 @@ class UserConfig(vyper.Vyper):
         # description: offline mode
         # values: [True | False]
         # default: False
-        self.offline = False
+        # The read has to come after the binding, not before it: assigning the
+        # default first and binding afterwards left 'PC_OFFLINE' bound to a key
+        # nothing ever looked up, so the variable had no effect at all outside
+        # the CLI (which sets this attribute from its own '--offline' option).
+        self.set_default("offline", False)
         self.bind_env("offline", "PC_OFFLINE")
+        self.offline = self.get_bool("offline")
 
         # option: useDockerPython
         # description: use a Docker container for running Python scripts

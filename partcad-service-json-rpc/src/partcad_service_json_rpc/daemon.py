@@ -3,75 +3,37 @@
 #
 # Licensed under Apache License, Version 2.0.
 #
-"""Per-workspace daemon lifecycle for the socket channel.
+"""Starting the per-workspace daemon, and serving from it.
 
-A daemon serves one workspace (keyed by a hash of its root path) over an AF_UNIX
-socket at ``~/.partcad/workspaces/<hash>/socket``. Callers run
-:func:`ensure_daemon`, which prints the socket path to stdout and, if no live
-daemon is found, starts one (double-forked and detached on POSIX) that serves a
-warm shared session.
+This is the daemon's own half. Callers run :func:`ensure_daemon`, which prints
+the endpoint to stdout and, if no live daemon is found, starts one (double-forked
+and detached on POSIX) that serves a warm shared session.
 
-Root discovery here replicates PartCAD's ``Context`` walk-up deliberately, so the
-hot path (a CLI command that only needs to find and connect to a live daemon)
-never imports the heavy ``partcad`` module.
+Where that endpoint is, and whether something is answering on it, is the
+rendezvous both ends have to agree on, so it is defined once in
+``partcad_utils.workspace`` and imported here. Everything a *client* does with a
+daemon -- finding it, connecting, stopping it and waiting for it to go -- lives
+in ``partcad_client``; a daemon has no business doing any of that, least of
+all to daemons other than itself.
 """
 
 import contextlib
-import hashlib
 import os
 import signal
 import socket
 import sys
 from typing import Callable, Optional
 
+from partcad_utils.workspace import (
+    LIVENESS_TIMEOUT,
+    determine_root_path,
+    is_alive,
+    pid_path,
+    socket_path,
+)
+
 from .rpc.methods import build_registry
-from .transport.framing import read_message, write_message
 from .transport.socket_server import SocketServer
-
-LIVENESS_TIMEOUT = 1.0
-
-
-def determine_root_path(start: Optional[str] = None) -> str:
-    """Find the workspace root the way ``partcad.Context`` does, without importing
-    partcad. Walks up while a parent ``partcad.yaml`` exists."""
-    root = os.path.abspath(start or os.getcwd())
-    if os.path.isfile(root):
-        root = os.path.dirname(root)
-    while os.path.exists(os.path.join(root, "..", "partcad.yaml")):
-        root = os.path.abspath(os.path.join(root, ".."))
-    return root
-
-
-def workspace_hash(root_path: str) -> str:
-    # Truncated so the AF_UNIX socket path stays under the ~108-char limit.
-    return hashlib.sha256(root_path.encode("utf-8")).hexdigest()[:16]
-
-
-def workspace_dir(root_path: str) -> str:
-    return os.path.join(os.path.expanduser("~"), ".partcad", "workspaces", workspace_hash(root_path))
-
-
-def socket_path(root_path: str) -> str:
-    return os.path.join(workspace_dir(root_path), "socket")
-
-
-def is_alive(path: str, timeout: float = LIVENESS_TIMEOUT) -> bool:
-    """True if a daemon answers ``rpc.discover`` on the socket within ``timeout``."""
-    if not os.path.exists(path):
-        return False
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.settimeout(timeout)
-    try:
-        client.connect(path)
-        stream = client.makefile("rwb")
-        write_message(stream, {"jsonrpc": "2.0", "id": 0, "method": "rpc.discover", "params": {}})
-        response = read_message(stream)
-        return isinstance(response, dict) and response.get("id") == 0 and "result" in response
-    except OSError:
-        return False
-    finally:
-        with contextlib.suppress(OSError):
-            client.close()
 
 
 @contextlib.contextmanager
@@ -188,40 +150,10 @@ def _redirect_std_fds(log_path: str) -> None:
 
 def _write_pid(wdir: str) -> None:
     with contextlib.suppress(OSError):
-        with open(os.path.join(wdir, "pid"), "w", encoding="utf-8") as f:
+        with open(pid_path(wdir), "w", encoding="utf-8") as f:
             f.write(str(os.getpid()))
 
 
 def _cleanup(wdir: str) -> None:
     with contextlib.suppress(OSError):
-        os.unlink(os.path.join(wdir, "pid"))
-
-
-def stop_daemon(root_path: Optional[str] = None, timeout: float = LIVENESS_TIMEOUT) -> bool:
-    """Ask the workspace daemon to stop. True only if it acknowledged the stop."""
-    root = root_path or determine_root_path()
-
-    # As in ensure_daemon: the AF_UNIX path below does not exist on Windows.
-    if os.name == "nt":  # pragma: no cover - exercised only on Windows
-        from .win_pipe import pipe_name, stop_pipe_daemon
-
-        return stop_pipe_daemon(pipe_name(root), timeout)
-
-    sock = socket_path(root)
-    if not is_alive(sock, timeout):
-        return False
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    client.settimeout(timeout)
-    try:
-        client.connect(sock)
-        stream = client.makefile("rwb")
-        write_message(stream, {"jsonrpc": "2.0", "id": 0, "method": "daemon.stop", "params": {}})
-        # Report success only on an acknowledged stop, so the CLI does not
-        # claim "stopped" for a daemon that never answered.
-        reply = read_message(stream)
-        return isinstance(reply, dict) and "result" in reply
-    except OSError:
-        return False
-    finally:
-        with contextlib.suppress(OSError):
-            client.close()
+        os.unlink(pid_path(wdir))

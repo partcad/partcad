@@ -42,6 +42,13 @@
   ],
   "configurations": [
     {
+      "name": "Render",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pc render",
+      "cwd": "${workspaceFolder}/examples"
+    },
+    {
       // https://code.visualstudio.com/docs/python/testing#_debug-tests
       "name": "Python: Debug Tests",
       "type": "debugpy",

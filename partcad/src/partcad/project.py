@@ -12,6 +12,7 @@ import asyncio
 import copy
 import os
 import re
+import tempfile
 import threading
 import typing
 
@@ -21,9 +22,9 @@ from typing import TYPE_CHECKING, List, Optional
 
 import ruamel.yaml
 
-from . import assembly, assembly_config
+from . import assembly, assembly_config, assembly_guide
 from . import assembly_factory_alias as afa
-from . import consts, factory, interface
+from . import consts, document as pc_document, factory, interface
 from . import logging as pc_logging
 from . import part_config
 from . import part_factory_alias as pfa
@@ -37,6 +38,7 @@ from . import (
 )
 from . import sketch_factory_alias as sfa
 from . import telemetry
+from .document_pdf import render_pdf_async
 from .exception import EmptyShapesError
 from .part import Part
 from .render import render_cfg_merge
@@ -64,6 +66,13 @@ OBJECT_KIND_SECTIONS = {
     # PartFactoryWrapper, which looks the definition up here.
     "partType": "partTypes",
 }
+
+# Assembly types whose parts the assembly itself materializes, rather than the
+# package declaring them: a STEP assembly's components become the parts
+# '<assembly>/<component>'. Such a part is only in 'Project.parts' once the
+# assembly has been built, so 'get_part' builds it on demand (see
+# '_materialize_derived_part').
+PART_PRODUCING_ASSEMBLY_TYPES = ("step",)
 
 
 @telemetry.instrument()
@@ -686,6 +695,12 @@ class Project(project_config.Configuration):
         )
 
     def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+        # A part an assembly materializes (a STEP component, for one) is not
+        # declared in 'partcad.yaml' - the assembly's own source file is what
+        # declares it - so it only exists once that assembly has been built.
+        # Build it now, rather than report a part that the package can perfectly
+        # well produce as missing.
+        self._materialize_derived_part(part_name)
         return self.get_object(
             "part",
             Project.PartLock,
@@ -698,6 +713,63 @@ class Project(project_config.Configuration):
             func_params,
             quiet=quiet,
         )
+
+    def _derived_part_owner(self, part_name: str) -> Optional[str]:
+        """The assembly whose parts are named '<this assembly>/<something>'.
+
+        Only assemblies of a type that materializes parts qualify, and only when
+        the package really declares one under that name, so an ordinary part
+        called 'brackets/left' is not mistaken for one.
+
+        Read from the configs already known rather than through
+        'get_assembly_config()': this runs on every part lookup, and that
+        accessor would ask a plugin-backed package to go and fetch the name over
+        the network before it could say it does not have it.
+        """
+        known = self._object_configs.get("assembly") or {}
+        prefix = part_name.split(";")[0]
+        while "/" in prefix:
+            prefix = prefix.rsplit("/", 1)[0]
+            config = known.get(prefix)
+            if config and config.get("type") in PART_PRODUCING_ASSEMBLY_TYPES:
+                return prefix
+        return None
+
+    def _materialize_derived_part(self, part_name: str) -> None:
+        """Build the assembly that would produce 'part_name', if one would.
+
+        A no-op unless the name is unknown *and* names an assembly that produces
+        parts, so the common path costs one dictionary lookup.
+        """
+        if part_name in self.parts:
+            return
+        owner = self._derived_part_owner(part_name)
+        if owner is None:
+            return
+        owning_assembly = self.get_assembly(owner)
+        if owning_assembly is None or owning_assembly.children:
+            return
+
+        pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
+
+        # On a thread of its own: instantiating an assembly runs 'asyncio.run()',
+        # which raises if the calling thread already has a running event loop -
+        # and this is reached from both synchronous callers and coroutines.
+        failure = []
+
+        def build():
+            try:
+                asyncio.run(owning_assembly.do_instantiate())
+            except Exception as e:  # pylint: disable=broad-except
+                failure.append(e)
+
+        thread = threading.Thread(target=build, daemon=True)
+        thread.start()
+        thread.join()
+        if failure:
+            pc_logging.error(
+                "Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner, part_name, failure[0])
+            )
 
     def get_assembly(self, assembly_name, func_params=None) -> Optional[assembly.Assembly]:
         return self.get_object(
@@ -1067,6 +1139,7 @@ class Project(project_config.Configuration):
         ext_by_kind = {
             "cadquery": "py",
             "build123d": "py",
+            "chili3d": "chili",
             "sdf": "py",
         }
         return self._add_component(
@@ -1188,6 +1261,7 @@ class Project(project_config.Configuration):
         assemblies: Optional[List] = None,
         format: Optional[str] = None,
         output_dir: Optional[Path] = None,
+        ignore_manufacturability: bool = False,
     ):
         with pc_logging.Action("RenderPkg", self.name):
             # Override the default output_dir.
@@ -1204,7 +1278,20 @@ class Project(project_config.Configuration):
                 raise EmptyShapesError
 
             tasks = []
-            render_formats = ["svg", "png", "dxf", "step", "stl", "3mf", "threejs", "obj", "gltf", "brep", "iges"]
+            render_formats = [
+                "svg",
+                "png",
+                "jpeg",
+                "dxf",
+                "step",
+                "stl",
+                "3mf",
+                "threejs",
+                "obj",
+                "gltf",
+                "brep",
+                "iges",
+            ]
 
             for shape in shapes:
                 # A deep copy: 'render_cfg_merge()' merges nested dictionaries in
@@ -1228,23 +1315,39 @@ class Project(project_config.Configuration):
             await asyncio.gather(*tasks)
 
             # The package document lists what the package declares; an assembly
-            # document lists what that assembly is made of. An assembly gets one
-            # of its own when it is the object the document was asked for, or
-            # when it asks for one in its own configuration.
-            assembly_readmes = []
-            if format is None or format == "readme":
-                for shape in shapes:
-                    if shape.kind != "assembly":
-                        continue
-                    if (format == "readme" and assemblies) or "readme" in (shape.config.get("render") or {}):
-                        assembly_readmes.append(shape.name)
-            for assembly_name in assembly_readmes:
-                await self.render_assembly_readme_async(assembly_name, render, output_dir)
+            # document lists what that assembly is made of, and the assembly
+            # instruction book how to put it together. An assembly gets one of
+            # its own when it is the object the document was asked for, or when
+            # it asks for one in its own configuration.
+            for document_format in ("readme",) + assembly_guide.GUIDE_FORMATS:
+                for assembly_name in self._assembly_documents_to_render(shapes, assemblies, format, document_format):
+                    if document_format == "readme":
+                        await self.render_assembly_readme_async(assembly_name, render, output_dir)
+                    else:
+                        await self.render_assembly_guide_async(
+                            assembly_name,
+                            document_format,
+                            render,
+                            output_dir,
+                            ignore_manufacturability,
+                        )
 
             # The package document is skipped when specific assemblies were asked
             # for: their own documents are what was requested.
             if (format == "readme" and not assemblies) or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
+
+    def _assembly_documents_to_render(self, shapes, assemblies, format, document_format):
+        """Which assemblies get a document of the given kind out of this run."""
+        if format is not None and format != document_format:
+            return []
+        names = []
+        for shape in shapes:
+            if shape.kind != "assembly":
+                continue
+            if (format == document_format and assemblies) or document_format in (shape.config.get("render") or {}):
+                names.append(shape.name)
+        return names
 
     def _enumerate_shapes(self, sketches, interfaces, parts, assemblies):
         def get_keys(name):
@@ -1299,26 +1402,36 @@ class Project(project_config.Configuration):
         assemblies: Optional[list] = None,
         format: Optional[str] = None,
         output_dir: Optional[Path] = None,
+        ignore_manufacturability: bool = False,
     ):
-        asyncio.run(self.render_async(sketches, interfaces, parts, assemblies, format, output_dir))
+        asyncio.run(
+            self.render_async(sketches, interfaces, parts, assemblies, format, output_dir, ignore_manufacturability)
+        )
 
-    def _readme_image(self, name, render_cfg, return_path, config=None):
-        """The '<img>' markup for the projection of the shape called 'name'.
+    def readme_image_path(self, name, render_cfg, return_path, config=None):
+        """Where the projection of the shape called 'name' is.
 
-        Returns a '(markup, test_path)' pair: 'markup' is the image tag, with the
-        source relative to the document being generated, and 'test_path' is where
-        the image file is expected relative to the output directory, so that the
-        caller can check whether it has been rendered at all. Both are 'None' when
-        the package renders neither SVG nor PNG.
+        Returns a '(src, test_path)' pair: 'src' is the path to write into a
+        document that links to the image, relative to the document being
+        generated, and 'test_path' is where the image file is expected relative
+        to the output directory, so that the caller can check whether it has been
+        rendered at all. Both are 'None' when the package renders none of the
+        image formats below.
         """
-        if "svg" in render_cfg or (config is not None and config.get("type") == "svg"):
-            image_cfg = render_cfg.get("svg", {})
-            extension = ".svg"
-        elif "png" in render_cfg:
-            image_cfg = render_cfg["png"]
-            extension = ".png"
+        # The first image format the package renders wins, in this order. Each
+        # entry is the render config key and the extension the rendered file
+        # carries, which is not always the key: "jpeg" writes ".jpg".
+        image_formats = [("svg", ".svg"), ("png", ".png"), ("jpeg", ".jpg")]
+
+        if config is not None and config.get("type") == "svg":
+            image_cfg, extension = render_cfg.get("svg", {}), ".svg"
         else:
-            return None, None
+            for image_format, image_extension in image_formats:
+                if image_format in render_cfg:
+                    image_cfg, extension = render_cfg[image_format], image_extension
+                    break
+            else:
+                return None, None
 
         if isinstance(image_cfg, str):
             image_cfg = {"prefix": image_cfg}
@@ -1328,49 +1441,21 @@ class Project(project_config.Configuration):
 
         image_path = os.path.join(return_path, prefix, name + extension)
         test_image_path = os.path.join(prefix, name + extension)
-        markup = '<img src="%s" alt="%s" style="width: auto; height: auto; max-width: 200px; max-height: 200px;">' % (
-            image_path,
-            name,
-        )
+        return image_path, test_image_path
+
+    def _readme_image(self, name, render_cfg, return_path, config=None):
+        """The '<img>' markup for the projection of the shape called 'name'."""
+        src, test_image_path = self.readme_image_path(name, render_cfg, return_path, config)
+        if src is None:
+            return None, None
+        markup = '<img src="%s" alt="%s" style="%s">' % (src, name, pc_document.MARKDOWN_IMAGE_STYLE)
         return markup, test_image_path
 
-    def _readme_package_link(self, package_name, dir_path):
-        """The path to another package's README.md, relative to 'dir_path'.
+    def _assembly_document_target(self, format, extension, assembly_name, render_cfg=None, output_dir=None):
+        """Where a document of one assembly goes, and what it is about.
 
-        Both the document being generated and the package it refers to have to
-        live under the same root for a link to be produced. Packages served from
-        the local cache, and documents generated outside of the root, are left
-        unlinked: a path pointing out of the tree is of no use to whoever reads
-        the generated document.
-        """
-        if self.ctx is None:
-            return None
-        project = self.ctx.get_project(package_name)
-        config_dir = getattr(project, "config_dir", None)
-        if config_dir is None:
-            return None
-
-        # 'ctx.config_dir', not 'ctx.root_path': the latter may name the root
-        # package's configuration file rather than the directory holding it.
-        root_path = os.path.abspath(self.ctx.config_dir)
-        try:
-            for path in (config_dir, dir_path):
-                if os.path.relpath(os.path.abspath(path), root_path).startswith(os.pardir):
-                    return None
-            return os.path.relpath(os.path.join(config_dir, "README.md"), dir_path)
-        except ValueError:
-            # Not on the same drive (Windows); no relative path exists.
-            return None
-
-    async def render_assembly_readme_async(self, assembly_name, render_cfg=None, output_dir=None):
-        """Generate the markdown document of a single assembly.
-
-        Where the package document lists what the package declares, this one lists
-        what the assembly is made of: every part and every sub-assembly it uses,
-        recursively, grouped by the package they come from and counted.
-
-        Returns the path of the generated document, or 'None' if there is no such
-        assembly in this package.
+        Returns '(assembly, path, dir_path, return_path, render_cfg, output_dir)',
+        or 'None' if this package has no such assembly.
         """
         assembly = self.get_assembly(assembly_name)
         if assembly is None:
@@ -1382,9 +1467,9 @@ class Project(project_config.Configuration):
             output_dir = self.config_dir
 
         # Only the assembly's own configuration is consulted for the path here:
-        # the package-level 'readme' setting points at the package document, and
-        # reusing it would have the assembly overwrite it.
-        cfg = (assembly.config.get("render") or {}).get("readme", {})
+        # the package-level setting points at the package document, and reusing
+        # it would have the assembly overwrite it.
+        cfg = (assembly.config.get("render") or {}).get(format, {})
         if isinstance(cfg, str):
             cfg = {"path": cfg}
         if cfg is None:
@@ -1393,64 +1478,95 @@ class Project(project_config.Configuration):
         # 'assembly.name' rather than the requested name: a parameterized
         # assembly is known by the name its parameter values resolve to, which is
         # also the name its images are rendered under.
-        name = assembly.name
-        path = os.path.join(output_dir, cfg.get("path", name + ".md"))
+        path = os.path.join(output_dir, cfg.get("path", assembly.name + extension))
         dir_path = os.path.dirname(path)
         return_path = os.path.relpath(output_dir, dir_path)
+        return assembly, path, dir_path, return_path, render_cfg, output_dir
 
-        grouped = await assembly.get_bom_grouped_async()
+    async def render_assembly_readme_async(self, assembly_name, render_cfg=None, output_dir=None):
+        """Generate the markdown document of a single assembly.
 
-        lines = ["# %s" % name, ""]
-        if assembly.desc:
-            lines += [assembly.desc, ""]
-        lines += ["Package: `%s`" % self.name, ""]
+        Where the package document lists what the package declares, this one lists
+        what the assembly is made of: every part and every sub-assembly it uses,
+        recursively, grouped by the package they come from and counted.
 
-        # The image is looked up where the assembly's own configuration puts it,
-        # the same way rendering it there does. Deep copy: the merge is in place.
-        image_cfg = render_cfg_merge(copy.deepcopy(render_cfg), assembly.config.get("render", {}) or {})
-        img_text, test_image_path = self._readme_image(name, image_cfg, return_path, assembly.config)
-        if img_text is not None and os.path.exists(os.path.join(output_dir, test_image_path)):
-            lines += [img_text, ""]
+        Returns the path of the generated document, or 'None' if there is no such
+        assembly in this package.
+        """
+        target = self._assembly_document_target("readme", ".md", assembly_name, render_cfg, output_dir)
+        if target is None:
+            return None
+        assembly, path, dir_path, return_path, render_cfg, output_dir = target
 
-        def add_section(title, column_title, packages):
-            section = []
-            for package_name in sorted(packages.keys()):
-                entries = packages[package_name]
-                link = self._readme_package_link(package_name, dir_path)
-                if link is None:
-                    section += ["### %s" % package_name]
-                else:
-                    section += ["### [%s](%s)" % (package_name, link)]
-                section += [""]
-                section += ["| %s | Count | Description |" % column_title]
-                section += ["| --- | ---: | --- |"]
-                for object_name in sorted(entries.keys()):
-                    entry = entries[object_name]
-                    desc = entry.get("desc") or ""
-                    # The table is one row per line, so a multi-line description
-                    # has to be folded into it.
-                    desc = desc.replace("|", "\\|").replace("\n", "<br/>")
-                    section += ["| %s | %d | %s |" % (object_name, entry["count"], desc)]
-                section += [""]
-            if not section:
-                return []
-            return ["## %s" % title, ""] + section
+        images = assembly_guide.PackageImages(self, render_cfg, output_dir, return_path)
+        document = await assembly_guide.build_readme_document_async(self, assembly, images, dir_path)
 
-        lines += add_section("Sub-Assemblies", "Assembly", grouped["assemblies"])
-        lines += add_section("Parts", "Part", grouped["parts"])
-
-        lines += [
-            "<br/><br/>",
-            "",
-            "*Generated by [PartCAD](https://partcad.org/)*",
-        ]
-
+        lines = pc_document.render_markdown(document)
+        self.ctx.ensure_dirs_for_file(path)
         with open(path, "w") as f:
             f.writelines(map(lambda s: s + "\n", lines))
         return path
 
     def render_assembly_readme(self, assembly_name, render_cfg=None, output_dir=None):
         return asyncio.run(self.render_assembly_readme_async(assembly_name, render_cfg, output_dir))
+
+    async def render_assembly_guide_async(
+        self,
+        assembly_name,
+        format="pdf",
+        render_cfg=None,
+        output_dir=None,
+        ignore_manufacturability=False,
+    ):
+        """Generate the assembly instruction book of a single assembly.
+
+        'format' is "pdf" or "html": the same document either way, laid out on
+        paper or as pages to flip through in a browser.
+
+        Returns the path of the generated document, or 'None' if there is no such
+        assembly in this package. Raises 'AssemblyDocumentError' if the assembly
+        is not one an instruction book can be written for (see
+        'assembly_guide.check_source').
+        """
+        if format not in assembly_guide.GUIDE_FORMATS:
+            raise ValueError("Unsupported assembly document format: %s" % format)
+
+        target = self._assembly_document_target(format, "." + format, assembly_name, render_cfg, output_dir)
+        if target is None:
+            return None
+        assembly, path, dir_path, _return_path, render_cfg, output_dir = target
+
+        assembly = assembly_guide.resolve_alias(self.ctx, assembly)
+        assembly_guide.check_source(assembly, ignore_manufacturability)
+
+        with pc_logging.Action("Guide%s" % format.upper(), self.name, assembly.name):
+            # The illustrations exist for this document alone - most of them show
+            # something that is not an object of any package - so they are
+            # rendered into a directory of their own and thrown away with it.
+            with tempfile.TemporaryDirectory() as assets_dir:
+                images = assembly_guide.RenderedImages(self.ctx, self, assets_dir)
+                document = await assembly_guide.build_guide_document_async(self.ctx, self, assembly, images, dir_path)
+
+                self.ctx.ensure_dirs_for_file(path)
+                if format == "html":
+                    with open(path, "w") as f:
+                        f.write(pc_document.render_html(document))
+                else:
+                    await render_pdf_async(self.ctx, document, path)
+
+        return path
+
+    def render_assembly_guide(
+        self,
+        assembly_name,
+        format="pdf",
+        render_cfg=None,
+        output_dir=None,
+        ignore_manufacturability=False,
+    ):
+        return asyncio.run(
+            self.render_assembly_guide_async(assembly_name, format, render_cfg, output_dir, ignore_manufacturability)
+        )
 
     def render_readme_async(self, render_cfg, output_dir):
         if output_dir is None:
@@ -1551,6 +1667,18 @@ class Project(project_config.Configuration):
             if "type" in config and config["type"] == "alias" and "aliases" in exclude:
                 return []
 
+            # The same merge 'render_async()' performs when it decides what to
+            # render: a shape's own 'render' section adds to, and overrides, the
+            # package's. Without it a format enabled - or pointed at a different
+            # prefix - on the shape alone renders a file that the README then
+            # fails to find.
+            #
+            # A deep copy, like everywhere else 'render_cfg_merge()' is called:
+            # the merge is in place, and the very same package configuration is
+            # handed to every shape of the package below, so a shallow copy would
+            # let one shape's settings leak into all the ones after it.
+            render_cfg = render_cfg_merge(copy.deepcopy(render_cfg), config.get("render", None) or {})
+
             path = None
             if "path" in config:
                 path = config["path"]
@@ -1559,6 +1687,8 @@ class Project(project_config.Configuration):
                 if "type" in config:
                     if config["type"] == "cadquery" or config["type"] == "build123d" or config["type"] == "sdf":
                         path += ".py"
+                    elif config["type"] == "chili3d":
+                        path += ".chili"
                     elif config["type"] == "openscad":
                         path += ".scad"
                     else:

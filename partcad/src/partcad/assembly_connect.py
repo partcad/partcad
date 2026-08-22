@@ -135,7 +135,7 @@ def _push_direction(mated_frame):
     """
     if mated_frame is None:
         return None
-    axis = mated_frame.rotate((0.0, 0.0, -1.0))
+    axis = mated_frame.rotate_vector((0.0, 0.0, -1.0))
     length = math.sqrt(sum(value * value for value in axis))
     if length == 0.0:
         return None

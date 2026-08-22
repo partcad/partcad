@@ -10,7 +10,7 @@ import io
 from partcad_service_json_rpc.core import events
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.transport import stdio
-from partcad_service_json_rpc.transport.framing import read_message, write_message
+from partcad_utils.framing import read_message, write_message
 
 
 def _drain(stream: io.BytesIO) -> list:

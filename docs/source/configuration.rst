@@ -51,6 +51,9 @@ Besides the package properties and, optionally, a list of imported dependencies,
   partcad: <(optional) required PartCAD version spec string>
   pythonVersion: <(optional) python version for sandboxing if applicable>
   pythonRequirements: <(python scripts only) the list of dependencies to install>
+  javascriptVersion: <(optional) Node.js major version for sandboxing if applicable>
+  javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
+  chili3dVersion: <(Chili3D parts only) the version of Chili3D to render with>
 
   dependencies:
       <dependency-name>:
@@ -62,6 +65,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
           revision: <(git only) the exact revision to import>
           plugin: <(external only) reference to the repository plugin that serves this package>
           subfolder: <(external only) location within the repository, for hierarchies>
+          cacheVersion: <(external only) non-negative integer; bump to invalidate the on-disk cache>
           includePaths: <(optional) Jinja2 include path>
 
   suppliers:
@@ -177,6 +181,18 @@ requests within the repository. In this way one plugin can serve an entire tree
 of packages, each with its own sketches, parts, assemblies, providers and
 further children.
 
+Non-null responses from a plugin are cached on disk, keyed by the plugin
+reference and the request; a request the plugin has no answer for is remembered
+only for the run that made it, and is put to the plugin again after a restart.
+The cache does not know when the plugin's code changes, so a plugin that starts
+returning a new shape of data (for example, adding a field to every part it
+serves) would keep being served the stale, pre-change entries. Set
+``cacheVersion`` to a non-negative integer and bump it whenever the plugin's
+output format changes: it is folded into the cache location, so bumping it moves
+the whole repository (and every child in its hierarchy) to a fresh cache
+namespace at once, invalidating the old entries. It defaults to ``0``
+(unversioned).
+
 See ``examples/plugin_repository_basic`` (a package backed by a local file),
 ``examples/plugin_repository_full`` (backed by an HTTP endpoint) and
 ``examples/plugin_repository_tree`` (a hierarchy of packages).
@@ -253,6 +269,8 @@ This section exclusively covers the requirements used to create the design.
         esthetic: |
           The part has to look like ...
 
+.. _files:
+
 Files
 -----
 
@@ -269,17 +287,28 @@ can be defined explicitly using the `path` parameter:
       type: step
       path: alternative-path.step # Instead of "part-name.step"
 
-When the source file is not present in the package source repository
-but needs to be pulled from a remote location, the following options can be used:
+When the source file is not kept in the package source repository but has to be
+pulled from a remote location (a STEP file published by the part vendor, for
+example), declare where to get it from using ``fileFrom`` and ``fileUrl``:
 
 .. code-block:: yaml
 
-  fileFrom: url
-  fileUrl: <url to pull the file from>
-  # fileCompressed: <(optional) whether the file needs to be decompressed before use>
-  # fileMd5Sum: <(optional) the MD5 checksum of the file>
-  # fileSha1Sum: <(optional) the SHA1 checksum of the file>
-  # fileSha2Sum: <(optional) the SHA2 checksum of the file>
+  parts:
+    bolt:
+      type: step
+      path: bolt.step # (optional) where to place the file once it is downloaded
+      fileFrom: url # "url" is the only source supported so far
+      fileUrl: https://example.com/vendor/catalog/bolt.step
+
+The file is fetched lazily: nothing is downloaded until the object is used for
+the first time, and the downloaded file is reused afterwards. Since the file is
+not expected to be a part of the package, PartCAD does not complain about it
+being missing while the package is loaded.
+
+``fileFrom`` and ``fileUrl`` must be declared together.
+They are recognized in :ref:`parts`, :ref:`sketches` and :ref:`assemblies`
+(an assembly's source file is pulled the same way, whether it is an ``.assy``
+file or a CAD file).
 
 Parameters
 ----------
@@ -319,8 +348,6 @@ Assemblies declare parameters the same way. Their values are passed to the
     - part: //package:part
       location: [[0, 0, {{ param_offset }}], [0, 0, 1], 0]
 
-.. _sketches:
-
 Other
 -----
 
@@ -340,6 +367,8 @@ There are other optional fields that are common to all objects:
   It may be due to storage size or time considerations, or due to known issues with dependency tracking.
   It does not override any global caching settings.
 
+.. _sketches:
+
 ========
 Sketches
 ========
@@ -353,6 +382,8 @@ Sketches are declared in ``partcad.yaml`` using the following syntax:
       type: <basic|dxf|svg|cadquery|build123d>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{sketch name}.{ext}" otherwise>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
 
 Basic
@@ -631,9 +662,11 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
+      type: <openscad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
@@ -681,13 +714,16 @@ Define parts with CodeCAD scripts using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|sdf>
+      type: <openscad|cadquery|build123d|chili3d|sdf>
       cwd: <alternative current working directory>
       showObject: <(optional) the name of the object to show using "show_object(...)">
       patch:
         # ...regexp substitutions to apply...
         "pattern": "repl"
       pythonRequirements: <(python scripts only) the list of dependencies to install>
+      javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
+      javascriptVersion: <(JavaScript scripts only) Node.js major version, overriding the package's>
+      chili3dVersion: <(Chili3D parts only) the version of Chili3D, overriding the package's>
       dependencies: # (optional) the list of filenames the caching logic checks for changes
         - <file1.py>
         - <file2.dat>
@@ -714,6 +750,106 @@ Define parts with CodeCAD scripts using the following syntax:
 |                                                                                      |       type: scad          |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
+Chili3D scripts
+^^^^^^^^^^^^^^^
+
+`Chili3D <https://github.com/xiangechen/chili3d>`_ scripts are JavaScript, not
+Python, and live in ``.chili`` files:
+
+.. code-block:: yaml
+
+  parts:
+    cube:
+      type: chili3d
+
+A ``.chili`` file is an ES module. PartCAD runs it in a sandboxed Node.js with
+the Chili3D API already loaded, and takes whatever the script hands back as the
+part. These are available as globals:
+
+``chili3d``
+  the Chili3D module namespace (``Plane``, ``XYZ``, ...)
+
+``shapeFactory``
+  a ready-made ``new chili3d.ShapeFactory()``
+
+``wasm``
+  the OCCT WebAssembly kernel, for what the high-level API does not cover
+
+``show(...)``
+  declare a shape (or an array of them) to be the part's result
+
+``show_object(...)``
+  an alias of ``show``, so a script reads like its CadQuery counterpart
+
+``parameters``
+  the part's build parameters, also injected as globals by name
+
+.. code-block:: javascript
+
+  const { Plane, XYZ } = chili3d;
+
+  const box = shapeFactory.box(Plane.XY, 10, 10, 10).value;
+  const hole = shapeFactory.cylinder(XYZ.unitZ, new XYZ(5, 5, 0), 3, 10).value;
+
+  show(shapeFactory.booleanCut([box], [hole]).value);
+
+A script that does not call ``show()`` may instead export its result as
+``default``, ``shape``, ``result`` or ``part``. Either way the shape may be a
+raw ``TopoDS_Shape``, the ``Result`` the Chili3D API returns, or the ``IShape``
+inside it - PartCAD unwraps all of them, and reports the error a failed
+``Result`` carries rather than producing an empty part.
+
+The script is evaluated inside the PartCAD sandbox, so ``import`` works the way
+it does in any Node.js project: by name for anything the package declares under
+``javascriptRequirements``, and relative for a file next to the script.
+
+.. code-block:: yaml
+
+  javascriptRequirements:
+    - "seedrandom@3.0.5"
+
+Choosing versions
+~~~~~~~~~~~~~~~~~
+
+``javascriptVersion`` names the Node.js major version to render on, and
+``chili3dVersion`` the version of Chili3D to render with. Both may be set on the
+package and overridden on an individual part:
+
+.. code-block:: yaml
+
+  javascriptVersion: "22"
+  chili3dVersion: "1.1.2"
+
+  parts:
+    cube:
+      type: chili3d
+    older_cube:
+      type: chili3d
+      chili3dVersion: "1.0.20"
+
+``chili3dVersion`` takes an exact version, or any range or tag npm accepts
+(``"^1.1"``, ``"latest"``). Naming ``chili3d`` under ``javascriptRequirements``
+does the same thing; where both are given the dedicated option wins, and a
+part's choice wins over its package's. Note that not every Chili3D release
+publishes the WebAssembly kernel PartCAD needs - one that does not fails with a
+message naming the version.
+
+Unlike the Python script types, where PartCAD pins CadQuery and build123d and
+overrides a package that asks for a different version, this really is the
+package's choice. A Node.js sandbox is identified by the set of dependencies it
+holds, so a package on its own Chili3D gets an environment of its own and
+changes nothing for any other package - or for another part of the same one.
+
+Two notes on how this differs from the Python script types:
+
+* ``patch`` expressions are JavaScript regular expressions rather than Python
+  ones. The syntax is nearly identical, but the replacement follows JavaScript's
+  rules: a capture group is referenced as ``$1`` where Python would write
+  ``\1``, and a literal dollar sign is written ``$$``.
+* Chili3D is an input format only. A part can be *defined* by a ``.chili``
+  script and then exported to STEP, STL, 3MF and everything else PartCAD
+  writes, but no exporter produces a ``.chili`` file.
+
 CAD Files
 ---------
 
@@ -725,6 +861,10 @@ Define parts with CAD files using the following syntax:
     <part name>:
       type: <step|brep|stl|3mf|obj>
       binary: <(stl only) use the binary format>
+
+A CAD file published elsewhere (in a vendor's catalog, for example) does not
+have to be committed to the package: see :ref:`files` for how to have PartCAD
+download it on demand.
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
@@ -924,6 +1064,65 @@ together rather than made, and has a single method of its own -- see
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
 
+.. _procurement:
+
+Procurement
+-----------
+
+A part that can be bought off the shelf instead of being manufactured is
+declared using the following syntax:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      # ...
+      vendor: <(optional) the name of the vendor selling the part>
+      sku: <(optional) the vendor's stock keeping unit (SKU) of the part>
+      count_per_sku: <(optional) the number of parts in one SKU, 1 by default>
+
+- ``vendor``
+
+  Optional. The vendor that sells the part.
+
+- ``sku``
+
+  Optional. The vendor's `stock keeping unit
+  <https://en.wikipedia.org/wiki/Stock_keeping_unit>`_ identifying what is
+  ordered from that vendor.
+
+  Both ``vendor`` and ``sku`` must be set for the part to be considered
+  purchasable. If either is missing, the part has to be manufactured instead,
+  which relies on the MCFTT parameters described above.
+
+- ``count_per_sku``
+
+  Optional. Defaults to ``1``. Must be a positive integer.
+
+  The number of parts that come in a single SKU, for the parts that are sold in
+  packs: a bag of 25 nuts is one SKU that yields 25 parts. Providers use it to
+  translate the number of parts requested into the number of SKUs to order, and
+  the number of SKUs a store has in stock into the number of parts it can
+  supply.
+
+These values are passed on to providers of the type ``store`` as
+``request["vendor"]``, ``request["sku"]`` and ``request["count_per_sku"]``
+(see :ref:`providers`).
+
+Note that ``count_per_sku`` is a property of how the part is packaged for sale,
+not of the CAD model. If the same part is sold by several vendors in different
+pack sizes, declare one part per (vendor, SKU) pair, for example using
+``alias``.
+
+.. code-block:: yaml
+
+  parts:
+    nut_m4_0_7mm:
+      type: step
+      vendor: gobilda
+      sku: "2803-0004-0002"
+      count_per_sku: 25  # sold in bags of 25
+
 .. _assemblies:
 
 ==========
@@ -939,8 +1138,10 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
   assemblies:
     <assembly name>:
-      type: assy  # Assembly YAML
+      type: <assy|step>  # Assembly YAML, or a STEP file with an assembly structure
       path: <(optional) the source file path>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       parameters:  # (optional)
         <param name>:
           type: <string|float|int|bool>
@@ -959,8 +1160,13 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         holdForceMax: <(optional) most force to hold this assembly with, in N, default: 7>
         holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
 
-The ``assy`` type is used to define assemblies in `Assembly YAML` format.
+The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
+the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
+The source file does not have to be a part of the package: ``fileFrom`` and
+``fileUrl`` pull it from a remote location on first use, exactly as they do for
+:ref:`parts` (see :ref:`files`). This holds for every assembly type -- a vendor's
+STEP assembly is declared with its URL and read from there.
 
 .. _assembly-manufacturing:
 
@@ -980,6 +1186,7 @@ method with the type, so ``manufacturing`` never has to be spelled out:
 Whether an assembly is *held to* that -- whether ``pc test`` checks that its
 parts can be obtained and its connection instructions followed -- is what
 ``manufacturable`` says, exactly as for parts.
+
 The optional ``offset`` parameter specifies the location of the assembly using an OCCT Location object.
 See "Implementation Detail" for more information on the OCCT Location object.
 
@@ -1037,6 +1244,72 @@ The example above shows an assembly created using ``Assembly YAML``.
 Other methods to define assemblies are coming soon (e.g. using ``CadQuery`` or ``build123d``).
 The assembly file syntax is described in the ``Assembly YAML`` section of this documentation.
 
+.. _assembly_step:
+
+STEP
+----
+
+A STEP file that carries an assembly structure already says what an assembly
+says: a tree of named components, each placed by a transform. The ``step`` type
+reads it and uses it as the assembly itself, with no intermediate file:
+
+.. code-block:: yaml
+
+  assemblies:
+    gearbox:
+      type: step
+      path: <(optional) the source file path, "{assembly name}.step" otherwise>
+      precision: <(optional) decimal places each component's placement is rounded to, 5 by default>
+
+``pc add assembly step <file>.step`` writes that declaration for an existing
+file.
+
+Every component of the STEP file becomes an ordinary PartCAD part, named
+``<assembly name>/<component name>``. Those parts are inspected, rendered,
+exported and referenced from other assemblies like any other part -- they are
+simply declared by the STEP file rather than by ``partcad.yaml``:
+
+.. code-block:: shell
+
+  pc inspect -a :gearbox            # the assembly
+  pc inspect :gearbox/output_shaft  # one component of it
+
+A group inside the STEP file becomes a nested assembly, so the tree PartCAD
+shows is the tree the CAD tool exported. Components that are the same geometry
+in several places are recognized as one part placed several times, which is what
+makes the bill of materials come out right.
+
+Nothing is written into the package: the geometry PartCAD extracts for each
+component is derived data and lives in PartCAD's own internal state directory.
+The source file itself does not have to be in the package either -- with
+``fileFrom``/``fileUrl`` (see :ref:`files`) a vendor's STEP assembly is declared
+by its URL and downloaded the first time it is used:
+
+.. code-block:: yaml
+
+  assemblies:
+    gearbox:
+      type: step
+      fileFrom: url
+      fileUrl: https://example.com/vendor/catalog/gearbox.step
+
+Compared to ``pc import assembly``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``pc import assembly`` reads the very same file with the very same reader, but
+it is a one-shot conversion: it writes a STEP file per component and an
+``Assembly YAML`` file into the package, and from then on the package owns them
+and the original file is never consulted again.
+
+Use ``type: step`` when the STEP file is to remain the source of truth: a
+vendor's file, a file regenerated by another CAD tool, or a file pulled from a
+URL. Every change to it is picked up on the next use, and nothing has to be
+kept in sync by hand.
+
+Use ``pc import assembly`` when the structure is to be taken over: the resulting
+parts and ``.assy`` file are ordinary package content that can be renamed,
+re-arranged, given interfaces and connections, or replaced part by part.
+
 References
 ----------
 
@@ -1054,6 +1327,66 @@ assemblies.
 |         |       type: alias                          || make it easier to         |
 |         |       source: </path/to:existing-assembly> || reference it locally.     |
 +---------+--------------------------------------------+----------------------------+
+
+Procurement
+-----------
+
+Not every assembly has to be assembled: some are sold assembled, as a kit or as
+a pre-built module. Such an assembly is declared purchasable the same way a part
+is (see :ref:`procurement`):
+
+.. code-block:: yaml
+
+  assemblies:
+    <assembly name>:
+      # ...
+      vendor: <(optional) the name of the vendor selling the assembly>
+      sku: <(optional) the vendor's stock keeping unit (SKU) of the assembly>
+      count_per_sku: <(optional) the number of assemblies in one SKU, 1 by default>
+
+``vendor``, ``sku`` and ``count_per_sku`` have the same meaning as they do for
+parts, with the assembly itself being what is ordered.
+
+.. code-block:: yaml
+
+  assemblies:
+    gearbox:
+      type: assy
+      vendor: gobilda
+      sku: "3103-0001-0001"  # shipped assembled
+
+An assembly that has both ``vendor`` and ``sku`` set is considered purchasable,
+and is not required to declare how it is manufactured: ``pc test`` only checks
+that a supplier carries it. An assembly without them is manufactured by producing
+its parts and putting them together, which requires everything it is procured
+from -- its parts, and the sub-assemblies that are sold assembled -- to be
+obtainable by itself.
+
+Declaring an assembly purchasable does not stop it from being modelled and
+rendered as usual: the links between its parts still describe what is inside the
+box.
+
+This is also where ``pc supply find`` and ``pc supply quote`` stop looking
+inside. An assembly is otherwise procured as the objects it is made of, and the
+same question is asked about each sub-assembly in turn: one that is sold
+assembled is ordered as a single item, and one that is not is broken down
+further. Pass ``--recursive`` to order the parts even where the assembly holding
+them could have been bought whole -- for example to compare the cost of building
+it against the cost of buying it.
+
+.. code-block:: shell
+
+  # A chassis that uses the gearbox above: the gearbox is quoted as one unit,
+  # and everything nobody sells assembled is quoted as the parts it is made of
+  $ pc supply quote //robot:chassis
+
+  # Quote every part of the chassis instead, the gearbox taken apart too
+  $ pc supply quote --recursive //robot:chassis
+
+An assembly embedded in the parent's own source file (the nested ``links:`` of
+an Assembly YAML file) is not an object of any package, so there is no name to
+order it by. Such an assembly is always procured as its contents, and declaring
+a vendor for it has no effect.
 
 .. _providers:
 

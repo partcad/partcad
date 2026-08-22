@@ -2,7 +2,13 @@
 # partcad/tests/unit carries helper modules that tests import by name (see
 # git_http_server.py). With --import-mode importlib pytest does not put the
 # test's own directory on the path, so it has to be named here.
-pythonpath = ["partcad-utils/src", "partcad/src", "partcad/tests/unit", "partcad-service-json-rpc/src"]
+pythonpath = [
+    "partcad-utils/src",
+    "partcad-client/src",
+    "partcad/src",
+    "partcad/tests/unit",
+    "partcad-service-json-rpc/src",
+]
 addopts = """
     --import-mode importlib
     --alluredir=allure-results
@@ -68,7 +74,7 @@ cache-dir = "/tmp/.prepare_partcad-dev"
 
 [tool.poetry]
 name = "partcad-dev"
-version = "0.7.158"
+version = "0.7.170"
 description = "Development Environment for PartCAD"
 authors = [
   "PartCAD <support@partcad.org>",
@@ -77,6 +83,7 @@ license = "Apache 2.0"
 readme = "README.md"
 packages = [
   { include = "partcad_utils", from = "partcad-utils/src" },
+  { include = "partcad_client", from = "partcad-client/src" },
   { include = "partcad", from = "partcad/src" },
   { include = "partcad_cli", from = "partcad-cli/src" },
   { include = "partcad_service_json_rpc", from = "partcad-service-json-rpc/src" }
@@ -213,6 +220,12 @@ ruff = "^0.15.22"
 jsonschema = "^4.26.0"
 # Only below 3.14, where the standard library has no 'compression.zstd'.
 "backports.zstd" = { version = ">=1.6.0", python = "<3.14" }
+# The clients behind the two off-machine cache tiers. They are extras of the
+# published wheel (partcad[memcache] and partcad[aws]), not dependencies of it;
+# they are here so the monorepo test suite, which drives both tiers against
+# local mock servers, has them installed.
+aiomcache = "^0.8.2"
+aioboto3 = "^15.5.0"
 
 [tool.poetry.group.cli.dependencies]
 setuptools = "^83.0.0"

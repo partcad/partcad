@@ -25,6 +25,9 @@ __pycache__
 /partcad-utils/LICENSE.txt
 /partcad-utils/dist
 /partcad-utils/build
+/partcad-client/LICENSE.txt
+/partcad-client/dist
+/partcad-client/build
 /partcad-service-json-rpc/dist
 /partcad/build
 /partcad/dist
