@@ -1,6 +1,6 @@
 [project]
 name = "partcad"
-version = "0.7.158"
+version = "0.7.175"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
@@ -26,7 +26,15 @@ classifiers = [
 ]
 
 [tool.setuptools.package-data]
-"partcad.wrappers" = ["*.py"]
+# The '.mjs' files are the JavaScript wrappers, read at runtime and handed to a
+# sandboxed Node.js exactly like the '.py' ones are handed to a sandboxed Python.
+"partcad.wrappers" = ["*.py", "*.mjs"]
+# The packages PartCAD ships inside itself and reaches at '//builtin' (see
+# partcad/builtin/). Their 'partcad.yaml' is read and their scripts are executed
+# by path in a sandbox, so both have to land in the wheel as files.
+"partcad.builtin" = ["*.yaml"]
+"partcad.builtin.export" = ["*.py", "*.yaml"]
+"partcad.builtin.render" = ["*.py", "*.yaml"]
 "partcad.template" = ["*.yaml"]
 "partcad.schema" = ["**/partcad.json"]
 
@@ -37,6 +45,11 @@ dependencies = {file = ["requirements.txt"]}
 # Optional linting dependency. `ruff` ships a native executable that is resolved
 # and launched lazily, so it is only required when `pc lint` actually runs.
 lint = {file = ["requirements-lint.txt"]}
+# The two cache tiers that reach off this machine. Each carries a client
+# library the core imports lazily, so neither is a dependency of the wheel:
+# 'cacheRemote' (memcached) and 'cacheS3' (object storage).
+memcache = {file = ["requirements-memcache.txt"]}
+aws = {file = ["requirements-aws.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"

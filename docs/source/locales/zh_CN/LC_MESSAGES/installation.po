@@ -570,4 +570,3 @@ msgid ""
 "files, use ``pc system status`` to investigate and to determine the "
 "location of the cached files."
 msgstr "不过，如果你怀疑本地缓存的文件出了什么问题，可以使用 ``pc system status`` 来排查，并确定缓存文件所在的位置。"
-

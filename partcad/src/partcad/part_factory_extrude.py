@@ -18,6 +18,8 @@ from . import telemetry
 
 @telemetry.instrument()
 class PartFactoryExtrude(PartFactory):
+    PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
+
     depth: float
     source_project_name: str
     source_sketch_name: str
@@ -66,7 +68,7 @@ class PartFactoryExtrude(PartFactory):
                 # The extrusion (OCCT BRepPrimAPI) runs in a sandbox: the source
                 # sketch and the resulting solid cross as BREP envelopes, so the
                 # core process never touches a live OCP object.
-                runtime = self.ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
+                runtime = self.ctx.get_python_runtime(version=self.PYTHON_SANDBOX_VERSION)
                 await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
 
                 wrapper_path = wrapper.get("extrude.py")

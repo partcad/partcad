@@ -38,6 +38,14 @@ def test_build_settings_quiet_sets_error_verbosity():
     assert m.build_settings(m.parse_args(["--quiet"]))["verbosity"] == "error"
 
 
+def test_devel_index_is_off_unless_asked_for():
+    assert "develIndex" not in m.build_settings(m.parse_args([]))
+
+
+def test_devel_index_reaches_the_session_settings():
+    assert m.build_settings(m.parse_args(["--devel-index"]))["develIndex"] == "true"
+
+
 @pytest.mark.parametrize(
     "address,expected",
     [

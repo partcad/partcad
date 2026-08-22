@@ -2,6 +2,49 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "definitions": {
+    "output-section": {
+      "type": "object",
+      "properties": {
+        "output_dir": { "type": "string", "minLength": 1 }
+      },
+      "patternProperties": {
+        "^[a-zA-Z0-9_.-]+$": { "$ref": "#/definitions/output-type" }
+      },
+      "additionalProperties": false
+    },
+    "output-type": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "desc": { "type": "string", "maxLength": 1000 },
+            "path": { "type": "string", "minLength": 1 },
+            "package": { "type": "string", "minLength": 1 },
+            "pythonRequirements": { "type": "array", "items": { "type": "string" } },
+            "pythonVersion": { "type": "string", "minLength": 1 },
+            "decode": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the shape and assembly envelopes are rebuilt into live CAD geometry before the implementation sees them. Set to false by an implementation that needs the assembly tree's structure rather than the single compound it decodes to (the built-in URDF exporter is the one that does)"
+            },
+            "extension": { "type": "string", "minLength": 1 },
+            "prefix": { "type": "string", "minLength": 1 },
+            "output_dir": { "type": "string", "minLength": 1 },
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["sketches", "interfaces", "parts", "assemblies"]
+              },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
     "file_path":{
       "type": "string",
       "pattern": "^(?!.*\\.$)(?:(?:[a-zA-Z]:\\|\\\\[^\\/:*?\"<>|\r\n]+\\[^\\/:*?\"<>|\r\n]+\\|\\.{1,2}[\\/]|[a-zA-Z0-9_ -]+[\\/]|[\\/])?(?:[^\\/:*?\"<>|\r\n]+[\\/]?)*)$"
@@ -9,6 +52,118 @@
     "url": {
       "type": "string",
       "pattern": "((http|https)://)(www.)?[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)"
+    },
+    "physics": {
+      "type": "object",
+      "description": "Physical properties, each with a documented name and unit. Lengths are millimetres and angles are degrees, as everywhere else in PartCAD; everything else is SI. A property that has no entry here is not carried: a format that states one PartCAD does not support fails the import, and a property PartCAD holds that the target format cannot state is reported on export.",
+      "properties": {
+        "mass": { "type": "number", "description": "Mass, in kilograms.", "minimum": 0 },
+        "centerOfMass": {
+          "type": "array",
+          "description": "Centre of mass in the shape's own frame, in millimetres.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "inertiaOrientation": {
+          "type": "array",
+          "description": "Orientation of the frame the inertia tensor is stated in, as roll/pitch/yaw in degrees. Absent means aligned with the shape's own frame.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "inertia": {
+          "type": "object",
+          "description": "The inertia tensor about 'centerOfMass', in kg*m^2.",
+          "properties": {
+            "ixx": { "type": "number" },
+            "ixy": { "type": "number" },
+            "ixz": { "type": "number" },
+            "iyy": { "type": "number" },
+            "iyz": { "type": "number" },
+            "izz": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "friction": { "type": "number", "description": "Coefficient of friction, along the first friction direction.", "minimum": 0 },
+        "friction2": { "type": "number", "description": "Coefficient of friction, along the second friction direction.", "minimum": 0 },
+        "frictionDirection": {
+          "type": "array",
+          "description": "The first friction direction, in the shape's own frame.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "contactStiffness": { "type": "number", "description": "Contact stiffness, in N/m." },
+        "contactDamping": { "type": "number", "description": "Contact damping, in N*s/m." },
+        "minContactDepth": { "type": "number", "description": "Penetration allowed before a contact force is applied, in millimetres." },
+        "maxContactVelocity": { "type": "number", "description": "The largest velocity a contact correction may impart, in mm/s." },
+        "restitution": { "type": "number", "description": "Coefficient of restitution: 0 is a dead stop, 1 is a perfect bounce.", "minimum": 0, "maximum": 1 },
+        "maxContacts": { "type": "integer", "description": "The largest number of contact points to resolve at once.", "minimum": 1 },
+        "velocityDamping": { "type": "number", "description": "Velocity damping applied to the body itself.", "minimum": 0 },
+        "selfCollide": { "type": "boolean", "description": "Whether this body collides with the others of the same model." },
+        "gravity": { "type": "boolean", "description": "Whether gravity acts on this body." },
+        "maxEffort": { "type": "number", "description": "The largest effort a connection may exert: N*m for a turn, N for a move." },
+        "maxVelocity": { "type": "number", "description": "The largest velocity a connection allows: deg/s for a turn, mm/s for a move." },
+        "damping": { "type": "number", "description": "Damping resisting the movement a connection allows." },
+        "springStiffness": { "type": "number", "description": "Stiffness of a spring returning a connection to 'springReference'." },
+        "springReference": { "type": "number", "description": "The position a spring returns a connection to: degrees for a turn, millimetres for a move." },
+        "stopCfm": { "type": "number", "description": "Constraint force mixing used at a connection's limits." },
+        "stopErp": { "type": "number", "description": "Error reduction used at a connection's limits." },
+        "fudgeFactor": { "type": "number", "description": "Solver scaling applied to a connection, between 0 and 1." },
+        "implicitSpringDamper": { "type": "boolean", "description": "Whether the spring and damper are applied implicitly by the solver." },
+        "provideFeedback": { "type": "boolean", "description": "Whether the simulator reports the forces at this connection." }
+      },
+      "additionalProperties": false
+    },
+    "motion": {
+      "type": "object",
+      "description": "The freedom of movement a connection allows. Angles are degrees and lengths millimetres, as everywhere else in PartCAD.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["fixed", "revolute", "continuous", "prismatic", "planar", "floating", "ball", "screw"]
+        },
+        "axis": {
+          "type": "array",
+          "description": "The axis moved about or along, in the frame of this interface's port.",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "limits": {
+          "type": "object",
+          "description": "How far the movement may go: degrees for a turn, millimetres for a move.",
+          "properties": {
+            "lower": { "type": "number" },
+            "upper": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "softLimits": {
+          "type": "object",
+          "description": "Limits a controller enforces before the hard ones, and the gains it does it with.",
+          "properties": {
+            "lower": { "type": "number" },
+            "upper": { "type": "number" },
+            "kPosition": { "type": "number" },
+            "kVelocity": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "mimic": {
+          "type": "object",
+          "description": "A movement that follows another one: value = multiplier * other + offset.",
+          "properties": {
+            "joint": { "type": "string", "minLength": 1 },
+            "multiplier": { "type": "number" },
+            "offset": { "type": "number" }
+          },
+          "required": ["joint"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "OCCTLocation":{
       "type": "array",
@@ -44,6 +199,44 @@
         }
       ]
     },
+    "hold": {
+      "description": "The interface, or the list of interfaces, to hold this object by while it is connected to another one. The default for 'holdWith'/'holdTo' in the 'how' section of an ASSY 'connect*' node.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      ]
+    },
+    "holdInstance": {
+      "description": "The instance of each interface listed in 'hold' to hold this object by, in the same order. The default for 'holdWithInstance'/'holdToInstance' in the 'how' section of an ASSY 'connect*' node.",
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      ]
+    },
+    "holdForce": {
+      "description": "A force to hold this object with, in N. The default for the 'holdWithForce*'/'holdToForce*' fields in the 'how' section of an ASSY 'connect*' node.",
+      "type": "number",
+      "minimum": 0
+    },
+    "connect": {
+      "description": "What this part or assembly contributes to every connection it takes part in. The defaults for the 'how' section of an ASSY 'connect*' node.",
+      "type": "object",
+      "properties": {
+        "hold": { "$ref": "#/definitions/hold" },
+        "holdInstance": { "$ref": "#/definitions/holdInstance" },
+        "holdForce": { "$ref": "#/definitions/holdForce" },
+        "holdForceMin": { "$ref": "#/definitions/holdForce" },
+        "holdForceMax": { "$ref": "#/definitions/holdForce" }
+      },
+      "additionalProperties": false
+    },
     "interface-parameter": {
       "oneOf": [
         {
@@ -70,6 +263,7 @@
                 "min": { "type": "number" },
                 "max": { "type": "number" },
                 "default": { "type": "number" },
+                "type": { "type": "string", "enum": ["move", "turn"], "default": "move" },
                 "dir": {
                   "type": "array",
                   "items": { "type": "number" },
@@ -116,6 +310,44 @@
           ]
         }
       }
+    },
+    "render": {
+      "description": "The 'render:' section: the 2D projections and documents 'pc render' writes. Its file types are open-ended, like every output section, but the raster options of the built-in formats are still checked.",
+      "allOf": [
+        { "$ref": "#/definitions/output-section" },
+        {
+          "type": "object",
+          "properties": {
+            "png": { "$ref": "#/definitions/raster-output-type" },
+            "jpeg": { "$ref": "#/definitions/raster-output-type" }
+          }
+        }
+      ]
+    },
+    "raster-output-type": {
+      "description": "A rasterized projection. Only what the built-in rasterizers understand is typed here; a package that replaces the implementation may add parameters of its own, which is why this does not close the object.",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 },
+            "quality": { "type": "integer", "minimum": 1, "maximum": 100 },
+            "progressive": { "type": "boolean" },
+            "optimize": { "type": "boolean" },
+            "subsampling": {
+              "oneOf": [
+                { "type": "string", "enum": ["4:4:4", "4:2:2", "4:2:0", "4:1:1"] },
+                { "type": "integer", "minimum": -1, "maximum": 2 }
+              ]
+            },
+            "background": { "type": "string", "pattern": "^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" }
+          },
+          "additionalProperties": true
+        }
+      ]
     }
   },
   "properties": {
@@ -162,13 +394,27 @@
       "items": { "type": "string", "minLength": 3 },
       "uniqueItems": true
     },
+    "javascriptVersion": {
+      "type": ["string", "number"],
+      "pattern": "^[0-9]+(\\.[0-9]+)*$"
+    },
+    "javascriptRequirements": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "chili3dVersion": {
+      "type": ["string", "number"],
+      "minLength": 1
+    },
     "suppliers":{
+      "description": "The providers to consider for the parts and assemblies of this package. A name is a provider of this package unless it is qualified with a package path, which lets a package buy from a provider defined elsewhere.",
       "oneOf":[
         { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
         {
           "type": "object",
           "patternProperties": {
-            "^[a-zA-Z0-9_/./-]+$": { "type": "null" }
+            "^[a-zA-Z0-9_/.:-]+$": { "type": "null" }
           },
           "additionalProperties": false
         }
@@ -182,35 +428,8 @@
       },
       "additionalProperties": false
     },
-    "render": {
-      "type": "object",
-      "patternProperties": {
-        "^(readme|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
-          "oneOf": [
-            { "type": "null" },
-            { "type": "string" },
-            {
-              "type": "object",
-              "properties": {
-                "prefix": { "type": "string", "minLength": 1 },
-                "exclude": {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "enum": ["sketches", "interfaces", "parts", "assemblies"]
-                  },
-                  "uniqueItems": true
-                },
-                "width": { "type": "integer", "minimum": 1 },
-                "height": { "type": "integer", "minimum": 1 }
-              },
-              "additionalProperties": false
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
+    "render": { "$ref": "#/definitions/render" },
+    "export": { "$ref": "#/definitions/output-section" },
     "dependencies": {
       "type": "object",
       "patternProperties": {
@@ -226,6 +445,7 @@
             "revision": { "type": "string", "minLength": 1 },
             "plugin": { "type": "string", "minLength": 1 },
             "subfolder": { "type": "string" },
+            "cacheVersion": { "type": "integer", "minimum": 0 },
             "includePaths": {
               "type": "array",
               "items": { "type": "string", "minLength": 1 },
@@ -242,6 +462,7 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
           "oneOf": [
             {"type": "string", "minLength": 1},
             {
@@ -250,7 +471,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "cadquery", "build123d", "svg", "dxf", "extrude", "sweep",
+                    "cadquery", "build123d", "chili3d", "svg", "dxf", "extrude", "sweep",
                     "stl", "step", "scad", "3mf", "enrich", "alias", "brep", "obj",
                     "kicad", "compound"
                   ]
@@ -267,6 +488,8 @@
                   }
                 },
                 "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "desc": { "type": "string", "maxLength": 1000 },
@@ -319,18 +542,34 @@
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
                 },
+                "javascriptRequirements": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "javascriptVersion": {
+                  "type": ["string", "number"],
+                  "pattern": "^[0-9]+(\\.[0-9]+)*$"
+                },
+                "chili3dVersion": {
+                  "type": ["string", "number"],
+                  "minLength": 1
+                },
                 "dependencies": {
                   "type": "array",
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
                 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
                 "manufacturing": {
                   "type": "object",
                   "properties": {
-                    "method": { "type": "string", "enum": ["basic", "additive", "pcbBasic"] }
+                    "method": { "type": "string", "enum": ["additive", "subtractive", "forming", "pcbBasic"] }
                   },
                   "required":["method"],
                   "additionalProperties": false
@@ -376,6 +615,15 @@
                     "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/port" }
                   },
                   "additionalProperties": false
+                },
+                "manufacturable": { "type": "boolean" },
+                "connect": { "$ref": "#/definitions/connect" },
+                "physics": { "$ref": "#/definitions/physics" },
+                "material": { "type": "string", "minLength": 1, "description": "The name of the material this shape is made of." },
+                "color": {
+                  "type": "string",
+                  "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
+                  "description": "The colour of this shape, as #RRGGBB or #RRGGBBAA."
                 }
               },
               "required": ["type"],
@@ -390,7 +638,12 @@
                   "pattern": "^(:[^:]+|[^:]+:[^:]+)$"
                 },
                 "desc": { "type": "string", "maxLength": 1000 },
-                "parameters": { "$ref": "#/definitions/shape-parameter" }
+                "parameters": { "$ref": "#/definitions/shape-parameter" },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "vendor": { "type": "string", "minLength": 1 },
+                "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 }
               },
               "required": ["type"],
               "additionalProperties": true
@@ -404,18 +657,46 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9_/./-]+$": {
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
           "oneOf": [
             {"type": "string", "minLength": 1},
             {
               "type": "object",
               "properties": {
-                "type": { "type": "string", "enum": ["assy", "alias"] },
+                "type": { "type": "string", "enum": ["assy", "step", "urdf", "alias"] },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 5,
+                  "description": "The number of decimal places the placement of each component is rounded to ('step' type only)"
+                },
+                "ignoreCollision": {
+                  "oneOf": [
+                    { "type": "boolean" },
+                    { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+                  ],
+                  "default": false,
+                  "description": "Build a URDF link from its visual geometry rather than its collision geometry: true for every link, or a list of the link names it applies to ('urdf' type only)"
+                },
+                "packagePaths": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true,
+                  "description": "Roots to resolve 'package://' mesh references against ('urdf' type only)"
+                },
+                "strict": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Fail on a Gazebo setting that has no PartCAD property, instead of reporting it. URDF outside Gazebo's extension blocks always fails, whatever this says ('urdf' type only)"
+                },
                 "manufacturing": {
                   "type": "object",
                   "properties": {
-                    "method": { "type": "string", "enum": ["basic", "additive", "pcbBasic"] }
+                    "method": { "type": "string", "enum": ["assy"], "default": "assy" }
                   },
                   "required":["method"],
                   "additionalProperties": false
@@ -428,7 +709,14 @@
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
                 },
-                "offset": { "$ref": "#/definitions/OCCTLocation" }
+                "vendor": { "type": "string", "minLength": 1 },
+                "sku": { "type": "string", "minLength": 1 },
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "offset": { "$ref": "#/definitions/OCCTLocation" },
+                "render": { "$ref": "#/definitions/render" },
+                "export": { "$ref": "#/definitions/output-section" },
+                "manufacturable": { "type": "boolean" },
+                "connect": { "$ref": "#/definitions/connect" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -446,8 +734,12 @@
             "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
             "desc": { "type": "string", "maxLength": 1000 },
             "path": { "type": "string", "minLength": 1 },
+            "fileFrom": { "type": "string", "enum": ["url"] },
+            "fileUrl": { "$ref": "#/definitions/url" },
             "tolerance": { "type": "number", "minimum": 0 },
             "parameters": { "$ref": "#/definitions/shape-parameter"},
+            "render": { "$ref": "#/definitions/render" },
+            "export": { "$ref": "#/definitions/output-section" },
             "include":{
               "oneOf": [
                 { "type": "string", "minLength": 1 },
@@ -560,6 +852,7 @@
             }
           },
           "required": ["type"],
+          "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
           "additionalProperties": false
         }
       },
@@ -575,6 +868,16 @@
             "desc": { "type": "string", "maxLength": 1000 },
             "path": { "type": "string", "minLength": 1 },
             "leadPort": { "type": "string", "minLength": 1 },
+            "threadStep": {
+              "description": "The axial distance a connection made through this interface advances per full turn, in mm. Inherited by the interfaces that inherit this one, and by the connections that use it.",
+              "type": "number",
+              "minimum": 0
+            },
+            "selfScrew": {
+              "description": "Whether this interface cuts its own thread rather than matching one, so that it may be connected to an interface with a different 'threadStep' or none.",
+              "type": "boolean",
+              "default": false
+            },
             "inherits":{
               "type": "object",
               "patternProperties":{
@@ -614,7 +917,9 @@
                 }
               ]
             },
-            "parameters": { "$ref": "#/definitions/interface-parameter"}
+            "parameters": { "$ref": "#/definitions/interface-parameter"},
+            "motion": { "$ref": "#/definitions/motion" },
+            "physics": { "$ref": "#/definitions/physics" }
           },
           "additionalProperties": false
         }

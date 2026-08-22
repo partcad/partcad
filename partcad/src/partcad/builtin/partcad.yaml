@@ -1,0 +1,27 @@
+# The packages PartCAD ships with itself.
+#
+# This package tree is not fetched from anywhere: it lives inside the `partcad`
+# Python package and every context makes it reachable at `//builtin`, no matter
+# what the root package is called or where it was loaded from. Its children
+# declare the built-in ways of producing output files:
+#
+#   - `//builtin/export` -- the 3D/CAD formats `pc export` writes.
+#   - `//builtin/render` -- the 2D projections `pc render` writes.
+#
+# A package that wants to produce a format differently does not patch anything
+# here. It declares the same format in its own `export:`/`render:` section with
+# a `path` of its own, which replaces the built-in implementation for that
+# package (see `docs/source/configuration.rst`).
+
+name: //builtin
+desc: |
+  The packages PartCAD ships with itself: the built-in ways of producing output
+  files, declared in `//builtin/export` and `//builtin/render`.
+
+dependencies:
+  export:
+    type: local
+    path: export
+  render:
+    type: local
+    path: render

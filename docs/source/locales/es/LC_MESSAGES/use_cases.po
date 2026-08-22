@@ -405,4 +405,3 @@ msgstr ""
 "una pull request en `el repositorio público de PartCAD "
 "<https://github.com/partcad/partcad-index>`_ para agregar una referencia "
 "a su paquete."
-

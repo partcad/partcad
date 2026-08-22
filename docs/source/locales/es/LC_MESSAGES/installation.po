@@ -644,4 +644,3 @@ msgstr ""
 "Sin embargo, si sospecha que algo anda mal con los archivos almacenados "
 "en caché localmente, use ``pc system status`` para investigar y "
 "determinar la ubicación de los archivos en caché."
-

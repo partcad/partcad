@@ -18,7 +18,8 @@ getting tested on Linux, MacOS and Windows.
 
   No Python on the machine, or no interest in maintaining a Python environment?
   Install the :ref:`standalone command line tools <standalone-cli>` instead. They are
-  the same tools, shipped with their own interpreter.
+  the same tools, shipped with their own interpreter. There is also a
+  :ref:`snap package <snap-package>` for Linux, not published yet.
 
 .. note::
 
@@ -123,8 +124,25 @@ Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.loc
 The bundle is around 875MB unpacked and 290MB to download on Linux, somewhat less on MacOS and Windows.
 Most of it is the OpenCASCADE geometry kernel, which the wheels download too, just at ``pip install`` time.
 
-Supported platforms are Linux on x86_64, and MacOS on Apple silicon. Windows is covered by the
-``.zip`` archive under :ref:`manual installation <standalone-manual>`.
+Supported platforms are Linux on x86_64 and arm64, and MacOS on Apple silicon. Windows is covered by the
+``.zip`` archives under :ref:`manual installation <standalone-manual>`.
+
+.. _standalone-os-versions:
+
+There is one build per supported *operating system version*, not one per operating system. A frozen bundle
+links against the C library and the system frameworks of the machine that built it, so it runs there and on
+anything newer, and on nothing older -- a single "Linux" build would quietly mean "whichever Linux the
+builder happened to be". The installer works out which one this machine can run and downloads that:
+
+.. code-block:: text
+
+  Linux, x86_64 and arm64     built on Ubuntu 22.04 and on Ubuntu 24.04
+  MacOS, Apple silicon        built on MacOS 15 and on MacOS 26
+  Windows, x86_64             built on Windows Server 2022 and on Windows Server 2025
+
+The Ubuntu names are not a requirement to run Ubuntu. Any Linux distribution can run these bundles; what
+differs between the two is the minimum glibc, and a machine the installer cannot identify as Ubuntu is
+offered the 22.04 build, which has the lower floor. Pass ``--platform`` to install a specific one.
 
 Options
 =======
@@ -151,6 +169,11 @@ Option                         Environment variable             Default
 ``--bin-dir <dir>``            ``PARTCAD_BIN_DIR``              ``~/.local/bin``
 ``--base-url <url>``           ``PARTCAD_BASE_URL``             the GitHub release for the version
 ``--repository <owner/name>``  ``PARTCAD_REPOSITORY``           ``partcad/partcad``
+``--platform <id>``            ``PARTCAD_PLATFORM``             detected from this machine
+``--ide``                      ``PARTCAD_IDE``                  off, the command line tools alone
+``--app-dir <dir>``            ``PARTCAD_APP_DIR``              MacOS, with ``--ide``: ``/Applications``
+                                                                when it is writable, ``~/Applications``
+                                                                otherwise
 ============================== ================================ ==========================================
 
 Installing several versions side by side is fine: each one unpacks into its own directory, and the
@@ -195,7 +218,7 @@ For a pull request, use the branch it comes from, or its head commit:
 
   .. code-block:: shell
 
-    $ unzip partcad-standalone-linux-x86_64.zip -d /tmp/partcad-build
+    $ unzip partcad-standalone-ubuntu-24.04-x86_64.zip -d /tmp/partcad-build
     $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/devel/install.sh | \
         sh -s -- --version <version> --base-url "file:///tmp/partcad-build"
 
@@ -210,9 +233,14 @@ Manual installation
 The archives are attached to every `GitHub release <https://github.com/partcad/partcad/releases>`_ next to
 the wheels, together with a ``.sha256`` file each:
 
-* ``partcad-<version>-linux-x86_64.tar.gz``
-* ``partcad-<version>-macos-arm64.tar.gz``
-* ``partcad-<version>-windows-x86_64.zip``
+* ``partcad-<version>-ubuntu-22.04-x86_64.tar.gz``, ``partcad-<version>-ubuntu-22.04-arm64.tar.gz``
+* ``partcad-<version>-ubuntu-24.04-x86_64.tar.gz``, ``partcad-<version>-ubuntu-24.04-arm64.tar.gz``
+* ``partcad-<version>-macos-15-arm64.tar.gz``, ``partcad-<version>-macos-26-arm64.tar.gz``
+* ``partcad-<version>-windows-2022-x86_64.zip``, ``partcad-<version>-windows-2025-x86_64.zip``
+
+Pick the newest one your machine is not older than -- see :ref:`the note above <standalone-os-versions>` on
+why there is more than one. When in doubt, the oldest build of your operating system runs everywhere the
+newer one does.
 
 Each one unpacks into a single ``partcad/`` directory holding ``pc``, ``partcad``, and everything they
 need. Put that directory anywhere and run the commands from it, or add it to ``PATH``. On Windows, unpack
@@ -220,7 +248,7 @@ the ``.zip`` and add the resulting directory to ``PATH`` -- there is no shell sc
 
 .. code-block:: shell
 
-  $ tar -xzf partcad-<version>-linux-x86_64.tar.gz -C ~/.local/share
+  $ tar -xzf partcad-<version>-ubuntu-22.04-x86_64.tar.gz -C ~/.local/share
   $ ~/.local/share/partcad/pc version
 
 .. note::
@@ -236,8 +264,8 @@ The bundle carries everything the wheels would install, including the optional e
 to the user: the Python linter (``lint``). A frozen bundle cannot be extended afterwards, so it ships
 complete.
 
-On Linux and Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to build
-``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
+On Linux x86_64 and on Windows it also carries **OpenSCAD**, which PartCAD runs as an external program to
+build ``.scad`` parts. The bundled copy is used in preference to any OpenSCAD installed on the machine, so that the
 bundle behaves the same everywhere rather than depending on which version a given host happens to have. Two
 consequences worth knowing:
 
@@ -250,8 +278,9 @@ consequences worth knowing:
   OpenSCAD will not start -- pass ``--ignore-bundled-openscad`` to fall back to a host OpenSCAD if you have
   one.
 
-The macOS bundle carries no OpenSCAD: the last OpenSCAD release predates Apple silicon and ships an
-Intel-only build, which would quietly require Rosetta 2. On macOS, install OpenSCAD yourself and PartCAD
+The macOS bundles carry no OpenSCAD: the last OpenSCAD release predates Apple silicon and ships an
+Intel-only build, which would quietly require Rosetta 2. The Linux arm64 bundles carry none for the same
+reason -- upstream publishes that release for x86_64 only. On both, install OpenSCAD yourself and PartCAD
 will use it.
 
 Two other things are deliberately not in the bundle, because PartCAD runs them as external programs rather
@@ -264,6 +293,173 @@ Run ``pc healthcheck`` to see what is missing on the current machine.
 
 The bundle provides the command line tools only. The ``partcad`` Python module for CAD-as-code scripts is
 a wheel: ``python -m pip install -U partcad``.
+
+
+.. _snap-package:
+
+============
+Snap (Linux)
+============
+
+On Linux, the standalone tools are also packaged as a `snap <https://snapcraft.io/docs>`_, for x86_64 and
+arm64. It is the same bundle as the ``ubuntu-24.04`` archives above, so everything said about those applies
+here too -- what it carries, what it still expects from the machine, the bundled OpenSCAD. What the snap adds
+is the packaging: snapd installs it, keeps it up to date, and removes it cleanly.
+
+.. note::
+
+  **The snap is not published yet.** It is built by CI, but it is not on the Snap Store and it is not attached
+  to GitHub releases, so ``snap install partcad`` does not work today. Publishing needs Snap Store credentials
+  and, because the snap is classic, a manual store review; both are still to come.
+
+  To try it now, download the ``partcad-snap-amd64`` (or ``partcad-snap-arm64``) artifact from a run of the
+  ``Standalone`` workflow on GitHub, unzip it, and install the ``.snap`` inside as below.
+
+.. code-block:: shell
+
+  $ sudo snap install --dangerous --classic partcad_<version>_amd64.snap
+  $ sudo snap alias partcad.pc pc
+  $ pc version
+
+Two flags need explaining:
+
+* ``--classic`` is the confinement. PartCAD works on your own files -- it reads and writes CAD projects
+  anywhere on disk, clones git repositories, builds conda sandboxes and runs CAD scripts in them, and serves
+  a daemon over a socket that the Visual Studio Code extension connects to. A strictly confined snap could do
+  none of that.
+* ``--dangerous`` says the package is not signed by the Snap Store, which a downloaded file is not. It stops
+  being necessary once the snap is published.
+
+``snap alias`` is there because a snap only gives the bare command name to the app named after the snap
+itself. Without it, the commands are ``partcad``, ``partcad.pc`` and ``partcad.json-rpc``.
+
+Where it keeps its state
+========================
+
+Everywhere else, PartCAD keeps its cache, its conda sandboxes and its git clones in ``~/.partcad``. The snap
+does not write them there. It sets ``PC_INTERNAL_STATE_DIR`` to the per-user directory snapd gives it, so all
+of that lives in ``~/snap/partcad/common`` instead, and ``sudo snap remove --purge partcad`` takes it away
+with the snap.
+
+Your configuration file is the exception, on purpose: ``~/.partcad/config.yaml`` is read from the home
+directory as usual, so one configuration keeps applying whether you installed PartCAD from the snap, the
+standalone bundle, or a wheel.
+
+The telemetry id is kept next to it, for the same reason in reverse: it identifies you, and an id that moved
+with the state directory would count one machine as several.
+
+conda and git
+=============
+
+A snap does not carry your shell environment, so a conda installed under your home directory -- the usual
+place -- is not visible to it, and neither is a git outside the standard system prefixes. This is expected
+and accepted rather than worked around: PartCAD notices, falls back to running Python scripts without a
+sandbox (``pythonSandbox: none``), and reports both as missing. Packages imported from git repositories are
+still cloned, through ``libgit2`` as everywhere else; what the snap cannot see is your git *configuration*
+(see :ref:`git-configuration`).
+
+.. code-block:: shell
+
+  $ pc healthcheck
+
+If you need the conda sandbox, or your own git configuration, use the :ref:`standalone bundle
+<standalone-cli>` or the wheels, which run with your own environment.
+
+To remove the snap, including its data:
+
+.. code-block:: shell
+
+  $ sudo snap remove --purge partcad
+
+
+.. _partcad-ide:
+
+==================================
+PartCAD IDE (no Python, no editor)
+==================================
+
+The PartCAD IDE is one application that holds all of it: the editor, the PartCAD extension, the
+extensions that go with it, and the same command line tools as the standalone build above. Nothing to
+configure, no Python to install, no list of extensions to work through. It opens in the PartCAD
+workbench.
+
+Use it if PartCAD is what you want to do rather than something you want to add to an editor you already
+have. If you already work in Visual Studio Code, install
+:ref:`the extension <vscode-extension>` there instead.
+
+Install
+=======
+
+On Linux and MacOS:
+
+.. code-block:: shell
+
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --ide
+
+The same installer as the command line tools, with the same options: everything described for the
+:ref:`standalone command line tools <standalone-cli>` applies here too. On Linux it unpacks into
+``~/.local/share/partcad/<version>-ide`` and adds an entry to the applications menu. On MacOS it puts
+``PartCAD IDE.app`` into ``/Applications``, or into ``~/Applications`` when the first is not writable;
+``--app-dir`` chooses. Either way ``partcad-ide`` is linked into ``~/.local/bin``, along with ``pc`` and
+``partcad`` from the copy inside the IDE -- so the command line tools are installed too, without a second
+download.
+
+On Windows, download ``partcad-ide-<version>-windows-x86_64-setup.exe`` from the
+`GitHub release <https://github.com/partcad/partcad/releases>`_ and run it. It installs for the current
+user without asking for administrator rights, into ``%LOCALAPPDATA%\Programs\PartCAD IDE``, and offers
+"for all users" as a choice. It adds a Start menu entry, and -- unless you turn the option off -- puts
+``partcad-ide`` and ``pc`` on your ``PATH``. Uninstall it from "Apps & features" like any other
+application.
+
+The installer is not signed, so SmartScreen shows a warning: choose "More info", then "Run anyway".
+
+``partcad-ide-<version>-windows-x86_64.zip`` is published next to it, for unpacking somewhere and running
+``partcad-ide.exe`` without installing anything.
+
+The download is around 1GB: an editor, a Python interpreter, the OpenCASCADE geometry kernel and the
+extensions, all in one archive.
+
+What is inside
+==============
+
+* The editor: `VSCodium <https://vscodium.com/>`_, the freely licensed build of the same source Visual
+  Studio Code is built from, with its extensions coming from `Open VSX <https://open-vsx.org/>`_.
+* The PartCAD extension, and the extensions PartCAD works with -- Python, the OCP CAD viewer, YAML and
+  the rest of the list in ``.vscode/extensions.json``.
+* The PartCAD command line tools, the same ones the standalone bundle installs, including OpenSCAD on
+  Linux and Windows.
+
+Pylance is not among them: it is proprietary and licensed for use only with Microsoft's products.
+Open-source type checking for Python is included in its place.
+
+The IDE keeps its settings, its state and any extension you install in ``~/.partcad-ide``, so it shares
+nothing with a Visual Studio Code or VSCodium on the same machine. PartCAD's own cache and configuration
+stay in ``~/.partcad``, shared with the command line tools, so a package installed in a terminal is
+there in the IDE.
+
+On MacOS, ``partcad-ide-<version>-macos-arm64.dmg`` is published as well: open it and drag the
+application to Applications, the usual way.
+
+.. note::
+
+  The MacOS application is signed ad-hoc rather than notarized. ``install.sh`` clears the quarantine
+  flag on the copy it installs; if you unpack the archive by hand instead, MacOS refuses to open it
+  until you do the same:
+  ``xattr -dr com.apple.quarantine "/Applications/PartCAD IDE.app"``.
+
+Upgrade and uninstall
+=====================
+
+Upgrading is installing again. Uninstalling is the same command as for the command line tools, and
+removes the application, the links and the menu entry:
+
+.. code-block:: shell
+
+  $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/main/install.sh | sh -s -- --uninstall
+
+The IDE does not update itself. It is built from a VSCodium release rather than being one, and its
+update server is deliberately absent -- a self-update would replace the PartCAD extension and tools
+inside it with a plain editor.
 
 
 =====================================
@@ -324,9 +520,33 @@ Without the extra, linting Python files reports an error naming the package to
 install. Everything else in PartCAD, including linting of YAML files, works
 without it.
 
+=====================
+Shared caching tiers
+=====================
+
+Beyond memory and the local filesystem, PartCAD can keep its cache of built
+geometry on a memcached server shared by a team or a CI fleet
+(``cacheRemote``), and in an S3 bucket that outlives both (``cacheS3``). Each
+carries a client library that is only imported when that tier is switched on,
+so each is an extra:
+
+.. code-block:: shell
+
+    $ python -m pip install -U 'partcad-cli[memcache]'   # cacheRemote
+    $ python -m pip install -U 'partcad-cli[aws]'        # cacheS3
+
+or on ``partcad`` itself, using the same extra names. Enabling a tier without
+its extra reports an error naming the package to install and leaves the
+remaining tiers working.
+
+.. _vscode-extension:
+
 ============================
 Visual Studio Code extension
 ============================
+
+For an editor you already have. To get the extension, the tools and an editor in one download instead,
+see :ref:`the PartCAD IDE <partcad-ide>`.
 
 This extension is available through the VS Code marketplace.
 The corresponding marketplace page is `here <https://marketplace.visualstudio.com/items?itemName=OpenVMP.partcad>`_.

@@ -37,6 +37,7 @@ class SketchFactory(ShapeFactory):
     def _create_sketch(self, config: object) -> Sketch:
         sketch = Sketch(self.target_project.name, config)
         sketch.instantiate = lambda sketch_self: self.instantiate(sketch_self)
+        sketch._prepare = lambda shape_self: self.prepare_async(shape_self)
         sketch.info = lambda: self.info(sketch)
         sketch.with_ports = self.with_ports
         return sketch
@@ -45,6 +46,7 @@ class SketchFactory(ShapeFactory):
         self.sketch = self._create_sketch(config)
         self.target_project.sketches[self.name] = self.sketch
 
+        self.apply_environment_cache_key(self.sketch)
         self.post_create()
 
         self.ctx.stats_sketches += 1

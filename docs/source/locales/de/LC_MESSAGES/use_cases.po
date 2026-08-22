@@ -406,4 +406,3 @@ msgstr ""
 "GitHub. Erstellen Sie dann einen Pull Request in `dem öffentlichen "
 "PartCAD-Repo <https://github.com/partcad/partcad-index>`_, um einen "
 "Verweis auf Ihr Paket hinzuzufügen."
-

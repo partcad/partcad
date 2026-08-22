@@ -46,6 +46,29 @@ isort --check partcad
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
+- **Built-in packages** (`./src/partcad/builtin`): PartCAD ships two packages inside itself, reachable from
+  every context as `//builtin/export` and `//builtin/render` (loaded on demand by `Context.get_project`, see
+  `output.py`). They declare the file types `pc export` and `pc render` write, in exactly the form a user's
+  package declares one — a `path` to a script, its `pythonRequirements`, and the export parameters. So adding a
+  format, changing its defaults or changing which dependencies it needs is an edit to `builtin/*/partcad.yaml`, not
+  to `shape.py`. The scripts run in a sandbox through `wrappers/wrapper_export.py`; they are data files, so
+  anything new under `builtin/` has to be listed in `pyproject.toml`'s `package-data` and in the PyInstaller
+  spec (see "Packaging" in the root [AGENTS.md](../AGENTS.md)). The requirement strings there are the versions
+  `sandbox_versions.py` pins, which `tests/unit/test_output.py` enforces.
+
+## Schemas and linting
+
+`./src/partcad/schema/partcad.json` is the schema `lint/schema.py` validates `partcad.yaml` against, and
+`lint/all.py` registers the checks — the names it gives them are what `pc lint -f` filters on. Anything added to
+`schema/` ships through `[tool.setuptools.package-data]` in `pyproject.toml` and through the PyInstaller spec's
+copy of the whole directory.
+
+The ASSY schema and its checker are **not** here: they are `partcad_utils.assy_lint` and
+`partcad_utils/schema/assy.json`. `AssySchemaLinting` is the *package* half — walking a package's `.assy` files
+needs the package graph, which is daemon work — while each client checks the one file being edited in its own
+process (`partcad_client.lint`, reached by `pc lint --file`). Two implementations of that check would let an
+editor and CI disagree about a file, so there is one, in the package both ends already depend on.
+
 ## Commit
 
 `pre-commit` hooks (`dev-tools/pre-commit-config.yaml`) run `pytest`, formatting, and lint checks on commit and

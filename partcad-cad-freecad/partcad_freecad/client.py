@@ -5,7 +5,7 @@
 #
 """A framed JSON-RPC client for the standalone ``partcad-json-rpc`` service.
 
-Mirrors ``partcad_service_json_rpc.client`` (a thin client that does not import
+Mirrors ``partcad_client.client`` (a thin client that does not import
 ``partcad``), with two differences that matter inside FreeCAD:
 
 * the launcher is an explicit path to the frozen executable, not this

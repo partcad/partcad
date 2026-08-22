@@ -87,8 +87,8 @@ parts:
 assemblies:
   assembly:
     type: assy
-    manufacturing:
-      method: basic
+    # No "manufacturing" section: an assembly of type "assy" is put together by
+    # following its own instructions, and gets that method with the type.
 
 render:
   readme:

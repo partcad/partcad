@@ -37,6 +37,7 @@ class PartFactory(ShapeFactory):
     def _create_part(self, config: object) -> Part:
         part = Part(self.target_project.name, config)
         part.instantiate = lambda part_self: self.instantiate(part_self)
+        part._prepare = lambda shape_self: self.prepare_async(shape_self)
         part.info = lambda: self.info(part)
         part.with_ports = self.with_ports
         return part
@@ -45,6 +46,7 @@ class PartFactory(ShapeFactory):
         self.part = self._create_part(config)
         self.target_project.parts[self.name] = self.part
 
+        self.apply_environment_cache_key(self.part)
         self.post_create()
 
         self.ctx.stats_parts += 1

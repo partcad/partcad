@@ -5,11 +5,27 @@
 #
 """Core-side entry point for 'pc import assembly'.
 
+An import reads a foreign file and leaves the package holding *PartCAD's own*
+objects - parts it can render on their own and an ``.assy`` that places them -
+rather than a declaration that points back at the foreign file. (Declaring one
+is what ``pc add assembly`` is for.) Both supported formats work that way:
+
+  * **STEP** - the file is split into one zeroed STEP part per solid and an
+    ``.assy`` that places them.
+  * **URDF** - each link becomes an ``stl`` part carrying the physical
+    properties the URDF stated, each joint becomes a pair of interfaces, and
+    the ``.assy`` connects the parts through them.
+
 The STEP-CAF reader and every other OCCT operation an assembly import needs run
-in a sandbox (see wrappers/wrapper_import_assy.py), so this module never touches
-a live OCP object: PartCAD does not depend on a CAD library to import an
-assembly. Here we drive the wrapper, register the STEP parts it wrote, and turn
-the plain-data tree it returns into an .assy file.
+in a sandbox (see assembly_step_reader and wrappers/wrapper_import_assy.py), so
+this module never touches a live OCP object: PartCAD does not depend on a CAD
+library to import an assembly. Here we register the STEP parts the reader wrote
+and turn the plain-data tree it returns into an .assy file.
+
+This is the one-shot half of reading a STEP assembly: it materializes the parts
+and the .assy file into the package, and from then on the package owns them. The
+'step' assembly type (assembly_factory_step) is the other half - it reads the
+very same file through the very same reader, but keeps everything in memory.
 """
 
 import asyncio
@@ -19,34 +35,54 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
 
 from ... import logging as pc_logging
-from ... import sandbox_versions, shape_envelope, wrapper
+from ...assembly_step_reader import read_assembly_tree
 from ...project import Project
 from ..part import import_part_action
 
 
-async def _run_import(ctx, request):
-    """Run the assembly-import wrapper in a sandbox and return its data tree."""
-    if ctx is None:
-        raise ValueError("A context is required to import an assembly")
+def import_urdf_action(project: Project, assembly_file: str, config: dict) -> str:
+    """Import a URDF as the parts, interfaces and .assy that say the same thing.
 
-    runtime = ctx.get_python_runtime(version=sandbox_versions.DEFAULT_PYTHON_VERSION)
-    # The wrapper only needs OCCT (STEP-CAF), not build123d/cadquery.
-    await runtime.ensure_async(sandbox_versions.CADQUERY_OCP)
+    This is the same conversion ``pc convert assembly -t assy`` performs on a
+    URDF assembly the package already declares, so it is done the same way: the
+    URDF is registered as an assembly of the package for the length of the
+    conversion and dropped again, leaving only what the conversion produced.
+    Registering it in memory rather than writing it to 'partcad.yaml' first is
+    what lets the source file live anywhere - the STEP import reads its file
+    where it lies too.
+    """
+    from .convert import apply_config, urdf_to_assy
 
-    wrapper_path = wrapper.get("import_assy.py")
-    request_serialized = shape_envelope.serialize(request)
-    command = [wrapper_path, "import_assy"]
-    exitcode, response_serialized, errors = await runtime.run_async(command, request_serialized)
-    if exitcode != 0 and not errors:
-        errors = "assembly import failed with exit code %s" % exitcode
-    if errors:
-        pc_logging.error(errors)
-        raise Exception(errors)
+    name = Path(assembly_file).stem
+    if project.get_assembly_config(name) is not None:
+        raise ValueError(
+            "The package already has an assembly named '%s'; rename the URDF file or remove it first" % name
+        )
 
-    result = shape_envelope.deserialize(response_serialized)
-    if not result.get("success", False):
-        raise Exception(result.get("exception") or "assembly import failed")
-    return result["root"]
+    urdf_config = {"type": "urdf", "path": str(Path(assembly_file).resolve())}
+    # What the URDF reader takes from an assembly's declaration. An import has
+    # nowhere to put them yet, but they arrive through 'config' when a caller
+    # (the JSON-RPC service, a test) supplies them.
+    for key in ("desc", "ignoreCollision", "packagePaths", "strict"):
+        if config.get(key) is not None:
+            urdf_config[key] = config[key]
+
+    known = project.object_configs("assembly")
+    known[name] = urdf_config
+    try:
+        sections = urdf_to_assy(project, name, urdf_config, Path(project.config_dir).resolve())
+    finally:
+        # Whatever happened, the package must not be left declaring a URDF
+        # assembly that 'partcad.yaml' knows nothing about.
+        known.pop(name, None)
+        project.assemblies.pop(name, None)
+
+    apply_config(project, sections)
+    pc_logging.info(
+        "Imported the URDF '%s' as %d parts and %d interfaces"
+        % (name, len(sections["parts"]), len(sections["interfaces"]))
+    )
+    return name
 
 
 def import_assy_action(
@@ -66,6 +102,7 @@ def import_assy_action(
 
     Supported formats:
       - STEP (.step, .stp)
+      - URDF (.urdf), which takes the path through 'import_urdf_action'
     """
     config = config or {}
 
@@ -75,20 +112,22 @@ def import_assy_action(
 
     pc_logging.info(f"Starting import of assembly: {project.rel_path(assembly_file)} (Type: {file_type})")
 
+    if file_type == "urdf":
+        return import_urdf_action(project, assembly_file, config)
+
     assembly_name = Path(assembly_file).stem
     project_root = Path(project.config_dir).resolve()
     output_folder = project_root / assembly_name
-    output_folder.mkdir(parents=True, exist_ok=True)
 
-    request = {
-        "operation": "import_assy",
-        "file_type": file_type,
-        "assembly_file": str(file_path.resolve()),
-        "assembly_name": assembly_name,
-        "output_folder": str(output_folder),
-        "precision": 5,
-    }
-    root = asyncio.run(_run_import(project.ctx, request))
+    root = asyncio.run(
+        read_assembly_tree(
+            project.ctx,
+            str(file_path.resolve()),
+            str(output_folder),
+            file_type=file_type,
+            precision=5,
+        )
+    )
 
     # Register each unique part exactly once. The wrapper deduplicates by
     # geometry, so distinct nodes may point at the same STEP file; they share one

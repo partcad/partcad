@@ -11,8 +11,34 @@ import rich_click as click
 from ....service import run
 
 # PartCAD part types (partcad.shape.PART_EXTENSION_MAPPING keys), inlined so the
-# thin CLI does not import the heavy partcad package.
-PART_TYPES = ["step", "brep", "stl", "3mf", "threejs", "obj", "iges", "gltf", "cadquery", "build123d", "sdf", "scad"]
+# thin CLI does not import the heavy partcad package. 'urdf' is deliberately
+# absent: it describes an assembly, not a shape, and only means anything inside
+# a package - see partcad.adhoc.convert.PACKAGE_ONLY_TYPES and
+# 'pc convert assembly'. It is still inferable from a '.urdf' filename, which is
+# where that rejection is reported from.
+PART_TYPES = [
+    "step",
+    "brep",
+    "stl",
+    "3mf",
+    "threejs",
+    "obj",
+    "iges",
+    "gltf",
+    "cadquery",
+    "build123d",
+    "chili3d",
+    "sdf",
+    "scad",
+]
+
+# What PartCAD can write. The rest are input formats only: PartCAD reads a
+# Chili3D, SDF or OpenSCAD script and has no exporter that produces one (see
+# partcad.shape.UNEXPORTABLE_PART_TYPES, inlined here for the same reason - it
+# also holds 'urdf', which is absent from the list above for the reason given
+# there).
+INPUT_ONLY_PART_TYPES = ["chili3d", "sdf", "scad"]
+OUTPUT_PART_TYPES = [part_type for part_type in PART_TYPES if part_type not in INPUT_ONLY_PART_TYPES]
 
 
 @click.command(help="Convert CAD files between formats (ad-hoc mode).")
@@ -25,7 +51,7 @@ PART_TYPES = ["step", "brep", "stl", "3mf", "threejs", "obj", "iges", "gltf", "c
 @click.option(
     "--output",
     "output_type",
-    type=click.Choice(PART_TYPES),
+    type=click.Choice(OUTPUT_PART_TYPES),
     help="Output file type. Inferred from filename if not provided.",
 )
 @click.argument("input_filename", type=click.Path(exists=True))

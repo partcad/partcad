@@ -5,7 +5,7 @@
 #
 """LSP-style ``Content-Length`` framing for JSON-RPC messages over a byte stream.
 
-The same codec as ``partcad_service_json_rpc.transport.framing``, duplicated here
+The same codec as ``partcad_utils.framing``, duplicated here
 on purpose: the addon talks to the *standalone* service, so it cannot import the
 service's Python package -- FreeCAD's interpreter has neither it nor ``partcad``
 installed, which is the whole point of using the frozen bundle.

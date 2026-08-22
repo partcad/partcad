@@ -1,3 +1,7 @@
 vendor,sku,count,price
 gobilda,2811-0004-0007,1,0.01
 gobilda,2802-0004-0012,1,0.02
+gobilda,2800-0003-0006,100,0.35
+gobilda,2800-0004-0006,100,0.45
+omc-stepperonline,17HS24-2104S,10,13.99
+omc-stepperonline,ST-M1,10,6.99

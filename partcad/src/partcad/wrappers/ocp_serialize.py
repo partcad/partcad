@@ -262,12 +262,34 @@ def shape_from_brep(data: bytes):
         return downcast(shape)
 
 
+def compressed_brep(shape) -> bytes:
+    """The zstd-compressed BREP bytes - how a shape payload is carried everywhere.
+
+    Base64 is applied on top of this only where the payload has to travel as
+    JSON; the core keeps the bytes (see partcad/shape_envelope.py).
+    """
+    return _compress(shape_to_brep(shape))
+
+
 def _brep_b64(shape) -> str:
-    return base64.b64encode(_compress(shape_to_brep(shape))).decode("ascii")
+    return base64.b64encode(compressed_brep(shape)).decode("ascii")
 
 
-def _shape_from_b64(brep_b64: str):
-    return shape_from_brep(_decompress(base64.b64decode(brep_b64)))
+def _brep_payload(value) -> bytes:
+    """The compressed payload of a "brep" field, base64-encoded or raw.
+
+    A payload that came off the pipe is base64 text; one handed over in-process
+    (from a cache, say) is already the bytes, and is passed on without a copy.
+    """
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, (bytearray, memoryview)):
+        return bytes(value)
+    return base64.b64decode(value)
+
+
+def _shape_from_b64(brep_b64):
+    return shape_from_brep(_decompress(_brep_payload(brep_b64)))
 
 
 def compound_of(shapes):
@@ -283,7 +305,7 @@ def compound_of(shapes):
 
 
 def encode_shape(shape, name=None, label=None) -> dict:
-    """Represent a single shape as {"name", "label", "brep"}."""
+    """Represent a single shape as {"name", "label", "brep"}, ready for JSON."""
     return {"name": name, "label": label, KEY_BREP: _brep_b64(shape)}
 
 
@@ -364,14 +386,18 @@ def encode(obj, name=None, label=None):
     if isinstance(obj, dict):
         # An already-built shape/assembly object keeps its own metadata verbatim.
         if KEY_BREP in obj or KEY_ASSEMBLY in obj:
-            return {
-                key: (
-                    value
-                    if key in (KEY_BREP, KEY_ASSEMBLY, KEY_LOCATION, "name", "label")
-                    else encode(value, name, label)
-                )
-                for key, value in obj.items()
-            }
+            encoded = {}
+            for key, value in obj.items():
+                if key == KEY_BREP:
+                    # Raw bytes reach here only in-process; on the pipe it is base64 already.
+                    encoded[key] = value if isinstance(value, str) else base64.b64encode(value).decode("ascii")
+                elif key == KEY_ASSEMBLY:
+                    encoded[key] = [encode(child, name, label) for child in value]
+                elif key in (KEY_LOCATION, "name", "label"):
+                    encoded[key] = value
+                else:
+                    encoded[key] = encode(value, name, label)
+            return encoded
         return {key: encode(value, name, label) for key, value in obj.items()}
 
     if isinstance(obj, (list, tuple, set, frozenset)):
@@ -427,11 +453,11 @@ def serialize(obj, name=None, label=None) -> str:
     return dumps(obj, name=name, label=label)
 
 
-def deserialize(data) -> object:
-    """Deserialize the form produced by 'serialize()'.
+def _payload_line(data) -> str:
+    """The single JSON line carrying the payload.
 
-    The response is taken as the last non-empty line of 'data', so any leading
-    progress a wrapper wrote to stdout is ignored.
+    It is taken as the last non-empty line of 'data', so any leading progress a
+    wrapper wrote to stdout is ignored.
     """
     if isinstance(data, (bytes, bytearray)):
         data = data.decode("utf-8")
@@ -442,4 +468,20 @@ def deserialize(data) -> object:
             if candidate:
                 line = candidate
                 break
-    return loads(line)
+    return line
+
+
+def deserialize(data) -> object:
+    """Deserialize the form produced by 'serialize()'."""
+    return loads(_payload_line(data))
+
+
+def deserialize_raw(data) -> object:
+    """Deserialize without decoding shapes - envelopes stay as their dicts.
+
+    The counterpart of the core-side 'shape_envelope.deserialize()', for the
+    wrappers that need the *structure* of an assembly envelope rather than the
+    compound it decodes to: the URDF exporter turns each node of the tree into a
+    link of its own, which the flattening in 'decode()' would have thrown away.
+    """
+    return json.loads(_payload_line(data))

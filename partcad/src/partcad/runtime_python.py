@@ -128,6 +128,77 @@ def describe_exit_code(returncode: int) -> str:
     return "exit code %d" % returncode
 
 
+def package_requirements(project) -> list[str]:
+    """What a package declares its Python sandbox needs.
+
+    Shared by PythonRuntime.prepare_for_package() and by the cache key the
+    factories build (see part_factory_python.PartFactoryPython), so the two
+    cannot come to different conclusions about what a sandbox holds.
+
+    A module-level function rather than a static method on the runtime:
+    telemetry.instrument() rewrites every callable in a class body, and a
+    'staticmethod' object is callable, so it would come back out as a plain
+    function and turn into a bound method on the way through an instance.
+    """
+    # TODO(clairbee): expire the guard file after a certain time
+    dependencies = []
+    if "pythonRequirements" in project.config_obj:
+        reqs = project.config_obj["pythonRequirements"]
+        if isinstance(reqs, str):
+            reqs = reqs.strip().split("\n")
+        for req in reqs:
+            # Skip blanks and comments, the way the requirements.txt branch
+            # below does: a multiline 'pythonRequirements' can carry both, and
+            # they are neither installable nor part of the environment.
+            req = req.strip()
+            if req and not req.startswith("#"):
+                dependencies.append(req)
+    else:
+        # TODO-218: @alexanderilyin: Add support for --hash=... in requirements.txt
+        requirements_path = os.path.join(project.path, "requirements.txt")
+        if os.path.exists(requirements_path):
+            with open(requirements_path) as f:
+                requirements_text = f.read()
+            requirements_lines = requirements_text.strip().split("\n")
+            for line in requirements_lines:
+                line = line.strip()
+                if line.startswith("#"):
+                    continue
+                dependencies.append(line)
+    return [dep for dep in dependencies if dep]
+
+
+def shape_requirements(config) -> list[str]:
+    """What one shape declares its Python sandbox needs.
+
+    Module-level for the same reason package_requirements() is.
+    """
+    if "pythonRequirements" not in config:
+        return []
+    reqs = config["pythonRequirements"]
+    if isinstance(reqs, str):
+        reqs = reqs.strip().split("\n")
+    return [req.strip() for req in reqs if req and req.strip()]
+
+
+def environment_requirements(project, config) -> list[str]:
+    """Everything installed into the sandbox a shape renders in.
+
+    The CAD stack PartCAD supplies comes first: 'once()' preinstalls all of it
+    into every sandbox and 'reconcile_requirement()' holds a package to those
+    versions, so a bump moves every sandboxed shape - which is the point, since
+    those versions are what produced it.
+
+    The package's and the shape's own requirements are then reconciled the same
+    way the installer reconciles them, so that a requirement PartCAD would
+    override does not key as though it had been honored.
+    """
+    requirements = list(sandbox_versions.PINNED_REQUIREMENTS)
+    requirements += package_requirements(project)
+    requirements += shape_requirements(config)
+    return [sandbox_versions.reconcile_requirement(requirement)[0] for requirement in requirements]
+
+
 class VenvLock:
     lock: FileLock
 
@@ -843,32 +914,7 @@ class PythonRuntime(runtime.Runtime):
     async def prepare_for_package(self, project, session=None):
         await self.once_async()
 
-        # TODO(clairbee): expire the guard file after a certain time
-
-        # Check if this project has python requirements
-        dependencies = []
-
-        # Install dependencies of the package
-        if "pythonRequirements" in project.config_obj:
-            reqs = project.config_obj["pythonRequirements"]
-            if isinstance(reqs, str):
-                reqs = reqs.strip().split("\n")
-            for req in reqs:
-                dependencies.append(req.strip())
-        else:
-            # TODO-218: @alexanderilyin: Add support for --hash=... in requirements.txt
-            requirements_path = os.path.join(project.path, "requirements.txt")
-            if os.path.exists(requirements_path):
-                with open(requirements_path) as f:
-                    requirements_text = f.read()
-                requirements_lines = requirements_text.strip().split("\n")
-                for line in requirements_lines:
-                    line = line.strip()
-                    if line.startswith("#"):
-                        continue
-                    dependencies.append(line)
-
-        for dep in dependencies:
+        for dep in package_requirements(project):
             # Use local partcad package instead of the deployed one (specifically intended to be used during testing)
             if dep == "partcad":
                 dep = get_local_partcad_pkg(dep)
@@ -878,12 +924,8 @@ class PythonRuntime(runtime.Runtime):
         await self.once_async()
 
         # Install dependencies of this part
-        if "pythonRequirements" in config:
-            reqs = config["pythonRequirements"]
-            if isinstance(reqs, str):
-                reqs = reqs.strip().split("\n")
-            for req in reqs:
-                await self.ensure_async_onced(req.strip(), session)
+        for req in shape_requirements(config):
+            await self.ensure_async_onced(req, session)
 
     def get_venv_python_path(self, session=None, path=None):
         use_venv = False

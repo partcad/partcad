@@ -8,92 +8,105 @@
 #
 
 import asyncio
-from pathlib import Path
 
 from .cache_hash import CacheHash
-import aiofiles
+from . import cache_backend
 
 
 class Cache:
+    """A hierarchy of storage tiers, addressed as one key-value store.
+
+    Entries are flat names ('<hash>.<key>') holding bytes. A read walks the
+    tiers nearest-first and stops at the first one that has the entry; a write
+    offers the entry to every tier whose size window accepts it. Which tiers
+    exist is the user's configuration - see cache_backend.build().
+
+    Nothing here inspects, converts or copies a payload: what a caller hands in
+    is what every tier stores, and a shape payload is the zstd-compressed BREP
+    frame the core already holds (see cache_shape.py).
+    """
+
     def __init__(self, data_type: str, user_config) -> None:
         """Initialize cache for specific data type."""
         self.data_type = data_type
         self.user_config = user_config
-        self.cache_dir = Path(user_config.internal_state_dir) / "cache" / data_type
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.backends = cache_backend.build(user_config, data_type)
 
-    def get_cache_path(self, hash: CacheHash) -> Path:
-        """Get the file path for a cached object."""
-        hash_str = hash.get()
-        if not hash_str:
-            return None
-        return self.cache_dir / hash_str
+    @property
+    def enabled(self) -> bool:
+        return bool(self.backends)
 
-    def _needs_write_data(self, data_len: int) -> bool:
-        """Check if object needs to be written to cache."""
-        # Make an exception for 1 byte objects to cache test results
-        if data_len >= 2 and data_len < self.user_config.cache_min_entry_size:
-            # This object is too small to cache
-            return False
-        if data_len > self.user_config.cache_max_entry_size:
-            # This object is too big to cache
-            return False
-
-        return True
-
-    def _should_cache_key(self, key: str, value: bytes) -> bool:
-        if not key.startswith(("shape", "sketch", "part", "assembly", "cmps")):
-            return True
-        return self._needs_write_data(len(value))
+    def _name(self, hash_str: str, key: str) -> str:
+        return "%s.%s" % (hash_str, key)
 
     async def write_data_async(self, hash: CacheHash, items: dict[str, bytes]) -> dict[str, bool]:
-        """Write object to cache and return its hash."""
-        if not self.user_config.cache:
+        """Store 'items' under 'hash', reporting which of them landed somewhere.
+
+        A key that no tier accepted - too big for one, too small for another,
+        every tier disabled - comes back absent rather than False, which is what
+        the callers have always keyed their in-memory decisions off.
+        """
+        if not self.backends:
             # Caching is disabled
             return {}
 
-        cache_path = self.get_cache_path(hash)
-        if not cache_path:
+        hash_str = hash.get()
+        if not hash_str:
             # Hash is not produced
             return {}
 
+        # The sidecar that records which object this hash belongs to. Only the
+        # tiers that want it get it (see CacheBackend.stores_names).
+        names = {self._name(hash_str, "name"): hash.name.encode()}
+
+        async def task_backend(backend):
+            accepted = {
+                self._name(hash_str, key): value
+                for key, value in items.items()
+                if backend.accepts(key, len(value))
+            }
+            if not accepted:
+                return {}
+            if backend.stores_names:
+                accepted.update(names)
+            return await backend.write_async(accepted)
+
+        results = await asyncio.gather(*[asyncio.create_task(task_backend(b)) for b in self.backends])
+
         saved = {}
-
-        async def task_item(key: str, value: bytes) -> None:
-            async with aiofiles.open(f"{cache_path}.{key}", "wb") as f:
-                await f.write(value)
-            saved[key] = True
-
-        tasks = [
-            asyncio.create_task(task_item(key, value))
-            for key, value in items.items()
-            if self._should_cache_key(key, value)
-        ]
-        if tasks:
-            tasks.append(asyncio.create_task(task_item("name", hash.name.encode())))
-            await asyncio.gather(*tasks)
-
-        # Report that it is saved to the filesystem
+        for stored in results:
+            for key in items:
+                if stored.get(self._name(hash_str, key), False):
+                    saved[key] = True
         return saved
 
     async def read_data_async(self, hash: CacheHash, keys: list[str]) -> dict[str, bytes]:
-        """Read object from cache using its hash."""
-        if not self.user_config.cache:
+        """Read 'keys' under 'hash' from the nearest tier that holds each of them."""
+        if not self.backends:
             # Caching is disabled
             return {}
 
-        cache_path = self.get_cache_path(hash)
-        if not cache_path:
+        hash_str = hash.get()
+        if not hash_str:
             # Hash is not produced
             return {}
 
-        async def task_item(key: str) -> tuple[str, bytes]:
-            try:
-                async with aiofiles.open(f"{cache_path}.{key}", "rb") as f:
-                    return [key, await f.read()]
-            except FileNotFoundError:
-                return [key, None]
+        found = {}
+        pending = list(keys)
+        for backend in self.backends:
+            if not pending:
+                break
+            stored = await backend.read_async([self._name(hash_str, key) for key in pending])
+            still_pending = []
+            for key in pending:
+                data = stored.get(self._name(hash_str, key))
+                if data is None:
+                    still_pending.append(key)
+                else:
+                    found[key] = data
+            pending = still_pending
 
-        tasks = [asyncio.create_task(task_item(key)) for key in keys]
-
-        return dict(await asyncio.gather(*tasks))
+        # A key nobody had is reported as a miss, the way a missing file was.
+        for key in pending:
+            found[key] = None
+        return found

@@ -51,6 +51,9 @@ Besides the package properties and, optionally, a list of imported dependencies,
   partcad: <(optional) required PartCAD version spec string>
   pythonVersion: <(optional) python version for sandboxing if applicable>
   pythonRequirements: <(python scripts only) the list of dependencies to install>
+  javascriptVersion: <(optional) Node.js major version for sandboxing if applicable>
+  javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
+  chili3dVersion: <(Chili3D parts only) the version of Chili3D to render with>
 
   dependencies:
       <dependency-name>:
@@ -62,7 +65,12 @@ Besides the package properties and, optionally, a list of imported dependencies,
           revision: <(git only) the exact revision to import>
           plugin: <(external only) reference to the repository plugin that serves this package>
           subfolder: <(external only) location within the repository, for hierarchies>
+          cacheVersion: <(external only) non-negative integer; bump to invalidate the on-disk cache>
           includePaths: <(optional) Jinja2 include path>
+
+  suppliers:
+      <(optional) the providers to consider for this package's objects; a bare
+       name is one of this package's own, "../sibling:name" is one next door>
 
   parts:
       <part declarations, see below>
@@ -173,6 +181,18 @@ requests within the repository. In this way one plugin can serve an entire tree
 of packages, each with its own sketches, parts, assemblies, providers and
 further children.
 
+Non-null responses from a plugin are cached on disk, keyed by the plugin
+reference and the request; a request the plugin has no answer for is remembered
+only for the run that made it, and is put to the plugin again after a restart.
+The cache does not know when the plugin's code changes, so a plugin that starts
+returning a new shape of data (for example, adding a field to every part it
+serves) would keep being served the stale, pre-change entries. Set
+``cacheVersion`` to a non-negative integer and bump it whenever the plugin's
+output format changes: it is folded into the cache location, so bumping it moves
+the whole repository (and every child in its hierarchy) to a fresh cache
+namespace at once, invalidating the old entries. It defaults to ``0``
+(unversioned).
+
 See ``examples/plugin_repository_basic`` (a package backed by a local file),
 ``examples/plugin_repository_full`` (backed by an HTTP endpoint) and
 ``examples/plugin_repository_tree`` (a hierarchy of packages).
@@ -249,6 +269,8 @@ This section exclusively covers the requirements used to create the design.
         esthetic: |
           The part has to look like ...
 
+.. _files:
+
 Files
 -----
 
@@ -265,17 +287,28 @@ can be defined explicitly using the `path` parameter:
       type: step
       path: alternative-path.step # Instead of "part-name.step"
 
-When the source file is not present in the package source repository
-but needs to be pulled from a remote location, the following options can be used:
+When the source file is not kept in the package source repository but has to be
+pulled from a remote location (a STEP file published by the part vendor, for
+example), declare where to get it from using ``fileFrom`` and ``fileUrl``:
 
 .. code-block:: yaml
 
-  fileFrom: url
-  fileUrl: <url to pull the file from>
-  # fileCompressed: <(optional) whether the file needs to be decompressed before use>
-  # fileMd5Sum: <(optional) the MD5 checksum of the file>
-  # fileSha1Sum: <(optional) the SHA1 checksum of the file>
-  # fileSha2Sum: <(optional) the SHA2 checksum of the file>
+  parts:
+    bolt:
+      type: step
+      path: bolt.step # (optional) where to place the file once it is downloaded
+      fileFrom: url # "url" is the only source supported so far
+      fileUrl: https://example.com/vendor/catalog/bolt.step
+
+The file is fetched lazily: nothing is downloaded until the object is used for
+the first time, and the downloaded file is reused afterwards. Since the file is
+not expected to be a part of the package, PartCAD does not complain about it
+being missing while the package is loaded.
+
+``fileFrom`` and ``fileUrl`` must be declared together.
+They are recognized in :ref:`parts`, :ref:`sketches` and :ref:`assemblies`
+(an assembly's source file is pulled the same way, whether it is an ``.assy``
+file or a CAD file).
 
 Parameters
 ----------
@@ -315,8 +348,6 @@ Assemblies declare parameters the same way. Their values are passed to the
     - part: //package:part
       location: [[0, 0, {{ param_offset }}], [0, 0, 1], 0]
 
-.. _sketches:
-
 Other
 -----
 
@@ -336,6 +367,8 @@ There are other optional fields that are common to all objects:
   It may be due to storage size or time considerations, or due to known issues with dependency tracking.
   It does not override any global caching settings.
 
+.. _sketches:
+
 ========
 Sketches
 ========
@@ -349,6 +382,8 @@ Sketches are declared in ``partcad.yaml`` using the following syntax:
       type: <basic|dxf|svg|cadquery|build123d>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{sketch name}.{ext}" otherwise>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
 
 Basic
@@ -443,6 +478,8 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
       abstract: <(optional) whether the interface is abstract>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{interface name}.{ext}" otherwise>
+      threadStep: <(optional) axial distance per full turn of a connection made through this interface, in mm>
+      selfScrew: <(optional) whether this interface cuts its own thread instead of matching one>
       inherits: # (optional) the list of other interfaces to inherit from
         <parent interface name>: <instance name>
         <other interface name>: # instance name is implied to be empty ("")
@@ -470,6 +507,48 @@ Interfaces are declared in ``partcad.yaml`` using the following syntax:
           default: ...
           type: <move (default)|turn>
           dir: [<x>, <y>, <z>] # the vector to move along or rotate around
+      motion: # (optional) what freedom of movement this connection allows
+        type: <fixed|revolute|continuous|prismatic|planar|floating|ball|screw>
+        axis: [<x>, <y>, <z>] # in the frame of this interface's port
+        limits: # degrees for a turn, millimetres for a move
+          lower: ...
+          upper: ...
+        softLimits: # (optional) limits a controller enforces before the hard ones
+          lower: ...
+          upper: ...
+          kPosition: ...
+          kVelocity: ...
+        mimic: # (optional) a movement that follows another one
+          joint: <the name of the connection it follows>
+          multiplier: ...
+          offset: ...
+      physics: # (optional) what the connection costs
+        maxEffort: ... # N*m for a turn, N for a move
+        maxVelocity: ... # deg/s for a turn, mm/s for a move
+        damping: ...
+        friction: ...
+        springStiffness: ...
+        springReference: ...
+
+Motion and physics
+------------------
+
+``motion`` and ``physics`` are a *record* of a connection, next to the
+``parameters`` that make it move. Where a parameter is executable - naming it in
+a connection places the parts - ``motion`` states what kind of joint the
+connection is, about which axis, and between which limits, and ``physics``
+states what a simulation needs to know about the cost of moving it.
+
+Every property has a PartCAD name and a PartCAD unit, and the set of them is
+closed: angles are degrees and lengths millimetres, as everywhere else in
+PartCAD, and the rest is SI. Nothing is stored under the name of the format it
+came from. A format that states something PartCAD has no property for fails the
+import rather than tucking the value away, and a property PartCAD holds that a
+target format cannot state is reported when it is exported - so the gap is
+always visible in one direction or the other.
+
+``pc convert assembly -t assy`` fills both sections in from a URDF's joints -
+see :doc:`simulation` for the mapping.
 
 Abstract interfaces
 -------------------
@@ -625,9 +704,11 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
+      type: <openscad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       # ... type-specific options ...
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
@@ -645,7 +726,66 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
+      material: <(optional) the name of the material this shape is made of>
+      color: <(optional) "#RRGGBB" or "#RRGGBBAA">
+
+      physics: # (optional) physical properties
+        mass: ... # kg
+        centerOfMass: [<x>, <y>, <z>] # mm, in the shape's own frame
+        inertiaOrientation: [<roll>, <pitch>, <yaw>] # (optional) degrees
+        inertia: # kg*m^2, about 'centerOfMass'
+          ixx: ...
+          ixy: ...
+          ixz: ...
+          iyy: ...
+          iyz: ...
+          izz: ...
+        friction: ...        # coefficient, along 'frictionDirection'
+        friction2: ...       # coefficient, across it
+        frictionDirection: [<x>, <y>, <z>]
+        contactStiffness: ... # N/m
+        contactDamping: ...   # N*s/m
+        minContactDepth: ...  # mm
+        maxContactVelocity: ... # mm/s
+        restitution: ...     # 0 is a dead stop, 1 a perfect bounce
+        maxContacts: ...
+        velocityDamping: ...
+        selfCollide: <true|false>
+        gravity: <true|false>
+
+      # What this part contributes to every connection it takes part in.
+      connect: # (optional)
+        hold: <(optional) name of an interface, or the list of them, to hold this part by>
+        holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
+        holdForceMin: <(optional) least force to hold this part with, in N, default: 3>
+        holdForceMax: <(optional) most force to hold this part with, in N, default: 7>
+        holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
+
 Depending on the type of the part, the configuration may have different options.
+
+The ``threadStep`` and ``selfScrew`` fields of an interface are inherited by the
+interfaces that inherit it, and by the connections made through it. Two
+interfaces that are connected have to agree on their thread unless one of them
+cuts its own. See :doc:`assy`.
+
+The fields of the ``connect`` section are the defaults for the ``holdWith*`` and
+``holdTo*`` fields of the ``how`` section of an Assembly YAML
+``connect``/``connectPorts`` node. See :doc:`assy`.
+
+Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
+them is closed. Lengths are millimetres and angles degrees, as everywhere else
+in PartCAD; everything else is SI, so a mass is kilograms and an inertia tensor
+kg·m². Nothing is stored under the name of the format it came from: a URDF
+import reads ``<inertial>`` and the friction and contact settings of a
+``<gazebo>`` block into these properties one value at a time, and a URDF export
+writes each of them back into the element that states it. A URDF that says
+something PartCAD has no property for stops the import instead of being carried
+opaquely, and a property PartCAD holds that URDF cannot state is reported when
+it is exported.
+
+``physics`` does not take part in the shape cache - it says nothing about the
+geometry - which also means nothing notices when an edit to the CAD invalidates
+it. See :doc:`simulation`.
 
 See :ref:`location` for more information on the OCCT Location object.
 
@@ -658,13 +798,16 @@ Define parts with CodeCAD scripts using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|sdf>
+      type: <openscad|cadquery|build123d|chili3d|sdf>
       cwd: <alternative current working directory>
       showObject: <(optional) the name of the object to show using "show_object(...)">
       patch:
         # ...regexp substitutions to apply...
         "pattern": "repl"
       pythonRequirements: <(python scripts only) the list of dependencies to install>
+      javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
+      javascriptVersion: <(JavaScript scripts only) Node.js major version, overriding the package's>
+      chili3dVersion: <(Chili3D parts only) the version of Chili3D, overriding the package's>
       dependencies: # (optional) the list of filenames the caching logic checks for changes
         - <file1.py>
         - <file2.dat>
@@ -691,6 +834,106 @@ Define parts with CodeCAD scripts using the following syntax:
 |                                                                                      |       type: scad          |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 
+Chili3D scripts
+^^^^^^^^^^^^^^^
+
+`Chili3D <https://github.com/xiangechen/chili3d>`_ scripts are JavaScript, not
+Python, and live in ``.chili`` files:
+
+.. code-block:: yaml
+
+  parts:
+    cube:
+      type: chili3d
+
+A ``.chili`` file is an ES module. PartCAD runs it in a sandboxed Node.js with
+the Chili3D API already loaded, and takes whatever the script hands back as the
+part. These are available as globals:
+
+``chili3d``
+  the Chili3D module namespace (``Plane``, ``XYZ``, ...)
+
+``shapeFactory``
+  a ready-made ``new chili3d.ShapeFactory()``
+
+``wasm``
+  the OCCT WebAssembly kernel, for what the high-level API does not cover
+
+``show(...)``
+  declare a shape (or an array of them) to be the part's result
+
+``show_object(...)``
+  an alias of ``show``, so a script reads like its CadQuery counterpart
+
+``parameters``
+  the part's build parameters, also injected as globals by name
+
+.. code-block:: javascript
+
+  const { Plane, XYZ } = chili3d;
+
+  const box = shapeFactory.box(Plane.XY, 10, 10, 10).value;
+  const hole = shapeFactory.cylinder(XYZ.unitZ, new XYZ(5, 5, 0), 3, 10).value;
+
+  show(shapeFactory.booleanCut([box], [hole]).value);
+
+A script that does not call ``show()`` may instead export its result as
+``default``, ``shape``, ``result`` or ``part``. Either way the shape may be a
+raw ``TopoDS_Shape``, the ``Result`` the Chili3D API returns, or the ``IShape``
+inside it - PartCAD unwraps all of them, and reports the error a failed
+``Result`` carries rather than producing an empty part.
+
+The script is evaluated inside the PartCAD sandbox, so ``import`` works the way
+it does in any Node.js project: by name for anything the package declares under
+``javascriptRequirements``, and relative for a file next to the script.
+
+.. code-block:: yaml
+
+  javascriptRequirements:
+    - "seedrandom@3.0.5"
+
+Choosing versions
+~~~~~~~~~~~~~~~~~
+
+``javascriptVersion`` names the Node.js major version to render on, and
+``chili3dVersion`` the version of Chili3D to render with. Both may be set on the
+package and overridden on an individual part:
+
+.. code-block:: yaml
+
+  javascriptVersion: "22"
+  chili3dVersion: "1.1.2"
+
+  parts:
+    cube:
+      type: chili3d
+    older_cube:
+      type: chili3d
+      chili3dVersion: "1.0.20"
+
+``chili3dVersion`` takes an exact version, or any range or tag npm accepts
+(``"^1.1"``, ``"latest"``). Naming ``chili3d`` under ``javascriptRequirements``
+does the same thing; where both are given the dedicated option wins, and a
+part's choice wins over its package's. Note that not every Chili3D release
+publishes the WebAssembly kernel PartCAD needs - one that does not fails with a
+message naming the version.
+
+Unlike the Python script types, where PartCAD pins CadQuery and build123d and
+overrides a package that asks for a different version, this really is the
+package's choice. A Node.js sandbox is identified by the set of dependencies it
+holds, so a package on its own Chili3D gets an environment of its own and
+changes nothing for any other package - or for another part of the same one.
+
+Two notes on how this differs from the Python script types:
+
+* ``patch`` expressions are JavaScript regular expressions rather than Python
+  ones. The syntax is nearly identical, but the replacement follows JavaScript's
+  rules: a capture group is referenced as ``$1`` where Python would write
+  ``\1``, and a literal dollar sign is written ``$$``.
+* Chili3D is an input format only. A part can be *defined* by a ``.chili``
+  script and then exported to STEP, STL, 3MF and everything else PartCAD
+  writes, but no exporter produces a ``.chili`` file.
+
 CAD Files
 ---------
 
@@ -702,6 +945,10 @@ Define parts with CAD files using the following syntax:
     <part name>:
       type: <step|brep|stl|3mf|obj>
       binary: <(stl only) use the binary format>
+
+A CAD file published elsewhere (in a vendor's catalog, for example) does not
+have to be committed to the package: see :ref:`files` for how to have PartCAD
+download it on demand.
 
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
 | Example                                                                              | Configuration             | Result                                                                                                                  |
@@ -877,6 +1124,89 @@ The MCFTT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type
 ``store``.
 
+Manufacturing methods
+---------------------
+
+The ``manufacturing.method`` field says how a part is made:
+
++------------------+-----------------------------------------------------------+
+| Method           | Meaning                                                   |
++==================+===========================================================+
+| ``additive``     | Built up, e.g. 3D printed                                 |
++------------------+-----------------------------------------------------------+
+| ``subtractive``  | Cut away from stock, e.g. machined                        |
++------------------+-----------------------------------------------------------+
+| ``forming``      | Shaped without adding or removing material                |
++------------------+-----------------------------------------------------------+
+| ``pcbBasic``     | A printed circuit board (**not implemented yet**)         |
++------------------+-----------------------------------------------------------+
+
+These are ways of making a **part**, and apply to parts only. An assembly is put
+together rather than made, and has a single method of its own -- see
+:ref:`assembly-manufacturing` below.
+
+A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
+a method.
+
+.. _procurement:
+
+Procurement
+-----------
+
+A part that can be bought off the shelf instead of being manufactured is
+declared using the following syntax:
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      # ...
+      vendor: <(optional) the name of the vendor selling the part>
+      sku: <(optional) the vendor's stock keeping unit (SKU) of the part>
+      count_per_sku: <(optional) the number of parts in one SKU, 1 by default>
+
+- ``vendor``
+
+  Optional. The vendor that sells the part.
+
+- ``sku``
+
+  Optional. The vendor's `stock keeping unit
+  <https://en.wikipedia.org/wiki/Stock_keeping_unit>`_ identifying what is
+  ordered from that vendor.
+
+  Both ``vendor`` and ``sku`` must be set for the part to be considered
+  purchasable. If either is missing, the part has to be manufactured instead,
+  which relies on the MCFTT parameters described above.
+
+- ``count_per_sku``
+
+  Optional. Defaults to ``1``. Must be a positive integer.
+
+  The number of parts that come in a single SKU, for the parts that are sold in
+  packs: a bag of 25 nuts is one SKU that yields 25 parts. Providers use it to
+  translate the number of parts requested into the number of SKUs to order, and
+  the number of SKUs a store has in stock into the number of parts it can
+  supply.
+
+These values are passed on to providers of the type ``store`` as
+``request["vendor"]``, ``request["sku"]`` and ``request["count_per_sku"]``
+(see :ref:`providers`).
+
+Note that ``count_per_sku`` is a property of how the part is packaged for sale,
+not of the CAD model. If the same part is sold by several vendors in different
+pack sizes, declare one part per (vendor, SKU) pair, for example using
+``alias``.
+
+.. code-block:: yaml
+
+  parts:
+    nut_m4_0_7mm:
+      type: step
+      vendor: gobilda
+      sku: "2803-0004-0002"
+      count_per_sku: 25  # sold in bags of 25
+
 .. _assemblies:
 
 ==========
@@ -892,8 +1222,10 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
 
   assemblies:
     <assembly name>:
-      type: assy  # Assembly YAML
+      type: <assy|step>  # Assembly YAML, or a STEP file with an assembly structure
       path: <(optional) the source file path>
+      fileFrom: <(optional) "url" to download the source file instead of keeping it in the package>
+      fileUrl: <(fileFrom=url only) the URL to download the source file from>
       parameters:  # (optional)
         <param name>:
           type: <string|float|int|bool>
@@ -904,8 +1236,41 @@ Assemblies are defined using the ``partcad.yaml`` file in the package folder. Th
         - <other.assy>
       offset: <(optional) OCCT Location object, e.g. "[[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]">
 
-The ``assy`` type is used to define assemblies in `Assembly YAML` format.
+      # What this assembly contributes to every connection it takes part in.
+      connect: # (optional) same as for parts
+        hold: <(optional) name of an interface, or the list of them, to hold this assembly by>
+        holdInstance: <(optional) instance of each interface listed in "hold", in the same order>
+        holdForceMin: <(optional) least force to hold this assembly with, in N, default: 3>
+        holdForceMax: <(optional) most force to hold this assembly with, in N, default: 7>
+        holdForce: <(optional) sets both "holdForceMin" and "holdForceMax">
+
+The ``assy`` type is used to define assemblies in `Assembly YAML` format, and
+the ``step`` type reads the structure out of a STEP file (see :ref:`assembly_step`).
 The ``path`` parameter specifies the source file path, and the ``parameters`` section allows for defining parameters that can be used within the assembly.
+The source file does not have to be a part of the package: ``fileFrom`` and
+``fileUrl`` pull it from a remote location on first use, exactly as they do for
+:ref:`parts` (see :ref:`files`). This holds for every assembly type -- a vendor's
+STEP assembly is declared with its URL and read from there.
+
+.. _assembly-manufacturing:
+
+**Manufacturing.** ``assy`` is the only manufacturing method an assembly has:
+it is put together by following the instructions in its own Assembly YAML file,
+rather than made the way a part is. Every assembly of type ``assy`` gets that
+method with the type, so ``manufacturing`` never has to be spelled out:
+
+.. code-block:: yaml
+
+  assemblies:
+    motor-mount:
+      type: assy
+      manufacturable: true
+      # manufacturing: { method: assy } is implied by the type
+
+Whether an assembly is *held to* that -- whether ``pc test`` checks that its
+parts can be obtained and its connection instructions followed -- is what
+``manufacturable`` says, exactly as for parts.
+
 The optional ``offset`` parameter specifies the location of the assembly using an OCCT Location object.
 See "Implementation Detail" for more information on the OCCT Location object.
 
@@ -924,6 +1289,114 @@ Here is an example of an assembly definition:
       offset: [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
 
 In this example, an assembly named ``example_assembly`` is defined with a parameter ``length`` and an offset.
+
+URDF
+----
+
+The ``urdf`` type uses a `URDF <https://wiki.ros.org/urdf>`_ file - the robot
+description format of ROS - as an assembly directly, with no conversion step:
+
+.. code-block:: yaml
+
+  assemblies:
+    robot:
+      type: urdf
+      path: <(optional) the source file path, "<assembly name>.urdf" by default>
+      ignoreCollision: <(optional) true, or a list of link names; false by default>
+      packagePaths: # (optional) roots to resolve "package://" mesh references against
+        - <../meshes>
+      strict: <(optional) fail on an unknown "<gazebo>" setting; false by default>
+
+``pc add assembly urdf <path>`` writes that declaration for a URDF that is
+already inside the package. ``pc import assembly <path>`` is the other choice:
+it converts instead of declaring, leaving the package with an ``stl`` part per
+link, an interface pair per joint and an ``.assy``, exactly as
+``pc convert assembly -t assy`` does below. Both commands work the way they do
+for a STEP file - ``add`` points at a file, ``import`` turns one into PartCAD's
+own objects.
+
+**One part per shape, in one flat list.** A link that has a single ``<visual>``
+(or ``<collision>``) becomes the part ``<assembly name>/<link name>``. A link
+that has several becomes a *sub-assembly* of one part each, named
+``<assembly name>/<link name>/<element name or index>``. Every link is a direct
+child of the assembly, placed where the joints between it and the robot's root
+link put it with **every joint at its zero position**, and each shape keeps the
+offset its own ``<origin>`` gave it. The result is the same in-memory
+representation an `Assembly YAML`_ file produces, so everything else -
+rendering, export, BoM, inspection - treats the two alike. The assembly is the
+container that holds the links, the robot's root link included; it is not one
+of them and carries no properties of its own.
+
+The joint tree deliberately does not become nesting. A URDF's tree is its
+*kinematics*, and an assembly is one static configuration of it, so a link
+hanging off another says nothing that the link's own placement does not already
+say - while nesting per joint would make an arm as deep as it has joints. The
+relative placements are not lost: they are what ``pc convert assembly -t assy``
+turns into joints, below. The only nesting left is the one that means something,
+a link whose several shapes group together.
+
+Those parts are ordinary parts. ``pc inspect robot/forearm`` and
+``pc export -t step robot/wrist`` work on them like on any other. They are not
+declared in ``partcad.yaml`` - the URDF is what declares them - so a package
+handed one of these names builds the assembly that owns it first.
+
+**Nothing is rewritten that does not have to be.** A ``mesh`` reference becomes
+a part that reads the very file the URDF named (``package://``, ``file://`` and
+paths relative to the URDF file are all resolved), for the mesh formats PartCAD
+reads - ``stl``, ``obj``, ``step``, ``brep`` and ``3mf``. The ``<origin>`` that
+places it becomes a PartCAD location, not a transform baked into a copy of the
+geometry. A mesh ``scale`` is honoured: URDF reads mesh coordinates as metres
+after scaling, PartCAD works in millimetres. Only ``box``, ``cylinder`` and
+``sphere`` are generated, because there is no file to point at.
+
+A link that states both a visual and a collision shape is built from the
+**collision** one: that is what a simulator resolves contact against, and a
+model that bothers to state both means it to be the physical shape.
+``ignoreCollision: true`` reverses that for every link, and a list of link names
+reverses it for those links only.
+
+What a link says about its physics becomes **named PartCAD properties** of the
+part, one property per URDF value and in PartCAD's own units: ``<inertial>``
+becomes ``mass``, ``centerOfMass`` and ``inertia``, and the friction and contact
+settings of a ``<gazebo>`` block become ``friction``, ``contactStiffness`` and
+the rest. Its ``<material>`` becomes ``material`` and ``color``. Nothing is
+stashed under a container of its own, nothing records the link's name or its
+parent - the part *is* named after the link, and the joint tree is this very
+file - and URDF that PartCAD has no property for stops the import rather than
+being carried opaquely. ``strict`` extends that to ``<gazebo>``, whose
+vocabulary is open and where an unknown setting is otherwise only reported.
+
+The geometry a link was *not* built from is kept too, as the part
+``<assembly name>/<link name>/<visual|collision>``: defined and exportable, but
+not placed in the assembly. What cannot be represented at all (joint kinematics,
+transmissions, sensors) is counted and reported; ``pc info`` shows the tally.
+:doc:`simulation` describes the gap and what closing it would take.
+
+The reverse direction is ``pc export -t urdf``, which writes a ``.urdf`` file
+plus a directory of the STL files it references, from any part or assembly.
+Each node of the assembly tree becomes a link, each parent/child relation a
+fixed joint, and a shape used more than once is written out once. What a part
+states about itself is written into the URDF element that states it - the mass
+and inertia into ``<inertial>``, the friction and contact properties into a
+``<gazebo>`` block, the colour into ``<material>`` - and only a part that says
+nothing gets inertial properties computed from its geometry. A property PartCAD
+holds that URDF has no way to state is reported rather than dropped in silence
+(see :doc:`simulation`).
+
+``pc convert assembly`` goes further than exporting: it rewrites the package
+around the assembly and switches its declared type.
+
+.. code-block:: shell
+
+  pc convert assembly -t assy robot   # urdf -> assy
+  pc convert assembly -t urdf logo    # assy -> urdf
+
+Converting to ASSY writes an ``stl`` part for every link, an interface pair for
+every joint, and an ``.assy`` that places its parts with ``connect:`` rather
+than with coordinates. Converting to URDF writes the ``.urdf`` and its meshes.
+Neither direction has an ad-hoc equivalent: ``pc adhoc convert`` refuses both
+formats, because an ASSY file is a set of references to the parts of a package
+and a URDF becomes a part per link - neither means anything without one.
 
 Assembly YAML
 -------------
@@ -963,6 +1436,72 @@ The example above shows an assembly created using ``Assembly YAML``.
 Other methods to define assemblies are coming soon (e.g. using ``CadQuery`` or ``build123d``).
 The assembly file syntax is described in the ``Assembly YAML`` section of this documentation.
 
+.. _assembly_step:
+
+STEP
+----
+
+A STEP file that carries an assembly structure already says what an assembly
+says: a tree of named components, each placed by a transform. The ``step`` type
+reads it and uses it as the assembly itself, with no intermediate file:
+
+.. code-block:: yaml
+
+  assemblies:
+    gearbox:
+      type: step
+      path: <(optional) the source file path, "{assembly name}.step" otherwise>
+      precision: <(optional) decimal places each component's placement is rounded to, 5 by default>
+
+``pc add assembly step <file>.step`` writes that declaration for an existing
+file.
+
+Every component of the STEP file becomes an ordinary PartCAD part, named
+``<assembly name>/<component name>``. Those parts are inspected, rendered,
+exported and referenced from other assemblies like any other part -- they are
+simply declared by the STEP file rather than by ``partcad.yaml``:
+
+.. code-block:: shell
+
+  pc inspect -a :gearbox            # the assembly
+  pc inspect :gearbox/output_shaft  # one component of it
+
+A group inside the STEP file becomes a nested assembly, so the tree PartCAD
+shows is the tree the CAD tool exported. Components that are the same geometry
+in several places are recognized as one part placed several times, which is what
+makes the bill of materials come out right.
+
+Nothing is written into the package: the geometry PartCAD extracts for each
+component is derived data and lives in PartCAD's own internal state directory.
+The source file itself does not have to be in the package either -- with
+``fileFrom``/``fileUrl`` (see :ref:`files`) a vendor's STEP assembly is declared
+by its URL and downloaded the first time it is used:
+
+.. code-block:: yaml
+
+  assemblies:
+    gearbox:
+      type: step
+      fileFrom: url
+      fileUrl: https://example.com/vendor/catalog/gearbox.step
+
+Compared to ``pc import assembly``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``pc import assembly`` reads the very same file with the very same reader, but
+it is a one-shot conversion: it writes a STEP file per component and an
+``Assembly YAML`` file into the package, and from then on the package owns them
+and the original file is never consulted again.
+
+Use ``type: step`` when the STEP file is to remain the source of truth: a
+vendor's file, a file regenerated by another CAD tool, or a file pulled from a
+URL. Every change to it is picked up on the next use, and nothing has to be
+kept in sync by hand.
+
+Use ``pc import assembly`` when the structure is to be taken over: the resulting
+parts and ``.assy`` file are ordinary package content that can be renamed,
+re-arranged, given interfaces and connections, or replaced part by part.
+
 References
 ----------
 
@@ -980,6 +1519,66 @@ assemblies.
 |         |       type: alias                          || make it easier to         |
 |         |       source: </path/to:existing-assembly> || reference it locally.     |
 +---------+--------------------------------------------+----------------------------+
+
+Procurement
+-----------
+
+Not every assembly has to be assembled: some are sold assembled, as a kit or as
+a pre-built module. Such an assembly is declared purchasable the same way a part
+is (see :ref:`procurement`):
+
+.. code-block:: yaml
+
+  assemblies:
+    <assembly name>:
+      # ...
+      vendor: <(optional) the name of the vendor selling the assembly>
+      sku: <(optional) the vendor's stock keeping unit (SKU) of the assembly>
+      count_per_sku: <(optional) the number of assemblies in one SKU, 1 by default>
+
+``vendor``, ``sku`` and ``count_per_sku`` have the same meaning as they do for
+parts, with the assembly itself being what is ordered.
+
+.. code-block:: yaml
+
+  assemblies:
+    gearbox:
+      type: assy
+      vendor: gobilda
+      sku: "3103-0001-0001"  # shipped assembled
+
+An assembly that has both ``vendor`` and ``sku`` set is considered purchasable,
+and is not required to declare how it is manufactured: ``pc test`` only checks
+that a supplier carries it. An assembly without them is manufactured by producing
+its parts and putting them together, which requires everything it is procured
+from -- its parts, and the sub-assemblies that are sold assembled -- to be
+obtainable by itself.
+
+Declaring an assembly purchasable does not stop it from being modelled and
+rendered as usual: the links between its parts still describe what is inside the
+box.
+
+This is also where ``pc supply find`` and ``pc supply quote`` stop looking
+inside. An assembly is otherwise procured as the objects it is made of, and the
+same question is asked about each sub-assembly in turn: one that is sold
+assembled is ordered as a single item, and one that is not is broken down
+further. Pass ``--recursive`` to order the parts even where the assembly holding
+them could have been bought whole -- for example to compare the cost of building
+it against the cost of buying it.
+
+.. code-block:: shell
+
+  # A chassis that uses the gearbox above: the gearbox is quoted as one unit,
+  # and everything nobody sells assembled is quoted as the parts it is made of
+  $ pc supply quote //robot:chassis
+
+  # Quote every part of the chassis instead, the gearbox taken apart too
+  $ pc supply quote --recursive //robot:chassis
+
+An assembly embedded in the parent's own source file (the nested ``links:`` of
+an Assembly YAML file) is not an object of any package, so there is no name to
+order it by. Such an assembly is always procured as its contents, and declaring
+a vendor for it has no effect.
 
 .. _providers:
 
@@ -1164,3 +1763,182 @@ Responses are cached per key (in memory and on disk), so a repository that is
 slow or remote is queried as little as possible. See
 ``examples/plugin_repository_basic``, ``examples/plugin_repository_full`` (an
 HTTP-backed repository) and ``examples/plugin_repository_tree`` (a hierarchy).
+
+.. _output-files:
+
+============
+Output files
+============
+
+``pc export`` writes 3D and CAD files; ``pc render`` writes 2D projections. Both
+are configured by a section of ``partcad.yaml`` named after the command --
+``export:`` and ``render:`` -- with one subsection per output file type:
+
+.. code-block:: yaml
+
+  export:
+    <file type>:
+      path: <(optional) the script that writes the file>
+      package: <(optional) the package that script belongs to>
+      pythonRequirements: # (optional) what that script's sandbox needs
+        - <requirement>
+      pythonVersion: <(optional) the sandbox interpreter to run it on>
+      extension: <(optional) the extension used when the file name is derived>
+      prefix: <(optional) where the file goes, relative to the package>
+      exclude: <(optional) kinds of object not to write this type for>
+      <parameter name>: <value> # anything else is an export parameter
+
+  render:
+    <file type>:
+      ... # the same fields, for the 2D projections
+
+The two sections behave identically. Which one a file type belongs to is
+decided by whichever built-in package implements it (see `Built-in
+implementations`_) -- ``step`` is an ``export:`` type wherever it is written
+down, ``svg`` is a ``render:`` one. For a file type no built-in package
+implements, the section it is declared in is what decides: declare a type of
+your own under ``export:`` and it is an export type, under ``render:`` and it is
+a render type.
+
+Whichever section owns a file type, the other one is read first and acts as a
+fallback, so the owning section always wins where both set the same field.
+
+For an ``export:`` type the fallback is history: a package that configured its
+STEP or STL output under ``render:`` before ``export:`` existed keeps working.
+
+For a ``render:`` type the fallback is what an export implementation *is*. An
+export file is one a CAD tool can open as a part or a sketch, which is a
+stricter thing to be than an output file in general -- so it also serves
+wherever any output file would do, and a render request for a file type only
+``export:`` implements uses that implementation.
+
+Note that neither fallback has anything to do with which command was typed.
+``pc export`` and ``pc render`` differ in their defaults, not in the section
+they read: a file type declared only under ``render:`` is produced by
+``pc export -t <type>`` just as well, because the section follows the
+declaration and not the command.
+
+What the two sections do say is what a file type *is*, and that is worth
+getting right when publishing a package. Declare a type under ``export:`` and
+you are promising geometry another tool can go on working with; declare it
+under ``render:`` and you are promising an output file, nothing more. A drawing,
+a picture or a report is the latter -- so declare it under ``render:``, where it
+stays reachable from both commands, rather than under ``export:``, where it
+would promise a part it cannot deliver.
+
+The short form ``<file type>: <path>`` is the same as ``prefix: <path>``.
+
+Export parameters
+-----------------
+
+Every field that is not one of those listed above is a parameter of that file
+type, handed to whatever implements it. Which parameters exist is therefore up
+to the implementation, not to PartCAD. For example, the built-in STEP
+implementation accepts ``comment``, which it places into the STEP file's
+``FILE_DESCRIPTION`` header entity:
+
+.. code-block:: yaml
+
+  export:
+    step:
+      comment: Produced by ACME Corp. Not for manufacturing.
+
+Every STEP file the package produces -- for any part or assembly in it -- then
+carries that text.
+
+Parameters may be declared per package, as above, or per object, in which case
+the object's value wins:
+
+.. code-block:: yaml
+
+  parts:
+    bracket:
+      type: cadquery
+      export:
+        step:
+          comment: Revision C.
+
+Custom implementations
+----------------------
+
+Declaring ``path`` for a file type replaces the implementation itself with a
+script the package supplies. This is the same mechanism as a ``partType``
+wrapper: the script runs inside a PartCAD sandbox, so it may import OCP,
+build123d or CadQuery, and it is executed with two globals available --
+
+- ``request`` -- the shape in ``request["wrapped"]``, every export parameter the
+  configuration resolved to, and ``shape_name``, ``shape_kind`` and
+  ``shape_type`` describing the object being written
+- ``path`` -- the absolute path of the file to write
+
+-- and reports what happened either by setting a global ``output``:
+
+.. code-block:: python
+
+  output = {"success": True}
+  # or
+  output = {"success": False, "exception": "..."}
+
+or by defining a function that returns the same thing, which is what lets one
+implementation reuse another:
+
+.. code-block:: python
+
+  def process(path, request):
+      ...
+      return {"success": True, "exception": None}
+
+.. code-block:: yaml
+
+  export:
+    stl:
+      path: my_stl_exporter.py
+      pythonRequirements:
+        - cadquery-ocp==7.9.3.1.1
+      comment: Produced by ACME Corp.
+
+``path`` is resolved relative to the package that declared it. A file type that
+no built-in package implements may be declared this way too, and is then
+nameable with ``pc export -t`` / ``pc render -t`` like any other.
+
+See ``examples/feature_export_custom`` for both halves of this.
+
+Using another package's implementation
+--------------------------------------
+
+``pc export -e <package>`` (and ``pc render -e <package>``) reads the
+``export:``/``render:`` sections of a further package on top of the built-in
+ones, so an implementation declared in one package can be applied to the objects
+of another without that package knowing about it:
+
+.. code-block:: shell
+
+  pc export -t stl -e //acme/exporters --package //some/other/package -O ./ bracket
+
+Built-in implementations
+------------------------
+
+The formats PartCAD ships are not special-cased anywhere: they are declared in
+exactly the form above by two packages that live inside the ``partcad``
+installation and that every context can reach, ``//builtin/export`` and
+``//builtin/render``. They are the bottom layer of the configuration, so a
+package that sets a single parameter keeps the built-in implementation for
+everything else, and a package that sets ``path`` replaces it.
+
+``//builtin/export`` implements ``step``, ``brep``, ``stl``, ``3mf``, ``obj``,
+``gltf``, ``iges``, ``threejs`` and ``urdf``. ``//builtin/render`` implements
+``svg``, ``png``, ``jpeg`` and ``dxf``. Reading their ``partcad.yaml`` is the most direct
+way to see what parameters each file type takes and what a package's own
+implementation should look like.
+
+``readme``, ``pdf`` and ``html`` are the outputs ``render:`` accepts that no
+implementation writes: PartCAD assembles them itself out of what the package
+declares and the images the other file types leave behind (see ``pc render`` in
+:doc:`cli`).
+
+``urdf`` is the one built-in file type that is not a single file: it writes a
+``.urdf`` plus the directory of mesh files it references, which is why
+``Shape.convert()`` refuses it (there is no single payload to hand back) and why
+it declares ``decode: false`` - it is handed the assembly *tree*, one URDF link
+per node, rather than the single compound the tree decodes to. See
+:doc:`simulation`.

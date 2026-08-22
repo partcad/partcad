@@ -58,6 +58,19 @@ class PartFactoryCompound(pf.PartFactory):
 
             self.part.desc = "Compound of %s" % self.source
 
+    async def prepare_async(self, part) -> None:
+        """Resolve the referenced assembly, then prepare it.
+
+        The assembly may live in another package, so resolving it loads - and
+        so downloads - that package, and preparing it reaches everything the
+        assembly links to in turn.
+        """
+        params = self.parameters if self.parameters else None
+        assembly = self.ctx._get_assembly(self.source, params)
+        if assembly is None:
+            raise Exception("compound source assembly not found: %s" % self.source)
+        await assembly.prepare_async()
+
     async def instantiate(self, part):
         with pc_logging.Action("Compound", part.project_name, part.name):
             params = self.parameters if self.parameters else None

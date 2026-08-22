@@ -404,4 +404,3 @@ msgstr ""
 "Сначала опубликуйте ваш пакет как репозиторий на GitHub. Затем создайте "
 "pull request в `публичном репозитории PartCAD <https://github.com/partcad"
 "/partcad-index>`_, чтобы добавить ссылку на ваш пакет."
-

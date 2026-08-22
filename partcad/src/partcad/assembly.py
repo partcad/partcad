@@ -12,6 +12,7 @@ import typing
 from . import telemetry
 from . import shape_envelope
 from .geom import Location
+from .plugin_provider_data_cart import ProviderCartItem
 from .shape import Shape
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
@@ -22,10 +23,41 @@ from . import logging as pc_logging
 
 
 class AssemblyChild:
-    def __init__(self, item, name=None, location=None):
+    """One item placed into an assembly.
+
+    'connection' is set when the item was placed by connecting it to another
+    child rather than at an absolute location: it records which child it was
+    connected to and where the two ports met, so that an assembly instruction
+    book can show that step (see assembly_guide.py). It stays 'None' for items
+    placed with 'location:', and for assemblies built through 'add()'.
+    """
+
+    def __init__(self, item, name=None, location=None, comment=None, how=None, connection=None):
         self.item = item
         self.name = name
         self.location = location
+        # The non-geometric half of the 'connect'/'connectPorts' section that
+        # placed this child: free-form context ('comment') and the assembly
+        # instructions ('how'). Both are None unless the child was connected.
+        self.comment = comment
+        self.how = how
+        self.connection = connection
+
+    def connect_info(self):
+        """What the ASSY file says about connecting this child, or None.
+
+        Connections that carry neither a comment nor anything but the default
+        'how' are left out: they add nothing to what the defaults already say.
+        """
+        has_how = self.how is not None and not self.how.is_default()
+        if self.comment is None and not has_how:
+            return None
+        info = {"name": self.name}
+        if self.comment is not None:
+            info["comment"] = self.comment
+        if has_how:
+            info["how"] = self.how.info()
+        return info
 
 
 @telemetry.instrument()
@@ -54,8 +86,10 @@ class Assembly(Shape):
         child_item: Shape,  # pc.Part or pc.Assembly
         name=None,
         loc=Location((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.0),
+        comment=None,
+        how=None,
     ):
-        self.children.append(AssemblyChild(child_item, name, loc))
+        self.children.append(AssemblyChild(child_item, name, loc, comment, how))
         self._wrapped = None  # Invalidate if any
 
     async def get_shape(self, ctx):
@@ -111,12 +145,26 @@ class Assembly(Shape):
         tasks = [asyncio.create_task(per_child(child)) for child in self.children]
         children = list(await asyncio.gather(*tasks))
 
+        envelope = dict(self.get_cache_metadata())
+        envelope[shape_envelope.KEY_ASSEMBLY] = children
+        return envelope
+
+    def get_cache_metadata(self):
+        """The outer layer to wrap around this assembly's cached children.
+
+        It has to be exactly what '_get_shape_real()' stamps on the tree it
+        builds, so that an assembly materialized from the cache is
+        indistinguishable from one just built. Besides the name and the label
+        that every shape carries, an assembly carries its own placement: two
+        assemblies of the same children in different places share the cached
+        children but must not inherit each other's location.
+        """
         name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
-        envelope = {"name": name, "label": self.name, shape_envelope.KEY_ASSEMBLY: children}
+        metadata = {"name": name, "label": self.name}
         root = self._root_location()
         if root is not None:
-            envelope[shape_envelope.KEY_LOCATION] = root.as_packed()
-        return envelope
+            metadata[shape_envelope.KEY_LOCATION] = root.as_packed()
+        return metadata
 
     def _root_location(self):
         """The assembly's own location as a geom.Location, or None."""
@@ -151,6 +199,65 @@ class Assembly(Shape):
             entry[shape_envelope.KEY_LOCATION] = composed.as_packed()
         return entry
 
+    def connected_children(self):
+        """Every child of this assembly, including those of the sub-assemblies it embeds.
+
+        An ASSY file's top level 'links:' becomes a child assembly of the object
+        the file defines, and so does every nested 'links:'. Those embedded
+        assemblies are not objects of any package - exactly as in the grouped
+        BoM, what they hold belongs to the assembly that embeds them - so the
+        connections inside them are this assembly's connections.
+        """
+        for child in self.children:
+            yield child
+            item = child.item
+            if isinstance(item, Assembly) and item.config.get("child", False):
+                yield from item.connected_children()
+
+    async def get_connect_problems(self):
+        """What makes this assembly's connection instructions invalid, if anything.
+
+        Each entry is '(child name, problem)'. The instructions are repaired in
+        place as they are resolved - an assembly still builds - so this is what
+        'pc test' looks at to tell a repaired one from a sound one.
+        """
+        await self.do_instantiate()
+        problems = []
+        for child in self.connected_children():
+            if child.how is None:
+                continue
+            problems.extend([(child.name, problem) for problem in child.how.problems])
+        return problems
+
+    async def resolve_connect_metadata(self, ctx):
+        """Fill in the parts of the connection metadata that need the geometry.
+
+        Only 'how.pushDistance' does, and only when the ASSY file left it to be
+        derived from the object being connected. Instantiating an assembly
+        deliberately does not build any geometry, so this is a separate step for
+        the callers that have a context and want the numbers.
+        """
+        await self.do_instantiate()
+        await asyncio.gather(
+            *[child.how.resolve_push_distance(ctx) for child in self.connected_children() if child.how is not None]
+        )
+
+    def shape_info(self, ctx):
+        info = super().shape_info(ctx)
+        # The connection metadata lives on the children, and a cached shape is
+        # returned without ever populating them.
+        if not self.children:
+            asyncio.run(self.do_instantiate())
+        try:
+            asyncio.run(self.resolve_connect_metadata(ctx))
+        except Exception as e:
+            pc_logging.debug("Failed to resolve the connection metadata: %s" % e)
+        connections = [child.connect_info() for child in self.connected_children()]
+        connections = [connection for connection in connections if connection is not None]
+        if connections:
+            info["Connections"] = connections
+        return info
+
     async def get_bom(self):
         with self.lock:
             async with self.get_async_lock():
@@ -183,3 +290,226 @@ class Assembly(Shape):
                 else:
                     bom[part_name] = 1
         return bom
+
+    def can_be_supplied(self) -> bool:
+        """Whether this assembly can be ordered as a whole, in an assembled state.
+
+        An assembly embedded in its parent's source file (the nested 'links:' of
+        an ASSY file) is not an object of any package, so there is no name to
+        order it by no matter what it declares: its contents are procured
+        instead.
+        """
+        if self.config.get("child", False):
+            return False
+        return self.get_store_data().is_purchasable
+
+    async def get_supply_bom(self):
+        """The bill of materials to procure this assembly from.
+
+        Same shape of result as 'get_bom()', but the walk stops at every
+        sub-assembly that can be supplied assembled (see 'can_be_supplied()'):
+        such a sub-assembly is listed itself, instead of its contents. An
+        assembly nobody sells is still procured as the parts it is made of.
+        """
+        with self.lock:
+            async with self.get_async_lock():
+                await self.do_instantiate()
+                if hasattr(self, "project_name"):
+                    # This is the top level assembly
+                    with pc_logging.Action("SupplyBoM", self.project_name, self.name):
+                        return await self._get_supply_bom_real()
+                else:
+                    return await self._get_supply_bom_real()
+
+    async def _get_supply_bom_real(self):
+        bom = {}
+
+        def account_for(name, count):
+            if name in bom:
+                bom[name] += count
+            else:
+                bom[name] = count
+
+        for child in self.children:
+            item = child.item
+            if isinstance(item, Assembly) and not item.can_be_supplied():
+                # Nobody sells it assembled: procure whatever it is made of
+                for child_name, child_count in (await item.get_supply_bom()).items():
+                    account_for(child_name, child_count)
+            else:
+                account_for(item.project_name + ":" + item.name, 1)
+
+        return bom
+
+    async def get_bom_grouped_async(self):
+        """The recursive contents of this assembly, grouped by package.
+
+        Unlike 'get_bom()', which flattens the whole tree into a map of part
+        names, this keeps parts and sub-assemblies apart and groups each of them
+        by the package they come from:
+
+            {
+                "parts": {"//package": {"name": {"count": 2, "desc": "..."}}},
+                "assemblies": {...},
+            }
+
+        Assemblies embedded in the parent's source file (the nested 'links:' of
+        an ASSY file) are not objects of any package, so they are not listed:
+        their contents are attributed to the assembly that embeds them.
+        """
+        with pc_logging.Action("BoMGrouped", self.project_name, self.name):
+            return await self._get_bom_grouped_locked()
+
+    def get_bom_grouped(self):
+        return asyncio.run(self.get_bom_grouped_async())
+
+    async def _get_bom_grouped_locked(self):
+        with self.lock:
+            async with self.get_async_lock():
+                await self.do_instantiate()
+                return await self._get_bom_grouped_real()
+
+    async def _get_bom_grouped_real(self):
+        grouped = {"parts": {}, "assemblies": {}}
+        for child in self.children:
+            item = child.item
+            if isinstance(item, Assembly):
+                if not item.config.get("child", False):
+                    _bom_grouped_add(grouped["assemblies"], item)
+                _bom_grouped_merge(grouped, await item._get_bom_grouped_locked())
+            else:
+                _bom_grouped_add(grouped["parts"], item)
+        return grouped
+
+    async def get_bom_detailed_async(self, ctx=None, stop_at_purchasable: bool = False):
+        """The flattened BoM of this assembly, one entry per line item.
+
+        Like 'get_bom()', the tree is flattened into a map keyed by the object's
+        full name, counting how many times each occurs. Unlike it, every entry
+        also carries what a bill of materials is read for: whether the item is a
+        part or an assembly, its description, and the store data that says what
+        to order.
+
+            {"//package:name": {"kind": "part", "count": 2, "desc": "...",
+                                "vendor": None, "sku": None, "count_per_sku": 1}}
+
+        With 'stop_at_purchasable', a sub-assembly that can be bought whole -- it
+        declares a vendor and an SKU, and a supplier of its package has it
+        available -- becomes a line item of its own instead of being expanded
+        into its contents. It is then one thing to order rather than a list of
+        parts to source and assemble, and nothing below it appears in the BoM.
+        Querying the suppliers needs 'ctx'; without one, nothing is purchasable.
+        """
+        with pc_logging.Action("BoMDetailed", self.project_name, self.name):
+            return await self._get_bom_detailed_locked(ctx, stop_at_purchasable, {})
+
+    def get_bom_detailed(self, ctx=None, stop_at_purchasable: bool = False):
+        return asyncio.run(self.get_bom_detailed_async(ctx, stop_at_purchasable))
+
+    async def _get_bom_detailed_locked(self, ctx, stop_at_purchasable, purchasable: dict):
+        with self.lock:
+            async with self.get_async_lock():
+                await self.do_instantiate()
+                return await self._get_bom_detailed_real(ctx, stop_at_purchasable, purchasable)
+
+    async def _get_bom_detailed_real(self, ctx, stop_at_purchasable, purchasable: dict):
+        bom = {}
+        for child in self.children:
+            item = child.item
+            if isinstance(item, Assembly):
+                # An assembly embedded in the parent's source file belongs to no
+                # package, so there is no name to order it by; it can only ever be
+                # expanded, exactly as the grouped BoM treats it.
+                embedded = bool(item.config.get("child", False))
+                if stop_at_purchasable and not embedded and await _is_purchasable(ctx, item, purchasable):
+                    _bom_detailed_add(bom, item, "assembly")
+                    continue
+                child_bom = await item._get_bom_detailed_locked(ctx, stop_at_purchasable, purchasable)
+                _bom_detailed_merge(bom, child_bom)
+            else:
+                _bom_detailed_add(bom, item, "part")
+        return bom
+
+
+def _bom_grouped_add(section: dict, item):
+    """Account for one more instance of 'item' in a grouped BoM section."""
+    entries = section.setdefault(item.project_name, {})
+    entry = entries.setdefault(item.name, {"count": 0, "desc": getattr(item, "desc", None)})
+    entry["count"] += 1
+
+
+def _bom_grouped_merge(grouped: dict, other: dict):
+    """Add the counts of another grouped BoM into 'grouped'."""
+    for kind, packages in other.items():
+        for package_name, entries in packages.items():
+            target = grouped[kind].setdefault(package_name, {})
+            for name, entry in entries.items():
+                if name in target:
+                    target[name]["count"] += entry["count"]
+                else:
+                    target[name] = dict(entry)
+
+
+def _bom_detailed_add(bom: dict, item, kind: str):
+    """Account for one more instance of 'item' in a detailed BoM."""
+    name = "%s:%s" % (item.project_name, item.name)
+    entry = bom.get(name)
+    if entry is None:
+        store_data = item.get_store_data()
+        entry = bom[name] = {
+            "kind": kind,
+            "count": 0,
+            "desc": getattr(item, "desc", None),
+            "vendor": store_data.vendor,
+            "sku": store_data.sku,
+            "count_per_sku": store_data.count_per_sku,
+        }
+    entry["count"] += 1
+
+
+def _bom_detailed_merge(bom: dict, other: dict):
+    """Add the counts of another detailed BoM into 'bom'."""
+    for name, entry in other.items():
+        if name in bom:
+            bom[name]["count"] += entry["count"]
+        else:
+            bom[name] = dict(entry)
+
+
+async def _is_purchasable(ctx, assembly, cache: dict) -> bool:
+    """Whether 'assembly' can be bought whole instead of being assembled.
+
+    Both halves are required: the store data that says what to order (a vendor
+    and an SKU), and a supplier of the assembly's own package that has it
+    available. Either half on its own is not something a buyer can act on.
+
+    The answer is cached per assembly, so a sub-assembly used many times costs
+    one supplier query rather than one per instance.
+    """
+    if ctx is None:
+        return False
+
+    name = "%s:%s" % (assembly.project_name, assembly.name)
+    if name in cache:
+        return cache[name]
+
+    def answer(value: bool) -> bool:
+        cache[name] = value
+        return value
+
+    store_data = assembly.get_store_data()
+    if not store_data.vendor or not store_data.sku:
+        return answer(False)
+
+    # Whether the package declares any supplier at all is asked here rather than
+    # left to 'find_part_suppliers()': that reports the absence as an error, and
+    # a package that simply does not sell anything is not one.
+    project = ctx.get_project(assembly.project_name)
+    if project is None or not project.get_suppliers():
+        return answer(False)
+
+    item = ProviderCartItem()
+    item.set_shape(assembly)
+    # 'find_part_suppliers()' keeps only the providers that report the item as
+    # available, so a non-empty result is the availability answer.
+    return answer(bool(await ctx.find_part_suppliers(item)))

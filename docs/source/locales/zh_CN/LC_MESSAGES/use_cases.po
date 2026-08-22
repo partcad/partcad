@@ -357,4 +357,3 @@ msgstr ""
 "将你的包发布到公共 PartCAD 仓库非常简单。首先，将你的包作为一个仓库发布到 GitHub 上。然后在 `公共 PartCAD 仓库 "
 "<https://github.com/partcad/partcad-index>`_ 中创建一个 pull "
 "request，以添加对你的包的引用。"
-

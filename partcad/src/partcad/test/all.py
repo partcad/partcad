@@ -14,6 +14,7 @@ from .cam import CamTest
 from .cam_additive_solid import CamAdditiveSolidTest
 from .cam_subtractive import CamSubtractiveTest
 from .cam_forming import CamFormingTest
+from .connect import ConnectTest
 
 _global_tests: list[Test] = []
 
@@ -30,6 +31,7 @@ def tests(concurrency_cap: int) -> list[Test]:
                 CamAdditiveSolidTest(),
                 CamSubtractiveTest(),
                 CamFormingTest(),
+                ConnectTest(),
             ]
         )
     return _global_tests
