@@ -17,7 +17,7 @@ from collections.abc import Iterator
 import pytest
 from click.testing import CliRunner
 from partcad_cli.click.command import cli
-from partcad_client_utils import selfupdate
+from partcad_client import selfupdate
 from partcad_utils.user_config import user_config
 
 
@@ -158,7 +158,7 @@ def test_offline_skips_the_version_check(click_runner: Iterator[CliRunner], reco
 def test_the_daemons_are_stopped_only_when_something_is_installed(
     click_runner: Iterator[CliRunner], recorder, monkeypatch
 ) -> None:
-    from partcad_client_utils import daemon
+    from partcad_client import daemon
 
     calls = []
     monkeypatch.setattr(daemon, "live_daemon_dirs", lambda *a, **kw: ["/tmp/ws-a", "/tmp/ws-b"])
@@ -177,7 +177,7 @@ def test_a_daemon_that_will_not_stop_is_reported_not_fatal(
     click_runner: Iterator[CliRunner], recorder, monkeypatch
 ) -> None:
     """Side-by-side install is what makes a survivor survivable; say so and go on."""
-    from partcad_client_utils import daemon
+    from partcad_client import daemon
 
     monkeypatch.setattr(daemon, "live_daemon_dirs", lambda *a, **kw: ["/tmp/ws-a", "/tmp/ws-b"])
     monkeypatch.setattr(daemon, "stop_all_daemons", lambda *a, **kw: ["/tmp/ws-a"])
@@ -204,8 +204,8 @@ def test_upgrade_installs_only_after_the_real_daemons_are_gone(click_runner: Ite
     if not hasattr(socket_module, "AF_UNIX"):
         pytest.skip("AF_UNIX not available on this platform")
 
-    from partcad_client_utils import daemon
-    from partcad_client_utils import selfupdate as real_selfupdate
+    from partcad_client import daemon
+    from partcad_client import selfupdate as real_selfupdate
     from partcad_service_json_rpc.core.session import Session
     from partcad_service_json_rpc.rpc.methods import build_registry
     from partcad_service_json_rpc.transport.socket_server import SocketServer

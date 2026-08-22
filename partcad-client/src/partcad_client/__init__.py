@@ -8,12 +8,12 @@
 Three things live here, and they are one idea: the operations that act on **this
 machine and its own installation**, from the process running out of it.
 
-* :mod:`~partcad_client_utils.daemon` -- discovering the daemon serving a
+* :mod:`~partcad_client.daemon` -- discovering the daemon serving a
   workspace, checking it is alive, stopping it and waiting for it to be gone,
   and enumerating the daemons running locally.
-* :mod:`~partcad_client_utils.client` -- starting a daemon if none is running and
+* :mod:`~partcad_client.client` -- starting a daemon if none is running and
   speaking framed JSON-RPC to it.
-* :mod:`~partcad_client_utils.selfupdate` -- replacing this installation of
+* :mod:`~partcad_client.selfupdate` -- replacing this installation of
   PartCAD, whether it is the Python wheels or the standalone bundle.
 
 None of it belongs to a daemon. A daemon can be remote, where "update PartCAD"

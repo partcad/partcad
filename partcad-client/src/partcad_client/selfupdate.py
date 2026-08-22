@@ -11,7 +11,7 @@ PyInstaller bundle that carries its own interpreter (installed by `install.sh`,
 or downloaded by the VS Code extension). This module is the one place that knows
 the difference.
 
-It lives in `partcad-client-utils` because **updating an installation is a
+It lives in `partcad-client` because **updating an installation is a
 client-side operation**: it is *this* machine's copy of PartCAD that gets
 replaced, by the process that runs from it. A daemon must not do it -- a daemon
 can be remote, where "update PartCAD" would mean updating somebody else's
@@ -20,7 +20,7 @@ installation.
 Even so, nothing here knows what a daemon is. A caller passes ``before_install``,
 which runs once a newer version is confirmed and before the first byte is
 written; `pc upgrade` uses it to stop every daemon running locally (through
-:mod:`partcad_client_utils.daemon`) and wait for them, because they are all
+:mod:`partcad_client.daemon`) and wait for them, because they are all
 executing the files about to be replaced.
 
 The other rule is **never write over the running installation**. The standalone
@@ -70,7 +70,7 @@ DISTRIBUTIONS = (
     "partcad-cli",
     "partcad-service-json-rpc",
     "partcad",
-    "partcad-client-utils",
+    "partcad-client",
     "partcad-utils",
 )
 

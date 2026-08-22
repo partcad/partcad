@@ -13,7 +13,7 @@ import threading
 import time
 
 import pytest
-from partcad_client_utils.client import DaemonClient, DaemonError
+from partcad_client.client import DaemonClient, DaemonError
 from partcad_service_json_rpc.core import events
 from partcad_service_json_rpc.core.session import Session
 from partcad_service_json_rpc.transport.socket_server import SocketServer

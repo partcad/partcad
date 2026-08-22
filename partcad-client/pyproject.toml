@@ -1,7 +1,7 @@
 [project]
-name = "partcad-client-utils"
+name = "partcad-client"
 version = "0.7.158"
-description = "Client-side PartCAD utilities: daemon discovery and connection, and updating the installation"
+description = "The PartCAD client: daemon discovery and connection, and upgrading the installation"
 readme = "README.md"
 keywords = ["cad", "partcad", "client", "daemon", "update"]
 requires-python = ">=3.10,<3.15"

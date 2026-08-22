@@ -13,7 +13,7 @@ Where that endpoint is, and whether something is answering on it, is the
 rendezvous both ends have to agree on, so it is defined once in
 ``partcad_utils.workspace`` and imported here. Everything a *client* does with a
 daemon -- finding it, connecting, stopping it and waiting for it to go -- lives
-in ``partcad_client_utils``; a daemon has no business doing any of that, least of
+in ``partcad_client``; a daemon has no business doing any of that, least of
 all to daemons other than itself.
 """
 

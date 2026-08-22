@@ -24,7 +24,7 @@ import tarfile
 import textwrap
 
 import pytest
-from partcad_client_utils import selfupdate
+from partcad_client import selfupdate
 
 # ---------------------------------------------------------------------------
 # What is installed
@@ -41,16 +41,14 @@ def test_installation_kind_is_wheel_when_under_site_packages(monkeypatch):
     monkeypatch.setattr(
         selfupdate,
         "__file__",
-        os.path.join("/venv", "lib", "python3.12", "site-packages", "partcad_client_utils", "selfupdate.py"),
+        os.path.join("/venv", "lib", "python3.12", "site-packages", "partcad_client", "selfupdate.py"),
     )
     assert selfupdate.installation_kind() == selfupdate.KIND_WHEEL
 
 
 def test_installation_kind_is_source_for_a_checkout(monkeypatch):
     monkeypatch.delattr(selfupdate.sys, "frozen", raising=False)
-    monkeypatch.setattr(
-        selfupdate, "__file__", "/home/dev/partcad/partcad-client-utils/src/partcad_client_utils/selfupdate.py"
-    )
+    monkeypatch.setattr(selfupdate, "__file__", "/home/dev/partcad/partcad-client/src/partcad_client/selfupdate.py")
     assert selfupdate.installation_kind() == selfupdate.KIND_SOURCE
 
 
@@ -418,7 +416,7 @@ def test_update_without_a_before_install_hook_just_installs(monkeypatch):
 def test_the_module_never_reaches_for_a_daemon():
     """Updating is a client-side act; a daemon can be remote, or somebody else's.
 
-    Even inside `partcad-client-utils`, the updater does not reach for the
+    Even inside `partcad-client`, the updater does not reach for the
     daemon module next to it: a caller that has daemons passes `before_install`,
     which is what lets `pc upgrade` stop all the local ones and lets the VS Code
     extension's Python backend -- which has none -- stop nothing.

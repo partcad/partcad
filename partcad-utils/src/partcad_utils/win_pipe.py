@@ -9,7 +9,7 @@ The counterpart of the AF_UNIX half of :mod:`partcad_utils.workspace`, and here
 for the same reason: the daemon serves the pipe these functions name, and clients
 look for it under the same name, so the name is computed in one place. Serving
 the pipe is `partcad_service_json_rpc.win_pipe`; stopping and enumerating is
-`partcad_client_utils.daemon`.
+`partcad_client.daemon`.
 
 NOTE: Windows-only. It is not exercised in the Linux dev container / CI;
 Windows-specific APIs are reached only inside functions so the module still

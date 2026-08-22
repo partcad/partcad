@@ -24,7 +24,7 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
   or on the daemon — see "Command boundary" in `partcad-cli/AGENTS.md`.
 
   It does **not** update PartCAD itself, and does not discover or stop daemons: those are
-  `partcad_client_utils`, run by the client. See `partcad-client-utils` below.
+  `partcad_client`, run by the client. See `partcad-client` below.
 
 * [partcad-utils](./partcad-utils/README.md):
 
@@ -34,7 +34,7 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
   owns it: a copy on each side is a copy that can disagree, and a disagreement is a client silently starting a
   second daemon.
 
-* [partcad-client-utils](./partcad-client-utils/README.md):
+* [partcad-client](./partcad-client/README.md):
 
   What a **client** does, and a daemon must not: discovering the daemon serving a workspace and connecting to
   it (`daemon`, `client`), and replacing this installation of PartCAD (`selfupdate`).
@@ -118,7 +118,7 @@ so this never affects a commit.
 From the repo root, inside the environment:
 
 ```bash
-poetry run pytest partcad partcad-cli partcad-utils partcad-client-utils partcad-service-json-rpc \
+poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc \
   -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```

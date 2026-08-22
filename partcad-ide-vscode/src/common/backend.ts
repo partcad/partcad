@@ -278,7 +278,7 @@ function runCli(
  * Ask the CLI where this workspace's daemon is, starting one if none is running.
  *
  * Deliberately not reimplemented here. Which socket serves which workspace, and
- * whether anything is answering on it, is `partcad_client_utils` -- a second
+ * whether anything is answering on it, is `partcad_client` -- a second
  * copy of those rules in TypeScript is a copy that can disagree, and a
  * disagreement means the extension quietly starting a daemon of its own beside
  * the one `pc` is using.

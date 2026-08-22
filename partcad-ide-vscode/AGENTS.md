@@ -17,7 +17,7 @@ The extension talks to PartCAD through a backend selected by the `partcad.backen
   warm context. See `src/common/backend.ts` and `src/common/provision.ts`.
 
   **Daemon handling is the CLI's, not the extension's.** Which socket serves which workspace, whether anything
-  is answering on it, and how to stop it and wait are `partcad_client_utils`, reached by running `pc`. A second
+  is answering on it, and how to stop it and wait are `partcad_client`, reached by running `pc`. A second
   copy of those rules in TypeScript is a copy that can disagree, and a disagreement means the extension quietly
   starting a daemon of its own beside the one `pc` is using. What stays in Node is the socket transport itself,
   because a live notification connection cannot be shelled out.
@@ -32,7 +32,7 @@ methods and routes the service's notifications back under the legacy `?/partcad/
 
 "Update PartCAD" (`partcad.update`) updates the PartCAD installation — `pc upgrade`, not `pc update`, which
 refetches a package's imports and is "Reload the package" (`partcad.refresh`) here. The extension implements
-none of it, which is the point: there is one upgrader, `partcad_client_utils.selfupdate`, and the extension
+none of it, which is the point: there is one upgrader, `partcad_client.selfupdate`, and the extension
 reaches it the same way a user would.
 
 - `service` — spawns `<bundle>/pc --no-ansi upgrade` in the workspace folder and streams it to
@@ -43,7 +43,7 @@ reaches it the same way a user would.
   fixed one, and how the extension detects that anything happened: the resolved path moves. If there is no `pc`
   beside the service, or it is too old to know the option, the extension downloads the release itself
   (`downloadLatest`), the same path a first install takes.
-- `python` — the bundled server's `partcad.install` handler calls `partcad_client_utils.selfupdate` directly
+- `python` — the bundled server's `partcad.install` handler calls `partcad_client.selfupdate` directly
   when PartCAD is already installed, and falls back to its `pip` bootstrap only when there is nothing installed
   to update. No daemon is stopped there, and none needs to be: this backend serves the extension in-process and
   never starts one.

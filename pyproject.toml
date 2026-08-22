@@ -4,7 +4,7 @@
 # test's own directory on the path, so it has to be named here.
 pythonpath = [
     "partcad-utils/src",
-    "partcad-client-utils/src",
+    "partcad-client/src",
     "partcad/src",
     "partcad/tests/unit",
     "partcad-service-json-rpc/src",
@@ -83,7 +83,7 @@ license = "Apache 2.0"
 readme = "README.md"
 packages = [
   { include = "partcad_utils", from = "partcad-utils/src" },
-  { include = "partcad_client_utils", from = "partcad-client-utils/src" },
+  { include = "partcad_client", from = "partcad-client/src" },
   { include = "partcad", from = "partcad/src" },
   { include = "partcad_cli", from = "partcad-cli/src" },
   { include = "partcad_service_json_rpc", from = "partcad-service-json-rpc/src" }

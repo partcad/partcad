@@ -24,7 +24,7 @@ import tempfile
 import threading
 
 import pytest
-from partcad_client_utils import daemon
+from partcad_client import daemon
 from partcad_utils.framing import read_message, write_message
 
 if not hasattr(socket, "AF_UNIX"):

@@ -1,7 +1,7 @@
 click==8.4.2
 ocp_vscode
 partcad==0.7.158
-partcad-client-utils==0.7.158
+partcad-client==0.7.158
 partcad-service-json-rpc==0.7.158
 partcad-utils==0.7.158
 rich-click==1.9.8

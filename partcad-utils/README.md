@@ -35,7 +35,7 @@ means a client silently starting a second daemon beside the one already serving.
 
 Everything a *client* then does with a daemon — connecting, stopping it, waiting
 for it, enumerating the local ones — is
-[`partcad-client-utils`](../partcad-client-utils/README.md); serving is
+[`partcad-client`](../partcad-client/README.md); serving is
 [`partcad-service-json-rpc`](../partcad-service-json-rpc/README.md).
 
 The `partcad` package aliases these modules back under its own namespace

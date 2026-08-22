@@ -33,7 +33,7 @@ only thing that could still be reading it.
 """
 
 import rich_click as click
-from partcad_client_utils import selfupdate
+from partcad_client import selfupdate
 
 
 @click.command(help="Upgrade PartCAD itself to the latest version.")
@@ -88,7 +88,7 @@ def _stop_local_daemons() -> None:
     A daemon that will not go is reported rather than fatal -- see the module
     docstring for why that is survivable.
     """
-    from partcad_client_utils import daemon
+    from partcad_client import daemon
 
     running = daemon.live_daemon_dirs()
     if not running:

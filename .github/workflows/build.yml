@@ -77,12 +77,12 @@ jobs:
           . ~/.bash_profile
           mamba activate env-build
           # Build the shared partcad-utils wheel first; partcad (and the CLI and
-          # the service) pin it, and it is not on PyPI. partcad-client-utils
+          # the service) pin it, and it is not on PyPI. partcad-client
           # pins partcad-utils in turn, and partcad-cli pins it.
           cp LICENSE.txt partcad-utils
           (cd partcad-utils && python -m build)
-          cp LICENSE.txt partcad-client-utils
-          (cd partcad-client-utils && python -m build)
+          cp LICENSE.txt partcad-client
+          (cd partcad-client && python -m build)
           cp LICENSE.txt apache20.svg partcad
           (cd partcad && python -m build)
           mamba deactivate
@@ -92,8 +92,8 @@ jobs:
           cp LICENSE.txt partcad-service-json-rpc
           # Install partcad-utils (pinned by partcad) before installing partcad.
           python -m pip install --find-links=partcad-utils/dist partcad-utils
-          python -m pip install --find-links=partcad-client-utils/dist --find-links=partcad-utils/dist \
-            partcad-client-utils
+          python -m pip install --find-links=partcad-client/dist --find-links=partcad-utils/dist \
+            partcad-client
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
           # Build the JSON-RPC service wheel too; partcad-cli pins it.
@@ -109,8 +109,8 @@ jobs:
           mamba activate ${{ format('env-test-build-{0}', matrix.python-version) }}
           # Install the shared packages first (pinned by partcad/cli/service, not on PyPI).
           python -m pip install --find-links=partcad-utils/dist partcad-utils
-          python -m pip install --find-links=partcad-client-utils/dist --find-links=partcad-utils/dist \
-            partcad-client-utils
+          python -m pip install --find-links=partcad-client/dist --find-links=partcad-utils/dist \
+            partcad-client
           python -m pip install -r partcad/requirements.txt
           python -m pip install --no-index --find-links=partcad/dist partcad
           # Install the service before partcad-cli, which pins it.

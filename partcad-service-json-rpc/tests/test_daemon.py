@@ -7,7 +7,7 @@
 
 Where the socket lives and whether anything answers on it is
 `partcad_utils.workspace`, tested there; stopping and enumerating daemons is
-`partcad_client_utils.daemon`, tested there. What is left here is the service's
+`partcad_client.daemon`, tested there. What is left here is the service's
 own half: `ensure_daemon` reusing a daemon that is already serving.
 """
 

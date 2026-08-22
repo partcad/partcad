@@ -6,10 +6,10 @@ the `partcad` package in this monorepo (`../partcad`); run all commands below fr
 
 `pc daemon start` / `pc daemon stop` manage the per-workspace background daemon from
 [`partcad-service-json-rpc`](../partcad-service-json-rpc), through
-[`partcad-client-utils`](../partcad-client-utils): `start` goes through
-`partcad_client_utils.client.start_daemon()` (forwarding the daemon-affecting globals —
+[`partcad-client`](../partcad-client): `start` goes through
+`partcad_client.client.start_daemon()` (forwarding the daemon-affecting globals —
 `--offline`, `--force-update`, `--python-sandbox`, verbosity — which otherwise stop at the client's own
-`user_config`), while `stop` calls `partcad_client_utils.daemon.stop_daemon()`.
+`user_config`), while `stop` calls `partcad_client.daemon.stop_daemon()`.
 
 These two are also the VS Code extension's way in. It does not derive socket paths or probe liveness itself: it
 runs `pc daemon start`, reads the endpoint from stdout, and connects — so there is one implementation of "where
@@ -28,9 +28,9 @@ daemon's warm context keeps serving the pre-mutation package.
 **`pc update` and `pc upgrade` sit on opposite sides of this line, which is why they are two commands and not
 one command with a flag.** `pc update` refetches the packages a package imports — the package graph, so a thin
 daemon client like any other. `pc upgrade` replaces this machine's copy of PartCAD
-(`partcad_client_utils.selfupdate`), which only the process running from it can do: a daemon can be remote,
+(`partcad_client.selfupdate`), which only the process running from it can do: a daemon can be remote,
 where "upgrade PartCAD" would mean upgrading somebody else's installation. It stays within the boundary's
-letter as well as its spirit — `selfupdate` lives in the deliberately cheap `partcad-client-utils`, so the
+letter as well as its spirit — `selfupdate` lives in the deliberately cheap `partcad-client`, so the
 command never imports the heavy `partcad`.
 
 `pc upgrade` owns the daemon handling the upgrade needs, because `selfupdate` deliberately has none. Every

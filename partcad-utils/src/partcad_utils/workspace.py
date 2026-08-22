@@ -8,7 +8,7 @@
 This is the rendezvous between a PartCAD client and the daemon serving its
 workspace: the daemon binds the address these functions compute, and the client
 looks for it at the same address. Neither side owns it, which is why it lives
-here rather than in `partcad-client-utils` or `partcad-service-json-rpc` -- a
+here rather than in `partcad-client` or `partcad-service-json-rpc` -- a
 copy on each side is a copy that can disagree, and a disagreement is a client
 that silently starts a second daemon.
 

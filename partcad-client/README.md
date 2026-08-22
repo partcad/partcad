@@ -1,8 +1,8 @@
-# partcad-client-utils
+# partcad-client
 
-Client-side utilities for the [PartCAD](https://github.com/partcad/partcad)
-ecosystem: finding and talking to the daemon that serves a workspace, and
-updating this installation of PartCAD.
+The client side of the [PartCAD](https://github.com/partcad/partcad) ecosystem:
+finding and talking to the daemon that serves a workspace, and upgrading this
+installation of PartCAD.
 
 Everything here acts on **this machine**, from the process running out of it.
 That is what makes it a client package and not a shared one, and why none of it

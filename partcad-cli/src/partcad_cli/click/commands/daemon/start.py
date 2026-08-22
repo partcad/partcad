@@ -8,14 +8,14 @@
 Also the VS Code extension's way in. The extension does not derive socket paths
 or probe liveness itself: it runs this command, reads the endpoint from stdout,
 and connects. One implementation of "where is the daemon", in
-`partcad_client_utils`, rather than one per language.
+`partcad_client`, rather than one per language.
 """
 
 import logging
 import os
 
 import rich_click as click
-from partcad_client_utils import client
+from partcad_client import client
 
 
 @click.command(help="Start the PartCAD daemon for this workspace (if needed) and print its socket path")
