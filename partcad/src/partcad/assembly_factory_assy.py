@@ -847,7 +847,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
                     target_interface=target_iface_obj,
                 )
 
-        if not item is None:
+        if item is not None:
             return AssemblyChild(item, name, location, connect_comment, connect_how)
         else:
             return None

@@ -219,7 +219,7 @@ parts:
       holdForceMax: 6.0
 
   example-motor:
-    desc: NEMA 17 motor bracket
+    desc: NEMA 17 motor
     url: https://www.omc-stepperonline.com/nema-17-bipolar-1-8deg-65ncm-92oz-in-2-1a-3-36v-42x42x60mm-4-wires-17hs24-2104s
     vendor: omc-stepperonline
     sku: 17HS24-2104S

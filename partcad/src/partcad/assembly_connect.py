@@ -214,8 +214,9 @@ class ConnectHow:
         self.turn_torque_max = self._number(config, "turnTorqueMax", DEFAULT_TURN_TORQUE_MAX)
         # 'threadStep' is inherited from the interfaces being connected when the
         # ASSY file does not give one: see 'resolve()'.
-        self.thread_step = self._number(config, "threadStep", DEFAULT_THREAD_STEP)
-        self.thread_step_specified = config.get("threadStep", None) is not None
+        declared_thread_step = self._number(config, "threadStep", None)
+        self.thread_step_specified = declared_thread_step is not None
+        self.thread_step = DEFAULT_THREAD_STEP if declared_thread_step is None else declared_thread_step
 
         # 'pushDistance' is derived from the object's own geometry when the ASSY
         # file does not give it. That needs a CAD runtime, which instantiating an
