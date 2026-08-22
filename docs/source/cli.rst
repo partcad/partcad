@@ -113,10 +113,11 @@ Workflow commands
   - ``pc supply quote`` — Get a quote from suppliers.
   - ``pc supply order`` — Place an order with suppliers.
 
-  ``find`` and ``quote`` take parts and assemblies alike. An assembly is procured as the objects it is made of,
-  except that the walk stops at every sub-assembly that is sold assembled (one with ``vendor`` and ``sku`` set,
-  see :ref:`procurement`): such a sub-assembly is ordered as one item instead of being taken apart. Pass
-  ``--recursive`` (``-r``) to walk all the way down to the parts regardless, and order those.
+  ``find`` and ``quote`` take parts and assemblies alike. A requested assembly that is sold assembled (one with
+  ``vendor`` and ``sku`` set, see :ref:`procurement`) is ordered as one item. Any other assembly is procured as
+  the objects it is made of, and the walk stops at every sub-assembly that is sold assembled: such a
+  sub-assembly is ordered as one item instead of being taken apart. Pass ``--recursive`` (``-r``) to walk all
+  the way down to the parts regardless, and order those.
 
 **************
 Other commands

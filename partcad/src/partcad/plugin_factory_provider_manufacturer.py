@@ -8,6 +8,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
+import os
 import tempfile
 
 from .plugin_request_provider_caps import ProviderRequestCaps
@@ -85,10 +86,11 @@ class PluginFactoryProviderManufacturer(PluginFactoryProvider):
             if object is None:
                 pc_logging.error(f"Part or assembly '{cart_item.name}' not found")
                 return
-            filepath = tempfile.mktemp(".step")
-            await object.render_async(self.ctx, format_name="step", filepath=filepath)
-            with open(filepath, "rb") as f:
-                step = f.read()
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                filepath = os.path.join(tmp_dir, "cart_item.step")
+                await object.render_async(self.ctx, format_name="step", filepath=filepath)
+                with open(filepath, "rb") as f:
+                    step = f.read()
             cart_item.add_binary("step", step)
         else:
             # TODO(clairbee): add support for other formats
