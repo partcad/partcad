@@ -17,10 +17,6 @@
     "ms-python.vscode-pylance": {
       "action": "skip",
       "reason": "Proprietary. Its license permits use only with Microsoft's own products, so it cannot be shipped in this IDE, and it is not published on Open VSX. `detachhead.basedpyright` below fills the same role."
-    },
-    "bernhard-42.ocp-cad-viewer": {
-      "required": true,
-      "reason": "An `extensionDependency` of the PartCAD extension: without it, the PartCAD extension does not activate and `pc inspect` has nowhere to draw. If Open VSX ever stops carrying it, add `\"source\": \"vsix\"` with a `\"url\"` pointing at the release asset rather than dropping it."
     }
   },
 

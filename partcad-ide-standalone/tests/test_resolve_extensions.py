@@ -79,8 +79,8 @@ def test_the_shipped_policy_matches_the_shipped_recommendations():
 
     assert "OpenVMP.partcad" in required, "the IDE has to ship the PartCAD extension"
     assert "PartCAD.partcad-ide-bootstrap" in required, "without it the IDE does not open the PartCAD workbench"
-    # Both are `extensionDependencies` of the PartCAD extension: it does not
-    # activate without them.
+    # An `extensionDependency` of the PartCAD extension: it does not activate
+    # without it. The viewer used to be a second one; it is built into the
+    # PartCAD extension now, so nothing third-party has to be there to draw.
     assert "ms-python.python" in required
-    assert "bernhard-42.ocp-cad-viewer" in required
     assert "ms-python.vscode-pylance" not in installed, "it cannot be redistributed"

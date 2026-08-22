@@ -35,7 +35,14 @@ class PluginFactoryFile(PluginFactory):
         self.extension = extension
 
         if "fileFrom" in config:
-            self.fileFactory = factory.instantiate("file", config["fileFrom"], ctx, self.project, config)
+            # 'instantiate' takes both a source and a target project; this call
+            # passed only one, so any plugin declaring 'fileFrom' died with a
+            # TypeError about the missing argument. 'self.project' is the source
+            # (see PluginFactory.__init__), and the target is the one this
+            # factory was constructed for.
+            self.fileFactory = factory.instantiate(
+                "file", config["fileFrom"], ctx, self.project, target_project, config
+            )
 
         if "path" in config:
             self.path = config["path"]

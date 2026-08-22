@@ -11,12 +11,35 @@ import * as vscode from 'vscode';
 import * as utils from './utils';
 
 type ItemData = { pkg: string; name: string; itemPath: string | undefined };
+
+/** The kinds of item that can be inspected, and how each is shown. */
+const KINDS = {
+    sketch: { command: 'partcad.showSketch', progress: 'Inspecting the sketch...' },
+    interface: { command: 'partcad.showInterface', progress: 'Inspecting the interface...' },
+    part: { command: 'partcad.showPart', progress: 'Inspecting the part...' },
+    assembly: { command: 'partcad.showAssembly', progress: 'Inspecting the assembly...' },
+} as const;
+
+type ItemKind = keyof typeof KINDS;
+
 export class PartcadInspector implements vscode.WebviewViewProvider {
     public static readonly viewType = 'partcadInspector';
 
     private _view?: vscode.WebviewView;
 
     private _showResolve?: (value: any) => void;
+
+    /**
+     * Renders asked for and not yet reported done.
+     *
+     * '?/partcad/showPartDone' carries no inspection identifier, so a
+     * completion cannot be matched to its request by name. It can be matched by
+     * count: PartCAD reports one completion per render it was asked for, so
+     * only once every earlier render has reported in is the completion this
+     * inspection's own. Without the count, a render superseded by a faster
+     * click resolves the newer inspection instead of its own.
+     */
+    private _pendingShows: number = 0;
 
     private shownPackage: string = '';
     private shownItem: string = '';
@@ -37,8 +60,13 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
      * showDone is called when lsp_server tells the extension that the show command is complete
      */
     public showDone() {
-        if (this._showResolve) {
-            this._showResolve(undefined);
+        if (this._pendingShows > 0) {
+            this._pendingShows -= 1;
+        }
+        if (this._pendingShows === 0 && this._showResolve) {
+            const resolve = this._showResolve;
+            this._showResolve = undefined;
+            resolve(undefined);
         }
     }
 
@@ -47,453 +75,93 @@ export class PartcadInspector implements vscode.WebviewViewProvider {
     }
 
     public async inspectSketch(sketch: ItemData, params: Object) {
-        const sketchName = sketch['name'];
-        const packageName = sketch['pkg'];
-        const itemPath = sketch['itemPath'];
-
-        if (this.shownPackage !== packageName || this.shownItem !== sketchName) {
-            await this._view?.webview.postMessage({ type: 'sketch', obj: sketch, params });
-        }
-        this.shownPackage = packageName;
-        this.shownItem = sketchName;
-
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: `${sketchName}`,
-                cancellable: false,
-            },
-            (progress, _token) => {
-                progress.report({ message: 'Contacting OCP CAD Viewer...', increment: 10 });
-
-                const process = new Promise((resolve, reject) => {
-                    if (this._showResolve) {
-                        this._showResolve(undefined);
-                    }
-                    this._showResolve = resolve;
-
-                    // Find existing viewer;
-                    let found = false;
-                    const tabs: vscode.Tab[] = vscode.window.tabGroups.all.map((tg) => tg.tabs).flat();
-                    for (var tab of tabs) {
-                        if (tab.label === 'OCP CAD Viewer') {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        vscode.commands
-                            .executeCommand('ocpCadViewer.ocpCadViewer')
-                            .then(
-                                () => {
-                                    return new Promise((f) => setTimeout(f, 1700));
-                                },
-                                () => {
-                                    reject();
-                                },
-                            )
-                            .then(
-                                () => {
-                                    progress.report({ message: 'Inspecting the sketch...', increment: 20 });
-                                    return vscode.commands.executeCommand('partcad.showSketch', {
-                                        pkg: packageName,
-                                        name: sketchName,
-                                    });
-                                },
-                                () => {
-                                    reject();
-                                },
-                            )
-                            .then(
-                                () => {
-                                    // Wait for an outside call of this._showResolve()
-                                },
-                                () => {
-                                    reject();
-                                },
-                            );
-                    } else {
-                        progress.report({ message: 'Inspecting the sketch...', increment: 20 });
-                        vscode.commands
-                            .executeCommand('partcad.showSketch', { pkg: packageName, name: sketchName, params })
-                            .then(
-                                () => {
-                                    // Wait for an outside call of this._showResolve()
-                                },
-                                () => {
-                                    reject();
-                                },
-                            );
-                    }
-                });
-
-                if (itemPath !== undefined && packageName === '//') {
-                    return new Promise((resolve, reject) => {
-                        return vscode.commands
-                            .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
-                                viewColumn: vscode.ViewColumn.One,
-                                preview: true,
-                            })
-                            .then(() => {
-                                return new Promise((f) => setTimeout(f, 1700)).then(
-                                    () => {
-                                        return process
-                                            .then(() => {
-                                                resolve(undefined);
-                                            })
-                                            .catch(() => {
-                                                reject();
-                                            });
-                                    },
-                                    () => {
-                                        reject();
-                                    },
-                                );
-                            });
-                    });
-                }
-
-                return process;
-            },
-        );
+        await this.inspect('sketch', sketch, params);
     }
 
     public async inspectInterface(intf: ItemData, params: Object) {
-        const intfName = intf['name'];
-        const packageName = intf['pkg'];
-        const itemPath = intf['itemPath'];
-
-        if (this.shownPackage !== packageName || this.shownItem !== intfName) {
-            await this._view?.webview.postMessage({ type: 'interface', obj: intf, params });
-        }
-        this.shownPackage = packageName;
-        this.shownItem = intfName;
-
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: `${intfName}`,
-                cancellable: false,
-            },
-            (progress, _token) => {
-                progress.report({ message: 'Contacting OCP CAD Viewer...', increment: 10 });
-
-                const process = new Promise((resolve, reject) => {
-                    if (this._showResolve) {
-                        this._showResolve(undefined);
-                    }
-                    this._showResolve = resolve;
-
-                    // Find existing viewer;
-                    let found = false;
-                    const tabs: vscode.Tab[] = vscode.window.tabGroups.all.map((tg) => tg.tabs).flat();
-                    for (var tab of tabs) {
-                        if (tab.label === 'OCP CAD Viewer') {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        vscode.commands
-                            .executeCommand('ocpCadViewer.ocpCadViewer')
-                            .then(
-                                () => {
-                                    return new Promise((f) => setTimeout(f, 1700));
-                                },
-                                () => {
-                                    reject();
-                                },
-                            )
-                            .then(
-                                () => {
-                                    progress.report({ message: 'Inspecting the interface...', increment: 20 });
-                                    return vscode.commands.executeCommand('partcad.showInterface', {
-                                        pkg: packageName,
-                                        name: intfName,
-                                    });
-                                },
-                                () => {
-                                    reject();
-                                },
-                            )
-                            .then(
-                                () => {
-                                    // Wait for an outside call of this._showResolve()
-                                },
-                                () => {
-                                    reject();
-                                },
-                            );
-                    } else {
-                        progress.report({ message: 'Inspecting the interface...', increment: 20 });
-                        vscode.commands
-                            .executeCommand('partcad.showInterface', { pkg: packageName, name: intfName, params })
-                            .then(
-                                () => {
-                                    // Wait for an outside call of this._showResolve()
-                                },
-                                () => {
-                                    reject();
-                                },
-                            );
-                    }
-                });
-
-                if (itemPath !== undefined && packageName === '//') {
-                    return new Promise((resolve, reject) => {
-                        return vscode.commands
-                            .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
-                                viewColumn: vscode.ViewColumn.One,
-                                preview: true,
-                            })
-                            .then(() => {
-                                return new Promise((f) => setTimeout(f, 1700)).then(
-                                    () => {
-                                        return process
-                                            .then(() => {
-                                                resolve(undefined);
-                                            })
-                                            .catch(() => {
-                                                reject();
-                                            });
-                                    },
-                                    () => {
-                                        reject();
-                                    },
-                                );
-                            });
-                    });
-                }
-
-                return process;
-            },
-        );
+        await this.inspect('interface', intf, params);
     }
 
     public async inspectPart(part: ItemData, params: Object) {
-        const partName = part['name'];
-        const packageName = part['pkg'];
-        const itemPath = part['itemPath'];
-
-        if (this.shownPackage !== packageName || this.shownItem !== partName) {
-            await this._view?.webview.postMessage({ type: 'part', obj: part, params });
-        }
-        this.shownPackage = packageName;
-        this.shownItem = partName;
-
-        await vscode.window.withProgress(
-            {
-                location: vscode.ProgressLocation.Notification,
-                title: `${partName}`,
-                cancellable: false,
-            },
-            (progress, _token) => {
-                progress.report({ message: 'Contacting OCP CAD Viewer...', increment: 10 });
-
-                const process = new Promise((resolve, reject) => {
-                    if (this._showResolve) {
-                        this._showResolve(undefined);
-                    }
-                    this._showResolve = resolve;
-
-                    // Find existing viewer;
-                    let found = false;
-                    const tabs: vscode.Tab[] = vscode.window.tabGroups.all.map((tg) => tg.tabs).flat();
-                    for (var tab of tabs) {
-                        if (tab.label === 'OCP CAD Viewer') {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        vscode.commands
-                            .executeCommand('ocpCadViewer.ocpCadViewer')
-                            .then(
-                                () => {
-                                    return new Promise((f) => setTimeout(f, 1700));
-                                },
-                                () => {
-                                    reject();
-                                },
-                            )
-                            .then(
-                                () => {
-                                    progress.report({ message: 'Inspecting the part...', increment: 20 });
-                                    return vscode.commands.executeCommand('partcad.showPart', {
-                                        pkg: packageName,
-                                        name: partName,
-                                    });
-                                },
-                                () => {
-                                    reject();
-                                },
-                            )
-                            .then(
-                                () => {
-                                    // Wait for an outside call of this._showResolve()
-                                },
-                                () => {
-                                    reject();
-                                },
-                            );
-                    } else {
-                        progress.report({ message: 'Inspecting the part...', increment: 20 });
-                        vscode.commands
-                            .executeCommand('partcad.showPart', { pkg: packageName, name: partName, params })
-                            .then(
-                                () => {
-                                    // Wait for an outside call of this._showResolve()
-                                },
-                                () => {
-                                    reject();
-                                },
-                            );
-                    }
-                });
-
-                if (itemPath !== undefined && packageName === '//') {
-                    return new Promise((resolve, reject) => {
-                        return vscode.commands
-                            .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
-                                viewColumn: vscode.ViewColumn.One,
-                                preview: true,
-                            })
-                            .then(() => {
-                                return new Promise((f) => setTimeout(f, 1700)).then(
-                                    () => {
-                                        return process
-                                            .then(() => {
-                                                resolve(undefined);
-                                            })
-                                            .catch(() => {
-                                                reject();
-                                            });
-                                    },
-                                    () => {
-                                        reject();
-                                    },
-                                );
-                            });
-                    });
-                }
-
-                return process;
-            },
-        );
+        await this.inspect('part', part, params);
     }
 
     public async inspectAssembly(assembly: ItemData, params: Object) {
-        const assemblyName = assembly['name'];
-        const packageName = assembly['pkg'];
-        const itemPath = assembly['itemPath'];
+        await this.inspect('assembly', assembly, params);
+    }
 
-        if (this.shownPackage !== packageName || this.shownItem !== assemblyName) {
-            await this._view?.webview.postMessage({ type: 'assembly', obj: assembly, params });
+    /**
+     * Render an item and show it in the PartCAD Viewer.
+     *
+     * PartCAD renders the item in its own process and pushes the result to the
+     * viewer over the PartCAD IDE socket; the viewer tab opens itself when that
+     * arrives. So there is nothing to launch and nothing to wait for here beyond
+     * the render itself - which is what the '?/partcad/showPartDone'
+     * notification, and so 'showDone()', resolves.
+     */
+    private async inspect(kind: ItemKind, item: ItemData, params: Object) {
+        const { command, progress: progressMessage } = KINDS[kind];
+        const itemName = item['name'];
+        const packageName = item['pkg'];
+        const itemPath = item['itemPath'];
+
+        if (this.shownPackage !== packageName || this.shownItem !== itemName) {
+            await this._view?.webview.postMessage({ type: kind, obj: item, params });
         }
         this.shownPackage = packageName;
-        this.shownItem = assemblyName;
+        this.shownItem = itemName;
 
         await vscode.window.withProgress(
             {
                 location: vscode.ProgressLocation.Notification,
-                title: `${assemblyName}`,
+                title: `${itemName}`,
                 cancellable: false,
             },
-            (progress, _token) => {
-                progress.report({ message: 'Contacting OCP CAD Viewer...', increment: 10 });
-
-                const process = new Promise((resolve, reject) => {
+            async (progress, _token) => {
+                // Assigned before the render is asked for, because the
+                // '?/partcad/showPartDone' that resolves it can arrive as soon as
+                // the command below returns.
+                const done = new Promise((resolve) => {
+                    // A previous inspection that is still pending is superseded
+                    // by this one rather than left to hang. Its render is still
+                    // running, though, so it is still owed a completion, which
+                    // '_pendingShows' keeps this one from taking for its own.
                     if (this._showResolve) {
                         this._showResolve(undefined);
                     }
                     this._showResolve = resolve;
-
-                    // Find existing viewer;
-                    let found = false;
-                    const tabs: vscode.Tab[] = vscode.window.tabGroups.all.map((tg) => tg.tabs).flat();
-                    for (var tab of tabs) {
-                        if (tab.label === 'OCP CAD Viewer') {
-                            found = true;
-                            break;
-                        }
-                    }
-
-                    if (!found) {
-                        vscode.commands
-                            .executeCommand('ocpCadViewer.ocpCadViewer')
-                            .then(
-                                () => {
-                                    return new Promise((f) => setTimeout(f, 700));
-                                },
-                                () => {
-                                    reject();
-                                },
-                            )
-                            .then(
-                                () => {
-                                    progress.report({ message: 'Inspecting the assembly...', increment: 20 });
-                                    return vscode.commands.executeCommand('partcad.showAssembly', {
-                                        pkg: packageName,
-                                        name: assemblyName,
-                                    });
-                                },
-                                () => {
-                                    reject();
-                                },
-                            )
-                            .then(
-                                () => {
-                                    // Wait for an outside call of this._showResolve()
-                                },
-                                () => {
-                                    reject();
-                                },
-                            );
-                    } else {
-                        progress.report({ message: 'Inspecting the assembly...', increment: 20 });
-                        vscode.commands
-                            .executeCommand('partcad.showAssembly', { pkg: packageName, name: assemblyName, params })
-                            .then(
-                                () => {
-                                    // Wait for an outside call of this._showResolve()
-                                },
-                                () => {
-                                    reject();
-                                },
-                            );
-                    }
+                    this._pendingShows += 1;
                 });
 
+                progress.report({ message: progressMessage, increment: 20 });
+                const rendered = (async () => {
+                    try {
+                        await vscode.commands.executeCommand(command, { pkg: packageName, name: itemName, params });
+                    } catch (error) {
+                        // A render that never started will never be reported
+                        // done; drop its share of the count so it cannot leave
+                        // a later inspection waiting forever.
+                        this.showDone();
+                        throw error;
+                    }
+                    // Wait for an outside call of this._showResolve()
+                    await done;
+                })();
+
+                // An item defined in the root package has a file of its own; open
+                // it beside the viewer so the user sees the source they are
+                // inspecting. Not for items pulled in from a dependency, whose
+                // files are not the user's to edit. Started after the render is
+                // already under way so it costs no latency - the render is the
+                // slow half, and nothing about it depends on the editor.
                 if (itemPath !== undefined && packageName === '//') {
-                    return new Promise((resolve, reject) => {
-                        return vscode.commands
-                            .executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
-                                viewColumn: vscode.ViewColumn.One,
-                                preview: true,
-                            })
-                            .then(() => {
-                                return new Promise((f) => setTimeout(f, 700)).then(
-                                    () => {
-                                        return process
-                                            .then(() => {
-                                                resolve(undefined);
-                                            })
-                                            .catch(() => {
-                                                reject();
-                                            });
-                                    },
-                                    () => {
-                                        reject();
-                                    },
-                                );
-                            });
+                    await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(itemPath), 'default', {
+                        viewColumn: vscode.ViewColumn.One,
+                        preview: true,
                     });
                 }
 
-                return process;
+                await rendered;
             },
         );
     }

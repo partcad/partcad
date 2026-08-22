@@ -46,19 +46,37 @@ def socket_dir():
         shutil.rmtree(path, ignore_errors=True)
 
 
+def _wait_until_listening(path, timeout=5.0):
+    """Block until the server at ``path`` accepts connections.
+
+    ``serve_unix()`` creates the socket *file* at bind() and only accepts after
+    listen(), so waiting for the file to exist returns too early and the next
+    connect is refused - a race a loaded CI runner loses (ECONNREFUSED on both
+    Linux and macOS). Probing with a real connect is the only signal that means
+    "ready".
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            probe.connect(path)
+            return
+        except (ConnectionRefusedError, FileNotFoundError):
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
+        finally:
+            probe.close()
+
+
 def _serve(socket_dir, registry):
     path = str(socket_dir / "socket")
     server = SocketServer(Session(), registry)
     threading.Thread(target=server.serve_unix, args=(path,), daemon=True).start()
     # Wait until the server is *accepting*, not merely until the socket file
-    # exists. serve_unix() binds -- which creates the file -- and only then
-    # calls listen(); a client that connects in between gets ECONNREFUSED.
-    # `_server_sock` is assigned after listen() returns, so it is the first
-    # observable moment at which a connection can succeed.
-    for _ in range(500):
-        if server._server_sock is not None:
-            break
-        time.sleep(0.01)
+    # exists: serve_unix() binds -- which creates the file -- and only then
+    # calls listen(), so a client that connects in between gets ECONNREFUSED.
+    _wait_until_listening(path)
     return server, path
 
 

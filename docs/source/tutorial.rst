@@ -118,7 +118,7 @@ Example log output:
 Inspect the part
 ----------------
 
-Once a part is created, it can be inspected in ``OCP CAD Viewer``.
+Once a part is created, it can be inspected in ``PartCAD Viewer``.
 
   .. code-block:: shell
 
@@ -294,7 +294,7 @@ Browse
 ------
 
 Browse the imported packages in the Explorer view. Click on the parts and
-assemblies to see them in the ``OCP CAD Viewer`` view that will appear on the
+assemblies to see them in the ``PartCAD Viewer`` view that will appear on the
 right.
 
 For example, navigate to ``//pub/std/metric/cqwarehouse`` and click on some part
@@ -316,7 +316,7 @@ Inspect the part
 When you edit Python or OpenSCAD files that are used in the current
 PartCAD package, saving the file makes it displayed automatically.
 Press ``Save`` (Ctrl-S or Cmd-S) to save the script and trigger an automatic
-inspection of the part. The ``OCP CAD Viewer`` view will appear on the right.
+inspection of the part. The ``PartCAD Viewer`` view will appear on the right.
 
 Import parts
 ------------
@@ -462,5 +462,5 @@ Inspect the assembly
 When you edit ASSY files in the current PartCAD package,
 the assembly is displayed automatically on save.
 Press ``Save`` (Ctrl-S or Cmd-S) to save the assembly file and trigger an
-automatic inspection of the assembly. The ``OCP CAD Viewer`` view will appear on
+automatic inspection of the assembly. The ``PartCAD Viewer`` view will appear on
 the right if it's not open yet.

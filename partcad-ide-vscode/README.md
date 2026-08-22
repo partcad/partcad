@@ -16,6 +16,16 @@ Also, make sure to visit [our website](https://partcad.org/) and browse [the rep
 
 ![Screenshot 2](https://github.com/openvmp/partcad/blob/main/docs/source/images/vscode2.png?raw=true)
 
+## PartCAD Viewer
+
+Selecting a part, assembly, sketch or interface opens it in the **PartCAD Viewer** tab. PartCAD tessellates the
+shape in a sandboxed runtime and sends the result to this extension as compressed glTF over a socket on
+`127.0.0.1:9137`, so the viewer needs no CAD library of its own. The Python side of that connection is the
+`partcad-ide-client` package, which this extension installs alongside `partcad`.
+
+Anything that can reach that port displays into the same viewer, including a `pc inspect` run in a plain
+terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.
+
 ## Creating PartCAD packages
 
 After this extension is installed, the PartCAD workbench becomes available.
@@ -41,7 +51,7 @@ If you select a file that does not exist
 then you will be prompted for the template to use.
 
 When you edit scripts that are registered in the current PartCAD package,
-saving the file makes it displayed in the OCP CAD Viewer view.
+saving the file makes it displayed in the PartCAD Viewer view.
 
 ## Creating assemblies
 
@@ -58,7 +68,7 @@ and let VS Code use the first suggested code completion suggestion.
 This will add the selected part or assembly to the currently edited assembly.
 
 When you edit ASSY files that are registered in the current PartCAD package,
-saving the file makes it displayed in the OCP CAD Viewer view.
+saving the file makes it displayed in the PartCAD Viewer view.
 
 ### Checking assemblies while you edit
 

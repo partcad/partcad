@@ -110,8 +110,6 @@ TEXT_PART_TYPES = frozenset({"step", "iges", "brep", "obj", "threejs", "svg", "d
 
 SUPPORTED_PART_TYPES = frozenset(LIVE_OBJECT_PART_TYPES | SERIALIZED_PART_TYPES)
 
-previously_displayed_shape = None
-
 
 @telemetry.instrument(exclude=["locked"])
 class Shape(ShapeConfiguration):
@@ -658,44 +656,17 @@ class Shape(ShapeConfiguration):
                 pc_logging.exception(e)
 
             if len(components) != 0:
-                import importlib
+                # The components are BREP envelopes and stay that way here: the
+                # viewer is a browser, so tessellation into glTF happens in a
+                # sandbox and the core never decodes a live OCP object to show one.
+                from . import viewer
 
-                ocp_vscode = importlib.import_module("ocp_vscode")
-                if ocp_vscode is None:
-                    pc_logging.warning('Failed to load "ocp_vscode". Giving up on connection to VS Code.')
-                else:
-                    try:
-                        global previously_displayed_shape
+                # A port is a coordinate frame with no geometry, so it cannot be
+                # tessellated; it travels beside the geometry for the viewer to
+                # draw a triad at.
+                markers = self.with_ports.get_markers() if self.with_ports is not None else []
 
-                        show_kwargs = {}
-                        if previously_displayed_shape == self.name:
-                            show_kwargs["reset_camera"] = ocp_vscode.Camera.KEEP
-                        else:
-                            previously_displayed_shape = self.name
-
-                        # ocp_vscode.config.status()
-                        pc_logging.info('Visualizing in "OCP CAD Viewer"...')
-                        # pc_logging.debug(self.shape)
-                        # The viewer needs live OCP objects; get_components()
-                        # returns BREP envelopes, so decode them here (lazily -
-                        # ocp_vscode already brings OCP with it).
-                        import ocp_serialize
-
-                        def _to_live(component):
-                            if isinstance(component, list):
-                                return [_to_live(item) for item in component]
-                            if shape_envelope.is_shape_envelope(component):
-                                return ocp_serialize.decode_shape(component)
-                            return component
-
-                        ocp_vscode.show(
-                            *[_to_live(component) for component in components],
-                            progress=None,
-                            **show_kwargs,
-                        )
-                    except Exception as e:
-                        pc_logging.warning(e)
-                        pc_logging.warning('No VS Code or "OCP CAD Viewer" extension detected.')
+                await viewer.show(ctx, components, name=self.name, kind=self.kind, markers=markers)
 
     def show(self, ctx=None):
         asyncio.run(self.show_async(ctx))

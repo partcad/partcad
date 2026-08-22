@@ -15,8 +15,6 @@ import http.server
 import os
 import threading
 
-import pytest
-
 import partcad as pc
 
 
@@ -115,5 +113,12 @@ def test_file_url_without_url_1(tmp_path):
     pkg.mkdir()
     (pkg / "partcad.yaml").write_text("parts:\n  bolt:\n    type: step\n    fileFrom: url\n")
 
-    with pytest.raises(Exception, match="'bolt' declares 'fileFrom: url' but no 'fileUrl'"):
-        pc.Context(str(pkg))
+    # The package still loads: a declaration PartCAD cannot use costs the user
+    # that one object, not the package (see Project.record_broken_object). The
+    # diagnostic is kept verbatim against the object it came from, which is
+    # what the extension shows and what a bare 'get_part()' logs.
+    ctx = pc.Context(str(pkg))
+    reason = ctx.get_project("//").get_broken_object_reason("part", "bolt")
+    assert reason is not None
+    assert "'bolt' declares 'fileFrom: url' but no 'fileUrl'" in reason
+    assert ctx.get_part(":bolt") is None

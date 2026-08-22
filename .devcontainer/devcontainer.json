@@ -65,8 +65,6 @@
         "OpenVMP.partcad",
         // Git Tools
         "eamodio.gitlens",
-        // CAD Viewer
-        "bernhard-42.ocp-cad-viewer",
         // Python Environment
         "donjayamanne.python-environment-manager",
         "njpwerner.autodocstring", // Python docstring generator

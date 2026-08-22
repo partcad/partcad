@@ -35,6 +35,8 @@ import { PartcadExplorer } from './PartcadExplorer';
 import { PartcadInspector } from './PartcadInspector';
 import { PartcadContext } from './PartcadContext';
 import { PartcadLint } from './PartcadLint';
+import { PartcadViewer } from './viewer/PartcadViewer';
+import { PartcadViewerServer } from './viewer/PartcadViewerServer';
 import * as PartcadItem from './PartcadItem';
 import { examples } from './examples';
 import { terminalInit } from './terminal';
@@ -46,6 +48,8 @@ let partcadExplorerView: vscode.TreeView<PartcadItem.PartcadItem | void>;
 let partcadContext: PartcadContext | undefined;
 let partcadInspector: PartcadInspector | undefined;
 let partcadLint: PartcadLint | undefined;
+let partcadViewer: PartcadViewer | undefined;
+let partcadViewerServer: PartcadViewerServer | undefined;
 let partcadTerminal: vscode.Terminal | undefined;
 let terminalEmitter: vscode.EventEmitter<string> | undefined;
 
@@ -260,7 +264,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                         items.sketches.length === 0 &&
                         items.interfaces.length === 0 &&
                         items.parts.length === 0 &&
-                        items.assemblies.length === 0
+                        items.assemblies.length === 0 &&
+                        // Objects that failed to load count as items too: a
+                        // package of nothing but broken ones has something to
+                        // show, and hiding the tree behind the "no items"
+                        // placeholder is what leaves the user with no way to
+                        // find out what went wrong.
+                        (items.broken ?? []).length === 0
                     ) {
                         await vscode.commands.executeCommand('setContext', 'partcad.itemsReceived', false);
                     } else {
@@ -868,7 +878,49 @@ connect:
         registerCommand(`partcad.support`, async () => {
             vscode.env.openExternal(vscode.Uri.parse('https://calendly.com/partcad-support/30min'));
         }),
+        registerCommand(`partcad.viewer`, async () => {
+            partcadViewer?.reveal(false);
+        }),
+        registerCommand(`partcad.showBrokenItem`, async ({ name, pkg, reason }) => {
+            // Clicking a broken item explains it rather than doing nothing.
+            // There is deliberately no attempt to inspect it: PartCAD could not
+            // create the object, so there is nothing to render.
+            await vscode.window
+                .showWarningMessage(
+                    `'${pkg}:${name}' could not be loaded.`,
+                    { modal: false, detail: reason },
+                    'Copy details',
+                )
+                .then(async (choice) => {
+                    if (choice === 'Copy details') {
+                        await vscode.env.clipboard.writeText(`${pkg}:${name}\n${reason ?? ''}`);
+                    }
+                });
+        }),
     );
+
+    /* Instantiate the viewer and start listening for PartCAD processes.
+     *
+     * Started here, during activation, rather than lazily when something is
+     * first shown: a 'partcad' running outside the IDE - in a terminal, in a
+     * notebook - connects on its own schedule, and there would be nothing for it
+     * to connect to.
+     */
+    partcadViewer = new PartcadViewer(context.extensionUri);
+    partcadViewerServer = new PartcadViewerServer();
+    context.subscriptions.push(
+        partcadViewer,
+        partcadViewerServer,
+        partcadViewerServer.onMessage((message) => partcadViewer?.handle(message)),
+        vscode.window.registerWebviewPanelSerializer(PartcadViewer.viewType, {
+            async deserializeWebviewPanel(panel: vscode.WebviewPanel) {
+                // VS Code restores the tab after a window reload; adopt it so the
+                // next show lands in it instead of opening a second one.
+                partcadViewer?.restore(panel);
+            },
+        }),
+    );
+    await partcadViewerServer.start();
 
     /* Instantiate the context viewer */
     partcadContext = new PartcadContext(context.extensionUri);

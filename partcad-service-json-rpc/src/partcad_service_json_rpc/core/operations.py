@@ -59,6 +59,25 @@ def _qualified(package: str, name: str) -> str:
     return package + ":" + name
 
 
+def _root_config_path(ctx) -> str:
+    """The path of the ``partcad.yaml`` a context loaded as its root package.
+
+    A ``Context`` has neither ``config_path`` nor ``broken``: both belong to the
+    root ``Project`` it loaded, reachable as ``Context.root``. Reading them off
+    the context raises ``AttributeError`` -- which is what made the extension
+    report "No PartCAD package is detected" for a package that had in fact
+    loaded perfectly. Guarding the attribute with ``getattr(..., "broken",
+    False)`` does not help either: the guard then always says "not broken" and
+    the very next line still raises.
+
+    Raises if the root package did not load, so the caller reports why.
+    """
+    root = getattr(ctx, "root", None)
+    if root is None or root.broken:
+        raise Exception("Package configuration file is not found or is not valid")
+    return root.config_path
+
+
 # ---- inspection ------------------------------------------------------------
 
 
@@ -125,7 +144,7 @@ def inspect_file(session, params):
         return None
     path = params.get("path", "")
     if path == "":
-        path = ctx.config_path
+        path = _root_config_path(ctx)
     _inspect_by_path(session, ctx, path)
     return None
 
@@ -445,7 +464,7 @@ def info(session, params):
     if ctx is None:
         return None
     cwd = os.getcwd()
-    path = ctx.config_path
+    path = _root_config_path(ctx)
     if path.startswith(cwd):
         path = path.replace(cwd, ".")
     ctx.stats_recalc()
@@ -1104,14 +1123,11 @@ def init(session, params):
             # IDE shows it in "Run and Debug" as soon as the package exists.
             session.partcad.add_render_configuration(os.path.dirname(os.path.abspath(path)))
             session.partcad_ctx = session.partcad.init(path)
-            if session.partcad_ctx and not getattr(session.partcad_ctx, "broken", False):
-                session.emitter.emit(
-                    events.PACKAGE_LOADED,
-                    {"configPath": session.partcad_ctx.config_path, "root": session.partcad_ctx.name},
-                )
-                _load_package_contents(session, session.partcad_ctx.name)
-            else:
-                session.emitter.signal(events.PACKAGE_LOAD_FAILED)
+            session.emitter.emit(
+                events.PACKAGE_LOADED,
+                {"configPath": _root_config_path(session.partcad_ctx), "root": session.partcad_ctx.name},
+            )
+            _load_package_contents(session, session.partcad_ctx.name)
         else:
             session.emitter.signal(events.PACKAGE_LOAD_FAILED)
             session.emitter.error("Failed to create package")
@@ -1133,19 +1149,18 @@ def package_load(session, params):
         path = params.get("path") or os.getcwd()
         session.package_path = path
         session.partcad_ctx = session.partcad.init(path)
-        if getattr(session.partcad_ctx, "broken", False):
-            raise Exception("Package YAML file is not found")
         session.emitter.emit(
             events.PACKAGE_LOADED,
-            {"configPath": session.partcad_ctx.config_path, "root": session.partcad_ctx.name},
+            {"configPath": _root_config_path(session.partcad_ctx), "root": session.partcad_ctx.name},
         )
         _load_package_contents(session, session.partcad_ctx.name)
     except session.partcad.exception.NeedsUpdateException:
         session.emitter.signal(events.NEEDS_UPDATE)
     except Exception as e:  # pylint: disable=broad-except
+        # Reported unconditionally: the guard this replaces suppressed the
+        # message in exactly the cases that need it.
         session.emitter.signal(events.PACKAGE_LOAD_FAILED)
-        if session.partcad_ctx and not getattr(session.partcad_ctx, "broken", False):
-            session.emitter.error("Failed to load package: %s" % e)
+        session.emitter.error("Failed to load package: %s" % e)
     return None
 
 
@@ -1772,21 +1787,61 @@ def _load_package_contents(session, name="//"):
                 "item_dir": pkg.config_dir if hasattr(pkg, "config_dir") else pkg.path,
             }
 
-        packages = [pkg_obj(ctx.get_project(n)) for n in project.get_child_project_names()]
+        # Per child, so one unloadable sub-package does not cost the user the
+        # whole tree. ``get_project()`` returns None for a package that could
+        # not be loaded, which ``pkg_obj()`` would then fail on.
+        packages = []
+        for child_name in project.get_child_project_names():
+            try:
+                child = ctx.get_project(child_name)
+                if child is None:
+                    raise Exception("the package could not be loaded")
+                packages.append(pkg_obj(child))
+            except session.partcad.exception.NeedsUpdateException:
+                # Not per-package: this says PartCAD itself is too old, and the
+                # caller turns it into the "update PartCAD" prompt.
+                raise
+            except Exception as e:  # pylint: disable=broad-except
+                session.emitter.warning("Skipping the package '%s': %s" % (child_name, e))
 
-    sketches = [
-        {**s.config, "item_path": (os.path.join(project.config_dir, s.path) if s.path else None)}
-        for s in project.sketches.values()
+    def item_objs(objects, with_path=True):
+        """Describe each object for the client, skipping any that cannot be described.
+
+        Per object, so that one that misbehaves costs the user that row rather
+        than the whole listing.
+        """
+        described = []
+        for object_name, obj in list(objects.items()):
+            try:
+                path = getattr(obj, "path", None) if with_path else None
+                described.append(
+                    {**obj.config, "item_path": (os.path.join(project.config_dir, path) if path else None)}
+                )
+            except Exception as e:  # pylint: disable=broad-except
+                session.emitter.warning("Skipping '%s:%s': %s" % (name, object_name, e))
+        return described
+
+    sketches = item_objs(project.sketches)
+    interfaces = item_objs(project.interfaces, with_path=False)
+    parts = item_objs(project.parts)
+    assemblies = item_objs(project.assemblies)
+
+    # Objects the package declares but PartCAD could not create - most often one
+    # written against a PartCAD that still had a feature since retired (the
+    # 'ai-*' part types the public index still carries). They are reported
+    # alongside the working ones because a package that lists nothing is
+    # indistinguishable from an empty one and gives the user nothing to act on.
+    broken = [
+        {"kind": kind, "name": object_name, "reason": reason}
+        for kind, objects in getattr(project, "broken_objects", {}).items()
+        for object_name, reason in objects.items()
     ]
-    interfaces = [{**i.config, "item_path": None} for i in project.interfaces.values()]
-    parts = [
-        {**p.config, "item_path": (os.path.join(project.config_dir, p.path) if p.path else None)}
-        for p in project.parts.values()
-    ]
-    assemblies = [
-        {**a.config, "item_path": (os.path.join(project.config_dir, a.path) if a.path else None)}
-        for a in project.assemblies.values()
-    ]
+    if broken:
+        session.emitter.warning(
+            "%d object(s) in '%s' could not be loaded. See the PartCAD Explorer for which, and why."
+            % (len(broken), name)
+        )
+
     session.emitter.emit(
         events.ITEMS,
         {
@@ -1796,6 +1851,7 @@ def _load_package_contents(session, name="//"):
             "interfaces": interfaces,
             "parts": parts,
             "assemblies": assemblies,
+            "broken": broken,
         },
     )
     info(session, {})

@@ -192,8 +192,8 @@ for _dist in ("opentelemetry-api", "opentelemetry-sdk", "opentelemetry-semantic-
 hiddenimports += collect_submodules("opentelemetry")
 
 # Imported lazily, by name, so that a bundle stays useful without them.
-# `pc inspect` hands the shape to the OCP CAD Viewer.
-add_package("ocp_vscode")
+# `pc inspect` sends the tessellated shape to the PartCAD IDE through this.
+add_package("partcad_ide_client")
 
 # `pc lint` runs the linter as a subprocess. `ruff.__main__.find_ruff_bin()`
 # looks in `sysconfig.get_path("scripts")` first, which inside a frozen bundle

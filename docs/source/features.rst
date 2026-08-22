@@ -28,7 +28,7 @@ Objects
 
 - **Add** a part, assembly, sketch, or interface.
 - **Import** a part, assembly, or sketch from an existing file.
-- **Display** (inspect) a part, assembly, sketch, or interface in the ``OCP CAD Viewer``; parts can also be
+- **Display** (inspect) a part, assembly, sketch, or interface in the ``PartCAD Viewer``; parts can also be
   opened for display and editing together, or their source edited directly.
 - **Test** a part, assembly, or scene.
 

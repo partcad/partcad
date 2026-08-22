@@ -146,16 +146,19 @@ class Session:
                 except Exception as e:  # pylint: disable=broad-except
                     self.emitter.error("Failed to de-initialize PartCAD: %s." % e)
                 for module_name in sorted(sys.modules.keys()):
-                    # Reset PartCAD (and ocp_vscode) module state between loads,
-                    # but never this shared service package: the session and the
-                    # operations calling load_partcad live in it.
+                    # Reset PartCAD module state between loads, but never this
+                    # shared service package: the session and the operations
+                    # calling load_partcad live in it.
                     if module_name.startswith("partcad_service_json_rpc"):
                         continue
                     if (
                         module_name == "partcad"
                         or module_name.startswith("partcad.")
                         or module_name.startswith("partcad_cli")
-                        or module_name.startswith("ocp_vscode")
+                        # Dropped with the rest: it holds the open socket to the
+                        # PartCAD Viewer, and a restart has to hand back a
+                        # connection made by the reloaded modules.
+                        or module_name.startswith("partcad_ide_client")
                     ):
                         del sys.modules[module_name]
                 self.partcad = importlib.reload(importlib.import_module("partcad"))

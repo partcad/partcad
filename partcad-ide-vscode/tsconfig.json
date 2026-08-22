@@ -12,4 +12,7 @@
         "noUnusedParameters": true,
         "skipLibCheck": true,
     },
+    // The webview's renderer is compiled by tsconfig.webview.json instead: it
+    // needs an ES module target, which this CommonJS configuration cannot give it.
+    "exclude": ["src/webview"],
 }

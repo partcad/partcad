@@ -28,6 +28,30 @@ The backend abstraction (`src/common/backend.ts`) keeps the extension's command/
 across both; the JSON-RPC backend translates the extension's `partcad.*` commands to the CLI-shaped JSON-RPC
 methods and routes the service's notifications back under the legacy `?/partcad/*` names.
 
+## The PartCAD Viewer
+
+End-to-end walkthrough, with the data flow diagram: [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+
+`src/viewer/` is the extension-host half of the viewer: a TCP server on a constant loopback port
+(`PartcadViewerServer`) that `partcad` processes connect to, and the webview panel that displays what they
+send (`PartcadViewer`). `src/webview/viewer.ts` is the renderer that runs *inside* that webview.
+
+Three things about it are load-bearing:
+
+- **Two webpack bundles, two tsconfigs.** The extension host is CommonJS; the webview is a browser context and
+  three.js ships its addons as ES modules only, so `src/webview` compiles under `tsconfig.webview.json` (and is
+  excluded from `tsconfig.json`). `npm run compile` builds both.
+- **The panel's CSP forbids network access.** Geometry arrives over `postMessage` and is parsed from memory;
+  three.js is bundled rather than loaded from a CDN. Do not add an asset that is fetched at runtime — that is
+  what rules out drei's `environment` presets, and why the renderer uses `RoomEnvironment`.
+- **The wire format is shared with Python.** `src/viewer/protocol.ts` mirrors
+  `partcad-ide-client/src/partcad_ide_client/protocol.py`, which is the normative description. Changing one
+  means changing both. `src/test/suite/viewerProtocol.test.ts` covers this side.
+
+Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
+compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
+`OCP CAD Viewer` extension, which is why that dependency is gone.
+
 ## Installing a package's dependencies
 
 `partcad.installPackage` runs the daemon's `install` operation - the PartCAD counterpart of `npm install`: it

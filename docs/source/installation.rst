@@ -424,8 +424,8 @@ What is inside
 
 * The editor: `VSCodium <https://vscodium.com/>`_, the freely licensed build of the same source Visual
   Studio Code is built from, with its extensions coming from `Open VSX <https://open-vsx.org/>`_.
-* The PartCAD extension, and the extensions PartCAD works with -- Python, the OCP CAD viewer, YAML and
-  the rest of the list in ``.vscode/extensions.json``.
+* The PartCAD extension -- which carries the PartCAD Viewer itself -- and the extensions PartCAD works
+  with: Python, YAML and the rest of the list in ``.vscode/extensions.json``.
 * The PartCAD command line tools, the same ones the standalone bundle installs, including OpenSCAD on
   Linux and Windows.
 

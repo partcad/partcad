@@ -1,0 +1,52 @@
+/*
+ * PartCAD, 2026
+ *
+ * Licensed under Apache License, Version 2.0.
+ */
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.viewer {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+}
+
+.viewer canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* The loading readout, centered over the canvas the way drei's <Html center> is. */
+.overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    /* The canvas is transparent so the editor background shows through; the
+       readout follows the theme rather than assuming a light or dark one. */
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    text-align: center;
+    white-space: pre-line;
+    pointer-events: none;
+}
+
+/* The name of what is being shown, out of the way in a corner. */
+.label {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.75rem;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    pointer-events: none;
+}

@@ -53,7 +53,11 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
 * [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
 
-  Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality.
+  Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality. Hosts the `PartCAD Viewer`.
+
+* [partcad-ide-client](./partcad-ide-client/AGENTS.md):
+
+  The Python side of the socket protocol `partcad` uses to display shapes in the IDE's `PartCAD Viewer`. Lazily imported by `partcad`, installed by `partcad-ide-vscode`.
 
 * [partcad-ide-standalone](./partcad-ide-standalone/AGENTS.md):
 
@@ -77,7 +81,7 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
 Full narrative guide (Docker/dev-container setup, PR merge criteria): `docs/source/contributing.rst`.
 Component-specific commands: `partcad/AGENTS.md`, `partcad-cli/AGENTS.md`, `partcad-ide-vscode/AGENTS.md`,
-`partcad-cad-freecad/AGENTS.md`.
+`partcad-ide-client/AGENTS.md`, `partcad-cad-freecad/AGENTS.md`.
 
 ### Where commands run
 
@@ -134,6 +138,7 @@ From the repo root, inside the environment:
 
 ```bash
 poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc partcad-cad-freecad \
+  partcad-ide-client \
   -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```

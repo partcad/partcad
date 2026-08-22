@@ -485,29 +485,52 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
             partcad_log_w_stream.write("Installing the latest PartCAD...\r\n")
             partcad_log_w_stream.flush()
 
-        result = utils.run_module(
-            module="pip",
-            argv=[
-                "pip",
-                "install",
-            ]
-            + override_externally_managed
-            + [
-                "--user",
-                "--no-input",
-                "--upgrade",
-                "partcad-service-json-rpc",
-                # The client half: `partcad.lintFile` checks the edited file
-                # through it, and `_do_self_update` upgrades through it. Neither
-                # is a dependency of the service, which is the daemon side.
-                "partcad-client",
-            ],
-            use_stdin=False,
-            add_stdout=partcad_log_w_stream,
-            add_stderr=partcad_log_w_stream,
-            cwd=os.getcwd(),
-            source=None,
+        def pip_install(*packages):
+            return utils.run_module(
+                module="pip",
+                argv=["pip", "install"]
+                + override_externally_managed
+                + ["--user", "--no-input", "--upgrade"]
+                + list(packages),
+                use_stdin=False,
+                add_stdout=partcad_log_w_stream,
+                add_stderr=partcad_log_w_stream,
+                cwd=os.getcwd(),
+                source=None,
+            )
+
+        result = pip_install(
+            "partcad-service-json-rpc",
+            # The client half: `partcad.lintFile` checks the edited file
+            # through it, and `_do_self_update` upgrades through it. Neither
+            # is a dependency of the service, which is the daemon side.
+            "partcad-client",
         )
+
+        # A separate invocation, and a non-fatal one. 'partcad-ide-client' is
+        # installed alongside PartCAD rather than depended on by it: it is only
+        # useful when an IDE is there to talk to, 'partcad' imports it lazily,
+        # and 'show()' degrades to a warning without it. Putting it in the
+        # command above would mean that one unavailable optional package took
+        # PartCAD itself down with it, since pip installs nothing when any
+        # requirement in a single invocation cannot be resolved.
+        try:
+            pip_install("partcad-ide-client")
+            # Whether the install worked is decided by importing what it was
+            # supposed to install, not by looking at 'stderr': 'run_module'
+            # swallows pip's SystemExit, so no exit status survives, and pip
+            # writes notices to 'stderr' on a perfectly successful run.
+            # 'invalidate_caches' is needed because the package has just
+            # appeared in a directory the import system has already scanned.
+            importlib.invalidate_caches()
+            importlib.import_module("partcad_ide_client")
+        except Exception as e:  # pylint: disable=broad-except
+            LSP_SERVER.send_notification(
+                "?/partcad/warn",
+                "PartCAD is installed, but 'partcad-ide-client' is not, so the PartCAD Viewer "
+                "will not receive anything: %s" % e,
+            )
+
         if partcad_log_w_stream is not None:
             partcad_log_w_stream.write("Done attempting to install the latest PartCAD!\r\n")
             partcad_log_w_stream.flush()

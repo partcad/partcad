@@ -17,7 +17,11 @@ import {
     ITEM_TYPE_SKETCH,
     ITEM_TYPE_INTERFACE,
     ITEM_TYPE_PART,
+    ITEM_TYPE_BROKEN,
 } from './PartcadItem';
+
+/** An object the package declares that PartCAD could not create, and why. */
+type BrokenItem = { kind: string; name: string; reason: string };
 
 type ItemMetadata = {
     name: string;
@@ -27,6 +31,8 @@ type ItemMetadata = {
     interfaces: PartConfig[];
     parts: PartConfig[];
     assemblies: PartConfig[];
+    // Optional: an older PartCAD LSP server does not report these.
+    broken?: BrokenItem[];
 };
 
 export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
@@ -225,6 +231,22 @@ export class PartcadExplorer implements vscode.TreeDataProvider<PartcadItem> {
                 filepath = sketch.item_path;
             }
             elements.push(new PartcadItem(dir, sketch.name, items.name, sketch, filepath, ITEM_TYPE_SKETCH));
+        }
+
+        // Last, so they never push the working objects out of view, and sorted
+        // so the listing is stable between refreshes.
+        const broken = (items.broken ?? []).slice().sort((i1, i2) => i1.name.localeCompare(i2.name));
+        for (const item of broken) {
+            elements.push(
+                new PartcadItem(
+                    dir,
+                    item.name,
+                    items.name,
+                    { name: item.name, type: item.kind, desc: item.reason },
+                    undefined,
+                    ITEM_TYPE_BROKEN,
+                ),
+            );
         }
 
         return elements;

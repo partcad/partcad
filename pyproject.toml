@@ -6,6 +6,7 @@ pythonpath = [
     "partcad-utils/src",
     "partcad-client/src",
     "partcad/src",
+    "partcad-ide-client/src",
     "partcad/tests/unit",
     "partcad-service-json-rpc/src",
     # The FreeCAD addon is not a package that gets installed: FreeCAD loads it
@@ -89,6 +90,7 @@ packages = [
   { include = "partcad_client", from = "partcad-client/src" },
   { include = "partcad", from = "partcad/src" },
   { include = "partcad_cli", from = "partcad-cli/src" },
+  { include = "partcad_ide_client", from = "partcad-ide-client/src" },
   { include = "partcad_service_json_rpc", from = "partcad-service-json-rpc/src" }
 ]
 
@@ -212,7 +214,6 @@ requests = "^2.34.2"
 aiofiles = "^25.1.0"
 aiohttp = "^3.14.2"
 google-genai = "^2.13.0"
-# ocp-vscode 4.0 pulls threejs-materials, which caps pillow below 12.3.
 pillow = "^12.2.0"
 openai = "^2.46.0"
 ollama = "^0.6.2"
@@ -237,11 +238,9 @@ requests = "^2.34.2"
 aiofiles = "^25.1.0"
 aiohttp = "^3.14.2"
 google-genai = "^2.13.0"
-# ocp-vscode 4.0 pulls threejs-materials, which caps pillow below 12.3.
 pillow = "^12.2.0"
 openai = "^2.46.0"
 ollama = "^0.6.2"
-ocp-vscode = "^4.0.0"
 click = "^8.4.2"
 rich-click = "^1.9.8"
 
