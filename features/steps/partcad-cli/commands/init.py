@@ -1,5 +1,6 @@
 from behave import given, then
 from behave.runner import Context
+import json
 import yaml
 import logging
 import tempfile
@@ -83,6 +84,25 @@ def step_impl(context, filename):
 #             # assert yaml_content == expected_content, "YAML content does not match expected private package structure"
 #         except yaml.YAMLError as exc:
 #             assert False, f"Error parsing YAML content: {exc}"
+
+
+@then('the file "{filename}" should hold the "{name}" run command')
+def step_impl(context, filename, name):
+    """The command `pc init` adds to the editor's "Run and Debug" view.
+
+    Parsed rather than grepped for, because what matters is that an editor can
+    read the file: it is written into whatever was there before, which is the
+    part that can go wrong.
+    """
+    file_path = os.path.join(context.test_dir, filename)
+    assert os.path.isfile(file_path), f"File '{filename}' was not created"
+
+    with open(file_path, "r", encoding="utf-8") as file:
+        configuration = json.load(file)
+
+    commands = {entry.get("name"): entry for entry in configuration.get("configurations", [])}
+    assert name in commands, f"'{name}' is not among {sorted(commands)}"
+    assert commands[name]["command"] == "pc render", f"'{name}' runs {commands[name].get('command')!r}"
 
 
 @then("the package should be marked as private")

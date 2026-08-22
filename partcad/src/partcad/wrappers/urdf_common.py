@@ -5,7 +5,8 @@
 #
 """Conversions between URDF's pose convention and PartCAD's.
 
-Shared by the two URDF wrappers (wrapper_import_urdf, wrapper_render_urdf) and
+Shared by the URDF reader (wrapper_import_urdf) and the URDF exporter
+(builtin/export/export_urdf.py), and
 deliberately free of every dependency - no OCP, no urdf_parser_py - so it can be
 imported and unit-tested on its own.
 

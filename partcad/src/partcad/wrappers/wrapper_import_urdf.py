@@ -241,7 +241,8 @@ def primitive_file(geometry, kind, name, context):
 #     the table* - do not widen the error and do not add a passthrough.
 #   * The export does the reverse: a PartCAD property URDF has no spelling for
 #     is reported through the log rather than silently dropped. The list lives
-#     in wrapper_render_urdf.URDF_STATED, and is to be extended the same way.
+#     in builtin/export/export_urdf.py's URDF_STATED, and is to be extended
+#     the same way.
 #
 # The units are one rule: lengths are millimetres and angles are degrees, which
 # is what PartCAD uses everywhere; everything else is SI, which is what URDF

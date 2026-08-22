@@ -18,6 +18,12 @@ First, the current directory needs to be initialized as a PartCAD package.
 If there is no ``-p`` flag passed to ``pc init``
 then the dependency on the public PartCAD repository is added automatically.
 
+``pc init`` also adds a **Render** command to ``.vscode/launch.json``, at the root of the git
+repository it is run in (next to the package, when there is no repository). It shows up in the
+"Run and Debug" view of the :ref:`PartCAD IDE <partcad-ide>` and of Visual Studio Code, and running
+it renders the package the same way ``pc render`` does from a terminal. An existing
+``launch.json``, with commands and comments of your own in it, is added to rather than replaced.
+
 Alternatively, manually create ``partcad.yaml`` with the following content:
 
   .. code-block:: yaml

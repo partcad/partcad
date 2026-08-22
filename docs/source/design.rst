@@ -91,6 +91,11 @@ using existing parts.
   The native format. The idea behind ASSY is to create a simplistic way to
   enumerate parts, define their parameters and define how parts connect.
 
+- STEP
+
+  A STEP file that carries an assembly structure, used as an assembly directly,
+  with its components becoming parts of the package.
+
 - URDF
 
   A `URDF <https://wiki.ros.org/urdf>`_ robot description used as an assembly
@@ -104,6 +109,10 @@ using existing parts.
   on export. What an assembly built out of rigid placements has nowhere to put -
   joint kinematics, collision geometry, sensors, transmissions - is dropped, and
   reported. :doc:`simulation` describes that gap and what closing it would take.
+
+For an assembly defined by a file another tool produced - the STEP and the URDF
+above - nothing is copied into the package, so the file stays the source of
+truth.
 
 Scenes
 ======

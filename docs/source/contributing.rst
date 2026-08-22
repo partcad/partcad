@@ -419,7 +419,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad-dev (0.7.158)
+  Installing the current project: partcad-dev (0.7.174)
 
 Activate Environment
 --------------------
@@ -601,6 +601,25 @@ maintainers, following are related GH docs:
 
 - `About Status Checks`_
 - `Required reviews`_
+
+.. _deep-test:
+
+Running the full test matrix
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+CI fans out over operating systems, and a pull request does not pay for all of them. By default it drops both
+Ubuntu 22.04 images and the second macOS, which is most of the cost -- macOS minutes bill at ten times the
+Linux rate. What stays is Ubuntu 24.04 on x86_64 and arm64, both Windows images, and one macOS.
+
+The full matrix runs on the nightly schedule, on a manual workflow run, and on a push, which includes the
+release. A push to ``devel`` is the exception: it runs no matrix at all unless its head commit message starts
+with ``Version updated``, which is the release commit.
+To run it on a pull request before it merges, put ``#deepTest`` anywhere in the pull request title or
+description and re-run the checks. Worth doing when the change touches packaging, dependencies, the standalone
+bundle or the snap, or anything else where an older OS version could behave differently.
+
+The ``Standalone`` workflow reads the same marker: without it, a pull request builds five of the eight
+standalone bundles. A release always builds all eight and refuses to publish if any is missing.
 
 Implementation Details
 ----------------------

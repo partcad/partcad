@@ -92,8 +92,7 @@ def init_sentry(version: str) -> None:
     )
 
     # Generate a random ID for the user
-    cfg_dir = user_config.get_config_dir()
-    guid_file = os.path.join(cfg_dir, ".generated_id")
+    guid_file = user_config.get_generated_id_path()
     # Check if the ID is already cached
     if os.path.exists(guid_file):
         with open(guid_file, "r") as f:

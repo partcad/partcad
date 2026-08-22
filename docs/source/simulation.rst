@@ -83,8 +83,9 @@ second copy in a properties section would only be a second thing to keep right.
 Writing a URDF
 ==============
 
-``wrapper_render_urdf`` is handed the assembly *tree* rather than the compound it
-decodes to. Each node becomes a link, each parent/child relation a fixed joint
+The URDF exporter (``//builtin/export``'s ``export_urdf.py``) is handed the
+assembly *tree* rather than the compound it decodes to - which is what
+``decode: false`` on its declaration asks for. Each node becomes a link, each parent/child relation a fixed joint
 carrying that child's placement, and each node with geometry gets an STL written
 next to the URDF. A shape that appears more than once is written once and
 referenced by every link that uses it.
@@ -422,7 +423,7 @@ interfaces. Simulators additionally want actuator limits and often a motor
 model.
 
 Sensors
-=======
+=========
 
 Cameras (with intrinsics, resolution, clipping, distortion), depth cameras,
 lidars (with ray patterns and ranges), IMUs, contact sensors, force-torque
@@ -527,8 +528,8 @@ Three additions, in increasing order of how much they are worth:
   ``mass`` has one: the solid's volume times the material's density, cached like
   any other derived value and invalidated when the CAD changes. The same for
   ``centerOfMass``, ``inertia`` and the surface properties. Today the URDF
-  exporter computes exactly this, from a density passed on the command line,
-  and throws it away afterwards - it should be a property of the part that every
+  exporter computes exactly this, from the ``density`` parameter of its
+  ``export:`` configuration, and throws it away afterwards - it should be a property of the part that every
   consumer sees.
 - **Provenance.** A declared value should say why it exists, since "measured on
   the bench" and "copied from a vendor datasheet" and "invented so the

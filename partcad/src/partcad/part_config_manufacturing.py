@@ -15,6 +15,8 @@ METHOD_ADDITIVE: int = 100
 METHOD_SUBTRACTIVE: int = 200
 METHOD_FORMING: int = 300
 
+# These are ways of making a part, and a part only: an assembly is put together
+# rather than made, and has its own single method (see AssemblyConfigManufacturing).
 _METHOD_MAP: dict[str, int] = {
     "additive": METHOD_ADDITIVE,
     "subtractive": METHOD_SUBTRACTIVE,

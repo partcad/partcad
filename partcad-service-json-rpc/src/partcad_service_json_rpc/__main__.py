@@ -51,8 +51,14 @@ def build_parser() -> argparse.ArgumentParser:
     # Dependency management options.
     parser.add_argument("--offline", action="store_true", help="Do not fetch anything from the network.")
     parser.add_argument("--force-update", action="store_true", help="Force refresh of cached dependencies.")
+    parser.add_argument(
+        "--devel-index",
+        action="store_true",
+        help="Use the 'devel' branch of the public index instead of the released one.",
+    )
     # Sandbox options.
     parser.add_argument("--python-sandbox", default=None, help="Python sandbox runtime for CAD scripts.")
+    parser.add_argument("--javascript-sandbox", default=None, help="JavaScript sandbox runtime for CAD scripts.")
     return parser
 
 
@@ -65,8 +71,12 @@ def build_settings(args: argparse.Namespace) -> dict:
     settings = {}
     if args.python_sandbox:
         settings["pythonSandbox"] = args.python_sandbox
+    if args.javascript_sandbox:
+        settings["javascriptSandbox"] = args.javascript_sandbox
     if args.force_update:
         settings["forceUpdate"] = "true"
+    if args.devel_index:
+        settings["develIndex"] = "true"
     if args.offline:
         settings["offline"] = "true"
     if args.verbose:

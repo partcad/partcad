@@ -15,6 +15,8 @@ on:
     branches: ["devel"]
     paths:
       - "dev-tools/pyinstaller/**"
+      - "dev-tools/snap/**"
+      - "snap/**"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "partcad/src/**"
@@ -25,6 +27,8 @@ on:
     branches: ["main", "devel"]
     paths:
       - "dev-tools/pyinstaller/**"
+      - "dev-tools/snap/**"
+      - "snap/**"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "partcad/src/**"
@@ -39,27 +43,83 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
+# One bundle per supported OS version, not one per operating system. A frozen
+# bundle links against the C library and system frameworks of the machine that
+# froze it, so it runs there and on anything newer, and on nothing older -- a
+# single "linux" build would silently mean "the newest Linux we happened to
+# build on". Every image is pinned for the same reason: "*-latest" moves, and an
+# artifact name that moves with it is a contract nobody can rely on.
+#
+# Keep these lists in sync with the platform ids in
+# "dev-tools/pyinstaller/build.sh", with LINUX_BUILDS/MACOS_BUILDS in
+# "install.sh" (which resolves a machine to one of these names), and with the
+# platform loop in the release check in "deploy.yml".
+#
+# ubuntu-26.04 (and -arm) are absent on purpose: still preview images, not
+# covered by the Actions SLA. See the note in test.yml. macOS is arm64 only: an
+# x86_64 bundle would need macos-13, and no macos-13 job has ever started on the
+# current runner plan (again, see test.yml).
+env:
+  # Built on every run.
+  PLATFORMS_CORE: >-
+    [{"os": "ubuntu-24.04", "platform": "ubuntu-24.04-x86_64"},
+    {"os": "ubuntu-24.04-arm", "platform": "ubuntu-24.04-arm64"},
+    {"os": "macos-15", "platform": "macos-15-arm64"},
+    {"os": "windows-2022", "platform": "windows-2022-x86_64"},
+    {"os": "windows-2025", "platform": "windows-2025-x86_64"}]
+  # Added only on a deep run: the nightly schedule, a manual dispatch, a push --
+  # which includes the release path -- or "#deepTest" in the pull request. See
+  # ".github/actions/test-depth", and OSES_DEEP_ONLY in "test.yml", which drops
+  # the same images for the same reasons.
+  #
+  # This workflow is the expensive one to halve: eight freezes of ~875MB, two of
+  # them on macOS runners that bill at 10x. The trade is that a pull request no
+  # longer proves the Ubuntu 22.04 and macOS 26 bundles still build. Nothing
+  # ships unproven, though -- "deploy.yml" runs on a push, which is always deep,
+  # and refuses a release that is missing any platform. Put "#deepTest" on a pull
+  # request that touches the freeze, and the whole set runs before it merges.
+  PLATFORMS_DEEP: >-
+    [{"os": "ubuntu-22.04", "platform": "ubuntu-22.04-x86_64"},
+    {"os": "ubuntu-22.04-arm", "platform": "ubuntu-22.04-arm64"},
+    {"os": "macos-26", "platform": "macos-26-arm64"}]
+
 jobs:
+  set-matrix:
+    name: "Set matrix"
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.set-matrix.outputs.build }}
+      install: ${{ steps.set-matrix.outputs.install }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide the depth
+        id: depth
+        uses: ./.github/actions/test-depth
+
+      - name: Set matrix
+        id: set-matrix
+        env:
+          DEEP: ${{ steps.depth.outputs.deep }}
+        run: |
+          if [ "${DEEP}" = "true" ]; then
+            platforms=$(jq -cn --argjson core '${{ env.PLATFORMS_CORE }}' --argjson deep '${{ env.PLATFORMS_DEEP }}' '$core + $deep')
+          else
+            platforms='${{ env.PLATFORMS_CORE }}'
+          fi
+          echo "Platforms: ${platforms}"
+          echo 'build={"include": '"${platforms}"'}' >> "${GITHUB_OUTPUT}"
+          # Everything the "Install" job can exercise, which is everything but
+          # Windows: "install.sh" is a shell installer and there is none there.
+          install=$(jq -c 'map(select(.platform | startswith("windows") | not))' <<<"${platforms}")
+          echo 'install={"include": '"${install}"'}' >> "${GITHUB_OUTPUT}"
+
   build:
     name: "Build (${{ matrix.platform }})"
+    needs: set-matrix
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-          # macos-latest is arm64. There is no macos x86_64 bundle: it would
-          # need macos-13, and no macos-13 job has ever started on the current
-          # runner plan (see the note in test.yml).
-          - os: macos-latest
-            platform: macos-arm64
-          - os: windows-latest
-            platform: windows-x86_64
-          # No linux arm64 bundle yet. This used to be impossible - cadquery-ocp
-          # 7.7.2 published no aarch64 Linux wheel - but 7.9.3.1.1 does, so the
-          # blocker is gone and adding an "ubuntu-24.04-arm" entry here is now
-          # only a question of runner budget.
-          # TODO(clairbee): add the linux-arm64 bundle.
+      matrix: ${{ fromJson(needs.set-matrix.outputs.build) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
 
@@ -82,9 +142,12 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install --yes libcairo2-dev
 
+      # The platform id is passed rather than detected: the runner image label is
+      # the authoritative answer to which OS version this is, and recovering it
+      # from the running system is guesswork on Windows in particular.
       - name: Build the standalone bundle
         shell: bash
-        run: dev-tools/pyinstaller/build.sh
+        run: dev-tools/pyinstaller/build.sh --platform=${{ matrix.platform }}
 
       - name: Upload the bundle
         uses: actions/upload-artifact@v7
@@ -97,17 +160,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Every platform this run built that "install.sh" can install, which is every
+  # one except Windows -- there is no shell installer there.
   install:
     name: "Install (${{ matrix.platform }})"
-    needs: build
+    needs: [set-matrix, build]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-          - os: macos-latest
-            platform: macos-arm64
+      matrix: ${{ fromJson(needs.set-matrix.outputs.install) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
@@ -122,6 +182,10 @@ jobs:
 
       # This exercises the script users pipe into `sh`, against the archive
       # this run produced, on a machine where PartCAD was never installed.
+      #
+      # Deliberately without `--platform`: the installer resolving this machine
+      # to one of the published builds is the part that can silently pick the
+      # wrong one, so it runs for real and the result is asserted afterwards.
       - name: Install with install.sh
         shell: bash
         run: |
@@ -130,7 +194,11 @@ jobs:
             --version "${version}" \
             --base-url "file://${PWD}/archives" \
             --install-dir "${HOME}/partcad-standalone" \
-            --bin-dir "${HOME}/partcad-bin"
+            --bin-dir "${HOME}/partcad-bin" 2>&1 | tee install.log
+          grep -q "(${{ matrix.platform }}) is installed" install.log || {
+            echo "::error::install.sh did not resolve this machine to ${{ matrix.platform }}"
+            exit 1
+          }
 
       - name: Run the installed commands
         shell: bash
@@ -148,7 +216,7 @@ jobs:
       # unpacked with its executable bit intact, which the build's own smoke
       # test cannot show: it runs against the bundle before it is archived.
       - name: Run the bundled OpenSCAD after installation
-        if: matrix.platform == 'linux-x86_64'
+        if: endsWith(matrix.platform, '-x86_64') && startsWith(matrix.platform, 'ubuntu-')
         shell: bash
         run: |
           export PATH="${HOME}/partcad-bin:${PATH}"
@@ -170,12 +238,156 @@ jobs:
           test ! -e "${HOME}/partcad-bin/pc"
           test ! -d "${HOME}/partcad-standalone"
 
+  # The snap package: the Linux bundle above, wrapped so that `snap install` is
+  # an option next to `install.sh` and `pip`. It packages the artifact rather
+  # than freezing a second time, so what the snap carries is exactly what the
+  # archive carries. See "dev-tools/snap/README.md".
+  #
+  # Not published anywhere: these are build artifacts, and uploading them to the
+  # Snap Store is deliberately left for later (it needs store credentials, and a
+  # manual review because the snap is classic). "deploy.yml" does not touch them.
+  #
+  # One base, two architectures. The base is what a snap runs on, and a core24
+  # snap carries its own Ubuntu 24.04 runtime onto whatever distribution the
+  # user has -- so unlike the standalone archives, there is nothing to gain from
+  # a build per host OS version here. The build *host* still has to be the
+  # base's release, which is why these are pinned to the ubuntu-24.04 images and
+  # take the ubuntu-24.04 bundles.
+  snap:
+    name: "Snap (${{ matrix.arch }})"
+    needs: build
+    # Skipped on the release path and in the merge queue, like the examples
+    # below. Nothing downstream consumes these: "deploy.yml" publishes the
+    # wheels and the standalone archives, and a job whose output no release
+    # carries has no business being able to block one.
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/devel')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+            bundle: ubuntu-24.04-x86_64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            bundle: ubuntu-24.04-arm64
+    runs-on: ${{ matrix.os }}
+    # Squashing ~875MB of frozen bundle is most of this.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download the Linux bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-standalone-${{ matrix.bundle }}
+          path: archives
+
+      # "snap/snapcraft.yaml" packages "dist/standalone/partcad", which is where
+      # a local "dev-tools/pyinstaller/build.sh" leaves the bundle. Unpacking the
+      # archive there puts the artifact in the same place -- and checks in
+      # passing that the archive the release ships is intact.
+      - name: Unpack the bundle
+        run: |
+          mkdir -p dist/standalone
+          tar -xzf archives/partcad-*-${{ matrix.bundle }}.tar.gz -C dist/standalone
+          test -x dist/standalone/partcad/pc
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
+
+      # Destructive mode, so there is no LXD to set up: it builds straight on the
+      # runner, which snapcraft only allows when the runner is the base's release.
+      - name: Build the snap
+        run: dev-tools/snap/build.sh --no-bundle --destructive-mode
+
+      # Installing and running it is the only check that the bundle survives
+      # being wrapped: that the apps resolve, that the classic confinement lets
+      # the frozen interpreter start, and that PartCAD writes its state where the
+      # snap directs it rather than into the home directory.
+      - name: Install the snap and run it
+        run: |
+          sudo snap install --dangerous --classic dist/snap/partcad_*_${{ matrix.arch }}.snap
+          # Only the app named after the snap gets the bare name; `pc` is
+          # `partcad.pc` until aliased. Users do this too (see the README).
+          sudo snap alias partcad.pc pc
+          # Where snapd puts the commands. On the hosted images it is already on
+          # PATH; say so anyway, so this does not depend on the image.
+          export PATH="/snap/bin:${PATH}"
+          # From a directory that is not the checkout, so nothing can resolve
+          # against the sources by accident.
+          cd "${HOME}"
+          pc version
+          partcad --help
+          partcad.json-rpc --version
+          pc init
+          pc list
+
+      # "snap/snapcraft.yaml" points PC_INTERNAL_STATE_DIR at the per-user
+      # directory snapd gives the snap, so that PartCAD's cache, sandboxes and
+      # git clones do not land in ~/.partcad. Nothing about the commands above
+      # succeeding would show that, so check it from both ends: that snapd
+      # exports the variable, and that PartCAD acted on it. Note that snapd
+      # creates ~/snap/partcad/common for every snap it runs, so its mere
+      # existence proves nothing and is not what is asserted.
+      - name: Check the snap keeps its state in the snap directory
+        run: |
+          export PATH="/snap/bin:${PATH}"
+          # `tail -n 1` so that anything snapd chooses to print first cannot be
+          # mistaken for the value.
+          # shellcheck disable=SC2016  # the expansion has to happen in the snap's shell, not here
+          state_dir="$(echo 'echo "$PC_INTERNAL_STATE_DIR"' | snap run --shell partcad.pc | tail -n 1 || true)"
+          echo "PC_INTERNAL_STATE_DIR as the snap sees it: '${state_dir}'"
+          test "${state_dir}" = "${HOME}/snap/partcad/common" || {
+            echo "::error::the snap does not export PC_INTERNAL_STATE_DIR=${HOME}/snap/partcad/common"
+            exit 1
+          }
+          # ~/.partcad is still created and still holds the user configuration
+          # and the telemetry id -- that is by design (see dev-tools/snap/README.md).
+          # What must not be there is the state PC_INTERNAL_STATE_DIR redirects.
+          for leftover in cache git tar external sandbox; do
+            if [ -e "${HOME}/.partcad/${leftover}" ]; then
+              echo "::error::PartCAD wrote '${leftover}' into ~/.partcad rather than the snap directory"
+              exit 1
+            fi
+          done
+          ls -la "${HOME}/.partcad" "${HOME}/snap/partcad/common" || true
+
+      # A snap does not carry the user's shell environment, so a conda under
+      # $HOME or a git outside the standard prefixes is not visible to it. That
+      # is accepted: PartCAD falls back to `pythonSandbox: none` and reports both
+      # as missing. The health check is run for the record, and deliberately not
+      # allowed to fail the job over them.
+      - name: Health check (informational)
+        run: |
+          export PATH="/snap/bin:${PATH}"
+          cd "${HOME}"
+          pc --no-ansi healthcheck 2>&1 | tee healthcheck.log || true
+          echo "conda and git are expected to be reported missing here."
+
+      - name: Remove the snap
+        run: sudo snap remove --purge partcad
+
+      - name: Upload the snap
+        uses: actions/upload-artifact@v7
+        with:
+          name: partcad-snap-${{ matrix.arch }}
+          path: |
+            dist/snap/*.snap
+            dist/snap/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
   # The wheel-based "Examples (PartCAD)" and "Examples (All)" jobs in test.yml,
   # cloned to run the same commands through the *bundled* `pc` rather than
   # `python -m partcad_cli ...`. This is the end-to-end check the build's own
   # smoke test cannot be: it fetches a git dependency (through the bundle's
   # libgit2, which nothing else here exercises), runs CAD scripts in the conda
-  # sandbox, and -- on Linux -- uses the OpenSCAD the bundle carries.
+  # sandbox, and -- on Linux x86_64 -- uses the OpenSCAD the bundle carries.
   #
   # Skipped on the release path (deploy.yml calls this workflow on a push to
   # main) and in the merge queue, to keep those fast and off heavy integration
@@ -187,27 +399,39 @@ jobs:
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'push' && github.ref == 'refs/heads/devel')
+    # A representative subset of the build matrix, not all of it: what these
+    # exercise is the bundle's behaviour, which does not differ between the
+    # 22.04 and the 24.04 build of the same architecture -- only the libraries
+    # it links against do, and the "Install" jobs above cover every platform
+    # this run built for that. So this runs one build per architecture and per
+    # OS, and only ones from PLATFORMS_CORE, so that the list stays literal and
+    # this job never asks for a bundle a reduced run did not produce.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
+          - os: ubuntu-24.04
+            platform: ubuntu-24.04-x86_64
             suite: PartCAD
             package: "//pub/examples/partcad"
             render: true
-          - os: ubuntu-latest
-            platform: linux-x86_64
+          - os: ubuntu-24.04
+            platform: ubuntu-24.04-x86_64
             suite: All
             package: "//pub/examples"
             render: false
-          - os: macos-latest
-            platform: macos-arm64
+          - os: ubuntu-24.04-arm
+            platform: ubuntu-24.04-arm64
             suite: PartCAD
             package: "//pub/examples/partcad"
             render: true
-          - os: macos-latest
-            platform: macos-arm64
+          - os: macos-15
+            platform: macos-15-arm64
+            suite: PartCAD
+            package: "//pub/examples/partcad"
+            render: true
+          - os: macos-15
+            platform: macos-15-arm64
             suite: All
             package: "//pub/examples"
             render: false
@@ -241,16 +465,21 @@ jobs:
       # not fully self-contained (see dev-tools/pyinstaller/build.sh). A desktop
       # has these; a CI runner may not, so install them and let the examples use
       # the bundled OpenSCAD.
-      - name: Install the bundled OpenSCAD's host libraries (Linux)
-        if: runner.os == 'Linux'
+      - name: Install the bundled OpenSCAD's host libraries (Linux x86_64)
+        if: matrix.platform == 'ubuntu-24.04-x86_64'
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             libgl1 libx11-6 libxcb1 libfontconfig1 libfreetype6 libglib2.0-0 libharfbuzz0b
 
-      # macOS bundles carry no OpenSCAD (see build.sh), so the examples fall back
-      # to a host OpenSCAD there, exactly as the wheels do. Same install as the
-      # wheel-based jobs' setup-test action.
+      # The macOS bundles carry no OpenSCAD, and neither does the Linux arm64 one
+      # -- upstream publishes the pinned release for x86_64 only (see build.sh).
+      # Both fall back to a host OpenSCAD, exactly as the wheels do.
+      - name: Install OpenSCAD (Linux arm64)
+        if: matrix.platform == 'ubuntu-24.04-arm64'
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends openscad
+
+      # Same install as the wheel-based jobs' setup-test action.
       - name: Install OpenSCAD (macOS)
         if: runner.os == 'macOS'
         shell: bash -el {0}

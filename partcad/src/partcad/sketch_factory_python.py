@@ -10,7 +10,8 @@
 import os
 
 from .sketch_factory_file import SketchFactoryFile
-from .runtime_python import PythonRuntime
+from .runtime_python import PythonRuntime, environment_requirements
+from . import sandbox_versions
 from . import telemetry
 
 
@@ -46,6 +47,16 @@ class SketchFactoryPython(SketchFactoryFile):
             python_version = self.project.python_version
         self.runtime = self.ctx.get_python_runtime(python_version)
         self.session = self.runtime.get_session(source_project.name)
+
+    def environment_cache_key(self) -> str | None:
+        """The interpreter and the dependency versions this sketch renders with.
+
+        The same resolution PartFactoryPython does, for the same reason: a
+        sketch built by a script belongs to the versions that built it.
+        """
+        return sandbox_versions.environment_cache_key(
+            "python", self.runtime.version, environment_requirements(self.project, self.config)
+        )
 
     def post_create(self) -> None:
         for dep in self.config.get("dependencies", []):

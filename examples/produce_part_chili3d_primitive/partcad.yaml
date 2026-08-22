@@ -1,0 +1,17 @@
+desc: PartCAD example project which demonstrates parts defined using Chili3D.
+
+docs:
+  usage: |
+    ```shell
+    pc inspect cube
+    ```
+
+parts:
+  cube:
+    type: chili3d
+    desc: Sample part defined using Chili3D
+
+render:
+  readme:
+  svg:
+    prefix: ./

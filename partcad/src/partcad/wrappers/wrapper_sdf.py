@@ -24,7 +24,7 @@ def sdf_triangles_to_topods(triangles: np.ndarray):
     'triangles' is a flat sequence of points, three consecutive points per
     triangle, so its length must be a positive multiple of three. The resulting
     face carries only a Poly_Triangulation; the 2D renderers normalize it (see
-    the 'normalize_mesh' path in wrapper_render_svg.py) before projecting it.
+    the 'normalize_mesh' path in builtin/render/render_svg.py) before projecting it.
     """
     arr = np.asarray(triangles)
     if arr.size == 0:

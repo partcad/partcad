@@ -12,7 +12,7 @@ from ...service import run
 
 # The assembly types that are a file in the package. 'alias' is deliberately
 # absent: it is a reference to another assembly, not a file to point at.
-ASSEMBLY_KINDS = ["assy", "urdf"]
+ASSEMBLY_KINDS = ["assy", "step", "urdf"]
 
 
 @click.command(help="Add an assembly")
@@ -22,8 +22,9 @@ ASSEMBLY_KINDS = ["assy", "urdf"]
 def cli(click_ctx: click.Context, kind: str, path: str):
     """Declare an existing file in the package as an assembly.
 
-    The file is used where it lies and is not converted: a URDF added this way
-    stays a URDF, and its links become parts of the package as it is read. Use
+    The file is used where it lies and is not converted: a STEP or a URDF added
+    this way stays what it is, and what it is made of - a STEP's components, a
+    URDF's links - becomes parts of the package as it is read. Use
     'pc import assembly' to turn one into PartCAD's own objects instead.
     """
     cli_ctx = click_ctx.obj

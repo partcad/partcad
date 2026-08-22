@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-__version__: str = "0.7.158"
+__version__: str = "0.7.174"
 
 # Must come before anything that can pull OCP in. VTK, which the OCP build we
 # use links against, bundles its own older copy of expat and exports it under
@@ -61,6 +61,7 @@ telemetry.init(__version__)
 
 from . import actions, exception, healthcheck, logging, utils
 from .assembly import Assembly
+from .assembly_connect import ConnectHold, ConnectHow
 from .consts import *
 from .context import Context
 from .geom import Location
@@ -81,6 +82,7 @@ from .globals import (
     init,
     render,
 )
+from .launch_config import add_render_configuration
 from .logging_ansi_terminal import fini as logging_ansi_terminal_fini
 from .logging_ansi_terminal import init as logging_ansi_terminal_init
 from .part import Part
@@ -105,6 +107,8 @@ plugins = PluginExportPngReportlab()
 
 __all__ = [
     "Assembly",
+    "ConnectHold",
+    "ConnectHow",
     "Context",
     "Location",
     "Part",
@@ -117,6 +121,7 @@ __all__ = [
     "ProviderRequestCaps",
     "Shape",
     "UserConfig",
+    "add_render_configuration",
     "config",
     "context",
     "convert_assembly",

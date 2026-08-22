@@ -30,8 +30,18 @@ class AssemblyFactoryFile(AssemblyFactory):
                 "ERROR: The project config directory must be a directory, found: '%s'" % source_project.config_dir
             )
         self.path = os.path.join(source_project.config_dir, self.path)
-        if not os.path.exists(self.path):
-            raise Exception("ERROR: The assembly path must exist")
+
+        if self.fileFactory is None:
+            # If the user did not supply a way to download the file,
+            # check if the file exists
+            if not os.path.exists(self.path):
+                raise Exception("ERROR: The assembly path (%s) must exist" % self.path)
+        # Checked whether or not a download is configured, and so outside the
+        # branch above: a path that exists but is a directory is a broken
+        # configuration either way. When there is no file factory the path is
+        # known to exist by now, so this still covers what devel checked there.
+        if os.path.exists(self.path) and not os.path.isfile(self.path):
+            raise Exception("ERROR: The assembly path (%s) must be a file" % self.path)
 
     def post_create(self) -> None:
         if self.path:
@@ -41,7 +51,20 @@ class AssemblyFactoryFile(AssemblyFactory):
             pc_logging.warning(f"Assembly path is not set: {self.assembly.name}")
         super().post_create()
 
-    async def instantiate(self, assembly):
-        if not self.fileFactory is None and not os.path.exists(assembly.path):
+    async def download_file_async(self, assembly) -> None:
+        """Fetch what 'fileFrom' points at, unless the file is already there."""
+        if self.fileFactory is not None and not os.path.exists(assembly.path):
             with pc_logging.Action("File", self.target_project.name, assembly.name):
                 await self.fileFactory.download(assembly.path)
+
+    async def prepare_async(self, assembly) -> None:
+        """Download the source file without building the assembly.
+
+        The cache key hashes the file's content, so it only means anything once
+        the file is on disk. 'pc install' calls this for every object, which is
+        why the first build after an install is a cache hit and not a miss.
+        """
+        await self.download_file_async(assembly)
+
+    async def instantiate(self, assembly):
+        await self.download_file_async(assembly)

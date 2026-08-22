@@ -1,0 +1,15 @@
+links:
+  - assembly: unit
+    package: sub
+    name: unit1
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - assembly: unit
+    package: sub
+    name: unit2
+    location: [[0, 0, 10], [0, 0, 1], 0]
+  - assembly: panel
+    package: sub
+    location: [[0, 0, 20], [0, 0, 1], 0]
+  - part: cube
+    package: sub
+    location: [[0, 0, 30], [0, 0, 1], 0]
