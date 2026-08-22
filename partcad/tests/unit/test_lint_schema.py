@@ -31,6 +31,26 @@ def failure(config):
     return err.value
 
 
+def failures(config):
+    """Every error raised for 'config', including those nested inside 'oneOf'.
+
+    'jsonschema.validate' surfaces a single best-match error. Where a branch of
+    a 'oneOf' is what failed -- 'parts' is the only kind wrapped in one -- the
+    best match is the 'oneOf' itself, and the error that names the offending
+    keyword sits underneath it in '.context'. Flatten the tree so a test can
+    assert on that error wherever it ended up.
+    """
+    schema = get_partcad_schema()
+    validator = jsonschema.validators.validator_for(schema)(schema)
+
+    def walk(errors):
+        for error in errors:
+            yield error
+            yield from walk(error.context or [])
+
+    return list(walk(validator.iter_errors(config)))
+
+
 # An object of each kind that carries a source file, in the shortest form that
 # declares where to pull that file from.
 FILE_BACKED = {
@@ -71,6 +91,9 @@ def test_schema_unsupported_file_from(kind):
     """'url' is the only source a file can be pulled from so far"""
     name, config = next(iter(FILE_BACKED[kind].items()))
     config = dict(config, fileFrom="ftp", fileUrl="https://example.com/vendor/%s" % name)
-    error = failure({kind: {name: config}})
-    assert error.json_path == "$.%s.%s.fileFrom" % (kind, name)
-    assert "'ftp' is not one of ['url']" in error.message
+    errors = failures({kind: {name: config}})
+    assert any(
+        error.json_path == "$.%s.%s.fileFrom" % (kind, name)
+        and "'ftp' is not one of ['url']" in error.message
+        for error in errors
+    ), [(error.json_path, error.message) for error in errors]
