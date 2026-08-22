@@ -104,6 +104,28 @@ filename = "partcad-cli/requirements.txt"
 search = "partcad-service-json-rpc=={current_version}"
 replace = "partcad-service-json-rpc=={new_version}"
 
+# The CLI's pass-through extras. Each one re-states the `partcad` pin that
+# `partcad-cli/requirements.txt` above already carries, so leaving them out of
+# this file does not merely make them stale -- it makes them contradict it.
+# `pip install partcad-cli[lint]` then resolves `partcad==<current>` and
+# `partcad[lint]==<whatever it froze at>` from the same install and fails. All
+# three had frozen this way (0.7.146, 0.7.158, 0.7.158) before they were added
+# here.
+[[tool.bumpversion.files]]
+filename = "partcad-cli/requirements-lint.txt"
+search = "partcad[lint]=={current_version}"
+replace = "partcad[lint]=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "partcad-cli/requirements-memcache.txt"
+search = "partcad[memcache]=={current_version}"
+replace = "partcad[memcache]=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "partcad-cli/requirements-aws.txt"
+search = "partcad[aws]=={current_version}"
+replace = "partcad[aws]=={new_version}"
+
 [[tool.bumpversion.files]]
 filename = "partcad/src/partcad/__init__.py"
 search = "__version__: str = \"{current_version}\""
