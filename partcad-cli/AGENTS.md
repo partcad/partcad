@@ -5,9 +5,15 @@ CLI interface (`pc` / `partcad` commands) to most `partcad` core functionality. 
 the `partcad` package in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
 
 `pc daemon start` / `pc daemon stop` manage the per-workspace background daemon from
-[`partcad-service-json-rpc`](../partcad-service-json-rpc): `start` goes through
-`partcad_service_json_rpc.client.start_daemon()`, while `stop` calls
-`partcad_service_json_rpc.daemon.stop_daemon()` directly.
+[`partcad-service-json-rpc`](../partcad-service-json-rpc), through
+[`partcad-client`](../partcad-client): `start` goes through
+`partcad_client.client.start_daemon()` (forwarding the daemon-affecting globals —
+`--offline`, `--force-update`, `--python-sandbox`, verbosity — which otherwise stop at the client's own
+`user_config`), while `stop` calls `partcad_client.daemon.stop_daemon()`.
+
+These two are also the VS Code extension's way in. It does not derive socket paths or probe liveness itself: it
+runs `pc daemon start`, reads the endpoint from stdout, and connects — so there is one implementation of "where
+is the daemon", not one per language.
 
 ## Command boundary
 
@@ -19,11 +25,29 @@ daemon rejects anything outside the package, and paths are printed relative to t
 the output never depends on a working directory. A package-mutating command *must* be a daemon client, or the
 daemon's warm context keeps serving the pre-mutation package.
 
+**`pc update` and `pc upgrade` sit on opposite sides of this line, which is why they are two commands and not
+one command with a flag.** `pc update` refetches the packages a package imports — the package graph, so a thin
+daemon client like any other. `pc upgrade` replaces this machine's copy of PartCAD
+(`partcad_client.selfupdate`), which only the process running from it can do: a daemon can be remote,
+where "upgrade PartCAD" would mean upgrading somebody else's installation. It stays within the boundary's
+letter as well as its spirit — `selfupdate` lives in the deliberately cheap `partcad-client`, so the
+command never imports the heavy `partcad`.
+
+`pc upgrade` owns the daemon handling the upgrade needs, because `selfupdate` deliberately has none. Every
+daemon on this machine is executing the files about to be replaced, so it stops **all** of them and waits
+(`daemon.stop_all_daemons()`) through the `before_install` hook — after a newer version is confirmed, before
+anything is written, so a no-op upgrade costs nobody their warm context. Doing that from a client is what keeps
+it simple: one process acting on its own machine, rather than daemons policing each other. A survivor is
+reported rather than fatal, because the new version is installed beside the old one and the old one is not
+removed until the command exits. The VS Code extension's "Update PartCAD" runs `pc upgrade`, so the two cannot
+drift apart.
+
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
 `init` (creates the workspace, before any package or context exists), `config` (prints the client's resolved
 `user_config` with its `--threads-max`/`PC_*` overrides), `healthcheck` (diagnoses this host), and **all of
 `pc system ...`** — `system status`, `system reset` and `system set telemetry ...` act on the machine the CLI
-runs on, by definition: its internal state directory, its user configuration. Still unmigrated: `supply/*`,
+runs on, by definition: its internal state directory, its user configuration — and `upgrade`, which replaces
+that machine's installation. Still unmigrated: `supply/*`,
 `add sketch`, `add dep`.
 
 `pc daemon ...` is the other side of that pair, command for command: `daemon start|stop` manage the process,

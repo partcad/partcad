@@ -1,0 +1,29 @@
+desc: The package the top level assembly is built out of, and the store that sells it
+
+providers:
+  myStore:
+    type: store
+    parameters:
+      file:
+        type: string
+        default: stock.csv
+
+suppliers:
+  myStore:
+
+parts:
+  cube:
+    type: cadquery
+    desc: A cube
+
+assemblies:
+  unit:
+    type: assy
+    desc: A pair of cubes, also sold assembled
+    vendor: partcad
+    sku: UNIT-1
+  panel:
+    type: assy
+    desc: A row of cubes, sold assembled but out of stock
+    vendor: partcad
+    sku: PANEL-1

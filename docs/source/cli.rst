@@ -27,6 +27,25 @@ Host commands
   - ``pc system set`` — Set system-wide settings, such as the telemetry type, environment, and Sentry DSN.
   - ``pc system telemetry`` — Inspect or clear locally stored telemetry data (``info``, ``clear``).
 
+``pc upgrade``
+  Upgrade PartCAD itself to the latest version. This upgrades the installation on this machine; the packages a
+  package imports are ``pc update``.
+
+  PartCAD upgrades itself whichever way it was installed: the Python wheels are upgraded with ``pip``, and a
+  standalone bundle downloads the matching release, verifies its checksum, and installs it beside the running
+  copy. Nothing is downloaded and no daemon is disturbed until a newer version has actually been found; once
+  one has, every PartCAD daemon running on the machine is asked to stop and waited for, because all of them are
+  executing files that are about to be replaced. The new version goes in beside the old one, and the old one is
+  then removed — including the copy the command is itself running from, which goes as soon as the command
+  exits. An installation that runs from a source checkout is reported and skipped — update that one with
+  ``git``.
+
+  Use ``--check`` to report whether a newer PartCAD is available without installing anything, and
+  ``--to-version`` to install a specific version instead of the latest one. Under the global ``--offline`` flag
+  the version check is skipped entirely.
+
+  The "Update PartCAD" command in the VS Code extension runs exactly this, so the two never drift apart.
+
 ****************
 Package commands
 ****************
@@ -39,7 +58,8 @@ Package commands
   Download and set up all packages imported by the current package.
 
 ``pc update``
-  Force update all imported packages to their latest versions.
+  Force update all imported packages to their latest versions. This updates the packages a package imports;
+  to upgrade the PartCAD installation itself, use ``pc upgrade``.
 
 ``pc lint``
   Run linting checks on the files within packages. Use ``-r`` to check imported packages recursively and
@@ -78,6 +98,18 @@ Object commands
 ``pc info``
   Show detailed information about a part, assembly, or scene, including its parameters.
 
+``pc bom``
+  Print the bill of materials of an assembly: every part it is made of, recursively, with how many of each
+  are needed and, where the object says so, the vendor and the SKU to order it by. Use ``-P`` to name the
+  package the assembly comes from, ``-p <name>=<value>`` to set parameters, and ``-j``/``--json`` to produce
+  JSON on standard output instead of a table.
+
+  ``-s``/``--stop-at-purchasable`` stops the recursion at a sub-assembly that can be bought ready-made — one
+  that declares both a ``vendor`` and an ``sku``, and that a supplier of its package reports as available.
+  Such a sub-assembly is listed as a single line item and its own contents are left out: it is one thing to
+  order, not a list of parts to source and assemble. A sub-assembly that names a vendor and an SKU nobody
+  supplies is still expanded.
+
 ``pc convert``
   Convert parts or sketches to another format and update their type in the package. Subcommands: ``part`` and
   ``sketch``.
@@ -89,7 +121,7 @@ Object commands
 
 ``pc render``
   Render a 2D projection of parts, assemblies, or scenes onto a plane. Choose the format with ``-t``:
-  ``svg``, ``png``, or ``readme``.
+  ``svg``, ``png``, ``readme``, ``pdf``, or ``html``.
 
   ``-t readme`` generates a markdown document instead of a projection: the package document (``README.md``,
   listing what the package declares) or, when ``-a`` names an assembly, that assembly's own document
@@ -100,6 +132,23 @@ Object commands
   Only assemblies that a package declares are listed as sub-assemblies. An assembly embedded in an Assembly
   YAML file's nested ``links:`` section belongs to no package, so it is not listed on its own: the parts it
   holds are counted towards the assembly that embeds it.
+
+  ``-t pdf`` and ``-t html`` generate the assembly instruction book of the assembly named by ``-a``: a title
+  page, the same bill of materials, then — sub-assemblies first, since they have to exist before the assembly
+  that uses them — a page showing each (sub-)assembly as it should look once it is together, followed by one
+  page per assembly step. A step page shows the two items being joined, and below them an exploded view of the
+  joint with a line drawn across the gap it opens. That gap is half of the largest dimension of the two items,
+  unless the step sets ``exploded:`` in its ``connect:`` or ``connectPorts:`` section (see :doc:`assy`). The
+  last page collects
+  links: to this assembly and its package, to every other package that supplies at least three of its parts,
+  and to PartCAD. The HTML is one self-contained file that shows a single page at a time, with arrows on
+  either side (and the arrow keys) to flip through it. As with ``readme``, an assembly can ask for either
+  document in the package configuration, by declaring ``pdf`` or ``html`` in its ``render`` section.
+
+  Both formats are only defined for an assembly declared as ``type: assy``: the steps come from the Assembly
+  YAML file, and an assembly that has none is refused rather than reduced to a title page and a parts list. An
+  assembly that is not meant to be built at all (``manufacturable: false``, on the assembly or inherited from
+  its package) is refused too; pass ``--ignore-manufacturability`` to generate the document anyway.
 
 *****************
 Workflow commands

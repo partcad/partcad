@@ -992,7 +992,7 @@ def activate(session, params):
     """Load PartCAD, verify version, run health checks, and signal readiness."""
     try:
         session.load_partcad()
-        if session.partcad.__version__ not in SpecifierSet(">=0.7.158"):
+        if session.partcad.__version__ not in SpecifierSet(">=0.7.161"):
             session.emitter.error("Failed to activate PartCAD: PartCAD Python module is not up-to-date.")
             session.emitter.signal(events.ACTIVATE_FAILED)
             return None
@@ -1317,6 +1317,100 @@ def list_mates(session, params):
     return None
 
 
+def bom(session, params):
+    """Print the bill of materials of an assembly.
+
+    Returns the line items so the CLI can render them as JSON; the human-readable
+    table is emitted here, through PartCAD logging, the way `pc list` renders its
+    own. ``stop_at_purchasable`` keeps sub-assemblies that can be bought whole
+    from being expanded into their contents.
+    """
+    import asyncio
+
+    ctx = _ctx(session, params)
+    if ctx is None:
+        return None
+    pc = session.partcad
+
+    object_name = params.get("object")
+    if not object_name:
+        raise JsonRpcError(USAGE_ERROR, "No assembly is given")
+
+    package = ctx.resolve_package_path(params.get("package") or ".")
+    package_obj = ctx.get_project(package)
+    if not package_obj:
+        pc.logging.error("Package %s is not found" % package)
+        return None
+
+    package, object_name = pc.utils.resolve_resource_path(package_obj.name, object_name)
+    path = "%s:%s" % (package, object_name)
+
+    param_dict = {}
+    for kv in params.get("params") or []:
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            param_dict[k] = v
+
+    with pc.logging.Process("BoM", package, object_name):
+        assembly = ctx.get_assembly(path, params=param_dict)
+        if assembly is None:
+            pc.logging.error("Assembly %s is not found" % path)
+            return None
+
+        bom_items = asyncio.run(
+            assembly.get_bom_detailed_async(ctx, stop_at_purchasable=bool(params.get("stop_at_purchasable")))
+        )
+
+        items = [{"name": name, **entry} for name, entry in sorted(bom_items.items())]
+        result = {
+            "assembly": path,
+            "items": items,
+            "total": sum(item["count"] for item in items),
+        }
+
+        if not params.get("json"):
+            pc.logging.info(_bom_output(result))
+    return result
+
+
+def _bom_output(result: dict) -> str:
+    """The human-readable rendering of a BoM: one line item per line.
+
+    The columns are sized from the content, not fixed the way `pc list` sizes
+    its own: every name here carries the package it comes from, so the names are
+    long and their length varies a lot from one BoM to the next.
+    """
+    items = result["items"]
+    output = "Bill of materials of %s:\n" % result["assembly"]
+    if not items:
+        return output + "\t<none>\n"
+
+    rows = []
+    for item in items:
+        # What to order, for the items that say so: buying one needs the vendor
+        # and the SKU, not the name PartCAD knows it by.
+        if item.get("vendor") and item.get("sku"):
+            source = "%s %s" % (item["vendor"], item["sku"])
+        else:
+            source = ""
+        rows.append((item["name"], str(item["count"]), source, item.get("desc") or ""))
+
+    name_width = max(len(row[0]) for row in rows)
+    count_width = max(len(row[1]) for row in rows)
+    source_width = max(len(row[2]) for row in rows)
+
+    # Where a folded description continues, counting the leading tab as one.
+    indent = 1 + name_width + 2 + count_width + 2 + (source_width + 2 if source_width else 0)
+    for name, count, source, desc in rows:
+        line = "\t%s  %s" % (name.ljust(name_width), count.rjust(count_width))
+        if source_width:
+            line += "  %s" % source.ljust(source_width)
+        line += "  " + desc.replace("\n", "\n" + " " * indent)
+        output += line.rstrip() + "\n"
+    output += "Total: %d\n" % result["total"]
+    return output
+
+
 def search_objects(session, params):
     """Search parts/sketches/assemblies/interfaces/packages by keyword."""
     ctx = _ctx(session, params)
@@ -1403,40 +1497,60 @@ def render_objects(session, params):
     fmt = params.get("format")
     output_dir = params.get("output_dir")
     object_name = params.get("object")
+    ignore_manufacturability = params.get("ignore_manufacturability", False)
+
+    from partcad.exception import AssemblyDocumentError
 
     with pc.logging.Process(params.get("label", "Render"), package):
         ctx.option_create_dirs = params.get("create_dirs", False)
-        if params.get("recursive"):
-            packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
-        else:
-            packages = [package]
-
-        for package in packages:
-            if object_name is not None:
-                package, object_name = pc.utils.resolve_resource_path(package, object_name)
-
-            if object_name is None:
-                ctx.render(project_path=package, format=fmt, output_dir=output_dir)
-            else:
-                sketches, interfaces, parts, assemblies = [], [], [], []
-                if params.get("sketch"):
-                    sketches.append(object_name)
-                elif params.get("interface"):
-                    interfaces.append(object_name)
-                elif params.get("assembly"):
-                    assemblies.append(object_name)
-                else:
-                    parts.append(object_name)
-                prj = ctx.get_project(package)
-                prj.render(
-                    sketches=sketches,
-                    interfaces=interfaces,
-                    parts=parts,
-                    assemblies=assemblies,
-                    format=fmt,
-                    output_dir=output_dir,
-                )
+        try:
+            _render_objects(pc, ctx, params, package, fmt, output_dir, object_name, ignore_manufacturability)
+        except AssemblyDocumentError as e:
+            # Asking for an assembly instruction book of something that has no
+            # assembly steps, or that is not meant to be built: what the user
+            # asked for, not a failure of the machinery.
+            raise JsonRpcError(USAGE_ERROR, str(e)) from e
     return None
+
+
+def _render_objects(pc, ctx, params, package, fmt, output_dir, object_name, ignore_manufacturability):
+    """The body of 'render_objects', once the request has been made sense of."""
+    if params.get("recursive"):
+        packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
+    else:
+        packages = [package]
+
+    for package in packages:
+        if object_name is not None:
+            package, object_name = pc.utils.resolve_resource_path(package, object_name)
+
+        if object_name is None:
+            ctx.render(
+                project_path=package,
+                format=fmt,
+                output_dir=output_dir,
+                ignore_manufacturability=ignore_manufacturability,
+            )
+        else:
+            sketches, interfaces, parts, assemblies = [], [], [], []
+            if params.get("sketch"):
+                sketches.append(object_name)
+            elif params.get("interface"):
+                interfaces.append(object_name)
+            elif params.get("assembly"):
+                assemblies.append(object_name)
+            else:
+                parts.append(object_name)
+            prj = ctx.get_project(package)
+            prj.render(
+                sketches=sketches,
+                interfaces=interfaces,
+                parts=parts,
+                assemblies=assemblies,
+                format=fmt,
+                output_dir=output_dir,
+                ignore_manufacturability=ignore_manufacturability,
+            )
 
 
 def convert_object(session, params):

@@ -82,6 +82,18 @@ class ProviderCartItem:
         self.sku = store_data.sku
         self.count_per_sku = store_data.count_per_sku
 
+    def set_shape(self, shape, count: int = 1):
+        """Populate the item from a shape object the caller already holds.
+
+        'set_spec()' resolves a part by name through the context; this is for the
+        callers that have the object at hand, including the assemblies that the
+        context's part lookup would never find. Only the store data is filled in:
+        an assembly has no material, color or finish of its own.
+        """
+        self.name = "%s:%s" % (shape.project_name, shape.name)
+        self.count = count
+        self._set_store_data(shape)
+
     async def set_spec(self, ctx, spec: str):
         self.name, self.count = resolve_cart_item(spec)
 

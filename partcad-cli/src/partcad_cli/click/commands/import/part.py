@@ -26,6 +26,7 @@ SUPPORTED_IMPORT_FORMATS_WITH_EXT = {
     "cadquery": ["py"],
     "build123d": ["py"],
     "sdf": ["py"],
+    "chili3d": ["chili"],
 }
 
 

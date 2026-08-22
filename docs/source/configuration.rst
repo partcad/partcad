@@ -51,6 +51,9 @@ Besides the package properties and, optionally, a list of imported dependencies,
   partcad: <(optional) required PartCAD version spec string>
   pythonVersion: <(optional) python version for sandboxing if applicable>
   pythonRequirements: <(python scripts only) the list of dependencies to install>
+  javascriptVersion: <(optional) Node.js major version for sandboxing if applicable>
+  javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
+  chili3dVersion: <(Chili3D parts only) the version of Chili3D to render with>
 
   dependencies:
       <dependency-name>:
@@ -62,6 +65,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
           revision: <(git only) the exact revision to import>
           plugin: <(external only) reference to the repository plugin that serves this package>
           subfolder: <(external only) location within the repository, for hierarchies>
+          cacheVersion: <(external only) non-negative integer; bump to invalidate the on-disk cache>
           includePaths: <(optional) Jinja2 include path>
 
   parts:
@@ -172,6 +176,18 @@ package backed by the same plugin, with a ``subfolder`` that scopes its
 requests within the repository. In this way one plugin can serve an entire tree
 of packages, each with its own sketches, parts, assemblies, providers and
 further children.
+
+Non-null responses from a plugin are cached on disk, keyed by the plugin
+reference and the request; a request the plugin has no answer for is remembered
+only for the run that made it, and is put to the plugin again after a restart.
+The cache does not know when the plugin's code changes, so a plugin that starts
+returning a new shape of data (for example, adding a field to every part it
+serves) would keep being served the stale, pre-change entries. Set
+``cacheVersion`` to a non-negative integer and bump it whenever the plugin's
+output format changes: it is folded into the cache location, so bumping it moves
+the whole repository (and every child in its hierarchy) to a fresh cache
+namespace at once, invalidating the old entries. It defaults to ``0``
+(unversioned).
 
 See ``examples/plugin_repository_basic`` (a package backed by a local file),
 ``examples/plugin_repository_full`` (backed by an HTTP endpoint) and
@@ -625,7 +641,7 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
+      type: <openscad|cadquery|build123d|chili3d|sdf|step|brep|stl|3mf|obj|extrude|sweep>
       desc: <(optional) textual description>
       path: <(optional) the source file path, "{part name}.{ext}" otherwise>
       # ... type-specific options ...
@@ -658,13 +674,16 @@ Define parts with CodeCAD scripts using the following syntax:
 
   parts:
     <part name>:
-      type: <openscad|cadquery|build123d|sdf>
+      type: <openscad|cadquery|build123d|chili3d|sdf>
       cwd: <alternative current working directory>
       showObject: <(optional) the name of the object to show using "show_object(...)">
       patch:
         # ...regexp substitutions to apply...
         "pattern": "repl"
       pythonRequirements: <(python scripts only) the list of dependencies to install>
+      javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
+      javascriptVersion: <(JavaScript scripts only) Node.js major version, overriding the package's>
+      chili3dVersion: <(Chili3D parts only) the version of Chili3D, overriding the package's>
       dependencies: # (optional) the list of filenames the caching logic checks for changes
         - <file1.py>
         - <file2.dat>
@@ -690,6 +709,106 @@ Define parts with CodeCAD scripts using the following syntax:
 |                                                                                      |     cube:                 |                                                                                                                         |
 |                                                                                      |       type: scad          |                                                                                                                         |
 +--------------------------------------------------------------------------------------+---------------------------+-------------------------------------------------------------------------------------------------------------------------+
+
+Chili3D scripts
+^^^^^^^^^^^^^^^
+
+`Chili3D <https://github.com/xiangechen/chili3d>`_ scripts are JavaScript, not
+Python, and live in ``.chili`` files:
+
+.. code-block:: yaml
+
+  parts:
+    cube:
+      type: chili3d
+
+A ``.chili`` file is an ES module. PartCAD runs it in a sandboxed Node.js with
+the Chili3D API already loaded, and takes whatever the script hands back as the
+part. These are available as globals:
+
+``chili3d``
+  the Chili3D module namespace (``Plane``, ``XYZ``, ...)
+
+``shapeFactory``
+  a ready-made ``new chili3d.ShapeFactory()``
+
+``wasm``
+  the OCCT WebAssembly kernel, for what the high-level API does not cover
+
+``show(...)``
+  declare a shape (or an array of them) to be the part's result
+
+``show_object(...)``
+  an alias of ``show``, so a script reads like its CadQuery counterpart
+
+``parameters``
+  the part's build parameters, also injected as globals by name
+
+.. code-block:: javascript
+
+  const { Plane, XYZ } = chili3d;
+
+  const box = shapeFactory.box(Plane.XY, 10, 10, 10).value;
+  const hole = shapeFactory.cylinder(XYZ.unitZ, new XYZ(5, 5, 0), 3, 10).value;
+
+  show(shapeFactory.booleanCut([box], [hole]).value);
+
+A script that does not call ``show()`` may instead export its result as
+``default``, ``shape``, ``result`` or ``part``. Either way the shape may be a
+raw ``TopoDS_Shape``, the ``Result`` the Chili3D API returns, or the ``IShape``
+inside it - PartCAD unwraps all of them, and reports the error a failed
+``Result`` carries rather than producing an empty part.
+
+The script is evaluated inside the PartCAD sandbox, so ``import`` works the way
+it does in any Node.js project: by name for anything the package declares under
+``javascriptRequirements``, and relative for a file next to the script.
+
+.. code-block:: yaml
+
+  javascriptRequirements:
+    - "seedrandom@3.0.5"
+
+Choosing versions
+~~~~~~~~~~~~~~~~~
+
+``javascriptVersion`` names the Node.js major version to render on, and
+``chili3dVersion`` the version of Chili3D to render with. Both may be set on the
+package and overridden on an individual part:
+
+.. code-block:: yaml
+
+  javascriptVersion: "22"
+  chili3dVersion: "1.1.2"
+
+  parts:
+    cube:
+      type: chili3d
+    older_cube:
+      type: chili3d
+      chili3dVersion: "1.0.20"
+
+``chili3dVersion`` takes an exact version, or any range or tag npm accepts
+(``"^1.1"``, ``"latest"``). Naming ``chili3d`` under ``javascriptRequirements``
+does the same thing; where both are given the dedicated option wins, and a
+part's choice wins over its package's. Note that not every Chili3D release
+publishes the WebAssembly kernel PartCAD needs - one that does not fails with a
+message naming the version.
+
+Unlike the Python script types, where PartCAD pins CadQuery and build123d and
+overrides a package that asks for a different version, this really is the
+package's choice. A Node.js sandbox is identified by the set of dependencies it
+holds, so a package on its own Chili3D gets an environment of its own and
+changes nothing for any other package - or for another part of the same one.
+
+Two notes on how this differs from the Python script types:
+
+* ``patch`` expressions are JavaScript regular expressions rather than Python
+  ones. The syntax is nearly identical, but the replacement follows JavaScript's
+  rules: a capture group is referenced as ``$1`` where Python would write
+  ``\1``, and a literal dollar sign is written ``$$``.
+* Chili3D is an input format only. A part can be *defined* by a ``.chili``
+  script and then exported to STEP, STL, 3MF and everything else PartCAD
+  writes, but no exporter produces a ``.chili`` file.
 
 CAD Files
 ---------

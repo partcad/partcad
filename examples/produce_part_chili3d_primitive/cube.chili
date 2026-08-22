@@ -1,0 +1,17 @@
+// A cube with a hole through it, defined using Chili3D.
+//
+// The wrapper hands a '.chili' script the Chili3D API as globals: 'chili3d' is
+// the module namespace, 'shapeFactory' is a ready-made ShapeFactory, and
+// 'show()' is how a script says which shape is the part. Importing by name
+// works too - the script is evaluated inside the PartCAD sandbox, where
+// 'chili3d' resolves like any other dependency.
+
+const { Plane, XYZ } = chili3d;
+
+const size = 10;
+const holeRadius = 3;
+
+const box = shapeFactory.box(Plane.XY, size, size, size).value;
+const hole = shapeFactory.cylinder(XYZ.unitZ, new XYZ(size / 2, size / 2, 0), holeRadius, size).value;
+
+show(shapeFactory.booleanCut([box], [hole]).value);

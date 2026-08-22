@@ -120,7 +120,7 @@
     "render": {
       "type": "object",
       "patternProperties": {
-        "^(readme|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
+        "^(readme|pdf|html|svg|png|stl|step|3mf|threejs|brep|obj|gltf|iges|markdown)$": {
           "oneOf": [
             { "type": "null" },
             { "type": "string" },
@@ -192,6 +192,19 @@
       "items": { "type": "string", "minLength": 3 },
       "uniqueItems": true
     },
+    "javascriptVersion": {
+      "type": ["string", "number"],
+      "pattern": "^[0-9]+(\\.[0-9]+)*$"
+    },
+    "javascriptRequirements": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "chili3dVersion": {
+      "type": ["string", "number"],
+      "minLength": 1
+    },
     "suppliers":{
       "oneOf":[
         { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
@@ -228,6 +241,7 @@
             "revision": { "type": "string", "minLength": 1 },
             "plugin": { "type": "string", "minLength": 1 },
             "subfolder": { "type": "string" },
+            "cacheVersion": { "type": "integer", "minimum": 0 },
             "includePaths": {
               "type": "array",
               "items": { "type": "string", "minLength": 1 },
@@ -252,7 +266,7 @@
                 "type": {
                   "type": "string",
                   "enum": [
-                    "cadquery", "build123d", "svg", "dxf", "extrude", "sweep",
+                    "cadquery", "build123d", "chili3d", "svg", "dxf", "extrude", "sweep",
                     "stl", "step", "scad", "3mf", "enrich", "alias", "brep", "obj",
                     "kicad", "compound"
                   ]
@@ -320,6 +334,19 @@
                   "type": "array",
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
+                },
+                "javascriptRequirements": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 },
+                  "uniqueItems": true
+                },
+                "javascriptVersion": {
+                  "type": ["string", "number"],
+                  "pattern": "^[0-9]+(\\.[0-9]+)*$"
+                },
+                "chili3dVersion": {
+                  "type": ["string", "number"],
+                  "minLength": 1
                 },
                 "dependencies": {
                   "type": "array",

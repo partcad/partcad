@@ -17,7 +17,7 @@ import threading
 from typing import BinaryIO, Mapping
 
 from ..rpc.dispatcher import Dispatcher, Handler
-from .framing import read_message, write_message
+from partcad_utils.framing import read_message, write_message
 
 
 def _notification_sink(write_stream: BinaryIO, lock: threading.Lock):

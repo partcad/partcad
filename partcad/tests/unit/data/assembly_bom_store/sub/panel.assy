@@ -1,0 +1,10 @@
+links:
+  - part: cube
+    name: cube1
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: cube
+    name: cube2
+    location: [[1, 0, 0], [0, 0, 1], 0]
+  - part: cube
+    name: cube3
+    location: [[2, 0, 0], [0, 0, 1], 0]
