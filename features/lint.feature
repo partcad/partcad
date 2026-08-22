@@ -126,6 +126,53 @@ Feature: `pc lint` command
     When I run "pc lint"
     Then the command should exit with a status code of "0"
 
+  @success
+  Scenario: Part, sketch and assembly with a source file pulled from a URL
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: Vendor files pulled from a URL
+      parts:
+        bolt:
+          type: step
+          path: bolt.step
+          fileFrom: url
+          fileUrl: https://example.com/vendor/catalog/bolt.step
+      sketches:
+        outline:
+          type: dxf
+          fileFrom: url
+          fileUrl: https://example.com/vendor/catalog/outline.dxf
+      assemblies:
+        rig:
+          type: assy
+          fileFrom: url
+          fileUrl: https://example.com/vendor/catalog/rig.assy
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @failure
+  Scenario: fileUrl without fileFrom
+    # The file is there, so the package still loads and the schema check runs.
+    # 'fileFrom' without 'fileUrl' is not linted the same way: the package
+    # fails to load before any check runs. See test_lint_schema.py for the
+    # schema itself, and test_file.py for what the loader reports.
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: Missing the source to download the file from
+      parts:
+        bolt:
+          type: step
+          fileUrl: https://example.com/vendor/catalog/bolt.step
+      """
+    And a file named "bolt.step" with content:
+      """
+      This is a step file for bolt.step
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "$.parts.bolt: 'fileFrom' is a dependency of 'fileUrl'"
+
   @failure
   Scenario: Invalid provider type
     Given a file named "partcad.yaml" with content:

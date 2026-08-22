@@ -12,7 +12,7 @@ from ...service import run
 
 
 @click.command(help="Add an assembly")
-@click.argument("kind", type=click.Choice(["assy"]))  # help="Type of the assembly"
+@click.argument("kind", type=click.Choice(["assy", "step"]))  # help="Type of the assembly"
 @click.argument("path", type=str)  # help="Path to the file"
 @click.pass_context
 def cli(click_ctx: click.Context, kind: str, path: str):
