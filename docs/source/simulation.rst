@@ -114,18 +114,35 @@ density turns those into a mass. Since PartCAD still has nowhere to record what
 a part is *made of*, that density is a parameter of the export with a default
 rather than a property of the part - the first gap this page proposes to close.
 
-A link's name, and the properties looked up under it, come from the label on the
-shape the exporter is handed - and there is one way that goes wrong today. The
-shape cache is keyed by geometry, deliberately, so that two parts reading the
-same mesh file do not compute it twice; but the entry carries the name and label
-of whichever part wrote it, and the other part reads back wearing a name that is
-not its own. Every consumer of a cached shape has that problem, and the URDF
-export is simply the first to key on the answer. The fix belongs in the cache,
-which should hand a shape back under the name it was asked for, so it is left
-for a change of its own. Until it lands, exporting parts that share geometry
-with other parts in the package can name a link after the wrong one and miss the
-properties declared on it; ``test_export_reports_properties_urdf_cannot_state``
-is marked ``xfail`` for exactly that reason.
+A link's name, and the properties written under it, come from the shape the
+exporter is handed, and both travel on that shape together. This used to be the
+one place the shape cache showed through: the cache is keyed by geometry,
+deliberately, so that two parts reading the same mesh file do not compute it
+twice, and the entry used to carry the name of whichever part wrote it - so the
+other part read back wearing a name that was not its own, and the properties
+looked up under that name were the wrong part's or nobody's. The entry no longer
+stores that outer layer at all. What identifies the shape being asked for - its
+name, its label, its placement, and what it reports about itself - is stamped
+onto the payload from the asking object's own configuration every time an entry
+is read, so parts that share geometry each get themselves back.
+
+The stamp reaches the shape that was asked for and no further. Inside a cached
+assembly the children sit in the entry with the names, labels and properties
+they were built with, because down there they are not who is asking - they are
+what the tree is made of, as much a part of the answer as the geometry. So a
+link exported from a part is that part; a link exported from a child of a cached
+assembly is whatever that child was when the tree was cached, and it takes a
+change the assembly actually hashes, or ``pc system reset``, to build it again.
+
+What a shape reports about itself is cached too, in an entry of its own beside
+the geometry - the geometry's key with ``-props`` appended. Both are filled by
+the one run that actually instantiates the shape, and they are read apart: a
+consumer after a part's material need not pull its BREP back out of the cache,
+and a cache written before that entry existed is a miss for the properties and
+not for the geometry. It is not what the stamp above is made of, though: that
+entry is keyed on the geometry, so what sits in it belongs to the geometry -
+which is where a *derived* property (item 2 below) would land. What the object
+asking reports is its own ``properties:`` section, and only that.
 
 Converting between the two
 ==========================
@@ -707,9 +724,10 @@ round trip nearly lossless while the rest of the proposal is still being
 designed, and it is the difference between PartCAD being usable in a robotics
 workflow and being a one-way trip out of one.
 
-A part carries ``physics:``, ``material:`` and ``color:``; an interface carries
-``motion:`` and ``physics:``. Every property in them is a PartCAD property with
-a PartCAD unit and a closed definition in the schema. A URDF import reads its
+A part carries a ``properties:`` section holding ``material``, ``color`` and
+``physics``; an interface carries ``motion:`` and ``physics:``. Every property
+in them is a PartCAD property with a PartCAD unit and a closed definition in the
+schema. A URDF import reads its
 values into them one at a time and the URDF export writes each one back into the
 element that states it. The two rules that keep the list honest are the loud
 failures: URDF that no property covers stops the import, and a property URDF
@@ -719,18 +737,18 @@ What is still missing:
 
 - **``<ros2_control>`` and ``<transmission>``**, which are robot-level rather
   than link-level, and so have nowhere to attach yet. The assembly needs a
-  ``physics:`` of its own - which it deliberately does not have today, because
-  an assembly is a container and every property so far belongs to something
-  inside it.
+  place to attach robot-level physics - an assembly takes the same
+  ``properties:`` section a part does, but nothing yet reads one there, because
+  every property so far belongs to something inside the container.
 - **Properties that are not a link's or a joint's.** A URDF's ``<gazebo>``
   blocks also carry sensors and simulator plugins, which items 7 and 8 cover;
   until then they are counted and reported, not carried.
-- **Any check at all that a declared property still applies.** ``physics:`` does
-  not take part in the shape cache, which is right - it says nothing about the
-  geometry - but it also means nothing notices when the geometry moves out from
-  under it. A mass read from a URDF survives an edit to the CAD that invalidates
-  it, silently. ``pc lint`` is where that belongs, and it needs item 2 to have
-  something to compare against.
+- **Any check at all that a declared property still applies.** ``properties:``
+  does not take part in the shape cache *key*, which is right - it says nothing
+  about the geometry - but it also means nothing notices when the geometry moves
+  out from under it. A mass read from a URDF survives an edit to the CAD that
+  invalidates it, silently. ``pc lint`` is where that belongs, and it needs
+  item 2 to have something to compare against.
 
 10. Units
 =========

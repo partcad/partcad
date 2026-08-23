@@ -112,12 +112,6 @@ SCRIPT_KEY = "__script__"
 # placement is baked into the shape instead of staying readable as data.
 DECODE_KEY = "__decode__"
 
-# A parameter, not a reserved key: a file type declares 'properties: true' to be
-# handed what the shapes state about themselves ('physics', 'material',
-# 'color'), keyed by full name, instead of the flag. Named here so the core and
-# the implementations agree on the spelling.
-PROPERTIES_KEY = "properties"
-
 
 class Implementation:
     """Who writes a file of a given type, and with what.

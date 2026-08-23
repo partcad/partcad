@@ -726,32 +726,34 @@ Parts are declared in ``partcad.yaml`` using the following syntax:
           location: <OCCT Location object> # e.g. [[x_off,y_off,z_off], [x_rot,y_rot,z_rot], rot_angle]
           sketch: <(optional) name of the sketch used for visualization>
 
-      material: <(optional) the name of the material this shape is made of>
-      color: <(optional) "#RRGGBB" or "#RRGGBBAA">
+      # What the shape this part produces reports about itself. See "Properties".
+      properties: # (optional)
+        material: <(optional) the name of the material this shape is made of>
+        color: <(optional) "#RRGGBB" or "#RRGGBBAA">
 
-      physics: # (optional) physical properties
-        mass: ... # kg
-        centerOfMass: [<x>, <y>, <z>] # mm, in the shape's own frame
-        inertiaOrientation: [<roll>, <pitch>, <yaw>] # (optional) degrees
-        inertia: # kg*m^2, about 'centerOfMass'
-          ixx: ...
-          ixy: ...
-          ixz: ...
-          iyy: ...
-          iyz: ...
-          izz: ...
-        friction: ...        # coefficient, along 'frictionDirection'
-        friction2: ...       # coefficient, across it
-        frictionDirection: [<x>, <y>, <z>]
-        contactStiffness: ... # N/m
-        contactDamping: ...   # N*s/m
-        minContactDepth: ...  # mm
-        maxContactVelocity: ... # mm/s
-        restitution: ...     # 0 is a dead stop, 1 a perfect bounce
-        maxContacts: ...
-        velocityDamping: ...
-        selfCollide: <true|false>
-        gravity: <true|false>
+        physics: # (optional) physical properties
+          mass: ... # kg
+          centerOfMass: [<x>, <y>, <z>] # mm, in the shape's own frame
+          inertiaOrientation: [<roll>, <pitch>, <yaw>] # (optional) degrees
+          inertia: # kg*m^2, about 'centerOfMass'
+            ixx: ...
+            ixy: ...
+            ixz: ...
+            iyy: ...
+            iyz: ...
+            izz: ...
+          friction: ...        # coefficient, along 'frictionDirection'
+          friction2: ...       # coefficient, across it
+          frictionDirection: [<x>, <y>, <z>]
+          contactStiffness: ... # N/m
+          contactDamping: ...   # N*s/m
+          minContactDepth: ...  # mm
+          maxContactVelocity: ... # mm/s
+          restitution: ...     # 0 is a dead stop, 1 a perfect bounce
+          maxContacts: ...
+          velocityDamping: ...
+          selfCollide: <true|false>
+          gravity: <true|false>
 
       # What this part contributes to every connection it takes part in.
       connect: # (optional)
@@ -772,20 +774,9 @@ The fields of the ``connect`` section are the defaults for the ``holdWith*`` and
 ``holdTo*`` fields of the ``how`` section of an Assembly YAML
 ``connect``/``connectPorts`` node. See :doc:`assy`.
 
-Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
-them is closed. Lengths are millimetres and angles degrees, as everywhere else
-in PartCAD; everything else is SI, so a mass is kilograms and an inertia tensor
-kg·m². Nothing is stored under the name of the format it came from: a URDF
-import reads ``<inertial>`` and the friction and contact settings of a
-``<gazebo>`` block into these properties one value at a time, and a URDF export
-writes each of them back into the element that states it. A URDF that says
-something PartCAD has no property for stops the import instead of being carried
-opaquely, and a property PartCAD holds that URDF cannot state is reported when
-it is exported.
-
-``physics`` does not take part in the shape cache - it says nothing about the
-geometry - which also means nothing notices when an edit to the CAD invalidates
-it. See :doc:`simulation`.
+The ``properties`` section says what the shape this part produces is, as opposed
+to ``parameters``, which say what is asked of the type that produces it. See
+:ref:`properties` below.
 
 See :ref:`location` for more information on the OCCT Location object.
 
@@ -1055,8 +1046,21 @@ Other methods to define parts are coming soon (e.g. `SDF <https://github.com/fog
 Please, express your interest in support for other formats by filing a corresponding issue on GitHub
 or sending an email to `support@partcad.org <mailto:support@partcad.org>`_.
 
+.. _parameters:
+
 Parameters
 ----------
+
+Parameters are **inputs**. They are a request made of the object type that
+produces the part - the ``width`` a CadQuery script extrudes to, the
+``tolerance`` a mesh is faceted at - and they only mean anything if that type
+accepts them. Two parts that differ in a parameter are different shapes, so a
+parameter is part of what the shape cache is keyed on.
+
+What comes back out is :ref:`properties`, and the two are not the same thing
+even where they share a name: ``parameters.material`` asks for a part to be made
+of something, and ``properties.material`` states what the part that came out is
+made of.
 
 Each part may have a list of parameters that are passed into the scripts to
 modify the part.
@@ -1123,6 +1127,62 @@ and have received corresponding manufacturing instructions out-of-band.
 The MCFTT parameters are not required and have no impact on parts that have
 ``vendor`` and ``sku`` set and that are procured using providers of the type
 ``store``.
+
+The MCFTT parameters are a request, and the request is a manufacturing one: they
+say what the part should be made of, and how well, for the provider that will
+make it. They are not a claim about a shape that exists. A part read from a STEP
+file that already states its material does not answer them, and the answer is
+not what an exporter writes into a file. That is :ref:`properties`, below.
+
+.. _properties:
+
+Properties
+----------
+
+Properties are **outputs**. They are what instantiating the object produced -
+what the resulting shape reports about itself - and they are declared where the
+shape cannot report them on its own. A mesh has no material and no mass, so the
+only way a part read from an STL has either is to say so; a URDF import fills
+this section in from what the file already stated.
+
+.. code-block:: yaml
+
+  parts:
+    <part name>:
+      # ...
+      properties:
+        material: <(optional) the name of the material this shape is made of>
+        color: <(optional) "#RRGGBB" or "#RRGGBBAA">
+        physics: # (optional)
+          mass: ... # kg
+          # ... see the full list under "Parts" above
+
+Assemblies take the same section. Nothing in it takes part in the shape cache -
+it says nothing about the geometry - which also means nothing notices when an
+edit to the CAD invalidates it. It does travel with the shape: a property
+declared on a part is carried on the shape that part produces, through the cache
+and through every assembly that embeds it, so an export of a whole robot finds
+each link's properties on the link. That is also where the properties inherit
+the caching a name and a placement already have: an object's own are stamped on
+from its configuration every time it is read, but the ones on the parts *inside*
+a cached assembly are part of that assembly's cached tree, and editing them does
+not invalidate it any more than renaming a part does. ``pc system reset``, or a
+change to something the assembly does hash, is what picks them up.
+
+Every ``physics`` property has a PartCAD name and a PartCAD unit, and the set of
+them is closed. Lengths are millimetres and angles degrees, as everywhere else
+in PartCAD; everything else is SI, so a mass is kilograms and an inertia tensor
+kg·m². Nothing is stored under the name of the format it came from: a URDF
+import reads ``<inertial>`` and the friction and contact settings of a
+``<gazebo>`` block into these properties one value at a time, and a URDF export
+writes each of them back into the element that states it. A URDF that says
+something PartCAD has no property for stops the import instead of being carried
+opaquely, and a property PartCAD holds that URDF cannot state is reported when
+it is exported. See :doc:`simulation`.
+
+A file type that has a way to state these declares ``properties: true`` in its
+``export:`` section, and is handed them keyed by the full name of the shape they
+belong to. URDF is the one built-in format that does.
 
 Manufacturing methods
 ---------------------

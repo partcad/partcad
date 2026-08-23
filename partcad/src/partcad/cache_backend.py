@@ -37,6 +37,13 @@ from . import logging as pc_logging
 # repository index - is small by construction and always worth storing.
 SIZED_KEYS = ("shape", "sketch", "part", "assembly", "cmps")
 
+# What a shape reports about itself is cached under the key of the geometry it
+# describes plus this suffix (see cache_shape.properties_key). Being named after
+# a geometry key is what makes it look like one here, and it is not: a handful
+# of declared values, small by construction like everything else the window
+# exempts. The window is there to keep trivial *geometry* out.
+PROPERTIES_SUFFIX = "-props"
+
 
 class CacheBackend:
     """One storage tier: flat names in, bytes out.
@@ -62,7 +69,7 @@ class CacheBackend:
 
     def accepts(self, key: str, size: int) -> bool:
         """Whether an entry of this size belongs in this tier."""
-        if not key.startswith(SIZED_KEYS):
+        if not key.startswith(SIZED_KEYS) or key.endswith(PROPERTIES_SUFFIX):
             return True
         # One-byte entries are how a test result is stored, and they are exempt
         # from the minimum: the point of the minimum is to keep small geometry

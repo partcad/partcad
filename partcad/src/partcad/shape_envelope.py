@@ -20,8 +20,10 @@ point of the split:
     dict on 'decode' - the core only ever moves the bytes around.
 
 A single shape is '{"name", "label", "brep"}'; an assembly is
-'{"name", "label", "assembly": [...]}'. Requests/responses are ordinary JSON
-objects that carry such shape objects under keys like "shape" or "wrapped".
+'{"name", "label", "assembly": [...]}'. Either may also carry an optional
+"location" and an optional "properties" (see the keys below).
+Requests/responses are ordinary JSON objects that carry such shape objects
+under keys like "shape" or "wrapped".
 
 The "brep" payload is zstd-compressed BREP. Which Python type holds it depends
 on the layer, and that is the whole reason this module exists:
@@ -44,6 +46,12 @@ KEY_BYTES = "__bytes__"
 # Optional placement on a shape/assembly object, carried opaquely by the core
 # and turned into a real location by the geometry-side codec (ocp_serialize).
 KEY_LOCATION = "location"
+# Optional properties on a shape/assembly object: what the shape reports about
+# itself ("material", "color", "physics"), as opposed to the parameters it was
+# built from. One key rather than three, so that the envelope's key space stays
+# small and everything that identifies an object travels beside its name. Like
+# the placement, it is data the core carries opaquely and never interprets.
+KEY_PROPERTIES = "properties"
 
 
 def is_shape_object(obj) -> bool:

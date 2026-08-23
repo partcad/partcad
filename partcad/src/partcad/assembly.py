@@ -157,10 +157,14 @@ class Assembly(Shape):
         indistinguishable from one just built. Besides the name and the label
         that every shape carries, an assembly carries its own placement: two
         assemblies of the same children in different places share the cached
-        children but must not inherit each other's location.
+        children but must not inherit each other's location. It carries what it
+        reports about itself for the same reason.
         """
         name = ("%s:%s" % (self.project_name, self.name)) if self.name else self.project_name
         metadata = {"name": name, "label": self.name}
+        properties = self._shape_properties()
+        if properties:
+            metadata[shape_envelope.KEY_PROPERTIES] = properties
         root = self._root_location()
         if root is not None:
             metadata[shape_envelope.KEY_LOCATION] = root.as_packed()

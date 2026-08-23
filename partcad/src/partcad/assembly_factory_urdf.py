@@ -61,6 +61,17 @@ DROPPED_LABELS = {
     "calibration": "joint calibration references",
 }
 
+# What a node of the wrapper's tree may say about the shape it becomes. The
+# wrapper speaks URDF's vocabulary and keeps these side by side; a PartCAD
+# configuration groups them under 'properties:', which is where every consumer
+# of a shape - the export above all - looks for them.
+NODE_PROPERTIES = ("physics", "material", "color")
+
+
+def node_properties(node):
+    """The 'properties:' section for one node of the wrapper's tree."""
+    return {key: node[key] for key in NODE_PROPERTIES if node.get(key)}
+
 
 @telemetry.instrument()
 class AssemblyFactoryUrdf(AssemblyFactoryFile):
@@ -288,8 +299,9 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             }
             # A sub-assembly that *is* a URDF link carries what the link said
             # about itself, so the export finds it where it expects to.
-            if node.get("physics"):
-                config["physics"] = node["physics"]
+            properties = node_properties(node)
+            if properties:
+                config[shape_envelope.KEY_PROPERTIES] = properties
             item = Assembly(assembly.project_name, config)
             # Keep it uncacheable before the parts info is in the hashing context
             item.cacheable = False
@@ -349,9 +361,9 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
             config["scale"] = scale
         # What the link states about itself, as named PartCAD properties: the
         # physical ones on the link, the appearance on the shape that has it.
-        for key in ("physics", "material", "color"):
-            if node.get(key):
-                config[key] = node[key]
+        properties = node_properties(node)
+        if properties:
+            config[shape_envelope.KEY_PROPERTIES] = properties
 
         full_name = "%s:%s" % (self.project.name, part_name)
         config = PartConfiguration.normalize(part_name, config, full_name)

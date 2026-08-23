@@ -10,6 +10,7 @@
 import json
 
 from .cache import Cache
+from .cache_backend import PROPERTIES_SUFFIX
 from .cache_hash import CacheHash
 from .utils import total_size
 from . import shape_envelope
@@ -53,6 +54,20 @@ def _deserialize(data: bytes):
     if data.startswith(_BREP_PREFIXES):
         return {shape_envelope.KEY_BREP: data}
     return shape_envelope.decode(json.loads(data.decode("utf-8")))
+
+
+def properties_key(kind: str) -> str:
+    """The key holding what the shape cached under 'kind' reports about itself.
+
+    Beside the geometry rather than inside it, because the two go stale on
+    different occasions: the hash covers 'parameters', 'offset' and 'scale'
+    only, so editing a 'properties:' section leaves the geometry entry valid,
+    and properties buried in that entry would go on being answered with the ones
+    it happened to be written with. An entry of its own is written, read and
+    missed on its own - and a shape's properties can be had without pulling its
+    geometry back out of the cache.
+    """
+    return kind + PROPERTIES_SUFFIX
 
 
 @telemetry.instrument()
