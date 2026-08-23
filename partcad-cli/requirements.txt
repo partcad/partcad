@@ -1,6 +1,6 @@
 click==8.4.2
-partcad==0.7.181
-partcad-client==0.7.181
-partcad-service-json-rpc==0.7.181
-partcad-utils==0.7.181
+partcad==0.7.182
+partcad-client==0.7.182
+partcad-service-json-rpc==0.7.182
+partcad-utils==0.7.182
 rich-click==1.9.8
