@@ -434,6 +434,67 @@ def test_stamp_records_the_package_that_declared_a_path():
     assert "package" not in output.stamp({"comment": "hi"}, "//pkg")
 
 
+class _Assembly:
+    """The little of an assembly that document selection actually reads."""
+
+    kind = "assembly"
+
+    def __init__(self, render_cfg):
+        self.name = "widget"
+        self.config = {"render": render_cfg}
+
+
+def test_an_implemented_pdf_is_not_overwritten_by_the_assembly_guide(ctx):
+    """The instruction book gives way to an implementation of the same file type.
+
+    Both would be written to '<assembly>.pdf', so whichever ran second would win
+    silently. The implementation is what the package asked for.
+    """
+    project = ctx.get_project("//produce_part_step")
+
+    # Declared with nothing behind it: still the instruction book.
+    assembly = _Assembly({"pdf": None})
+    assert project._assembly_documents_to_render([assembly], None, None, "pdf") == ["widget"]
+
+    # Declared with an implementation: a file of the assembly's own, produced
+    # like any other file type.
+    assembly = _Assembly({"pdf": {"package": "//pub/feature/render/draftwright", "path": "draw.py"}})
+    assert project._assembly_documents_to_render([assembly], None, None, "pdf") == []
+
+    # The implementation may equally come from the package rather than the
+    # assembly, which is where the package-level configuration comes in.
+    assembly = _Assembly({})
+    package_cfg = {"pdf": {"package": "//pub/feature/render/draftwright", "path": "draw.py"}}
+    assert project._assembly_documents_to_render([assembly], ["widget"], "pdf", "pdf", package_cfg) == []
+    assert project._assembly_documents_to_render([assembly], ["widget"], "pdf", "pdf", {"pdf": None}) == ["widget"]
+
+
+def test_a_document_format_stops_being_one_once_somebody_implements_it():
+    """'pdf' is the instruction book only for as long as nobody writes a 'pdf'.
+
+    A package that names an implementation for it is saying that its 'pdf' is a
+    file of its own - a drawing, a datasheet - and PartCAD has to produce it the
+    way it produces every other file type a package implements, instead of
+    quietly rendering the assembly guide over it.
+    """
+    # Nothing declared, declared empty, or declared as a bare output location:
+    # all still the document PartCAD assembles itself.
+    assert output.is_document_format("pdf", {})
+    assert output.is_document_format("pdf", {"pdf": None})
+    assert output.is_document_format("pdf", {"pdf": "./drawings"})
+    assert output.is_document_format("pdf", {"pdf": {"prefix": "./drawings"}})
+    assert output.is_document_format("html", {})
+    assert output.is_document_format("readme", {})
+    # An implementation, in this package or in another one.
+    assert not output.is_document_format("pdf", {"pdf": {"path": "draw.py"}})
+    assert not output.is_document_format(
+        "pdf", {"pdf": {"package": "//pub/feature/render/draftwright", "path": "render_draftwright.py"}}
+    )
+    # Everything else is a file type an implementation always writes.
+    assert not output.is_document_format("svg", {})
+    assert not output.is_document_format("step", {"step": {"comment": "hi"}})
+
+
 def test_parameters_exclude_the_reserved_fields():
     impl = output.Implementation(
         output.EXPORT,

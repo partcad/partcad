@@ -70,7 +70,8 @@ BUILTIN_PATHS = {
 #
 # Held out wherever a section is read as a list of file types to run an
 # implementation for, so that declaring one does not send PartCAD looking for a
-# 'path' that was never meant to exist.
+# 'path' that was never meant to exist - unless the package names one, see
+# 'is_document_format()'.
 NON_WRAPPER_FORMATS = frozenset({"readme", "markdown", "pdf", "html"})
 
 # Keys of a section that configure the section itself rather than name a file
@@ -84,6 +85,27 @@ def format_names(section_obj) -> list:
     if not isinstance(section_obj, dict):
         return []
     return [name for name in section_obj if name not in SECTION_KEYS]
+
+
+def is_document_format(format_name: str, section_obj) -> bool:
+    """Whether PartCAD assembles this file itself instead of running a script.
+
+    True for the file types of NON_WRAPPER_FORMATS - and only for as long as
+    nobody implements them. A configuration that names a 'path' for one is a
+    package saying that its 'pdf' is a file of its own (a drawing, a datasheet)
+    rather than the assembly instruction book, and PartCAD produces it the way
+    it produces every other file type a package implements.
+
+    'readme' is the one that cannot be taken over in practice, not because it is
+    special-cased here but because there is nothing to name: PartCAD does not
+    ship an implementation of it for a package to replace (see
+    'builtin/render/partcad.yaml').
+    """
+    if format_name not in NON_WRAPPER_FORMATS:
+        return False
+    if not isinstance(section_obj, dict):
+        return True
+    return not normalize(section_obj.get(format_name)).get("path")
 
 
 # The fields of a file type's configuration that are not parameters.

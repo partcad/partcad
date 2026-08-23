@@ -57,6 +57,8 @@ Below are some examples of consuming existing modules:
 These examples showcase particular PartCAD features:
 
 - [Export to file](./feature_export)
+- [Export parameters, and an export implementation of one's own](./feature_export_custom)
+- [Technical drawings, from a render implementation another package supplies](./feature_render_custom)
 - [Convert parts inside a package or standalone (ad-hoc)](./feature_convert_part)
 - [Convert sketch inside a package or standalone (ad-hoc)](./feature_convert_sketch)
 - [Import parts or assemblies (with optional format conversion)](./feature_import)

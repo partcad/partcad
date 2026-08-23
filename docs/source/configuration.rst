@@ -2011,6 +2011,30 @@ of another without that package knowing about it:
 
   pc export -t stl -e //acme/exporters --package //some/other/package -O ./ bracket
 
+That is one command's worth of it. To have a package's own output written that
+way every time, declare the file type and say where the implementation lives:
+``package`` names the package, ``path`` the script inside it. The implementing
+package is fetched like any other dependency, and its ``pythonRequirements`` are
+installed into the sandbox before its implementation runs, so nothing has to be
+installed by hand:
+
+.. code-block:: yaml
+
+  dependencies:
+    pub:
+      onlyInRoot: true
+      type: git
+      url: https://github.com/partcad/partcad-index.git
+
+  render:
+    pdf:
+      package: //pub/feature/render/draftwright
+      path: render_draftwright.py
+      title: Mounting Plate  # a parameter of that implementation
+
+``examples/feature_render_custom`` is exactly this: three file types drawn by an
+implementation published in the public index.
+
 Built-in implementations
 ------------------------
 
@@ -2031,6 +2055,15 @@ implementation should look like.
 implementation writes: PartCAD assembles them itself out of what the package
 declares and the images the other file types leave behind (see ``pc render`` in
 :doc:`cli`).
+
+That holds for as long as nobody writes them. A ``pdf:`` or ``html:`` that names
+a ``path`` is a package saying that this file is one of its own -- a drawing, a
+datasheet -- and PartCAD produces it by running that implementation instead of
+assembling the assembly instruction book over it. ``readme`` is the one that
+cannot be taken over in practice, not because it is held apart but because
+PartCAD ships no implementation of it to replace. See
+``examples/feature_render_custom``, where ``pdf``, ``svg`` and ``dxf`` are all
+technical drawings produced by an implementation another package publishes.
 
 ``urdf`` is the one built-in file type that is not a single file: it writes a
 ``.urdf`` plus the directory of mesh files it references, which is why
