@@ -13,6 +13,12 @@ coverage==7.15.2
 # depended on 'ocp_vscode', which pulled 'flask-sock', which pulled Flask.
 flask==3.1.3
 pyhamcrest==2.1.0
+# 'partcad-cli/tests/unit/test_versions.py' parses 'dev-tools/bumpversion.toml'.
+# 'tomllib' is only in the standard library from Python 3.11, so on 3.10 - which
+# this repo supports and the CI matrix runs - the test falls back to 'tomli'.
+# Declared here because until now it arrived only by accident, through
+# 'partcad-ide-vscode/src/test/python_tests/requirements.txt'.
+tomli==2.4.1; python_version < "3.11"
 pytest==9.1.1
 pytest-cov==7.1.0
 pytest-durations==1.7.0
