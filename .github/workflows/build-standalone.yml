@@ -533,12 +533,22 @@ jobs:
           name: partcad-standalone-${{ matrix.platform }}
           path: archives
 
+      # `--platform`, unlike the "Install" job above. The artifact downloaded
+      # here holds the one build it is named after and no "platforms.json", so
+      # there is no inventory for the installer to resolve this machine against.
+      # Writing one into this directory would be worse than leaving it out: a
+      # manifest describing every platform would point at archives that are not
+      # here, so the installer would resolve the host to one of them and fail on
+      # the download instead of on the missing manifest. Resolution is what the
+      # "Install" job exercises, against a manifest generated from the archive
+      # sitting beside it; what this job exercises is the bundle.
       - name: Install with install.sh
         shell: bash -el {0}
         run: |
           version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' partcad/src/partcad/__init__.py)
           sh install.sh \
             --version "${version}" \
+            --platform "${{ matrix.platform }}" \
             --base-url "file://${PWD}/archives" \
             --install-dir "${HOME}/partcad-standalone" \
             --bin-dir "${HOME}/partcad-bin"
