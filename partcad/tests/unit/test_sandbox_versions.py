@@ -82,6 +82,40 @@ def test_zstd_requirement(python_version, expected):
     assert sandbox_versions.zstd_requirement(python_version) == expected
 
 
+@pytest.mark.parametrize(
+    "python_version, exact, expected",
+    [
+        # No free-threaded CPython below 3.13, and conda-forge's build strings
+        # there end in "_cpython" rather than "_cp312" -- a pin would match
+        # nothing and fail the solve, so there must not be one.
+        ("3.10", True, None),
+        ("3.11", True, None),
+        ("3.12", True, None),
+        # From 3.13 on, conda-forge carries "*_cp313"/"*_cp313t" builds of the
+        # very same release and the GIL one has to be named.
+        ("3.13", True, "python_abi==3.13=*_cp313"),
+        ("3.14", True, "python_abi==3.14=*_cp314"),
+        # conda takes the single-'=' spelling that the python spec uses there.
+        ("3.14", False, "python_abi=3.14=*_cp314"),
+    ],
+)
+def test_python_abi_requirement(python_version, exact, expected):
+    assert sandbox_versions.python_abi_requirement(python_version, exact=exact) == expected
+
+
+def test_python_abi_requirement_never_names_the_free_threaded_abi():
+    """The whole point: the pin must not end in the 't' suffix.
+
+    A "*_cp314t" sandbox has no CAD wheels at all -- cadquery-ocp and nlopt
+    publish "cp314-cp314" and nothing else -- so every script-defined part in it
+    dies with "No module named 'OCP'".
+    """
+    for python_version in ("3.13", "3.14"):
+        requirement = sandbox_versions.python_abi_requirement(python_version)
+        assert requirement is not None
+        assert not requirement.endswith("t")
+
+
 def test_cadquery_floor_excludes_the_oldest_supported_python():
     """CadQuery publishes nothing for 3.10, so sandboxes there must skip it."""
     assert not sandbox_versions.is_at_least("3.10", sandbox_versions.MIN_PYTHON_VERSION_CADQUERY)

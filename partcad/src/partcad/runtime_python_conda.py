@@ -17,6 +17,7 @@ import sys
 import json
 
 from . import runtime_python
+from . import sandbox_versions
 from . import logging as pc_logging
 from . import telemetry
 
@@ -36,6 +37,9 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
         self.global_conda_lock = FileLock(os.path.join(ctx.user_config.internal_state_dir, ".conda.lock"))
         self.conda_initialized = self.initialized
+        # Set by verify_conda() when the sandbox on disk turns out to hold a
+        # free-threaded interpreter, which nothing but a rebuild can fix.
+        self.conda_free_threaded = False
 
         # find conda executable
         self.conda_path = CondaPythonRuntime.find_conda_executable()
@@ -101,6 +105,21 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 elif not stdout.strip().startswith(self.version):
                     pc_logging.warning("conda venv check warning: %s" % stdout)
                     self.conda_initialized = False
+                elif "free-threading" in stdout:
+                    # A sandbox built before the ABI was pinned can hold the
+                    # free-threaded interpreter, and the version check above
+                    # waves it through: sys.version reads "3.14.0 free-threading
+                    # build (...)", so it starts with "3.14" like any other. The
+                    # sandbox directory is named after the version alone
+                    # (pc-py-conda-3.14), so there is nothing else to tell the
+                    # two apart either. Left alone it would keep failing every
+                    # script-defined part with "No module named 'OCP'" forever,
+                    # since no CAD wheel is built for that ABI. Rebuild it
+                    # instead - this is the one case where the existing prefix
+                    # has to go, so 'conda create' has somewhere to create into.
+                    pc_logging.warning("conda venv is a free-threaded build, rebuilding it: %s" % stdout.strip())
+                    self.conda_free_threaded = True
+                    self.conda_initialized = False
                 else:
                     self.conda_initialized = True
             except Exception as e:
@@ -152,6 +171,14 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
             if os.path.exists(self.path):
                 self.verify_conda()
 
+                if self.conda_free_threaded:
+                    # Only ever true for a sandbox whose interpreter has no CAD
+                    # wheels at all (see verify_conda), and only reachable here
+                    # under the install lock. Every other verify failure leaves
+                    # the prefix where it is, as before.
+                    shutil.rmtree(self.path, ignore_errors=True)
+                    self.conda_free_threaded = False
+
             if not self.conda_initialized:
                 self.once_conda_locked_attempt()
                 if not self.conda_initialized:
@@ -184,6 +211,14 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             *self.variant_packages,
                             "python==%s" % self.version if self.is_mamba else "python=%s" % self.version,
                         ]
+                        # The python spec above names a version and nothing else,
+                        # which from 3.13 on leaves the solver free to pick the
+                        # free-threaded (no-GIL) build of it -- and it does. No
+                        # CAD wheel exists for that ABI, so pin the GIL one.
+                        # See sandbox_versions.python_abi_requirement().
+                        python_abi = sandbox_versions.python_abi_requirement(self.version, exact=self.is_mamba)
+                        if python_abi is not None:
+                            args.append(python_abi)
                         # Strip user home directory from the path, if any
                         sanitized_args = copy.copy(args)
                         sanitized_args[0] = os.path.join("...", os.path.basename(sanitized_args[0]))
