@@ -134,6 +134,16 @@ link exported from a part is that part; a link exported from a child of a cached
 assembly is whatever that child was when the tree was cached, and it takes a
 change the assembly actually hashes, or ``pc system reset``, to build it again.
 
+What a shape reports about itself is cached too, in an entry of its own beside
+the geometry - the geometry's key with ``-props`` appended. Both are filled by
+the one run that actually instantiates the shape, and they are read apart: a
+consumer after a part's material need not pull its BREP back out of the cache,
+and a cache written before that entry existed is a miss for the properties and
+not for the geometry. It is not what the stamp above is made of, though: that
+entry is keyed on the geometry, so what sits in it belongs to the geometry -
+which is where a *derived* property (item 2 below) would land. What the object
+asking reports is its own ``properties:`` section, and only that.
+
 Converting between the two
 ==========================
 
@@ -733,12 +743,12 @@ What is still missing:
 - **Properties that are not a link's or a joint's.** A URDF's ``<gazebo>``
   blocks also carry sensors and simulator plugins, which items 7 and 8 cover;
   until then they are counted and reported, not carried.
-- **Any check at all that a declared property still applies.** ``properties:`` does
-  not take part in the shape cache, which is right - it says nothing about the
-  geometry - but it also means nothing notices when the geometry moves out from
-  under it. A mass read from a URDF survives an edit to the CAD that invalidates
-  it, silently. ``pc lint`` is where that belongs, and it needs item 2 to have
-  something to compare against.
+- **Any check at all that a declared property still applies.** ``properties:``
+  does not take part in the shape cache *key*, which is right - it says nothing
+  about the geometry - but it also means nothing notices when the geometry moves
+  out from under it. A mass read from a URDF survives an edit to the CAD that
+  invalidates it, silently. ``pc lint`` is where that belongs, and it needs
+  item 2 to have something to compare against.
 
 10. Units
 =========

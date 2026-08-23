@@ -30,7 +30,7 @@ import partcad as pc
 from partcad import shape_envelope
 from partcad.assembly import Assembly
 from partcad.cache_hash import CacheHash
-from partcad.cache_shape import ShapeCache
+from partcad.cache_shape import ShapeCache, properties_key
 from partcad.lint.all import get_partcad_schema
 from partcad.shape import Shape
 
@@ -45,8 +45,8 @@ STEEL = {"material": "steel", "color": "#8899AA"}
 BRASS = {"material": "brass", "physics": {"mass": 0.25}}
 
 
-def _cache(tmp_path):
-    return ShapeCache(user_config=CacheUserConfig(tmp_path))
+def _cache(tmp_path, **overrides):
+    return ShapeCache(user_config=CacheUserConfig(tmp_path, **overrides))
 
 
 def _hash():
@@ -56,9 +56,14 @@ def _hash():
     return cache_hash
 
 
+def _entry(tmp_path, cache_hash, key):
+    """The file one cache entry is stored in, whether or not it is there."""
+    return tmp_path / "cache" / "shapes" / ("%s.%s" % (cache_hash.get(), key))
+
+
 class _Ctx:
-    def __init__(self, tmp_path):
-        self.cache_shapes = _cache(tmp_path)
+    def __init__(self, tmp_path, **overrides):
+        self.cache_shapes = _cache(tmp_path, **overrides)
 
 
 class _Part(Shape):
@@ -248,7 +253,7 @@ def test_the_cache_stores_no_properties_of_its_own_but_keeps_a_child_s(tmp_path)
     tree = {"name": "pkg:first", "label": "first", "properties": BRASS, "assembly": [child]}
     asyncio.run(cache.write_async(cache_hash, {"assembly": tree}))
 
-    stored = json.loads((tmp_path / "cache" / "shapes" / ("%s.assembly" % cache_hash.get())).read_bytes())
+    stored = json.loads(_entry(tmp_path, cache_hash, "assembly").read_bytes())
     assert stored == {"assembly": [shape_envelope.encode(child)]}
     assert "brass" not in json.dumps(stored)
 
@@ -293,6 +298,106 @@ def test_composition_carries_a_child_s_properties_into_the_parent(tmp_path):
 
     assert "properties" not in tree
     assert tree["assembly"][0]["properties"] == BRASS
+
+
+# In an entry of their own
+# ------------------------
+
+
+def test_instantiating_a_shape_fills_the_geometry_entry_and_the_properties_one(tmp_path):
+    """Both, and by the one path that actually built the shape.
+
+    The key is the geometry's with a suffix, so the two sit side by side in
+    whatever tier took them and neither can be mistaken for the other.
+    """
+    ctx = _Ctx(tmp_path)
+    part = _Part("bolt", STEEL)
+    asyncio.run(part.get_wrapped(ctx))
+
+    assert properties_key("part") == "part-props"
+    assert _entry(tmp_path, part.hash, "part").read_bytes() == BREP
+    assert json.loads(_entry(tmp_path, part.hash, properties_key("part")).read_bytes()) == STEEL
+
+
+def test_the_properties_are_materialized_without_the_geometry(tmp_path):
+    """Asking what a shape is made of does not pull its BREP out of the cache."""
+    ctx = _Ctx(tmp_path)
+    part = _Part("bolt", STEEL)
+    asyncio.run(part.get_wrapped(ctx))
+    _entry(tmp_path, part.hash, "part").unlink()
+
+    # A later run of the same part, with no geometry left to read.
+    assert asyncio.run(_Part("bolt", STEEL).get_cached_properties_async(ctx)) == STEEL
+
+
+def test_the_geometry_is_materialized_without_the_properties(tmp_path):
+    """A cache from before the properties had an entry is not a miss for the geometry.
+
+    The two go stale on different occasions and are read on different ones, so
+    the absence of either has to leave the other alone.
+    """
+    ctx = _Ctx(tmp_path)
+    first = _Part("first", STEEL)
+    asyncio.run(first.get_wrapped(ctx))
+    _entry(tmp_path, first.hash, properties_key("part")).unlink()
+
+    second = asyncio.run(_Part("second", BRASS).get_wrapped(ctx))
+
+    assert second == {"name": "pkg:second", "label": "second", "properties": BRASS, "brep": BREP}
+    assert asyncio.run(_Part("second", BRASS).get_cached_properties_async(ctx)) is None
+
+
+def test_a_shape_that_reports_nothing_leaves_no_properties_entry(tmp_path):
+    """One entry or none, the way one stamped key or none is."""
+    ctx = _Ctx(tmp_path)
+    plain = _Part("plain")
+    asyncio.run(plain.get_wrapped(ctx))
+
+    assert not _entry(tmp_path, plain.hash, properties_key("part")).exists()
+    assert asyncio.run(_Part("plain").get_cached_properties_async(ctx)) is None
+
+
+def test_the_properties_entry_is_not_filtered_out_by_the_geometry_size_window(tmp_path):
+    """It is named after a geometry key without being geometry.
+
+    A tier drops entries below its minimum to keep trivial geometry out of the
+    cache - 100 bytes for the files tier by default. A handful of declared
+    values is always under that, so applying the window to them would leave the
+    entry never written at all.
+    """
+    ctx = _Ctx(tmp_path, cache_min_entry_size=100)
+    part = _Part("bolt", STEEL)
+    asyncio.run(part.get_wrapped(ctx))
+
+    # The window really is on: the geometry below it was dropped.
+    assert len(BREP) < 100 and not _entry(tmp_path, part.hash, "part").exists()
+    assert json.loads(_entry(tmp_path, part.hash, properties_key("part")).read_bytes()) == STEEL
+
+
+def test_an_assembly_s_own_go_to_its_entry_and_its_children_s_stay_in_the_tree(tmp_path):
+    """The split, end to end: the root's are the asking object's, a child's are the tree's."""
+    ctx = _Ctx(tmp_path)
+    rig = _Assembly("rig", BRASS, child_properties=STEEL)
+    asyncio.run(rig.get_wrapped(ctx))
+
+    stored = json.loads(_entry(tmp_path, rig.hash, "assembly").read_bytes())
+    assert [child["properties"] for child in stored["assembly"]] == [STEEL]
+    assert "brass" not in json.dumps(stored)
+    assert json.loads(_entry(tmp_path, rig.hash, properties_key("assembly")).read_bytes()) == BRASS
+
+
+def test_a_properties_entry_is_carried_as_the_plain_dict_it_is(tmp_path):
+    """It has no payload, so there is no outer layer to strip or to stamp back on."""
+    cache = _cache(tmp_path)
+    cache_hash = _hash()
+    key = properties_key("part")
+    asyncio.run(cache.write_async(cache_hash, {key: BRASS}))
+
+    assert json.loads(_entry(tmp_path, cache_hash, key).read_bytes()) == BRASS
+
+    read, _ = asyncio.run(cache.read_async(cache_hash, [key], {"name": "pkg:x", "label": "x"}))
+
+    assert read[key] == BRASS
 
 
 # And into the exporter

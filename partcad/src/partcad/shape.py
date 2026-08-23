@@ -19,6 +19,7 @@ import warnings
 from typing import Optional
 
 from .cache_hash import CacheHash
+from .cache_shape import properties_key
 from . import output
 from .shape_config import ShapeConfiguration
 from .utils import total_size
@@ -368,6 +369,15 @@ class Shape(ShapeConfiguration):
                         to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
                         if self.components and len(self.components) > 0:
                             to_cache["cmps"] = self.components
+                        properties = self._shape_properties()
+                        if properties:
+                            # Both entries are filled here and nowhere else:
+                            # this is the one path that has actually
+                            # instantiated the shape, and so the one that knows
+                            # what came out of it. They are materialized apart
+                            # (see 'get_cached_properties_async()'), and a shape
+                            # that reports nothing leaves no entry to read.
+                            to_cache[properties_key(self.kind)] = properties
                         to_cache_in_memory = await ctx.cache_shapes.write_async(cache_hash, to_cache)
                         do_cache_in_memory = to_cache_in_memory.get(self.kind, False)
                     else:
@@ -395,6 +405,30 @@ class Shape(ShapeConfiguration):
             return None
         properties = {key: value for key, value in properties.items() if value not in (None, {}, [], "")}
         return properties or None
+
+    async def get_cached_properties_async(self, ctx):
+        """What the cache recorded beside this shape's geometry, or None.
+
+        The other half of 'get_wrapped()'. The two entries are filled together,
+        as the shape is instantiated, and materialized apart: the properties can
+        be had without pulling a BREP out of the cache, and the BREP without
+        them. A shape that has never been built, an entry written before
+        properties were cached at all, and a shape that reports nothing all mean
+        the same thing here - nothing recorded - which is an answer rather than
+        a failure, and never a reason to build the geometry again.
+
+        What comes back describes the geometry, which every object hashing to
+        the same key shares. What identifies *this* object is its own
+        'properties:' section, which is why 'get_cache_metadata()' - and so
+        everything stamped onto an envelope - reads the configuration and never
+        comes here.
+        """
+        if not ctx or await self.get_cache_key_async() is None:
+            return None
+        key = properties_key(self.kind)
+        cached, _ = await ctx.cache_shapes.read_async(self.hash, [key])
+        properties = cached.get(key)
+        return properties if isinstance(properties, dict) and properties else None
 
     def _shape_metadata(self):
         """The (full_name, label) stamped onto this shape's envelope."""
