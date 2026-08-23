@@ -99,6 +99,12 @@ render:
     company: PartCAD
     drawn_by: PartCAD example
     frame: true
+    # A3 rather than draftwright's A4. On A4 this part fills both dimension
+    # strips below and above the plan view - the slot's length below, the hole
+    # positions and the slot's own position above - and the overall 90 width has
+    # nowhere left to go, so draftwright drops it and says so
+    # ('overall_dim_withheld'). The bigger sheet leaves room for it.
+    page: A3
 
   # The same implementation and the same parameters, in the other two formats.
   # A YAML anchor, not a PartCAD feature - the file type each one names is what
