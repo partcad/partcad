@@ -99,11 +99,14 @@ render:
     company: PartCAD
     drawn_by: PartCAD example
     frame: true
-    # A3 rather than draftwright's A4. On A4 this part fills both dimension
-    # strips below and above the plan view - the slot's length below, the hole
-    # positions and the slot's own position above - and the overall 90 width has
-    # nowhere left to go, so draftwright drops it and says so
-    # ('overall_dim_withheld'). The bigger sheet leaves room for it.
+    # The sheet, named rather than left to draftwright's default - which matters
+    # for more than its size. Unset, this part came out A4 at 1:1 and the
+    # overall 90 width had nowhere to go: both dimension strips of the plan view
+    # were full (the slot's length below, the hole positions and the slot's own
+    # position above), so draftwright dropped the width and said so
+    # ('overall_dim_withheld'). Naming a sheet fits the drawing to it instead -
+    # A4 lands on 1:2 and A3 on 2:1, and both leave room for the width. A3
+    # because a 90 mm plate is worth reading at 2:1.
     page: A3
 
   # The same implementation and the same parameters, in the other two formats.
