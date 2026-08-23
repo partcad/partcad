@@ -650,9 +650,19 @@ class Project(project_config.Configuration):
         *package* requires a newer PartCAD, which is not a per-object condition
         and which the caller turns into its own "update PartCAD" prompt. Filing
         it against one object would swallow that prompt.
+
+        A type PartCAD itself retired ('factory.RetiredTypeException') is
+        reported at WARNING instead of ERROR. The object is still recorded as
+        broken and still skipped, but nothing the user of that package can do
+        would make it work - PartCAD dropped the feature - so it must not fail
+        the command. The public index, a separate repository, still declares the
+        generative-AI part types retired in 0.7.153. Every other reason stays an
+        error: an unknown type is a mistake somebody can fix.
         """
         if isinstance(reason, NeedsUpdateException):
             raise reason
+
+        retired = isinstance(reason, factory.RetiredTypeException)
 
         reason = str(reason) or type(reason).__name__
         # One line, and short: some of these configurations embed multi-page
@@ -662,7 +672,10 @@ class Project(project_config.Configuration):
             reason = reason[:197] + "..."
 
         self.broken_objects.setdefault(kind, {})[name] = reason
-        pc_logging.error("Failed to create the %s '%s:%s': %s" % (kind, self.name, name, reason))
+        if retired:
+            pc_logging.warning("Skipping the %s '%s:%s': %s" % (kind, self.name, name, reason))
+        else:
+            pc_logging.error("Failed to create the %s '%s:%s': %s" % (kind, self.name, name, reason))
 
     def get_broken_object_reason(self, kind: str, name: str):
         """Why an object could not be created, or None if it was not one of them."""
