@@ -118,6 +118,71 @@ def test_the_schema_refuses_the_flat_form_and_an_unknown_property():
         _validate({"parts": {"bolt": {"type": "step", "properties": {"smell": "burnt"}}}})
 
 
+# What a connection costs, which an interface states and a shape must not: these
+# describe moving a joint, not being a body. Values of the type each is declared
+# with, so that a rejection below is about the name and nothing else.
+CONNECTION_ONLY_PHYSICS = {
+    "maxEffort": 12.0,
+    "maxVelocity": 30.0,
+    "damping": 0.5,
+    "springStiffness": 100.0,
+    "springReference": 0.0,
+    "stopCfm": 0.1,
+    "stopErp": 0.2,
+    "fudgeFactor": 0.5,
+    "implicitSpringDamper": True,
+    "provideFeedback": True,
+}
+
+
+def _errors(config):
+    """Every error raised for 'config', including those nested inside a 'oneOf'.
+
+    'parts' and 'assemblies' are each wrapped in one, so the best-match error
+    names the 'oneOf' and the error that names the offending property sits
+    underneath it in '.context'. Draft 7 explicitly because that is what
+    '$schema' says: a later validator reads this schema's tuple-form 'items' as
+    a single subschema and misjudges the OCCT locations.
+    """
+    validator = jsonschema.Draft7Validator(get_partcad_schema())
+
+    def walk(errors):
+        for error in errors:
+            yield error
+            yield from walk(error.context or [])
+
+    return list(walk(validator.iter_errors(config)))
+
+
+def test_the_schema_takes_a_body_property_on_a_shape():
+    """What a body is: mass, where it balances, how it rubs and how it bounces."""
+    _validate({"parts": {"bolt": {"type": "step", "properties": {"physics": {"mass": 0.01, "friction": 0.4}}}}})
+    _validate({"assemblies": {"rig": {"type": "assy", "properties": {"physics": {"restitution": 0.2}}}}})
+
+
+@pytest.mark.parametrize("name,value", sorted(CONNECTION_ONLY_PHYSICS.items()))
+@pytest.mark.parametrize("kind,declaration", [("parts", {"type": "step"}), ("assemblies", {"type": "assy"})])
+def test_the_schema_refuses_a_connection_property_on_a_shape(kind, declaration, name, value):
+    """A part is not a joint, so it has no effort limit, no damping, no spring.
+
+    The shape's vocabulary is the body half of 'physics'. Stating the other half
+    on a shape is a mistake about where the property lives rather than metadata
+    to carry, and the error names the property so it can be moved.
+    """
+    config = {kind: {"thing": dict(declaration, properties={"physics": {name: value}})}}
+    with pytest.raises(jsonschema.exceptions.ValidationError):
+        _validate(config)
+    assert any(
+        error.json_path == "$.%s.thing.properties.physics" % kind and name in error.message for error in _errors(config)
+    )
+
+
+def test_the_schema_still_takes_a_connection_property_on_an_interface():
+    """Only the shape's vocabulary narrowed - the connection's is untouched."""
+    _validate({"interfaces": {"hinge": {"physics": dict(CONNECTION_ONLY_PHYSICS)}}})
+    _validate({"interfaces": {"hinge": {"physics": {"damping": 0.5, "friction": 0.4}}}})
+
+
 def test_declaring_properties_does_not_move_the_cache_key():
     """They say nothing about the geometry, so they must not rehash it.
 

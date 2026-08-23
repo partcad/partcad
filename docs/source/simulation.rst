@@ -120,11 +120,19 @@ one place the shape cache showed through: the cache is keyed by geometry,
 deliberately, so that two parts reading the same mesh file do not compute it
 twice, and the entry used to carry the name of whichever part wrote it - so the
 other part read back wearing a name that was not its own, and the properties
-looked up under that name were the wrong part's or nobody's. The cache no longer
-stores any of it. What identifies a shape - its name, its label, its placement,
-and what it reports about itself - is stamped onto the payload from the asking
-object's own configuration every time an entry is read, so parts that share
-geometry each get themselves back.
+looked up under that name were the wrong part's or nobody's. The entry no longer
+stores that outer layer at all. What identifies the shape being asked for - its
+name, its label, its placement, and what it reports about itself - is stamped
+onto the payload from the asking object's own configuration every time an entry
+is read, so parts that share geometry each get themselves back.
+
+The stamp reaches the shape that was asked for and no further. Inside a cached
+assembly the children sit in the entry with the names, labels and properties
+they were built with, because down there they are not who is asking - they are
+what the tree is made of, as much a part of the answer as the geometry. So a
+link exported from a part is that part; a link exported from a child of a cached
+assembly is whatever that child was when the tree was cached, and it takes a
+change the assembly actually hashes, or ``pc system reset``, to build it again.
 
 Converting between the two
 ==========================
