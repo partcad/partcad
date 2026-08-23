@@ -1143,7 +1143,7 @@ The ``manufacturing.method`` field says how a part is made:
 
 These are ways of making a **part**, and apply to parts only. An assembly is put
 together rather than made, and has a single method of its own -- see
-:ref:`assembly-manufacturing` below.
+:ref:`manufacturing an assembly <assembly-manufacturing>` below.
 
 A part that is bought rather than made carries ``vendor`` and ``sku`` instead of
 a method.
@@ -1486,7 +1486,7 @@ by its URL and downloaded the first time it is used:
       fileUrl: https://example.com/vendor/catalog/gearbox.step
 
 Compared to ``pc import assembly``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 ``pc import assembly`` reads the very same file with the very same reader, but
 it is a one-shot conversion: it writes a STEP file per component and an
