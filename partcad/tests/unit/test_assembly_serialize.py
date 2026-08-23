@@ -14,6 +14,8 @@ import sys
 import partcad as pc
 from partcad import shape_envelope
 
+from OCP.Bnd import Bnd_Box
+from OCP.BRepBndLib import BRepBndLib
 from OCP.BRepGProp import BRepGProp
 from OCP.GProp import GProp_GProps
 
@@ -25,6 +27,14 @@ def _volume(shape):
     props = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape, props)
     return props.Mass()
+
+
+def _bbox(shape):
+    """The assembled bounding box, as the two corners in world coordinates."""
+    box = Bnd_Box()
+    BRepBndLib.Add_s(shape, box)
+    lo, hi = box.CornerMin(), box.CornerMax()
+    return (lo.X(), lo.Y(), lo.Z(), hi.X(), hi.Y(), hi.Z())
 
 
 def _first_leaf(tree):
@@ -98,4 +108,16 @@ def test_assembly_tree_round_trips_to_the_same_geometry():
     # And it comes back as the same geometry. get_wrapped() returns a BREP
     # envelope too, so decode that as well before measuring.
     rebuilt = ocp_serialize.decode_shape(shape_envelope.loads(text))
-    assert abs(_volume(rebuilt) - _volume(ocp_serialize.decode_shape(compound))) < 1e-6
+    original = ocp_serialize.decode_shape(compound)
+    assert abs(_volume(rebuilt) - _volume(original)) < 1e-6
+
+    # Volume alone is placement-blind: a child that came back at the origin, or
+    # anywhere else, displaces exactly as much as one in its right place, so the
+    # assertion above would not notice. The bounding box does - it is the cheap
+    # invariant that moves when a child does. Both sides are measured the same
+    # way, so Bnd_Box's own gap cancels out.
+    rebuilt_bbox = _bbox(rebuilt)
+    original_bbox = _bbox(original)
+    assert all(abs(a - b) < 1e-6 for a, b in zip(rebuilt_bbox, original_bbox)), (
+        "the assembly does not occupy the same space: %r vs %r" % (rebuilt_bbox, original_bbox)
+    )
