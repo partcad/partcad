@@ -153,9 +153,15 @@ class ProviderCart:
     async def add_object(self, ctx, object: str, recursive: bool = False):
         """Add a part or an assembly.
 
-        An assembly that can be supplied assembled is added as a single item,
-        the way it is ordered. Any other assembly is broken down into what it is
-        made of, and the same question is asked about each sub-assembly in turn.
+        An assembly the model declares as supplied assembled (see
+        'Assembly.is_declared_purchasable()') is added as a single item, the way
+        it is ordered. Any other assembly is broken down into what it is made
+        of, and the same question is asked about each sub-assembly in turn.
+
+        Only the declaration decides that: no supplier is queried while the cart
+        is filled, so an assembly that is declared orderable but that nobody has
+        available still enters the cart as one item. Availability is what the
+        providers answer afterwards, when the finished cart is put to them.
 
         Pass 'recursive=True' to break every assembly down to its parts,
         including the ones that could have been ordered assembled.
@@ -177,7 +183,7 @@ class ProviderCart:
         else:
             assembly = prj.get_assembly(object_name)
             if assembly:
-                if not recursive and assembly.can_be_supplied():
+                if not recursive and assembly.is_declared_purchasable():
                     pc_logging.debug(f"Adding assembly '{object_name}' to the cart as is")
                     item = ProviderCartItem()
                     await item.set_spec(ctx, name)

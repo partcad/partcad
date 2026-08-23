@@ -162,7 +162,7 @@ def test_embedded_assembly_is_never_supplied():
         {"name": "frame:cluster", "child": True, "vendor": "acme", "sku": "CLUSTER-1"},
     )
     assert embedded.get_store_data().is_purchasable
-    assert not embedded.can_be_supplied()
+    assert not embedded.is_declared_purchasable()
 
     # ... so the cart procures what is inside it instead.
     assert _counts(_cart("//sub:frame")) == {

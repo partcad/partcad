@@ -291,13 +291,23 @@ class Assembly(Shape):
                     bom[part_name] = 1
         return bom
 
-    def can_be_supplied(self) -> bool:
-        """Whether this assembly can be ordered as a whole, in an assembled state.
+    def is_declared_purchasable(self) -> bool:
+        """Whether the model declares this assembly as ordered whole, assembled.
+
+        This is a property of the *model*, not of the market: it reads what the
+        package says about the assembly and asks no supplier anything, so it is
+        answerable offline and costs nothing. That is what a BoM walk needs in
+        order to decide whether to descend into a sub-assembly.
 
         An assembly embedded in its parent's source file (the nested 'links:' of
         an ASSY file) is not an object of any package, so there is no name to
         order it by no matter what it declares: its contents are procured
         instead.
+
+        Whether anybody actually sells it is the other, market-side question,
+        answered by '_is_available_to_buy()'. The two are easy to conflate and
+        are not interchangeable: this one says what the model intends, that one
+        says what can be bought today.
         """
         if self.config.get("child", False):
             return False
@@ -307,9 +317,12 @@ class Assembly(Shape):
         """The bill of materials to procure this assembly from.
 
         Same shape of result as 'get_bom()', but the walk stops at every
-        sub-assembly that can be supplied assembled (see 'can_be_supplied()'):
-        such a sub-assembly is listed itself, instead of its contents. An
-        assembly nobody sells is still procured as the parts it is made of.
+        sub-assembly the model declares as supplied assembled (see
+        'is_declared_purchasable()'): such a sub-assembly is listed itself,
+        instead of its contents. An assembly the model does not declare that
+        way is procured as the parts it is made of instead. Whether anybody
+        actually has one available is a question for the suppliers and is not
+        asked here.
         """
         with self.lock:
             async with self.get_async_lock():
@@ -332,7 +345,7 @@ class Assembly(Shape):
 
         for child in self.children:
             item = child.item
-            if isinstance(item, Assembly) and not item.can_be_supplied():
+            if isinstance(item, Assembly) and not item.is_declared_purchasable():
                 # Nobody sells it assembled: procure whatever it is made of
                 for child_name, child_count in (await item.get_supply_bom()).items():
                     account_for(child_name, child_count)
@@ -419,9 +432,9 @@ class Assembly(Shape):
             if isinstance(item, Assembly):
                 # An assembly embedded in the parent's source file belongs to no
                 # package, so there is no name to order it by; it can only ever be
-                # expanded, exactly as the grouped BoM treats it.
-                embedded = bool(item.config.get("child", False))
-                if stop_at_purchasable and not embedded and await _is_purchasable(ctx, item, purchasable):
+                # expanded, exactly as the grouped BoM treats it. That rule is
+                # part of the declaration half of '_is_available_to_buy()'.
+                if stop_at_purchasable and await _is_available_to_buy(ctx, item, purchasable):
                     _bom_detailed_add(bom, item, "assembly")
                     continue
                 child_bom = await item._get_bom_detailed_locked(ctx, stop_at_purchasable, purchasable)
@@ -476,12 +489,19 @@ def _bom_detailed_merge(bom: dict, other: dict):
             bom[name] = dict(entry)
 
 
-async def _is_purchasable(ctx, assembly, cache: dict) -> bool:
-    """Whether 'assembly' can be bought whole instead of being assembled.
+async def _is_available_to_buy(ctx, assembly, cache: dict) -> bool:
+    """Whether 'assembly' can be bought whole today instead of being assembled.
 
-    Both halves are required: the store data that says what to order (a vendor
-    and an SKU), and a supplier of the assembly's own package that has it
-    available. Either half on its own is not something a buyer can act on.
+    Where 'Assembly.is_declared_purchasable()' answers a question about the
+    model, this answers one about the *market*, and so it has to query the
+    suppliers. Both halves are required: what the model declares as orderable,
+    and a supplier of the assembly's own package that has it available. Either
+    half on its own is not something a buyer can act on, which is why a
+    procurement answer cannot be given offline the way a BoM walk can.
+
+    The declaration half is delegated to 'is_declared_purchasable()' rather than
+    re-derived here, so that the two never drift apart -- an assembly embedded
+    in its parent's source file, for one, is never orderable by name.
 
     The answer is cached per assembly, so a sub-assembly used many times costs
     one supplier query rather than one per instance.
@@ -497,8 +517,7 @@ async def _is_purchasable(ctx, assembly, cache: dict) -> bool:
         cache[name] = value
         return value
 
-    store_data = assembly.get_store_data()
-    if not store_data.vendor or not store_data.sku:
+    if not assembly.is_declared_purchasable():
         return answer(False)
 
     # Whether the package declares any supplier at all is asked here rather than
