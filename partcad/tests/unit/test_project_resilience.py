@@ -313,3 +313,64 @@ def test_an_unknown_type_is_reported_at_error_level(unknown_type_package, monkey
     pc.Context(str(unknown_type_package)).get_project("//")
 
     assert not any("nonsense" in message for message in recorded), recorded
+
+
+# ...and the retirement is scoped to the kind that was actually retired.
+#
+# Every 'ai-*' registration #486 removed was a 'factory.register("part", ...)';
+# there never was an 'ai-cadquery' sketch, assembly, provider or repository. So
+# the name only means "retired" on a part. Anywhere else it is a typo in a
+# package somebody can fix, and forgiving it would both hide that and claim a
+# release had a type it never had.
+
+
+@pytest.fixture
+def retired_part_type_on_a_sketch_package(tmp_path):
+    """A sketch declared with a type only ever registered for parts."""
+    config = {
+        "name": "//test",
+        "sketches": {"not_a_sketch_type": {"type": "ai-cadquery"}},
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(config))
+    return tmp_path
+
+
+def test_a_retired_part_type_on_a_sketch_is_unknown_rather_than_retired(
+    retired_part_type_on_a_sketch_package,
+):
+    """It has to fail the command, exactly as any other unknown sketch type does."""
+    pc.logging.reset_errors()
+
+    project = pc.Context(str(retired_part_type_on_a_sketch_package)).get_project("//")
+
+    assert pc.logging.had_errors is True
+    reason = project.get_broken_object_reason("sketch", "not_a_sketch_type")
+    assert "unknown sketch type 'ai-cadquery'" in reason
+    # And it must not claim a release that never had such a sketch type.
+    assert "retired" not in reason
+    assert "0.7.153" not in reason
+
+
+def test_a_retired_part_type_on_a_sketch_is_not_reported_as_a_warning(
+    retired_part_type_on_a_sketch_package, monkeypatch
+):
+    recorded = _record_warnings(monkeypatch)
+
+    pc.Context(str(retired_part_type_on_a_sketch_package)).get_project("//")
+
+    assert not any("ai-cadquery" in message for message in recorded), recorded
+
+
+@pytest.mark.parametrize("kind", ["sketch", "assembly", "provider", "repository"])
+def test_a_retired_part_type_raises_a_plain_unknown_type_for_other_kinds(kind):
+    with pytest.raises(factory.UnknownTypeException) as excinfo:
+        factory.instantiate(kind, "ai-cadquery", None, None, None, {"name": "some_object"})
+
+    assert not isinstance(excinfo.value, factory.RetiredTypeException)
+    assert "unknown %s type 'ai-cadquery'" % kind in str(excinfo.value)
+
+
+def test_a_retired_part_type_is_still_retired_on_a_part():
+    """The guard above must not have cost the case the retirement is for."""
+    with pytest.raises(factory.RetiredTypeException):
+        factory.instantiate("part", "ai-cadquery", None, None, None, {"name": "some_part"})

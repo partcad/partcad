@@ -11,14 +11,22 @@
 # The object types this PartCAD used to support and deliberately removed, each
 # mapped to the release that removed it.
 #
-# All four are the built-in generative-AI part types retired by #486 ("retire
-# the built-in generative-AI functionality"), which deleted the
-# 'part_factory_ai_*' modules together with their 'register()' calls. The public
-# index is a separate repository and still declares them, as does every package
-# published while they existed - so this is not something the user of such a
-# package can correct. That is why naming one of these is a warning and the
-# object is skipped, while any other unknown type stays an error (see
-# 'Project.record_broken_object').
+# These are 'part' types, and only 'part' types. All four are the built-in
+# generative-AI part types retired by #486 ("retire the built-in generative-AI
+# functionality"), which deleted the 'part_factory_ai_*' modules together with
+# their 'register()' calls - every one of which was a
+# 'factory.register("part", ...)'. The public index is a separate repository and
+# still declares them, as does every package published while they existed - so
+# this is not something the user of such a package can correct. That is why
+# naming one of these is a warning and the object is skipped, while any other
+# unknown type stays an error (see 'Project.record_broken_object').
+#
+# Because the scope is 'part', 'instantiate' consults this only for that kind.
+# The same name on a sketch, an assembly, a provider or a repository was never a
+# type PartCAD had, so it is not a retirement and must not be forgiven as one -
+# and calling it retired would name a release that never supported it. Should a
+# non-part type ever be retired, this map has to grow a kind before that entry
+# can be added to it.
 #
 # Nothing else belongs in here. A type that never existed, or a typo in the
 # user's own package, must keep failing loudly.
@@ -122,7 +130,10 @@ def instantiate(kind: str, t: str, ctx, source_project, target_project, config):
     # the retired 'ai-*' types carry - into the log for every occurrence.
     #
     # Checked after the lookups above, not before them, so that a type which is
-    # somehow registered again is served rather than reported as retired.
-    if isinstance(t, str) and t in RETIRED_TYPES:
+    # somehow registered again is served rather than reported as retired. Gated
+    # on 'part' because that is what every retired type was: naming one of them
+    # on any other kind is a broken declaration, not a retirement (see
+    # 'RETIRED_TYPES').
+    if kind == "part" and isinstance(t, str) and t in RETIRED_TYPES:
         raise RetiredTypeException(kind, t, config.get("name"))
     raise UnknownTypeException(kind, t, config.get("name"))
