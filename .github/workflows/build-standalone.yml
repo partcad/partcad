@@ -78,8 +78,17 @@ permissions:
 # independent, because no two runs share a run id. Independent runs keep the
 # plain group unchanged, so a second push to a branch still cancels the build
 # in flight -- which is why the suffix is conditional rather than always there.
+#
+# Note which way round the two branches go. `a && b || c` is the only
+# conditional an expression has, and it is not a ternary: `&&` yields the first
+# falsy operand and `||` the first truthy one, so a *falsy* `b` falls through to
+# `c` and the condition stops meaning anything at all. An empty string is falsy.
+# Written the other way -- `== 'null' && '' || format(...)` -- this would append
+# the suffix to every run, independent ones included, and no push would ever
+# supersede the build in flight again. The non-empty half has to be the half the
+# condition selects.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ toJSON(inputs.called) == 'null' && '' || format('-called-{0}', github.run_id) }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ toJSON(inputs.called) != 'null' && format('-called-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 # One bundle per supported OS version, not one per operating system. A frozen
