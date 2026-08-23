@@ -30,6 +30,15 @@ what makes the update safe on Windows, where overwriting a running executable
 fails outright, what lets the frozen `pc` update itself, and what leaves a daemon
 that outlived the stop still serving from intact files.
 
+Which standalone bundle to download is **not** a question about this machine
+alone. The bundles are named after the OS version they were frozen on
+(``ubuntu-24.04-x86_64``, not ``linux-x86_64``), because a frozen bundle links
+against the C library of its builder and runs on that release and newer. Which
+of those a given release carries is a property of the release, so the release
+says: ``platforms.json`` beside the archives lists them, best first, and
+:func:`select_platforms` narrows that list to the builds this machine can run --
+the same policy ``install.sh`` applies to its own hardcoded lists.
+
 Superseded bundles are then removed -- all of them, including the one this
 process is running from, which cannot delete itself and is handed to a detached
 reaper that waits for this process to exit first. See :func:`_reap_after_exit`.
@@ -78,12 +87,21 @@ DISTRIBUTIONS = (
 # links into the bin directory.
 BUNDLE_EXECUTABLES = ("pc", "partcad", "partcad-json-rpc")
 
+# The release manifest: which platform builds a release actually carries, and in
+# which order to try them. Published beside the archives by
+# "dev-tools/release/platforms-manifest.sh".
+MANIFEST_NAME = "platforms.json"
+
 USER_AGENT = "partcad-selfupdate"
 NETWORK_TIMEOUT = 30.0
 
 
 class SelfUpdateError(RuntimeError):
     """The installation cannot be updated, with a message saying what to do."""
+
+
+class _NotPublished(SelfUpdateError):
+    """A release asset is not there. Not fatal on its own: try the next build."""
 
 
 def _noop(_message: str) -> None:
@@ -300,12 +318,8 @@ def update(
 # ---------------------------------------------------------------------------
 
 
-def platform_archive() -> tuple:
-    """``(platform, extension)`` of the release archive for this machine.
-
-    The names mirror ``install.sh`` and ``dev-tools/pyinstaller/build.sh``, which
-    is what makes an installation from either updatable by the other.
-    """
+def host_platform() -> tuple:
+    """``(os, arch)`` of this machine, in the names the release manifest uses."""
     os_names = {"linux": "linux", "darwin": "macos", "win32": "windows"}
     machine_names = {
         "x86_64": "x86_64",
@@ -319,15 +333,154 @@ def platform_archive() -> tuple:
         raise SelfUpdateError(
             "no standalone PartCAD bundle is published for %s/%s" % (sys.platform, platform.machine())
         )
-    return "%s-%s" % (os_name, arch), ("zip" if os_name == "windows" else "tar.gz")
+    return os_name, arch
+
+
+def archive_extension(os_name: str) -> str:
+    """The archive format the bundles are published in for ``os_name``."""
+    return "zip" if os_name == "windows" else "tar.gz"
+
+
+def host_release() -> Optional[str]:
+    """This machine's OS release as ``"<name>-<version>"``, or None if unknown.
+
+    The same question ``install.sh`` asks, and the same two answers it can give:
+    an Ubuntu version out of ``/etc/os-release``, or a macOS major version. Every
+    other machine is deliberately "unknown" -- a non-Ubuntu Linux cannot be lined
+    up against a build named after an Ubuntu release, and Windows builds are
+    named after the runner image, which is not a version this machine has.
+    """
+    if sys.platform.startswith("linux"):
+        return _linux_release()
+    if sys.platform == "darwin":
+        # The major version is the compatibility boundary; the point release is
+        # not, which is why the builds are named "macos-15" and not "macos-15.3".
+        major = (platform.mac_ver()[0] or "").split(".")[0]
+        return "macos-%s" % major if major else None
+    return None
+
+
+def _linux_release() -> Optional[str]:
+    try:
+        fields = {}
+        with open("/etc/os-release", "r", encoding="utf-8") as stream:
+            for line in stream:
+                key, separator, value = line.strip().partition("=")
+                if separator:
+                    fields[key] = value.strip().strip('"').strip("'")
+    except OSError:
+        return None
+    if fields.get("ID") != "ubuntu":
+        return None
+    version = fields.get("VERSION_ID")
+    return "ubuntu-%s" % version if version else None
+
+
+def _version_tuple(value: str) -> tuple:
+    """A comparable version. Non-digits are dropped, missing fields count as 0."""
+    fields = []
+    for field in value.split("."):
+        digits = "".join(character for character in field if character.isdigit())
+        fields.append(int(digits) if digits else 0)
+    return tuple(fields)
+
+
+def _version_le(left: tuple, right: tuple) -> bool:
+    """True when ``left <= right``, padding the shorter one with zeroes.
+
+    ``(24,) <= (24, 0)`` has to hold both ways round, which plain tuple
+    comparison does not give: Python orders the shorter tuple first.
+    """
+    width = max(len(left), len(right))
+    return left + (0,) * (width - len(left)) <= right + (0,) * (width - len(right))
+
+
+def _split_release(value: str) -> Optional[tuple]:
+    """``("ubuntu", (24, 4))`` for ``"ubuntu-24.04"``; None without a version."""
+    name, _, version = value.partition("-")
+    if not name or not version:
+        return None
+    return name, _version_tuple(version)
+
+
+def _platform_release(platform_name: str) -> Optional[tuple]:
+    """The OS release a build was frozen on, from its platform id.
+
+    ``"ubuntu-24.04-x86_64"`` is ``("ubuntu", (24, 4))``; ``"linux-x86_64"`` --
+    an IDE archive, built once per operating system rather than per OS version
+    -- carries no release and is None.
+    """
+    head, _, _arch = platform_name.rpartition("-")
+    return _split_release(head) if head else None
+
+
+def select_platforms(manifest: dict, kind: str, os_name: str, arch: str, release: Optional[str] = None) -> List[str]:
+    """The builds in ``manifest`` worth trying on this machine, best first.
+
+    ``manifest[kind][os][arch]`` is what the release actually published, newest
+    build first. This applies the policy ``install.sh`` applies to its own
+    hardcoded lists, and for the same reason: a frozen bundle needs the C library
+    of the machine that froze it or newer, so a build newer than this machine is
+    dropped rather than offered and left to fail at first start. A machine whose
+    release cannot be established -- Windows, a non-Ubuntu Linux -- gets the list
+    backwards instead, oldest and therefore most portable build first. An OS
+    older than every build gets the oldest one anyway, as the only candidate with
+    a chance.
+    """
+    published = (((manifest.get(kind) or {}).get(os_name) or {}).get(arch)) or []
+    published = [entry for entry in published if isinstance(entry, str) and entry]
+    if not published:
+        return []
+    host = _split_release(release) if release else None
+    releases = [(entry, _platform_release(entry)) for entry in published]
+    if host is None or not any(found and found[0] == host[0] for _, found in releases):
+        return list(reversed(published))
+    usable = [entry for entry, found in releases if found and found[0] == host[0] and _version_le(found[1], host[1])]
+    return usable or [published[-1]]
+
+
+def fetch_manifest(base_url: str) -> dict:
+    """The release manifest published beside the archives.
+
+    Which builds a release carries is a property of the release, not of this
+    machine: the bundles are named after the OS version they were frozen on, and
+    that set changes as builders come and go. So the release says, and this
+    reads it, rather than a client guessing a name that may not exist.
+    """
+    url = "%s/%s" % (base_url, MANIFEST_NAME)
+    try:
+        body = _http_get(url)
+    except SelfUpdateError as e:
+        raise SelfUpdateError(
+            "%s is not published, so there is no way to tell which standalone bundles "
+            "this release carries. Releases made before the manifest existed cannot be "
+            "installed by `pc upgrade`; install one with install.sh, or update to a "
+            "release that publishes %s." % (url, MANIFEST_NAME)
+        ) from e
+    try:
+        manifest = json.loads(body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as e:
+        raise SelfUpdateError("%s is not valid JSON: %s" % (url, e)) from e
+    if not isinstance(manifest, dict):
+        raise SelfUpdateError("%s does not contain a release manifest" % url)
+    return manifest
+
+
+def release_platforms(base_url: str, kind: str = "bundle") -> List[str]:
+    """The platform ids to try for this machine, best first."""
+    os_name, arch = host_platform()
+    platforms = select_platforms(fetch_manifest(base_url), kind, os_name, arch, host_release())
+    if not platforms:
+        raise SelfUpdateError("the release at %s publishes no standalone bundle for %s/%s" % (base_url, os_name, arch))
+    return platforms
 
 
 def _install_standalone(version: str, repo: str, log: Callable[[str], None]) -> str:
     """Download the release bundle and install it beside the running one."""
-    platform_name, ext = platform_archive()
-    archive = "partcad-%s-%s.%s" % (version, platform_name, ext)
+    os_name, _arch = host_platform()
+    ext = archive_extension(os_name)
     base_url = os.environ.get("PARTCAD_BASE_URL") or "https://github.com/%s/releases/download/%s" % (repo, version)
-    url = "%s/%s" % (base_url, archive)
+    candidates = release_platforms(base_url)
 
     root = install_dir()
     target = os.path.join(root, version)
@@ -342,10 +495,7 @@ def _install_standalone(version: str, repo: str, log: Callable[[str], None]) -> 
         )
 
     with tempfile.TemporaryDirectory(prefix="partcad-update-", dir=_staging_parent(root)) as staging:
-        archive_path = os.path.join(staging, archive)
-        log("Downloading %s..." % url)
-        _download(url, archive_path)
-        _verify_checksum(url, archive_path, log)
+        archive_path = _download_bundle(base_url, version, candidates, ext, staging, log)
 
         log("Unpacking...")
         _extract(archive_path, staging, ext)
@@ -367,6 +517,42 @@ def _install_standalone(version: str, repo: str, log: Callable[[str], None]) -> 
     _relink_launchers(target, root, log)
     _prune_old_versions(root, keep=target, running=running, log=log)
     return target
+
+
+def _download_bundle(
+    base_url: str,
+    version: str,
+    candidates: List[str],
+    ext: str,
+    staging: str,
+    log: Callable[[str], None],
+) -> str:
+    """Download the first candidate the release actually has. Returns its path.
+
+    The manifest says what was published, so the first candidate is normally the
+    one that arrives. It can still be absent -- a builder that failed after the
+    manifest was written, a mirror behind ``PARTCAD_BASE_URL`` that carries part
+    of a release -- and every later candidate is a bundle this machine can run
+    too, so a missing one moves on the way ``install.sh`` does.
+    """
+    last_error = None
+    for platform_name in candidates:
+        archive = "partcad-%s-%s.%s" % (version, platform_name, ext)
+        url = "%s/%s" % (base_url, archive)
+        archive_path = os.path.join(staging, archive)
+        log("Downloading %s..." % url)
+        try:
+            _download(url, archive_path)
+        except _NotPublished as e:
+            log("Warning: %s" % e)
+            last_error = e
+            continue
+        _verify_checksum(url, archive_path, log)
+        return archive_path
+    raise SelfUpdateError(
+        "no build of %s at %s for this machine. Tried: %s%s"
+        % (version, base_url, ", ".join(candidates), (" (%s)" % last_error) if last_error else "")
+    )
 
 
 def _staging_parent(root: str) -> Optional[str]:
@@ -524,11 +710,15 @@ def _download(url: str, dest: str) -> None:
             shutil.copyfileobj(response, out)
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            raise SelfUpdateError(
+            raise _NotPublished(
                 "no build was published at %s. See the releases page for what is available." % url
             ) from e
         raise SelfUpdateError("download failed (HTTP %s): %s" % (e.code, url)) from e
     except (urllib.error.URLError, OSError) as e:
+        # A "file://" base URL -- a local mirror, or the archives of a CI run --
+        # reports a missing asset as a missing file rather than as a 404.
+        if isinstance(getattr(e, "reason", e), FileNotFoundError):
+            raise _NotPublished("there is no %s" % url) from e
         raise SelfUpdateError("download failed: %s: %s" % (url, e)) from e
 
 

@@ -140,23 +140,158 @@ def test_repository_honors_the_environment(monkeypatch):
 @pytest.mark.parametrize(
     "platform_name,machine,expected",
     [
-        ("linux", "x86_64", ("linux-x86_64", "tar.gz")),
-        ("linux", "aarch64", ("linux-arm64", "tar.gz")),
-        ("darwin", "arm64", ("macos-arm64", "tar.gz")),
-        ("win32", "AMD64", ("windows-x86_64", "zip")),
+        ("linux", "x86_64", ("linux", "x86_64")),
+        ("linux", "aarch64", ("linux", "arm64")),
+        ("darwin", "arm64", ("macos", "arm64")),
+        ("win32", "AMD64", ("windows", "x86_64")),
     ],
 )
-def test_platform_archive(monkeypatch, platform_name, machine, expected):
+def test_host_platform(monkeypatch, platform_name, machine, expected):
     monkeypatch.setattr(selfupdate.sys, "platform", platform_name)
     monkeypatch.setattr(selfupdate.platform, "machine", lambda: machine)
-    assert selfupdate.platform_archive() == expected
+    assert selfupdate.host_platform() == expected
 
 
-def test_platform_archive_rejects_an_unsupported_machine(monkeypatch):
+def test_host_platform_rejects_an_unsupported_machine(monkeypatch):
     monkeypatch.setattr(selfupdate.sys, "platform", "linux")
     monkeypatch.setattr(selfupdate.platform, "machine", lambda: "riscv64")
     with pytest.raises(selfupdate.SelfUpdateError, match="no standalone PartCAD bundle"):
-        selfupdate.platform_archive()
+        selfupdate.host_platform()
+
+
+def test_archive_extension_is_zip_on_windows_only():
+    assert selfupdate.archive_extension("windows") == "zip"
+    assert selfupdate.archive_extension("linux") == "tar.gz"
+    assert selfupdate.archive_extension("macos") == "tar.gz"
+
+
+def test_host_release_reads_the_ubuntu_version(monkeypatch, tmp_path):
+    os_release = tmp_path / "os-release"
+    os_release.write_text('NAME="Ubuntu"\nID=ubuntu\nVERSION_ID="22.04"\n')
+    monkeypatch.setattr(selfupdate.sys, "platform", "linux")
+    monkeypatch.setattr(selfupdate, "open", lambda *a, **k: open(os_release, "r", encoding="utf-8"), raising=False)
+    assert selfupdate.host_release() == "ubuntu-22.04"
+
+
+def test_host_release_is_unknown_on_a_distribution_that_is_not_ubuntu(monkeypatch, tmp_path):
+    os_release = tmp_path / "os-release"
+    os_release.write_text('NAME="Fedora Linux"\nID=fedora\nVERSION_ID=41\n')
+    monkeypatch.setattr(selfupdate.sys, "platform", "linux")
+    monkeypatch.setattr(selfupdate, "open", lambda *a, **k: open(os_release, "r", encoding="utf-8"), raising=False)
+    assert selfupdate.host_release() is None
+
+
+def test_host_release_takes_the_macos_major_version(monkeypatch):
+    monkeypatch.setattr(selfupdate.sys, "platform", "darwin")
+    monkeypatch.setattr(selfupdate.platform, "mac_ver", lambda: ("15.3.1", ("", "", ""), "arm64"))
+    assert selfupdate.host_release() == "macos-15"
+
+
+def test_host_release_is_unknown_on_windows(monkeypatch):
+    # The Windows builds are named after the runner image ("windows-2025"),
+    # which is not a version this machine has, so there is nothing to compare.
+    monkeypatch.setattr(selfupdate.sys, "platform", "win32")
+    assert selfupdate.host_release() is None
+
+
+# ---------------------------------------------------------------------------
+# Choosing a build out of the release manifest
+# ---------------------------------------------------------------------------
+
+MANIFEST = {
+    "version": "0.7.177",
+    "bundle": {
+        "linux": {
+            "x86_64": ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"],
+            "arm64": ["ubuntu-24.04-arm64", "ubuntu-22.04-arm64"],
+        },
+        "macos": {"arm64": ["macos-26-arm64", "macos-15-arm64"]},
+        "windows": {"x86_64": ["windows-2025-x86_64", "windows-2022-x86_64"]},
+    },
+    "ide": {
+        "linux": {"x86_64": ["linux-x86_64"]},
+        "macos": {"arm64": ["macos-arm64"]},
+        "windows": {"x86_64": ["windows-x86_64"]},
+    },
+}
+
+
+def _select(os_name, arch, release, kind="bundle", manifest=MANIFEST):
+    return selfupdate.select_platforms(manifest, kind, os_name, arch, release)
+
+
+def test_a_matching_host_gets_its_own_build_first():
+    assert _select("linux", "x86_64", "ubuntu-24.04") == ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"]
+
+
+def test_a_build_newer_than_the_host_is_never_offered():
+    # 22.04 cannot run a bundle frozen on 24.04: the glibc it needs is not there.
+    assert _select("linux", "x86_64", "ubuntu-22.04") == ["ubuntu-22.04-x86_64"]
+
+
+def test_a_host_newer_than_every_build_gets_all_of_them_newest_first():
+    assert _select("linux", "x86_64", "ubuntu-26.04") == ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"]
+    assert _select("macos", "arm64", "macos-27") == ["macos-26-arm64", "macos-15-arm64"]
+
+
+def test_a_host_older_than_every_build_still_gets_the_oldest_one():
+    # Nothing published can be promised to run here, but the oldest build is the
+    # only candidate with a chance, so it is offered rather than nothing at all.
+    assert _select("linux", "x86_64", "ubuntu-20.04") == ["ubuntu-22.04-x86_64"]
+    assert _select("macos", "arm64", "macos-14") == ["macos-15-arm64"]
+
+
+def test_an_unidentified_host_is_offered_the_oldest_build_first():
+    # A non-Ubuntu Linux, or Windows: the release cannot be compared, so the
+    # widest build (the lowest C library floor) goes first.
+    assert _select("linux", "x86_64", None) == ["ubuntu-22.04-x86_64", "ubuntu-24.04-x86_64"]
+    assert _select("windows", "x86_64", None) == ["windows-2022-x86_64", "windows-2025-x86_64"]
+
+
+def test_a_release_name_the_manifest_does_not_carry_counts_as_unidentified():
+    assert _select("linux", "x86_64", "debian-12") == ["ubuntu-22.04-x86_64", "ubuntu-24.04-x86_64"]
+
+
+def test_an_unknown_operating_system_has_no_candidates():
+    assert _select("freebsd", "x86_64", None) == []
+
+
+def test_an_architecture_the_release_does_not_carry_has_no_candidates():
+    # macOS x86_64 has no bundle: nothing is offered, rather than an arm64 one.
+    assert _select("macos", "x86_64", "macos-15") == []
+
+
+def test_the_ide_archives_carry_no_os_version_and_are_offered_as_they_are():
+    assert _select("linux", "x86_64", "ubuntu-22.04", kind="ide") == ["linux-x86_64"]
+    assert _select("macos", "arm64", "macos-15", kind="ide") == ["macos-arm64"]
+
+
+def test_a_manifest_without_this_kind_has_no_candidates():
+    assert _select("linux", "x86_64", "ubuntu-24.04", manifest={"version": "0.7.177"}) == []
+
+
+def test_fetch_manifest_explains_a_release_that_does_not_publish_one(monkeypatch):
+    def missing(url, headers=None):
+        raise selfupdate.SelfUpdateError("could not reach %s" % url)
+
+    monkeypatch.setattr(selfupdate, "_http_get", missing)
+    with pytest.raises(selfupdate.SelfUpdateError, match="platforms.json is not published"):
+        selfupdate.fetch_manifest("https://example.invalid/builds")
+
+
+def test_fetch_manifest_rejects_a_body_that_is_not_a_manifest(monkeypatch):
+    monkeypatch.setattr(selfupdate, "_http_get", lambda url, headers=None: b"<html>404</html>")
+    with pytest.raises(selfupdate.SelfUpdateError, match="not valid JSON"):
+        selfupdate.fetch_manifest("https://example.invalid/builds")
+
+
+def test_release_platforms_reports_a_machine_the_release_has_no_build_for(monkeypatch):
+    monkeypatch.setattr(selfupdate.sys, "platform", "darwin")
+    monkeypatch.setattr(selfupdate.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(selfupdate, "fetch_manifest", lambda base_url: MANIFEST)
+    monkeypatch.setattr(selfupdate, "host_release", lambda: "macos-15")
+    with pytest.raises(selfupdate.SelfUpdateError, match="no standalone bundle for macos/x86_64"):
+        selfupdate.release_platforms("https://example.invalid/builds")
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +391,10 @@ def standalone(monkeypatch, tmp_path):
     monkeypatch.setenv("PATH", str(bin_dir))
     monkeypatch.setattr(selfupdate.sys, "platform", "linux")
     monkeypatch.setattr(selfupdate.platform, "machine", lambda: "x86_64")
+    # What the release says it carries, and what this machine is: together they
+    # name the archive, which no client can work out from the host alone.
+    monkeypatch.setattr(selfupdate, "fetch_manifest", lambda base_url: MANIFEST)
+    monkeypatch.setattr(selfupdate, "host_release", lambda: "ubuntu-24.04")
 
     archive = _make_bundle_archive(tmp_path / "release")
 
@@ -355,11 +494,47 @@ def test_install_standalone_uses_the_base_url_override(monkeypatch, standalone):
 
     with pytest.raises(selfupdate.SelfUpdateError):
         selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
-    assert urls == ["https://example.invalid/builds/partcad-0.7.159-linux-x86_64.tar.gz"]
+    assert urls == ["https://example.invalid/builds/partcad-0.7.159-ubuntu-24.04-x86_64.tar.gz"]
+
+
+def test_install_standalone_falls_through_to_the_next_published_build(monkeypatch, standalone, no_reaper):
+    """A build the manifest lists but the release does not have moves on.
+
+    A builder can fail after the manifest is written, and a mirror behind
+    PARTCAD_BASE_URL can carry part of a release. Every later candidate is still
+    a bundle this machine can run.
+    """
+    root, _bin_dir, _running = standalone
+    real_download = selfupdate._download
+    urls = []
+
+    def download(url, dest):
+        urls.append(url)
+        if "ubuntu-24.04" in url:
+            raise selfupdate._NotPublished("no build was published at %s" % url)
+        real_download(url, dest)
+
+    monkeypatch.setattr(selfupdate, "_download", download)
+    target = selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
+    assert target == str(root / "0.7.159")
+    assert [url.rsplit("/", 1)[-1] for url in urls] == [
+        "partcad-0.7.159-ubuntu-24.04-x86_64.tar.gz",
+        "partcad-0.7.159-ubuntu-22.04-x86_64.tar.gz",
+    ]
+
+
+def test_install_standalone_reports_every_build_it_tried(monkeypatch, standalone):
+    monkeypatch.setattr(selfupdate, "_download", lambda url, dest: _fail_missing(url))
+    with pytest.raises(selfupdate.SelfUpdateError, match="ubuntu-24.04-x86_64, ubuntu-22.04-x86_64"):
+        selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
 
 
 def _fail_download(url, dest):
     raise selfupdate.SelfUpdateError("download failed: %s" % url)
+
+
+def _fail_missing(url):
+    raise selfupdate._NotPublished("no build was published at %s" % url)
 
 
 # ---------------------------------------------------------------------------

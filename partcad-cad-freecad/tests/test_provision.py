@@ -36,23 +36,118 @@ def clean_environment(monkeypatch):
 @pytest.mark.parametrize(
     "system, machine, expected",
     [
-        ("Linux", "x86_64", ("linux-x86_64", "tar.gz")),
-        ("Linux", "aarch64", ("linux-arm64", "tar.gz")),
-        ("Darwin", "arm64", ("macos-arm64", "tar.gz")),
-        ("Windows", "AMD64", ("windows-x86_64", "zip")),
+        ("Linux", "x86_64", ("linux", "x86_64")),
+        ("Linux", "aarch64", ("linux", "arm64")),
+        ("Darwin", "arm64", ("macos", "arm64")),
+        ("Windows", "AMD64", ("windows", "x86_64")),
     ],
 )
 def test_platform_names_match_install_sh(system, machine, expected):
-    assert provision.platform_archive(system, machine) == expected
+    assert provision.host_platform(system, machine) == expected
 
 
 def test_an_unsupported_platform_has_no_bundle():
-    assert provision.platform_archive("SunOS", "sparc") is None
+    assert provision.host_platform("SunOS", "sparc") is None
+
+
+def test_the_archive_format_is_zip_on_windows_only():
+    assert provision.archive_extension("windows") == "zip"
+    assert provision.archive_extension("linux") == "tar.gz"
 
 
 def test_archive_and_artifact_names_are_the_ci_contract():
-    assert provision.archive_name("0.7.158", "linux-x86_64", "tar.gz") == "partcad-0.7.158-linux-x86_64.tar.gz"
-    assert provision.artifact_name("windows-x86_64") == "partcad-standalone-windows-x86_64"
+    assert (
+        provision.archive_name("0.7.158", "ubuntu-24.04-x86_64", "tar.gz")
+        == "partcad-0.7.158-ubuntu-24.04-x86_64.tar.gz"
+    )
+    assert provision.artifact_name("windows-2025-x86_64") == "partcad-standalone-windows-2025-x86_64"
+
+
+def test_the_host_release_is_the_macos_major_version(monkeypatch):
+    monkeypatch.setattr(provision._platform, "mac_ver", lambda: ("26.1", ("", "", ""), "arm64"))
+    assert provision.host_release("Darwin") == "macos-26"
+
+
+def test_the_host_release_is_unknown_on_windows():
+    # The Windows builds are named after the runner image ("windows-2025"),
+    # which is not a version this machine has, so there is nothing to compare.
+    assert provision.host_release("Windows") is None
+
+
+# ---- choosing a build --------------------------------------------------------
+
+MANIFEST = {
+    "version": "0.7.177",
+    "bundle": {
+        "linux": {
+            "x86_64": ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"],
+            "arm64": ["ubuntu-24.04-arm64", "ubuntu-22.04-arm64"],
+        },
+        "macos": {"arm64": ["macos-26-arm64", "macos-15-arm64"]},
+        "windows": {"x86_64": ["windows-2025-x86_64", "windows-2022-x86_64"]},
+    },
+    "ide": {"linux": {"x86_64": ["linux-x86_64"]}},
+}
+
+
+def _select(os_name, arch, release, kind="bundle", manifest=MANIFEST):
+    return provision.select_platforms(manifest, kind, os_name, arch, release)
+
+
+def test_the_host_gets_its_own_build_first():
+    assert _select("linux", "x86_64", "ubuntu-24.04") == ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"]
+
+
+def test_a_build_newer_than_the_host_is_never_offered():
+    assert _select("linux", "x86_64", "ubuntu-22.04") == ["ubuntu-22.04-x86_64"]
+
+
+def test_a_host_newer_than_every_build_gets_all_of_them():
+    assert _select("macos", "arm64", "macos-27") == ["macos-26-arm64", "macos-15-arm64"]
+
+
+def test_a_host_older_than_every_build_still_gets_the_oldest():
+    assert _select("macos", "arm64", "macos-14") == ["macos-15-arm64"]
+
+
+def test_an_unidentified_host_is_offered_the_most_portable_build_first():
+    assert _select("windows", "x86_64", None) == ["windows-2022-x86_64", "windows-2025-x86_64"]
+    assert _select("linux", "x86_64", None) == ["ubuntu-22.04-x86_64", "ubuntu-24.04-x86_64"]
+
+
+def test_an_unknown_operating_system_has_no_candidates():
+    assert _select("sunos", "sparc", None) == []
+
+
+def test_an_architecture_the_release_does_not_carry_has_no_candidates():
+    assert _select("macos", "x86_64", "macos-15") == []
+
+
+def test_a_missing_manifest_leaves_nothing_to_try():
+    assert _select("linux", "x86_64", "ubuntu-24.04", manifest={}) == []
+
+
+def test_ci_artifact_names_are_grouped_like_a_manifest():
+    grouped = provision.group_platforms(
+        [
+            "ubuntu-22.04-x86_64",
+            "macos-15-arm64",
+            "ubuntu-24.04-x86_64",
+            "windows-2022-x86_64",
+            "not-a-platform-id-at-all",
+        ]
+    )
+    assert grouped["linux"]["x86_64"] == ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"]
+    assert grouped["macos"]["arm64"] == ["macos-15-arm64"]
+    assert grouped["windows"]["x86_64"] == ["windows-2022-x86_64"]
+
+
+def test_a_release_without_a_manifest_reads_as_no_manifest(monkeypatch):
+    def missing(url, headers=None, timeout=60.0):
+        raise OSError("404")
+
+    monkeypatch.setattr(provision, "http_get", missing)
+    assert provision.release_manifest("partcad/partcad", "0.7.135") is None
 
 
 # ---- locating an existing installation ---------------------------------------
@@ -270,10 +365,10 @@ def test_a_missing_checksum_is_not_fatal(tmp_path):
 def test_the_newest_run_carrying_this_platforms_artifact_is_used(monkeypatch):
     responses = {
         "runs": {"workflow_runs": [{"id": 1}, {"id": 2}]},
-        "1": {"artifacts": [{"name": "partcad-standalone-macos-arm64", "archive_download_url": "wrong"}]},
+        "1": {"artifacts": [{"name": "partcad-standalone-macos-15-arm64", "archive_download_url": "wrong"}]},
         "2": {
             "artifacts": [
-                {"name": "partcad-standalone-linux-x86_64", "archive_download_url": "right", "expired": False}
+                {"name": "partcad-standalone-ubuntu-24.04-x86_64", "archive_download_url": "right", "expired": False}
             ]
         },
     }
@@ -286,47 +381,123 @@ def test_the_newest_run_carrying_this_platforms_artifact_is_used(monkeypatch):
 
     monkeypatch.setattr(provision, "http_get_json", fake_get_json)
 
-    artifact = provision.latest_devel_artifact("partcad/partcad", "linux-x86_64", "devel", "t")
+    artifact, platform_name = provision.latest_devel_artifact(
+        "partcad/partcad", "linux", "x86_64", "ubuntu-24.04", "devel", "t"
+    )
 
     assert artifact["archive_download_url"] == "right"
+    assert platform_name == "ubuntu-24.04-x86_64"
+
+
+def test_a_run_builds_what_it_builds_and_the_host_picks_from_that(monkeypatch):
+    """The run's artifact names are its inventory, and the host filters them.
+
+    Which platforms exist is a property of the run -- a shallow run builds fewer
+    than a deep one -- the way it is a property of a release. So the names the
+    run produced are read first and the host applied to them, rather than a name
+    being guessed in advance and asked for.
+    """
+
+    def fake_get_json(url, token=None, timeout=60.0):  # pylint: disable=unused-argument
+        if "/runs?" in url:
+            return {"workflow_runs": [{"id": 1}]}
+        return {
+            "artifacts": [
+                {"name": "partcad-standalone-ubuntu-24.04-x86_64", "archive_download_url": "too-new"},
+                {"name": "partcad-standalone-ubuntu-22.04-x86_64", "archive_download_url": "right"},
+                {"name": "partcad-standalone-macos-15-arm64", "archive_download_url": "wrong-os"},
+            ]
+        }
+
+    monkeypatch.setattr(provision, "http_get_json", fake_get_json)
+
+    artifact, platform_name = provision.latest_devel_artifact(
+        "partcad/partcad", "linux", "x86_64", "ubuntu-22.04", "devel", "t"
+    )
+    assert (artifact["archive_download_url"], platform_name) == ("right", "ubuntu-22.04-x86_64")
+
+
+def test_the_only_build_a_run_has_is_offered_even_to_an_older_host(monkeypatch):
+    """Nothing can be promised, but the oldest build is the only chance there is."""
+
+    def fake_get_json(url, token=None, timeout=60.0):  # pylint: disable=unused-argument
+        if "/runs?" in url:
+            return {"workflow_runs": [{"id": 1}]}
+        return {"artifacts": [{"name": "partcad-standalone-ubuntu-24.04-x86_64", "archive_download_url": "only"}]}
+
+    monkeypatch.setattr(provision, "http_get_json", fake_get_json)
+
+    artifact, platform_name = provision.latest_devel_artifact(
+        "partcad/partcad", "linux", "x86_64", "ubuntu-22.04", "devel", "t"
+    )
+    assert (artifact["archive_download_url"], platform_name) == ("only", "ubuntu-24.04-x86_64")
 
 
 def test_an_expired_artifact_is_skipped(monkeypatch):
     def fake_get_json(url, token=None, timeout=60.0):  # pylint: disable=unused-argument
         if "/runs?" in url:
             return {"workflow_runs": [{"id": 1}]}
-        return {"artifacts": [{"name": "partcad-standalone-linux-x86_64", "expired": True}]}
+        return {"artifacts": [{"name": "partcad-standalone-ubuntu-24.04-x86_64", "expired": True}]}
 
     monkeypatch.setattr(provision, "http_get_json", fake_get_json)
 
-    assert provision.latest_devel_artifact("partcad/partcad", "linux-x86_64", "devel", "t") is None
+    assert provision.latest_devel_artifact("partcad/partcad", "linux", "x86_64", None, "devel", "t") is None
 
 
 def test_downloading_a_devel_build_without_a_token_says_so(tmp_path):
     with pytest.raises(RuntimeError, match="GitHub token"):
-        provision.download_devel("partcad/partcad", "linux-x86_64", "devel", str(tmp_path), lambda _m: None)
+        provision.download_devel("partcad/partcad", "linux", "x86_64", None, "devel", str(tmp_path), lambda _m: None)
 
 
-def test_a_release_with_a_bundle_for_this_platform_is_used(tmp_path, monkeypatch):
-    calls = {}
+@pytest.fixture
+def ubuntu_2404_host(monkeypatch):
+    """A host the manifest can be resolved against, with nothing installed yet."""
     monkeypatch.setattr(provision, "resolve_service_path", lambda _cache: None)
-    monkeypatch.setattr(provision, "platform_archive", lambda: ("linux-x86_64", "tar.gz"))
-    monkeypatch.setattr(provision, "latest_release_tag", lambda repo: "0.7.158")
+    monkeypatch.setattr(provision, "host_platform", lambda: ("linux", "x86_64"))
+    monkeypatch.setattr(provision, "host_release", lambda: "ubuntu-24.04")
+
+
+def test_a_release_with_a_bundle_for_this_platform_is_used(tmp_path, monkeypatch, ubuntu_2404_host):
+    calls = {}
+    monkeypatch.setattr(provision, "latest_release_tag", lambda repo: "0.7.177")
+    monkeypatch.setattr(provision, "release_manifest", lambda repo, version: MANIFEST)
     monkeypatch.setattr(provision, "url_exists", lambda url: calls.setdefault("asset", url) is None or True)
     monkeypatch.setattr(provision, "download_release", lambda *args: "/bundle/" + provision.EXE)
     monkeypatch.setattr(provision, "download_devel", lambda *args: pytest.fail("should not fall back"))
 
     assert provision.ensure_service(str(tmp_path)) == "/bundle/" + provision.EXE
-    assert calls["asset"].endswith("/0.7.158/partcad-0.7.158-linux-x86_64.tar.gz")
+    assert calls["asset"].endswith("/0.7.177/partcad-0.7.177-ubuntu-24.04-x86_64.tar.gz")
 
 
-def test_a_release_without_a_bundle_falls_back_to_the_devel_build(tmp_path, monkeypatch):
-    monkeypatch.setattr(provision, "resolve_service_path", lambda _cache: None)
-    monkeypatch.setattr(provision, "platform_archive", lambda: ("linux-x86_64", "tar.gz"))
+def test_an_archive_the_manifest_lists_but_the_release_lacks_moves_on(tmp_path, monkeypatch, ubuntu_2404_host):
+    """The manifest is written before the upload, so a listed archive can be absent."""
+    tried = []
+    monkeypatch.setattr(provision, "latest_release_tag", lambda repo: "0.7.177")
+    monkeypatch.setattr(provision, "release_manifest", lambda repo, version: MANIFEST)
+    monkeypatch.setattr(provision, "url_exists", lambda url: tried.append(url) is None and "ubuntu-22.04" in url)
+    monkeypatch.setattr(provision, "download_release", lambda repo, version, platform_name, *rest: platform_name)
+    monkeypatch.setattr(provision, "download_devel", lambda *args: pytest.fail("should not fall back"))
+
+    assert provision.ensure_service(str(tmp_path)) == "ubuntu-22.04-x86_64"
+    assert len(tried) == 2
+
+
+def test_a_release_without_a_manifest_falls_back_to_the_devel_build(tmp_path, monkeypatch, ubuntu_2404_host):
     # A release that publishes the wheels but no standalone bundle for this
-    # platform: the archives are a later addition than the wheels, so a tag can
-    # have none.
+    # platform, or one made before the manifest existed: either way there is
+    # nothing here to resolve, and the development build is the fallback.
     monkeypatch.setattr(provision, "latest_release_tag", lambda repo: "0.7.135")
+    monkeypatch.setattr(provision, "release_manifest", lambda repo, version: None)
+    monkeypatch.setattr(provision, "url_exists", lambda url: pytest.fail("nothing to ask about"))
+    monkeypatch.setattr(provision, "download_release", lambda *args: pytest.fail("no bundle to download"))
+    monkeypatch.setattr(provision, "download_devel", lambda *args: "/devel/" + provision.EXE)
+
+    assert provision.ensure_service(str(tmp_path)) == "/devel/" + provision.EXE
+
+
+def test_a_release_with_no_bundle_for_this_host_falls_back_to_the_devel_build(tmp_path, monkeypatch, ubuntu_2404_host):
+    monkeypatch.setattr(provision, "latest_release_tag", lambda repo: "0.7.177")
+    monkeypatch.setattr(provision, "release_manifest", lambda repo, version: MANIFEST)
     monkeypatch.setattr(provision, "url_exists", lambda url: False)
     monkeypatch.setattr(provision, "download_release", lambda *args: pytest.fail("no bundle to download"))
     monkeypatch.setattr(provision, "download_devel", lambda *args: "/devel/" + provision.EXE)
@@ -334,19 +505,15 @@ def test_a_release_without_a_bundle_falls_back_to_the_devel_build(tmp_path, monk
     assert provision.ensure_service(str(tmp_path)) == "/devel/" + provision.EXE
 
 
-def test_no_release_at_all_falls_back_to_the_devel_build(tmp_path, monkeypatch):
-    monkeypatch.setattr(provision, "resolve_service_path", lambda _cache: None)
-    monkeypatch.setattr(provision, "platform_archive", lambda: ("linux-x86_64", "tar.gz"))
+def test_no_release_at_all_falls_back_to_the_devel_build(tmp_path, monkeypatch, ubuntu_2404_host):
     monkeypatch.setattr(provision, "latest_release_tag", lambda repo: None)
     monkeypatch.setattr(provision, "download_devel", lambda *args: "/devel/" + provision.EXE)
 
     assert provision.ensure_service(str(tmp_path)) == "/devel/" + provision.EXE
 
 
-def test_pc_cad_devel_skips_the_release_lookup_entirely(tmp_path, monkeypatch):
+def test_pc_cad_devel_skips_the_release_lookup_entirely(tmp_path, monkeypatch, ubuntu_2404_host):
     monkeypatch.setenv("PC_CAD_DEVEL", "1")
-    monkeypatch.setattr(provision, "resolve_service_path", lambda _cache: None)
-    monkeypatch.setattr(provision, "platform_archive", lambda: ("linux-x86_64", "tar.gz"))
     monkeypatch.setattr(provision, "latest_release_tag", lambda repo: pytest.fail("no release lookup"))
     monkeypatch.setattr(provision, "download_devel", lambda *args: "/devel/" + provision.EXE)
 
@@ -362,7 +529,7 @@ def test_an_existing_installation_is_never_downloaded_over(tmp_path, monkeypatch
 
 def test_an_unsupported_platform_is_reported(tmp_path, monkeypatch):
     monkeypatch.setattr(provision, "resolve_service_path", lambda _cache: None)
-    monkeypatch.setattr(provision, "platform_archive", lambda: None)
+    monkeypatch.setattr(provision, "host_platform", lambda: None)
 
     with pytest.raises(RuntimeError, match="unsupported platform"):
         provision.ensure_service(str(tmp_path))

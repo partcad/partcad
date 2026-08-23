@@ -12,6 +12,15 @@ same release-archive naming and unpack layout is reused, so an existing
 standalone installation (or the one the VS Code extension downloaded) is picked
 up rather than downloaded again.
 
+Which bundle to download is not a question about this machine alone: a bundle is
+named after the OS version it was frozen on (``ubuntu-24.04-x86_64``, not
+``linux-x86_64``), because it links against that machine's C library and runs
+there and on nothing older. Which of those a release carries is a property of
+the release, so the release says: ``platforms.json`` beside the archives lists
+them, best first, and :func:`select_platforms` narrows the list to the builds
+this host can run. A ``devel`` build has no manifest; the artifact names of the
+run stand in for one.
+
 Two sources, in this order:
 
 * the **latest GitHub release** that actually carries a bundle for this platform;
@@ -42,6 +51,13 @@ DEFAULT_BRANCH = "devel"
 STANDALONE_WORKFLOW = "build-standalone.yml"
 USER_AGENT = "partcad-freecad"
 
+# What a release says it carries, published beside the archives by
+# "dev-tools/release/platforms-manifest.sh".
+MANIFEST_NAME = "platforms.json"
+
+# What "build-standalone.yml" names its artifacts; the platform id follows.
+ARTIFACT_PREFIX = "partcad-standalone-"
+
 EXE = "partcad-json-rpc.exe" if os.name == "nt" else "partcad-json-rpc"
 
 # Reported to the caller so a UI can say what is happening; the download is
@@ -56,20 +72,160 @@ def _noop(_message: str) -> None:
 # ---- platform --------------------------------------------------------------
 
 
-def platform_archive(system: Optional[str] = None, machine: Optional[str] = None):
-    """Return ``(platform, extension)`` naming this host's bundle, or None.
-
-    The names are the contract with ``install.sh`` and the ``Standalone``
-    workflow: ``partcad-<version>-<os>-<arch>.tar.gz`` (``.zip`` on Windows) and
-    the ``partcad-standalone-<os>-<arch>`` CI artifact.
-    """
+def host_platform(system: Optional[str] = None, machine: Optional[str] = None):
+    """Return ``(os, arch)`` for this host in the manifest's names, or None."""
     system = (system or _platform.system()).lower()
     machine = (machine or _platform.machine()).lower()
     os_name = {"linux": "linux", "darwin": "macos", "windows": "windows"}.get(system)
     arch = {"x86_64": "x86_64", "amd64": "x86_64", "arm64": "arm64", "aarch64": "arm64"}.get(machine)
     if os_name is None or arch is None:
         return None
-    return "%s-%s" % (os_name, arch), ("zip" if os_name == "windows" else "tar.gz")
+    return os_name, arch
+
+
+def archive_extension(os_name: str) -> str:
+    return "zip" if os_name == "windows" else "tar.gz"
+
+
+def host_release(system: Optional[str] = None) -> Optional[str]:
+    """This host's OS release as ``"<name>-<version>"``, or None when unknown.
+
+    The same two answers ``install.sh`` can give: an Ubuntu version out of
+    ``/etc/os-release``, or a macOS major version. Everything else is
+    deliberately unknown -- a non-Ubuntu Linux cannot be lined up against a
+    build named after an Ubuntu release, and the Windows builds are named after
+    the runner image, which is not a version this machine has.
+    """
+    system = (system or _platform.system()).lower()
+    if system == "linux":
+        return _linux_release()
+    if system == "darwin":
+        # The major version is the compatibility boundary; the point release is
+        # not, which is why the builds are "macos-15" and not "macos-15.3".
+        major = (_platform.mac_ver()[0] or "").split(".")[0]
+        return "macos-%s" % major if major else None
+    return None
+
+
+def _linux_release() -> Optional[str]:
+    try:
+        fields = {}
+        with open("/etc/os-release", "r", encoding="utf-8") as stream:
+            for line in stream:
+                key, separator, value = line.strip().partition("=")
+                if separator:
+                    fields[key] = value.strip().strip('"').strip("'")
+    except OSError:
+        return None
+    if fields.get("ID") != "ubuntu":
+        return None
+    version = fields.get("VERSION_ID")
+    return "ubuntu-%s" % version if version else None
+
+
+def _version_tuple(value: str) -> tuple:
+    """A comparable version. Non-digits are dropped, missing fields count as 0."""
+    fields = []
+    for field in value.split("."):
+        digits = "".join(character for character in field if character.isdigit())
+        fields.append(int(digits) if digits else 0)
+    return tuple(fields)
+
+
+def _version_le(left: tuple, right: tuple) -> bool:
+    """True when ``left <= right``, padding the shorter one with zeroes."""
+    width = max(len(left), len(right))
+    return left + (0,) * (width - len(left)) <= right + (0,) * (width - len(right))
+
+
+def _split_release(value: str):
+    """``("ubuntu", (24, 4))`` for ``"ubuntu-24.04"``; None without a version."""
+    name, _, version = value.partition("-")
+    if not name or not version:
+        return None
+    return name, _version_tuple(version)
+
+
+def parse_platform(platform_id: str):
+    """``(os, arch, release)`` for a platform id, or None when it is not one.
+
+    ``"ubuntu-24.04-x86_64"`` is ``("linux", "x86_64", ("ubuntu", (24, 4)))``;
+    ``"linux-x86_64"`` -- an IDE archive, built once per operating system rather
+    than per OS version -- has no release and is ``("linux", "x86_64", None)``.
+    """
+    parts = platform_id.split("-")
+    if len(parts) not in (2, 3):
+        return None
+    os_name = {"ubuntu": "linux", "linux": "linux", "macos": "macos", "windows": "windows"}.get(parts[0])
+    arch = parts[-1]
+    if os_name is None or arch not in ("x86_64", "arm64"):
+        return None
+    release = _split_release("%s-%s" % (parts[0], parts[1])) if len(parts) == 3 else None
+    return os_name, arch, release
+
+
+def group_platforms(platform_ids) -> dict:
+    """``{os: {arch: [id, ...]}}`` with each list newest build first.
+
+    The shape the release manifest publishes, built here from a list of names --
+    the CI artifacts of a ``devel`` run, which no manifest describes.
+    """
+    grouped: dict = {}
+    for platform_id in platform_ids:
+        parsed = parse_platform(platform_id)
+        if parsed is None:
+            continue
+        os_name, arch, _release = parsed
+        grouped.setdefault(os_name, {}).setdefault(arch, []).append(platform_id)
+    for by_arch in grouped.values():
+        for ids in by_arch.values():
+            ids.sort(key=lambda name: (parse_platform(name)[2] or ("", ()))[1], reverse=True)
+    return grouped
+
+
+def select_platforms(manifest: dict, kind: str, os_name: str, arch: str, release: Optional[str] = None) -> list:
+    """The builds in ``manifest`` worth trying on this host, best first.
+
+    ``manifest[kind][os][arch]`` is what the release published, newest build
+    first. A frozen bundle needs the C library of the machine that froze it or
+    newer, so a build newer than this host is dropped rather than offered and
+    left to fail at first start; a host whose release cannot be established gets
+    the list backwards, oldest and therefore most portable build first; and a
+    host older than every build is still offered the oldest one, as the only
+    candidate with a chance.
+
+    Duplicated from ``partcad_client.selfupdate`` on purpose, for the reason
+    given in ``framing.py``: FreeCAD's interpreter has no PartCAD in it, which
+    is the whole point of downloading the frozen bundle.
+    """
+    published = (((manifest.get(kind) or {}).get(os_name) or {}).get(arch)) or []
+    published = [entry for entry in published if isinstance(entry, str) and entry]
+    if not published:
+        return []
+    host = _split_release(release) if release else None
+    releases = [(entry, (parse_platform(entry) or (None, None, None))[2]) for entry in published]
+    if host is None or not any(found and found[0] == host[0] for _, found in releases):
+        return list(reversed(published))
+    usable = [entry for entry, found in releases if found and found[0] == host[0] and _version_le(found[1], host[1])]
+    return usable or [published[-1]]
+
+
+def release_manifest(repository: str, version: str) -> Optional[dict]:
+    """The release's ``platforms.json``, or None when it does not publish one.
+
+    Which builds a release carries is a property of the release: the bundles are
+    named after the OS version they were frozen on, and that set changes as
+    builders come and go, so the release says rather than a client guessing. A
+    release made before the manifest existed returns None here and is treated
+    like a release with no bundle for this host -- the development build is the
+    fallback, as it already is for a release that predates the bundles.
+    """
+    try:
+        body = http_get(release_archive_url(repository, version, MANIFEST_NAME), _headers(accept="*/*"))
+        manifest = json.loads(body.decode("utf-8"))
+    except (HTTPError, OSError, ValueError):
+        return None
+    return manifest if isinstance(manifest, dict) else None
 
 
 def archive_name(version: str, platform_name: str, ext: str) -> str:
@@ -77,7 +233,7 @@ def archive_name(version: str, platform_name: str, ext: str) -> str:
 
 
 def artifact_name(platform_name: str) -> str:
-    return "partcad-standalone-%s" % platform_name
+    return "%s%s" % (ARTIFACT_PREFIX, platform_name)
 
 
 # ---- locating an existing installation --------------------------------------
@@ -224,16 +380,23 @@ def url_exists(url: str) -> bool:
 
 def latest_devel_artifact(
     repository: str = DEFAULT_REPOSITORY,
-    platform_name: str = "linux-x86_64",
+    os_name: str = "linux",
+    arch: str = "x86_64",
+    release: Optional[str] = None,
     branch: str = DEFAULT_BRANCH,
     token: Optional[str] = None,
-) -> Optional[dict]:
-    """The newest successful ``Standalone`` artifact for ``platform_name``.
+) -> Optional[tuple]:
+    """The newest successful ``Standalone`` artifact this host can run.
 
-    Returns the artifact object (its ``archive_download_url`` is what the caller
-    needs), or None when no successful run has one. Artifacts expire after the
-    workflow's retention period, so a run may exist with nothing to download --
-    hence the walk over several runs rather than only the newest.
+    Returns ``(artifact, platform)`` -- the artifact's ``archive_download_url``
+    is what the caller needs -- or None when no successful run has one. There is
+    no manifest for a CI run, so the run's own artifact names are the inventory:
+    which platforms a ``devel`` run built is a property of that run (a shallow
+    run builds fewer than a deep one), exactly as it is of a release.
+
+    Artifacts expire after the workflow's retention period, so a run may exist
+    with nothing to download -- hence the walk over several runs rather than
+    only the newest.
     """
     runs_url = (
         # No event filter: the bundles are built on a push to the branch, but a
@@ -243,12 +406,17 @@ def latest_devel_artifact(
         "?branch=%s&status=success&per_page=10" % (repository, STANDALONE_WORKFLOW, branch)
     )
     runs = http_get_json(runs_url, token=token).get("workflow_runs") or []
-    wanted = artifact_name(platform_name)
     for run in runs:
         artifacts_url = "https://api.github.com/repos/%s/actions/runs/%s/artifacts" % (repository, run["id"])
-        for artifact in http_get_json(artifacts_url, token=token).get("artifacts") or []:
-            if artifact.get("name") == wanted and not artifact.get("expired"):
-                return artifact
+        artifacts = http_get_json(artifacts_url, token=token).get("artifacts") or []
+        available = {}
+        for artifact in artifacts:
+            name = artifact.get("name") or ""
+            if name.startswith(ARTIFACT_PREFIX) and not artifact.get("expired"):
+                available[name[len(ARTIFACT_PREFIX) :]] = artifact
+        built = {"bundle": group_platforms(available)}
+        for platform_name in select_platforms(built, "bundle", os_name, arch, release):
+            return available[platform_name], platform_name
     return None
 
 
@@ -364,7 +532,15 @@ def download_release(repository: str, version: str, platform_name: str, ext: str
     return _install_from_archive(archive, root, progress)
 
 
-def download_devel(repository: str, platform_name: str, branch: str, root: str, progress: Progress) -> str:
+def download_devel(
+    repository: str,
+    os_name: str,
+    arch: str,
+    release: Optional[str],
+    branch: str,
+    root: str,
+    progress: Progress,
+) -> str:
     """Download and unpack the latest ``devel`` CI bundle; return the executable's path.
 
     The artifact is a zip *around* the release archive (that is how
@@ -382,12 +558,14 @@ def download_devel(repository: str, platform_name: str, branch: str, root: str, 
         )
 
     progress("looking up the latest %s build..." % branch)
-    artifact = latest_devel_artifact(repository, platform_name, branch, token)
-    if artifact is None:
+    found = latest_devel_artifact(repository, os_name, arch, release, branch, token)
+    if found is None:
         raise RuntimeError(
-            "no unexpired '%s' bundle for %s was found in the last few "
-            "'%s' runs of %s" % (branch, platform_name, branch, repository)
+            "no unexpired '%s' bundle for %s/%s was found in the last few "
+            "'%s' runs of %s" % (branch, os_name, arch, branch, repository)
         )
+    artifact, platform_name = found
+    progress("using the %s build of %s..." % (branch, platform_name))
 
     wrapper = os.path.join(root, "artifact.zip")
     progress("downloading the %s bundle..." % branch)
@@ -439,10 +617,12 @@ def ensure_service(cache_dir: str, progress: Progress = _noop, repository: Optio
         return existing
 
     repository = repository or os.environ.get("PC_CAD_REPOSITORY") or DEFAULT_REPOSITORY
-    pa = platform_archive()
-    if pa is None:
+    host = host_platform()
+    if host is None:
         raise RuntimeError("unsupported platform %s/%s" % (_platform.system(), _platform.machine()))
-    platform_name, ext = pa
+    os_name, arch = host
+    ext = archive_extension(os_name)
+    release = host_release()
 
     root = bundle_root(cache_dir)
     shutil.rmtree(root, ignore_errors=True)
@@ -451,16 +631,22 @@ def ensure_service(cache_dir: str, progress: Progress = _noop, repository: Optio
     if not want_devel():
         progress("resolving the latest release...")
         version = latest_release_tag(repository)
-        # A release with no bundle for this platform is not a release we can use:
-        # the standalone archives are a recent addition, and the newest tag may
-        # well predate them. Fall through to the development build instead of
+        # A release with no bundle for this host is not a release we can use:
+        # the standalone archives are a recent addition, the manifest that says
+        # which of them a release carries is newer still, and the newest tag may
+        # predate either. Fall through to the development build instead of
         # failing on a 404.
-        if version and url_exists(release_archive_url(repository, version, archive_name(version, platform_name, ext))):
-            return download_release(repository, version, platform_name, ext, root, progress)
-        progress("no released bundle for %s; falling back to the development build" % platform_name)
+        manifest = release_manifest(repository, version) if version else None
+        for platform_name in select_platforms(manifest or {}, "bundle", os_name, arch, release):
+            archive = archive_name(version, platform_name, ext)
+            # The manifest is written before the upload, so an archive it lists
+            # can still be absent; every later candidate runs here too.
+            if url_exists(release_archive_url(repository, version, archive)):
+                return download_release(repository, version, platform_name, ext, root, progress)
+        progress("no released bundle for %s/%s; falling back to the development build" % (os_name, arch))
 
     branch = os.environ.get("PC_CAD_BRANCH") or DEFAULT_BRANCH
-    return download_devel(repository, platform_name, branch, root, progress)
+    return download_devel(repository, os_name, arch, release, branch, root, progress)
 
 
 def temporary_dir() -> str:

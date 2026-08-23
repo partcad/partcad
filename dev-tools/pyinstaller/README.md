@@ -106,19 +106,34 @@ separately in `.github/actions/setup-all/action.yml`.
 The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
 `partcad-<version>-<platform>.tar.gz` (`.zip` on Windows), and its `.sha256`, where `<platform>` is the
 `<os>-<os-version>-<arch>` id above. Pass `--platform=<id>` to name the archive explicitly rather than after
-this machine. The archive name is a contract with three consumers that derive it independently:
-`install.sh` (from `uname` and `/etc/os-release`, resolving the machine to one of the published builds),
-`partcad_client.selfupdate` (which is what `pc upgrade` and the VS Code extension use to update a bundle in
-place), and the extension's own first-time download (`src/common/provision.ts`). So is the archive's single
-top-level `partcad/` directory: all three unpack it and rename that directory to `<install-dir>/<version>/`,
-which is what lets a new bundle be installed beside a running one instead of over it.
+this machine. The archive name is a contract with four consumers: `install.sh`, `partcad_client.selfupdate`
+(which is what `pc upgrade` and the VS Code extension use to update a bundle in place), the extension's own
+first-time download (`src/common/provision.ts`), and the FreeCAD addon
+(`partcad-cad-freecad/partcad_freecad/provision.py`). So is the archive's single top-level `partcad/`
+directory: all of them unpack it and rename that directory to `<install-dir>/<version>/`, which is what lets a
+new bundle be installed beside a running one instead of over it.
 
-> **Out of sync.** Only `install.sh` derives the `<os>-<os-version>-<arch>` id. `partcad_client.selfupdate`
-> (`platform_archive()`, from `sys.platform`/`platform.machine()`) and `provision.ts` (`platformArchive()`,
-> from `process.platform`/`process.arch`) still ask for the older `<os>-<arch>` name -- `linux-x86_64`,
-> `macos-arm64`, `windows-x86_64` -- which no release publishes any more. Both have to learn the OS-version
-> ids, or the release has to publish an alias under the old name, before `pc upgrade` and the extension's
-> first-time download work again.
+**Which build to download is not a property of the host.** A machine cannot know which OS versions a given
+release was built for, so a release publishes a manifest saying so: `platforms.json`, generated from the
+archives themselves by `dev-tools/release/platforms-manifest.sh` and uploaded by `deploy.yml` beside them.
+
+```json
+{
+  "version": "0.7.177",
+  "bundle": { "linux": { "x86_64": ["ubuntu-24.04-x86_64", "ubuntu-22.04-x86_64"] } },
+  "ide": { "linux": { "x86_64": ["linux-x86_64"] } }
+}
+```
+
+Both artifact kinds are in it because they are named differently: the command line bundle carries the OS
+version it was frozen on, the IDE does not (it ships its own Electron runtime and is built once per operating
+system and architecture). Each list is ordered newest build first, and it is an inventory rather than an
+answer: a client still drops the builds newer than the machine it runs on, and one that cannot identify its
+host release walks the list backwards, oldest and most portable first. That policy is `select_platforms()` in
+`partcad_client.selfupdate` and in the addon's `provision.py`, and `selectPlatforms()` in `provision.ts` --
+three copies, because the addon cannot import PartCAD (its whole reason for using the frozen bundle) and the
+extension is TypeScript. `install.sh` is the reference implementation and still resolves the machine itself,
+from `uname` and `/etc/os-release`, against its own `LINUX_BUILDS`/`MACOS_BUILDS`.
 
 The bundle embeds the interpreter it was built with, so `PYTHON` decides the Python version users end up
 running. CI builds with 3.14, the newest version PartCAD supports (`requires-python = ">=3.10,<3.15"`) and
