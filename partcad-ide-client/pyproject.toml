@@ -1,6 +1,6 @@
 [project]
 name = "partcad-ide-client"
-version = "0.7.183"
+version = "0.7.184"
 description = "Client library connecting PartCAD to the PartCAD IDE viewer"
 readme = "README.md"
 keywords = ["partcad", "cad", "vscode", "viewer", "gltf"]
