@@ -319,8 +319,10 @@ class Assembly(Shape):
         Same shape of result as 'get_bom()', but the walk stops at every
         sub-assembly the model declares as supplied assembled (see
         'is_declared_purchasable()'): such a sub-assembly is listed itself,
-        instead of its contents. An assembly nobody sells is still procured as
-        the parts it is made of.
+        instead of its contents. An assembly the model does not declare that
+        way is procured as the parts it is made of instead. Whether anybody
+        actually has one available is a question for the suppliers and is not
+        asked here.
         """
         with self.lock:
             async with self.get_async_lock():
