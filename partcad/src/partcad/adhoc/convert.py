@@ -83,19 +83,22 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
                 raise RuntimeError("Failed to load the input part: no part returned")
 
             shape = asyncio.run(part.get_wrapped(ctx))
+            # Errors first: when the factory failed - a missing module, a
+            # sandbox that would not install - that is the reason there is no
+            # shape, and it is the one worth reporting. "No shape returned" is
+            # what is left to say when nothing was recorded.
+            if part.errors:
+                raise RuntimeError(f"Failed to load the input part: {part.errors}")
             if not shape:
                 raise RuntimeError("Failed to load the input part: no shape returned")
 
             pc_logging.info(f"Loaded input part: {input_path}")
             pc_logging.info(f"Shape: {type(shape)}")
 
-            if part.errors:
-                raise RuntimeError(f"Failed to load the input part: {part.errors}")
-
             part.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
 
     except Exception as e:
-        raise RuntimeError(f"Failed to convert: {e}")
+        raise RuntimeError(f"Failed to convert: {e}") from e
     finally:
         shutil.rmtree(temp_dir)
 
@@ -124,17 +127,19 @@ def convert_sketch_file(input_filename: str, input_type: str, output_filename: s
                 raise RuntimeError("Failed to load the input sketch: no sketch returned")
 
             shape = asyncio.run(sketch.get_wrapped(ctx))
+            # Errors first, for the same reason as in convert_cad_file().
+            if sketch.errors:
+                raise RuntimeError(f"Failed to load the input sketch: {sketch.errors}")
             if not shape:
                 raise RuntimeError("Failed to load the input sketch: no shape returned")
 
             pc_logging.debug(f"Loaded input sketch: {input_path}")
 
-            if sketch.errors:
-                raise RuntimeError(f"Failed to load the input sketch: {sketch.errors}")
-
             sketch.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
 
     except Exception as e:
-        raise RuntimeError("Failed to convert sketch") from e
+        # The cause belongs in the message, not only in __cause__: this is what
+        # the CLI prints, and without it every sketch failure reads the same.
+        raise RuntimeError(f"Failed to convert sketch: {e}") from e
     finally:
         shutil.rmtree(temp_dir)

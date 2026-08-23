@@ -23,7 +23,7 @@ Run `pc --help` to see all commands, and `pc <command> --help` for the options o
 a specific command. The most common commands are:
 
 - `pc init` — Create a new PartCAD package in the current directory.
-- `pc install` — Download and set up all imported packages.
+- `pc install` — Download everything the package needs to be built.
 - `pc list` — List parts, sketches, assemblies, interfaces, and packages.
 - `pc add` / `pc import` — Add or import a part, sketch, or assembly.
 - `pc inspect` — View a part, assembly, or scene visually.
