@@ -27,13 +27,15 @@ jobs:
 
   # The PartCAD IDE: the editor with the PartCAD extension and the command line
   # bundles above inside it, attached to the same release. It waits for the
-  # bundles and is told not to build them again -- a called workflow shares this
-  # run's artifacts, so it downloads what the job above produced.
+  # bundles and is told they are already here -- a called workflow shares this
+  # run's artifacts, so it downloads what the job above produced. This is the
+  # only place that says so: on every other trigger the IDE workflow finds the
+  # sibling "Standalone" run for the commit instead of building anything.
   build-ide:
     needs: build-standalone
     uses: ./.github/workflows/build-ide-standalone.yml
     with:
-      build_tools: false
+      tools_in_this_run: true
 
   # Keep the "build" job identical to "python-build.yml".
   # TODO(clairbee): include "python-build.yml" instead

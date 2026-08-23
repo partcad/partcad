@@ -7,14 +7,16 @@ on:
   # Called by "deploy.yml", which uploads the archives to the GitHub release.
   workflow_call:
     inputs:
-      build_tools:
+      tools_in_this_run:
         description: >-
-          Build the standalone command line bundles as part of this workflow.
-          Set it to false when the caller has already built them in this run:
-          a called workflow shares the run's artifacts, so building them twice
-          only costs an hour per platform.
+          Set it to true when the caller has already built the standalone
+          command line bundles in this run: a called workflow shares the run's
+          artifacts, so the IDE build downloads them from here. Left false, it
+          instead finds the sibling "Standalone" workflow run for this commit
+          and downloads them from there -- see the "bundles" job below. Only
+          "deploy.yml" builds the bundles itself, and it is the only caller.
         type: boolean
-        default: true
+        default: false
   merge_group:
   # Not on every change: this builds the standalone command line bundles first,
   # to put them inside the IDE, and those pull ~500MB of OpenCASCADE per runner.
@@ -37,8 +39,13 @@ on:
       - "install.sh"
       - ".github/workflows/build-ide-standalone.yml"
 
+# `actions: read` is what lets the "build" job list and download the artifacts
+# of *another* workflow run -- the sibling "Standalone" run that froze the
+# command line bundles. `contents: read` alone reaches only the current run's
+# artifacts. Nothing here writes anything, so this is the whole of it.
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -65,43 +72,283 @@ jobs:
       - name: Run the tests
         run: python -m pytest partcad-ide-standalone/tests -o addopts= -v
 
-  # The command line tools that go inside the IDE. The same bundles that are
-  # published on their own, built by the same workflow, so the IDE cannot ship
-  # tools that differ from the ones `install.sh` installs.
+  # Where the command line bundles that go inside the IDE come from.
+  #
+  # They are the same bundles `install.sh` installs, frozen by the "Standalone"
+  # workflow, and this workflow no longer calls it. It used to: this job was
+  # `uses: ./.github/workflows/build-standalone.yml`. That was wrong twice over.
+  #
+  # "Standalone" runs on its own `push`/`pull_request` triggers, and its path
+  # filters overlap this workflow's -- every version bump touches
+  # "partcad-ide-vscode/package.json" (ours) and "partcad-cli/src/**" (theirs).
+  # So one commit started the seven-platform, ~35-minute freeze twice: once as
+  # its own run and once inside this one, and half of it was thrown away.
+  #
+  # Worse, the two cancelled each other. A called workflow evaluates
+  # `github.workflow` as the *caller's* name, so the called instance computed
+  # the same concurrency group this run was already holding and
+  # `cancel-in-progress` killed it -- in 13 seconds, with no failed job to point
+  # at. See the note on `concurrency` in "build-standalone.yml", which is where
+  # that is fixed.
+  #
+  # The arrangement now is the one "deploy.yml" already used on the release
+  # path, generalised: exactly one run owns the freeze and everyone else
+  # downloads what it produced. On the release path that run is the
+  # `build-standalone` job of the "Deployment" run itself, and the matrix below
+  # downloads from its own run (`tools_in_this_run`). On every other trigger it
+  # is the sibling "Standalone" run for this same commit, which this job finds,
+  # waits for, and hands down as `run-id`.
+  #
+  # Rejected: keeping the call and only giving it a distinct concurrency group.
+  # That fixes the cancellation and leaves the duplication -- fourteen frozen
+  # bundles per version bump instead of seven.
+  #
+  # Rejected: building the IDE without the command line tools on push and pull
+  # request. The archive would then not be the artifact that gets released, and
+  # the "Install" jobs below -- which are the point of building it at all --
+  # could not check that `pc` runs out of the installed IDE.
+  #
+  # This is one ubuntu-latest job rather than a step inside the matrix because
+  # the answer is the same for all three platforms and the matrix runners are
+  # macOS and Windows, billed at 10x and 2x. It is also unconditional rather
+  # than skipped on the release path: a skipped dependency would drag "build"
+  # into the `!cancelled() && ... == 'skipped'` contortion this file used to
+  # need, and the step inside it costs seconds when there is nothing to look up.
   bundles:
     name: "Command line tools"
-    # Build them unless a "workflow_call" caller says it already has: only
-    # "deploy.yml" does, and it passes its own build down through the run's
-    # artifacts. Every other trigger -- push, pull request, merge group, manual
-    # dispatch -- has to build them here, or the jobs below have nothing to
-    # download.
-    #
-    # `toJSON` rather than the `inputs.build_tools != false` this used to say.
-    # Outside "workflow_call"/"workflow_dispatch" there is no `inputs` context,
-    # so `inputs.build_tools` is null, and GitHub compares mismatched types by
-    # coercing both to numbers: null becomes 0, false becomes 0, and
-    # `null != false` is therefore false. That skipped this job on every push
-    # and pull request while still letting "build" run -- it tolerates a skipped
-    # "bundles" for deploy.yml's sake -- so the IDE build failed at "Download the
-    # command line tools" for a day. `toJSON` compares the value as text
-    # ("null", "true", "false"), which is what tells an absent input apart from
-    # one that was deliberately set to false.
-    #
-    # Not `github.event_name == 'workflow_call'`: in a called workflow the
-    # `github` context is the caller's, so that reads "push" on the release
-    # path, never "workflow_call".
-    if: ${{ toJSON(inputs.build_tools) != 'false' }}
-    uses: ./.github/workflows/build-standalone.yml
+    runs-on: ubuntu-latest
+    # Long enough to sit out a whole "Standalone" run. The freeze itself is
+    # ~35 minutes; the install, snap and examples jobs after it have taken the
+    # run past an hour. The step below gives up before this does, so the
+    # failure says what it was waiting for instead of "timed out".
+    timeout-minutes: 90
+    outputs:
+      # The run whose "partcad-standalone-*" artifacts the matrix downloads.
+      # Empty when the caller froze them in this run, where there is nothing to
+      # look up and nothing reads this.
+      run-id: ${{ steps.resolve.outputs.run-id }}
+    steps:
+      - name: Find the "Standalone" run that built the bundles
+        id: resolve
+        # `toJSON` rather than `inputs.tools_in_this_run == true`. Outside
+        # "workflow_call"/"workflow_dispatch" there is no `inputs` context, so
+        # the value is null, and GitHub compares mismatched types by coercing
+        # both to numbers -- null and false both become 0, and the comparison
+        # then cannot tell "not passed" from "passed as false". `toJSON`
+        # compares the value as text ("null", "true", "false"), which can.
+        # This file learned that the hard way once already; see git history for
+        # the day the IDE build downloaded artifacts that were never built.
+        #
+        # Not `github.event_name == 'workflow_call'`: in a called workflow the
+        # `github` context is the caller's, so that reads "push" on the release
+        # path, never "workflow_call".
+        if: ${{ toJSON(inputs.tools_in_this_run) != 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          # The commit both workflows saw. On a pull request `github.sha` is the
+          # merge commit, which no workflow ever ran on -- the head of the
+          # branch is what "Standalone" recorded as its `head_sha`.
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Where to look when this commit has no "Standalone" run of its own.
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref || github.ref_name }}
+          # Long enough for the freeze plus everything after it, and short
+          # enough that this job's own timeout above never gets there first.
+          WAIT_SECONDS: "4500"
+          # The sibling run is created in the same second as this one but its
+          # first job takes a moment to appear, so "no run for this commit" is
+          # not a conclusion that can be drawn immediately. Anything less than
+          # this and a race decides whether the IDE embeds this commit's
+          # bundles or an older commit's.
+          GRACE_SECONDS: "300"
+          POLL_SECONDS: "30"
+        run: |
+          set -euo pipefail
+
+          workflow="build-standalone.yml"
+          base="${BASE_BRANCH#refs/heads/}"
+
+          say() { printf '%s  %s\n' "$(date -u '+%H:%M:%S')" "$*"; }
+          run_url() { printf '%s/%s/actions/runs/%s' "${SERVER_URL}" "${REPO}" "$1"; }
+
+          # Every unexpired "partcad-standalone-*" artifact a run still holds.
+          #
+          # This, and not the run's conclusion, is the test. "Standalone"
+          # uploads the bundles in its "Build" jobs and then spends another
+          # half hour running examples through them, and those fail on their
+          # own schedule: at the time of writing not one of the last thirty
+          # "Standalone" runs on devel concluded `success`, while their bundles
+          # were built, uploaded and perfectly good. Requiring `success` here
+          # would mean the IDE never builds again. A run that produced no
+          # bundle at all is the real failure, and it is caught below.
+          bundles_of() {
+            gh api "repos/${REPO}/actions/runs/$1/artifacts?per_page=100" \
+              --jq '[.artifacts[] | select(.expired == false)
+                     | select(.name | startswith("partcad-standalone-")) | .name]
+                    | sort | join(" ")'
+          }
+
+          # id, status and conclusion of every "Standalone" run for a commit,
+          # newest first. Called workflows do not get a run of their own -- they
+          # are jobs of the caller's run -- so this only ever lists the
+          # independent ones, which is exactly what is wanted.
+          runs_for_sha() {
+            gh api "repos/${REPO}/actions/workflows/${workflow}/runs?head_sha=$1&per_page=100" \
+              --jq '.workflow_runs | sort_by(.created_at) | reverse
+                    | .[] | [.id, .status, .conclusion] | @tsv'
+          }
+
+          # The same, for the most recent finished runs on a branch.
+          runs_on_branch() {
+            gh api "repos/${REPO}/actions/workflows/${workflow}/runs?branch=$1&status=completed&per_page=30" \
+              --jq '.workflow_runs | sort_by(.created_at) | reverse
+                    | .[] | [.id, .head_sha, .conclusion] | @tsv'
+          }
+
+          started=$(date +%s)
+          use_run=""
+          use_conclusion=""
+          use_sha="${HEAD_SHA}"
+
+          say "Looking for a \"Standalone\" run for ${HEAD_SHA}."
+
+          # (1) The run for this very commit, waited out if it is still going.
+          while :; do
+            elapsed=$(( $(date +%s) - started ))
+            pending=""
+            pending_first=""
+            barren=""
+            barren_first=""
+
+            listing=$(runs_for_sha "${HEAD_SHA}")
+            while IFS=$'\t' read -r id status conclusion; do
+              [ -n "${id}" ] || continue
+              if [ "${status}" != "completed" ]; then
+                pending="${pending} ${id}"
+                [ -n "${pending_first}" ] || pending_first="${id}"
+                continue
+              fi
+              names=$(bundles_of "${id}")
+              if [ -n "${names}" ]; then
+                use_run="${id}"
+                use_conclusion="${conclusion}"
+                say "Run ${id} (${conclusion}) has: ${names}"
+                break
+              fi
+              barren="${barren} ${id} (${conclusion})"
+              [ -n "${barren_first}" ] || barren_first="${id}"
+            done <<<"${listing}"
+
+            [ -z "${use_run}" ] || break
+
+            if [ -n "${pending}" ]; then
+              if [ "${elapsed}" -ge "${WAIT_SECONDS}" ]; then
+                echo "::error::Gave up after $(( elapsed / 60 )) minutes waiting" \
+                  "for the \"Standalone\" workflow run(s)${pending} to finish" \
+                  "freezing the command line bundles for ${HEAD_SHA}. The IDE" \
+                  "embeds those bundles, so there is nothing to build until" \
+                  "they exist. Re-run this workflow once $(run_url "${pending_first}")" \
+                  "has finished."
+                exit 1
+              fi
+              say "Run(s)${pending} still going (${elapsed}s in, giving up at ${WAIT_SECONDS}s)."
+              sleep "${POLL_SECONDS}"
+              continue
+            fi
+
+            if [ -n "${barren}" ]; then
+              echo "::error::The \"Standalone\" workflow run(s) for ${HEAD_SHA}" \
+                "--${barren} -- finished without leaving a single" \
+                "partcad-standalone-* artifact, so there is no command line" \
+                "bundle to put inside the IDE. Fix or re-run that workflow for" \
+                "this commit, then re-run this one: $(run_url "${barren_first}")."
+              exit 1
+            fi
+
+            # No run at all for this commit -- yet, or ever.
+            if [ "${elapsed}" -lt "${GRACE_SECONDS}" ]; then
+              say "No run for ${HEAD_SHA} yet (${elapsed}s in, deciding at ${GRACE_SECONDS}s)."
+              sleep "${POLL_SECONDS}"
+              continue
+            fi
+            break
+          done
+
+          # (2) No run for this commit. That is legitimate: the two workflows
+          # have different path filters, and a change confined to
+          # "partcad-ide-standalone/**" fires this one and not that one. The
+          # IDE build only needs a working bundle to embed and smoke-test, so
+          # the newest one on the base branch keeps that coverage -- as long as
+          # nobody reading the log can mistake it for this commit's.
+          if [ -z "${use_run}" ]; then
+            say "No \"Standalone\" run exists for ${HEAD_SHA}; falling back to ${base}."
+            listing=$(runs_on_branch "${base}")
+            while IFS=$'\t' read -r id sha conclusion; do
+              [ -n "${id}" ] || continue
+              names=$(bundles_of "${id}")
+              [ -n "${names}" ] || continue
+              use_run="${id}"
+              use_conclusion="${conclusion}"
+              use_sha="${sha}"
+              say "Run ${id} (${conclusion}, ${sha}) has: ${names}"
+              break
+            done <<<"${listing}"
+
+            if [ -z "${use_run}" ]; then
+              echo "::error::No \"Standalone\" workflow run has command line" \
+                "bundles to offer: none ran for ${HEAD_SHA}, and none of the" \
+                "last 30 finished runs on ${base} still has an unexpired" \
+                "partcad-standalone-* artifact (they are kept for 14 days)." \
+                "The IDE cannot be built without them. Run the \"Standalone\"" \
+                "workflow on ${base} -- manually, or by pushing a change under" \
+                "one of its paths -- and then re-run this one."
+              exit 1
+            fi
+
+            echo "::warning::The command line bundles inside this IDE build are" \
+              "NOT from ${HEAD_SHA}. They come from \"Standalone\" run ${use_run}," \
+              "which built ${use_sha} on ${base}: $(run_url "${use_run}")." \
+              "\"Standalone\" never ran for this commit -- its path filters did" \
+              "not match it -- so an older bundle is the only one there is, and" \
+              "embedding it still exercises the IDE build end to end. Do not" \
+              "read a green result as having tested this commit's command line" \
+              "tools, though, because it has not."
+          fi
+
+          if [ "${use_conclusion}" != "success" ]; then
+            echo "::warning::Taking the command line bundles from \"Standalone\"" \
+              "run ${use_run}, which concluded \"${use_conclusion}\". The bundles" \
+              "were uploaded before it did and they are what the IDE embeds;" \
+              "whatever went wrong afterwards is reported in that run:" \
+              "$(run_url "${use_run}")."
+          fi
+
+          say "Using \"Standalone\" run ${use_run} ($(run_url "${use_run}"))."
+          echo "run-id=${use_run}" >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "### Command line tools"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Run | [${use_run}]($(run_url "${use_run}")) |"
+            echo "| Conclusion | \`${use_conclusion}\` |"
+            echo "| Commit | \`${use_sha}\` |"
+            if [ "${use_sha}" != "${HEAD_SHA}" ]; then
+              echo "| | **not this commit (\`${HEAD_SHA}\`)** |"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
 
   build:
     name: "Build (${{ matrix.platform }})"
+    # Both dependencies always run -- "bundles" resolves where the command line
+    # tools come from rather than building them -- so a plain `needs` says all
+    # there is to say. The `!cancelled() && ... == 'skipped'` guard that used to
+    # be here existed only to tolerate a "bundles" job that the release path
+    # skipped, and there is no longer such a path.
     needs: [tools, bundles]
-    # "bundles" is skipped when the caller built the tools itself, and a skipped
-    # dependency would otherwise skip this job with it.
-    if: >-
-      ${{ !cancelled()
-      && needs.tools.result == 'success'
-      && (needs.bundles.result == 'success' || needs.bundles.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
@@ -173,11 +420,30 @@ jobs:
             choco install innosetup --no-progress --yes
           fi
 
-      - name: Download the command line tools
+      # Two steps for one download, because the bundles live in one of two
+      # places and neither is a fallback for the other. On the release path
+      # "deploy.yml" froze them in this very run and a called workflow shares
+      # the run's artifacts, so the plain download finds them. Everywhere else
+      # they belong to the sibling "Standalone" run the "bundles" job above
+      # resolved, which takes `run-id` and a token to reach.
+      - name: Download the command line tools (built in this run)
+        if: ${{ toJSON(inputs.tools_in_this_run) == 'true' }}
         uses: actions/download-artifact@v8
         with:
           name: partcad-standalone-${{ matrix.bundle }}
           path: bundles
+
+      - name: Download the command line tools (from the "Standalone" run)
+        if: ${{ toJSON(inputs.tools_in_this_run) != 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-standalone-${{ matrix.bundle }}
+          path: bundles
+          # Another run, of another workflow. `actions: read` in `permissions`
+          # is what makes the token able to see it; without that this fails
+          # with a bare 403 rather than anything that names the cause.
+          run-id: ${{ needs.bundles.outputs.run-id }}
+          github-token: ${{ github.token }}
 
       - name: Unpack the command line tools
         shell: bash

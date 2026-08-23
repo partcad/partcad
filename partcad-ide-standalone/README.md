@@ -223,3 +223,11 @@ without building.
 `install.sh --ide` on a runner that has never seen PartCAD. `deploy.yml` calls it on a push to `main` and
 uploads the archives to the same GitHub release as the wheels and the command line bundles, which is where
 `install.sh --ide` downloads from.
+
+It does not build the command line bundles it embeds. `deploy.yml` builds them once, in the same run, and the
+IDE build downloads them from there; on every other trigger the IDE build finds the sibling `Standalone`
+workflow run for the same commit and downloads them from that run instead. Building them here as well would
+mean freezing every platform twice for one commit -- and the `bundles` job in that workflow explains what else
+it meant. When no `Standalone` run exists for the commit (a change confined to `partcad-ide-standalone/**`
+fires the IDE workflow and not that one) the build falls back to the newest bundles on the base branch and says
+so, loudly, in the log and the run summary.

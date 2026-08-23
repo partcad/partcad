@@ -5,6 +5,26 @@ on:
   workflow_dispatch:
   # Called by "deploy.yml", which uploads the bundles to the GitHub release.
   workflow_call:
+    inputs:
+      # Not a knob, and nothing passes it. It exists so that the `concurrency`
+      # group below can tell a called instance of this workflow from an
+      # independent one -- which nothing else in the expression context can.
+      #
+      # `github.workflow` looks like the discriminator and is the wrong one:
+      # inside a called workflow the whole `github` context is the *caller's*,
+      # so it reads "IDE" or "Deployment" here, never "Standalone". (Same trap
+      # as `github.event_name`, which reads "push" on the release path rather
+      # than "workflow_call" -- "build-ide-standalone.yml" says so too.) The
+      # `inputs` context, by contrast, exists only under `workflow_call` and
+      # `workflow_dispatch`, and this workflow declares no `workflow_dispatch`
+      # inputs -- so `inputs.called` is null on every trigger except a call,
+      # and non-null on a call whether or not the caller passed anything.
+      called:
+        description: >-
+          Reserved. Do not pass it: its presence, not its value, is what marks
+          an instance of this workflow that another workflow called.
+        type: boolean
+        default: true
   merge_group:
   # Freezing pulls ~500MB of OpenCASCADE per runner, so this does not run on
   # every change: only on the ones that can change what is frozen. The two
@@ -39,8 +59,27 @@ on:
 permissions:
   contents: read
 
+# One build per branch, or per pull request, and a new push supersedes the one
+# in flight. That is the plain half of the group. The suffix is the other half,
+# and it is not cosmetic.
+#
+# Being called used to be fatal here. `github.workflow` is the *caller's*
+# workflow name inside a called workflow, so an instance called by the "IDE"
+# workflow computed the group "IDE-refs/heads/devel" -- byte for byte the group
+# the IDE run that called it was already holding. `cancel-in-progress` then did
+# exactly what it was told. Every "IDE" run died that way, on devel and on
+# every pull request, in well under a minute and with no failed job to point
+# at: the called workflow was cancelled before it started a single one.
+#
+# Appending the run id when, and only when, an `inputs` context exists closes
+# both halves of that. A called instance can no longer share a group with the
+# run that called it, because the caller's own group carries no such suffix;
+# and it can no longer share one with any other instance, called or
+# independent, because no two runs share a run id. Independent runs keep the
+# plain group unchanged, so a second push to a branch still cancels the build
+# in flight -- which is why the suffix is conditional rather than always there.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ toJSON(inputs.called) == 'null' && '' || format('-called-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 # One bundle per supported OS version, not one per operating system. A frozen
