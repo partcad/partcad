@@ -278,9 +278,13 @@ def python_abi_requirement(python_version: str, exact: bool = True) -> str | Non
     and conda-forge's build strings end in "_cpython" rather than "_cp312", so a
     "*_cp312" pin would match no package at all and fail the solve outright.
 
-    'exact' picks the spelling of the equality, mirroring the python spec the
-    caller builds: mamba is given "==", conda "=". Both select the same package
-    here, since python_abi's version is the bare "<major>.<minor>".
+    'exact' picks the spelling of the equality: mamba is given "==", conda "=".
+    Both select the same package here, since python_abi's version is the bare
+    "<major>.<minor>" and there is no patch component for the two to disagree
+    about. That is a property of this package alone, and does not carry over to
+    the 'python' spec beside it: libmamba reads "python==3.14" as the 3.14
+    release exactly, i.e. 3.14.0, so that one is always spelled with a single
+    "=" (see CondaPythonRuntime.once_conda_locked_attempt).
 
     That is also why both halves of the spec are derived from _major_minor()
     rather than from the caller's string: a "3.13.1" would otherwise ask for a
