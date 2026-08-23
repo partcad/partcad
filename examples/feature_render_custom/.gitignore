@@ -1,3 +1,21 @@
 # The DXF of the same drawing: nearly a megabyte of it, which is what
-# 'pc render' is for. The SVG the README shows and the PDF it links are kept.
+# 'pc render' is for. The PDF the README links is kept, and so is the SVG it
+# shows - see below.
 bracket.dxf
+
+# The drawing the README shows. It is committed, and it stays committed: an
+# image a README points at has to be in the repository. What is ignored here is
+# the *regeneration* of it.
+#
+# draftwright does not write the same bytes twice. Every glyph on the sheet is
+# emitted as a path, and a couple of them change places from one run to the next
+# on identical input, so re-rendering leaves a diff that says nothing about the
+# drawing. It is not worth a commit.
+#
+# Note what this does and does not do: git ignores nothing about a file it
+# already tracks, so 'git status' still shows this one as modified after a
+# render. The line below is what an untracked copy obeys, and the record of why
+# the churn is not worth keeping. To hold it back in a clone you work in:
+#
+#     git update-index --skip-worktree bracket.svg
+bracket.svg

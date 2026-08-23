@@ -12,12 +12,19 @@ PartCAD writes output files in two flavours, each declared in a section of
     'render:'   the 2D projections 'pc render' writes
 
 A section has one subsection per file type, whose fields are that type's
-parameters. Three of them are not parameters but say how the file is produced -
-'path' (the implementation script), 'package' (where that script lives) and
-'pythonRequirements' (what its sandbox needs) - and three more describe where
-the output goes rather than what goes in it. Everything else is handed to the
-implementation verbatim, which is what lets a package add a parameter (say, a
-'comment' for STEP) without PartCAD having to know about it.
+parameters. Some of them are not parameters but say how the file is produced -
+'path' (the implementation script), 'package' (where that script lives),
+'pythonRequirements' and 'pythonVersion' (what its sandbox needs, and which
+interpreter it is) - and three more describe where the output goes rather than
+what goes in it. Everything else is handed to the implementation verbatim, which
+is what lets a package add a parameter (say, a 'comment' for STEP) without
+PartCAD having to know about it.
+
+Of those, 'pythonVersion' is the one field a calling package cannot set: which
+interpreter a script runs on is the business of the package that wrote the
+script, so it is read there and nowhere else (see
+'Implementation.python_version()'). 'pythonRequirements' still layers like
+everything else, so a package can add what its own parameters need.
 
 The built-in implementations are not special-cased anywhere: they are declared
 in exactly this form by two packages that ship inside 'partcad' itself and that
@@ -166,13 +173,49 @@ class Implementation:
     def python_version(self) -> str:
         """Which sandbox interpreter runs this implementation.
 
-        Not taken from the implementing package's 'pythonVersion': that
-        defaults to whatever interpreter PartCAD itself happens to run on,
-        which would scatter the render sandbox across versions depending on how
-        the user installed PartCAD. An implementation that genuinely needs
-        another interpreter says so on the format itself.
+        The package that ships the script decides, because it is that package's
+        code that has to run and its 'pythonRequirements' that have to resolve
+        around it. A drawing implementation whose dependencies want build123d
+        0.11 only on 3.13 says '3.13' once, beside the requirement, and every
+        package that draws with it gets that interpreter without knowing why.
+
+        Nobody else gets a say. The object being written and the package it
+        belongs to are the *callers* here: they may be a package that has never
+        heard of this implementation, and an interpreter chosen there would
+        decide what somebody else's code runs on. A 'pythonVersion' set on a
+        file type by a calling package is therefore ignored, with a warning
+        rather than in silence.
+
+        Where the implementing package says nothing, the answer is a fixed
+        default rather than the interpreter PartCAD itself runs on: the latter
+        would scatter the render sandbox across versions depending on how the
+        user installed PartCAD.
         """
-        return self.config.get("pythonVersion") or sandbox_versions.DEFAULT_PYTHON_VERSION
+        declared = None
+        if self.project is not None:
+            # As that package declares the file type - in either section, owning
+            # section last, the order the options themselves are layered in - and
+            # then as the package declares itself.
+            for section_name in config_sections(self.section):
+                section_obj = self.project.config_obj.get(section_name)
+                if isinstance(section_obj, dict):
+                    declared = normalize(section_obj.get(self.format_name)).get("pythonVersion") or declared
+            declared = declared or getattr(self.project, "python_version_declared", None)
+
+        resolved = declared or sandbox_versions.DEFAULT_PYTHON_VERSION
+        asked = self.config.get("pythonVersion")
+        if asked and str(asked) != str(resolved):
+            pc_logging.warning(
+                "'%s' runs on Python %s, not the %s asked for: the interpreter of an output "
+                "implementation is the one its own package declares (%s)."
+                % (
+                    self.format_name,
+                    resolved,
+                    asked,
+                    self.project.name if self.project is not None else "unknown package",
+                )
+            )
+        return resolved
 
 
 def normalize(config) -> dict:

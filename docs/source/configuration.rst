@@ -1842,7 +1842,8 @@ are configured by a section of ``partcad.yaml`` named after the command --
       package: <(optional) the package that script belongs to>
       pythonRequirements: # (optional) what that script's sandbox needs
         - <requirement>
-      pythonVersion: <(optional) the sandbox interpreter to run it on>
+      pythonVersion: <(optional) the sandbox interpreter to run it on; only the
+                      package that ships the script may set this>
       extension: <(optional) the extension used when the file name is derived>
       prefix: <(optional) where the file goes, relative to the package>
       exclude: <(optional) kinds of object not to write this type for>
@@ -2034,6 +2035,20 @@ installed by hand:
 
 ``examples/feature_render_custom`` is exactly this: three file types drawn by an
 implementation published in the public index.
+
+The sandbox that runs comes with the implementation rather than from the package
+asking for the file. Its ``pythonVersion`` -- declared on the implementing
+package, or on a file type that package declares -- is the interpreter, and a
+``pythonVersion`` set by a calling package is ignored with a warning. It could
+not be anything else: the caller may never have heard of what that script
+imports, and an implementation whose dependencies resolve only on one
+interpreter would break the moment somebody drew with it from a package that
+said otherwise. Where nothing declares one, the interpreter is a fixed default,
+not whichever one PartCAD itself is running on.
+
+``pythonRequirements`` is not read that way. It layers like every other field,
+so a package can add what its own parameters need to a sandbox it did not
+otherwise configure.
 
 Built-in implementations
 ------------------------

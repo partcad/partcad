@@ -514,6 +514,67 @@ def test_parameters_exclude_the_reserved_fields():
     assert impl.decode is False
 
 
+class _ImplementingPackage:
+    """A package that ships an output implementation, as the resolution reads it."""
+
+    def __init__(self, name="//pub/feature/render/draftwright", declared=None, section_obj=None):
+        self.name = name
+        self.python_version_declared = declared
+        self.config_obj = {output.RENDER: section_obj} if section_obj is not None else {}
+
+
+def test_the_interpreter_comes_from_the_package_that_wrote_the_implementation():
+    """Whose Python an implementation runs on is not the caller's business.
+
+    A package that draws with somebody else's renderer is a caller: it may never
+    have heard of what that script imports. The interpreter is declared beside
+    the requirements that have to resolve on it, in the package that ships them.
+    """
+    config = {"package": "//pub/feature/render/draftwright", "path": "render_draftwright.py"}
+
+    # Declared by the implementing package, for all of its file types...
+    impl = output.Implementation(output.RENDER, "pdf", config, _ImplementingPackage(declared="3.13"))
+    assert impl.python_version() == "3.13"
+
+    # ...or on the file type itself, in that same package.
+    impl = output.Implementation(
+        output.RENDER,
+        "pdf",
+        config,
+        _ImplementingPackage(section_obj={"pdf": {"path": "render_draftwright.py", "pythonVersion": "3.12"}}),
+    )
+    assert impl.python_version() == "3.12"
+
+    # Nothing declared anywhere: a fixed default, not the interpreter PartCAD
+    # happens to be running on.
+    impl = output.Implementation(output.RENDER, "pdf", config, _ImplementingPackage())
+    assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
+
+
+def test_a_calling_package_does_not_choose_the_implementations_interpreter(caplog):
+    """A 'pythonVersion' from the caller is ignored, and says so."""
+    impl = output.Implementation(
+        output.RENDER,
+        "pdf",
+        {"package": "//pub/feature/render/draftwright", "path": "render_draftwright.py", "pythonVersion": "3.10"},
+        _ImplementingPackage(declared="3.13"),
+    )
+    assert impl.python_version() == "3.13"
+    assert "3.10" in caplog.text and "3.13" in caplog.text
+
+    # The implementing package's own answer is not "ignored" and is not warned
+    # about, however it reaches the merged configuration.
+    caplog.clear()
+    impl = output.Implementation(
+        output.RENDER,
+        "pdf",
+        {"package": "//pub/feature/render/draftwright", "path": "render_draftwright.py", "pythonVersion": "3.13"},
+        _ImplementingPackage(declared="3.13"),
+    )
+    assert impl.python_version() == "3.13"
+    assert caplog.text == ""
+
+
 def test_a_format_decodes_its_envelopes_unless_it_declares_otherwise(ctx):
     """'decode' is off for URDF alone, and nothing else may lose it silently.
 
