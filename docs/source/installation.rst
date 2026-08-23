@@ -223,13 +223,16 @@ For a pull request, use the branch it comes from, or its head commit:
   latest release, because bundles are published per release, not per commit. To install the bundle a branch
   or pull request actually built, take it from the ``Standalone`` workflow run of that branch or pull
   request: open the run on GitHub, download the ``partcad-standalone-<platform>`` artifact, unzip it, and
-  point the installer at the directory holding the archive.
+  point the installer at the directory holding the archive. Name that build with ``--platform``: an
+  artifact holds the one build it is named after and no ``platforms.json``, so there is no manifest there
+  for the installer to resolve this machine against.
 
   .. code-block:: shell
 
     $ unzip partcad-standalone-ubuntu-24.04-x86_64.zip -d /tmp/partcad-build
     $ curl -fsSL https://raw.githubusercontent.com/partcad/partcad/devel/install.sh | \
-        sh -s -- --version <version> --base-url "file:///tmp/partcad-build"
+        sh -s -- --version <version> --platform ubuntu-24.04-x86_64 \
+                 --base-url "file:///tmp/partcad-build"
 
   ``--base-url`` accepts any URL, so a bundle published anywhere else (an internal mirror, a file server)
   installs the same way.

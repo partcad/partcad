@@ -414,6 +414,45 @@ def _platform_release(platform_name: str) -> Optional[tuple]:
     return _split_release(head) if head else None
 
 
+def _manifest_object(value: object, where: str) -> dict:
+    """One level of ``manifest[kind][os][arch]``, as an object.
+
+    Missing and malformed are not the same answer. A release that publishes
+    nothing for this kind or this operating system simply says nothing about it,
+    and the caller reports that against the release. A level that is there but is
+    not an object means the manifest does not have the shape every client reads
+    it by, and that has to be said here: walking on would raise an
+    ``AttributeError`` from somewhere with no idea which file was wrong.
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise SelfUpdateError(
+            "the release manifest is malformed: %s is %s, not an object" % (where, type(value).__name__)
+        )
+    return value
+
+
+def _manifest_platform_list(value: object, where: str) -> List[str]:
+    """The platform ids one level of the manifest lists, validated.
+
+    A string is rejected rather than accepted as a one-element list, which is the
+    whole point of checking: iterating a string yields its characters, and the
+    installer would go looking for archives named "a", "b" and "c" instead of
+    saying the manifest was wrong.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise SelfUpdateError(
+            "the release manifest is malformed: %s is %s, not a list of platform ids" % (where, type(value).__name__)
+        )
+    for entry in value:
+        if not isinstance(entry, str) or not entry:
+            raise SelfUpdateError("the release manifest is malformed: %s lists %r, not a platform id" % (where, entry))
+    return list(value)
+
+
 def select_platforms(manifest: dict, kind: str, os_name: str, arch: str, release: Optional[str] = None) -> List[str]:
     """The builds in ``manifest`` worth trying on this machine, best first.
 
@@ -427,8 +466,9 @@ def select_platforms(manifest: dict, kind: str, os_name: str, arch: str, release
     older than every build gets the oldest one anyway, as the only candidate with
     a chance.
     """
-    published = (((manifest.get(kind) or {}).get(os_name) or {}).get(arch)) or []
-    published = [entry for entry in published if isinstance(entry, str) and entry]
+    by_os = _manifest_object(manifest.get(kind), kind)
+    by_arch = _manifest_object(by_os.get(os_name), "%s.%s" % (kind, os_name))
+    published = _manifest_platform_list(by_arch.get(arch), "%s.%s.%s" % (kind, os_name, arch))
     if not published:
         return []
     host = _split_release(release) if release else None

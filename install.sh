@@ -412,7 +412,12 @@ manifest_platforms() {
       skip_ws()
       if (substr(doc, pos, 1) != "{") { print "not a JSON object" > "/dev/stderr"; exit 2 }
       parse_object("")
-      if (bad) { print "malformed JSON" > "/dev/stderr"; exit 2 }
+      # The scanner stops at the closing brace of the top-level object, so
+      # anything after it -- a second document, a truncated file glued to
+      # something else -- would otherwise go unread and unreported, and the ids
+      # gathered so far would pass for the whole manifest.
+      skip_ws()
+      if (bad || pos <= len) { print "malformed JSON" > "/dev/stderr"; exit 2 }
     }
   '
 }

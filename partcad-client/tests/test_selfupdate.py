@@ -279,6 +279,38 @@ def test_a_manifest_without_this_kind_has_no_candidates():
     assert _select("linux", "x86_64", "ubuntu-24.04", manifest={"version": "0.7.177"}) == []
 
 
+def test_a_manifest_that_omits_a_level_has_no_candidates():
+    # Absent is an answer, not a fault: a release that published nothing for this
+    # host says so by leaving the level out, and that is reported against the
+    # release rather than against the manifest.
+    assert _select("linux", "x86_64", "ubuntu-24.04", manifest={"bundle": {}}) == []
+    assert _select("linux", "x86_64", "ubuntu-24.04", manifest={"bundle": {"linux": {}}}) == []
+
+
+def test_a_platform_list_that_is_a_string_is_rejected():
+    # Not filtered down to nothing and not iterated: every character of
+    # "ubuntu-24.04-x86_64" is a non-empty string, so a lenient reader would go
+    # looking for an archive named "u".
+    manifest = {"bundle": {"linux": {"x86_64": "ubuntu-24.04-x86_64"}}}
+    with pytest.raises(selfupdate.SelfUpdateError, match="bundle.linux.x86_64 is str, not a list"):
+        _select("linux", "x86_64", "ubuntu-24.04", manifest=manifest)
+
+
+def test_a_platform_list_holding_something_that_is_not_an_id_is_rejected():
+    manifest = {"bundle": {"linux": {"x86_64": ["ubuntu-24.04-x86_64", 42]}}}
+    with pytest.raises(selfupdate.SelfUpdateError, match="bundle.linux.x86_64 lists 42"):
+        _select("linux", "x86_64", "ubuntu-24.04", manifest=manifest)
+
+
+def test_a_manifest_level_that_is_not_an_object_is_rejected():
+    # A list here used to reach `.get` on a list and raise AttributeError, which
+    # says nothing about which file was wrong.
+    with pytest.raises(selfupdate.SelfUpdateError, match="bundle is list, not an object"):
+        _select("linux", "x86_64", "ubuntu-24.04", manifest={"bundle": ["ubuntu-24.04-x86_64"]})
+    with pytest.raises(selfupdate.SelfUpdateError, match="bundle.linux is str, not an object"):
+        _select("linux", "x86_64", "ubuntu-24.04", manifest={"bundle": {"linux": "x86_64"}})
+
+
 def test_fetch_manifest_explains_a_release_that_does_not_publish_one(monkeypatch):
     def missing(url, headers=None):
         raise selfupdate.SelfUpdateError("could not reach %s" % url)
