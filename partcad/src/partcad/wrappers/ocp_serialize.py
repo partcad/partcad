@@ -495,7 +495,9 @@ def deserialize_raw(data) -> object:
 
     The counterpart of the core-side 'shape_envelope.deserialize()', for the
     wrappers that need the *structure* of an assembly envelope rather than the
-    compound it decodes to: the URDF exporter turns each node of the tree into a
-    link of its own, which the flattening in 'decode()' would have thrown away.
+    geometry it decodes to: the URDF exporter names each link and places each
+    joint from what the envelope says about a node, and 'decode()' keeps none of
+    that - the compound it builds mirrors the tree, but the names and labels are
+    gone and the placements are baked into the geometry.
     """
     return json.loads(_payload_line(data))

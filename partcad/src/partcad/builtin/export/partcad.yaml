@@ -114,13 +114,15 @@ export:
     desc: |
       Unified Robot Description Format: a URDF file plus the mesh files it
       references. Unlike every other format here it is handed the assembly
-      *tree* rather than the compound it decodes to (`decode: false`), because
-      one URDF link per assembly node is what makes the export reversible.
+      *tree* itself rather than the geometry it decodes to (`decode: false`),
+      because one URDF link per assembly node - named, placed and looked up by
+      what the tree says - is what makes the export reversible.
     path: export_urdf.py
     extension: urdf
     # 'decode: false' -- see wrappers/wrapper_export.py. The exporter walks the
-    # assembly envelopes itself; decoding them into live geometry would collapse
-    # the tree into a single compound and there would be no links left to write.
+    # assembly envelopes itself; decoding them into live geometry would keep the
+    # tree's shape but drop every node's name and label and bake its placement
+    # in, leaving nothing to name, group or joint the links by.
     decode: false
     pythonRequirements:
       - cadquery-ocp==7.9.3.1.1
