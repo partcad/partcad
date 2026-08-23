@@ -98,7 +98,7 @@ def convert_cad_file(input_filename: str, input_type: str, output_filename: str,
             part.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
 
     except Exception as e:
-        raise RuntimeError(f"Failed to convert: {e}")
+        raise RuntimeError(f"Failed to convert: {e}") from e
     finally:
         shutil.rmtree(temp_dir)
 
@@ -138,6 +138,8 @@ def convert_sketch_file(input_filename: str, input_type: str, output_filename: s
             sketch.render(ctx=ctx, format_name=output_type, project=project, filepath=output_filename)
 
     except Exception as e:
-        raise RuntimeError("Failed to convert sketch") from e
+        # The cause belongs in the message, not only in __cause__: this is what
+        # the CLI prints, and without it every sketch failure reads the same.
+        raise RuntimeError(f"Failed to convert sketch: {e}") from e
     finally:
         shutil.rmtree(temp_dir)
