@@ -1,0 +1,6 @@
+# The 'render:' section of this package exists to exercise rendering of every
+# part type it declares, not to publish pictures: there is no README here to put
+# them in. The sources live in the subdirectories and are checked in; what a
+# render leaves in this directory is not.
+/*.png
+/*.svg

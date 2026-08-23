@@ -58,7 +58,7 @@ pc convert assembly -t assy robot
 
 ### robot
 <table><tr>
-<td valign=top><a href="robot.urdf"><img src="././robot.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="robot.urdf"><img src="././robot.svg" alt="robot" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>A URDF robot description used directly as a PartCAD assembly</td>
 </tr></table>
 

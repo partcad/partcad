@@ -493,20 +493,28 @@ jobs:
       # above produces, and they are checked in on purpose: a change in how
       # PartCAD renders then shows up here as a diff, which is the only thing
       # that makes them a regression canary rather than decoration. Without this
-      # a render that produces different - or new - files passes green.
+      # a render that produces different - or new - files passes green, which is
+      # how several examples came to reference images that were never committed.
       # To make it pass, re-render locally and commit the result, or fix the
       # regression.
       #
       # This job rather than a job of its own, so the check reuses the sandboxes
       # the render above has already provisioned; and one cell of the matrix
       # rather than all of them, because what is checked in is one rendering and
-      # only the sandbox is pinned across images.
+      # only the sandbox is pinned across images. The projection itself is
+      # produced by the sandbox, so the other cells should agree - but "should"
+      # is not what a required check is for, and a spurious failure on macOS
+      # would train people to ignore this one.
       #
       # UNSTABLE is what a render is expected to rewrite every time, because the
       # tool that writes it cannot write it reproducibly. It is a list to keep
       # short: every entry is a file nobody is watching any more. An entry needs
       # a reason here, and the package it belongs to has to carry the same
-      # reason where a reader of that package will meet it.
+      # reason where a reader of that package will meet it. Nothing PartCAD
+      # implements itself is on it: the built-in DXF renderer suppresses the
+      # timestamp and GUIDs a DXF is otherwise stamped with, and pins the order
+      # of its CLASSES section, under the 'reproducible' parameter of the 'dxf'
+      # file type.
       - name: The rendered examples must match what is checked in
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
         run: |

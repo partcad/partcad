@@ -504,3 +504,43 @@ def test_runtime_exit_description_explains_a_wasm_abort():
 
 def test_runtime_exit_description_plain_failure():
     assert runtime_exit_description(1) == "exit code 1"
+
+
+#
+# The environment a sandbox process is spawned with
+#
+
+
+def _runtime_with_node(path, exec_path=None):
+    """A runtime whose Node.js is where get_node_path() says it is."""
+    runtime = _bare_runtime(path)
+    runtime.exec_path = exec_path
+    runtime.exec_name = "node"
+    return runtime
+
+
+def test_the_sandbox_node_goes_on_the_path(tmp_path, monkeypatch):
+    """'npm' is a script whose '#!/usr/bin/env node' resolves against PATH.
+
+    Without the sandbox's own bin directory in front of it, npm finds the host's
+    Node.js - or, on a host that has none, nothing at all, and every install in
+    the sandbox fails with "env: 'node': No such file or directory".
+    """
+    monkeypatch.setenv("PATH", "/usr/bin")
+    runtime = _runtime_with_node(tmp_path)
+
+    env = JavaScriptRuntime._subprocess_env(runtime)
+
+    assert env["PATH"].split(os.pathsep)[0] == os.path.join(str(tmp_path), "bin")
+    assert "/usr/bin" in env["PATH"].split(os.pathsep)
+
+
+def test_the_path_of_an_explicitly_located_node_is_its_own_directory(tmp_path, monkeypatch):
+    """A runtime told where Node.js is does not go looking under its own path."""
+    monkeypatch.setenv("PATH", "/usr/bin")
+    node = tmp_path / "elsewhere" / "node"
+    runtime = _runtime_with_node(tmp_path, exec_path=str(node))
+
+    env = JavaScriptRuntime._subprocess_env(runtime)
+
+    assert env["PATH"].split(os.pathsep)[0] == str(tmp_path / "elsewhere")

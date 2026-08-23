@@ -13,13 +13,13 @@ pc inspect bone
 
 ### bone
 <table><tr>
-<td valign=top><a href="bone.py"><img src="././bone.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="bone.py"><img src="././bone.svg" alt="bone" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Plate used as one of the bones on PartCAD logo</td>
 </tr></table>
 
 ### head_half
 <table><tr>
-<td valign=top><a href="head_half.py"><img src="././head_half.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="head_half.py"><img src="././head_half.svg" alt="head_half" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Bracket used as one side of the head on PartCAD logo</td>
 </tr></table>
 

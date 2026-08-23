@@ -83,3 +83,10 @@ render:
     line_weight: 1.0
     viewport_origin: [0, 0, 100]
     viewport_up: [0, 1, 0]
+    # Write the same bytes for the same drawing: a fixed creation time and the
+    # all-zero GUID pair, instead of the wall clock and fresh GUIDs a DXF is
+    # otherwise stamped with on every save. On by default because the same
+    # drawing rendered twice should be the same file - that is what makes a
+    # checked-in DXF a baseline a change can be noticed against. Set it to
+    # 'false' for a file that has to record when it was really written.
+    reproducible: true

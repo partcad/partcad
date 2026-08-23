@@ -1,28 +1,45 @@
-desc: PartCAD example project to demonstrate various export mechanisms
+desc: PartCAD example project to demonstrate the 3D and CAD files `pc export` writes.
+
+docs:
+  intro: |
+    `pc export` writes the files another tool can go on working with -- meshes,
+    CAD kernel formats, scene formats -- and the `export:` section of
+    `partcad.yaml` says which of them a package publishes. Each file type is a
+    subsection of its own; `<file type>: <path>` is the short form of
+    `prefix: <path>`, which is all most of them need.
+
+    The 2D projections are the other section, `render:`, and the other example:
+    see `feature_render`. Only this package's own document and the picture in it
+    are rendered here, because every package wants those.
+  usage: |
+    ```shell
+    pc export              # every file type below
+    pc export -t stl bolt  # only one of them
+    ```
 
 parts:
   bolt:
     type: step
     desc: M8x30-screw
 
-render:
-  svg:
-    prefix: ./
-  png:
-    prefix: ./
-    width: 128
-    height: 256
-  jpeg:
-    prefix: ./
-    width: 128
-    height: 256
-    quality: 90
+export:
   stl: ./
-  # step: ./ # TODO(clairbee): fix CadQuery's noisiness
+  # TODO(clairbee): fix CadQuery's noisiness
+  # step: ./
   3mf: ./
   threejs: ./
   brep: ./
   obj: ./
-  gltf: ./
+  # glTF 2.0 is JSON, and so is three.js, so the built-in implementation writes
+  # a '.json' by default and the two would land on the same file. 'extension'
+  # is the field that settles it. A glTF is two files: this one and the '.bin'
+  # of geometry it references.
+  gltf:
+    prefix: ./
+    extension: gltf
   iges: ./
-  markdown: README.md
+
+render:
+  readme:
+  svg:
+    prefix: ./

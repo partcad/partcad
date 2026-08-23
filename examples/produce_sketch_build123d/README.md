@@ -12,7 +12,7 @@ pc inspect -s clock
 
 ### clock
 <table><tr>
-<td valign=top><a href="clock.py"><img src="././clock.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="clock.py"><img src="././clock.svg" alt="clock" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>A clock face taken from the build123d examples</td>
 </tr></table>
 

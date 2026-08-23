@@ -9,7 +9,7 @@ JPEG shares the whole rasterization path with PNG (see
 'builtin/render/render_raster.py'); what is specific to it is the file
 extension, the encoder options and the background the transparent projection is
 flattened onto. These tests cover that without the sandbox: an end-to-end render
-is exercised by 'test_render.test_render_project' (the 'feature_export' example
+is exercised by 'test_render.test_render_project' (the 'feature_render' example
 renders JPEG) and by 'features/render.feature'.
 """
 
@@ -89,18 +89,22 @@ def test_the_builtin_jpeg_declares_the_jpg_extension():
 
 
 def test_jpeg_output_getopts_uses_the_jpg_extension():
-    """A package's JPEG render options resolve to a '<name>.jpg' output path."""
-    ctx = pc.init("examples")
-    prj = ctx.get_project("//feature_export")
-    bolt = prj.get_part("bolt")
-    assert bolt is not None
+    """A package's JPEG render options resolve to a '<name>.jpg' output path.
 
-    impl, filepath = bolt.output_getopts(ctx, "jpeg", prj)
-    assert filepath.endswith("bolt.jpg")
+    'feature_render' is the example that configures the render targets; the
+    'prefix' it gives the raster ones is part of the resolved path.
+    """
+    ctx = pc.init("examples")
+    prj = ctx.get_project("//feature_render")
+    cube = prj.get_part("cube")
+    assert cube is not None
+
+    impl, filepath = cube.output_getopts(ctx, "jpeg", prj)
+    assert filepath.endswith(os.path.join("images", "cube.jpg"))
     assert impl.section == output.RENDER
     assert impl.parameters["quality"] == 90
-    assert impl.parameters["width"] == 128
-    assert impl.parameters["height"] == 256
+    assert impl.parameters["width"] == 256
+    assert impl.parameters["height"] == 192
 
 
 def test_jpeg_implementation_forwards_the_encoder_options():

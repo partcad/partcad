@@ -22,9 +22,9 @@ There are many ways to produce a PartCAD model that can be consumed by others.
 
 - Import parts defined using CAD scripting languages:
 
-  - [Primitive shapes using CadQuery](./produce_part_cadquery/)
-  - [Primitive shapes using Build123d](./produce_part_build123d/)
   - [Primitive shapes using OpenSCAD](./produce_part_openscad/)
+  - [Primitive shapes using Chili3D](./produce_part_chili3d_primitive/)
+  - [Shapes defined by signed distance functions (SDF)](./produce_part_sdf/)
 
 - Import parts defined using CAD Files:
   - [STEP files](./produce_part_step/)
@@ -32,6 +32,7 @@ There are many ways to produce a PartCAD model that can be consumed by others.
   - [STL files](./produce_part_stl/)
   - [3MF files](./produce_part_3mf/)
   - [OBJ files](./produce_part_obj/)
+  - [KiCad PCBs](./produce_part_kicad/)
 
 - Combine parts into assemblies:
   - [Assembly YAML (ASSY) files](./produce_assembly_assy/)
@@ -56,14 +57,16 @@ Below are some examples of consuming existing modules:
 
 These examples showcase particular PartCAD features:
 
-- [Export to file](./feature_export)
-- [Export parameters, and an export implementation of one's own](./feature_export_custom)
+- [Render 2D projections, and configure each of them on its own](./feature_render)
 - [Technical drawings, from a render implementation another package supplies](./feature_render_custom)
+- [Export to 3D and CAD files](./feature_export)
+- [Export parameters, and an export implementation of one's own](./feature_export_custom)
 - [Convert parts inside a package or standalone (ad-hoc)](./feature_convert_part)
 - [Convert sketch inside a package or standalone (ad-hoc)](./feature_convert_sketch)
 - [Import parts or assemblies (with optional format conversion)](./feature_import)
 - [Interfaces and mating](./feature_interface)
 - [Part enrichment](./feature_enrich)
+- [Parts built by a part type the package defines itself](./produce_part_wrapper)
 - [Mono-repo and Multi-repo](./feature_monorepo)
 
 ## External integrations

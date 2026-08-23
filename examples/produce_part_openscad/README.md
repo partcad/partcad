@@ -10,9 +10,21 @@ pc inspect cube
 
 ## Parts
 
+### box
+<table><tr>
+<td valign=top><a href="parametric_box.scad"><img src="././box.svg" alt="box" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>A box instantiated from a parameterized SCAD module</td>
+<td valign=top>Parameters:<br/><ul>
+<li>width: 10</li>
+<li>depth: 20</li>
+<li>height: 5</li>
+</ul>
+</td>
+</tr></table>
+
 ### cube
 <table><tr>
-<td valign=top><a href="cube.scad"><img src="././cube.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cube.scad"><img src="././cube.svg" alt="cube" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>A cube defined in SCAD</td>
 </tr></table>
 

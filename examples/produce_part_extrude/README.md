@@ -14,19 +14,19 @@ pc inspect clock
 
 ### clock
 <table><tr>
-<td valign=top><a href="clock.extrude"><img src="././clock.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="clock.extrude"><img src="././clock.svg" alt="clock" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Extrude a clock sketch to create a 3D clock.</td>
 </tr></table>
 
 ### cylinder
 <table><tr>
-<td valign=top><a href="cylinder.extrude"><img src="././cylinder.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cylinder.extrude"><img src="././cylinder.svg" alt="cylinder" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Extrude a circle sketch to create a cylinder.</td>
 </tr></table>
 
 ### dxf
 <table><tr>
-<td valign=top><a href="dxf.extrude"><img src="././dxf.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="dxf.extrude"><img src="././dxf.svg" alt="dxf" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Extrude a DXF sketch to create a 3D part.</td>
 </tr></table>
 

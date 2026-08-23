@@ -11,7 +11,7 @@ pc inspect -s dxf_01
 ## Sketches
 
 ### dxf_01
-<a href="dxf_01.dxf"><img src="././dxf_01.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
+<a href="dxf_01.dxf"><img src="././dxf_01.svg" alt="dxf_01" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
 
 <br/><br/>
 
