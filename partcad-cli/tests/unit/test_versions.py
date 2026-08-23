@@ -113,11 +113,17 @@ SELF_PIN = re.compile(
 # rest are dependency and build directories.
 SKIPPED_DIRS = frozenset({".git", ".venv", ".nox", ".tox", "node_modules", "bundled", "build", "dist"})
 
+# The pinned files and the pip-compile inputs alike. The inputs are not merely
+# scanned early: `partcad/requirements-dev.in` has no compiled counterpart at
+# all -- CI installs it with `pip install -r` directly -- so a pin added there
+# would be read by nothing here if only ".txt" were globbed.
+REQUIREMENTS_GLOBS = ("*requirements*.txt", "*requirements*.in")
+
 
 def _self_pins():
     """Every PartCAD self-pin in the tree, as (relative path, "name[extras]==", version)."""
     found = []
-    for path in sorted(REPO_ROOT.rglob("*requirements*.txt")):
+    for path in sorted(candidate for glob in REQUIREMENTS_GLOBS for candidate in REPO_ROOT.rglob(glob)):
         relative = path.relative_to(REPO_ROOT)
         if SKIPPED_DIRS.intersection(relative.parts):
             continue
