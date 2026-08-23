@@ -415,7 +415,10 @@ Feature: `pc lint` command
       """
     And a file named "main.assy" with content:
       """
-      This is a assembly file for main.assy
+      links:
+        - part: bone
+          package: //pub/examples
+          location: [[0, 0, 0], [0, 0, 1], 0]
       """
     When I run "pc lint"
     Then the command should exit with a status code of "0"
