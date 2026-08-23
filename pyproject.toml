@@ -78,7 +78,7 @@ cache-dir = "/tmp/.prepare_partcad-dev"
 
 [tool.poetry]
 name = "partcad-dev"
-version = "0.7.184"
+version = "0.7.185"
 description = "Development Environment for PartCAD"
 authors = [
   "PartCAD <support@partcad.org>",
