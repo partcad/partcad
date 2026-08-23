@@ -111,6 +111,7 @@ Feature: `pc info` command
           type: git
           relPath: robotics/parts
           url: https://github.com/partcad/partcad-index.git
+          revision: main
       """
     When I run "pc info /rob/dfrobot:motion/rubber_wheel_136_24"
     Then the command should exit with a status code of "0"
@@ -181,6 +182,7 @@ Feature: `pc info` command
   #       pub:
   #         type: git
   #         url: https://github.com/openvmp/partcad-index.git
+  #         revision: main
   #     parts:
   #     assemblies:
   #     """

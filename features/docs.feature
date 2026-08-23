@@ -16,6 +16,7 @@ Feature: `pc render` command
         pub:
           type: git
           url: https://github.com/partcad/partcad-index.git
+          revision: main
       """
     And I run "pc --no-ansi list"
     Then the command should exit with a status code of "0"

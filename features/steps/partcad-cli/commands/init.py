@@ -79,7 +79,13 @@ def step_impl(context, filename):
 
 #             # # Check that pub repo we added
 #             # expected_content = {
-#             #     "dependencies": {"pub": {"type": "git", "url": "https://github.com/openvmp/partcad-index.git"}}
+#             #     "dependencies": {
+#             #         "pub": {
+#             #             "type": "git",
+#             #             "url": "https://github.com/openvmp/partcad-index.git",
+#             #             "revision": "main",
+#             #         }
+#             #     }
 #             # }
 #             # assert yaml_content == expected_content, "YAML content does not match expected private package structure"
 #         except yaml.YAMLError as exc:
