@@ -25,12 +25,27 @@ import { getServiceDownloadRepositoryFromSetting, getServicePathFromSetting } fr
 
 const EXE = process.platform === 'win32' ? 'partcad-json-rpc.exe' : 'partcad-json-rpc';
 
-interface PlatformArchive {
-    platform: string;
+// What a release says it carries, published beside the archives by
+// `dev-tools/release/platforms-manifest.sh`.
+const MANIFEST_NAME = 'platforms.json';
+
+/**
+ * The release manifest: `{version, bundle: {os: {arch: [platform, ...]}}, ide: ...}`,
+ * each list ordered newest build first.
+ */
+interface ReleaseManifest {
+    version?: string;
+    [kind: string]: unknown;
+}
+
+interface HostPlatform {
+    os: string;
+    arch: string;
     ext: 'tar.gz' | 'zip';
 }
 
-function platformArchive(): PlatformArchive | undefined {
+/** This machine, in the names the manifest uses. */
+function hostPlatform(): HostPlatform | undefined {
     let osName: string;
     switch (process.platform) {
         case 'linux':
@@ -56,7 +71,134 @@ function platformArchive(): PlatformArchive | undefined {
         default:
             return undefined;
     }
-    return { platform: `${osName}-${arch}`, ext: osName === 'windows' ? 'zip' : 'tar.gz' };
+    return { os: osName, arch, ext: osName === 'windows' ? 'zip' : 'tar.gz' };
+}
+
+/**
+ * This machine's OS release as `<name>-<version>`, or undefined when it cannot
+ * be established.
+ *
+ * The same two answers `install.sh` can give: an Ubuntu version out of
+ * `/etc/os-release`, or a macOS major version. Everything else is deliberately
+ * unknown -- a non-Ubuntu Linux cannot be lined up against a build named after
+ * an Ubuntu release, and the Windows builds are named after the runner image,
+ * which is not a version this machine has.
+ */
+function hostRelease(): string | undefined {
+    if (process.platform === 'linux') {
+        try {
+            const text = fs.readFileSync('/etc/os-release', 'utf8');
+            const fields = new Map<string, string>();
+            for (const line of text.split('\n')) {
+                const separator = line.indexOf('=');
+                if (separator > 0) {
+                    fields.set(
+                        line.slice(0, separator).trim(),
+                        line
+                            .slice(separator + 1)
+                            .trim()
+                            .replace(/^["']|["']$/g, ''),
+                    );
+                }
+            }
+            const version = fields.get('VERSION_ID');
+            return fields.get('ID') === 'ubuntu' && version ? `ubuntu-${version}` : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+    if (process.platform === 'darwin') {
+        try {
+            // The major version is the compatibility boundary; the point release
+            // is not, which is why the builds are `macos-15` and not `macos-15.3`.
+            const product = cp.execFileSync('sw_vers', ['-productVersion'], { encoding: 'utf8' }).trim();
+            const major = product.split('.')[0];
+            return major ? `macos-${major}` : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+    return undefined;
+}
+
+/** A comparable version. Non-digits are dropped, missing fields count as 0. */
+function versionFields(value: string): number[] {
+    return value.split('.').map((field) => {
+        const digits = field.replace(/\D/g, '');
+        return digits ? Number(digits) : 0;
+    });
+}
+
+/** True when `left <= right`, padding the shorter one with zeroes. */
+function versionLe(left: number[], right: number[]): boolean {
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+        const difference = (left[i] ?? 0) - (right[i] ?? 0);
+        if (difference !== 0) {
+            return difference < 0;
+        }
+    }
+    return true;
+}
+
+/** `["ubuntu", [24, 4]]` for `"ubuntu-24.04"`; undefined without a version. */
+function splitRelease(value: string): [string, number[]] | undefined {
+    const separator = value.indexOf('-');
+    if (separator <= 0 || separator === value.length - 1) {
+        return undefined;
+    }
+    return [value.slice(0, separator), versionFields(value.slice(separator + 1))];
+}
+
+/**
+ * The OS release a build was frozen on, from its platform id.
+ *
+ * `ubuntu-24.04-x86_64` is `["ubuntu", [24, 4]]`; `linux-x86_64` -- an IDE
+ * archive, built once per operating system rather than per OS version -- has no
+ * release and is undefined.
+ */
+function platformRelease(platformId: string): [string, number[]] | undefined {
+    const separator = platformId.lastIndexOf('-');
+    return separator > 0 ? splitRelease(platformId.slice(0, separator)) : undefined;
+}
+
+/**
+ * The builds in `manifest` worth trying on this machine, best first.
+ *
+ * `manifest[kind][os][arch]` is what the release actually published, newest
+ * build first. This applies the policy `install.sh` applies to its own
+ * hardcoded lists, and for the same reason: a frozen bundle needs the C library
+ * of the machine that froze it or newer, so a build newer than this machine is
+ * dropped rather than offered and left to fail at first start. A machine whose
+ * release cannot be established -- Windows, a non-Ubuntu Linux -- gets the list
+ * backwards instead, oldest and therefore most portable build first. An OS
+ * older than every build is still offered the oldest one, as the only candidate
+ * with a chance.
+ */
+export function selectPlatforms(
+    manifest: ReleaseManifest,
+    kind: string,
+    osName: string,
+    arch: string,
+    release: string | undefined,
+): string[] {
+    const byOs = (manifest?.[kind] ?? {}) as Record<string, Record<string, unknown>>;
+    const raw = byOs?.[osName]?.[arch];
+    const published = (Array.isArray(raw) ? raw : []).filter(
+        (entry): entry is string => typeof entry === 'string' && !!entry,
+    );
+    if (published.length === 0) {
+        return [];
+    }
+    const host = release ? splitRelease(release) : undefined;
+    const releases = published.map((entry) => platformRelease(entry));
+    if (!host || !releases.some((found) => found && found[0] === host[0])) {
+        return [...published].reverse();
+    }
+    const usable = published.filter((_entry, index) => {
+        const found = releases[index];
+        return !!found && found[0] === host[0] && versionLe(found[1], host[1]);
+    });
+    return usable.length > 0 ? usable : [published[published.length - 1]];
 }
 
 function isFile(p: string): boolean {
@@ -316,16 +458,25 @@ async function downloadAndExtract(
     serverId: string,
     progress: vscode.Progress<{ message?: string }>,
 ): Promise<string | undefined> {
-    const pa = platformArchive();
-    if (!pa) {
+    const host = hostPlatform();
+    if (!host) {
         throw new Error(`unsupported platform ${process.platform}/${process.arch}`);
     }
     const repo = getServiceDownloadRepositoryFromSetting(serverId);
 
     progress.report({ message: 'resolving the latest release...' });
     const version = await latestRelease(repo);
-    const archive = `partcad-${version}-${pa.platform}.${pa.ext}`;
-    const url = `https://github.com/${repo}/releases/download/${version}/${archive}`;
+    const base = `https://github.com/${repo}/releases/download/${version}`;
+
+    // Which bundles a release carries is a property of the release, not of this
+    // machine: they are named after the OS version they were frozen on, and that
+    // set changes as builders come and go. So the release says, and this reads
+    // it, rather than guessing a name that may not exist.
+    const manifest = await fetchManifest(base);
+    const candidates = selectPlatforms(manifest, 'bundle', host.os, host.arch, hostRelease());
+    if (candidates.length === 0) {
+        throw new Error(`release ${version} publishes no PartCAD bundle for ${host.os}/${host.arch}`);
+    }
 
     // Unpacked beside any bundle already there, under a directory named after
     // its version: the same layout `install.sh` and `pc upgrade` produce, so all
@@ -335,10 +486,8 @@ async function downloadAndExtract(
     const staging = path.join(root, `.staging-${version}`);
     await fs.promises.rm(staging, { recursive: true, force: true });
     await fs.promises.mkdir(staging, { recursive: true });
-    const archivePath = path.join(staging, archive);
 
-    progress.report({ message: `downloading ${archive}...` });
-    await downloadFile(url, archivePath);
+    const { url, archivePath } = await downloadFirstPublished(base, version, candidates, host.ext, staging, progress);
 
     // The HTTPS transfer is already authenticated; the checksum only guards
     // against a corrupted download, so an *unavailable* checksum is a warning.
@@ -362,7 +511,7 @@ async function downloadAndExtract(
     }
 
     progress.report({ message: 'extracting...' });
-    await extract(archivePath, staging, pa.ext);
+    await extract(archivePath, staging, host.ext);
     await fs.promises.rm(archivePath, { force: true });
 
     const unpacked = path.join(staging, 'partcad');
@@ -414,6 +563,81 @@ async function pruneBundles(root: string, keep: string): Promise<void> {
     }
 }
 
+/**
+ * Download the first candidate the release actually has, into `staging`.
+ *
+ * The manifest says what was published, so the first candidate is normally the
+ * one that arrives. It can still be absent -- a builder that failed after the
+ * manifest was written -- and every later candidate is a bundle this machine can
+ * run too, so a missing one moves on the way `install.sh` does.
+ */
+async function downloadFirstPublished(
+    base: string,
+    version: string,
+    candidates: string[],
+    ext: string,
+    staging: string,
+    progress: vscode.Progress<{ message?: string }>,
+): Promise<{ url: string; archivePath: string }> {
+    for (let i = 0; i < candidates.length; i++) {
+        const archive = `partcad-${version}-${candidates[i]}.${ext}`;
+        const url = `${base}/${archive}`;
+        const archivePath = path.join(staging, archive);
+        progress.report({ message: `downloading ${archive}...` });
+        try {
+            await downloadFile(url, archivePath);
+            return { url, archivePath };
+        } catch (e: any) {
+            if (e?.status === 404 && i < candidates.length - 1) {
+                traceInfo(`PartCAD: ${url} is not published, trying the next build`);
+                continue;
+            }
+            throw e;
+        }
+    }
+    throw new Error(`no build of ${version} for this machine. Tried: ${candidates.join(', ')}`);
+}
+
+/**
+ * The release manifest published beside the archives.
+ *
+ * A release made before the manifest existed cannot be resolved: there is no
+ * host-only way back to a name like `ubuntu-24.04-x86_64`, and guessing one is
+ * how this broke in the first place. Say so instead.
+ */
+async function fetchManifest(base: string): Promise<ReleaseManifest> {
+    const url = `${base}/${MANIFEST_NAME}`;
+    let body: Buffer;
+    try {
+        body = await httpsGet(url);
+    } catch (e: any) {
+        throw new Error(
+            `${url} is not published, so there is no way to tell which PartCAD bundles this release ` +
+                `carries. Install one with install.sh, or use a release that publishes ${MANIFEST_NAME} (${e?.message ?? e}).`,
+        );
+    }
+    let manifest: unknown;
+    try {
+        manifest = JSON.parse(body.toString());
+    } catch (e: any) {
+        throw new Error(`${url} is not valid JSON: ${e?.message ?? e}`);
+    }
+    if (!manifest || typeof manifest !== 'object') {
+        throw new Error(`${url} does not contain a release manifest`);
+    }
+    return manifest as ReleaseManifest;
+}
+
+/** An HTTP response that was not a success, carrying its status for the caller. */
+class HttpError extends Error {
+    constructor(
+        readonly status: number,
+        url: string,
+    ) {
+        super(`HTTP ${status} for ${url}`);
+    }
+}
+
 async function latestRelease(repo: string): Promise<string> {
     const body = await httpsGet(`https://api.github.com/repos/${repo}/releases/latest`, {
         Accept: 'application/vnd.github+json',
@@ -437,7 +661,7 @@ function httpsGet(url: string, headers: Record<string, string> = {}): Promise<Bu
                 }
                 if (status !== 200) {
                     res.resume();
-                    reject(new Error(`HTTP ${status} for ${url}`));
+                    reject(new HttpError(status, url));
                     return;
                 }
                 const chunks: Buffer[] = [];
@@ -460,7 +684,7 @@ function downloadFile(url: string, dest: string): Promise<void> {
                 }
                 if (status !== 200) {
                     res.resume();
-                    reject(new Error(`HTTP ${status} for ${url}`));
+                    reject(new HttpError(status, url));
                     return;
                 }
                 const file = fs.createWriteStream(dest);

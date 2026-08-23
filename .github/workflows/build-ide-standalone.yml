@@ -70,7 +70,27 @@ jobs:
   # tools that differ from the ones `install.sh` installs.
   bundles:
     name: "Command line tools"
-    if: ${{ inputs.build_tools != false }}
+    # Build them unless a "workflow_call" caller says it already has: only
+    # "deploy.yml" does, and it passes its own build down through the run's
+    # artifacts. Every other trigger -- push, pull request, merge group, manual
+    # dispatch -- has to build them here, or the jobs below have nothing to
+    # download.
+    #
+    # `toJSON` rather than the `inputs.build_tools != false` this used to say.
+    # Outside "workflow_call"/"workflow_dispatch" there is no `inputs` context,
+    # so `inputs.build_tools` is null, and GitHub compares mismatched types by
+    # coercing both to numbers: null becomes 0, false becomes 0, and
+    # `null != false` is therefore false. That skipped this job on every push
+    # and pull request while still letting "build" run -- it tolerates a skipped
+    # "bundles" for deploy.yml's sake -- so the IDE build failed at "Download the
+    # command line tools" for a day. `toJSON` compares the value as text
+    # ("null", "true", "false"), which is what tells an absent input apart from
+    # one that was deliberately set to false.
+    #
+    # Not `github.event_name == 'workflow_call'`: in a called workflow the
+    # `github` context is the caller's, so that reads "push" on the release
+    # path, never "workflow_call".
+    if: ${{ toJSON(inputs.build_tools) != 'false' }}
     uses: ./.github/workflows/build-standalone.yml
 
   build:
