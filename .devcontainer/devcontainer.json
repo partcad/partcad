@@ -8,17 +8,43 @@
     // TODO: poetry-* hooks are source of unnecessary conflicts in PRs and should be handled by dependabot.
     "SKIP": "behave,prepare-commit-msg,poetry-install,poetry-lock,poetry-export"
   },
+  // Runs on the host, before the container exists: resolves the Docker socket
+  // of a host that does not keep one at the standard path. See the second
+  // "-v" under runArgs below. Named ".cmd" rather than ".sh" because this
+  // runs in the host's own shell and a failure here aborts `devcontainer up`:
+  // the file is a polyglot that cmd.exe reads as a batch script doing nothing
+  // and /bin/sh reads as a wrapper around docker-socket-init.sh. Quoted, so a
+  // workspace path with a space in it still resolves.
+  "initializeCommand": {
+    "docker-socket": "\"${localWorkspaceFolder}/.devcontainer/docker-socket-init.cmd\""
+  },
   "postCreateCommand": {
     "Start D-Bus": "sudo service dbus start && (until systemctl is-active --quiet dbus; do sleep 1; done)"
   },
   "postStartCommand": {
     "pre-commit": "pre-commit install --config dev-tools/pre-commit-config.yaml",
-    "docker-permission": "sudo chown $(whoami):$(whoami) /var/run/docker.sock"
+    "docker-socket": ".devcontainer/docker-socket-start.sh"
   },
-  "runArgs": ["--privileged"],
+  "runArgs": [
+    "--privileged",
+    // The host's Docker daemon, so that this container can start containers of
+    // its own -- PartCAD's KiCad sandbox, for one. Two candidates, which
+    // .devcontainer/docker-socket-start.sh tries in this order.
+    //
+    // The standard path first: on macOS and Windows the daemon is not there at
+    // all (on Windows it is a named pipe), and this exact name is what Docker
+    // Desktop translates, so no other spelling works on those hosts.
+    "-v", "/var/run/docker.sock:/var/run/docker-host.sock",
+    // Then whatever .devcontainer/docker-socket-init.sh resolved, for a Linux
+    // host that keeps its daemon somewhere else: rootless, a unix:// value in
+    // DOCKER_HOST, Colima.
+    "-v", "/tmp/partcad-devcontainer-${localEnv:USER}/docker.sock:/var/run/docker-host-alt.sock"
+    // Both are "-v" rather than "mounts" entries deliberately: "mounts" turns
+    // into "--mount", which aborts `devcontainer up` when the source does not
+    // exist, whereas "-v" leaves an empty directory in its place, which the
+    // container side reads as "no daemon here" and passes over in silence.
+  ],
   "mounts": [
-    // Docker socket inside the container to run docker runtimes
-    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     // TODO: For some reason this leads to tests hanging in the CI.
     // "source=partcad-partcad,target=/home/vscode/.partcad,type=volume",
     "source=partcad-cache,target=/home/vscode/.cache,type=volume",

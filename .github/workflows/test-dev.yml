@@ -13,7 +13,15 @@ on:
     branches: ["devel"]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # A push whose head commit is a version bump is the only run that publishes
+  # the dev container image tagged with that version: the job that builds it is
+  # skipped on every other push to devel, and the tag is never built again. So
+  # cancelling such a run loses that image for good -- 0.7.180 has no dev
+  # container image on ghcr for exactly this reason, its run having been
+  # cancelled by the next push. Give version bumps a concurrency group of their
+  # own, keyed by commit, so nothing can supersede them. Every other run keeps
+  # cancelling its predecessor as before.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ startsWith(github.event.head_commit.message, 'Version updated') && format('-{0}', github.sha) || '' }}
   cancel-in-progress: true
 
 permissions:

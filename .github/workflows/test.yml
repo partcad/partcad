@@ -17,7 +17,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Version bumps get a concurrency group of their own, keyed by commit: theirs
+  # is the run that publishes the version-tagged KiCad sandbox image and the
+  # only one that runs the full matrix on devel, and neither is ever done again
+  # for that version. Cancelling it is what left 0.7.180 without a KiCad image
+  # on ghcr. See the same block in "test-dev.yml" for the dev container image.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ startsWith(github.event.head_commit.message, 'Version updated') && format('-{0}', github.sha) || '' }}
   cancel-in-progress: true
 
 env:
