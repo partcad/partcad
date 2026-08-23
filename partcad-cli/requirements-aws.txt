@@ -1,1 +1,1 @@
-partcad[aws]==0.7.187
+partcad[aws]==0.7.188
