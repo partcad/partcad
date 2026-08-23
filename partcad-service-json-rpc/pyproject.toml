@@ -1,6 +1,6 @@
 [project]
 name = "partcad-service-json-rpc"
-version = "0.7.186"
+version = "0.7.187"
 description = "JSON-RPC service interface to PartCAD"
 readme = "README.md"
 keywords = ["cad", "json-rpc", "partcad", "service", "ide"]

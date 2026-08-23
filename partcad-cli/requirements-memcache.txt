@@ -1,1 +1,1 @@
-partcad[memcache]==0.7.186
+partcad[memcache]==0.7.187
