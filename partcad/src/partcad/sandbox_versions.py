@@ -198,6 +198,25 @@ def _parsed(version: str):
     return tuple(int(part) for part in version.split("."))
 
 
+def _major_minor(version: str) -> str:
+    """The bare "<major>.<minor>" of a version that may carry more components.
+
+    Callers are documented to pass "<major>.<minor>", but nothing enforces it:
+    the package schema's 'pythonVersion' pattern accepts "3.13.1" and no layer
+    between it and a sandbox trims the patch component off. python_abi is
+    versioned by ABI rather than by release -- conda-forge publishes
+    "python_abi 3.13.* *_cp313" and no 3.13.1 of it at all -- so a patch version
+    reaching python_abi_requirement() unedited yields a spec that matches
+    nothing and fails the solve with an error naming neither PartCAD nor the
+    setting that caused it.
+
+    Built on _parsed() so the components are validated as numbers here, the same
+    way is_at_least() validates them.
+    """
+    major, minor = _parsed(version)[:2]
+    return "%d.%d" % (major, minor)
+
+
 def is_at_least(python_version: str, minimum: str) -> bool:
     """Whether a "<major>.<minor>" version is not older than another.
 
@@ -262,11 +281,17 @@ def python_abi_requirement(python_version: str, exact: bool = True) -> str | Non
     'exact' picks the spelling of the equality, mirroring the python spec the
     caller builds: mamba is given "==", conda "=". Both select the same package
     here, since python_abi's version is the bare "<major>.<minor>".
+
+    That is also why both halves of the spec are derived from _major_minor()
+    rather than from the caller's string: a "3.13.1" would otherwise ask for a
+    python_abi release that does not exist and for a "*_cp3131" build that names
+    no ABI. See _major_minor() for how such a version gets here.
     """
     if not is_at_least(python_version, MIN_PYTHON_VERSION_FREE_THREADING):
         return None
     equality = "==" if exact else "="
-    return "python_abi%s%s=*_cp%s" % (equality, python_version, python_version.replace(".", ""))
+    abi_version = _major_minor(python_version)
+    return "python_abi%s%s=*_cp%s" % (equality, abi_version, abi_version.replace(".", ""))
 
 
 #

@@ -97,6 +97,14 @@ def test_zstd_requirement(python_version, expected):
         ("3.14", True, "python_abi==3.14=*_cp314"),
         # conda takes the single-'=' spelling that the python spec uses there.
         ("3.14", False, "python_abi=3.14=*_cp314"),
+        # A patch version is only documented away, not prevented: the package
+        # schema's 'pythonVersion' pattern accepts "3.13.1" and nothing between
+        # it and the sandbox trims it. python_abi is versioned by ABI, so both
+        # halves have to come out "3.13"/"cp313" all the same -- "==3.13.1" names
+        # a release conda-forge never published and "*_cp3131" names no ABI at
+        # all, and the pair fails the solve rather than anything actionable.
+        ("3.13.1", True, "python_abi==3.13=*_cp313"),
+        ("3.14.0", False, "python_abi=3.14=*_cp314"),
     ],
 )
 def test_python_abi_requirement(python_version, exact, expected):
