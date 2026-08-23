@@ -118,6 +118,6 @@ def test_assembly_tree_round_trips_to_the_same_geometry():
     # way, so Bnd_Box's own gap cancels out.
     rebuilt_bbox = _bbox(rebuilt)
     original_bbox = _bbox(original)
-    assert all(abs(a - b) < 1e-6 for a, b in zip(rebuilt_bbox, original_bbox)), (
+    assert all(abs(a - b) < 1e-6 for a, b in zip(rebuilt_bbox, original_bbox, strict=True)), (
         "the assembly does not occupy the same space: %r vs %r" % (rebuilt_bbox, original_bbox)
     )
