@@ -82,17 +82,27 @@ def test_getting_an_object_that_was_never_declared_still_returns_none(package):
 
 
 def test_unknown_type_exception_lists_what_is_supported():
+    # Deliberately a type nobody ever had rather than a retired one.
+    # 'RetiredTypeException' subclasses this and hands its own message to
+    # super(), so the supported-type list is never built for a retired type -
+    # asking 'ai-cadquery' here asserted nothing, and 'cadquery' matched only
+    # the substring inside the bad type's own name. The retired path has its
+    # own tests further down.
     with pytest.raises(factory.UnknownTypeException) as excinfo:
-        factory.instantiate("part", "ai-cadquery", None, None, None, {"name": "some_part"})
+        factory.instantiate("part", "nonsense", None, None, None, {"name": "some_part"})
+
+    assert not isinstance(excinfo.value, factory.RetiredTypeException)
 
     message = str(excinfo.value)
-    assert "ai-cadquery" in message
+    assert "nonsense" in message
     assert "some_part" in message
     # The supported types are listed, because "unknown type" on its own leaves
-    # the user with nothing to do about it.
+    # the user with nothing to do about it. Asserted on the sentence that
+    # introduces the list, and on a type name the bad type cannot supply itself.
+    assert "supports" in message
     assert "cadquery" in message
     assert excinfo.value.kind == "part"
-    assert excinfo.value.type == "ai-cadquery"
+    assert excinfo.value.type == "nonsense"
 
 
 def test_a_parametrized_instance_of_an_unusable_declaration_returns_none(tmp_path):
@@ -198,3 +208,179 @@ def test_a_factory_that_produces_nothing_is_recorded_rather_than_indexed(tmp_pat
             del factory.all["part"]["test-silent"]
         else:
             factory.register("part", "test-silent", saved)
+
+
+# A type PartCAD itself retired is not the same as a type nobody ever had.
+#
+# The public index is a separate repository, and it still declares the
+# generative-AI part types removed in 0.7.153. Reporting those as errors makes
+# every command that so much as walks the index exit non-zero, over declarations
+# the user cannot edit and cannot fix. Reporting a genuine typo as anything less
+# than an error would be worse, so the two have to stay apart.
+
+
+def _record_warnings(monkeypatch):
+    """Collect pc_logging.warning() calls.
+
+    The 'partcad' logger sets propagate=False, so the caplog fixture (which
+    attaches to the root logger) sees nothing on the pytest version used in CI.
+    """
+    recorded = []
+    monkeypatch.setattr(pc.logging, "warning", lambda *args, **kwargs: recorded.append(" ".join(str(a) for a in args)))
+    return recorded
+
+
+@pytest.fixture
+def unknown_type_package(tmp_path):
+    """The same package, but the unusable type is a typo rather than a retirement."""
+    config = {
+        "name": "//test",
+        "parts": {
+            "good_before": {"type": "cadquery", "path": "cube.py"},
+            "typo": {"type": "nonsense"},
+            "good_after": {"type": "cadquery", "path": "cube.py"},
+        },
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(config))
+    (tmp_path / "cube.py").write_text("import cadquery as cq\nshow_object(cq.Workplane('front').box(1, 1, 1))\n")
+    return tmp_path
+
+
+def test_the_retired_types_are_the_ones_that_were_removed():
+    """The set is closed, and comes from what #486 actually deleted.
+
+    Those four are the 'part_factory_ai_*' modules that PR removed along with
+    their 'factory.register()' calls. Anything else added here would quietly
+    downgrade a real error.
+    """
+    assert set(factory.RETIRED_TYPES) == {"ai-build123d", "ai-cadquery", "ai-openscad", "ai-sdf"}
+    assert set(factory.RETIRED_TYPES.values()) == {"0.7.153"}
+    # And none of them is registered, which is what makes them retired.
+    for kind in factory.all:
+        assert not set(factory.RETIRED_TYPES) & set(factory.all[kind])
+
+
+def test_a_retired_type_does_not_make_the_command_fail(package):
+    """pc_logging.error() sets the flag the CLI turns into a non-zero exit code.
+
+    This is the whole point: 'pc list -r //pub/examples' walked the index, hit
+    the retired declarations it carries, and aborted on them.
+    """
+    pc.logging.reset_errors()
+
+    ctx = pc.Context(str(package))
+    project = ctx.get_project("//")
+
+    assert pc.logging.had_errors is False
+    # Still skipped, and still recorded as broken - only the severity changed.
+    assert sorted(project.parts.keys()) == ["good_after", "good_before"]
+    assert list(project.broken_objects["part"]) == ["obsolete"]
+
+
+def test_a_retired_type_says_it_was_retired_and_when(package, monkeypatch):
+    recorded = _record_warnings(monkeypatch)
+
+    project = pc.Context(str(package)).get_project("//")
+
+    reason = project.get_broken_object_reason("part", "obsolete")
+    assert "retired in PartCAD 0.7.153" in reason
+    assert "ai-cadquery" in reason
+    assert any("ai-cadquery" in message and "retired" in message for message in recorded), recorded
+
+
+def test_a_retired_type_raises_a_retired_type_exception():
+    with pytest.raises(factory.RetiredTypeException) as excinfo:
+        factory.instantiate("part", "ai-openscad", None, None, None, {"name": "some_part"})
+
+    # Still an unknown type, so every caller that handles those keeps working.
+    assert isinstance(excinfo.value, factory.UnknownTypeException)
+    assert excinfo.value.release == "0.7.153"
+    assert "retired" in str(excinfo.value)
+    assert "some_part" in str(excinfo.value)
+
+
+def test_an_unknown_type_is_still_an_error(unknown_type_package):
+    """The property that must not regress along with the above.
+
+    A type nobody retired is a mistake in the package being loaded, and it has
+    to keep failing the command that found it.
+    """
+    pc.logging.reset_errors()
+
+    project = pc.Context(str(unknown_type_package)).get_project("//")
+
+    assert pc.logging.had_errors is True
+    reason = project.get_broken_object_reason("part", "typo")
+    assert "unknown part type 'nonsense'" in reason
+    assert "retired" not in reason
+    # ...and it costs the caller that one object, exactly as before.
+    assert sorted(project.parts.keys()) == ["good_after", "good_before"]
+
+
+def test_an_unknown_type_is_reported_at_error_level(unknown_type_package, monkeypatch):
+    recorded = _record_warnings(monkeypatch)
+
+    pc.Context(str(unknown_type_package)).get_project("//")
+
+    assert not any("nonsense" in message for message in recorded), recorded
+
+
+# ...and the retirement is scoped to the kind that was actually retired.
+#
+# Every 'ai-*' registration #486 removed was a 'factory.register("part", ...)';
+# there never was an 'ai-cadquery' sketch, assembly, provider or repository. So
+# the name only means "retired" on a part. Anywhere else it is a typo in a
+# package somebody can fix, and forgiving it would both hide that and claim a
+# release had a type it never had.
+
+
+@pytest.fixture
+def retired_part_type_on_a_sketch_package(tmp_path):
+    """A sketch declared with a type only ever registered for parts."""
+    config = {
+        "name": "//test",
+        "sketches": {"not_a_sketch_type": {"type": "ai-cadquery"}},
+    }
+    (tmp_path / "partcad.yaml").write_text(yaml.safe_dump(config))
+    return tmp_path
+
+
+def test_a_retired_part_type_on_a_sketch_is_unknown_rather_than_retired(
+    retired_part_type_on_a_sketch_package,
+):
+    """It has to fail the command, exactly as any other unknown sketch type does."""
+    pc.logging.reset_errors()
+
+    project = pc.Context(str(retired_part_type_on_a_sketch_package)).get_project("//")
+
+    assert pc.logging.had_errors is True
+    reason = project.get_broken_object_reason("sketch", "not_a_sketch_type")
+    assert "unknown sketch type 'ai-cadquery'" in reason
+    # And it must not claim a release that never had such a sketch type.
+    assert "retired" not in reason
+    assert "0.7.153" not in reason
+
+
+def test_a_retired_part_type_on_a_sketch_is_not_reported_as_a_warning(
+    retired_part_type_on_a_sketch_package, monkeypatch
+):
+    recorded = _record_warnings(monkeypatch)
+
+    pc.Context(str(retired_part_type_on_a_sketch_package)).get_project("//")
+
+    assert not any("ai-cadquery" in message for message in recorded), recorded
+
+
+@pytest.mark.parametrize("kind", ["sketch", "assembly", "provider", "repository"])
+def test_a_retired_part_type_raises_a_plain_unknown_type_for_other_kinds(kind):
+    with pytest.raises(factory.UnknownTypeException) as excinfo:
+        factory.instantiate(kind, "ai-cadquery", None, None, None, {"name": "some_object"})
+
+    assert not isinstance(excinfo.value, factory.RetiredTypeException)
+    assert "unknown %s type 'ai-cadquery'" % kind in str(excinfo.value)
+
+
+def test_a_retired_part_type_is_still_retired_on_a_part():
+    """The guard above must not have cost the case the retirement is for."""
+    with pytest.raises(factory.RetiredTypeException):
+        factory.instantiate("part", "ai-cadquery", None, None, None, {"name": "some_part"})
