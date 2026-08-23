@@ -82,17 +82,27 @@ def test_getting_an_object_that_was_never_declared_still_returns_none(package):
 
 
 def test_unknown_type_exception_lists_what_is_supported():
+    # Deliberately a type nobody ever had rather than a retired one.
+    # 'RetiredTypeException' subclasses this and hands its own message to
+    # super(), so the supported-type list is never built for a retired type -
+    # asking 'ai-cadquery' here asserted nothing, and 'cadquery' matched only
+    # the substring inside the bad type's own name. The retired path has its
+    # own tests further down.
     with pytest.raises(factory.UnknownTypeException) as excinfo:
-        factory.instantiate("part", "ai-cadquery", None, None, None, {"name": "some_part"})
+        factory.instantiate("part", "nonsense", None, None, None, {"name": "some_part"})
+
+    assert not isinstance(excinfo.value, factory.RetiredTypeException)
 
     message = str(excinfo.value)
-    assert "ai-cadquery" in message
+    assert "nonsense" in message
     assert "some_part" in message
     # The supported types are listed, because "unknown type" on its own leaves
-    # the user with nothing to do about it.
+    # the user with nothing to do about it. Asserted on the sentence that
+    # introduces the list, and on a type name the bad type cannot supply itself.
+    assert "supports" in message
     assert "cadquery" in message
     assert excinfo.value.kind == "part"
-    assert excinfo.value.type == "ai-cadquery"
+    assert excinfo.value.type == "nonsense"
 
 
 def test_a_parametrized_instance_of_an_unusable_declaration_returns_none(tmp_path):
