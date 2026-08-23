@@ -4,6 +4,18 @@ on:
     branches: ["devel"]
 permissions:
   contents: write
+
+# Only one bump may be in flight at a time. Without this, a burst of merges
+# starts a run each, every one of them reading `current_version` from its own
+# base and computing the same `{new_version}`; three commits titled "Version
+# updated from 0.7.160 to 0.7.161" were created within the same minute that
+# way. `cancel-in-progress` stays false because cancelling a *running* bump
+# would drop it; GitHub already collapses the queue to a single pending run,
+# which is the wanted behaviour for a burst.
+concurrency:
+  group: version-bump-devel
+  cancel-in-progress: false
+
 jobs:
   update_version_and_tag:
     # ubuntu-24.04 is still the newest generally available Ubuntu LTS runner
@@ -19,15 +31,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           token: ${{ secrets.PAT }}
+          # The push below is a fast-forward and the step asserts ancestry
+          # before bumping; both need real history, and the default depth of 1
+          # gives neither. Tags come with it, so a re-used tag name is caught
+          # by `bump-my-version` rather than discovered at push time.
+          fetch-depth: 0
       - name: Install Python 3
         uses: actions/setup-python@v7
         with:
           # Only runs 'bump-my-version'; pinned to 3.13 like the other
           # single-interpreter jobs rather than the newest supported 3.14.
           python-version: "3.13"
-      - name: Setup env variables
-        run: |
-          echo "SKIPBUMP=FALSE" >> "${GITHUB_ENV}"
 
       - name: Install dependencies
         run: |
@@ -39,33 +53,90 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
 
-      # If a commit starts with [MAJOR] a new major verion upgrade will be
-      # triggered. Use with caution as Major upgrades denote backwards
-      # incompatibility. Yet I like it to be integrated in the CI
-      - name: Bump Major Version
+      # This step used to be four: three `bump-my-version` invocations gated on
+      # the commit message, then `git push --force --follow-tags`.
+      #
+      # The force push is what made merges disappear. `checkout` reads the ref
+      # once, at the top of the job; the push overwrote `devel` with that base
+      # plus a bump, minutes later. Anything merged in between was discarded,
+      # and nothing reported it -- GitHub still showed those pull requests as
+      # merged, with their branches auto-deleted. #514, #519, #529 and #533 were
+      # all lost this way and had to be re-landed by hand (#523, #526, #535).
+      #
+      # So: read the ref immediately before bumping, and push *without* --force,
+      # so a merge that lands inside the remaining window is a rejected push
+      # rather than a silent loss. A rejection is retried from the new tip.
+      #
+      # Re-reading also has to mean re-bumping, not rebasing what was already
+      # computed: `bump-my-version` takes `current_version` from
+      # `dev-tools/bumpversion.toml`, which is itself one of the files a bump
+      # rewrites. A stale base therefore does not merely lose commits, it
+      # computes the wrong version -- so each attempt starts over from the tip
+      # it is about to push onto.
+      - name: Bump the version and push it
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
+          TRIGGERING_SHA: ${{ github.sha }}
         run: |
-          bump-my-version bump --config-file dev-tools/bumpversion.toml major
-          echo "SKIPBUMP=TRUE" >> "${GITHUB_ENV}"
-        if: startsWith(github.event.head_commit.message, '[MAJOR]')
+          set -euo pipefail
 
-      - name: Bump Minor Version
-        env:
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-        run: |
-          bump-my-version bump --config-file dev-tools/bumpversion.toml minor
-          echo "SKIPBUMP=TRUE" >> "${GITHUB_ENV}"
-        if: startsWith(github.event.head_commit.message, '[FEATURE]')
+          # Which part moves is decided by the commit that triggered the run,
+          # so it is settled once, before any attempt. The patterns are quoted:
+          # unquoted, `[MAJOR]` is a character class matching a single letter.
+          case "${COMMIT_MSG}" in
+            '[MAJOR]'*)   PART="major" ;;
+            '[FEATURE]'*) PART="minor" ;;
+            *)            PART="patch" ;;
+          esac
+          echo "Bumping the ${PART} version."
 
-      # Default action
-      - name: Bump Patch Version
-        env:
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-        run: |
-          bump-my-version bump --config-file dev-tools/bumpversion.toml patch
-        if: env.SKIPBUMP == 'FALSE'
+          NEW_VERSION=""
+          for attempt in 1 2 3 4 5; do
+            git fetch origin devel
 
-      - name: Commit version change to repo
-        run: |
-          git push --force --follow-tags
+            # A bump computed on a history that has already lost the commit
+            # that asked for it is not worth pushing. This cannot trip on its
+            # own -- something else has to have force-pushed `devel` -- which
+            # is exactly the condition that went unnoticed four times, so it
+            # fails loudly instead of building on top of it. A legitimate
+            # force-push is not blocked: it triggers its own run, whose
+            # triggering commit *is* present.
+            if ! git merge-base --is-ancestor "${TRIGGERING_SHA}" FETCH_HEAD; then
+              echo "::error::${TRIGGERING_SHA} triggered this run but is no longer in 'devel'."
+              echo "::error::Something force-pushed the branch and dropped it. Refusing to bump."
+              exit 1
+            fi
+
+            # Start each attempt from the tip being pushed onto, discarding any
+            # bump a previous attempt computed against an older one.
+            git reset --hard FETCH_HEAD
+            if [ -n "${NEW_VERSION}" ]; then
+              git tag -d "${NEW_VERSION}" 2>/dev/null || true
+            fi
+
+            bump-my-version bump --config-file dev-tools/bumpversion.toml "${PART}"
+            NEW_VERSION="$(git describe --tags --exact-match HEAD)"
+
+            # No --force. If 'devel' moved while the lines above ran, this is
+            # rejected and the next attempt recomputes from the new tip; it can
+            # never overwrite what landed.
+            #
+            # --atomic makes the branch and the tag one unit. Without it a
+            # rejected attempt still pushes its tag -- `--follow-tags` sends
+            # them independently -- leaving `{new_version}` on a commit that
+            # was never merged, and the retry cannot correct it because git
+            # will not move an existing remote tag without a force. The
+            # release then builds from a tree nobody reviewed.
+            if git push --atomic --follow-tags origin HEAD:devel; then
+              echo "Pushed ${NEW_VERSION} on attempt ${attempt}."
+              exit 0
+            fi
+
+            echo "::warning::'devel' moved while bumping to ${NEW_VERSION}; retrying from its new tip."
+          done
+
+          # Five rejections in a row is not the ordinary race. Whatever the
+          # cause, it is in the push output above, and failing is safe: no
+          # bump is not a problem, and the next merge starts a fresh run.
+          echo "::error::Could not push the version bump after 5 attempts; see the push errors above."
+          exit 1
