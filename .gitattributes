@@ -3,3 +3,8 @@
 *.stl binary
 **/*.jpg filter=lfs diff=lfs merge=lfs -text
 **/*.png filter=lfs diff=lfs merge=lfs -text
+
+# The dev container's polyglot initializeCommand shim: cmd.exe reads the top of it
+# and /bin/sh the bottom, and the shell half breaks on a trailing CR -- so pin it to
+# LF whatever the checkout's core.eol says.
+/.devcontainer/docker-socket-init.cmd text eol=lf

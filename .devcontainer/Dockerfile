@@ -48,8 +48,8 @@ RUN apt-get update -y \
   openscad \
   pypy3 \
   pypy3-dev \
-  # Docker troubleshooting tools
-  docker.io inetutils-telnet inetutils-ping \
+  # Docker socket forwarding (docker-socket-start.sh) and troubleshooting tools
+  socat inetutils-telnet inetutils-ping \
   # Development tools
   file xxd \
   bash-completion \
@@ -104,15 +104,33 @@ RUN curl -L -O "https://github.com/conda-forge/miniforge/releases/download/26.3.
 #   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 #   && apt-get install -y nodejs
 
-ENV DOCKERVERSION=18.03.1-ce
-RUN curl -fsSLO https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKERVERSION}.tgz \
-  && tar xzvf docker-${DOCKERVERSION}.tgz --strip 1 \
-  -C /usr/local/bin docker/docker \
-  && rm docker-${DOCKERVERSION}.tgz
+# The Docker CLI, for driving the host's daemon from inside this container --
+# see .devcontainer/docker-socket-start.sh, which is what puts the daemon
+# within reach. It comes from Docker's own repository rather than Debian's:
+# `docker.io` on bookworm is 20.10, and its API version 1.41 is below the 1.44
+# that Docker Engine 29 accepts, so it can talk to a current daemon at all.
+# Buildx comes along because `docker build` is the modern CLI's front end to it
+# (tools/containers/kicad/README.md builds the KiCad sandbox image that way).
+ARG DOCKER_CLI_VERSION=5:29.7.2-1~debian.12~bookworm
+ARG DOCKER_BUILDX_VERSION=0.36.1-1~debian.12~bookworm
+RUN install -m 0755 -d /etc/apt/keyrings \
+  && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
+  && chmod a+r /etc/apt/keyrings/docker.asc \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" \
+  >/etc/apt/sources.list.d/docker.list \
+  && apt-get update -y \
+  && apt-get install --no-install-recommends -y \
+  "docker-ce-cli=${DOCKER_CLI_VERSION}" \
+  "docker-buildx-plugin=${DOCKER_BUILDX_VERSION}" \
+  && rm -rf /var/lib/apt/lists/*
 
 # TODO(clairbee): fix the scripts that led to the wrong permissions instead of chmod
+# COPY rather than `RUN --mount=type=bind`: the latter is the only instruction
+# in this file that BuildKit is required for, and requiring it means the image
+# cannot be built by a plain `docker build` on a machine without the buildx
+# plugin. The two scripts are ~4 KB and the RUN below deletes them again.
 # hadolint ignore=DL3004
-RUN --mount=type=bind,source=./docker-build-bootstrap.sh,target=/tmp/docker-build-bootstrap.sh \
-  --mount=type=bind,source=./docker-build-dbus.sh,target=/tmp/docker-build-dbus.sh \
-  /tmp/docker-build-bootstrap.sh \
-  && /tmp/docker-build-dbus.sh
+COPY ./docker-build-bootstrap.sh ./docker-build-dbus.sh /tmp/
+RUN /tmp/docker-build-bootstrap.sh \
+  && /tmp/docker-build-dbus.sh \
+  && rm -f /tmp/docker-build-bootstrap.sh /tmp/docker-build-dbus.sh
