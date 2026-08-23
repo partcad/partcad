@@ -90,11 +90,12 @@ done
 # architecture:
 #
 #   ubuntu-22.04-x86_64   ubuntu-22.04-arm64    macos-15-arm64    windows-2022-x86_64
-#   ubuntu-24.04-x86_64   ubuntu-24.04-arm64    macos-26-arm64    windows-2025-x86_64
+#   ubuntu-24.04-x86_64   ubuntu-24.04-arm64    macos-26-arm64
 #
-# `install.sh` resolves the same ids from the machine it runs on. Keep the two
-# in sync: the list above, the matrix in ".github/workflows/build-standalone.yml",
-# and LINUX_BUILDS/MACOS_BUILDS in "install.sh".
+# Which of these a release carries is published with it, as `platforms.json`;
+# `install.sh` and the other clients read that rather than keeping a list. The
+# matrix in ".github/workflows/build-standalone.yml" is where the list lives.
+# Windows is one build on purpose -- see the note beside that matrix.
 case "$(uname -s)" in
 Linux*) OS_NAME="linux" ;;
 Darwin*) OS_NAME="macos" ;;

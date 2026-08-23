@@ -37,6 +37,11 @@ UNINSTALL=0
 # directory.
 IDE_APP_NAME="PartCAD IDE.app"
 
+# What a release says it carries, published beside the archives by
+# "dev-tools/release/platforms-manifest.sh". This script reads it rather than
+# keeping its own copy of the platform list, which is a copy that drifts.
+MANIFEST_NAME="platforms.json"
+
 usage() {
   cat <<'EOF'
 Install the standalone PartCAD command line tools, or the PartCAD IDE.
@@ -61,7 +66,9 @@ Options:
                         not writable).
   --base-url <url>      Directory holding the archives, instead of the GitHub
                         release. Use it to install a build that is not
-                        released, such as one produced by a pull request.
+                        released, such as one produced by a pull request. It
+                        must also hold the release's platforms.json, or the
+                        build has to be named with --platform.
   --repository <owner/name>
                         GitHub repository to install from
                         (default: partcad/partcad).
@@ -205,7 +212,7 @@ if [ "${UNINSTALL}" = "1" ]; then
   exit 0
 fi
 
-###############################################  PLATFORM  ###################################################
+###################################################  HOST  ###################################################
 
 case "$(uname -s)" in
 Linux) OS_NAME="linux" ;;
@@ -228,16 +235,19 @@ esac
 # A frozen bundle links against the C library and system frameworks of the
 # machine it was built on, so it runs on that OS version and everything newer,
 # and on nothing older. There is therefore one build per supported OS version,
-# and the archive name carries it. These lists say which builds exist, newest
-# first; keep them in sync with the matrix in
-# ".github/workflows/build-standalone.yml".
+# and the archive name carries it: "ubuntu-24.04-x86_64", not "linux-x86_64".
 #
-# Both lists are Ubuntu/macOS releases because those are what the builders run.
-# The Ubuntu ones are not a statement about which distribution you need: the
-# older build has the lower glibc floor, which is all that a non-Ubuntu Linux
-# cares about, and that is the one such a machine is offered.
-LINUX_BUILDS="ubuntu-24.04 ubuntu-22.04"
-MACOS_BUILDS="macos-26 macos-15"
+# Which of those builds a release actually has is a property of the release and
+# not of this machine, so the release says: "platforms.json", published beside
+# the archives, lists them newest first. This script reads that inventory below
+# and then applies the policy in this section to it -- an inventory is not an
+# answer, because a build newer than this machine still cannot run here.
+#
+# The published builds are named after Ubuntu and macOS releases because those
+# are what the builders run. The Ubuntu ones are not a statement about which
+# distribution you need: the older build has the lower glibc floor, which is all
+# that a non-Ubuntu Linux cares about, and that is the one such a machine is
+# offered.
 
 # True when $1 <= $2, comparing dotted version numbers field by field.
 # Note `test` rather than `$(( ))`: a leading zero makes shell arithmetic read
@@ -303,31 +313,138 @@ candidate_releases() {
   printf '%s' "${cr_result}"
 }
 
-if [ -n "${PLATFORM}" ]; then
-  PLATFORMS="${PLATFORM}"
-elif [ "${IDE}" = "1" ]; then
-  # The IDE is built once per operating system and architecture, not once per
-  # OS version: it carries its own Electron runtime, and
-  # "partcad-ide-standalone/build.sh" names its archive "<os>-<arch>". The
-  # command line tools inside it are the per-OS-version bundle, but that is the
-  # IDE build's choice, not something this script names.
-  PLATFORMS="${OS_NAME}-${ARCH_NAME}"
-else
-  case "${OS_NAME}" in
-  linux) BUILDS="${LINUX_BUILDS}" ;;
-  macos) BUILDS="${MACOS_BUILDS}" ;;
-  esac
-  HOST_RELEASE="$(host_release)"
-  PLATFORMS=""
-  for release in $(candidate_releases "${BUILDS}" "${HOST_RELEASE}"); do
-    PLATFORMS="${PLATFORMS} ${release}-${ARCH_NAME}"
+# The platform ids a release manifest lists under one kind, operating system and
+# architecture, in the order it lists them. The manifest arrives on stdin.
+#
+# Parsed with `awk` rather than with `jq`: this installer exists so that a bare
+# machine needs nothing installed, and `awk` is on every POSIX system while `jq`
+# is on almost none. It is a real scanner rather than a pattern match on the
+# layout we happen to generate -- strings, objects and arrays are walked while a
+# path is kept -- so a reformatted or extended manifest still reads correctly,
+# and a malformed one is reported instead of half understood.
+manifest_platforms() {
+  awk -v want="$1.$2.$3" '
+    { doc = doc $0 "\n" }
+
+    function skip_ws(   ch) {
+      while (pos <= len) {
+        ch = substr(doc, pos, 1)
+        if (ch == " " || ch == "\t" || ch == "\r" || ch == "\n") pos++
+        else return
+      }
+    }
+
+    function parse_string(   out, ch) {
+      pos++                                   # the opening quote
+      out = ""
+      while (pos <= len) {
+        ch = substr(doc, pos, 1)
+        if (ch == "\\") { pos++; out = out substr(doc, pos, 1); pos++; continue }
+        if (ch == "\"") { pos++; return out }
+        out = out ch
+        pos++
+      }
+      bad = 1
+      return out
+    }
+
+    function parse_value(path,   ch, value) {
+      if (bad) return
+      skip_ws()
+      ch = substr(doc, pos, 1)
+      if (ch == "{") { parse_object(path); return }
+      if (ch == "[") { parse_array(path); return }
+      if (ch == "\"") {
+        value = parse_string()
+        # Every entry of the wanted list is a string reached by this path, and
+        # nothing else in the manifest is.
+        if (path == want) print value
+        return
+      }
+      # A number, true, false or null. Nothing here reads one, so it is skipped.
+      while (pos <= len && index(" \t\r\n,]}", substr(doc, pos, 1)) == 0) pos++
+      if (pos > len) bad = 1
+    }
+
+    function parse_object(path,   key, ch) {
+      pos++                                   # "{"
+      skip_ws()
+      if (substr(doc, pos, 1) == "}") { pos++; return }
+      while (pos <= len && !bad) {
+        skip_ws()
+        if (substr(doc, pos, 1) != "\"") { bad = 1; return }
+        key = parse_string()
+        skip_ws()
+        if (substr(doc, pos, 1) != ":") { bad = 1; return }
+        pos++
+        parse_value((path == "") ? key : (path "." key))
+        skip_ws()
+        ch = substr(doc, pos, 1)
+        pos++
+        if (ch == ",") continue
+        if (ch == "}") return
+        bad = 1
+        return
+      }
+      bad = 1
+    }
+
+    function parse_array(path,   ch) {
+      pos++                                   # "["
+      skip_ws()
+      if (substr(doc, pos, 1) == "]") { pos++; return }
+      while (pos <= len && !bad) {
+        parse_value(path)
+        skip_ws()
+        ch = substr(doc, pos, 1)
+        pos++
+        if (ch == ",") continue
+        if (ch == "]") return
+        bad = 1
+        return
+      }
+      bad = 1
+    }
+
+    END {
+      len = length(doc)
+      pos = 1
+      skip_ws()
+      if (substr(doc, pos, 1) != "{") { print "not a JSON object" > "/dev/stderr"; exit 2 }
+      parse_object("")
+      if (bad) { print "malformed JSON" > "/dev/stderr"; exit 2 }
+    }
+  '
+}
+
+# The releases this machine could use, newest first, out of the manifest and in
+# the shape candidate_releases() compares: "ubuntu-24.04-x86_64" comes back as
+# "ubuntu-24.04", the architecture being settled already.
+#
+# An entry that carries no OS version is dropped with a warning rather than
+# compared: `test -lt` against something that is not a number would end the
+# install, and a manifest naming a build this script cannot reason about is a
+# reason to fall back to the rest of the list, not to give up.
+inventory_releases() {
+  # A manifest that cannot be parsed ends the install here rather than reading
+  # as an empty inventory, which would be reported as "this release has no
+  # build for your machine" and send somebody looking in the wrong place.
+  ir_ids="$(printf '%s\n' "${MANIFEST}" | manifest_platforms bundle "${OS_NAME}" "${ARCH_NAME}")" ||
+    fail "${BASE_URL}/${MANIFEST_NAME} is not a valid release manifest.
+       Use --platform to name the build to install."
+  ir_result=""
+  for ir_id in ${ir_ids}; do
+    ir_release="${ir_id%-*}"
+    case "${ir_release#*-}" in
+    "${ir_release}" | '' | *[!0-9.]*)
+      warn "ignoring '${ir_id}' from ${MANIFEST_NAME}: it names no OS version"
+      continue
+      ;;
+    esac
+    ir_result="${ir_result} ${ir_release}"
   done
-  if [ -n "${HOST_RELEASE}" ]; then
-    log "This machine is ${HOST_RELEASE} on ${ARCH_NAME}."
-  else
-    log "Could not identify this system's release; trying the most portable build first."
-  fi
-fi
+  printf '%s' "${ir_result}"
+}
 
 ################################################  FETCH  #####################################################
 
@@ -340,6 +457,8 @@ elif command -v wget >/dev/null 2>&1; then
 else
   fail "neither curl nor wget is available"
 fi
+
+command -v awk >/dev/null 2>&1 || fail "awk is not available; it is needed to read the release manifest"
 
 if [ -z "${VERSION}" ]; then
   log "Looking up the latest PartCAD release..."
@@ -359,6 +478,53 @@ else
 fi
 
 : "${BASE_URL:=https://github.com/${REPOSITORY}/releases/download/${VERSION}}"
+
+##################################################  BUILD  ###################################################
+
+if [ -n "${PLATFORM}" ]; then
+  # An explicit build: no inventory is consulted, which is also what makes
+  # --platform the way out of anything this resolution gets wrong.
+  PLATFORMS="${PLATFORM}"
+elif [ "${IDE}" = "1" ]; then
+  # The IDE is built once per operating system and architecture, not once per
+  # OS version: it carries its own Electron runtime, and
+  # "partcad-ide-standalone/build.sh" names its archive "<os>-<arch>". There is
+  # therefore exactly one candidate and nothing to choose between, so the
+  # manifest is not read. The command line tools inside it are the
+  # per-OS-version bundle, but that is the IDE build's choice, not something
+  # this script names.
+  PLATFORMS="${OS_NAME}-${ARCH_NAME}"
+else
+  log "Looking up the builds ${VERSION} was published for..."
+  MANIFEST="$(read_url "${BASE_URL}/${MANIFEST_NAME}" 2>/dev/null || true)"
+  [ -n "${MANIFEST}" ] || fail "there is no ${MANIFEST_NAME} at
+         ${BASE_URL}
+       so there is no way to tell which builds this release has. Releases made
+       before that file existed cannot be resolved by name, because the archives
+       are named after the OS version they were built on and no machine can
+       guess which of those were published. Two ways forward:
+         - install the latest release, which does publish it: leave out
+           --version (and --base-url, if you passed one);
+         - name the build yourself, from
+           https://github.com/${REPOSITORY}/releases:
+             ... | sh -s -- --version ${VERSION} --platform ubuntu-22.04-${ARCH_NAME}"
+
+  HOST_RELEASE="$(host_release)"
+  BUILDS="$(inventory_releases)"
+  [ -n "${BUILDS}" ] || fail "${VERSION} publishes no PartCAD bundle for ${OS_NAME} on ${ARCH_NAME}.
+       See https://github.com/${REPOSITORY}/releases for what it does have, and
+       use --platform to install one of those builds."
+
+  PLATFORMS=""
+  for release in $(candidate_releases "${BUILDS}" "${HOST_RELEASE}"); do
+    PLATFORMS="${PLATFORMS} ${release}-${ARCH_NAME}"
+  done
+  if [ -n "${HOST_RELEASE}" ]; then
+    log "This machine is ${HOST_RELEASE} on ${ARCH_NAME}."
+  else
+    log "Could not identify this system's release; trying the most portable build first."
+  fi
+fi
 
 TMP_DIR="$(mktemp -d)"
 cleanup() { rm -rf "${TMP_DIR}"; }

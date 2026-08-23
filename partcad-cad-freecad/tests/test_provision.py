@@ -60,7 +60,7 @@ def test_archive_and_artifact_names_are_the_ci_contract():
         provision.archive_name("0.7.158", "ubuntu-24.04-x86_64", "tar.gz")
         == "partcad-0.7.158-ubuntu-24.04-x86_64.tar.gz"
     )
-    assert provision.artifact_name("windows-2025-x86_64") == "partcad-standalone-windows-2025-x86_64"
+    assert provision.artifact_name("windows-2022-x86_64") == "partcad-standalone-windows-2022-x86_64"
 
 
 def test_the_host_release_is_the_macos_major_version(monkeypatch):
@@ -84,7 +84,9 @@ MANIFEST = {
             "arm64": ["ubuntu-24.04-arm64", "ubuntu-22.04-arm64"],
         },
         "macos": {"arm64": ["macos-26-arm64", "macos-15-arm64"]},
-        "windows": {"x86_64": ["windows-2025-x86_64", "windows-2022-x86_64"]},
+        # One Windows build, not one per image: see the note beside the matrix
+        # in "build-standalone.yml".
+        "windows": {"x86_64": ["windows-2022-x86_64"]},
     },
     "ide": {"linux": {"x86_64": ["linux-x86_64"]}},
 }
@@ -111,8 +113,11 @@ def test_a_host_older_than_every_build_still_gets_the_oldest():
 
 
 def test_an_unidentified_host_is_offered_the_most_portable_build_first():
-    assert _select("windows", "x86_64", None) == ["windows-2022-x86_64", "windows-2025-x86_64"]
     assert _select("linux", "x86_64", None) == ["ubuntu-22.04-x86_64", "ubuntu-24.04-x86_64"]
+
+
+def test_windows_has_one_build_and_needs_no_ordering():
+    assert _select("windows", "x86_64", None) == ["windows-2022-x86_64"]
 
 
 def test_an_unknown_operating_system_has_no_candidates():

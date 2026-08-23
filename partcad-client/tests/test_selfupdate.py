@@ -206,7 +206,10 @@ MANIFEST = {
             "arm64": ["ubuntu-24.04-arm64", "ubuntu-22.04-arm64"],
         },
         "macos": {"arm64": ["macos-26-arm64", "macos-15-arm64"]},
-        "windows": {"x86_64": ["windows-2025-x86_64", "windows-2022-x86_64"]},
+        # One Windows build, not one per image: nothing here can be compared
+        # against a Windows host, and there is no floor for two builds to differ
+        # in. See the note beside the matrix in "build-standalone.yml".
+        "windows": {"x86_64": ["windows-2022-x86_64"]},
     },
     "ide": {
         "linux": {"x86_64": ["linux-x86_64"]},
@@ -242,10 +245,16 @@ def test_a_host_older_than_every_build_still_gets_the_oldest_one():
 
 
 def test_an_unidentified_host_is_offered_the_oldest_build_first():
-    # A non-Ubuntu Linux, or Windows: the release cannot be compared, so the
-    # widest build (the lowest C library floor) goes first.
+    # A non-Ubuntu Linux: the release cannot be compared, so the widest build
+    # (the lowest C library floor) goes first.
     assert _select("linux", "x86_64", None) == ["ubuntu-22.04-x86_64", "ubuntu-24.04-x86_64"]
-    assert _select("windows", "x86_64", None) == ["windows-2022-x86_64", "windows-2025-x86_64"]
+
+
+def test_windows_has_one_build_and_needs_no_ordering():
+    # A Windows host is always "unidentified" -- the builds are named after
+    # runner images, which is not a version this machine has -- and that is
+    # exactly why only one is published: a list of one needs no policy.
+    assert _select("windows", "x86_64", None) == ["windows-2022-x86_64"]
 
 
 def test_a_release_name_the_manifest_does_not_carry_counts_as_unidentified():

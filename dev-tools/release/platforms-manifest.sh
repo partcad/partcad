@@ -39,11 +39,13 @@
 # host detection it depends on; only the inventory lives here.
 #
 # Usage:
-#   platforms-manifest.sh --bundles <dir> --ide <dir> [--output <file>]
+#   platforms-manifest.sh [--bundles <dir>] [--ide <dir>] [--output <file>]
 #
 # Both directories are the ones "deploy.yml" downloads the release artifacts
-# into. The ".dmg"/"-setup.exe" installers beside the IDE archives are ignored,
-# as are the ".sha256" files: what a client downloads is the archive.
+# into; either may be left out, which is how a build job with only one kind of
+# archive in hand describes what it has. The ".dmg"/"-setup.exe" installers
+# beside the IDE archives are ignored, as are the ".sha256" files: what a client
+# downloads is the archive.
 
 set -eu
 
@@ -71,17 +73,16 @@ while [ $# -gt 0 ]; do
     shift 2
     ;;
   -h | --help)
-    sed -n '8,46p' "$0"
+    sed -n '8,48p' "$0"
     exit 0
     ;;
   *) fail "unknown argument '$1'" ;;
   esac
 done
 
-[ -n "${BUNDLE_DIR}" ] || fail "--bundles <dir> is required"
-[ -n "${IDE_DIR}" ] || fail "--ide <dir> is required"
-[ -d "${BUNDLE_DIR}" ] || fail "no such directory: ${BUNDLE_DIR}"
-[ -d "${IDE_DIR}" ] || fail "no such directory: ${IDE_DIR}"
+[ -n "${BUNDLE_DIR}" ] || [ -n "${IDE_DIR}" ] || fail "--bundles <dir> or --ide <dir> is required"
+[ -z "${BUNDLE_DIR}" ] || [ -d "${BUNDLE_DIR}" ] || fail "no such directory: ${BUNDLE_DIR}"
+[ -z "${IDE_DIR}" ] || [ -d "${IDE_DIR}" ] || fail "no such directory: ${IDE_DIR}"
 
 # "<kind> <version> <platform-id>" for every release archive in a directory.
 # The prefix is what the archive name starts with, so that the IDE's
@@ -113,11 +114,11 @@ scan() {
 }
 
 ROWS="$(
-  scan bundle "${BUNDLE_DIR}" partcad
-  scan ide "${IDE_DIR}" partcad-ide
+  [ -z "${BUNDLE_DIR}" ] || scan bundle "${BUNDLE_DIR}" partcad
+  [ -z "${IDE_DIR}" ] || scan ide "${IDE_DIR}" partcad-ide
 )"
 
-[ -n "${ROWS}" ] || fail "found no release archives in '${BUNDLE_DIR}' or '${IDE_DIR}'"
+[ -n "${ROWS}" ] || fail "found no release archives in '${BUNDLE_DIR}${IDE_DIR:+ }${IDE_DIR}'"
 
 # One release publishes one version; anything else means the artifacts of two
 # runs were mixed, and a manifest naming one of them would be a lie.

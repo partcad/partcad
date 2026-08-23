@@ -234,14 +234,14 @@ jobs:
         run: |
           missing=0
           # The platforms built by "build-standalone.yml". Keep in sync with the
-          # matrix there, and with LINUX_BUILDS/MACOS_BUILDS in "install.sh":
-          # a name published here that the installer never asks for is dead
-          # weight, and one it asks for that is not here is a failed install.
+          # matrix there: a release missing one of these is a release some
+          # machine cannot install, and the manifest generated below would
+          # faithfully describe the gap rather than close it.
           for platform in \
             ubuntu-22.04-x86_64 ubuntu-22.04-arm64 \
             ubuntu-24.04-x86_64 ubuntu-24.04-arm64 \
             macos-15-arm64 macos-26-arm64 \
-            windows-2022-x86_64 windows-2025-x86_64; do
+            windows-2022-x86_64; do
             archive=$(find standalone -type f -name "partcad-*-${platform}.*" ! -name "*.sha256")
             checksum=$(find standalone -type f -name "partcad-*-${platform}.*.sha256")
             if [ -z "${archive}" ] || [ -z "${checksum}" ]; then

@@ -132,17 +132,26 @@ Supported platforms are Linux on x86_64 and arm64, and MacOS on Apple silicon. W
 There is one build per supported *operating system version*, not one per operating system. A frozen bundle
 links against the C library and the system frameworks of the machine that built it, so it runs there and on
 anything newer, and on nothing older -- a single "Linux" build would quietly mean "whichever Linux the
-builder happened to be". The installer works out which one this machine can run and downloads that:
+builder happened to be". Every release publishes a manifest, ``platforms.json``, saying which builds it
+carries; the installer reads it, works out which of them this machine can run, and downloads that:
 
 .. code-block:: text
 
   Linux, x86_64 and arm64     built on Ubuntu 22.04 and on Ubuntu 24.04
   MacOS, Apple silicon        built on MacOS 15 and on MacOS 26
-  Windows, x86_64             built on Windows Server 2022 and on Windows Server 2025
+  Windows, x86_64             built on Windows Server 2022
 
 The Ubuntu names are not a requirement to run Ubuntu. Any Linux distribution can run these bundles; what
 differs between the two is the minimum glibc, and a machine the installer cannot identify as Ubuntu is
 offered the 22.04 build, which has the lower floor. Pass ``--platform`` to install a specific one.
+
+Windows is one build rather than one per Windows version, because there is nothing to choose between: the
+split exists so that a machine can be compared against it, and Windows offers no such comparison -- nor the
+glibc-style floor that would make one matter. It runs on Windows 10 and later.
+
+Releases made before ``platforms.json`` existed cannot be resolved this way: there is no way to know from
+this machine which builds such a release carries. Install the latest release, or name the build with
+``--platform``.
 
 Options
 =======
@@ -236,7 +245,7 @@ the wheels, together with a ``.sha256`` file each:
 * ``partcad-<version>-ubuntu-22.04-x86_64.tar.gz``, ``partcad-<version>-ubuntu-22.04-arm64.tar.gz``
 * ``partcad-<version>-ubuntu-24.04-x86_64.tar.gz``, ``partcad-<version>-ubuntu-24.04-arm64.tar.gz``
 * ``partcad-<version>-macos-15-arm64.tar.gz``, ``partcad-<version>-macos-26-arm64.tar.gz``
-* ``partcad-<version>-windows-2022-x86_64.zip``, ``partcad-<version>-windows-2025-x86_64.zip``
+* ``partcad-<version>-windows-2022-x86_64.zip``
 
 Pick the newest one your machine is not older than -- see :ref:`the note above <standalone-os-versions>` on
 why there is more than one. When in doubt, the oldest build of your operating system runs everywhere the

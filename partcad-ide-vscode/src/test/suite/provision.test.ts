@@ -24,7 +24,10 @@ const MANIFEST = {
             arm64: ['ubuntu-24.04-arm64', 'ubuntu-22.04-arm64'],
         },
         macos: { arm64: ['macos-26-arm64', 'macos-15-arm64'] },
-        windows: { x86_64: ['windows-2025-x86_64', 'windows-2022-x86_64'] },
+        // One Windows build, not one per image: nothing here can be compared
+        // against a Windows host, and there is no floor for two builds to
+        // differ in. See the note beside the matrix in "build-standalone.yml".
+        windows: { x86_64: ['windows-2022-x86_64'] },
     },
     ide: {
         linux: { x86_64: ['linux-x86_64'] },
@@ -63,15 +66,20 @@ suite('Release manifest', () => {
     });
 
     test('an unidentified host is offered the most portable build first', () => {
-        // Windows, or a Linux that is not Ubuntu: nothing to compare against,
-        // so the build with the lowest C library floor goes first.
-        assert.deepStrictEqual(selectPlatforms(MANIFEST, 'bundle', 'windows', 'x86_64', undefined), [
-            'windows-2022-x86_64',
-            'windows-2025-x86_64',
-        ]);
+        // A Linux that is not Ubuntu: nothing to compare against, so the build
+        // with the lowest C library floor goes first.
         assert.deepStrictEqual(selectPlatforms(MANIFEST, 'bundle', 'linux', 'x86_64', 'debian-12'), [
             'ubuntu-22.04-x86_64',
             'ubuntu-24.04-x86_64',
+        ]);
+    });
+
+    test('windows has one build and needs no ordering', () => {
+        // A Windows host is always "unidentified" -- the builds are named after
+        // runner images, which is not a version this machine has -- and that is
+        // exactly why only one is published: a list of one needs no policy.
+        assert.deepStrictEqual(selectPlatforms(MANIFEST, 'bundle', 'windows', 'x86_64', undefined), [
+            'windows-2022-x86_64',
         ]);
     });
 

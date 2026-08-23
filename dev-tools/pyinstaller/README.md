@@ -29,21 +29,31 @@ suffix) plus the architecture:
 | --- | --- | --- |
 | Linux | `ubuntu-22.04-x86_64`, `ubuntu-24.04-x86_64` | `ubuntu-22.04-arm64`, `ubuntu-24.04-arm64` |
 | macOS | — (needs macos-13, see below) | `macos-15-arm64`, `macos-26-arm64` |
-| Windows | `windows-2022-x86_64`, `windows-2025-x86_64` | — |
+| Windows | `windows-2022-x86_64` | — |
 
 The Ubuntu names say what built the bundle, not what is required to run it: any distribution can run these, and
 what differs between the two is the minimum glibc. `install.sh` offers a machine it cannot identify as Ubuntu
 the 22.04 build, which has the lower floor.
 
-Three lists have to agree, and nothing enforces it: `PLATFORMS_CORE` plus `PLATFORMS_DEEP` in
-`.github/workflows/build-standalone.yml`, `LINUX_BUILDS`/`MACOS_BUILDS` in `install.sh`, and the platform loop in the
-release check in `deploy.yml`. A name in the matrix that the installer never asks for is dead weight; one the installer
-asks for that the matrix does not build is a failed install. Each of the three says so at the point where it is defined.
+**Windows is one build, on purpose.** The per-OS-version split earns its keep only where a machine can be lined
+up against it — an Ubuntu version from `/etc/os-release`, a macOS major version from `sw_vers`. Windows offers
+no such comparison: `windows-2022`/`windows-2025` are runner image names, and the only route back to one of
+them is the NT build number table in `build.sh`, which knows those two server builds and no version of Windows
+anybody runs. So a second Windows build is one no client could ask for on purpose — redundant if it is equally
+portable, unreachable if it is not — and Windows has no glibc-style floor for the two to differ in anyway: the
+CRT the bundle needs ships either inside it or with the OS. The one build published is the older image's, which
+is also the one the IDE embeds. Two would need the host-to-build mapping to exist first.
 
-The split between `PLATFORMS_CORE` and `PLATFORMS_DEEP` is about cost, not support: a pull request builds the five core
+Two lists have to agree, and nothing enforces it: `PLATFORMS_CORE` plus `PLATFORMS_DEEP` in
+`.github/workflows/build-standalone.yml`, and the platform loop in the release check in `deploy.yml`. A name in the
+matrix that no release check expects is dead weight; one the check expects that the matrix does not build is a refused
+release. Each says so at the point where it is defined. The clients keep no list of their own — they read the manifest
+described below.
+
+The split between `PLATFORMS_CORE` and `PLATFORMS_DEEP` is about cost, not support: a pull request builds the four core
 platforms, and the three in `PLATFORMS_DEEP` (Ubuntu 22.04 on both architectures, and the second macOS) are added on a
 deep run — the nightly schedule, a manual dispatch, a push, or `#deepTest` in the pull request. See
-`.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all eight; `deploy.yml`
+`.github/actions/test-depth`. A release runs on a push, so it is always deep and always builds all seven; `deploy.yml`
 refuses to publish otherwise. Put `#deepTest` on a pull request that changes what is frozen.
 
 `build.sh` detects the platform id from the machine when it is not told one, which is what a local build wants.
@@ -132,8 +142,8 @@ answer: a client still drops the builds newer than the machine it runs on, and o
 host release walks the list backwards, oldest and most portable first. That policy is `select_platforms()` in
 `partcad_client.selfupdate` and in the addon's `provision.py`, and `selectPlatforms()` in `provision.ts` --
 three copies, because the addon cannot import PartCAD (its whole reason for using the frozen bundle) and the
-extension is TypeScript. `install.sh` is the reference implementation and still resolves the machine itself,
-from `uname` and `/etc/os-release`, against its own `LINUX_BUILDS`/`MACOS_BUILDS`.
+extension is TypeScript. `install.sh` is the fourth and the reference implementation: it reads the same
+manifest with `awk`, and applies the same policy from `uname`, `/etc/os-release` and `sw_vers`.
 
 The bundle embeds the interpreter it was built with, so `PYTHON` decides the Python version users end up
 running. CI builds with 3.14, the newest version PartCAD supports (`requires-python = ">=3.10,<3.15"`) and
