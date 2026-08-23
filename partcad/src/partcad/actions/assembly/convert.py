@@ -280,7 +280,7 @@ def urdf_to_assy(project: Project, assembly_name: str, config: dict, out_dir: Pa
     """Turn a URDF assembly into an ASSY one, with parts and interfaces.
 
     Every link becomes an ``stl`` part written into ``<assembly>/`` inside the
-    package, carrying whatever the URDF said about it in its ``physics``
+    package, carrying whatever the URDF said about it in its ``properties``
     section. Every joint becomes an interface pair, and the ``.assy`` connects
     the parts through them.
     """
@@ -332,11 +332,16 @@ def urdf_to_assy(project: Project, assembly_name: str, config: dict, out_dir: Pa
         entry["type"] = "stl"
         entry["path"] = relative
         entry["desc"] = "Link '%s' of '%s'" % (link_name, assembly_name)
-        for key, value in (links[link_name].get("appearance") or {}).items():
-            entry[key] = value
+        # What the link reports about itself, all under one 'properties:'
+        # section: the appearance of its shape and its physics. Not
+        # 'parameters:' - nothing here is asked of the 'stl' type below, it is
+        # what the shape that type produces turns out to be made of.
+        properties = _section(links[link_name].get("appearance"))
         physics = _section(links[link_name].get("physics"))
         if physics:
-            entry["physics"] = physics
+            properties["physics"] = physics
+        if properties:
+            entry["properties"] = properties
         parts["%s/%s" % (assembly_name, link_name)] = entry
 
     # Which interface each link implements, and where.

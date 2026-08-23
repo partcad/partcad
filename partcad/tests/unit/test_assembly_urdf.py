@@ -233,7 +233,7 @@ def test_urdf_physics_becomes_named_partcad_properties():
     is the URDF file itself.
     """
     ctx = pc.Context(EXAMPLES)
-    shoulder = ctx.get_part("//produce_assembly_urdf:robot/shoulder").config
+    shoulder = ctx.get_part("//produce_assembly_urdf:robot/shoulder").config["properties"]
 
     assert shoulder["physics"]["mass"] == pytest.approx(0.32)
     # 0.03 m up in the URDF, in millimetres here.
@@ -248,9 +248,9 @@ def test_urdf_physics_becomes_named_partcad_properties():
     # link became, the robot's root link included, and are there exactly once.
     robot = ctx._get_assembly(URDF_EXAMPLE)
     asyncio.run(robot.do_instantiate())
-    assert "physics" not in robot.config
+    assert "properties" not in robot.config
 
-    base = ctx.get_part("//produce_assembly_urdf:robot/base_link").config["physics"]
+    base = ctx.get_part("//produce_assembly_urdf:robot/base_link").config["properties"]["physics"]
     assert base["mass"] == pytest.approx(0.78)
     assert base["inertia"]["izz"] == pytest.approx(1.87e-3)
     # The Gazebo block was read into properties too, one value at a time.
@@ -385,7 +385,7 @@ def test_an_unknown_gazebo_setting_is_reported_and_can_be_fatal(tmp_path):
     robot = ctx._get_assembly(":robot")
     asyncio.run(robot.do_instantiate())
     # What it did understand became a property; what it did not was reported.
-    assert ctx.get_part(":robot/a").config["physics"]["friction"] == pytest.approx(0.4)
+    assert ctx.get_part(":robot/a").config["properties"]["physics"]["friction"] == pytest.approx(0.4)
     assert any("stormFactor" in warning for warning in robot.urdf_factory.urdf_info["warnings"])
 
     strict = _urdf_package(tmp_path / "strict", body, options="    strict: true\n")
@@ -494,22 +494,20 @@ def test_export_states_the_properties_a_part_carries(tmp_path):
     assert float(gazebo[0].find("mu1").text) == pytest.approx(0.9)
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Depends on the shape cache handing back a shape under its own name. The cache is keyed by "
-        "geometry, so this part shares an entry with every other part that reads the same mesh, and "
-        "the entry carries whichever name was stamped on it first - so the declared 'mass' is only "
-        "found when this test happens to be the one that wrote it. Expected to pass once the cache "
-        "stamps on read; see the URDF section of docs/source/simulation.rst."
-    ),
-)
 def test_export_reports_properties_urdf_cannot_state(tmp_path, caplog):
     """The mirror image of refusing unknown URDF: what URDF cannot say is said out loud.
 
     'damping' is a PartCAD property of a connection, and URDF has no place for
     one on a link. The export writes what it can and reports the rest at info
     level - the file is correct, it just says less than the package does.
+
+    This used to be xfail'd: the properties were looked up in a side index built
+    from the configuration tree, and the shape they belonged to came back from a
+    geometry-keyed cache entry under whichever name was stamped on it first, so
+    the declared 'mass' was only found when this test happened to be the one
+    that filled the entry. The properties now ride on the envelope beside the
+    name they are looked up by, and both are stamped from this part's own
+    configuration every time the entry is read, so the two cannot disagree.
     """
     root = sandbox(tmp_path, ("produce_part_stl",))
     package = root / "produce_part_stl"
@@ -518,7 +516,11 @@ def test_export_reports_properties_urdf_cannot_state(tmp_path, caplog):
         .read_text()
         .replace(
             "    desc: A cube defined in STL\n",
-            "    desc: A cube defined in STL\n    physics:\n      mass: 2.0\n      damping: 0.5\n",
+            "    desc: A cube defined in STL\n"
+            "    properties:\n"
+            "      physics:\n"
+            "        mass: 2.0\n"
+            "        damping: 0.5\n",
         )
     )
     (package / "partcad.yaml").write_text(config)
@@ -595,9 +597,9 @@ def test_convert_urdf_to_assy(tmp_path):
         assert entry["type"] == "stl"
         assert (package / entry["path"]).is_file()
     # What the URDF said about a link travelled with it, as named properties.
-    assert config["parts"]["robot/base_link"]["physics"]["mass"] == pytest.approx(0.78)
-    assert config["parts"]["robot/base_link"]["physics"]["friction"] == pytest.approx(0.9)
-    assert config["parts"]["robot/shoulder"]["color"] == "#E6801A"
+    assert config["parts"]["robot/base_link"]["properties"]["physics"]["mass"] == pytest.approx(0.78)
+    assert config["parts"]["robot/base_link"]["properties"]["physics"]["friction"] == pytest.approx(0.9)
+    assert config["parts"]["robot/shoulder"]["properties"]["color"] == "#E6801A"
 
     # One interface pair per distinct joint, reused where the joints agree: the
     # two fixed joints share a pair, the revolute one gets its own.
@@ -730,7 +732,7 @@ def test_import_assembly_from_a_urdf(tmp_path):
         entry = config["parts"]["robot/%s" % link]
         assert entry["type"] == "stl"
         assert (package / entry["path"]).is_file()
-    assert config["parts"]["robot/base_link"]["physics"]["mass"] == pytest.approx(0.78)
+    assert config["parts"]["robot/base_link"]["properties"]["physics"]["mass"] == pytest.approx(0.78)
     assert set(config["interfaces"]) == {
         "robot/fixed-socket",
         "robot/fixed-plug",

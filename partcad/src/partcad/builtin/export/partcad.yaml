@@ -141,7 +141,9 @@ export:
     # mesh_dir: <directory>
     # mesh_prefix: <prefix>
     # density: 2700.0
-    # Hand the exporter what the parts state about themselves - mass, inertia,
+    # Hand the exporter what the parts report about themselves - mass, inertia,
     # friction, colour - so that it writes those rather than recomputing them or
-    # losing them. See 'output.PROPERTIES_KEY'.
+    # losing them. The properties travel on the shape envelopes; this asks for
+    # the index that looks one up by name, which costs a walk of the tree that
+    # is already in hand. See 'wrappers/wrapper_export.properties_index()'.
     properties: true

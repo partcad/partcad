@@ -33,6 +33,10 @@ Both '__file__' and the run name '__partcad_export__' are set on the script, so
 it can gate any top-level work ("if __name__ == '__partcad_export__':") and
 remain importable by its siblings - which is how the PNG and DXF renderers
 reuse the SVG one.
+
+A format that declared 'properties: true' finds 'request["properties"]' holding
+what each shape reports about itself - its material, its colour, its physics -
+keyed by the full name the shape carries. See 'properties_index()'.
 """
 
 import os
@@ -56,6 +60,53 @@ SCRIPT_KEY = "__script__"
 # (the URDF exporter turns each node into a link of its own) declares
 # 'decode: false', because decoding collapses the tree into one compound.
 DECODE_KEY = "__decode__"
+
+# The parameter a file type sets to 'true' to be handed what the shapes it is
+# given report about themselves, keyed by the full name ("<package>:<name>")
+# those shapes carry on their envelopes. It is a plain export parameter, not a
+# reserved key: a format that has no way to state a material or a mass never
+# declares it and never sees the index.
+PROPERTIES_KEY = "properties"
+
+
+def properties_index(request):
+    """Full name -> what that shape reports about itself, over the whole request.
+
+    Built from the request as it arrives, before anything is decoded, and that
+    ordering is the point. The properties ride on the envelopes, beside the very
+    name an exporter looks a node up by, so they are here for an implementation
+    that walks the tree ('decode: false') *and* for one that is handed live
+    geometry ('decode: true'), whose decoding throws every envelope away.
+
+    Only shapes that report something appear. A shape with no name cannot be
+    looked up and is skipped, but its children are still walked.
+    """
+    index = {}
+
+    def walk(obj):
+        if isinstance(obj, list):
+            for item in obj:
+                walk(item)
+            return
+        if not isinstance(obj, dict):
+            return
+        is_envelope = ocp_serialize.KEY_BREP in obj or ocp_serialize.KEY_ASSEMBLY in obj
+        if is_envelope:
+            properties = obj.get(PROPERTIES_KEY)
+            name = obj.get("name")
+            if name and isinstance(properties, dict) and properties:
+                index[name] = properties
+            for child in obj.get(ocp_serialize.KEY_ASSEMBLY) or []:
+                walk(child)
+            return
+        for key, value in obj.items():
+            # Never the index itself: it is keyed by name, not by anything that
+            # holds an envelope, and walking it would be pointless.
+            if key != PROPERTIES_KEY:
+                walk(value)
+
+    walk(request)
+    return index
 
 
 def _failed(exception):
@@ -109,6 +160,10 @@ if __name__ == "__main__":
     # choice travels inside the request itself.
     path, request = wrapper_common.handle_input(decode=False)
     script = request.pop(SCRIPT_KEY, None)
+    # Before the decode, while the envelopes - and so the properties they carry
+    # - are still there to be read.
+    if request.get(PROPERTIES_KEY) is True:
+        request[PROPERTIES_KEY] = properties_index(request)
     if request.pop(DECODE_KEY, True) is not False:
         request = ocp_serialize.decode(request)
     if script is None:

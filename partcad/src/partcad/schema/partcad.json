@@ -53,6 +53,20 @@
       "type": "string",
       "pattern": "((http|https)://)(www.)?[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)"
     },
+    "shape-properties": {
+      "type": "object",
+      "description": "What the shape this object produces reports about itself, as opposed to 'parameters', which are what is asked of the object type that produces it. Every entry here is an output: it describes the instantiated shape, and an exporter that has a way to state one writes it out rather than recomputing or losing it.",
+      "properties": {
+        "material": { "type": "string", "minLength": 1, "description": "The name of the material this shape is made of." },
+        "color": {
+          "type": "string",
+          "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
+          "description": "The colour of this shape, as #RRGGBB or #RRGGBBAA."
+        },
+        "physics": { "$ref": "#/definitions/physics" }
+      },
+      "additionalProperties": false
+    },
     "physics": {
       "type": "object",
       "description": "Physical properties, each with a documented name and unit. Lengths are millimetres and angles are degrees, as everywhere else in PartCAD; everything else is SI. A property that has no entry here is not carried: a format that states one PartCAD does not support fails the import, and a property PartCAD holds that the target format cannot state is reported on export.",
@@ -481,12 +495,7 @@
                   "items": { "type": "string", "minLength": 1 },
                   "uniqueItems": true
                 },
-                "properties": {
-                  "type": "object",
-                  "properties": {
-                    "length": { "type": "number" }
-                  }
-                },
+                "properties": { "$ref": "#/definitions/shape-properties" },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
@@ -617,14 +626,7 @@
                   "additionalProperties": false
                 },
                 "manufacturable": { "type": "boolean" },
-                "connect": { "$ref": "#/definitions/connect" },
-                "physics": { "$ref": "#/definitions/physics" },
-                "material": { "type": "string", "minLength": 1, "description": "The name of the material this shape is made of." },
-                "color": {
-                  "type": "string",
-                  "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
-                  "description": "The colour of this shape, as #RRGGBB or #RRGGBBAA."
-                }
+                "connect": { "$ref": "#/definitions/connect" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -716,7 +718,8 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "manufacturable": { "type": "boolean" },
-                "connect": { "$ref": "#/definitions/connect" }
+                "connect": { "$ref": "#/definitions/connect" },
+                "properties": { "$ref": "#/definitions/shape-properties" }
               },
               "required": ["type"],
               "additionalProperties": false
