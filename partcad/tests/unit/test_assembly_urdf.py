@@ -501,6 +501,21 @@ def test_export_reports_properties_urdf_cannot_state(tmp_path, caplog):
     one on a link. The export writes what it can and reports the rest at info
     level - the file is correct, it just says less than the package does.
 
+    Deliberately not checked against the schema, unlike every other package
+    written here: 'shape-physics' refuses a connection property on a shape, so a
+    part declaring 'damping' is exactly what the schema exists to catch, and
+    'test_the_schema_refuses_a_connection_property_on_a_shape' is where that is
+    asserted. This is the other half - what the exporter does when one reaches it
+    anyway, from a package written before the schema narrowed, a hand-edited
+    file, or a part built from an imported URDF. 'pc lint' is what validates a
+    package; loading one does not, so the property arrives here either way.
+
+    A property both legal on a shape and unstatable in URDF would say this more
+    directly, but there is none: 'shape-physics' and export_urdf.URDF_STATED are
+    the same sixteen names today. They are two lists that may drift apart, which
+    is why the exporter reports rather than drops - and why this stays tested
+    with a property the schema turns away rather than not at all.
+
     This used to be xfail'd: the properties were looked up in a side index built
     from the configuration tree, and the shape they belonged to came back from a
     geometry-keyed cache entry under whichever name was stamped on it first, so
@@ -524,7 +539,6 @@ def test_export_reports_properties_urdf_cannot_state(tmp_path, caplog):
         )
     )
     (package / "partcad.yaml").write_text(config)
-    assert_valid_package_config(yaml.safe_load(config))
 
     ctx = pc.Context(str(root))
     cube = ctx.get_part("//produce_part_stl:cube")
