@@ -5,6 +5,7 @@ dependencies:
     onlyInRoot: True
     type: git
     url: https://github.com/partcad/partcad-index.git
+    revision: main
 
 parts:
   # This is a degenerate case pointing inside a child package, for testing purposes only.

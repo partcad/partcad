@@ -9,13 +9,14 @@ Common options, such as ``-v``/``-q`` (verbosity), ``--no-ansi`` (plain-text log
 
 ``--devel-index`` is one of those common options, and is worth calling out. The public index (the ``pub``
 dependency, published at `partcad-index <https://github.com/partcad/partcad-index>`_) lives in a repository of
-its own, so nothing in your package pins which version of it you get: an ordinary run imports its default
-branch, which is the released state. ``--devel-index`` imports its ``devel`` branch instead — the branch that a
-release fast-forwards ``main`` to — so a change staged there can be exercised before it is released. The
-redirect follows the repository rather than the dependency name, so it applies wherever the index appears in
-the dependency tree and leaves every other dependency alone. The same switch is available as the
-``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user configuration, and as the ``partcad.develIndex``
-setting of the VS Code extension.
+its own, and a package imports it at ``main``: the revision ``pc init`` writes into the dependency, and the
+default branch a plain import lands on anyway. Either way that is the released state. ``--devel-index`` imports
+its ``devel`` branch instead — the branch that a release fast-forwards ``main`` to — so a change staged there
+can be exercised before it is released. It replaces the revision a package names rather than deferring to it,
+which is what it exists to do. The redirect follows the repository rather than the dependency name, so it
+applies wherever the index appears in the dependency tree and leaves every other dependency alone. The same
+switch is available as the ``PC_DEVEL_INDEX`` environment variable, as ``develIndex`` in the user configuration,
+and as the ``partcad.develIndex`` setting of the VS Code extension.
 
 Every boolean ``PC_*`` variable (``PC_DEVEL_INDEX``, ``PC_FORCE_UPDATE``, ``PC_OFFLINE``, ``PC_CACHE_FILES``, the
 ``PC_TELEMETRY_*`` switches, …) is read the same way: ``1``, ``true``, ``yes``, ``on`` turn it on, and ``0``,

@@ -696,9 +696,10 @@ class GitImportConfiguration:
     def _apply_devel_index_override(self):
         """Point the public index at its unreleased branch when asked to.
 
-        The public index lives in a repository of its own, so nothing in the
-        package that imports it says which version of it to use: a plain import
-        gets whatever its default branch holds, which is the released state.
+        The public index lives in a repository of its own, and a package
+        imports it at 'main': the revision 'pc init' writes into the dependency,
+        and the default branch a plain import lands on anyway. Either way that is
+        the released state.
         'develIndex' is how the staged state is exercised instead, and it names no
         dependency: the index is recognized by the repository its URL points at,
         so it is redirected wherever in the dependency tree it appears and under

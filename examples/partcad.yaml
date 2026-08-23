@@ -20,4 +20,5 @@ dependencies:
     onlyInRoot: true
     type: git
     url: https://github.com/partcad/partcad-index.git
+    revision: main
   # NOTE: The subdirectories automatically become dependencies of the "local" type

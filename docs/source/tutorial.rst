@@ -34,6 +34,7 @@ Alternatively, manually create ``partcad.yaml`` with the following content:
       pub:
         type: git
         url: https://github.com/partcad/partcad-index.git
+        revision: main
 
 Now launch ``pc list`` to see the list of packages currently available in
 the public PartCAD repository.
