@@ -11,14 +11,43 @@ runs:
       run: |
         . ~/.bashrc
         . ~/.bash_profile
-        mamba create -n env-build python==${{ matrix.python-version }} -y
+
+        # "python==3.13" names a version and nothing else, and from 3.13 on
+        # conda-forge publishes two builds of every release: the ordinary one
+        # ("*_cp313") and the free-threaded, no-GIL one ("*_cp313t"). Which of
+        # them an unconstrained solve lands on is the solver's business, and it
+        # has landed on the free-threaded one -- an interpreter the CAD stack
+        # cannot be installed into at all, because cadquery-ocp and nlopt
+        # publish no "cp*t" wheels. So pin the ABI, and let the environments
+        # built below stay the GIL build.
+        #
+        # The same hazard, and the very same spelling of the pin, as in the
+        # sandboxes PartCAD provisions at runtime: see
+        # sandbox_versions.python_abi_requirement() in partcad/src/partcad,
+        # which is the other half of this fix. Keep the two in step.
+        #
+        # There is nothing to pin below 3.13 -- CPython has no free-threaded
+        # build there, and conda-forge's build strings end in "_cpython" rather
+        # than "_cp312", so such a pin would match no package at all and fail
+        # the solve outright. The version arrives from the matrix, so that test
+        # is made here in the shell rather than in a workflow expression.
+        PYTHON_VERSION="${{ matrix.python-version }}"
+        PYTHON_MAJOR="${PYTHON_VERSION%%.*}"
+        PYTHON_MINOR="${PYTHON_VERSION#*.}"
+        PYTHON_MINOR="${PYTHON_MINOR%%.*}"
+        PYTHON_ABI=()
+        if [ "${PYTHON_MAJOR}" -gt 3 ] || { [ "${PYTHON_MAJOR}" -eq 3 ] && [ "${PYTHON_MINOR}" -ge 13 ]; }; then
+          PYTHON_ABI=("python_abi==${PYTHON_MAJOR}.${PYTHON_MINOR}=*_cp${PYTHON_MAJOR}${PYTHON_MINOR}")
+        fi
+
+        mamba create -n env-build python==${{ matrix.python-version }} "${PYTHON_ABI[@]}" -y
         mamba activate env-build
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
         python -m pip install --upgrade build
         mamba deactivate
 
-        mamba create -n env-build-cli python==${{ matrix.python-version }} -y
+        mamba create -n env-build-cli python==${{ matrix.python-version }} "${PYTHON_ABI[@]}" -y
         mamba activate env-build-cli
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools

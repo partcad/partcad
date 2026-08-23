@@ -188,9 +188,33 @@ DEFAULT_PYTHON_VERSION = "3.11"
 # still has to be rendered on 3.11.
 MIN_PYTHON_VERSION_CADQUERY = "3.11"
 
+# The first Python CPython publishes a free-threaded ("no-GIL") build of, and so
+# the first for which conda-forge carries two ABI variants of one and the same
+# release. See python_abi_requirement() for why that has to be disambiguated.
+MIN_PYTHON_VERSION_FREE_THREADING = "3.13"
+
 
 def _parsed(version: str):
     return tuple(int(part) for part in version.split("."))
+
+
+def _major_minor(version: str) -> str:
+    """The bare "<major>.<minor>" of a version that may carry more components.
+
+    Callers are documented to pass "<major>.<minor>", but nothing enforces it:
+    the package schema's 'pythonVersion' pattern accepts "3.13.1" and no layer
+    between it and a sandbox trims the patch component off. python_abi is
+    versioned by ABI rather than by release -- conda-forge publishes
+    "python_abi 3.13.* *_cp313" and no 3.13.1 of it at all -- so a patch version
+    reaching python_abi_requirement() unedited yields a spec that matches
+    nothing and fails the solve with an error naming neither PartCAD nor the
+    setting that caused it.
+
+    Built on _parsed() so the components are validated as numbers here, the same
+    way is_at_least() validates them.
+    """
+    major, minor = _parsed(version)[:2]
+    return "%d.%d" % (major, minor)
 
 
 def is_at_least(python_version: str, minimum: str) -> bool:
@@ -224,6 +248,50 @@ def zstd_requirement(python_version: str) -> str | None:
     if is_at_least(python_version, MIN_PYTHON_VERSION_ZSTD_STDLIB):
         return None
     return ZSTD
+
+
+def python_abi_requirement(python_version: str, exact: bool = True) -> str | None:
+    """The conda spec that holds a sandbox to the GIL build of its interpreter.
+
+    NOT redundant, however much it looks it. "python==3.14" names a version and
+    nothing else, and from 3.13 onwards conda-forge publishes two builds of every
+    single release: the ordinary one ("*_cp314") and the free-threaded, no-GIL
+    one ("*_cp314t"). Which one an unconstrained solve lands on is the solver's
+    business, and on the CI runners it landed on the free-threaded one -- the
+    sandbox came out at "lib/python3.14t/site-packages".
+
+    Nothing in PartCAD wants that build, and the whole CAD stack is unusable in
+    it: cadquery-ocp and nlopt publish "cp314-cp314" wheels and no "cp314t" ones,
+    so pip finds no candidate at all ("Could not find a version that satisfies
+    the requirement nlopt==2.11.0"), and every part defined by a script then dies
+    with "No module named 'OCP'". Remove this and that comes back.
+
+    The pin goes on 'python_abi' rather than on the 'python' spec itself. A build
+    string can only be given in conda's three-field "name=version=build" form, so
+    pinning it on 'python' would mean rewriting the version half of the spec the
+    caller asked for as well. 'python_abi' is a package the interpreter already
+    depends on -- python 3.14 declares "python_abi 3.14.* *_cp314" -- so pinning
+    its build string pins the interpreter's without touching the python spec and
+    without adding anything to the environment that was not going in anyway.
+
+    None below 3.13: there CPython has no free-threaded build to disambiguate,
+    and conda-forge's build strings end in "_cpython" rather than "_cp312", so a
+    "*_cp312" pin would match no package at all and fail the solve outright.
+
+    'exact' picks the spelling of the equality, mirroring the python spec the
+    caller builds: mamba is given "==", conda "=". Both select the same package
+    here, since python_abi's version is the bare "<major>.<minor>".
+
+    That is also why both halves of the spec are derived from _major_minor()
+    rather than from the caller's string: a "3.13.1" would otherwise ask for a
+    python_abi release that does not exist and for a "*_cp3131" build that names
+    no ABI. See _major_minor() for how such a version gets here.
+    """
+    if not is_at_least(python_version, MIN_PYTHON_VERSION_FREE_THREADING):
+        return None
+    equality = "==" if exact else "="
+    abi_version = _major_minor(python_version)
+    return "python_abi%s%s=*_cp%s" % (equality, abi_version, abi_version.replace(".", ""))
 
 
 #
