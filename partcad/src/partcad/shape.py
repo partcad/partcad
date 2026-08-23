@@ -915,9 +915,10 @@ class Shape(ShapeConfiguration):
         request = await self._output_request(obj, impl, kwargs)
         request[output.SCRIPT_KEY] = os.path.abspath(script)
         # Whether the sandbox rebuilds the envelopes into live geometry before
-        # the implementation sees them. Off for an implementation that walks the
-        # assembly *tree* (the URDF exporter turns each node into a link of its
-        # own), which decoding would have collapsed into one compound.
+        # the implementation sees them. Off for an implementation that needs what
+        # the envelopes say about each node (the URDF exporter names every link
+        # and places every joint from that), none of which decoding carries over
+        # into the geometry it builds.
         request[output.DECODE_KEY] = impl.decode
         request_serialized = shape_envelope.serialize(request)
 

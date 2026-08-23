@@ -52,9 +52,11 @@ SCRIPT_KEY = "__script__"
 # The key that says whether the envelopes are rebuilt into live OCCT geometry
 # before the implementation sees them. It has to travel in the request and be
 # read before anything is decoded, which is why the request is always read raw
-# here and decoded afterwards. An implementation that walks an assembly *tree*
-# (the URDF exporter turns each node into a link of its own) declares
-# 'decode: false', because decoding collapses the tree into one compound.
+# here and decoded afterwards. An implementation that needs what an envelope
+# says *about* a node (the URDF exporter names each link after the node and
+# reads its location as a joint origin) declares 'decode: false', because
+# decoding keeps the tree's shape but only its geometry: names and labels are
+# gone and placements are baked in rather than left as data.
 DECODE_KEY = "__decode__"
 
 

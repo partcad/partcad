@@ -1858,6 +1858,42 @@ the object's value wins:
         step:
           comment: Revision C.
 
+Two names are not entirely the package's own.
+
+``decode`` is not a parameter at all. It is one of the fields PartCAD reads
+itself -- it says whether the sandbox rebuilds the shape and assembly envelopes
+into live geometry before the implementation sees them (see ``urdf`` under
+`Built-in implementations`_) -- so no package can declare an export parameter
+named ``decode``: a ``decode:`` in a file type's configuration is always that
+flag.
+
+``properties`` is the other way round, and it is a parameter -- with a caveat. A
+file type that declares ``properties: true`` is handed, in place of the flag, an
+index of what the shapes being written declare about themselves: their
+``physics``, ``material`` and ``color``, keyed by the full ``<package>:<name>``
+of each shape, so an implementation given a whole assembly tree can look up the
+properties belonging to each node of it. Only shapes that declare at least one
+appear.
+
+.. code-block:: yaml
+
+  export:
+    urdf:
+      properties: true
+
+It is opt-in because building the index instantiates the whole assembly tree,
+which defeats the shape cache for that subtree: an assembly whose geometry could
+have been served from the cache has to be built anyway, so that its children
+exist to be walked. An implementation with no use for the properties should not
+pay for that. ``urdf`` is the one built-in file type that asks.
+
+The caveat is that ``properties``, unlike ``decode``, is *not* a reserved field
+name, and PartCAD intercepts it by value rather than by declaration: a package
+that declares an ordinary export parameter of its own named ``properties`` and
+gives it the value ``true`` will find that value replaced by the index before
+its implementation sees it. Any other value is passed through untouched, but the
+name is best avoided for anything else.
+
 Custom implementations
 ----------------------
 
@@ -1939,6 +1975,8 @@ declares and the images the other file types leave behind (see ``pc render`` in
 ``urdf`` is the one built-in file type that is not a single file: it writes a
 ``.urdf`` plus the directory of mesh files it references, which is why
 ``Shape.convert()`` refuses it (there is no single payload to hand back) and why
-it declares ``decode: false`` - it is handed the assembly *tree*, one URDF link
-per node, rather than the single compound the tree decodes to. See
-:doc:`simulation`.
+it declares ``decode: false`` - it is handed the assembly *tree* itself, one
+URDF link per node, rather than the geometry the tree decodes to. Decoding keeps
+the shape of the tree but nothing else about it: every node's ``name`` and
+``label`` is dropped, and its placement is baked into the geometry instead of
+staying readable as the joint origin. See :doc:`simulation`.
