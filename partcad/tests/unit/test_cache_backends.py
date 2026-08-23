@@ -184,7 +184,12 @@ def test_a_second_event_loop_gets_a_working_client(tmp_path):
 
 
 def test_one_client_serves_overlapping_requests_and_goes_when_they_do(tmp_path):
-    """The client is shared while requests overlap, and released once they finish."""
+    """The client is shared while requests overlap, and released once they finish.
+
+    Both the client and the count of who is using it live per event loop, since
+    more than one can be live at a time, so the state is read out of the entry
+    belonging to the loop running the requests rather than off the backend.
+    """
     with serve_memcached() as server:
         cache = Cache("shapes", _memcache_config(tmp_path, server))
         remote = cache.backends[0]
@@ -194,7 +199,7 @@ def test_one_client_serves_overlapping_requests_and_goes_when_they_do(tmp_path):
 
             async def one():
                 async with remote.connected():
-                    depth.append(remote._users)
+                    depth.append(remote._per_loop[asyncio.get_running_loop()]["users"])
                     await asyncio.sleep(0)
 
             await asyncio.gather(*[one() for _ in range(4)])
@@ -204,8 +209,8 @@ def test_one_client_serves_overlapping_requests_and_goes_when_they_do(tmp_path):
 
     # They really did overlap ...
     assert max(depth) > 1
-    # ... and the last one out released it.
-    assert remote._client is None
+    # ... and the last one out took the whole entry with it, client included.
+    assert remote._per_loop == {}
 
 
 # ----------------------------------------------------------------------- S3 --
