@@ -9,6 +9,7 @@
 
 import typing
 
+from . import factory
 from .part import Part
 from .shape_factory import ShapeFactory
 from . import telemetry
@@ -22,6 +23,32 @@ class PartFactory(ShapeFactory):
     name: str
     orig_name: str
 
+    # Object-type parameters: the parameters an object *type* contributes to
+    # the parameter list, rather than the author of the part declaring them
+    # from nothing. They are told apart from the rest here, in the factory
+    # layer, because that is the only layer that knows what type produced the
+    # part: the schema accepts any parameter name matching its pattern and has
+    # no per-part-type branching at all.
+    #
+    # Two class-level sets, so the mechanism is not welded to the one parameter
+    # that exists today.
+    #
+    # POLICED_OBJECT_TYPE_PARAMETERS is the registry of names policed at all.
+    # Only a name in here may ever be rejected. Parameters are otherwise
+    # arbitrary - a script may call its own whatever it likes - so a name that
+    # is not in this registry must stay free on every type, forever.
+    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"material"})
+
+    # ACCEPTED_OBJECT_TYPE_PARAMETERS is what *this* factory accepts of the
+    # policed names. Empty here, which makes "does not accept" the default: a
+    # type opts in by mixing in a class that widens the set (see
+    # 'PartFactoryHomogen'). The types that have not opted in are deliberate,
+    # not an oversight - whether each of them should accept 'material' has not
+    # been decided, and will be settled case by case. Defaulting to "no" is
+    # what leaves that decision open; defaulting to "yes" would silently make
+    # it.
+    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset()
+
     def __init__(
         self,
         ctx,
@@ -33,6 +60,40 @@ class PartFactory(ShapeFactory):
         self.target_project = target_project
         self.name = config["name"]
         self.orig_name = config["orig_name"]
+
+        self._validate_object_type_parameters(config)
+
+    def _validate_object_type_parameters(self, config: object) -> None:
+        """Reject an object-type parameter this part type does not accept.
+
+        Runs from the constructor rather than from 'post_create()', the base
+        class catch-all that would otherwise be the natural hook, because
+        '_create()' registers the part in 'target_project.parts' *before* it
+        calls 'post_create()'. Raising from there would have the package record
+        the object as broken and go on holding a fully registered, buildable
+        part under the same name: the rejection would be reported and not
+        enforced. Nothing is registered yet at this point, so the failure is
+        the same per-object failure an unknown type produces - caught by
+        'Project.init_objects()' / 'Project.get_object()' and filed against
+        this one object by 'Project.record_broken_object()', which logs it as
+        an error and so sets the CLI's error state, while the rest of the
+        package loads and builds.
+        """
+        parameters = config.get("parameters") or {}
+        if not isinstance(parameters, dict):
+            # Malformed; the schema has its own say about that.
+            return
+        for name in sorted(parameters):
+            if name not in self.POLICED_OBJECT_TYPE_PARAMETERS:
+                continue
+            if name in self.ACCEPTED_OBJECT_TYPE_PARAMETERS:
+                continue
+            raise factory.ObjectTypeParameterException(
+                "part",
+                config.get("type"),
+                config.get("name"),
+                name,
+            )
 
     def _create_part(self, config: object) -> Part:
         part = Part(self.target_project.name, config)

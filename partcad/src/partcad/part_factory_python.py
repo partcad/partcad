@@ -10,13 +10,14 @@
 import os
 
 from .part_factory_file import PartFactoryFile
+from .part_factory_homogen import PartFactoryHomogen
 from .runtime_python import PythonRuntime, environment_requirements
 from . import sandbox_versions
 from . import telemetry
 
 
 @telemetry.instrument()
-class PartFactoryPython(PartFactoryFile):
+class PartFactoryPython(PartFactoryHomogen, PartFactoryFile):
     runtime: PythonRuntime
     cwd: str
 

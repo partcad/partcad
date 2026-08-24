@@ -1062,6 +1062,38 @@ even where they share a name: ``parameters.material`` asks for a part to be made
 of something, and ``properties.material`` states what the part that came out is
 made of.
 
+Most parameters are the part's own invention. A script may call one whatever it
+likes, and nothing outside that script knows what it means, so PartCAD lets a
+part declare any name it wants. A few are **object-type parameters** instead:
+contributed by the part *type* rather than declared out of nothing, with a
+meaning PartCAD itself acts on. They are therefore only available on the types
+that can honour them. ``material`` is the first, and today the only, one.
+
+What decides which types accept ``material`` is whether the part is a single
+homogeneous body - one solid, made of one thing - because that is what has to
+be true for one ``material:`` value to be true of the whole part. A mesh is one
+body: an STL file is a surface with nothing inside it to vary, and the only way
+it has a material at all is for somebody to say so. So is a solid built by a
+script, and so is one extruded from a single sketch. ``stl``, ``cadquery``,
+``build123d``, ``sdf`` and ``extrude`` accept ``material``.
+
+A STEP file is not one body. It can carry many solids, each already stating a
+material of its own, and naming one material for the file would be a claim
+about a part the file itself describes better. ``step`` rejects ``material``,
+and so does ``kicad``, which is a STEP file behind a footprint. What such a
+part is made of belongs under :ref:`properties`, where a shape says what it
+turned out to be rather than what was asked of it.
+
+Every other part type rejects ``material`` too, but for a different reason:
+whether it should accept it has not been decided yet, and answering "no" until
+somebody decides leaves the question open rather than settling it by accident.
+
+Declaring ``material`` under ``parameters:`` of a type that does not accept it
+is an error, not a warning. It costs the package that one part - the rest of
+the package loads and builds as usual - and the command that found it reports a
+failure. No other parameter name is restricted anywhere: what is policed is the
+one name PartCAD gives a meaning to, not the right to declare parameters.
+
 Each part may have a list of parameters that are passed into the scripts to
 modify the part.
 The parameters can be of types ``string``, ``float``, ``int`` and ``bool``.
@@ -1088,6 +1120,8 @@ visualization, simulation calculations and, if applicable, manufacturing
 
   Must point at an object of type ``material``.
   Some of them are defined in ``//pub/std/manufacturing/material``.
+  This one is an object-type parameter, so it may only be declared on the part
+  types listed above.
   When a request is made to a manufacturing API,
   a close enough material is selected from the materials provided by the
   manufacturer. The responsibility to select the right material is on the

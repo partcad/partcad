@@ -7,7 +7,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-from .part_factory import PartFactory
+from .part_factory_homogen import PartFactoryHomogen
 from .sketch import Sketch
 from . import logging as pc_logging
 from . import wrapper
@@ -16,8 +16,14 @@ from . import sandbox_versions
 from . import telemetry
 
 
+# Homogeneous: an extrusion is one sketch swept into one solid, so a single
+# 'material:' is true of the whole of it - the same argument that lets a
+# script-built solid have one. It is also the only part type in this
+# repository that already ships a part declaring 'parameters: material:'
+# (examples/provider_manufacturer), which is the quoting path this parameter
+# exists for.
 @telemetry.instrument()
-class PartFactoryExtrude(PartFactory):
+class PartFactoryExtrude(PartFactoryHomogen):
     PYTHON_SANDBOX_VERSION = sandbox_versions.DEFAULT_PYTHON_VERSION
 
     depth: float

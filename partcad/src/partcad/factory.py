@@ -85,6 +85,38 @@ class RetiredTypeException(UnknownTypeException):
         )
 
 
+class ObjectTypeParameterException(Exception):
+    """A declared object asks for an object-type parameter its type does not accept.
+
+    An *object-type parameter* is one an object type contributes to the
+    parameter list, rather than the author of the object declaring it from
+    nothing: it has a meaning PartCAD itself acts on, so it only means anything
+    on a type that can honour it. 'material' is the first, and today the only,
+    one of them.
+
+    Which types accept which is decided by the factory classes (see
+    'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS'), not by the schema: the
+    schema takes any parameter name at all, and has no per-type branching to
+    hang this on. Every name outside the policed registry stays free, because
+    parameters are otherwise the object's own invention.
+
+    Raised while the object is being created, like 'UnknownTypeException' above,
+    so that 'Project.record_broken_object()' files it against that one object
+    and the rest of the package goes on loading. It stays an error rather than
+    being softened the way 'RetiredTypeException' is: this is a declaration
+    whose author can correct it, not a feature PartCAD took away.
+    """
+
+    def __init__(self, kind: str, t, name, parameter: str):
+        self.kind = kind
+        self.type = t
+        self.name = name
+        self.parameter = parameter
+        super().__init__(
+            "the %s type '%s' does not accept the '%s' parameter declared by '%s'" % (kind, t, parameter, name)
+        )
+
+
 class Factory:
     def __init__(self) -> None:
         pass
