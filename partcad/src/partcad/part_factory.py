@@ -109,6 +109,24 @@ class PartFactory(ShapeFactory):
                 name,
             )
 
+    def object_type_parameter_names(self) -> list:
+        """The object-type parameter names this part's type contributes.
+
+        Put into the request a script-running wrapper is handed, so the wrapper
+        learns them from the type instead of carrying a copy of the list. A
+        wrapper that runs a CadQuery/build123d script is otherwise strict about
+        build parameters the script does not declare - rightly, since such a
+        name is usually a typo - but a part may be obliged to declare an
+        object-type parameter its script has no use for ('pc test' requires a
+        manufactured part to state a tolerance). Those names, and only those,
+        are dropped there when the script does not want them; see
+        'wrappers/custom_cqgi.filter_optional_params'.
+
+        Sorted, so the request is stable and two identical parts serialize
+        identically.
+        """
+        return sorted(self.ACCEPTED_OBJECT_TYPE_PARAMETERS)
+
     def _create_part(self, config: object) -> Part:
         part = Part(self.target_project.name, config)
         # What this part's type contributes, so that reading an object-type

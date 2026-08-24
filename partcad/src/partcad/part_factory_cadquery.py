@@ -61,6 +61,10 @@ class PartFactoryCadquery(PartFactoryPython):
             if "parameters" in self.config:
                 for param_name, param in self.config["parameters"].items():
                     request["build_parameters"][param_name] = param["default"]
+            # Which of the above the part's *type* contributed. The wrapper needs
+            # it to tell a parameter the script forgot to declare (an error) from
+            # one the script was never asked to want (not an error).
+            request["object_type_parameters"] = self.object_type_parameter_names()
             patch = {}
             if "show" in self.config:
                 patch["\\Z"] = "\nshow(%s)\n" % self.config["show"]

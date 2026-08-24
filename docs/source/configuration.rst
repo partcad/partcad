@@ -1114,6 +1114,17 @@ precision, which is not something a manufacturer can be asked for, so
 tolerance - including a part reached through an assembly in the package. A part
 that is bought rather than made is not asked: it comes as it comes.
 
+A CadQuery or build123d script is handed every parameter the part declares, each
+as a variable of the same name, and the script has to assign that name at its
+own top level for the value to land anywhere - a parameter the script never
+mentions is a parameter nobody will read, so naming one is an error and usually
+a typo. Object-type parameters are the one exception, because the part may be
+required to declare one the script has no use for: a script that assigns
+``material`` still receives the declared material, and a script that does not
+mention it is left alone rather than refused. Nothing else is forgiven. An SDF
+script takes its parameters differently - they are prepended to it as
+assignments - so this never arose there.
+
 Each part may have a list of parameters that are passed into the scripts to
 modify the part.
 The parameters can be of types ``string``, ``float``, ``int`` and ``bool``.
