@@ -12,12 +12,20 @@ PartCAD writes output files in two flavours, each declared in a section of
     'render:'   the 2D projections 'pc render' writes
 
 A section has one subsection per file type, whose fields are that type's
-parameters. Three of them are not parameters but say how the file is produced -
-'path' (the implementation script), 'package' (where that script lives) and
-'pythonRequirements' (what its sandbox needs) - and three more describe where
-the output goes rather than what goes in it. Everything else is handed to the
-implementation verbatim, which is what lets a package add a parameter (say, a
-'comment' for STEP) without PartCAD having to know about it.
+parameters. Some of them are not parameters but say how the file is produced -
+'path' (the implementation script), 'package' (where that script lives),
+'pythonRequirements' and 'pythonVersion' (what its sandbox needs, and which
+interpreter it is) - and three more describe where the output goes rather than
+what goes in it. Everything else is handed to the implementation verbatim, which
+is what lets a package add a parameter (say, a 'comment' for STEP) without
+PartCAD having to know about it.
+
+The first four are not layered like the rest. 'path' and 'package' say whose
+script this is, and 'pythonVersion' and 'pythonRequirements' describe the
+environment that script needs - which only the package that wrote it can
+answer. All four are therefore read from that package alone; a copy of them
+that reaches the merged options from a calling package is inert (see
+'Implementation.python_version()').
 
 The built-in implementations are not special-cased anywhere: they are declared
 in exactly this form by two packages that ship inside 'partcad' itself and that
@@ -70,7 +78,8 @@ BUILTIN_PATHS = {
 #
 # Held out wherever a section is read as a list of file types to run an
 # implementation for, so that declaring one does not send PartCAD looking for a
-# 'path' that was never meant to exist.
+# 'path' that was never meant to exist - unless the package names one, see
+# 'is_document_format()'.
 NON_WRAPPER_FORMATS = frozenset({"readme", "markdown", "pdf", "html"})
 
 # Keys of a section that configure the section itself rather than name a file
@@ -84,6 +93,27 @@ def format_names(section_obj) -> list:
     if not isinstance(section_obj, dict):
         return []
     return [name for name in section_obj if name not in SECTION_KEYS]
+
+
+def is_document_format(format_name: str, section_obj) -> bool:
+    """Whether PartCAD assembles this file itself instead of running a script.
+
+    True for the file types of NON_WRAPPER_FORMATS - and only for as long as
+    nobody implements them. A configuration that names a 'path' for one is a
+    package saying that its 'pdf' is a file of its own (a drawing, a datasheet)
+    rather than the assembly instruction book, and PartCAD produces it the way
+    it produces every other file type a package implements.
+
+    'readme' is the one that cannot be taken over in practice, not because it is
+    special-cased here but because there is nothing to name: PartCAD does not
+    ship an implementation of it for a package to replace (see
+    'builtin/render/partcad.yaml').
+    """
+    if format_name not in NON_WRAPPER_FORMATS:
+        return False
+    if not isinstance(section_obj, dict):
+        return True
+    return not normalize(section_obj.get(format_name)).get("path")
 
 
 # The fields of a file type's configuration that are not parameters.
@@ -127,7 +157,6 @@ class Implementation:
         self.config = config
         self.project = project
         self.script = config.get("path")
-        self.python_requirements = list(config.get("pythonRequirements") or [])
         # Whether the sandbox decodes the envelopes into live geometry for this
         # implementation. Off for one that needs the assembly tree's structure
         # rather than the compound it decodes to.
@@ -141,16 +170,62 @@ class Implementation:
     def extension(self, default: str) -> str:
         return self.config.get("extension") or default
 
+    def _declared(self, key):
+        """What the implementing package says about this file type, if anything.
+
+        Read from that package's own configuration rather than from the layered
+        options: the layers below this one are the built-in defaults and the
+        layers above are callers, and neither is describing the environment this
+        script needs. The file type is looked up in both sections, owning
+        section last, which is the order the options themselves are layered in.
+        """
+        if self.project is None:
+            return None
+        value = None
+        for section_name in config_sections(self.section):
+            section_obj = self.project.config_obj.get(section_name)
+            if isinstance(section_obj, dict):
+                value = normalize(section_obj.get(self.format_name)).get(key) or value
+        return value
+
     def python_version(self) -> str:
         """Which sandbox interpreter runs this implementation.
 
-        Not taken from the implementing package's 'pythonVersion': that
-        defaults to whatever interpreter PartCAD itself happens to run on,
-        which would scatter the render sandbox across versions depending on how
-        the user installed PartCAD. An implementation that genuinely needs
-        another interpreter says so on the format itself.
+        The package that ships the script decides. It is that package's code
+        that has to run and its requirements that have to resolve around it: a
+        drawing implementation whose dependencies want build123d 0.11 only on
+        3.13 says '3.13' once, beside the requirement, and every package that
+        draws with it gets that interpreter without having to know why.
+
+        Nobody else has an opinion worth reading. A package that asks for a
+        drawing is a caller - it may be a package of STEP files with no Python
+        in it at all - so its own interpreter says nothing about what somebody
+        else's script needs, and is not consulted. A 'pythonVersion' that
+        reaches the merged options from there is not overridden here; it is
+        never read.
+
+        Where the implementing package says nothing, the answer is a fixed
+        default rather than the interpreter PartCAD itself runs on: the latter
+        would scatter the render sandbox across versions depending on how the
+        user installed PartCAD.
         """
-        return self.config.get("pythonVersion") or sandbox_versions.DEFAULT_PYTHON_VERSION
+        return (
+            self._declared("pythonVersion")
+            or getattr(self.project, "python_version_declared", None)
+            or sandbox_versions.DEFAULT_PYTHON_VERSION
+        )
+
+    @property
+    def python_requirements(self) -> list:
+        """What the sandbox needs installed before this implementation runs.
+
+        The implementing package's again, and for the same reason: these are the
+        imports of its script, resolved against the interpreter it asked for.
+        The package-level requirements of that package are installed too, by
+        'RuntimePython.prepare_for_package()'; this is what the file type adds
+        on top of them.
+        """
+        return list(self._declared("pythonRequirements") or [])
 
 
 def normalize(config) -> dict:

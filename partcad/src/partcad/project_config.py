@@ -123,11 +123,19 @@ class Configuration:
                 if python_version == "3.1":
                     python_version = "3.10"
             self.python_version = python_version
+            # Kept apart from the resolved value below, because "this package
+            # asked for 3.13" and "nobody asked, so whatever interpreter PartCAD
+            # happens to run on" are different answers and one caller has to tell
+            # them apart: an output implementation runs on the interpreter the
+            # package that ships it asked for, and on a fixed default otherwise
+            # (see output.Implementation.python_version()).
+            self.python_version_declared = python_version
         else:
             self.python_version = "%d.%d" % (
                 sys.version_info.major,
                 sys.version_info.minor,
             )
+            self.python_version_declared = None
 
         # option: "javascriptVersion"
         # description: the major version of Node.js to use in sandboxed

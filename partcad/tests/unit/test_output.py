@@ -434,6 +434,67 @@ def test_stamp_records_the_package_that_declared_a_path():
     assert "package" not in output.stamp({"comment": "hi"}, "//pkg")
 
 
+class _Assembly:
+    """The little of an assembly that document selection actually reads."""
+
+    kind = "assembly"
+
+    def __init__(self, render_cfg):
+        self.name = "widget"
+        self.config = {"render": render_cfg}
+
+
+def test_an_implemented_pdf_is_not_overwritten_by_the_assembly_guide(ctx):
+    """The instruction book gives way to an implementation of the same file type.
+
+    Both would be written to '<assembly>.pdf', so whichever ran second would win
+    silently. The implementation is what the package asked for.
+    """
+    project = ctx.get_project("//produce_part_step")
+
+    # Declared with nothing behind it: still the instruction book.
+    assembly = _Assembly({"pdf": None})
+    assert project._assembly_documents_to_render([assembly], None, None, "pdf") == ["widget"]
+
+    # Declared with an implementation: a file of the assembly's own, produced
+    # like any other file type.
+    assembly = _Assembly({"pdf": {"package": "//pub/feature/render/draftwright", "path": "draw.py"}})
+    assert project._assembly_documents_to_render([assembly], None, None, "pdf") == []
+
+    # The implementation may equally come from the package rather than the
+    # assembly, which is where the package-level configuration comes in.
+    assembly = _Assembly({})
+    package_cfg = {"pdf": {"package": "//pub/feature/render/draftwright", "path": "draw.py"}}
+    assert project._assembly_documents_to_render([assembly], ["widget"], "pdf", "pdf", package_cfg) == []
+    assert project._assembly_documents_to_render([assembly], ["widget"], "pdf", "pdf", {"pdf": None}) == ["widget"]
+
+
+def test_a_document_format_stops_being_one_once_somebody_implements_it():
+    """'pdf' is the instruction book only for as long as nobody writes a 'pdf'.
+
+    A package that names an implementation for it is saying that its 'pdf' is a
+    file of its own - a drawing, a datasheet - and PartCAD has to produce it the
+    way it produces every other file type a package implements, instead of
+    quietly rendering the assembly guide over it.
+    """
+    # Nothing declared, declared empty, or declared as a bare output location:
+    # all still the document PartCAD assembles itself.
+    assert output.is_document_format("pdf", {})
+    assert output.is_document_format("pdf", {"pdf": None})
+    assert output.is_document_format("pdf", {"pdf": "./drawings"})
+    assert output.is_document_format("pdf", {"pdf": {"prefix": "./drawings"}})
+    assert output.is_document_format("html", {})
+    assert output.is_document_format("readme", {})
+    # An implementation, in this package or in another one.
+    assert not output.is_document_format("pdf", {"pdf": {"path": "draw.py"}})
+    assert not output.is_document_format(
+        "pdf", {"pdf": {"package": "//pub/feature/render/draftwright", "path": "render_draftwright.py"}}
+    )
+    # Everything else is a file type an implementation always writes.
+    assert not output.is_document_format("svg", {})
+    assert not output.is_document_format("step", {"step": {"comment": "hi"}})
+
+
 def test_parameters_exclude_the_reserved_fields():
     impl = output.Implementation(
         output.EXPORT,
@@ -451,6 +512,84 @@ def test_parameters_exclude_the_reserved_fields():
     assert impl.extension("brep") == "step"
     assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
     assert impl.decode is False
+
+
+class _ImplementingPackage:
+    """A package that ships an output implementation, as the resolution reads it."""
+
+    def __init__(self, name="//pub/feature/render/draftwright", declared=None, section_obj=None):
+        self.name = name
+        self.python_version_declared = declared
+        self.config_obj = {output.RENDER: section_obj} if section_obj is not None else {}
+
+
+def test_the_sandbox_comes_from_the_package_that_wrote_the_implementation():
+    """Which Python runs a script, and what is installed on it, is its author's.
+
+    A package that draws with somebody else's renderer is a caller. It may be a
+    package of STEP files with no Python of its own at all, and it has never
+    heard of what that script imports - so the interpreter and the requirements
+    are read where they are known, beside the script.
+    """
+    config = {"package": "//pub/feature/render/draftwright", "path": "render_draftwright.py"}
+
+    # Declared by the implementing package, for everything it implements...
+    impl = output.Implementation(output.RENDER, "pdf", config, _ImplementingPackage(declared="3.13"))
+    assert impl.python_version() == "3.13"
+    assert impl.python_requirements == []
+
+    # ...or on the file type, in that same package.
+    project = _ImplementingPackage(
+        section_obj={
+            "pdf": {
+                "path": "render_draftwright.py",
+                "pythonVersion": "3.12",
+                "pythonRequirements": ["ezdxf==1.4.4"],
+            }
+        }
+    )
+    impl = output.Implementation(output.RENDER, "pdf", config, project)
+    assert impl.python_version() == "3.12"
+    assert impl.python_requirements == ["ezdxf==1.4.4"]
+
+    # Nothing declared anywhere: a fixed default, not the interpreter PartCAD
+    # happens to be running on, and nothing to install.
+    impl = output.Implementation(output.RENDER, "pdf", config, _ImplementingPackage())
+    assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
+    assert impl.python_requirements == []
+
+
+def test_a_calling_package_does_not_configure_the_implementations_sandbox():
+    """What a caller says about the environment is not read at all.
+
+    Not overridden, not warned about - never consulted. There is nothing to warn
+    about: a package asking for a drawing is not making a claim about somebody
+    else's interpreter, and the layered options carry these keys only because
+    every field of a file type is layered the same way.
+    """
+    caller_says = {
+        "package": "//pub/feature/render/draftwright",
+        "path": "render_draftwright.py",
+        "pythonVersion": "3.10",
+        "pythonRequirements": ["build123d==0.11.1"],
+    }
+    impl = output.Implementation(output.RENDER, "pdf", caller_says, _ImplementingPackage(declared="3.13"))
+    assert impl.python_version() == "3.13"
+    assert impl.python_requirements == []
+
+    # ...including when the implementing package has nothing to say either.
+    impl = output.Implementation(output.RENDER, "pdf", caller_says, _ImplementingPackage())
+    assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
+    assert impl.python_requirements == []
+
+
+def test_the_builtin_implementations_still_get_their_own_requirements(ctx):
+    """The rule is not a special case: '//builtin' is an implementing package too."""
+    project, part = _part(ctx, "//produce_part_step", "bolt")
+    impl, _ = part.output_getopts(ctx, "step", project)
+    impl.project = ctx.get_project(output.BUILTIN_PACKAGES[output.EXPORT])
+    assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
+    assert "cadquery-ocp==%s" % sandbox_versions.CADQUERY_OCP.split("==")[1] in impl.python_requirements
 
 
 def test_a_format_decodes_its_envelopes_unless_it_declares_otherwise(ctx):

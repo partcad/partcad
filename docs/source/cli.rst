@@ -186,6 +186,10 @@ Object commands
   either side (and the arrow keys) to flip through it. As with ``readme``, an assembly can ask for either
   document in the package configuration, by declaring ``pdf`` or ``html`` in its ``render`` section.
 
+  Declaring one with a ``path`` says the opposite: that this ``pdf`` is a file of the package's own — a
+  drawing, a datasheet — written by that implementation like any other file type, and no instruction book is
+  generated over it (see :ref:`output-files`).
+
   Both formats are only defined for an assembly declared as ``type: assy``: the steps come from the Assembly
   YAML file, and an assembly that has none is refused rather than reduced to a title page and a parts list. An
   assembly that is not meant to be built at all (``manufacturable: false``, on the assembly or inherited from

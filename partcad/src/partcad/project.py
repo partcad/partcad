@@ -1410,7 +1410,7 @@ class Project(project_config.Configuration):
                 formats = output_formats + [
                     name
                     for name in output.format_names(shape_cfg)
-                    if name not in output_formats and name not in output.NON_WRAPPER_FORMATS
+                    if name not in output_formats and not output.is_document_format(name, shape_cfg)
                 ]
 
                 for format_name in formats:
@@ -1434,7 +1434,9 @@ class Project(project_config.Configuration):
             # its own when it is the object the document was asked for, or when
             # it asks for one in its own configuration.
             for document_format in ("readme",) + assembly_guide.GUIDE_FORMATS:
-                for assembly_name in self._assembly_documents_to_render(shapes, assemblies, format, document_format):
+                for assembly_name in self._assembly_documents_to_render(
+                    shapes, assemblies, format, document_format, render
+                ):
                     if document_format == "readme":
                         await self.render_assembly_readme_async(assembly_name, render, output_dir)
                     else:
@@ -1451,13 +1453,19 @@ class Project(project_config.Configuration):
             if (format == "readme" and not assemblies) or (format is None and "readme" in render):
                 self.render_readme_async(render, output_dir)
 
-    def _assembly_documents_to_render(self, shapes, assemblies, format, document_format):
+    def _assembly_documents_to_render(self, shapes, assemblies, format, document_format, render_cfg=None):
         """Which assemblies get a document of the given kind out of this run."""
         if format is not None and format != document_format:
             return []
         names = []
         for shape in shapes:
             if shape.kind != "assembly":
+                continue
+            # A 'pdf' or 'html' somebody implements is a file of that assembly's
+            # own, produced above like any other file type, and asking for it
+            # here as well would overwrite it with the instruction book.
+            cfg = render_cfg_merge(copy.deepcopy(render_cfg or {}), shape.config.get("render") or {})
+            if not output.is_document_format(document_format, cfg):
                 continue
             if (format == document_format and assemblies) or document_format in (shape.config.get("render") or {}):
                 names.append(shape.name)

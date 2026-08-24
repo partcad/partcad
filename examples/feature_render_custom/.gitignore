@@ -1,0 +1,6 @@
+# The DXF of the same drawing: nearly a megabyte of it, over the limit the
+# 'check-added-large-files' hook allows a commit to add, and nothing points at
+# it. 'pc render' is how you get it. The SVG the README shows and the PDF it
+# links are committed - see 'render:' in partcad.yaml for why re-rendering
+# those two dirties the tree, and why that is not worth a commit.
+bracket.dxf
