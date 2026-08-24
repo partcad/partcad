@@ -56,6 +56,14 @@ isort --check partcad
   spec (see "Packaging" in the root [AGENTS.md](../AGENTS.md)). The requirement strings there are the versions
   `sandbox_versions.py` pins, which `tests/unit/test_output.py` enforces.
 
+- **Sandbox environment** (`./src/partcad/python_env.py`): importing `partcad` sweeps every `PYTHON*` variable
+  out of `os.environ` and puts back only `PARTCAD_PYTHON_ENV`. Everything PartCAD spawns — the wrappers, `pip`,
+  `-m venv`, conda — inherits that, which is why the sandbox interpreters run with plain `-sOOu` rather than the
+  `-I` they used to: `-I` implies `-E`, and `-E` would have made the sandbox ignore PartCAD's own
+  `PYTHONHASHSEED=0` along with the user's `PYTHONPATH`. So do not reintroduce `-I`/`-E` on a sandbox command,
+  and add anything a sandbox interpreter has to be told through the environment to `PARTCAD_PYTHON_ENV`, where
+  the sweep cannot take it away again.
+
 ## Schemas and linting
 
 `./src/partcad/schema/partcad.json` is the schema `lint/schema.py` validates `partcad.yaml` against, and

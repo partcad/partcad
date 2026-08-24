@@ -7,6 +7,14 @@
 
 __version__: str = "0.7.193"
 
+# Must come before anything that spawns a process: everything PartCAD executes
+# in a Python sandbox inherits this environment, so this is where the sandbox
+# stops inheriting the user's PYTHON* variables and starts inheriting the
+# reproducible ones PartCAD wants instead. See the module for the whole story.
+from .python_env import sanitize as _sanitize_python_env
+
+_sanitize_python_env()
+
 # Must come before anything that can pull OCP in. VTK, which the OCP build we
 # use links against, bundles its own older copy of expat and exports it under
 # the standard XML_* names. Once that is in the process, the standard library's

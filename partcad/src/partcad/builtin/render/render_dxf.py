@@ -64,12 +64,15 @@ def convert_svg_to_dxf(svg_file, dxf_file, reproducible=True):
         # CLASS entry for every DXF type the document uses, and it discovers
         # them by iterating 'EntityDB.dxf_types_in_use()' - a 'set' of type
         # names. Set iteration over strings follows the interpreter's hash seed,
-        # which is randomized per process and cannot be pinned from the
-        # environment here: the sandbox runs this wrapper with '-I', and that
-        # makes Python ignore PYTHONHASHSEED. So two saves of one drawing emit
-        # the CLASSES section in a different order about half the time.
+        # so without a pinned seed two saves of one drawing emit the CLASSES
+        # section in a different order about half the time. PartCAD does pin it
+        # (PYTHONHASHSEED=0, see partcad.python_env), but that only makes the
+        # order stable, not meaningful: it still changes for reasons no reader
+        # of the diff can follow, and it holds only for a process PartCAD
+        # started.
         #
-        # Registering the same names ourselves first, sorted, settles it:
+        # Registering the same names ourselves first, sorted, settles it for
+        # good:
         # 'ClassesSection.register()' keeps the first entry for a key and
         # ignores later ones, so ezdxf's own pass during 'saveas' adds only what
         # is left and cannot reorder what is already there.

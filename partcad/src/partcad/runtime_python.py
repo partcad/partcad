@@ -253,15 +253,20 @@ class PythonRuntime(runtime.Runtime):
         # The name of the Python executable to search for in bin folders
         self.exec_name = "python" if os.name != "nt" else "python.exe"
 
-        # Isolate this sandbox environment from the rest of the system
-        self.python_flags = ["-sOOIu"]
+        # Isolate this sandbox environment from the rest of the system.
+        #
+        # "-s" keeps the user's site-packages out; the rest of what isolation
+        # takes now comes from the environment, which PartCAD sanitized at
+        # startup (see python_env). This used to be "-I", which additionally
+        # implied "-E" (ignore every PYTHON* variable) and "-P" -- but "-E"
+        # cannot be selective, so it also made PartCAD unable to *set* a
+        # PYTHON* variable for the sandbox, PYTHONHASHSEED above all. Dropping
+        # the variables once, at startup, isolates just as well and leaves that
+        # channel open; PYTHONSAFEPATH stands in for "-P".
+        self.python_flags = ["-sOOu"]
 
         # TODO(clairbee): To improve portability, warn about uses of default encoding
         # self.python_flags += ["-X", "warn_default_encoding=1"]
-
-        # TODO(clairbee): add -P on 3.11+
-        # if TODO version >= "3.11":
-        #     self.python_flags.append("-P")
 
         self.pip_flags = []
         self.pip_install_flags = []
