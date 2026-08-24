@@ -80,6 +80,56 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
             pc_logging.error(f"Error locating conda executable: {e}")
             return None
 
+    def python_abi_specs(self):
+        """The specs holding every solve in this prefix to the GIL interpreter.
+
+        Every conda command that touches the prefix has to carry these, not just
+        the "create". A solve is free to replace what a previous one installed,
+        and an unconstrained one does: creating with the ABI pinned and then
+        running a plain "conda install pip pycairo" swapped the interpreter out
+        from under the sandbox for the free-threaded build of the same version --
+
+            UNLINK python 3.14.0 h32b2ec7_103_cp314
+            LINK   python 3.14.6 hf9ea5aa_1_cp314t
+
+        which is how a sandbox created with the pin still ended up free-threaded.
+        The two builds are the same version with the same build number, so
+        nothing but this spec decides which one a tie goes to.
+
+        Empty below 3.13, where CPython has no free-threaded build to
+        disambiguate. See sandbox_versions.python_abi_requirement().
+        """
+        python_abi = sandbox_versions.python_abi_requirement(self.version, exact=self.is_mamba)
+        return [] if python_abi is None else [python_abi]
+
+    def discard_prefix(self):
+        """Remove the sandbox prefix and forget everything that described it.
+
+        The install guards are marker files inside the prefix, so they go with
+        it. What does not is what this object remembers: 'initialized' was read
+        off the prefix existing (see runtime.Runtime), and 'constraints_path' is
+        memoized on first use. Left alone, the rebuilt prefix would be handed a
+        constraints file that no longer exists -- "Could not open constraint
+        file" on every install into it -- and would never be given the CAD stack,
+        because once() skips that whole block when 'initialized' is set.
+        """
+        shutil.rmtree(self.path, ignore_errors=True)
+        self.initialized = False
+        self.conda_initialized = False
+        self.constraints_path = None
+
+    def discard_if_free_threaded(self):
+        """Throw the prefix away if it holds a free-threaded interpreter.
+
+        Only ever true for a sandbox whose interpreter has no CAD wheels at all
+        (see verify_conda). Every other verify failure leaves the prefix where it
+        is, as before, for the next attempt to install into.
+        """
+        if not self.conda_free_threaded:
+            return
+        self.discard_prefix()
+        self.conda_free_threaded = False
+
     def verify_conda(self):
         # Make a best effort attempt to determine if it's valid
         python_path = self.get_venv_python_path()
@@ -170,23 +220,27 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
             # See if it just got created
             if os.path.exists(self.path):
                 self.verify_conda()
+                self.discard_if_free_threaded()
 
-                if self.conda_free_threaded:
-                    # Only ever true for a sandbox whose interpreter has no CAD
-                    # wheels at all (see verify_conda), and only reachable here
-                    # under the install lock. Every other verify failure leaves
-                    # the prefix where it is, as before.
-                    shutil.rmtree(self.path, ignore_errors=True)
-                    self.conda_free_threaded = False
+            # TODO(clairbee): Does it make sense to retry more than once?
+            attempts = 0
+            while not self.conda_initialized and attempts < 2:
+                # Sometimes it fails to create from the first attempt
+                attempts += 1
+                self.once_conda_locked_attempt()
+                if self.conda_initialized:
+                    # An attempt reports success from the exit code of the last
+                    # command it ran, which says nothing about *which*
+                    # interpreter ended up in the prefix. Ask the prefix itself,
+                    # so a create that quietly produced the wrong one is caught
+                    # here rather than by the next process to open this sandbox
+                    # -- which is what turned this into a rebuild every sandbox
+                    # of every run repeated and none of them fixed.
+                    self.verify_conda()
+                    self.discard_if_free_threaded()
 
             if not self.conda_initialized:
-                self.once_conda_locked_attempt()
-                if not self.conda_initialized:
-                    # Sometime it fails to create from the first attempt
-                    self.once_conda_locked_attempt()
-                # TODO(clairbee): Does it make sense to retry more than once?
-                if not self.conda_initialized:
-                    raise Exception("ERROR: Conda environment initialization failed")
+                raise Exception("ERROR: Conda environment initialization failed")
 
     # TODO(clairbee): Make an async version of this function
     def once_conda_locked_attempt(self):
@@ -209,16 +263,21 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             "-p",
                             self.path,
                             *self.variant_packages,
-                            "python==%s" % self.version if self.is_mamba else "python=%s" % self.version,
+                            # "=" rather than "=="; the two do not mean the same
+                            # thing here. libmamba reads "python==3.14" as the
+                            # 3.14 release exactly, which is 3.14.0 -- so the
+                            # mamba branch this used to have pinned every sandbox
+                            # to the oldest patch of its line, and left the next
+                            # solve wanting to upgrade it. "=3.14" is the fuzzy
+                            # "3.14.*" both conda and mamba mean by it.
+                            "python=%s" % self.version,
+                            # The python spec above names a version and nothing
+                            # else, which from 3.13 on leaves the solver free to
+                            # pick the free-threaded (no-GIL) build of it -- and
+                            # it does. No CAD wheel exists for that ABI, so pin
+                            # the GIL one.
+                            *self.python_abi_specs(),
                         ]
-                        # The python spec above names a version and nothing else,
-                        # which from 3.13 on leaves the solver free to pick the
-                        # free-threaded (no-GIL) build of it -- and it does. No
-                        # CAD wheel exists for that ABI, so pin the GIL one.
-                        # See sandbox_versions.python_abi_requirement().
-                        python_abi = sandbox_versions.python_abi_requirement(self.version, exact=self.is_mamba)
-                        if python_abi is not None:
-                            args.append(python_abi)
                         # Strip user home directory from the path, if any
                         sanitized_args = copy.copy(args)
                         sanitized_args[0] = os.path.join("...", os.path.basename(sanitized_args[0]))
@@ -233,7 +292,7 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             shell=False,
                             encoding="utf-8",
                         )
-                        _, stderr = p.communicate()
+                        stdout, stderr = p.communicate()
 
                     if not stderr is None and stderr.strip() != "":
                         # Handle most common sporadic conda/mamba failures
@@ -250,6 +309,16 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                             attempts += 1
                             continue
                         pc_logging.error("conda env install error: %s" % stderr)
+                    elif p.returncode != 0:
+                        # A failed solve under "--json" is reported *on stdout*,
+                        # as {"success": false, "error": ...}, and leaves stderr
+                        # empty -- so the check above sees a clean run and this
+                        # one is the only thing between a failed create and the
+                        # "conda install" below being asked to populate a prefix
+                        # that was never made.
+                        pc_logging.error(
+                            "conda env create failed (exit %s): %s" % (p.returncode, (stdout or "").strip())
+                        )
                     break
 
                 with telemetry.start_as_current_span(
@@ -274,6 +343,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         # PNG output work without any system dependency; pip then
                         # sees it already satisfied and does not rebuild it.
                         "pycairo",
+                        # Not redundant with the "create" above: this solve is
+                        # free to replace the interpreter that one installed, and
+                        # without this it does. See python_abi_specs().
+                        *self.python_abi_specs(),
                     ]
                     if sys.platform.startswith("linux"):
                         # conda-forge's ICU 78 (pulled in through build123d ->
@@ -308,5 +381,5 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 else:
                     self.conda_initialized = True
             except Exception as e:
-                shutil.rmtree(self.path)
+                self.discard_prefix()
                 raise e
