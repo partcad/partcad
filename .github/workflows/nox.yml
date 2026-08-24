@@ -1,16 +1,21 @@
-# Minimalistic workflow to build the VS Code extension
-# TODO(clairbee): build the extension as part of the "build" and "deploy" workflows
-name: nox
+# The VS Code extension: one build, one ".vsix".
+#
+# Called by "build.yml" (CD) and by "deploy.yml", which uploads the package to
+# the GitHub release. It deliberately has no "push"/"pull_request" triggers of
+# its own: it used to, and adding it to those two workflows on top would build
+# the same package twice per commit. Exactly one run owns the build -- the same
+# arrangement "build-ide-standalone.yml" documents for the command line bundles.
+name: Extension # Keep the action badge icon short
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - devel
-  pull_request:
-    branches:
-      - devel
+  workflow_call:
+
+# No "concurrency" block, on purpose. A called workflow evaluates
+# `github.workflow` as the *caller's* name, so a group keyed on it would compute
+# the group the caller is already holding and `cancel-in-progress` would kill the
+# run that started this one. See the note on `concurrency` in
+# "build-standalone.yml", which is where that was learned.
 
 jobs:
   build:
@@ -42,8 +47,44 @@ jobs:
         run: pip install --upgrade attrs
       - working-directory: partcad-ide-vscode
         run: python -m pip install nox
-      - working-directory: partcad-ide-vscode
-        run: nox --session setup
-      - working-directory: partcad-ide-vscode
+
+      # One command, not "setup" and then "build_package": the latter runs
+      # "_setup_template_environment" itself (see "noxfile.py"), so it populates
+      # "bundled/libs" before it packages, and running "setup" first only paid
+      # for the same pip-compile and the same install twice.
+      #
+      # It is also exactly what "partcad-ide-standalone/build.sh" runs, so the
+      # extension that ships inside the IDE is built the same way as the one
+      # released here -- including "bundled/libs", which the language server
+      # puts first on its `sys.path`.
+      - name: Package the extension
+        working-directory: partcad-ide-vscode
         run: nox --session build_package
       # TODO(clairbee): run VSCode tests (that depend on the PartCAD Python module)
+
+      # "npm run vsce-package" writes a fixed "partcad.vsix", because
+      # "partcad-ide-standalone/build.sh" looks for that exact name. A release
+      # asset cannot be version-less though -- every other asset on the release
+      # carries the version -- so the copy that gets uploaded is renamed here
+      # rather than by changing the script the IDE build depends on.
+      - name: Name the package after the version
+        working-directory: partcad-ide-vscode
+        run: |
+          version="$(jq -r .version package.json)"
+          if [ -z "${version}" ] || [ "${version}" = "null" ]; then
+            echo "::error::no version in partcad-ide-vscode/package.json"
+            exit 1
+          fi
+          cp partcad.vsix "partcad-${version}.vsix"
+          ls -l "partcad-${version}.vsix"
+
+      - name: Upload the extension
+        uses: actions/upload-artifact@v7
+        with:
+          # Deliberately neither "partcad-ide-*" nor "partcad-standalone-*":
+          # "deploy.yml" downloads those two by pattern, each into its own
+          # directory, and a third name matching either would be merged into the
+          # wrong one.
+          name: partcad-vsix
+          path: partcad-ide-vscode/partcad-*.vsix
+          if-no-files-found: error

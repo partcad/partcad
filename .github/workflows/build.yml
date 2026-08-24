@@ -173,3 +173,17 @@ jobs:
           python -m pip install -r docs/requirements.txt
           sphinx-build  -M html docs/source docs/build -n -W
           mamba deactivate
+
+  # The VS Code extension, built once -- one Linux runner, one ".vsix", the same
+  # package "deploy.yml" attaches to the release. It is not part of the matrix
+  # above: the matrix says which OS and Python the *wheels* have to build on, and
+  # the extension is packaged with `vsce` on whatever host does it.
+  #
+  # The workflow it calls used to run on its own "push"/"pull_request" triggers.
+  # Those are gone, so this is the only thing that builds it on a pull request or
+  # a push -- which also means a push to "devel" that is not a version bump
+  # skips it, exactly as it skips everything else here.
+  build-vscode-extension:
+    name: "VS Code extension"
+    if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
+    uses: ./.github/workflows/nox.yml
