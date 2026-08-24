@@ -81,23 +81,24 @@ parts:
 
 # Re-rendering this example dirties the working tree, and that is expected.
 # None of draftwright's three formats is byte-reproducible, each for its own
-# reason, and none of its parameters can make one so - 'build_drawing()' takes
-# the drawing's content and layout, not how the file is serialized, and
-# 'Drawing.export()' takes the formats and a raster DPI. Measured by rendering
-# each format twice in a row from the same input:
+# reason, and no parameter of its own can settle it: 'build_drawing()' takes
+# what to draw, 'Drawing.export()' takes which formats and a raster DPI.
+# Measured by rendering each format twice in a row from the same input:
 #
-#   svg  Two glyph outlines swap places from one run to the next. Same paths,
-#        same coordinates, different order - a tie in whatever orders the text
-#        it emits, broken differently each time. It is not Python's hash
-#        randomization: 'PYTHONHASHSEED=0' changes nothing.
+#   svg  Two faces of one glyph - the stem and the tittle of an 'i' in the
+#        title block - swap places from one run to the next. Same paths, same
+#        coordinates, different order. It follows the process's hash seed: with
+#        the seed pinned, two runs are byte-identical, and two different seeds
+#        differ. A sandbox wrapper cannot pin it, because it runs under '-I',
+#        which makes Python ignore PYTHONHASHSEED.
 #   pdf  Carries the moment it was written in '/CreationDate'.
 #   dxf  Carries it twice, in the '$TDCREATE' and 'TDUPDATE' header variables.
 #
 # So the two committed files are re-committed only when the drawing itself
-# changes. The CI job that renders the examples ignores exactly these paths,
-# and says so where it does (.github/workflows/test.yml, "Rendering must leave
-# the tree as it found it"). If you see them modified after 'pc render' and the
-# drawing looks the same, throw the change away: 'git checkout -- .'
+# changes. The CI job that renders the examples skips exactly these paths and
+# says so where it does (.github/workflows/test.yml, "The rendered examples
+# must match what is checked in"). If you see them modified after 'pc render'
+# and the drawing is the same, throw the change away: 'git checkout -- .'
 render:
   # The package document, assembled by PartCAD out of the images below.
   readme:

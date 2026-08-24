@@ -484,34 +484,45 @@ jobs:
           coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml
           mamba deactivate
 
-      # The step above re-rendered every output the examples commit. Rendering
-      # the same package from the same source twice has to produce the same
-      # files, or the ones in the repository are not the ones the examples
-      # describe -- and a reader comparing a committed drawing with what `pc
-      # render` gives them has no way to tell a stale file from a noisy one.
+      # The images and README.md files under 'examples/' are what the render
+      # above produces, and they are checked in on purpose: a change in how
+      # PartCAD renders then shows up here as a diff, which is the only thing
+      # that makes them a regression canary rather than decoration. Without this
+      # a render that produces different - or new - files passes green.
+      # To make it pass, re-render locally and commit the result, or fix the
+      # regression.
       #
-      # Only tracked files are compared. An output an example does not commit is
-      # a separate question, and one this job should not answer by failing.
+      # This job rather than a job of its own, so the check reuses the sandboxes
+      # the render above has already provisioned; and one cell of the matrix
+      # rather than all of them, because what is checked in is one rendering and
+      # only the sandbox is pinned across images.
       #
-      # The exceptions are the drawings of `feature_render_custom`, which
-      # draftwright cannot write reproducibly: two glyph outlines change places
-      # in the SVG between runs, and the PDF carries the moment it was written.
-      # Neither is settable through anything draftwright takes. The example's
-      # `partcad.yaml` says the same thing at greater length, beside the file
-      # types it is about.
-      - name: Rendering must leave the tree as it found it
-        shell: bash -el {0}
+      # UNSTABLE is what a render is expected to rewrite every time, because the
+      # tool that writes it cannot write it reproducibly. It is a list to keep
+      # short: every entry is a file nobody is watching any more. An entry needs
+      # a reason here, and the package it belongs to has to carry the same
+      # reason where a reader of that package will meet it.
+      - name: The rendered examples must match what is checked in
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
         run: |
-          dirty=$(git diff --name-only -- examples \
-            ':(exclude)examples/feature_render_custom/bracket.svg' \
-            ':(exclude)examples/feature_render_custom/bracket.pdf')
-          if [ -n "$dirty" ]; then
-            echo "::error::Rendering the examples changed files that are committed:"
-            echo "$dirty"
-            git diff --stat -- examples
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+          # draftwright emits two faces of one glyph in an order that follows
+          # the process's hash seed - which a wrapper running under '-I' cannot
+          # pin - and stamps the PDF with the time it was written. Neither is
+          # settable through anything it takes; see 'render:' in the example's
+          # partcad.yaml.
+          UNSTABLE=(
+            ':(exclude)examples/feature_render_custom/bracket.svg'
+            ':(exclude)examples/feature_render_custom/bracket.pdf'
+          )
+
+          if [ -n "$(git status --porcelain -- examples "${UNSTABLE[@]}")" ]; then
+            echo "::error::'pc render -r' changed the checked-in examples. Re-render locally ('cd examples && pc render -r') and commit the result, or fix the regression."
+            git status --porcelain -- examples "${UNSTABLE[@]}"
+            git --no-pager diff -- examples "${UNSTABLE[@]}"
             exit 1
           fi
-          echo "Rendering left every committed output unchanged."
 
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
