@@ -54,6 +54,12 @@ def process(path, request):
 
     # Execute the script
     script_object = custom_cqgi.parse(script)
+    # An object-type parameter the script has no use for is dropped rather than
+    # rejected: which names those are comes from the request, so the part type
+    # stays the one place that decides. Everything else is still strict.
+    build_parameters = custom_cqgi.filter_optional_params(
+        script_object, build_parameters, request.get("object_type_parameters")
+    )
     build_result = script_object.build(build_parameters=build_parameters)
 
     if not build_result.success:

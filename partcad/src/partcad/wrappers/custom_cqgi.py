@@ -30,6 +30,35 @@ def parse(script_source):
     return model
 
 
+# Added by PartCAD; not part of the CadQuery original above.
+def filter_optional_params(model, params, optional):
+    """Drop the object-type parameters this script did not ask for.
+
+    'set_param_values()' below is strict on purpose: a build parameter that is
+    not a top-level assignment in the script is a name nobody will ever read,
+    which is almost always a typo, and it has to keep failing loudly.
+
+    Object-type parameters are the exception, and only they. They are
+    contributed by the part *type* rather than written by the author of the
+    script - 'material', 'color' and 'tolerance' today - so a part may be
+    obliged to declare one ('pc test' requires a manufactured part to state a
+    tolerance) while the script that builds its geometry has no use for it. Such
+    a name is dropped here, before the strict setter ever sees it. A script that
+    *does* assign one still receives its value, which is the entire point of
+    passing them through.
+
+    'optional' arrives in the request, from the factory that knows which names
+    the part's type contributes; this function never carries a list of its own.
+    An empty or absent 'optional' therefore leaves the behaviour exactly as it
+    was - which is what a sketch, whose types contribute nothing, gets.
+    """
+    optional = set(optional or [])
+    if not optional:
+        return params
+    declared = model.metadata.parameters
+    return {name: value for name, value in params.items() if name not in optional or name in declared}
+
+
 class CQModel(object):
     """
     Represents a Cadquery Script.

@@ -10,6 +10,7 @@
 import os
 
 from .part_factory_file import PartFactoryFile
+from .part_factory_homogen import PartFactoryHomogen
 from . import logging as pc_logging
 from . import wrapper
 from . import telemetry
@@ -18,7 +19,7 @@ from . import shape_envelope
 
 
 @telemetry.instrument()
-class PartFactoryStl(PartFactoryFile):
+class PartFactoryStl(PartFactoryHomogen, PartFactoryFile):
     PYTHON_SANDBOX_VERSION = "3.11"
 
     def __init__(self, ctx, source_project, target_project, config):
