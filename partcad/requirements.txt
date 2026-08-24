@@ -6,7 +6,7 @@
 # things that need a CAD library present in this process are handing back live
 # build123d/cadquery objects (convert("build123d"/"cadquery")) and show(); both
 # are opt-in, import their library lazily, and warn if it is not installed.
-partcad-utils==0.7.195
+partcad-utils==0.8.0
 # sdf-fork  # installed on demand into the sandbox runtime (see part_factory_sdf.py)
 pyyaml>=6.0.1
 # Pinned, not floored. pygit2 follows libgit2 and drops deprecated API across

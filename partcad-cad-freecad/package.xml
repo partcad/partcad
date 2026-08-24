@@ -15,7 +15,7 @@
     (partcad-json-rpc), which the addon downloads on first use, so FreeCAD's
     Python needs no PartCAD installation of its own.
   </description>
-  <version>0.7.195</version>
+  <version>0.8.0</version>
   <date>2026-08-12</date>
 
   <maintainer email="support@partcad.org">PartCAD</maintainer>
