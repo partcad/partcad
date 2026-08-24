@@ -56,6 +56,22 @@ isort --check partcad
   spec (see "Packaging" in the root [AGENTS.md](../AGENTS.md)). The requirement strings there are the versions
   `sandbox_versions.py` pins, which `tests/unit/test_output.py` enforces.
 
+- **Sandbox environment** (`./src/partcad/python_env.py`): importing `partcad` sweeps every `PYTHON*` variable
+  out of `os.environ` and puts back only `PARTCAD_PYTHON_ENV`. Everything PartCAD spawns — the wrappers, `pip`,
+  `-m venv`, conda — inherits that, which is why a sandbox interpreter runs with plain `-sOOu` rather than the
+  `-I` it used to: `-I` implies `-E`, and `-E` would have made the sandbox ignore PartCAD's own
+  `PYTHONHASHSEED=0` along with the user's `PYTHONPATH`. So do not reintroduce `-I`/`-E` on a sandbox command
+  the environment already covers, and add anything a sandbox interpreter has to be told through the environment
+  to `PARTCAD_PYTHON_ENV`, where the sweep cannot take it away again.
+
+  Below `sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH` the environment does *not* cover it: `PYTHONSAFEPATH`
+  arrived in 3.11 and an older interpreter ignores it, which would leave the directory PartCAD runs from first
+  on `sys.path` for the `-m venv`/`-m pip` calls that provision a sandbox. Those versions keep `-I` and go on
+  ignoring `PYTHONHASHSEED` — no flag pins a hash seed, so isolation and reproducibility cannot both be had
+  there. `tests/unit/test_python_env.py` asserts the outcome (a `venv.py`/`pip.py` beside the interpreter never
+  wins) on whichever version is running, so both branches are covered by the CI matrix rather than by a
+  comment.
+
 ## Schemas and linting
 
 `./src/partcad/schema/partcad.json` is the schema `lint/schema.py` validates `partcad.yaml` against, and

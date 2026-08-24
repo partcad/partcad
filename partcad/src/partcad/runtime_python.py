@@ -253,15 +253,40 @@ class PythonRuntime(runtime.Runtime):
         # The name of the Python executable to search for in bin folders
         self.exec_name = "python" if os.name != "nt" else "python.exe"
 
-        # Isolate this sandbox environment from the rest of the system
-        self.python_flags = ["-sOOIu"]
+        # Isolate this sandbox environment from the rest of the system.
+        #
+        # "-s" keeps the user's site-packages out; the rest of what isolation
+        # takes now comes from the environment, which PartCAD sanitized at
+        # startup (see python_env). This used to be "-I", which additionally
+        # implied "-E" (ignore every PYTHON* variable) and "-P" -- but "-E"
+        # cannot be selective, so it also made PartCAD unable to *set* a
+        # PYTHON* variable for the sandbox, PYTHONHASHSEED above all. Dropping
+        # the variables once, at startup, isolates just as well and leaves that
+        # channel open; PYTHONSAFEPATH stands in for "-P".
+        #
+        # Except below 3.11, where PYTHONSAFEPATH does not exist and is ignored
+        # in silence. Provisioning runs "-m venv" and "-m pip" from whatever
+        # directory PartCAD itself was started in, and for a "-m" command
+        # sys.path[0] is that directory -- so a "venv.py" or "pip.py" sitting in
+        # it is imported instead of the module meant. An interpreter that old
+        # therefore keeps "-I", and with it keeps ignoring PYTHONHASHSEED,
+        # exactly as every version did before this. No flag pins a hash seed,
+        # so below 3.11 the isolation and the reproducibility cannot both be
+        # had; the isolation wins, and 3.10 is left no worse off than it was.
+        try:
+            has_safe_path = sandbox_versions.is_at_least(self.version, sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH)
+        except ValueError:
+            # A 'pythonVersion' the schema permits but neither this nor the
+            # sandbox naming can read -- ">=3.12", which 'pc init' writes into
+            # every new package (see Context.get_python_runtime). Unreadable
+            # means "cannot be shown to have PYTHONSAFEPATH", so it isolates the
+            # way an old interpreter does rather than trusting a variable that
+            # may be ignored.
+            has_safe_path = False
+        self.python_flags = ["-sOOu"] if has_safe_path else ["-sOOIu"]
 
         # TODO(clairbee): To improve portability, warn about uses of default encoding
         # self.python_flags += ["-X", "warn_default_encoding=1"]
-
-        # TODO(clairbee): add -P on 3.11+
-        # if TODO version >= "3.11":
-        #     self.python_flags.append("-P")
 
         self.pip_flags = []
         self.pip_install_flags = []

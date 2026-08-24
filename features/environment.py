@@ -1,6 +1,12 @@
 import os
 import socket
 
+# Imported for the side effect of its module body: it snapshots the PYTHON*
+# variables this run was started with, and behave loads this file before any
+# step definition -- which is the last moment at which that snapshot is still
+# what the harness was given. See the module.
+import features.pristine_env  # noqa: F401
+
 from allure_behave.hooks import allure_report
 
 
