@@ -1,6 +1,6 @@
 [project]
 name = "partcad-utils"
-version = "0.7.193"
+version = "0.7.194"
 description = "Shared lightweight utilities for PartCAD (logging, telemetry, user config, ASSY checking)"
 readme = "README.md"
 keywords = ["cad", "partcad", "logging", "telemetry", "config"]
