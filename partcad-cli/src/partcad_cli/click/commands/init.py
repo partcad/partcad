@@ -9,7 +9,6 @@
 #
 
 import os
-import sys
 
 import rich_click as click
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
@@ -100,16 +99,6 @@ class DynamicPromptOption(click.Option):
     cls=DynamicPromptOption,
     help="Required PartCAD version spec string",
     prompt="Enter the required PartCAD version spec string",
-    show_envvar=True,
-)
-@click.option(
-    "-pyv",
-    "--python-version",
-    type=str,
-    default=f'>={".".join(map(str, list(sys.version_info)[:2]))}',
-    cls=DynamicPromptOption,
-    help="Python version for sandboxing if applicable",
-    prompt="Enter the python version for sandboxing (if applicable)",
     show_envvar=True,
 )
 @click.option(
