@@ -145,6 +145,9 @@ class Context:
         self.option_create_dirs = False
         self.runtimes_python = {}
         self.runtimes_python_lock = threading.Lock()
+        # Python versions already reported as held down to MAX_PYTHON_VERSION_CAD,
+        # so the warning is said once rather than once per part.
+        self.python_versions_held = set()
         self.runtimes_javascript = {}
         self.runtimes_javascript_lock = threading.Lock()
 
@@ -1095,13 +1098,43 @@ class Context:
     def get_python_runtime(self, version=None, python_runtime=None):
         with self.runtimes_python_lock:
             if version is None:
-                version = "%d.%d" % (
-                    sys.version_info.major,
-                    sys.version_info.minor,
-                )
+                version = sandbox_versions.DEFAULT_PYTHON_VERSION
             # A version like 3.11 declared in YAML arrives as a float; keep it a
             # string so the runtime name below can be built by concatenation.
             version = str(version)
+
+            # Every Python sandbox is given the CAD stack (see
+            # runtime_python.once), so the ceiling belongs here rather than in
+            # the handful of factories that happen to render with it: above it,
+            # pip finds no wheel for anything the sandbox is preloaded with and
+            # every part rendered in it dies on an import of something that was
+            # never installed. Held rather than refused, because a package
+            # asking for a Python newer than these pins is asking for something
+            # reasonable that PartCAD cannot supply yet, and the pins move.
+            #
+            # Only the ceiling. The floor is CadQuery's alone and stays with the
+            # factories that need CadQuery: a 3.10 sandbox is a perfectly good
+            # place to convert an STL.
+            requested = version
+            try:
+                version = sandbox_versions.at_most(version, sandbox_versions.MAX_PYTHON_VERSION_CAD)
+            except ValueError:
+                # The schema's 'pythonVersion' pattern permits a leading ">=",
+                # and 'pc init' writes ">=<the host's version>" into every new
+                # package, so a value that is not a plain "<major>.<minor>" is
+                # something a real package really does carry. It is already not
+                # a version this or the sandbox naming can reason about, and
+                # making the bound the thing that discovers that would turn a
+                # long-standing oddity into a crash. Pass it through untouched,
+                # exactly as before.
+                pass
+            if version != requested and requested not in self.python_versions_held:
+                self.python_versions_held.add(requested)
+                pc_logging.warning(
+                    "Python %s was asked for, but the CAD packages PartCAD pins are built for %s at the newest;"
+                    " using %s instead" % (requested, sandbox_versions.MAX_PYTHON_VERSION_CAD, version)
+                )
+
             if python_runtime is None:
                 python_runtime = self.user_config.python_sandbox
             runtime_name = python_runtime + "-" + version

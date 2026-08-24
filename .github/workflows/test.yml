@@ -65,6 +65,28 @@ env:
   #    because that is the version most contributors and most users are on.
   OSES_DEEP_ONLY: '["ubuntu-22.04", "ubuntu-22.04-arm", "macos-26"]'
   PYTHONS: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
+  # The two ends of the range a *sandbox* can be built at:
+  # sandbox_versions.MIN_PYTHON_VERSION_CADQUERY and MAX_PYTHON_VERSION_CAD.
+  # Keep them in step with those constants.
+  #
+  # This is a different axis from PYTHONS above, which is the range PartCAD
+  # itself is supported on. The two used to be the same thing by accident: a
+  # package that named no 'pythonVersion' was given the version of whatever
+  # interpreter PartCAD was running on, so a matrix leg's Python decided its
+  # sandbox's Python too. It no longer does - a sandbox is built at the version
+  # PartCAD pins - so for the jobs whose subject is the sandbox, running five
+  # host Pythons now builds the same sandbox five times over. They run these
+  # two instead, which are the versions a sandbox can actually come out at.
+  #
+  # Jobs whose subject is PartCAD rather than the sandbox keep the full range:
+  # 'test-pytest' exercises PartCAD's own code on each interpreter, and
+  # 'test-examples-all' is the broad feature sweep.
+  #
+  # NOT filtered by EXCLUDES, deliberately. That list encodes "every image but
+  # ubuntu-latest runs the oldest and the newest Python only", which for this
+  # two-entry list would drop 3.11 everywhere else and leave a single version -
+  # the opposite of testing both bounds.
+  PYTHONS_SANDBOX: '["3.11", "3.14"]'
   # Number of parallel shards the behave suite is split into. Keep in sync with
   # the "shard" list in the set-matrix job's matrix-behave output.
   BEHAVE_SHARDS: 4
@@ -100,13 +122,17 @@ env:
     {"os": "macos-26", "python-version": "3.12"},
     {"os": "macos-26", "python-version": "3.13"}]
   # The sharded 'test-behave' jobs and 'test-pub-repo' (45 min) are by far the
-  # most expensive, so they get a reduced matrix: the '*-latest' images only, on
-  # the oldest and the newest supported Python. Behave then shards each of those
-  # BEHAVE_SHARDS ways. Linux arm64 is deliberately not here: it is covered by
-  # 'test-pytest' and both 'test-examples-*' jobs above, which is what would
-  # catch an architecture specific breakage, and adding it here would multiply
-  # the most expensive jobs in the workflow by BEHAVE_SHARDS.
+  # most expensive, so they get a reduced OS axis: the '*-latest' images only.
+  # Behave then shards each of those BEHAVE_SHARDS ways. Linux arm64 is
+  # deliberately not here: it is covered by 'test-pytest' and both
+  # 'test-examples-*' jobs above, which is what would catch an architecture
+  # specific breakage, and adding it here would multiply the most expensive jobs
+  # in the workflow by BEHAVE_SHARDS.
   OSES_SLIM: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+  # Behave's Python axis: the oldest and the newest PartCAD is supported on.
+  # Behave drives the command line rather than the sandbox, so what matters here
+  # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
+  # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
   # The VS Code extension pytest job builds the extension bundle, which vendors
   # partcad's dependencies into 'bundled/libs' with 'pip install --implementation
@@ -162,6 +188,7 @@ jobs:
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      matrix-sandbox: ${{ steps.set-matrix.outputs.matrix-sandbox }}
       matrix-slim: ${{ steps.set-matrix.outputs.matrix-slim }}
       matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
       matrix-ide: ${{ steps.set-matrix.outputs.matrix-ide }}
@@ -191,7 +218,14 @@ jobs:
           # simply matches nothing -- and keeps one list to maintain rather than
           # two that have to agree.
           echo 'matrix={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS }}, "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
-          echo 'matrix-slim={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}}' >> "${GITHUB_OUTPUT}"
+          # The same OS axis as 'matrix', so it follows the depth too, but the
+          # two versions a sandbox can be built at rather than every version
+          # PartCAD runs on -- and no excludes, which would leave only one of
+          # the two on every image but ubuntu-latest. See PYTHONS_SANDBOX above.
+          echo 'matrix-sandbox={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS_SANDBOX }}}' >> "${GITHUB_OUTPUT}"
+          # 'test-pub-repo' renders the public index, so its subject is the
+          # sandbox as well; only its OS axis is the reduced one.
+          echo 'matrix-slim={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SANDBOX }}}' >> "${GITHUB_OUTPUT}"
           # Behave is single-process and dominates CI wall-clock, so it runs
           # sharded across parallel jobs. The "shard" axis is derived from
           # BEHAVE_SHARDS (1..N) here, so the number of behave jobs can never
@@ -450,7 +484,11 @@ jobs:
       # - cache-preheat
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+      # The sandbox matrix: this job renders every part type this repository
+      # defines, so what it is really testing is sandbox provisioning, and a
+      # sandbox no longer varies with the interpreter PartCAD runs on. See
+      # PYTHONS_SANDBOX above.
+      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-sandbox) }}
     runs-on: ${{ matrix.os }}
     # 30 -> 75: this job renders the examples, so it populates sandboxes harder
     # than "Examples (All)" and felt the larger OCP 7.9 install the most; the SDF

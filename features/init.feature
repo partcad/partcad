@@ -13,7 +13,6 @@ Feature: `pc init` command
     And STDERR should not contain "PartCAD configuration file is not found"
     And a file named "partcad.yaml" should have YAML content:
       """
-      pythonVersion: ">=\\d+\\.\\d+"
       partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
         pub:
@@ -33,7 +32,6 @@ Feature: `pc init` command
     And a file named "partcad.yaml" should have YAML content:
       """
       private: true
-      pythonVersion: ">=\\d+\\.\\d+"
       partcad: ">=\\d+\\.\\d+\\.\\d+"
       dependencies:
       sketches:

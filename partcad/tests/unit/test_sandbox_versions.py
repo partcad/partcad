@@ -128,3 +128,40 @@ def test_cadquery_floor_excludes_the_oldest_supported_python():
     """CadQuery publishes nothing for 3.10, so sandboxes there must skip it."""
     assert not sandbox_versions.is_at_least("3.10", sandbox_versions.MIN_PYTHON_VERSION_CADQUERY)
     assert sandbox_versions.is_at_least("3.11", sandbox_versions.MIN_PYTHON_VERSION_CADQUERY)
+
+
+@pytest.mark.parametrize(
+    "asked, maximum, expected",
+    [
+        # Above the ceiling: the ceiling wins.
+        ("3.15", "3.14", "3.14"),
+        ("4.0", "3.14", "3.14"),
+        # At or below it: what the package asked for wins.
+        ("3.14", "3.14", "3.14"),
+        ("3.11", "3.14", "3.11"),
+        # A patch component compares numerically, the way at_least's does: as
+        # strings "3.9" would sort above "3.14".
+        ("3.9", "3.14", "3.9"),
+    ],
+)
+def test_at_most(asked, maximum, expected):
+    assert sandbox_versions.at_most(asked, maximum) == expected
+
+
+def test_the_cad_ceiling_is_above_the_cadquery_floor():
+    """The two bounds have to leave a sandbox somewhere to be.
+
+    They move for unrelated reasons - the floor when CadQuery drops a Python,
+    the ceiling when the pinned wheels gain one - so nothing but this says they
+    have not crossed.
+    """
+    assert sandbox_versions.is_at_least(
+        sandbox_versions.MAX_PYTHON_VERSION_CAD, sandbox_versions.MIN_PYTHON_VERSION_CADQUERY
+    )
+
+
+def test_the_default_python_is_one_the_pins_cover():
+    """Otherwise every package that names no interpreter is silently held down."""
+    assert sandbox_versions.is_at_least(
+        sandbox_versions.MAX_PYTHON_VERSION_CAD, sandbox_versions.DEFAULT_PYTHON_VERSION
+    )

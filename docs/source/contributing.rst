@@ -665,6 +665,14 @@ bundle or the snap, or anything else where an older OS version could behave diff
 The ``Standalone`` workflow reads the same marker: without it, a pull request builds five of the eight
 standalone bundles. A release always builds all eight and refuses to publish if any is missing.
 
+The Python axis is not the same for every job, because not every job is testing the same thing. ``Pytest`` and
+``Examples (All)`` run the whole supported range: they exercise PartCAD's own code, so the interpreter it runs
+on is the point. ``Examples (PartCAD)`` and ``Repo //pub`` render packages, so what they are really testing is
+the sandbox -- and a sandbox is built at the version PartCAD pins rather than at the version PartCAD is running
+on, so they run the two ends of the range a sandbox can be built at instead
+(``sandbox_versions.MIN_PYTHON_VERSION_CADQUERY`` and ``MAX_PYTHON_VERSION_CAD``). ``Behave`` drives the command
+line, so it stays on the oldest and newest supported Python.
+
 Implementation Details
 ----------------------
 
