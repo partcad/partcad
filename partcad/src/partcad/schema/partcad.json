@@ -427,7 +427,8 @@
     },
     "pythonVersion": {
       "type": "string",
-      "pattern": "^(>)?(=)?([0-9]+\\.)?[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+      "pattern": "^(>)?(=)?([0-9]+\\.)?[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "The interpreter this package's sandboxes are built on. Defaults to the one PartCAD pins, not to the one PartCAD is running on, so a package renders on the same Python for everyone who opens it. A version newer than the CAD packages PartCAD pins are built for is held down to the newest that has wheels, and says so."
     },
     "pythonRequirements": {
       "type": "array",

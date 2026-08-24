@@ -109,7 +109,7 @@ class Configuration:
         # option: "pythonVersion"
         # description: the version of python to use in sandboxed environments if any
         # values: string (e.g. "3.10")
-        # default: <The major and minor version of the current interpreter>
+        # default: sandbox_versions.DEFAULT_PYTHON_VERSION
         if "pythonVersion" in self.config_obj:
             python_version = self.config_obj["pythonVersion"]
             if not isinstance(python_version, str):
@@ -124,17 +124,26 @@ class Configuration:
                     python_version = "3.10"
             self.python_version = python_version
             # Kept apart from the resolved value below, because "this package
-            # asked for 3.13" and "nobody asked, so whatever interpreter PartCAD
-            # happens to run on" are different answers and one caller has to tell
-            # them apart: an output implementation runs on the interpreter the
-            # package that ships it asked for, and on a fixed default otherwise
-            # (see output.Implementation.python_version()).
+            # asked for 3.13" and "nobody asked, so it got the default" are
+            # different answers and one caller has to tell them apart: an output
+            # implementation runs on the interpreter the package that ships it
+            # asked for, and on a fixed default otherwise (see
+            # output.Implementation.python_version()).
             self.python_version_declared = python_version
         else:
-            self.python_version = "%d.%d" % (
-                sys.version_info.major,
-                sys.version_info.minor,
-            )
+            # NOT the interpreter PartCAD itself is running on, which is what
+            # this used to be. Nothing was gained by matching it: under 'conda'
+            # the sandbox is built from scratch at whatever version is asked
+            # for and the host interpreter is never reused, and under 'none'
+            # the version is ignored altogether (runtime_python_none takes
+            # whatever 'python' is on PATH). All it did was make the sandbox a
+            # property of how PartCAD happened to be installed - so the same
+            # package rendered on a different interpreter for each developer,
+            # changed under one of them when they upgraded their Python, and,
+            # in the standalone bundle, followed whatever Python the release
+            # was frozen with. Pinning it here makes a sandbox as reproducible
+            # as the stack that goes into it.
+            self.python_version = sandbox_versions.DEFAULT_PYTHON_VERSION
             self.python_version_declared = None
 
         # option: "javascriptVersion"

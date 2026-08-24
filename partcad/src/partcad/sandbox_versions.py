@@ -188,6 +188,23 @@ DEFAULT_PYTHON_VERSION = "3.11"
 # still has to be rendered on 3.11.
 MIN_PYTHON_VERSION_CADQUERY = "3.11"
 
+# The newest Python the pinned CAD stack is built for. cadquery-ocp 7.9.3.1.1,
+# cadquery 2.8.0, build123d 0.11.1 and nlopt 2.11.0 publish cp310 through cp314
+# and nothing above; a sandbox newer than this has no wheel for pip to find, so
+# every script-defined part in it fails on an import of something that was never
+# installed.
+#
+# The ceiling this is applied as (see Context.get_python_runtime) is not a claim
+# about what PartCAD supports - it is what *these pins* are built for, and it
+# moves with them. The floor above is a different kind of thing: it belongs to
+# CadQuery alone, and is applied only by the factories that need CadQuery, since
+# an 'stl' part on a 3.10 sandbox is perfectly fine.
+#
+# Bump this together with PINNED_REQUIREMENTS, not separately. There is a test
+# that it stays at or above MIN_PYTHON_VERSION_CADQUERY, which is the only part
+# of "keep it honest" a test can check; the rest is reading the wheel lists.
+MAX_PYTHON_VERSION_CAD = "3.14"
+
 # The first Python CPython publishes a free-threaded ("no-GIL") build of, and so
 # the first for which conda-forge carries two ABI variants of one and the same
 # release. See python_abi_requirement() for why that has to be disambiguated.
@@ -228,6 +245,11 @@ def is_at_least(python_version: str, minimum: str) -> bool:
 def at_least(python_version: str, minimum: str) -> str:
     """Return the newer of two "<major>.<minor>" version strings."""
     return python_version if is_at_least(python_version, minimum) else minimum
+
+
+def at_most(python_version: str, maximum: str) -> str:
+    """Return the older of two "<major>.<minor>" version strings."""
+    return python_version if is_at_least(maximum, python_version) else maximum
 
 
 def zstd_requirement(python_version: str) -> str | None:

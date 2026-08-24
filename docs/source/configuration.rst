@@ -49,7 +49,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
   url: <(optional) package or maintainer's url>
   poc: <(optional) point of contact, maintainer's email>
   partcad: <(optional) required PartCAD version spec string>
-  pythonVersion: <(optional) python version for sandboxing if applicable>
+  pythonVersion: <(optional) python version for sandboxing if applicable; defaults to the version PartCAD pins, not the one it runs on>
   pythonRequirements: <(python scripts only) the list of dependencies to install>
   javascriptVersion: <(optional) Node.js major version for sandboxing if applicable>
   javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
