@@ -1,1 +1,1 @@
-partcad[lint]==0.7.192
+partcad[lint]==0.7.193
