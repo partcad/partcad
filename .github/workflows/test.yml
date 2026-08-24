@@ -484,6 +484,35 @@ jobs:
           coverage xml --rcfile=../dev-tools/coverage.rc --data-file=.coverage -o ../examples-partcad-test-results/coverage.xml
           mamba deactivate
 
+      # The step above re-rendered every output the examples commit. Rendering
+      # the same package from the same source twice has to produce the same
+      # files, or the ones in the repository are not the ones the examples
+      # describe -- and a reader comparing a committed drawing with what `pc
+      # render` gives them has no way to tell a stale file from a noisy one.
+      #
+      # Only tracked files are compared. An output an example does not commit is
+      # a separate question, and one this job should not answer by failing.
+      #
+      # The exceptions are the drawings of `feature_render_custom`, which
+      # draftwright cannot write reproducibly: two glyph outlines change places
+      # in the SVG between runs, and the PDF carries the moment it was written.
+      # Neither is settable through anything draftwright takes. The example's
+      # `partcad.yaml` says the same thing at greater length, beside the file
+      # types it is about.
+      - name: Rendering must leave the tree as it found it
+        shell: bash -el {0}
+        run: |
+          dirty=$(git diff --name-only -- examples \
+            ':(exclude)examples/feature_render_custom/bracket.svg' \
+            ':(exclude)examples/feature_render_custom/bracket.pdf')
+          if [ -n "$dirty" ]; then
+            echo "::error::Rendering the examples changed files that are committed:"
+            echo "$dirty"
+            git diff --stat -- examples
+            exit 1
+          fi
+          echo "Rendering left every committed output unchanged."
+
       - name: Upload test results & coverage reports to github and codecov
         uses: ./.github/actions/upload-test-results
         with:

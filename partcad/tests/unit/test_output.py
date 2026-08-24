@@ -523,56 +523,73 @@ class _ImplementingPackage:
         self.config_obj = {output.RENDER: section_obj} if section_obj is not None else {}
 
 
-def test_the_interpreter_comes_from_the_package_that_wrote_the_implementation():
-    """Whose Python an implementation runs on is not the caller's business.
+def test_the_sandbox_comes_from_the_package_that_wrote_the_implementation():
+    """Which Python runs a script, and what is installed on it, is its author's.
 
-    A package that draws with somebody else's renderer is a caller: it may never
-    have heard of what that script imports. The interpreter is declared beside
-    the requirements that have to resolve on it, in the package that ships them.
+    A package that draws with somebody else's renderer is a caller. It may be a
+    package of STEP files with no Python of its own at all, and it has never
+    heard of what that script imports - so the interpreter and the requirements
+    are read where they are known, beside the script.
     """
     config = {"package": "//pub/feature/render/draftwright", "path": "render_draftwright.py"}
 
-    # Declared by the implementing package, for all of its file types...
+    # Declared by the implementing package, for everything it implements...
     impl = output.Implementation(output.RENDER, "pdf", config, _ImplementingPackage(declared="3.13"))
     assert impl.python_version() == "3.13"
+    assert impl.python_requirements == []
 
-    # ...or on the file type itself, in that same package.
-    impl = output.Implementation(
-        output.RENDER,
-        "pdf",
-        config,
-        _ImplementingPackage(section_obj={"pdf": {"path": "render_draftwright.py", "pythonVersion": "3.12"}}),
+    # ...or on the file type, in that same package.
+    project = _ImplementingPackage(
+        section_obj={
+            "pdf": {
+                "path": "render_draftwright.py",
+                "pythonVersion": "3.12",
+                "pythonRequirements": ["ezdxf==1.4.4"],
+            }
+        }
     )
+    impl = output.Implementation(output.RENDER, "pdf", config, project)
     assert impl.python_version() == "3.12"
+    assert impl.python_requirements == ["ezdxf==1.4.4"]
 
     # Nothing declared anywhere: a fixed default, not the interpreter PartCAD
-    # happens to be running on.
+    # happens to be running on, and nothing to install.
     impl = output.Implementation(output.RENDER, "pdf", config, _ImplementingPackage())
     assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
+    assert impl.python_requirements == []
 
 
-def test_a_calling_package_does_not_choose_the_implementations_interpreter(caplog):
-    """A 'pythonVersion' from the caller is ignored, and says so."""
-    impl = output.Implementation(
-        output.RENDER,
-        "pdf",
-        {"package": "//pub/feature/render/draftwright", "path": "render_draftwright.py", "pythonVersion": "3.10"},
-        _ImplementingPackage(declared="3.13"),
-    )
+def test_a_calling_package_does_not_configure_the_implementations_sandbox():
+    """What a caller says about the environment is not read at all.
+
+    Not overridden, not warned about - never consulted. There is nothing to warn
+    about: a package asking for a drawing is not making a claim about somebody
+    else's interpreter, and the layered options carry these keys only because
+    every field of a file type is layered the same way.
+    """
+    caller_says = {
+        "package": "//pub/feature/render/draftwright",
+        "path": "render_draftwright.py",
+        "pythonVersion": "3.10",
+        "pythonRequirements": ["build123d==0.11.1"],
+    }
+    impl = output.Implementation(output.RENDER, "pdf", caller_says, _ImplementingPackage(declared="3.13"))
     assert impl.python_version() == "3.13"
-    assert "3.10" in caplog.text and "3.13" in caplog.text
+    assert impl.python_requirements == []
 
-    # The implementing package's own answer is not "ignored" and is not warned
-    # about, however it reaches the merged configuration.
-    caplog.clear()
-    impl = output.Implementation(
-        output.RENDER,
-        "pdf",
-        {"package": "//pub/feature/render/draftwright", "path": "render_draftwright.py", "pythonVersion": "3.13"},
-        _ImplementingPackage(declared="3.13"),
-    )
-    assert impl.python_version() == "3.13"
-    assert caplog.text == ""
+    # ...including when the implementing package has nothing to say either.
+    impl = output.Implementation(output.RENDER, "pdf", caller_says, _ImplementingPackage())
+    assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
+    assert impl.python_requirements == []
+
+
+def test_the_builtin_implementations_still_get_their_own_requirements(ctx):
+    """The rule is not a special case: '//builtin' is an implementing package too."""
+    project, part = _part(ctx, "//produce_part_step", "bolt")
+    impl, _ = part.output_getopts(ctx, "step", project)
+    impl.project = ctx.get_project(output.BUILTIN_PACKAGES[output.EXPORT])
+    assert impl.python_version() == sandbox_versions.DEFAULT_PYTHON_VERSION
+    assert "cadquery-ocp==%s" % sandbox_versions.CADQUERY_OCP.split("==")[1] in impl.python_requirements
 
 
 def test_a_format_decodes_its_envelopes_unless_it_declares_otherwise(ctx):

@@ -20,11 +20,12 @@ what goes in it. Everything else is handed to the implementation verbatim, which
 is what lets a package add a parameter (say, a 'comment' for STEP) without
 PartCAD having to know about it.
 
-Of those, 'pythonVersion' is the one field a calling package cannot set: which
-interpreter a script runs on is the business of the package that wrote the
-script, so it is read there and nowhere else (see
-'Implementation.python_version()'). 'pythonRequirements' still layers like
-everything else, so a package can add what its own parameters need.
+The first four are not layered like the rest. 'path' and 'package' say whose
+script this is, and 'pythonVersion' and 'pythonRequirements' describe the
+environment that script needs - which only the package that wrote it can
+answer. All four are therefore read from that package alone; a copy of them
+that reaches the merged options from a calling package is inert (see
+'Implementation.python_version()').
 
 The built-in implementations are not special-cased anywhere: they are declared
 in exactly this form by two packages that ship inside 'partcad' itself and that
@@ -156,7 +157,6 @@ class Implementation:
         self.config = config
         self.project = project
         self.script = config.get("path")
-        self.python_requirements = list(config.get("pythonRequirements") or [])
         # Whether the sandbox decodes the envelopes into live geometry for this
         # implementation. Off for one that needs the assembly tree's structure
         # rather than the compound it decodes to.
@@ -170,52 +170,62 @@ class Implementation:
     def extension(self, default: str) -> str:
         return self.config.get("extension") or default
 
+    def _declared(self, key):
+        """What the implementing package says about this file type, if anything.
+
+        Read from that package's own configuration rather than from the layered
+        options: the layers below this one are the built-in defaults and the
+        layers above are callers, and neither is describing the environment this
+        script needs. The file type is looked up in both sections, owning
+        section last, which is the order the options themselves are layered in.
+        """
+        if self.project is None:
+            return None
+        value = None
+        for section_name in config_sections(self.section):
+            section_obj = self.project.config_obj.get(section_name)
+            if isinstance(section_obj, dict):
+                value = normalize(section_obj.get(self.format_name)).get(key) or value
+        return value
+
     def python_version(self) -> str:
         """Which sandbox interpreter runs this implementation.
 
-        The package that ships the script decides, because it is that package's
-        code that has to run and its 'pythonRequirements' that have to resolve
-        around it. A drawing implementation whose dependencies want build123d
-        0.11 only on 3.13 says '3.13' once, beside the requirement, and every
-        package that draws with it gets that interpreter without knowing why.
+        The package that ships the script decides. It is that package's code
+        that has to run and its requirements that have to resolve around it: a
+        drawing implementation whose dependencies want build123d 0.11 only on
+        3.13 says '3.13' once, beside the requirement, and every package that
+        draws with it gets that interpreter without having to know why.
 
-        Nobody else gets a say. The object being written and the package it
-        belongs to are the *callers* here: they may be a package that has never
-        heard of this implementation, and an interpreter chosen there would
-        decide what somebody else's code runs on. A 'pythonVersion' set on a
-        file type by a calling package is therefore ignored, with a warning
-        rather than in silence.
+        Nobody else has an opinion worth reading. A package that asks for a
+        drawing is a caller - it may be a package of STEP files with no Python
+        in it at all - so its own interpreter says nothing about what somebody
+        else's script needs, and is not consulted. A 'pythonVersion' that
+        reaches the merged options from there is not overridden here; it is
+        never read.
 
         Where the implementing package says nothing, the answer is a fixed
         default rather than the interpreter PartCAD itself runs on: the latter
         would scatter the render sandbox across versions depending on how the
         user installed PartCAD.
         """
-        declared = None
-        if self.project is not None:
-            # As that package declares the file type - in either section, owning
-            # section last, the order the options themselves are layered in - and
-            # then as the package declares itself.
-            for section_name in config_sections(self.section):
-                section_obj = self.project.config_obj.get(section_name)
-                if isinstance(section_obj, dict):
-                    declared = normalize(section_obj.get(self.format_name)).get("pythonVersion") or declared
-            declared = declared or getattr(self.project, "python_version_declared", None)
+        return (
+            self._declared("pythonVersion")
+            or getattr(self.project, "python_version_declared", None)
+            or sandbox_versions.DEFAULT_PYTHON_VERSION
+        )
 
-        resolved = declared or sandbox_versions.DEFAULT_PYTHON_VERSION
-        asked = self.config.get("pythonVersion")
-        if asked and str(asked) != str(resolved):
-            pc_logging.warning(
-                "'%s' runs on Python %s, not the %s asked for: the interpreter of an output "
-                "implementation is the one its own package declares (%s)."
-                % (
-                    self.format_name,
-                    resolved,
-                    asked,
-                    self.project.name if self.project is not None else "unknown package",
-                )
-            )
-        return resolved
+    @property
+    def python_requirements(self) -> list:
+        """What the sandbox needs installed before this implementation runs.
+
+        The implementing package's again, and for the same reason: these are the
+        imports of its script, resolved against the interpreter it asked for.
+        The package-level requirements of that package are installed too, by
+        'RuntimePython.prepare_for_package()'; this is what the file type adds
+        on top of them.
+        """
+        return list(self._declared("pythonRequirements") or [])
 
 
 def normalize(config) -> dict:

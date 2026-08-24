@@ -1840,10 +1840,12 @@ are configured by a section of ``partcad.yaml`` named after the command --
     <file type>:
       path: <(optional) the script that writes the file>
       package: <(optional) the package that script belongs to>
+      # The environment the script runs in. Read from the package that ships
+      # the script and from nowhere else, so these two say something only in
+      # the package that also declares "path".
       pythonRequirements: # (optional) what that script's sandbox needs
         - <requirement>
-      pythonVersion: <(optional) the sandbox interpreter to run it on; only the
-                      package that ships the script may set this>
+      pythonVersion: <(optional) the sandbox interpreter to run it on>
       extension: <(optional) the extension used when the file name is derived>
       prefix: <(optional) where the file goes, relative to the package>
       exclude: <(optional) kinds of object not to write this type for>
@@ -2036,19 +2038,20 @@ installed by hand:
 ``examples/feature_render_custom`` is exactly this: three file types drawn by an
 implementation published in the public index.
 
-The sandbox that runs comes with the implementation rather than from the package
-asking for the file. Its ``pythonVersion`` -- declared on the implementing
-package, or on a file type that package declares -- is the interpreter, and a
-``pythonVersion`` set by a calling package is ignored with a warning. It could
-not be anything else: the caller may never have heard of what that script
-imports, and an implementation whose dependencies resolve only on one
-interpreter would break the moment somebody drew with it from a package that
-said otherwise. Where nothing declares one, the interpreter is a fixed default,
-not whichever one PartCAD itself is running on.
+The sandbox comes with the implementation rather than from the package asking
+for the file. Both ``pythonVersion`` and ``pythonRequirements`` are read from
+the implementing package -- from the file type as *that* package declares it, or
+from the package itself -- and from nowhere else. It could not be otherwise: the
+caller may be a package of STEP files with no Python in it at all, and it has
+never heard of what that script imports. Where the implementing package declares
+no interpreter, it is a fixed default rather than whichever one PartCAD itself is
+running on, which would otherwise scatter the sandbox across versions depending
+on how PartCAD was installed.
 
-``pythonRequirements`` is not read that way. It layers like every other field,
-so a package can add what its own parameters need to a sandbox it did not
-otherwise configure.
+Both fields still parse anywhere -- every field of a file type layers the same
+way -- so setting them on a file type whose implementation lives elsewhere is
+not an error. It simply describes nothing: the environment being described
+belongs to the package that wrote the script.
 
 Built-in implementations
 ------------------------
