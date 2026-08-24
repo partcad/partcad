@@ -392,6 +392,16 @@ jobs:
         with:
           python-version: "3.13"
 
+      # "build.sh" packages the PartCAD extension with `nox --session
+      # build_package` -- the same command ".github/workflows/nox.yml" uses for
+      # the released package -- so that "bundled/libs" is populated with wheels
+      # frozen for *this* platform. It checks for nox rather than installing it,
+      # so install it here. Deliberately not folded into the step below, which is
+      # `continue-on-error` for the optional icon renderers: a failure to install
+      # this one has to fail the job.
+      - name: Install nox
+        run: python -m pip install nox
+
       # Xvfb: installing an extension runs the editor, which wants a display
       # even when it never opens a window. Cairo: the icons are rendered from
       # the project's logo. Neither is available on the Windows runner, and the

@@ -37,6 +37,13 @@ jobs:
     with:
       tools_in_this_run: true
 
+  # The VS Code extension: one ".vsix", built once on a Linux runner, attached to
+  # the same release. Independent of everything above -- the IDE builds its own
+  # copy per platform, because "bundled/libs" inside the package carries compiled
+  # wheels and the one built here is a Linux one.
+  build-vscode-extension:
+    uses: ./.github/workflows/nox.yml
+
   # Keep the "build" job identical to "python-build.yml".
   # TODO(clairbee): include "python-build.yml" instead
   build:
@@ -162,6 +169,10 @@ jobs:
       # Blocking for the same reason: "install.sh --ide" installs from this
       # release too.
       - build-ide
+      # Blocking too, though nothing installs the extension automatically: a
+      # release that is missing an asset the documentation points at is a
+      # release someone has to go and fix by hand.
+      - build-vscode-extension
     runs-on: ubuntu-24.04
     environment:
       name: pypi
@@ -228,6 +239,15 @@ jobs:
           merge-multiple: true
           path: ide
 
+      # By name, not by pattern: there is exactly one of these, and the two
+      # patterns above already claim every other "partcad-*" artifact this run
+      # produces.
+      - name: Download the VS Code extension
+        uses: actions/download-artifact@v8
+        with:
+          name: partcad-vsix
+          path: vsix
+
       # "install.sh" derives an asset name from `uname` and fails for the user
       # if that asset is not on the release. Downloading artifacts does not fail
       # when none match, so check here, before the release exists, rather than
@@ -271,6 +291,16 @@ jobs:
                 -printf "%p %s bytes\n"
             fi
           done
+          # And the extension. One file, no platform in its name -- but the
+          # upload below globs "vsix/**", and an empty glob would fail there,
+          # after the release has already been created.
+          vsix="$(find vsix -type f -name "partcad-*.vsix" | head -n 1)"
+          if [ -z "${vsix}" ]; then
+            echo "::error::no VS Code extension package"
+            missing=1
+          else
+            echo "${vsix} $(stat -c%s "${vsix}") bytes"
+          fi
           exit "${missing}"
 
       # What the release carries, written down for the clients that download
@@ -303,6 +333,7 @@ jobs:
           gh release upload '${{ env.MERGED_TAG }}' dist/** --repo '${{ github.repository }}'
           gh release upload '${{ env.MERGED_TAG }}' standalone/** --repo '${{ github.repository }}'
           gh release upload '${{ env.MERGED_TAG }}' ide/** --repo '${{ github.repository }}'
+          gh release upload '${{ env.MERGED_TAG }}' vsix/** --repo '${{ github.repository }}'
           gh release upload '${{ env.MERGED_TAG }}' platforms.json --repo '${{ github.repository }}'
 
       - name: Publish distribution to PyPI

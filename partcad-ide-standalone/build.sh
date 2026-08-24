@@ -68,8 +68,8 @@ Options:
                            IDE is built without them, and asks the user to
                            download them on first use.
   --vsix <path>            The PartCAD extension to install. Defaults to
-                           `partcad-ide-vscode/partcad.vsix`, built with npm if
-                           it is not there yet.
+                           `partcad-ide-vscode/partcad.vsix`, built with `nox`
+                           if it is not there yet.
   --vscodium-version <tag> Build from this VSCodium release instead of the one
                            `vscodium.json` pins (or the latest, when it pins
                            none).
@@ -376,7 +376,26 @@ if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
     EXTENSION_VSIX="${REPO_ROOT}/partcad-ide-vscode/partcad.vsix"
     if [ ! -f "${EXTENSION_VSIX}" ]; then
       log "==> Building the PartCAD extension (no ${EXTENSION_VSIX} yet)"
-      (cd "${REPO_ROOT}/partcad-ide-vscode" && npm install && npm run vsce-package)
+      # `nox --session build_package`, and not the `npm install && npm run
+      # vsce-package` this used to run. The npm script packages whatever is in
+      # the tree; it does not create `bundled/libs`, which is gitignored and
+      # only the nox session populates. That directory is the language server's
+      # vendored dependencies -- `bundled/tool/lsp_server.py` puts it first on
+      # its `sys.path` -- so without it the IDE shipped an extension whose
+      # language server could not import `pygls`.
+      #
+      # It is also the one command ".github/workflows/nox.yml" runs to build the
+      # package that goes on the release, so the extension inside the IDE and the
+      # released one are built the same way. It has to run here, per platform,
+      # rather than reusing that one package: `bundled/libs` holds compiled
+      # wheels (pygit2, aiohttp, cffi), so each IDE needs the ones frozen for its
+      # own OS.
+      #
+      # Checked rather than installed, in the same spirit as the `npx` check
+      # above -- and only on this path, so `--vsix` still works without it.
+      "${PYTHON}" -c 'import nox' >/dev/null 2>&1 ||
+        fail "nox is needed to build the PartCAD extension: '${PYTHON} -m pip install nox', or pass --vsix"
+      (cd "${REPO_ROOT}/partcad-ide-vscode" && "${PYTHON}" -m nox --session build_package)
     fi
   fi
   [ -f "${EXTENSION_VSIX}" ] || fail "no PartCAD extension at ${EXTENSION_VSIX}"

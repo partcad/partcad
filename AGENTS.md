@@ -154,17 +154,18 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 
 ### Packaging
 
-Four artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI), the standalone
-PyInstaller bundles for users who have no Python, the PartCAD IDE, which carries those bundles inside it, and
-the snap, which wraps the Linux bundle and is built but not published yet. Adding a runtime dependency, an
-optional extra, or a file that is read at runtime can be invisible to the frozen bundle and break it while the
-wheels stay fine — see `dev-tools/pyinstaller/README.md` before doing any of those. Note that the bundles fan
-out over *OS versions* (`ubuntu-22.04-x86_64`, `macos-26-arm64`, …), and that the same platform list appears in
-three places that nothing keeps in sync; the README says which, and which of them a pull request skips without
-`#deepTest`. Changing `.vscode/extensions.json` changes what the IDE ships with — see
-`partcad-ide-standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of
-its own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state
-directory).
+Five artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI), the standalone PyInstaller
+bundles for users who have no Python, the PartCAD IDE, which carries those bundles inside it, the VS Code extension's
+`.vsix`, and the snap, which wraps the Linux bundle and is built but not published yet. Adding a runtime dependency,
+an optional extra, or a file that is read at runtime can be invisible to the frozen bundle and break it while the
+wheels stay fine — see `dev-tools/pyinstaller/README.md` before doing any of those. Note that the bundles fan out over
+*OS versions* (`ubuntu-22.04-x86_64`, `macos-26-arm64`, …), and that the same platform list appears in three places
+that nothing keeps in sync; the README says which, and which of them a pull request skips without `#deepTest`. The
+`.vsix` is built once, on Linux, by `.github/workflows/nox.yml`, which `build.yml` and `deploy.yml` both call;
+`partcad-ide-standalone/build.sh` runs the same `nox` session per platform, because the `bundled/libs` inside the
+package holds compiled wheels. Changing `.vscode/extensions.json` changes what the IDE ships with — see
+`partcad-ide-standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of its
+own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 
 ### Committing
 

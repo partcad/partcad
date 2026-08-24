@@ -141,6 +141,14 @@ nox --session build_package   # builds partcad.vsix (also runs npm install)
 code --install-extension partcad.vsix
 ```
 
+`nox --session build_package` and not `npm run vsce-package`: the nox session populates `bundled/libs` first,
+which is gitignored, holds the language server's vendored dependencies, and is what
+`bundled/tool/lsp_server.py` puts at the front of its `sys.path`. It is the only command that builds this
+package anywhere -- `.github/workflows/nox.yml` runs it once on Linux and attaches `partcad-<version>.vsix` to
+the GitHub release, and `partcad-ide-standalone/build.sh` runs it again per platform for the copy that ships
+inside the PartCAD IDE. Per platform because `bundled/libs` holds compiled wheels (`pygit2`, `aiohttp`,
+`cffi`), so the released Linux package is not the one a macOS or Windows IDE can carry.
+
 After changing `partcad` core code while developing through this extension, click "Restart PartCAD" in the
 PartCAD `Context` view (or restart VS Code) to pick up the change.
 
