@@ -263,7 +263,27 @@ class PythonRuntime(runtime.Runtime):
         # PYTHON* variable for the sandbox, PYTHONHASHSEED above all. Dropping
         # the variables once, at startup, isolates just as well and leaves that
         # channel open; PYTHONSAFEPATH stands in for "-P".
-        self.python_flags = ["-sOOu"]
+        #
+        # Except below 3.11, where PYTHONSAFEPATH does not exist and is ignored
+        # in silence. Provisioning runs "-m venv" and "-m pip" from whatever
+        # directory PartCAD itself was started in, and for a "-m" command
+        # sys.path[0] is that directory -- so a "venv.py" or "pip.py" sitting in
+        # it is imported instead of the module meant. An interpreter that old
+        # therefore keeps "-I", and with it keeps ignoring PYTHONHASHSEED,
+        # exactly as every version did before this. No flag pins a hash seed,
+        # so below 3.11 the isolation and the reproducibility cannot both be
+        # had; the isolation wins, and 3.10 is left no worse off than it was.
+        try:
+            has_safe_path = sandbox_versions.is_at_least(self.version, sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH)
+        except ValueError:
+            # A 'pythonVersion' the schema permits but neither this nor the
+            # sandbox naming can read -- ">=3.12", which 'pc init' writes into
+            # every new package (see Context.get_python_runtime). Unreadable
+            # means "cannot be shown to have PYTHONSAFEPATH", so it isolates the
+            # way an old interpreter does rather than trusting a variable that
+            # may be ignored.
+            has_safe_path = False
+        self.python_flags = ["-sOOu"] if has_safe_path else ["-sOOIu"]
 
         # TODO(clairbee): To improve portability, warn about uses of default encoding
         # self.python_flags += ["-X", "warn_default_encoding=1"]

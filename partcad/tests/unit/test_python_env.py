@@ -17,8 +17,7 @@ from partcad import python_env
 from partcad.runtime_python import PythonRuntime
 
 
-@pytest.fixture
-def sandbox_python_flags(tmp_path):
+def _flags_for(tmp_path, version=None):
     """The flags a real PythonRuntime hands to a sandbox interpreter.
 
     Built through __init__, since the flags are what __init__ decides; the
@@ -28,7 +27,13 @@ def sandbox_python_flags(tmp_path):
     class _Ctx:
         user_config = types.SimpleNamespace(internal_state_dir=str(tmp_path))
 
-    return PythonRuntime(_Ctx(), "none").python_flags
+    return PythonRuntime(_Ctx(), "none", version).python_flags
+
+
+@pytest.fixture
+def sandbox_python_flags(tmp_path):
+    """The flags for a sandbox on the interpreter running these tests."""
+    return _flags_for(tmp_path)
 
 
 def test_sanitize_drops_every_python_variable():
@@ -72,12 +77,30 @@ def test_importing_partcad_sanitized_this_process():
     assert os.environ["PYTHONHASHSEED"] == "0"
 
 
-def test_sandbox_interpreter_flags_isolate_without_isolated_mode(sandbox_python_flags):
+@pytest.mark.parametrize("version", ["3.11", "3.12", "3.13", "3.14"])
+def test_sandbox_interpreter_flags_drop_isolated_mode_where_the_environment_can_replace_it(tmp_path, version):
     """'-I' is gone, but the half of it no environment variable can express is not."""
-    flags = sandbox_python_flags
+    flags = _flags_for(tmp_path, version)
 
     assert flags == ["-sOOu"]
     assert "I" not in "".join(flags)
+
+
+@pytest.mark.parametrize("version", ["3.9", "3.10"])
+def test_sandbox_interpreter_flags_keep_isolated_mode_below_safe_path(tmp_path, version):
+    """PYTHONSAFEPATH is ignored before 3.11, so there '-I' is the only isolation."""
+    assert _flags_for(tmp_path, version) == ["-sOOIu"]
+
+
+def test_a_version_the_bound_cannot_read_isolates_the_old_way(tmp_path):
+    """'pc init' writes ">=<host version>", and such a package has to keep working.
+
+    Nothing between the schema and here trims that into a version this can
+    compare, so it must not be the thing that discovers it -- and, since it
+    cannot be shown to understand PYTHONSAFEPATH, it gets the isolation that
+    needs no variable.
+    """
+    assert _flags_for(tmp_path, ">=3.12") == ["-sOOIu"]
 
 
 @pytest.mark.parametrize(
@@ -125,3 +148,29 @@ def test_a_child_of_this_process_hashes_reproducibly(sandbox_python_flags):
     }
 
     assert len(runs) == 1
+
+
+@pytest.mark.parametrize("module", ["venv", "pip"])
+def test_a_shadowing_module_beside_the_sandbox_cannot_hijack_a_provisioning_command(
+    tmp_path, sandbox_python_flags, module
+):
+    """The reason 3.10 keeps '-I': provisioning runs "-m", and "-m" reads sys.path[0].
+
+    Provisioning ("-m venv", "-m pip") inherits PartCAD's own working directory,
+    and for a "-m" command Python puts that directory first on sys.path unless
+    told otherwise. A file named after the module being run therefore wins over
+    the module itself. On 3.11+ PYTHONSAFEPATH is what says otherwise; below it
+    only "-I" does -- so this asserts the outcome, on whichever interpreter is
+    running the tests, rather than the mechanism that produced it.
+    """
+    (tmp_path / (module + ".py")).write_text("print('SHADOWED')\n")
+
+    out = subprocess.run(
+        [sys.executable, *sandbox_python_flags, "-m", module, "--help"],
+        cwd=str(tmp_path),
+        env=os.environ,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "SHADOWED" not in out.stdout, out.stdout

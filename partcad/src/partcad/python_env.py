@@ -50,10 +50,15 @@ PARTCAD_PYTHON_ENV = {
     "PYTHONHASHSEED": "0",
     # The other half of what "-I" used to give us: keep the script's directory
     # (and, for "-m", the current directory) off sys.path, so a stray file in
-    # the package being processed cannot shadow a module the sandbox imports.
-    # This is "-P", spelled as an environment variable because the flag only
-    # exists on 3.11+ and the sandbox interpreter may be 3.10 -- where the
-    # variable is ignored rather than rejected, which a flag would not be.
+    # the directory PartCAD runs from cannot shadow a module the sandbox
+    # imports. This is "-P", spelled as a variable so that one setting covers
+    # every process rather than every command line.
+    #
+    # It only arrived in 3.11, and an older interpreter ignores it in silence
+    # rather than refusing it. So this does not protect a 3.10 sandbox, and
+    # nothing here can: see PythonRuntime.__init__, which falls back to "-I"
+    # below sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH and gives up the hash
+    # seed there in exchange.
     "PYTHONSAFEPATH": "1",
 }
 

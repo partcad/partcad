@@ -188,6 +188,13 @@ DEFAULT_PYTHON_VERSION = "3.11"
 # still has to be rendered on 3.11.
 MIN_PYTHON_VERSION_CADQUERY = "3.11"
 
+# Where "-P" (and the PYTHONSAFEPATH that spells it as a variable) arrived:
+# don't put the script's directory -- or, for a "-m" command, the current one --
+# on sys.path. Below this the variable is silently ignored, so a sandbox
+# interpreter that old has to be isolated with the "-I" flag instead. See
+# PythonRuntime.__init__ for what that costs.
+MIN_PYTHON_VERSION_SAFE_PATH = "3.11"
+
 # The newest Python the pinned CAD stack is built for. cadquery-ocp 7.9.3.1.1,
 # cadquery 2.8.0, build123d 0.11.1 and nlopt 2.11.0 publish cp310 through cp314
 # and nothing above; a sandbox newer than this has no wheel for pip to find, so
