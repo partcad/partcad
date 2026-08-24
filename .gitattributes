@@ -1,4 +1,23 @@
-* text=lf
+# Every text file is LF in the index and LF in the working tree, on every
+# platform, whatever `core.autocrlf` says locally.
+#
+# This used to read `* text=lf`, which does nothing at all: `text` is a boolean
+# (or `auto`), so git reads any other value as "unspecified" and falls back to
+# `core.autocrlf` -- which Git for Windows installs as `true`. So Windows
+# checkouts got CRLF, and a test that writes a fixture from a `.feature`
+# docstring and then asserts a line number in the output got its lines counted
+# twice: behave keeps the CR on each docstring line, the fixture step writes it
+# through a text-mode handle (CR LF -> CR CR LF), and reading that back with
+# universal newlines turns one line break into two. That is what put the four
+# `features/lint.feature` ASSY findings a line late on windows-latest, and only
+# there.
+#
+# `text=auto` rather than a bare `text`: `*` covers the binaries too, and there
+# are some no rule below claims -- `examples/**/cube.3mf` (a zip container) and
+# `examples/feature_render_custom/bracket.pdf`. A bare `text` would declare
+# those to be text and rewrite their bytes; `auto` sniffs the content and leaves
+# anything binary alone.
+* text=auto eol=lf
 *.step binary
 *.stl binary
 **/*.jpg filter=lfs diff=lfs merge=lfs -text

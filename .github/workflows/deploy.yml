@@ -8,8 +8,18 @@ on:
     tags:
       - "**"
 
+# `contents: write` is what attaches the wheels, the bundles and the IDE to the
+# GitHub release. `actions: read` is not for anything this workflow does itself:
+# a called workflow cannot be granted a scope the caller does not hold, and
+# "build-ide-standalone.yml" declares `actions: read` so its "build" job can
+# download the artifacts of *another* run. Naming any permission here drops
+# every unnamed one to `none`, so leaving this out does not merely narrow the
+# token -- it makes the whole run fail to start, before a single job, with no
+# failed job to point at. That is what `startup_failure` on every tag from
+# 0.7.185 to 0.7.193 was: nine releases that never built or published.
 permissions:
   contents: write
+  actions: read
 
 jobs:
   # The standalone bundles: the same tools packaged with their own Python

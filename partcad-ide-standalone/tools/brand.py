@@ -111,8 +111,21 @@ def brand_shim(shim_path: pathlib.Path, old_name: str, new_name: str, allow_miss
     executable with the CLI entry point. It names that executable, so renaming
     the executable without rewriting the script leaves a `partcad-ide` command
     that cannot find `partcad-ide`.
+
+    Not everything in `bin/` is that script. VSCodium also ships a compiled
+    launcher there -- `codium-tunnel`, the `code-tunnel` of upstream VS Code --
+    and `build.sh` renames every `codium*` it finds, so this is handed a binary
+    as well. A binary names its executable in its own way, if at all, and a
+    same-length textual substitution inside one is not something to attempt: the
+    rename is the whole of the branding it gets. Treat it exactly like a script
+    that does not mention the old name, which is what `--allow-missing` is for.
     """
-    text = shim_path.read_text(encoding="utf-8")
+    try:
+        text = shim_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        if allow_missing:
+            return False
+        raise SystemExit(f"error: {shim_path} is not a text launcher; there is nothing to rewrite in it")
 
     # Whole words only: `codium` inside `.vscodium-data` or a URL is not the
     # executable's name, and a substring replacement there changes where user

@@ -104,6 +104,27 @@ def test_a_launcher_that_names_no_executable_stops_the_build(tmp_path):
         brand.brand_shim(shim, "codium", "partcad-ide")
 
 
+def test_a_binary_in_bin_is_left_alone(tmp_path):
+    # `bin/` holds more than the launcher script: VSCodium ships `codium-tunnel`
+    # there, a compiled executable, and `build.sh` hands every `codium*` to this.
+    # It is renamed like the rest and its bytes are not to be touched.
+    shim = tmp_path / "codium-tunnel"
+    # Undecodable on purpose: 0xb0 is an invalid UTF-8 start byte, and it is the
+    # one the IDE build actually died on.
+    payload = b"\x7fELF\x02\x01\x01\x00" + bytes(range(0xB0, 0xD0))
+    shim.write_bytes(payload)
+
+    assert not brand.brand_shim(shim, "codium", "partcad-ide", allow_missing=True)
+    assert shim.read_bytes() == payload
+
+
+def test_a_binary_without_allow_missing_stops_the_build(tmp_path):
+    shim = tmp_path / "codium-tunnel"
+    shim.write_bytes(b"\x7fELF\x02\x01\x01\x00\xb0\xff")
+    with pytest.raises(SystemExit, match="not a text launcher"):
+        brand.brand_shim(shim, "codium", "partcad-ide")
+
+
 def test_the_macos_bundle_is_rebranded(tmp_path):
     path = tmp_path / "Info.plist"
     with open(path, "wb") as handle:

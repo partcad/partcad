@@ -38,3 +38,26 @@ nox-poetry==1.2.0
 cadquery-ocp==7.9.3.1.1
 build123d==0.11.1
 ocpsvg==0.6.0
+# Every optional extra the 'partcad' wheel declares. None of them is a runtime
+# dependency - each carries a client library the core imports lazily, and only
+# when the feature that needs it is switched on - but 'partcad/tests/unit' has
+# tests that switch exactly those features on and drive them against local mock
+# servers ('test_cache_backends.py' for both cache tiers, and 'pc lint' for
+# ruff). Without the extra the feature reports itself unusable and skips, the
+# tier under test never runs, and the assertion fails on the empty result rather
+# than on anything the test meant to check. That is what CI hit: every Pytest
+# job on every platform failed 'test_memcache_round_trips_the_payload_untouched'
+# with 'assert {} == {"part": True}' and the reason only in the captured log
+# ("cacheRemote ... needs the 'aiomcache' package, which is not installed").
+#
+# All three, not just the two that were missing: 'lint' happens to arrive today
+# because '.github/actions/setup-all' installs './partcad[lint]', but that is
+# the workflow's business and not something the test dependencies should rest
+# on. Named here, the suite states what it needs to run.
+#
+# Included by reference rather than restated, so the version ranges a user
+# installing 'partcad[memcache]' gets are the ones CI tests against. Paths are
+# relative to this file, which is what pip resolves '-r' against.
+-r requirements-lint.txt
+-r requirements-memcache.txt
+-r requirements-aws.txt
