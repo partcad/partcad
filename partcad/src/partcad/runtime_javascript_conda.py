@@ -102,12 +102,12 @@ class CondaJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
         Same reasoning as CondaPythonRuntime._subprocess_env(): conda does not
         touch LD_LIBRARY_PATH, so on an older Linux host the loader binds the
         environment's binaries to a system libstdc++ that predates the symbols
-        they were built against. No-op off Linux, where the parent environment
-        is inherited unchanged.
+        they were built against. No-op off Linux, where only what the base class
+        does - putting the environment's Node.js on PATH - applies.
         """
+        env = super()._subprocess_env()
         if not sys.platform.startswith("linux"):
-            return None
-        env = os.environ.copy()
+            return env
         env_lib = os.path.join(self.path, "lib")
         previous = env.get("LD_LIBRARY_PATH", "")
         env["LD_LIBRARY_PATH"] = env_lib + (os.pathsep + previous if previous else "")

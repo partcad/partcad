@@ -14,7 +14,7 @@ pc inspect cylinder
 
 ### cube
 <table><tr>
-<td valign=top><a href="cube.py"><img src="././cube.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cube.py"><img src="././cube.svg" alt="cube" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>This is a cube from examples</td>
 <td valign=top>Parameters:<br/><ul>
 <li>width: 10.0</li>
@@ -27,7 +27,7 @@ pc inspect cylinder
 
 ### cube_alias (alias to cube)
 <table><tr>
-<td valign=top><a href="cube_alias.py"><img src="././cube_alias.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cube_alias.py"><img src="././cube_alias.svg" alt="cube_alias" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>This is a cube from examples</td>
 <td valign=top>Parameters:<br/><ul>
 <li>width: 10.0</li>
@@ -40,13 +40,13 @@ pc inspect cylinder
 
 ### cube_alias_alias (alias to cube_alias)
 <table><tr>
-<td valign=top><a href="cube_alias_alias.alias"><img src="././cube_alias_alias.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cube_alias_alias.alias"><img src="././cube_alias_alias.svg" alt="cube_alias_alias" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>This is an example of an alias to a part</td>
 </tr></table>
 
 ### cube_alias_enrich (alias to cube_enrich)
 <table><tr>
-<td valign=top><a href="cube_alias_enrich.py"><img src="././cube_alias_enrich.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cube_alias_enrich.py"><img src="././cube_alias_enrich.svg" alt="cube_alias_enrich" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>This is an example of a part defined by enriching another part</td>
 <td valign=top>Parameters:<br/><ul>
 <li>width: 20.0</li>
@@ -58,7 +58,7 @@ pc inspect cylinder
 
 ### cube_alias_params (alias to cube;height=20.0,length=7.5,width=20.0)
 <table><tr>
-<td valign=top><a href="cube_alias_params.py"><img src="././cube_alias_params.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cube_alias_params.py"><img src="././cube_alias_params.svg" alt="cube_alias_params" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>This is a cube from examples</td>
 <td valign=top>Parameters:<br/><ul>
 <li>width: 20.0</li>
@@ -71,7 +71,7 @@ pc inspect cylinder
 
 ### cube_enrich
 <table><tr>
-<td valign=top><a href="cube_enrich.py"><img src="././cube_enrich.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cube_enrich.py"><img src="././cube_enrich.svg" alt="cube_enrich" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>This is an example of a part defined by enriching another part</td>
 <td valign=top>Parameters:<br/><ul>
 <li>width: 20.0</li>
@@ -83,7 +83,7 @@ pc inspect cylinder
 
 ### cube_enrich_enrich
 <table><tr>
-<td valign=top><a href="cube_enrich_enrich.py"><img src="././cube_enrich_enrich.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cube_enrich_enrich.py"><img src="././cube_enrich_enrich.svg" alt="cube_enrich_enrich" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>This is an example of enriching a part with params in the name</td>
 <td valign=top>Parameters:<br/><ul>
 <li>width: 20.0</li>
@@ -95,7 +95,7 @@ pc inspect cylinder
 
 ### cylinder
 <table><tr>
-<td valign=top><a href="cylinder.py"><img src="././cylinder.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cylinder.py"><img src="././cylinder.svg" alt="cylinder" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>This is a cylinder from examples</td>
 </tr></table>
 

@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<svg width="513.000000001mm" height="296.6033378281mm" viewBox="-3.5424392456 -2.048146792 7.0848784912 4.096293584" version="1.1" xmlns="http://www.w3.org/2000/svg">
+<svg width="513.0mm" height="513.0mm" viewBox="-2.5048828125 -2.5048828125 5.009765625 5.009765625" version="1.1" xmlns="http://www.w3.org/2000/svg">
   <g transform="scale(1,-1)" stroke-linecap="round">
-    <g fill="none" stroke="rgb(64,192,64)" stroke-width="0.013810679320049753" id="Visible">
-      <line x1="3.5355339059" y1="0.0" x2="0.0" y2="-2.0412414523" />
-      <line x1="0.0" y1="-2.0412414523" x2="-3.5355339059" y2="0.0" />
-      <line x1="-3.5355339059" y1="0.0" x2="0.0" y2="2.0412414523" />
-      <line x1="0.0" y1="2.0412414523" x2="3.5355339059" y2="0.0" />
+    <g fill="none" stroke="rgb(64,192,64)" stroke-width="0.009765625" id="Visible">
+      <line x1="2.5" y1="2.5" x2="2.5" y2="-2.5" />
+      <line x1="2.5" y1="-2.5" x2="-2.5" y2="-2.5" />
+      <line x1="-2.5" y1="-2.5" x2="-2.5" y2="2.5" />
+      <line x1="-2.5" y1="2.5" x2="2.5" y2="2.5" />
     </g>
   </g>
 </svg>

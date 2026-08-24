@@ -1,0 +1,107 @@
+desc: >
+  PartCAD example project to demonstrate the 2D projections `pc render` writes,
+  and how each of them is configured on its own.
+
+docs:
+  intro: |
+    `pc render` writes 2D projections of the objects a package declares, and the
+    `render:` section of `partcad.yaml` says which ones and with what. Every file
+    type is a subsection of its own, so each is configured separately: where the
+    file goes (`prefix`), which objects get one (`exclude`), what the projection
+    looks at (`viewport_origin`, `viewport_up`), and whatever else that file type
+    takes -- a pixel size for the raster ones, a background color and a quality
+    for JPEG.
+
+    A shape may re-tune any of it for itself, by declaring a `render:` section of
+    its own. `cylinder` below does exactly that: the package looks at a part from
+    a corner, and the cylinder asks to be looked at head-on instead.
+
+    `readme` is the one entry no implementation writes. PartCAD assembles this
+    document itself out of what the package declares and the images the other
+    file types leave behind, which is why the tables below show the SVGs.
+
+    The 3D and CAD files a package publishes are a different section --
+    `export:` -- and a different example: see `feature_export`.
+
+    A `prefix` that points at a directory expects it to be there: PartCAD writes
+    the file, not the path to it, unless it is asked to with `--create-dirs`.
+    Here `images/` already exists, because what is in it is checked in.
+  usage: |
+    ```shell
+    pc render                 # every file type declared below
+    pc render -t png          # only one of them
+    pc render -t dxf -O ./ :outline
+    ```
+
+parts:
+  cube:
+    type: cadquery
+    desc: Rendered the way the package configures it
+
+  cylinder:
+    type: cadquery
+    desc: Rendered head-on, because it overrides the package's viewport
+    # A shape's own 'render:' section adds to, and overrides, the package's. Only
+    # the fields named here change; the cylinder still goes to the same prefixes,
+    # at the same sizes, as everything else.
+    render:
+      svg:
+        viewport_origin: [0, 0, 100]
+        viewport_up: [0, 1, 0]
+
+sketches:
+  outline:
+    type: basic
+    desc: A 2D shape, to show which file types are worth writing for one
+    rectangle:
+      side-x: 20
+      side-y: 12
+
+render:
+  # The package document -- this README. It is assembled from the images the
+  # other file types leave behind, so it names whichever of them comes first in
+  # 'svg', 'png', 'jpeg'.
+  readme:
+
+  # The vector projection, next to the sources it is a projection of.
+  svg:
+    prefix: ./
+    line_weight: 1.0
+
+  # The same projection rasterized, into a directory of its own rather than
+  # beside the sources - which is all 'prefix' does. A sketch is already flat and
+  # already an SVG worth looking at, so it does not get a raster copy; that is
+  # what 'exclude' is for.
+  png:
+    prefix: images/
+    # Independent of each other, and of the shape: the projection is fitted into
+    # whatever box these two describe.
+    width: 256
+    height: 192
+    exclude:
+      - sketches
+
+  # JPEG has no alpha channel, so the transparent background of the projection
+  # has to be flattened onto some color.
+  jpeg:
+    prefix: images/
+    width: 256
+    height: 192
+    background: "#ffffff"
+    quality: 90
+    exclude:
+      - sketches
+
+  # A DXF is a drawing another CAD tool opens, which is what a sketch is for;
+  # the parts stay out of it.
+  #
+  # A DXF is also the one output that would not be the same file twice: it is
+  # stamped on every save with the time it was written and a fresh pair of
+  # GUIDs. 'reproducible' - on by default, see '//builtin/render' - writes fixed
+  # values instead, which is what lets this one be checked in like the rest.
+  # Set it to 'false' for a drawing that has to record when it was really made.
+  dxf:
+    prefix: ./
+    reproducible: true
+    exclude:
+      - parts

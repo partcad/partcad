@@ -150,6 +150,18 @@ that decides; `docs/source/contributing.rst` explains it to contributors. Note t
 matrix at all unless its head commit message starts with `Version updated` — the `set-matrix` job, and every
 job that depends on it, is skipped otherwise.
 
+The packages under `examples/` are a third suite. The images and `README.md` files there are what
+`cd examples && pc render -r` produces, and they are checked in so that a change in how PartCAD renders is a
+diff someone has to look at rather than something a reader of the README discovers. If a change affects a
+projection or a generated document, re-render and commit the result. The `example-images` `pre-commit` hook
+catches the cheap half of this instantly (a README pointing at an image that is not checked in); the
+`Examples (PartCAD)` job in `test.yml` renders everything and fails if the tree changed, on one cell of the
+matrix because what is checked in is one rendering. Every output type PartCAD implements is byte-stable, DXF
+included: the built-in DXF renderer suppresses the timestamp and GUIDs a DXF is otherwise stamped with and
+pins the order of its `CLASSES` section, under the `reproducible` parameter of the `dxf` file type (on by
+default). An implementation another package supplies may not be, and those files are named one by one in that
+job's `UNSTABLE` list — keep it short, and give every entry a reason there and in the package it belongs to.
+
 Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.toml`.
 
 ### Packaging

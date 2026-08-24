@@ -533,6 +533,49 @@ To run tests using ``behave``, execute the following command in an activated env
 
 Feature definitions and step implementations are located in the ``./features`` directory.
 
+Examples
+^^^^^^^^
+
+The packages under ``./examples`` are documentation, and they are also a
+regression test. Each one declares a ``render:`` section, and the images and
+``README.md`` files that ``pc render`` produces from it are **checked in**. That
+is deliberate: a change in how PartCAD renders then shows up as a diff in those
+files, and whoever made the change gets to decide whether it is an improvement
+or a regression before it reaches a reader of the README.
+
+So if your change affects what a projection or a generated document looks like,
+re-render the examples and commit the result along with it:
+
+.. code-block:: bash
+
+    $ cd examples && pc render -r
+
+Two things guard the invariant. The ``example-images`` ``pre-commit`` hook is
+instant and checks only what is already on disk: every image an example's
+``README.md`` points at has to exist and be checked in, and no ``.gitignore``
+may hide one. It exists because the mistake that costs is asymmetric -- a
+regenerated ``README.md`` is a tracked file and stages itself with ``git add
+-u``, while the images beside it are new and untracked and do not. The
+``Examples (PartCAD)`` CI job then renders everything and fails if the working
+tree changed at all; that check runs on one cell of the matrix, because what is
+checked in is one rendering.
+
+Everything PartCAD implements itself can be a baseline, including the DXF --
+which a CAD tool would otherwise stamp with the time it was written and a fresh
+pair of GUIDs. The built-in DXF renderer writes fixed values for those instead,
+and pins the order of the ``CLASSES`` section, which ezdxf otherwise derives
+from a ``set`` and so emits differently per process. That is the
+``reproducible`` parameter of the ``dxf`` file type, on by default; a drawing
+that has to record when it was really written sets ``reproducible: false``, and
+stops being diffable.
+
+An implementation another package supplies is not PartCAD's to fix, and one of
+them may well write a different file every time. Those files are named in the
+CI check's ``UNSTABLE`` list, which is deliberately short: every entry is a file
+nobody is watching any more, so it needs a reason there and the same reason
+where a reader of that package will meet it. See ``examples/feature_render_custom``,
+whose SVG and PDF are the only entries today.
+
 Commit & Push Changes
 ---------------------
 

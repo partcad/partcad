@@ -12,7 +12,7 @@ pc inspect cube
 
 ### cube
 <table><tr>
-<td valign=top><a href="cube.py"><img src="././cube.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="cube.py"><img src="././cube.svg" alt="cube" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Sample part defined using build123d</td>
 </tr></table>
 

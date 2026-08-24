@@ -12,28 +12,21 @@ pc inspect bolt
 
 ### bolt
 <table><tr>
-<td valign=top><a href="bolt.step"><img src="././bolt.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="bolt.step"><img src="././bolt.svg" alt="bolt" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>M8x30-screw</td>
 <td valign=top>Aliases:<br/><ul><li>hexhead</li></ul></td>
 </tr></table>
 
 ### fastener (alias to bolt)
 <table><tr>
-<td valign=top><a href="fastener.step"><img src="././bolt.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
-<td valign=top>M8x30-screw</td>
-<td valign=top>Aliases:<br/><ul><li>hexhead</li></ul></td>
-</tr></table>
-
-### hexhead (alias to bolt)
-<table><tr>
-<td valign=top><a href="hexhead.step"><img src="././bolt.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="fastener.step"><img src="././fastener.svg" alt="fastener" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>M8x30-screw</td>
 <td valign=top>Aliases:<br/><ul><li>hexhead</li></ul></td>
 </tr></table>
 
 ### screw (alias to bolt)
 <table><tr>
-<td valign=top><a href="screw.step"><img src="././bolt.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="screw.step"><img src="././screw.svg" alt="screw" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>M8x30-screw</td>
 <td valign=top>Aliases:<br/><ul><li>hexhead</li></ul></td>
 </tr></table>

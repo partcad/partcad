@@ -5,6 +5,7 @@ Assembly YAML examples
 ## Usage
 ```shell
 pc inspect primitive
+pc inspect 'primitive_parametrized;offset=12'
 pc inspect logo
 pc inspect logo_embedded
 ```
@@ -14,30 +15,45 @@ pc inspect logo_embedded
 
 ### logo
 <table><tr>
-<td valign=top><a href="logo.assy"><img src="././logo.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="logo.assy"><img src="././logo.svg" alt="logo" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>PartCAD logo</td>
 </tr></table>
 
 ### logo_embedded
 <table><tr>
-<td valign=top><a href="logo_embedded.assy"><img src="././logo_embedded.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="logo_embedded.assy"><img src="././logo_embedded.svg" alt="logo_embedded" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>PartCAD logo using embedded assemblies</td>
 </tr></table>
 
 ### partcad_logo (alias to logo)
 <table><tr>
-<td valign=top><a href="partcad_logo.assy"><img src="././logo.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="partcad_logo.assy"><img src="././partcad_logo.svg" alt="partcad_logo" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>PartCAD logo</td>
 </tr></table>
 
 ### partcad_logo_short (alias to logo)
 <table><tr>
-<td valign=top><a href="partcad_logo_short.assy"><img src="././logo.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="partcad_logo_short.assy"><img src="././partcad_logo_short.svg" alt="partcad_logo_short" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>PartCAD logo</td>
 </tr></table>
 
 ### primitive
-<a href="primitive.assy"><img src="././primitive.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
+<a href="primitive.assy"><img src="././primitive.svg" alt="primitive" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
+
+### primitive_parametrized
+<table><tr>
+<td valign=top><a href="primitive_parametrized.assy"><img src="././primitive_parametrized.svg" alt="primitive_parametrized" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>Parameters declared here are passed to the ASSY file as 'param_<name>'</td>
+<td valign=top>Parameters:<br/><ul>
+<li>offset: 5.0</li>
+</ul>
+</td>
+</tr></table>
+
+## Parts
+
+### primitive_compound
+<a href="primitive_compound.compound"><img src="././primitive_compound.svg" alt="primitive_compound" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a>
 
 <br/><br/>
 

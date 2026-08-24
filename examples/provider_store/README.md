@@ -58,10 +58,34 @@ $ pc supply order 123456
 
 ## Parts
 
+### bracket (alias to example-bracket)
+<table><tr>
+<td valign=top><a href="bracket.step"><img src="././bracket.svg" alt="bracket" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>NEMA 17 motor bracket</td>
+</tr></table>
+
+### motor (alias to example-motor)
+<table><tr>
+<td valign=top><a href="motor.step"><img src="././motor.svg" alt="motor" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>NEMA 17 motor</td>
+</tr></table>
+
 ### nut (alias to hardware/nut_m4_0_7mm)
 <table><tr>
-<td valign=top><a href="nut.step"><img src="././nut.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="nut.step"><img src="././nut.svg" alt="nut" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>2811 Series Zinc-Plated Steel Hex Nut (M4 x 0.7mm, 7mm Hex) - 25 Pack</td>
+</tr></table>
+
+### screw_m3_6mm (alias to socket-head-m3-screw-6mm)
+<table><tr>
+<td valign=top><a href="screw_m3_6mm.step"><img src="././screw_m3_6mm.svg" alt="screw_m3_6mm" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>M3 socket head screw, 6mm long</td>
+</tr></table>
+
+### screw_m4_6mm (alias to socket-head-m4-screw-6mm)
+<table><tr>
+<td valign=top><a href="screw_m4_6mm.step"><img src="././screw_m4_6mm.svg" alt="screw_m4_6mm" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>M4 socket head screw, 6mm long</td>
 </tr></table>
 
 <br/><br/>

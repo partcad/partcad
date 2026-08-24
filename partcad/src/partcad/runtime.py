@@ -141,7 +141,14 @@ class Runtime:
         cwd: str = None,
         input_files: list[str] = None,
         output_files: list[str] = None,
+        env: dict = None,
     ):
+        # 'env' replaces this process's environment for the child, and is only
+        # ever passed by a runtime that has to place something of its own on it
+        # (see JavaScriptRuntime._subprocess_env(), which puts the sandbox's
+        # Node.js on PATH so that the 'npm' script's '#!/usr/bin/env node' finds
+        # it). It has no counterpart in the RPC path below: what a remote
+        # executor's environment should be is that executor's business.
         if input_files is None:
             input_files = []
         if output_files is None:
@@ -185,6 +192,7 @@ class Runtime:
                 encoding="utf-8",
                 # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
                 cwd=cwd,
+                env=env,
             )
             stdout, stderr = p.communicate(
                 input=stdin,
@@ -223,6 +231,7 @@ class Runtime:
         cwd: str = None,
         input_files: list[str] = None,
         output_files: list[str] = None,
+        env: dict = None,
     ):
         if input_files is None:
             input_files = []
@@ -265,6 +274,7 @@ class Runtime:
                 shell=False,
                 # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
                 cwd=cwd,
+                env=env,
             )
             stdout, stderr = await p.communicate(
                 # TODO(clairbee): add timeout

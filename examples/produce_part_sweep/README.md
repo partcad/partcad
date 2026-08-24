@@ -14,19 +14,19 @@ pc inspect clock
 
 ### clock
 <table><tr>
-<td valign=top><a href="clock.sweep"><img src="././clock.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="clock.sweep"><img src="././clock.svg" alt="clock" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Sweep a clock sketch to create a 3D clock.</td>
 </tr></table>
 
 ### dxf
 <table><tr>
-<td valign=top><a href="dxf.sweep"><img src="././dxf.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="dxf.sweep"><img src="././dxf.svg" alt="dxf" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Sweep a DXF sketch to create a 3D part.</td>
 </tr></table>
 
 ### pipe
 <table><tr>
-<td valign=top><a href="pipe.sweep"><img src="././pipe.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="pipe.sweep"><img src="././pipe.svg" alt="pipe" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Sweep a circle sketch to create a pipe.</td>
 </tr></table>
 

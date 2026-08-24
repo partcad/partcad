@@ -2,7 +2,8 @@
 
 This example demonstrates how the same parametrized assembly
 can be defined in three slightly different ways
-using three approaches to connect parts to each other.
+using three approaches to connect parts to each other,
+and a fourth one that carries the instructions to assemble it.
 
 ## Usage
 ```shell
@@ -10,6 +11,10 @@ using three approaches to connect parts to each other.
 pc inspect -a connect-ports
 pc inspect -a connect-interfaces
 pc inspect -a connect-mates
+
+# the same mount, with the instructions needed to actually assemble it
+pc info -a connect-instructions
+pc test -a connect-instructions
 
 # placement == "inner"
 pc inspect -a -p placement=inner connect-ports
@@ -20,9 +25,24 @@ pc inspect -a -p placement=inner connect-mates
 
 ## Assemblies
 
+### connect-instructions
+<table><tr>
+<td valign=top><a href="connect-instructions.assy"><img src="././connect-instructions.svg" alt="connect-instructions" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top>The same motor mount, assembled rather than only placed: every connection
+carries the instructions needed to actually perform it.
+</td>
+<td valign=top>Parameters:<br/><ul>
+<li>placement: <ul>
+<li>inner</li><li><b>outer</b></li>
+</ul>
+</li>
+</ul>
+</td>
+</tr></table>
+
 ### connect-interfaces
 <table><tr>
-<td valign=top><a href="connect-interfaces.assy"><img src="././connect-interfaces.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="connect-interfaces.assy"><img src="././connect-interfaces.svg" alt="connect-interfaces" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Demonstrates how to connect parts by specifying interfaces.</td>
 <td valign=top>Parameters:<br/><ul>
 <li>placement: <ul>
@@ -39,7 +59,7 @@ pc inspect -a -p placement=inner connect-mates
 
 ### connect-mates
 <table><tr>
-<td valign=top><a href="connect-mates.assy"><img src="././connect-mates.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="connect-mates.assy"><img src="././connect-mates.svg" alt="connect-mates" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Demonstrates how to provide the minimum information while letting PartCAD
 determine the rest using the interfaces' mating metadata.
 </td>
@@ -58,7 +78,7 @@ determine the rest using the interfaces' mating metadata.
 
 ### connect-ports
 <table><tr>
-<td valign=top><a href="connect-ports.assy"><img src="././connect-ports.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="connect-ports.assy"><img src="././connect-ports.svg" alt="connect-ports" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Demonstrates how to connect parts by specifying ports.</td>
 <td valign=top>Parameters:<br/><ul>
 <li>placement: <ul>

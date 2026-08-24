@@ -475,13 +475,25 @@ class JavaScriptRuntime(runtime.Runtime):
                     await self.ensure_async_onced_locked(js_package)
 
     def _subprocess_env(self):
-        """Environment for a spawned sandbox process, or None to inherit ours.
+        """Environment for a spawned sandbox process.
 
-        The base runtime inherits the parent environment unchanged. Subclasses
-        whose Node.js needs help locating its own shared libraries override this
-        (see CondaJavaScriptRuntime).
+        The runtime's own directory goes on the front of PATH, because 'npm' is
+        not a binary: it is a script whose '#!/usr/bin/env node' resolves against
+        PATH. Left alone it finds the host's Node.js, or - on a host that has
+        none, which is the whole point of a sandbox that ships one - nothing at
+        all, and every install fails with "env: 'node': No such file or
+        directory" no matter that the sandbox has a perfectly good interpreter
+        one directory away.
+
+        Subclasses whose Node.js needs more than this override the method and
+        build on what it returns (see CondaJavaScriptRuntime).
         """
-        return None
+        env = os.environ.copy()
+        node_dir = os.path.dirname(self.get_node_path())
+        if node_dir:
+            previous = env.get("PATH", "")
+            env["PATH"] = node_dir + (os.pathsep + previous if previous else "")
+        return env
 
     def get_node_path(self):
         """The Node.js executable this runtime runs scripts with."""
@@ -662,7 +674,14 @@ class JavaScriptRuntime(runtime.Runtime):
             # Through the base Runtime, which is what carries the (unfinished)
             # remote/containerized execution path; npm is a Node.js script but
             # is spawned by its own launcher, not by this runtime's Node.js.
-            exitcode, _, stderr = super().run(self.npm_install_command(js_package, path, force), stdin="", cwd=path)
+            # That launcher still needs to find a Node.js, which is what the
+            # environment is for.
+            exitcode, _, stderr = super().run(
+                self.npm_install_command(js_package, path, force),
+                stdin="",
+                cwd=path,
+                env=self._subprocess_env(),
+            )
         if exitcode != 0:
             pc_logging.error("Failed to install %s into %s: %s" % (js_package, path, stderr))
             return
@@ -675,7 +694,10 @@ class JavaScriptRuntime(runtime.Runtime):
         self.prepare_env_locked(path)
         with pc_logging.Action("NpmInst", self.version, js_package + " in " + path):
             exitcode, _, stderr = await super().run_async(
-                self.npm_install_command(js_package, path, force), stdin="", cwd=path
+                self.npm_install_command(js_package, path, force),
+                stdin="",
+                cwd=path,
+                env=self._subprocess_env(),
             )
         if exitcode != 0:
             pc_logging.error("Failed to install %s into %s: %s" % (js_package, path, stderr))

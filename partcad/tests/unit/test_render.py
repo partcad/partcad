@@ -67,11 +67,17 @@ def test_render_svg_assy_2():
 
 @pytest.mark.slow
 def test_render_project():
-    """Render an entire project"""
+    """Render an entire project
+
+    'feature_render' rather than 'feature_export': it is the example that
+    declares every 2D target, which is what makes this cover more than one
+    implementation. (The 3D and CAD files moved to 'feature_export' and its
+    'export:' section.)
+    """
     if platform.system() == "Windows":
         pytest.skip("Rendering to PNG is not supported in Windows CI due to Cairo")
     ctx = pc.init("examples")
-    prj = ctx.get_project("//feature_export")
+    prj = ctx.get_project("//feature_render")
     assert prj is not None
     output_dir = tempfile.mkdtemp()
     prj.render(output_dir=output_dir)

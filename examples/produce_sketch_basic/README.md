@@ -16,43 +16,43 @@ pc inspect -s rect_01
 
 ### circle_01
 <table><tr>
-<td valign=top><a href="circle_01.basic"><img src="././circle_01.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="circle_01.basic"><img src="././circle_01.svg" alt="circle_01" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>The shortest way to create a basic circle in PartCAD</td>
 </tr></table>
 
 ### circle_02
 <table><tr>
-<td valign=top><a href="circle_02.basic"><img src="././circle_02.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="circle_02.basic"><img src="././circle_02.svg" alt="circle_02" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>A longer way to create a basic circle in PartCAD</td>
 </tr></table>
 
 ### circle_03
 <table><tr>
-<td valign=top><a href="circle_03.basic"><img src="././circle_03.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="circle_03.basic"><img src="././circle_03.svg" alt="circle_03" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>The longest way to create a basic circle in PartCAD</td>
 </tr></table>
 
 ### circle_04
 <table><tr>
-<td valign=top><a href="circle_04.basic"><img src="././circle_04.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="circle_04.basic"><img src="././circle_04.svg" alt="circle_04" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Create a circle with an inner radius</td>
 </tr></table>
 
 ### circle_05
 <table><tr>
-<td valign=top><a href="circle_05.basic"><img src="././circle_05.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="circle_05.basic"><img src="././circle_05.svg" alt="circle_05" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>Create a circle with an inner radius</td>
 </tr></table>
 
 ### rect_01
 <table><tr>
-<td valign=top><a href="rect_01.basic"><img src="././rect_01.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="rect_01.basic"><img src="././rect_01.svg" alt="rect_01" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>The longest way to create a basic square in PartCAD</td>
 </tr></table>
 
 ### square_01
 <table><tr>
-<td valign=top><a href="square_01.basic"><img src="././square_01.svg" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
+<td valign=top><a href="square_01.basic"><img src="././square_01.svg" alt="square_01" style="width: auto; height: auto; max-width: 200px; max-height: 200px;"></a></td>
 <td valign=top>The shortest way to create a basic square in PartCAD</td>
 </tr></table>
 
