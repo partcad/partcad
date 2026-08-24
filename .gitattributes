@@ -12,14 +12,26 @@
 # `features/lint.feature` ASSY findings a line late on windows-latest, and only
 # there.
 #
-# `text=auto` rather than a bare `text`: `*` covers the binaries too, and there
-# are some no rule below claims -- `examples/**/cube.3mf` (a zip container) and
-# `examples/feature_render_custom/bracket.pdf`. A bare `text` would declare
-# those to be text and rewrite their bytes; `auto` sniffs the content and leaves
-# anything binary alone.
+# `text=auto` rather than a bare `text`, because `*` covers the binaries too: a
+# bare `text` declares every one of them to be text and rewrites its bytes,
+# while `auto` sniffs the content first. The sniff is a safety net, though, not
+# the rule -- every binary kind in the tree is named below, so what happens to
+# it is declared rather than guessed.
+#
+# `.pdf` earns its line the hard way. The sniff calls a blob binary on a NUL
+# byte, or on nonprintable bytes outweighing printable ones;
+# `examples/feature_render_custom/bracket.pdf` has no NUL at all and four high
+# bytes in 60KB, so `auto` calls it text. It survives today only because it
+# happens to contain no CR. That file is generated (`pc render`), and the next
+# drawing that puts a CR inside a stream loses a byte on checkout, silently --
+# measured: re-render with one CRLF in it and `auto` alone hands back 60710
+# bytes where 60711 went in. `.3mf` is a zip container and the sniff does catch
+# it; named here too, so that neither rests on the heuristic.
 * text=auto eol=lf
 *.step binary
 *.stl binary
+*.3mf binary
+*.pdf binary
 **/*.jpg filter=lfs diff=lfs merge=lfs -text
 **/*.png filter=lfs diff=lfs merge=lfs -text
 
