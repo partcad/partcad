@@ -1067,32 +1067,52 @@ likes, and nothing outside that script knows what it means, so PartCAD lets a
 part declare any name it wants. A few are **object-type parameters** instead:
 contributed by the part *type* rather than declared out of nothing, with a
 meaning PartCAD itself acts on. They are therefore only available on the types
-that can honour them. ``material`` is the first, and today the only, one.
+that can honour them. Today there are three - ``material``, ``color`` and
+``tolerance``.
 
-What decides which types accept ``material`` is whether the part is a single
+What decides which types accept them is whether the part is a single
 homogeneous body - one solid, made of one thing - because that is what has to
-be true for one ``material:`` value to be true of the whole part. A mesh is one
-body: an STL file is a surface with nothing inside it to vary, and the only way
-it has a material at all is for somebody to say so. So is a solid built by a
-script, and so is one extruded from a single sketch. ``stl``, ``cadquery``,
-``build123d``, ``sdf`` and ``extrude`` accept ``material``.
+be true for one ``material:``, one ``color:`` or one ``tolerance:`` to be true
+of the whole part. A mesh is one body: an STL file is a surface with nothing
+inside it to vary, and the only way it has a material at all is for somebody to
+say so. So is a solid built by a script, and so is one extruded from a single
+sketch. ``stl``, ``cadquery``, ``build123d``, ``sdf`` and ``extrude`` accept
+all three.
 
 A STEP file is not one body. It can carry many solids, each already stating a
-material of its own, and naming one material for the file would be a claim
-about a part the file itself describes better. ``step`` rejects ``material``,
-and so does ``kicad``, which is a STEP file behind a footprint. What such a
-part is made of belongs under :ref:`properties`, where a shape says what it
-turned out to be rather than what was asked of it.
+material and a colour of its own, and naming one for the file would be a claim
+about a part the file itself describes better. ``step`` rejects them, and so
+does ``kicad``, which is a STEP file behind a footprint. What such a part is
+made of belongs under :ref:`properties`, where a shape says what it turned out
+to be rather than what was asked of it.
 
-Every other part type rejects ``material`` too, but for a different reason:
-whether it should accept it has not been decided yet, and answering "no" until
-somebody decides leaves the question open rather than settling it by accident.
+Every other part type rejects them too, but for a different reason: whether it
+should accept them has not been decided yet, and answering "no" until somebody
+decides leaves the question open rather than settling it by accident.
 
-Declaring ``material`` under ``parameters:`` of a type that does not accept it
+Declaring one of these under ``parameters:`` of a type that does not accept it
 is an error, not a warning. It costs the package that one part - the rest of
 the package loads and builds as usual - and the command that found it reports a
 failure. No other parameter name is restricted anywhere: what is policed is the
-one name PartCAD gives a meaning to, not the right to declare parameters.
+handful of names PartCAD gives a meaning to, not the right to declare
+parameters. It is the parameter's *name* that is policed, too, and not the
+shape of its declaration - any parameter may carry ``color:`` and ``material:``
+fields of its own describing what one of its values looks like, whatever the
+part type.
+
+``tolerance`` is the one of the three that has a default, ``0.0``: it reads
+back as that on any type that accepts it, whether or not a part declares one.
+The default is applied when the value is read and is never written into the
+part's ``parameters:`` section, because that section is part of what the shape
+cache is keyed on - writing a default in would move the cache key of every part
+that never mentioned a tolerance, for a value nobody set. A tolerance somebody
+did declare keys the cache like any other input, because it is one.
+
+A tolerance of ``0.0`` means nobody said. It reads as a demand for perfect
+precision, which is not something a manufacturer can be asked for, so
+:doc:`pc test <cli>` fails a part that is going to be *made* and has no
+tolerance - including a part reached through an assembly in the package. A part
+that is bought rather than made is not asked: it comes as it comes.
 
 Each part may have a list of parameters that are passed into the scripts to
 modify the part.
@@ -1131,6 +1151,8 @@ visualization, simulation calculations and, if applicable, manufacturing
 
 - ``color``
 
+  This one is an object-type parameter too, with the same restriction.
+
   **Not implemented yet. Use color names for now.**
 
 - ``finish``
@@ -1147,9 +1169,10 @@ visualization, simulation calculations and, if applicable, manufacturing
 
 - ``tolerance``
 
-  Optional. Can be omitted for a claim to perfect precision during manufacturing.
-
-  **Not implemented yet.**
+  An object-type parameter as well, and the one with a default: omitting it is
+  the same as writing ``0.0``, which is a claim to perfect precision and is
+  what ``pc test`` rejects on a part that is to be manufactured. Give it a real
+  value on anything you intend to have made.
 
 If the part has variable MCFTT parameters depending on the surface,
 then either this part must be broken down into multiple parts,

@@ -59,6 +59,32 @@ class CamTest(Test):
 
         return f"No suppliers provide the {shape.kind}"
 
+    def tolerance_failure(self, part: Part) -> str | None:
+        """Why this part's manufacturing tolerance is unusable, or None if it is fine.
+
+        A part that is going to be made has to say how precisely. 'tolerance' is
+        an object-type parameter of the homogeneous part types, and it reads back
+        as 0.0 when nothing declared one - a demand for perfect precision, which
+        is what "nobody said" amounts to and is not something a manufacturer can
+        be asked for. Read through 'get_object_type_parameter()' rather than
+        'get_mcftt()' because the default lives on the part's type, and that is
+        the reader that knows it.
+
+        Checked here, in the part path of the CAM test, rather than in a sibling
+        test class: the siblings ('cam-additive', 'cam-subtractive',
+        'cam-forming') each check the geometry for one manufacturing method,
+        while this applies to a part however it is made, and it needs exactly the
+        purchased-or-manufactured determination this method has just made.
+        Assemblies reach it for free - 'test_assembly()' runs every test in
+        'tests_to_run' over its supply BoM, and this test is one of them.
+        """
+        tolerance = part.get_object_type_parameter("tolerance")
+        if tolerance is None:
+            return "No manufacturing tolerance: the part type '%s' does not accept one" % part.config.get("type")
+        if tolerance == 0.0:
+            return "No manufacturing tolerance is specified"
+        return None
+
     async def test_part(self, tests_to_run: list[Test], ctx, part: Part, test_ctx: dict = {}) -> bool:
         self.debug(part, "Testing for manufacturability")
 
@@ -81,6 +107,15 @@ class CamTest(Test):
 
         if not can_be_purchased and not can_be_manufactured:
             return self.failed(part, "Cannot be purchased or manufactured")
+
+        if not can_be_purchased:
+            # Only what is actually made needs a manufacturing tolerance. A part
+            # that is bought comes as it comes, which is the same reason the
+            # MCFTT parameters are documented as having no effect on a part with
+            # a vendor and an SKU.
+            failure = self.tolerance_failure(part)
+            if failure:
+                return self.failed(part, failure)
 
         failure = await self.supply_failure(ctx, part)
         if failure:

@@ -81,6 +81,11 @@ parts:
       material:
         type: string
         default: //pub/std/manufacturing/material/plastic:pla
+      # How precisely it has to be made. Without this the part is asking for
+      # perfect precision, which "pc test" reports as no tolerance at all.
+      tolerance:
+        type: float
+        default: 0.1
     manufacturing:
       method: additive
 

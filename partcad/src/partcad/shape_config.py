@@ -14,8 +14,31 @@ from partcad.shape_config_store import ShapeConfigStore
 from . import logging as pc_logging
 
 
+class _NoDefault:
+    """Sentinel: an object-type parameter that has no default.
+
+    For such a parameter, absent means absent - 'material' and 'color' either
+    were declared or were not, and there is nothing sensible to invent for
+    them. A parameter whose default is a real value (a 'tolerance' of 0.0)
+    reads back as that value when nothing declared it.
+    """
+
+    def __repr__(self) -> str:
+        return "NO_DEFAULT"
+
+
+NO_DEFAULT = _NoDefault()
+
+
 class ShapeConfiguration:
     is_manufacturable: bool = False
+
+    # The object-type parameters the type that produces this shape accepts,
+    # mapped to their defaults (see 'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS',
+    # which is what a part factory stamps here as the part is created). Empty
+    # for every shape whose type contributes none - which today is every shape
+    # that is not a part.
+    object_type_parameters: dict = {}
 
     def __init__(self, config: dict) -> None:
         self.config = config
@@ -93,3 +116,54 @@ class ShapeConfiguration:
         ):
             return None
         return self.config["parameters"][property]["default"]
+
+    def get_object_type_parameter(self, name: str):
+        """The value of an object-type parameter, with the type's default applied.
+
+        The counterpart of 'get_mcftt()' for the parameters a type contributes
+        rather than the object invents. It reads the same place - the object's
+        own 'parameters:' - and differs in what happens when nothing is
+        declared: the default comes from the type that produces the shape, not
+        from here.
+
+        The default is applied *here*, on the way out, and is deliberately never
+        written into 'config["parameters"]'. 'Shape.__init__' hashes that
+        dictionary into the shape's cache key, so injecting a default would move
+        the key of every homogeneous part that never mentioned a tolerance - a
+        mass invalidation of existing cache entries for a value nobody set. Read
+        this way, an undeclared tolerance stays out of the hash entirely, while a
+        tolerance somebody did declare keys the cache like any other input,
+        because it is one.
+
+        The default doubles as the parameter's type witness: a numeric default
+        means the parameter is numeric, so a declared value is coerced to a
+        number. A value that will not coerce is reported and the default is used
+        instead, which is how 'PartConfigManufacturing' treats a manufacturing
+        method it does not recognize.
+
+        Reads 'self.config' rather than the resolved final configuration, the
+        same as 'get_mcftt()' does, so an alias reports what the alias itself
+        declares. That is a pre-existing property of both readers, not something
+        decided here.
+        """
+        accepted = self.object_type_parameters
+        if name not in accepted:
+            # Not a parameter this type contributes at all.
+            return None
+        default = accepted[name]
+        fallback = None if isinstance(default, _NoDefault) else default
+
+        parameters = self.config.get("parameters") or {}
+        declared = parameters.get(name) if isinstance(parameters, dict) else None
+        if not isinstance(declared, dict) or "default" not in declared:
+            return fallback
+
+        value = declared["default"]
+        if isinstance(default, float):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                kind = getattr(self, "kind", "object").capitalize()
+                pc_logging.error(f"{kind} '{self.name}' has a non-numeric '{name}': {value!r}")
+                return fallback
+        return value

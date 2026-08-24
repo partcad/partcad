@@ -33,21 +33,35 @@ class PartFactory(ShapeFactory):
     # Two class-level sets, so the mechanism is not welded to the one parameter
     # that exists today.
     #
-    # POLICED_OBJECT_TYPE_PARAMETERS is the registry of names policed at all.
-    # Only a name in here may ever be rejected. Parameters are otherwise
-    # arbitrary - a script may call its own whatever it likes - so a name that
-    # is not in this registry must stay free on every type, forever.
-    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"material"})
+    # POLICED_OBJECT_TYPE_PARAMETERS is the registry of names policed at all,
+    # and stays a plain set of names: whether a name is policed is a property
+    # of the name, the same everywhere. Only a name in here may ever be
+    # rejected. Parameters are otherwise arbitrary - a script may call its own
+    # whatever it likes - so a name that is not in this registry must stay free
+    # on every type, forever.
+    #
+    # A name, not a shape of declaration: a parameter *named* 'color' is
+    # policed, while the 'color:' and 'material:' fields a parameter of any
+    # name may carry inside its own definition (see 'shape-parameter' in the
+    # schema, and 'features/lint.feature') are a different thing entirely and
+    # are never looked at here.
+    POLICED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset({"material", "color", "tolerance"})
 
     # ACCEPTED_OBJECT_TYPE_PARAMETERS is what *this* factory accepts of the
-    # policed names. Empty here, which makes "does not accept" the default: a
-    # type opts in by mixing in a class that widens the set (see
-    # 'PartFactoryHomogen'). The types that have not opted in are deliberate,
-    # not an oversight - whether each of them should accept 'material' has not
-    # been decided, and will be settled case by case. Defaulting to "no" is
-    # what leaves that decision open; defaulting to "yes" would silently make
-    # it.
-    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.FrozenSet[str] = frozenset()
+    # policed names, mapped to the default each reads back as when nothing
+    # declares it. 'NO_DEFAULT' means absent stays absent. Empty here, which
+    # makes "does not accept" the default: a type opts in by mixing in a class
+    # that widens the mapping (see 'PartFactoryHomogen'). The types that have
+    # not opted in are deliberate, not an oversight - whether each of them
+    # should accept these has not been decided, and will be settled case by
+    # case. Defaulting to "no" is what leaves that decision open; defaulting to
+    # "yes" would silently make it.
+    #
+    # Only what is *accepted* carries defaults, which is why this is a mapping
+    # and the registry above is not. A default is what a type promises about a
+    # parameter it honours, and a type that rejects a parameter promises
+    # nothing about it.
+    ACCEPTED_OBJECT_TYPE_PARAMETERS: typing.Dict[str, typing.Any] = {}
 
     def __init__(
         self,
@@ -97,6 +111,11 @@ class PartFactory(ShapeFactory):
 
     def _create_part(self, config: object) -> Part:
         part = Part(self.target_project.name, config)
+        # What this part's type contributes, so that reading an object-type
+        # parameter off the part applies the type's default without the reader
+        # having to know which factory made it (see
+        # 'ShapeConfiguration.get_object_type_parameter').
+        part.object_type_parameters = self.ACCEPTED_OBJECT_TYPE_PARAMETERS
         part.instantiate = lambda part_self: self.instantiate(part_self)
         part._prepare = lambda shape_self: self.prepare_async(shape_self)
         part.info = lambda: self.info(part)

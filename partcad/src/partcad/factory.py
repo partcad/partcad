@@ -91,8 +91,8 @@ class ObjectTypeParameterException(Exception):
     An *object-type parameter* is one an object type contributes to the
     parameter list, rather than the author of the object declaring it from
     nothing: it has a meaning PartCAD itself acts on, so it only means anything
-    on a type that can honour it. 'material' is the first, and today the only,
-    one of them.
+    on a type that can honour it. 'material', 'color' and 'tolerance' are the
+    ones that exist today.
 
     Which types accept which is decided by the factory classes (see
     'PartFactory.ACCEPTED_OBJECT_TYPE_PARAMETERS'), not by the schema: the
