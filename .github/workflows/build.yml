@@ -186,4 +186,4 @@ jobs:
   build-vscode-extension:
     name: "VS Code extension"
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
-    uses: ./.github/workflows/nox.yml
+    uses: ./.github/workflows/vsix.yml

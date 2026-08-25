@@ -12,6 +12,10 @@
 // Here the directory is whatever the extension resolved or provisioned, which
 // is what the rest of this module is about.
 //
+// It also marks those terminals with `PARTCAD_MANAGED_BY`, which is how
+// `pc upgrade` knows to refuse: a bundle the extension owns is replaced by
+// updating the extension.
+//
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -19,59 +23,42 @@ import * as vscode from 'vscode';
 
 import { traceInfo } from './log/logging';
 import { resolveServicePath } from './provision';
-import { getAddToolsToTerminalPathFromSetting, getBackendFromSetting } from './settings';
+import { getAddToolsToTerminalPathFromSetting } from './settings';
 
 /** `pc` as the filesystem spells it. */
 const CLI = process.platform === 'win32' ? 'pc.exe' : 'pc';
 
 /**
- * Where the Python backend's `pc` would be, as the language server reported it.
+ * Marks a terminal as one this extension seeded, for the tools it seeded it with.
  *
- * The extension cannot work this out on its own: it is the scripts directory of
- * the interpreter the server is running on, under the scheme `pip install
- * --user` writes to, and only that interpreter can say what it is. Undefined
- * until `?/partcad/scriptsPath` arrives, which is after the server has finished
- * provisioning.
+ * `pc upgrade` reads it and refuses: a bundle the extension downloaded is
+ * replaced by updating the extension, and upgrading from inside it would install
+ * a second copy the extension does not know about. Kept in step with
+ * `MANAGED_BY_ENV` / `MANAGED_BY_EXTENSION` in
+ * `partcad_client/selfupdate.py`, which is the only reader.
  */
-let pythonScriptsDirectory: string | undefined;
+const MANAGED_BY = 'PARTCAD_MANAGED_BY';
+const MANAGED_BY_EXTENSION = 'vscode-extension';
 
 /** The directory currently prepended, so a refresh can tell when nothing moved. */
 let applied: string | undefined;
 
 /**
- * The directory holding the tools, for the backend in use, or undefined.
+ * The directory holding the tools, or undefined when nothing is installed yet.
  *
- * For the service backend this is the directory the resolved `partcad-json-rpc`
- * lives in: a standalone bundle is laid out as `<install-dir>/<version>/{pc,
- * partcad,partcad-json-rpc}`, one directory holding all three, so the executable
- * the extension already found names it. Some of `resolveServicePath`'s fallbacks
- * (the `~/.local/bin` launcher `install.sh` links, and a plain PATH lookup)
- * resolve to a directory that is on PATH already; prepending it again is
- * deliberate and inert, and cheaper than reasoning about what a shell will do
- * with the PATH it has not been given yet.
+ * This is the directory the resolved `partcad-json-rpc` lives in: a standalone
+ * bundle is laid out as `<install-dir>/<version>/{pc,partcad,partcad-json-rpc}`,
+ * one directory holding all three, so the executable the extension already found
+ * names it -- and putting it on PATH covers every entry point at once. Some of
+ * `resolveServicePath`'s fallbacks (the `~/.local/bin` launcher `install.sh`
+ * links, a plain PATH lookup, and a `pip install partcad` in the user's own
+ * environment) resolve to a directory that is on PATH already; prepending it
+ * again is deliberate and inert, and cheaper than reasoning about what a shell
+ * will do with the PATH it has not been given yet.
  */
 export function toolsDirectory(context: vscode.ExtensionContext, serverId: string): string | undefined {
-    if (getBackendFromSetting(serverId) === 'service') {
-        const execPath = resolveServicePath(context, serverId);
-        return execPath ? path.dirname(execPath) : undefined;
-    }
-    return pythonScriptsDirectory;
-}
-
-/**
- * Record the scripts directory the language server reported.
- *
- * Returns true when it changed, so the caller knows whether to refresh. The
- * server sends it once its environment is provisioned; before then the Python
- * backend contributes nothing to the PATH.
- */
-export function setPythonScriptsDirectory(directory: string | undefined): boolean {
-    const normalized = directory && directory.length > 0 ? directory : undefined;
-    if (normalized === pythonScriptsDirectory) {
-        return false;
-    }
-    pythonScriptsDirectory = normalized;
-    return true;
+    const execPath = resolveServicePath(context, serverId);
+    return execPath ? path.dirname(execPath) : undefined;
 }
 
 /**
@@ -125,20 +112,20 @@ export function refreshToolsPath(context: vscode.ExtensionContext, serverId: str
 
     collection.description = 'Adds the PartCAD command line tools (pc, partcad) to the PATH';
     collection.prepend('PATH', directory + path.delimiter);
+    collection.replace(MANAGED_BY, MANAGED_BY_EXTENSION);
     traceInfo(`PartCAD: added ${directory} to the terminal PATH`);
 
     if (!fs.existsSync(path.join(directory, CLI))) {
-        // Worth saying rather than hiding: the directory is the right one --
-        // it is where this backend's executables live -- but `pc` itself is not
-        // in it, so a terminal will not get the command. For the service
-        // backend that means a bundle built without the CLI; for the Python
-        // backend, an environment provisioned without `partcad-cli`.
-        traceInfo(`PartCAD: note that ${directory} has no '${CLI}' in it yet`);
+        // Worth saying rather than hiding: the directory is the right one -- it
+        // is where the resolved service lives -- but `pc` itself is not beside
+        // it, so a terminal will not get the command. A standalone bundle always
+        // carries all three, so this means a hand-set `partcad.servicePath`
+        // pointing somewhere unusual.
+        traceInfo(`PartCAD: note that ${directory} has no '${CLI}' in it`);
     }
 }
 
 /** Forget the applied directory. For tests, and for a clean deactivate. */
 export function resetToolsPathForTesting(): void {
     applied = undefined;
-    pythonScriptsDirectory = undefined;
 }

@@ -180,9 +180,9 @@ an optional extra, or a file that is read at runtime can be invisible to the fro
 wheels stay fine — see `dev-tools/pyinstaller/README.md` before doing any of those. Note that the bundles fan out over
 *OS versions* (`ubuntu-22.04-x86_64`, `macos-26-arm64`, …), and that the same platform list appears in three places
 that nothing keeps in sync; the README says which, and which of them a pull request skips without `#deepTest`. The
-`.vsix` is built once, on Linux, by `.github/workflows/nox.yml`, which `build.yml` and `deploy.yml` both call;
-`partcad-ide-standalone/build.sh` runs the same `nox` session per platform, because the `bundled/libs` inside the
-package holds compiled wheels. Changing `.vscode/extensions.json` changes what the IDE ships with — see
+`.vsix` is built once by `.github/workflows/vsix.yml`, which `build.yml` and `deploy.yml` both call, and
+`partcad-ide-standalone/build.sh` runs the same `npm run vsce-package` for the copy inside the IDE. One build
+serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. Changing `.vscode/extensions.json` changes what the IDE ships with — see
 `partcad-ide-standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 

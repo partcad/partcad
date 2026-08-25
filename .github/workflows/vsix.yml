@@ -2,9 +2,16 @@
 #
 # Called by "build.yml" (CD) and by "deploy.yml", which uploads the package to
 # the GitHub release. It deliberately has no "push"/"pull_request" triggers of
-# its own: it used to, and adding it to those two workflows on top would build
-# the same package twice per commit. Exactly one run owns the build -- the same
-# arrangement "build-ide-standalone.yml" documents for the command line bundles.
+# its own: adding it to those two workflows on top would build the same package
+# twice per commit. Exactly one run owns the build -- the same arrangement
+# "build-ide-standalone.yml" documents for the command line bundles.
+#
+# This replaces "nox.yml". The extension used to carry a Python language server
+# and a "bundled/libs" of PartCAD's dependencies, which is what needed nox,
+# pip-compile, an interpreter and a page of native build prerequisites here --
+# and which could only ever have worked on the one platform this job runs on,
+# because those wheels are compiled. The extension is a JSON-RPC client now:
+# TypeScript, npm, nothing else.
 name: Extension # Keep the action badge icon short
 
 on:
@@ -23,44 +30,33 @@ jobs:
       matrix:
         # ubuntu-24.04 is still the newest generally available Ubuntu LTS
         # runner image (ubuntu-26.04 is preview only), so this stays pinned.
+        # One runner is now correct rather than merely cheap: the package has no
+        # compiled content left, so the ".vsix" this produces is the same on
+        # every platform.
         os: [ubuntu-24.04]
-        # Single pinned Python for this build-only job. Kept at 3.13 rather
-        # than the newest supported 3.14 so that a brand new interpreter
-        # cannot break packaging of the extension on its own.
-        python-version: ["3.13"]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-all
 
-      - name: Install prerequisites
-        shell: bash
-        run: |
-          sudo apt-get -q update || exit 1
-          sudo apt-get -q install -y \
-            libxml2-dev libxslt-dev \
-            libtiff5-dev libjpeg-dev libopenjp2-7-dev zlib1g-dev \
-            libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev \
-            python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev
-      - name: install dependencies
-        run: pip install --upgrade attrs
-      - working-directory: partcad-ide-vscode
-        run: python -m pip install nox
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: partcad-ide-vscode/package-lock.json
 
-      # One command, not "setup" and then "build_package": the latter runs
-      # "_setup_template_environment" itself (see "noxfile.py"), so it populates
-      # "bundled/libs" before it packages, and running "setup" first only paid
-      # for the same pip-compile and the same install twice.
-      #
-      # It is also exactly what "partcad-ide-standalone/build.sh" runs, so the
-      # extension that ships inside the IDE is built the same way as the one
-      # released here -- including "bundled/libs", which the language server
-      # puts first on its `sys.path`.
+      - name: Install dependencies
+        working-directory: partcad-ide-vscode
+        run: npm ci
+
+      # `npm run vsce-package` runs `vscode:prepublish`, which is the production
+      # webpack build, so this compiles and packages in one step. Lint and the
+      # type check run in "npm-test.yml"; a packaging job that also linted would
+      # be a second place for the same failure to appear.
       - name: Package the extension
         working-directory: partcad-ide-vscode
-        run: nox --session build_package
-      # TODO(clairbee): run VSCode tests (that depend on the PartCAD Python module)
+        run: npm run vsce-package
 
       # "npm run vsce-package" writes a fixed "partcad.vsix", because
       # "partcad-ide-standalone/build.sh" looks for that exact name. A release

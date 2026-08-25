@@ -47,12 +47,12 @@ jobs:
     with:
       tools_in_this_run: true
 
-  # The VS Code extension: one ".vsix", built once on a Linux runner, attached to
-  # the same release. Independent of everything above -- the IDE builds its own
-  # copy per platform, because "bundled/libs" inside the package carries compiled
-  # wheels and the one built here is a Linux one.
+  # The VS Code extension: one ".vsix", built once, attached to the same release.
+  # Independent of everything above, and platform-independent now that the
+  # package has no compiled content in it -- it is a JSON-RPC client, so the one
+  # built here is the one every platform gets.
   build-vscode-extension:
-    uses: ./.github/workflows/nox.yml
+    uses: ./.github/workflows/vsix.yml
 
   # Keep the "build" job identical to "python-build.yml".
   # TODO(clairbee): include "python-build.yml" instead

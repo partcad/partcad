@@ -24,7 +24,6 @@ addopts = """
     --junitxml=pytest-results/junit.xml
     --self-contained-html
     --ignore-glob="openscad*"
-    --ignore-glob="partcad-ide-vscode/bundled/libs/*"
     """
 #    --log-cli-level=DEBUG # Add this flag to see debug logs during test runs
 filterwarnings = [

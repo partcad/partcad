@@ -107,10 +107,17 @@ It's easier to test some parts of the robot like `link-lower-arm` or `link-base`
 
 ## Implementation notes
 
-### Failed to load PartCAD: \_nlopt
+### Where PartCAD itself comes from
 
-If you see the above error message then you are probably using Windows and not using Conda.
-Please, switch to a Python environment created with Conda and Python >=3.10 and <3.15.
+This extension is a client. It talks to a `partcad-json-rpc` executable, and it finds one in this order: the
+`partcad.servicePath` setting, an existing standalone installation, a bundle it downloaded before, `~/.local/bin`,
+and finally your `PATH`. That last one means `pip install partcad` in a Python environment of your own is enough
+— the extension picks it up and downloads nothing. If it finds none of them, it offers to download a standalone
+bundle, which needs no Python at all.
+
+`pc upgrade` run inside a bundle this extension downloaded will refuse and tell you to update the extension
+instead: the extension owns that bundle, and upgrading it from underneath would leave a copy the extension does
+not know about.
 
 ## More documentation
 

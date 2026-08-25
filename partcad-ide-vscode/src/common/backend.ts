@@ -3,28 +3,27 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The backend abstraction the extension talks to. Two implementations satisfy
-// the same small interface the extension uses (notifications + lifecycle):
+// How the extension talks to PartCAD: the standalone `partcad-json-rpc`
+// service, over a framed JSON-RPC connection. It connects to the per-workspace
+// socket daemon by default (run the launcher, read the printed socket path,
+// connect), or over stdio when `partcad.serviceChannel` is "stdio". Either way
+// it registers the `partcad.*` commands the extension issues, translating each
+// to the CLI-shaped JSON-RPC method, and routes the service's notifications
+// back under the `?/partcad/*` names the extension's handlers listen on.
 //
-//   * LspBackend     - the legacy Python language server (unchanged behavior),
-//                      selected by the `partcad.backend: "python"` setting.
-//   * JsonRpcBackend - the standalone `partcad-json-rpc` service, the default.
-//                      It connects over the per-workspace socket daemon by
-//                      default (run the launcher, read the printed socket path,
-//                      connect), or over stdio when `partcad.serviceChannel` is
-//                      "stdio". Either way it registers the same `partcad.*`
-//                      commands the LSP client used to auto-register, translating
-//                      each to the CLI-shaped JSON-RPC method, and routes the
-//                      service's notifications back under the legacy
-//                      `?/partcad/*` names so the extension's handlers are
-//                      unchanged.
+// There used to be a second implementation beside this one: a Python language
+// server, bundled with its own copy of PartCAD's dependencies, selected by
+// `partcad.backend: "python"`. It is gone. It could never have worked off
+// Linux/CPython 3.13 anyway -- `bundled/libs` held compiled wheels and the
+// ".vsix" is built once -- and everything it did, this does, for every command:
+// a `pip install partcad` puts `partcad-json-rpc` on PATH, which
+// `resolveServicePath` finds, so a user with their own Python needs no download.
 //
 
 import * as cp from 'child_process';
 import * as net from 'net';
 import * as vscode from 'vscode';
 import { Disposable } from 'vscode';
-import { LanguageClient } from 'vscode-languageclient/node';
 import {
     createMessageConnection,
     MessageConnection,
@@ -34,8 +33,8 @@ import {
 
 import { traceError, traceInfo } from './log/logging';
 import { cliBeside, ensureServiceExecutable } from './provision';
-import { getBackendFromSetting, getServiceChannelFromSetting, setBackendSetting } from './settings';
-import { restartServer } from './server';
+import { refreshToolsPath } from './terminalPath';
+import { getServiceChannelFromSetting } from './settings';
 
 /** The subset of the language client the extension depends on. */
 export interface PartcadBackend {
@@ -49,24 +48,6 @@ export interface PartcadBackend {
 
 // The extension subscribes and the legacy server published under this prefix.
 const NOTIFICATION_PREFIX = '?/partcad/';
-
-/** Wraps the legacy LanguageClient so it satisfies PartcadBackend. */
-class LspBackend implements PartcadBackend {
-    constructor(public readonly client: LanguageClient) {}
-
-    onNotification(method: string, handler: (params: any) => void): Disposable {
-        return this.client.onNotification(method, handler);
-    }
-    setTrace(value: any): Promise<void> {
-        return this.client.setTrace(value);
-    }
-    isRunning(): boolean {
-        return this.client.isRunning();
-    }
-    stop(): Promise<void> {
-        return this.client.stop();
-    }
-}
 
 /** How this backend reaches the `pc` CLI, and what that CLI may be used for. */
 type CliAccess = {
@@ -441,50 +422,45 @@ function connectStdio(
  */
 export async function restartBackend(
     serverId: string,
-    serverName: string,
+    _serverName: string,
     outputChannel: vscode.LogOutputChannel,
     context: vscode.ExtensionContext,
     existing: PartcadBackend | undefined,
 ): Promise<PartcadBackend | undefined> {
-    if (getBackendFromSetting(serverId) === 'service') {
-        if (existing) {
-            try {
-                await existing.stop();
-            } catch (e) {
-                traceError(`Failed to stop the previous backend: ${e}`);
-            }
-        }
-        const execPath = await ensureServiceExecutable(context, serverId);
-        if (!execPath) {
-            traceInfo('PartCAD: service download declined; switching to the Python backend.');
-            await setBackendSetting(serverId, 'python');
-            return undefined;
-        }
-        const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
-        const args = serviceArgs(serverId);
-        const env = serviceEnv(serverId);
-        try {
-            if (getServiceChannelFromSetting(serverId) === 'stdio') {
-                return connectStdio(execPath, args, cwd, env, outputChannel);
-            }
-            return await connectSocket(execPath, args, cwd, env, outputChannel);
-        } catch (e) {
-            traceError(`Failed to start the PartCAD service: ${e}`);
-            return undefined;
-        }
-    }
-
-    // Python / legacy LSP backend.
-    let previousClient: LanguageClient | undefined;
-    if (existing instanceof LspBackend) {
-        previousClient = existing.client;
-    } else if (existing) {
+    if (existing) {
         try {
             await existing.stop();
         } catch (e) {
             traceError(`Failed to stop the previous backend: ${e}`);
         }
     }
-    const client = await restartServer(serverId, serverName, outputChannel, previousClient);
-    return client ? new LspBackend(client) : undefined;
+    const execPath = await ensureServiceExecutable(context, serverId);
+    // The tools directory only exists once something is installed, and this is
+    // where a first install happens: `ensureServiceExecutable` downloads the
+    // bundle when there is none. Activation already ran and found nothing, so
+    // without this a user who accepts the download prompt gets a working PartCAD
+    // and a terminal with no `pc` in it until the next window. Refresh here, not
+    // only after `updateServiceBundle`, which covers upgrades and not first
+    // installs.
+    refreshToolsPath(context, serverId);
+    if (!execPath) {
+        // Declining used to fall back to the Python backend. There is nothing to
+        // fall back to now, and nothing to invent: the user has told us not to
+        // download, so the honest outcome is no backend and a message saying how
+        // to supply one.
+        traceInfo('PartCAD: no PartCAD service available; install one with `pip install partcad`.');
+        return undefined;
+    }
+    const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const args = serviceArgs(serverId);
+    const env = serviceEnv(serverId);
+    try {
+        if (getServiceChannelFromSetting(serverId) === 'stdio') {
+            return connectStdio(execPath, args, cwd, env, outputChannel);
+        }
+        return await connectSocket(execPath, args, cwd, env, outputChannel);
+    } catch (e) {
+        traceError(`Failed to start the PartCAD service: ${e}`);
+        return undefined;
+    }
 }

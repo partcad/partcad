@@ -11,23 +11,14 @@ import * as vscode from 'vscode';
 import { PartcadBackend, restartBackend } from './common/backend';
 import { registerLogger, traceError, traceLog, traceVerbose } from './common/log/logging';
 import {
-    checkVersion,
-    getInterpreterDetails,
-    initializePython,
-    onDidChangePythonInterpreter,
-    resolveInterpreter,
-} from './common/python';
-import {
     checkIfConfigurationChanged,
-    getBackendFromSetting,
-    getInterpreterFromSetting,
     getInstallOnOpenFromSetting,
     getPackagePathFromSetting,
     getReopenTerminalFromSetting,
     getPopupTerminalFromSetting,
 } from './common/settings';
 import { updateServiceBundle } from './common/provision';
-import { refreshToolsPath, setPythonScriptsDirectory } from './common/terminalPath';
+import { refreshToolsPath } from './common/terminalPath';
 import { loadServerDefaults } from './common/setup';
 import { getLSClientTraceLevel } from './common/utilities';
 import { createOutputChannel, isVirtualWorkspace, onDidChangeConfiguration, registerCommand } from './common/vscodeapi';
@@ -175,14 +166,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     // The Python backend cannot check anything until PartCAD is
                     // installed into the interpreter; now it can.
                     partcadLint?.refresh();
-                }),
-                lsClient.onNotification('?/partcad/scriptsPath', async (directory: string) => {
-                    // Where `pip install --user` put this interpreter's scripts,
-                    // which is the Python backend's answer to "where is `pc`".
-                    // Only that interpreter can say, so it tells us.
-                    if (setPythonScriptsDirectory(directory)) {
-                        refreshToolsPath(context, serverId);
-                    }
                 }),
                 lsClient.onNotification('?/partcad/installFailed', async () => {
                     await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
@@ -395,49 +378,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }
         await vscode.commands.executeCommand('setContext', 'partcad.workspaceIsGood', true);
 
-        // The service backend runs the standalone executable and needs no Python
-        // interpreter; skip the interpreter resolution the Python backend does.
-        if (getBackendFromSetting(serverId) === 'service') {
-            await vscode.commands.executeCommand('setContext', 'partcad.pythonIsGood', true);
-            await handleRestartServer(serverId, serverName, outputChannel);
-            return;
-        }
-
-        const interpreter = getInterpreterFromSetting(serverId);
-        if (interpreter && interpreter.length > 0) {
-            if (checkVersion(await resolveInterpreter(interpreter))) {
-                traceVerbose(`Using interpreter from ${serverInfo.module}.interpreter: ${interpreter.join(' ')}`);
-                await vscode.commands.executeCommand('setContext', 'partcad.pythonIsGood', true);
-                await handleRestartServer(serverId, serverName, outputChannel);
-            } else {
-                await vscode.commands.executeCommand('setContext', 'partcad.failed', true);
-                await vscode.commands.executeCommand('setContext', 'partcad.pythonIsGood', false);
-            }
-            return;
-        }
-
-        const interpreterDetails = await getInterpreterDetails();
-        if (interpreterDetails.path) {
-            traceVerbose(`Using interpreter from Python extension: ${interpreterDetails.path.join(' ')}`);
-            await vscode.commands.executeCommand('setContext', 'partcad.pythonIsGood', true);
-            await handleRestartServer(serverId, serverName, outputChannel);
-            return;
-        }
-
-        traceError(
-            'Python interpreter missing:\r\n' +
-                '[Option 1] Select python interpreter using the ms-python.python.\r\n' +
-                `[Option 2] Set an interpreter using "${serverId}.interpreter" setting.\r\n` +
-                'Please use Python 3.8 or greater.',
-        );
-        await vscode.commands.executeCommand('setContext', 'partcad.failed', true);
-        await vscode.commands.executeCommand('setContext', 'partcad.pythonIsGood', false);
+        // The service is a standalone executable; there is no interpreter to
+        // resolve and no Python extension to ask, so nothing between here and
+        // starting it. `partcad.pythonIsGood` went with the welcome view that
+        // was its only reader.
+        await handleRestartServer(serverId, serverName, outputChannel);
     };
 
     context.subscriptions.push(
-        onDidChangePythonInterpreter(async () => {
-            await runServer();
-        }),
         onDidChangeConfiguration(async (e: vscode.ConfigurationChangeEvent) => {
             // Cheap and idempotent, so it is not worth working out which of the
             // settings that decide the directory was the one that changed.
@@ -463,15 +411,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             partcadExplorer?.clearItems();
             await partcadInspector?.clear();
 
-            if (getBackendFromSetting(serverId) === 'service') {
-                // Terminate the shared daemon so its warm context is torn down,
-                // then start a fresh daemon, reconnect, and reactivate.
-                await lsClient?.stopDaemon?.();
-                await handleRestartServer(serverId, serverName, outputChannel);
-            } else {
-                // Python backend: reload the context in the running server.
-                await vscode.commands.executeCommand('partcad.activate');
-            }
+            // Terminate the shared daemon so its warm context is torn down,
+            // then start a fresh daemon, reconnect, and reactivate.
+            await lsClient?.stopDaemon?.();
+            await handleRestartServer(serverId, serverName, outputChannel);
         }),
         registerCommand(`partcad.update`, async () => {
             await vscode.commands.executeCommand('setContext', 'partcad.activated', false);
@@ -490,37 +433,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             partcadExplorer?.clearItems();
             await partcadInspector?.clear();
 
-            if (getBackendFromSetting(serverId) === 'service') {
-                // The bundle upgrades itself by running its own `pc upgrade`,
-                // so the extension and the CLI upgrade by the same code. That
-                // takes the local daemons down with it, so reconnect afterwards
-                // -- to the new executable, which is at a new path once the
-                // upgrade installed one.
-                try {
-                    // `pc upgrade` stops every local daemon itself; this covers
-                    // the fallback download path, which does not, and this
-                    // connection has to go either way.
-                    await lsClient?.stopDaemon?.();
-                    const result = await updateServiceBundle(context, serverId, outputChannel);
-                    // `pc upgrade` installs beside the running bundle and deletes
-                    // every superseded one, so the directory this put on the PATH
-                    // may no longer exist.
-                    refreshToolsPath(context, serverId);
-                    if (!result.execPath) {
-                        await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
-                        return;
-                    }
-                } catch (e: any) {
-                    traceError(`PartCAD update failed: ${e?.stack ?? e}`);
-                    vscode.window.showErrorMessage(`Failed to update PartCAD: ${e?.message ?? e}`);
+            // The bundle upgrades itself by running its own `pc upgrade`, so
+            // the extension and the CLI upgrade by the same code. That takes the
+            // local daemons down with it, so reconnect afterwards -- to the new
+            // executable, which is at a new path once the upgrade installed one.
+            try {
+                // `pc upgrade` stops every local daemon itself; this covers the
+                // fallback download path, which does not, and this connection
+                // has to go either way.
+                await lsClient?.stopDaemon?.();
+                const result = await updateServiceBundle(context, serverId, outputChannel);
+                // `pc upgrade` installs beside the running bundle and deletes
+                // every superseded one, so the directory this put on the PATH
+                // may no longer exist.
+                refreshToolsPath(context, serverId);
+                if (!result.execPath) {
+                    await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
+                    return;
                 }
-                await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
-                await handleRestartServer(serverId, serverName, outputChannel);
-            } else {
-                // Python backend: the server upgrades its own environment and
-                // reloads the context. `?/partcad/installed` clears the flag.
-                await vscode.commands.executeCommand('partcad.reinstall');
+            } catch (e: any) {
+                traceError(`PartCAD update failed: ${e?.stack ?? e}`);
+                vscode.window.showErrorMessage(`Failed to update PartCAD: ${e?.message ?? e}`);
             }
+            await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
+            await handleRestartServer(serverId, serverName, outputChannel);
         }),
         registerCommand(`partcad.installPackage`, async () => {
             await vscode.commands.executeCommand('setContext', 'partcad.packageContentsBeingLoaded', true);
@@ -886,16 +822,7 @@ connect:
             // buttons end up in the same updater the toolbar's "Update PartCAD"
             // uses -- reached by the route each backend needs.
             await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', true);
-            if (getBackendFromSetting(serverId) === 'service') {
-                await vscode.commands.executeCommand('partcad.update');
-                return;
-            }
-            // Python backend: `partcad.install` runs the shared updater when the
-            // service module is already installed, and the pip bootstrap when it
-            // is not. Going through it rather than through `partcad.update`
-            // leaves `partcad.activated` alone, so a failed install still shows
-            // the Explorer's install button instead of an empty view.
-            await vscode.commands.executeCommand('partcad.install');
+            await vscode.commands.executeCommand('partcad.update');
         }),
         registerCommand(`partcad.support`, async () => {
             vscode.env.openExternal(vscode.Uri.parse('https://calendly.com/partcad-support/30min'));
@@ -1099,20 +1026,7 @@ connect:
     context.subscriptions.push(partcadTerminal);
 
     setImmediate(async () => {
-        // The service backend does not use Python at all; start it directly
-        // without pulling in the Python extension.
-        if (getBackendFromSetting(serverId) === 'service') {
-            await runServer();
-            return;
-        }
-        const interpreter = getInterpreterFromSetting(serverId);
-        if (interpreter === undefined || interpreter.length === 0) {
-            traceLog(`Python extension loading`);
-            await initializePython(context.subscriptions);
-            traceLog(`Python extension loaded`);
-        } else {
-            await runServer();
-        }
+        await runServer();
     });
 }
 

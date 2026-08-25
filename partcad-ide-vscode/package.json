@@ -48,9 +48,6 @@
     "Visualization",
     "Other"
   ],
-  "extensionDependencies": [
-    "ms-python.python"
-  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
@@ -116,23 +113,9 @@
         "title": "Backend",
         "order": 0,
         "properties": {
-          "partcad.backend": {
-            "default": "service",
-            "description": "How the extension talks to PartCAD. 'service' runs the standalone 'partcad-json-rpc' executable (downloaded on demand, no Python required). 'python' uses a Python interpreter and the bundled language server, as in previous versions.",
-            "enum": [
-              "service",
-              "python"
-            ],
-            "enumDescriptions": [
-              "Use the standalone partcad-json-rpc service (recommended; no Python environment required).",
-              "Use a Python interpreter and the bundled language server."
-            ],
-            "scope": "machine",
-            "type": "string"
-          },
           "partcad.servicePath": {
             "default": "",
-            "description": "Path to a 'partcad-json-rpc' executable. When empty, the extension looks for an existing standalone installation, then offers to download one. Only used when 'partcad.backend' is 'service'.",
+            "description": "Path to a 'partcad-json-rpc' executable. When empty, the extension looks for a 'partcad-json-rpc' on the PATH (a 'pip install partcad' puts one there) and for an existing standalone installation, then offers to download one.",
             "scope": "machine",
             "type": "string"
           },
@@ -144,7 +127,7 @@
           },
           "partcad.serviceChannel": {
             "default": "socket",
-            "description": "How the extension connects to the PartCAD service. 'socket' uses a shared per-workspace background daemon (recommended); 'stdio' runs a dedicated service process over stdin/stdout. Only used when 'partcad.backend' is 'service'.",
+            "description": "How the extension connects to the PartCAD service. 'socket' uses a shared per-workspace background daemon (recommended); 'stdio' runs a dedicated service process over stdin/stdout.",
             "enum": [
               "socket",
               "stdio"
@@ -158,7 +141,7 @@
           },
           "partcad.serviceDownloadRepository": {
             "default": "partcad/partcad",
-            "description": "GitHub repository (owner/name) to download the standalone PartCAD bundle from. Only used when 'partcad.backend' is 'service'.",
+            "description": "GitHub repository (owner/name) to download the standalone PartCAD bundle from.",
             "scope": "machine",
             "type": "string"
           }
@@ -251,29 +234,6 @@
             "description": "Whether to take the public PartCAD index from its 'devel' branch instead of the released state on 'main'. Turn this on to work against index changes that have not been released yet.",
             "scope": "machine",
             "type": "boolean"
-          },
-          "partcad.importStrategy": {
-            "default": "useBundled",
-            "description": "Defines where `partcad` is imported from. This setting may be ignored if `partcad.path` is set.",
-            "enum": [
-              "useBundled",
-              "fromEnvironment"
-            ],
-            "enumDescriptions": [
-              "Always use the bundled version of `partcad`.",
-              "Use `partcad` from environment, fallback to bundled version only if `partcad` not available in the environment."
-            ],
-            "scope": "window",
-            "type": "string"
-          },
-          "partcad.interpreter": {
-            "default": [],
-            "description": "When set to a path to python executable, extension will use that to launch the server and any subprocess.",
-            "scope": "resource",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
           },
           "partcad.showNotifications": {
             "default": "always",
@@ -855,7 +815,7 @@
       {
         "view": "partcadExplorer",
         "contents": "PartCAD initialization failed!",
-        "when": "!partcad.activated && partcad.failed && partcad.pythonIsGood && partcad.workspaceIsGood"
+        "when": "!partcad.activated && partcad.failed && partcad.workspaceIsGood"
       },
       {
         "view": "partcadExplorer",
@@ -864,12 +824,7 @@
       },
       {
         "view": "partcadExplorer",
-        "contents": "Setup or switch to a working Python environment (>=3.10).",
-        "when": "!partcad.activated && partcad.failed && !partcad.pythonIsGood"
-      },
-      {
-        "view": "partcadExplorer",
-        "contents": "PartCAD Python module v0.8.0 is not found.\n\nPartCAD Python module has to be installed in the current Python environment for the PartCAD VS Code Extension to work properly.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD](command:partcad.startInstall)",
+        "contents": "PartCAD v0.8.0 is not found.\n\nThe extension needs a PartCAD to talk to. Install one below and it will be downloaded for you, or run `pip install partcad` in a Python environment of your own -- the extension finds a `partcad-json-rpc` on the PATH.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD](command:partcad.startInstall)",
         "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled"
       },
       {
@@ -930,10 +885,8 @@
     ]
   },
   "dependencies": {
-    "@vscode/python-extension": "^1.0.6",
     "fs-extra": "^11.4.0",
-    "three": "^0.185.1",
-    "vscode-languageclient": "^9.0.1"
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",

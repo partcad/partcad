@@ -85,10 +85,13 @@ lines get overwritten). To get the complete and detailed error log, see the
 Typical problems
 ----------------
 
-Message in "Explorer" left panel: "No Python (>= 3.10) installed"
+Message in "Explorer" left panel: "PartCAD ... is not found"
 
- - Install Conda environment into the current working directory (main menu: View -> Command palette -> Python: Create environment...)
- - Choose interpreter (main menu: View -> Command palette -> Python: Choose interpreter...)
+ - Press "Install or update PartCAD" in the "Explorer" left panel and the
+   extension downloads a standalone PartCAD for you. No Python is needed.
+ - Or, if you would rather use your own Python environment, run
+   ``pip install partcad`` in it: the extension finds the ``partcad-json-rpc``
+   that puts on your ``PATH`` and uses that instead of downloading anything.
  - Reload PartCAD extension (by pressing "Reload" button in "Context" left panel)
 
 "The PartCAD extension is being initialized..." in "Explorer" gets into infinite loop (and nothing happens in the corresponding terminal window)
@@ -97,7 +100,7 @@ Message in "Explorer" left panel: "No Python (>= 3.10) installed"
 
 Error while loading part or assembly view: "Module ... not found"
 
- - Make sure that extension version matches PartCAD Python module version in `pc version` command output
+ - Make sure that the extension version matches the PartCAD version in ``pc version`` command output
 
 ==============
 PartCAD Viewer

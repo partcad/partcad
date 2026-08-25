@@ -185,7 +185,7 @@ jobs:
           configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
-            (cd partcad-ide-vscode && poetry run nox --session setup && poetry run nox --session build_package)
+            (cd partcad-ide-vscode && npm ci && npm run vsce-package)
 
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results

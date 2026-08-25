@@ -1,32 +1,43 @@
 # partcad-ide-vscode
 
 Visual Studio Code extension providing navigation and UI for `partcad` projects. Node/TypeScript toolchain
-(`npm`), with a `nox`-driven Python side for the bundled LSP tool and its tests. Run all commands below from
+(`npm`). Run all commands below from
 this directory (`partcad-ide-vscode/`).
 
-## Backends
+## The backend
 
-The extension talks to PartCAD through a backend selected by the `partcad.backend` setting:
+**This extension is a JSON-RPC client and nothing else.** It talks to the standalone `partcad-json-rpc`
+executable, translating each `partcad.*` command the UI issues into the CLI-shaped JSON-RPC method and routing
+the service's notifications back under the `?/partcad/*` names the handlers listen on. See
+`src/common/backend.ts` and `src/common/provision.ts`.
 
-- `service` (default) — uses the standalone `partcad-json-rpc` executable (from
-  [`partcad-service-json-rpc`](../partcad-service-json-rpc)); no Python environment required. On first use it
-  looks for an existing standalone install, then offers to download one; declining switches the setting to
-  `python`. By default it connects over the per-workspace socket **daemon** (`partcad.serviceChannel: socket`):
-  it runs `pc daemon start`, reads the printed socket path, and connects; `partcad.serviceChannel: stdio` runs
-  a dedicated process over stdin/stdout instead. "Restart PartCAD"/reset runs `pc daemon stop` to tear down the
-  warm context. See `src/common/backend.ts` and `src/common/provision.ts`.
+By default it connects over the per-workspace socket **daemon** (`partcad.serviceChannel: socket`): it runs
+`pc daemon start`, reads the printed socket path, and connects. `partcad.serviceChannel: stdio` runs a
+dedicated process over stdin/stdout instead. "Restart PartCAD"/reset runs `pc daemon stop` to tear down the
+warm context.
 
-  **Daemon handling is the CLI's, not the extension's.** Which socket serves which workspace, whether anything
-  is answering on it, and how to stop it and wait are `partcad_client`, reached by running `pc`. A second
-  copy of those rules in TypeScript is a copy that can disagree, and a disagreement means the extension quietly
-  starting a daemon of its own beside the one `pc` is using. What stays in Node is the socket transport itself,
-  because a live notification connection cannot be shelled out.
-- `python` — the legacy path: a Python LSP server bundled under `./bundled/tool`, launched with a discovered
-  Python interpreter. Behavior is unchanged from previous versions.
+Where the executable comes from is `resolveServicePath`: the `partcad.servicePath` setting, then an existing
+standalone install, then the extension's own download directory, then `~/.local/bin`, then a plain `PATH`
+lookup. That last one is why a user with their own Python needs no download at all -- `pip install partcad`
+puts `partcad-json-rpc` on the `PATH`. Only when none of them resolves does the extension offer to download a
+bundle, and declining leaves it with no backend rather than falling back to something.
 
-The backend abstraction (`src/common/backend.ts`) keeps the extension's command/notification handling identical
-across both; the JSON-RPC backend translates the extension's `partcad.*` commands to the CLI-shaped JSON-RPC
-methods and routes the service's notifications back under the legacy `?/partcad/*` names.
+**Daemon handling is the CLI's, not the extension's.** Which socket serves which workspace, whether anything
+is answering on it, and how to stop it and wait are `partcad_client`, reached by running `pc`. A second copy of
+those rules in TypeScript is a copy that can disagree, and a disagreement means the extension quietly starting
+a daemon of its own beside the one `pc` is using. What stays in Node is the socket transport itself, because a
+live notification connection cannot be shelled out.
+
+### There used to be a second backend
+
+A Python language server under `bundled/tool`, with PartCAD's dependencies vendored into `bundled/libs`,
+selected by `partcad.backend: "python"`. It is gone, along with the setting, `partcad.interpreter`,
+`partcad.importStrategy`, the `ms-python.python` dependency, and 3,361 lines of Python.
+
+It was never the only way to do anything: the JSON-RPC backend registers every command the language server did,
+and two more. And it could not have worked where it was shipped -- `bundled/libs` held compiled wheels
+(`pygit2`, `aiohttp` and `cffi` publish no `py3-none-any` wheel at all) while the `.vsix` is built once, on
+Linux, for one CPython. Do not reintroduce a second backend; extend this one.
 
 ## The PartCAD Viewer
 
@@ -61,8 +72,8 @@ whatever `partcad.packagePath` resolves to. "The first time" is remembered per c
 state, so reopening the window is not another download; `partcad.installOnOpen: "false"` turns the automatic
 run off and leaves the palette command.
 
-Do not confuse it with `partcad.install`, which bootstraps the PartCAD *Python module* for the `python`
-backend and is a no-op for the frozen service.
+Do not confuse it with `partcad.install`, which is a no-op: it bootstrapped the PartCAD Python module for the
+backend that no longer exists, and survives only so an old command binding does not break.
 
 ## Updating PartCAD
 
@@ -71,18 +82,18 @@ refetches a package's imports and is "Reload the package" (`partcad.refresh`) he
 none of it, which is the point: there is one upgrader, `partcad_client.selfupdate`, and the extension
 reaches it the same way a user would.
 
-- `service` — spawns `<bundle>/pc --no-ansi upgrade` in the workspace folder and streams it to
-  the output channel (`updateServiceBundle` in `src/common/provision.ts`). `pc` looks up the latest release
-  and, only if something newer exists, stops every daemon running on the machine, waits for them, installs the
-  new bundle beside the running one, and removes every superseded bundle. The extension then reconnects, at the
-  new path — which is why `resolveServicePath` picks the newest `<root>/<version>/` directory rather than a
-  fixed one, and how the extension detects that anything happened: the resolved path moves. If there is no `pc`
-  beside the service, or it is too old to know the option, the extension downloads the release itself
-  (`downloadLatest`), the same path a first install takes.
-- `python` — the bundled server's `partcad.install` handler calls `partcad_client.selfupdate` directly
-  when PartCAD is already installed, and falls back to its `pip` bootstrap only when there is nothing installed
-  to update. No daemon is stopped there, and none needs to be: this backend serves the extension in-process and
-  never starts one.
+It spawns `<bundle>/pc --no-ansi upgrade` in the workspace folder and streams it to the output channel
+(`updateServiceBundle` in `src/common/provision.ts`). `pc` looks up the latest release and, only if something
+newer exists, stops every daemon running on the machine, waits for them, installs the new bundle beside the
+running one, and removes every superseded bundle. The extension then reconnects, at the new path — which is why
+`resolveServicePath` picks the newest `<root>/<version>/` directory rather than a fixed one, and how the
+extension detects that anything happened: the resolved path moves. If there is no `pc` beside the service, or
+it is too old to know the option, the extension downloads the release itself (`downloadLatest`), the same path
+a first install takes.
+
+The other direction is a refusal, and deliberately so: `pc upgrade` run *inside* a bundle this extension
+downloaded errors out and says to update the extension instead. See "The tools on the terminal PATH" below for
+how it knows.
 
 The Explorer's "install"/"needs to be updated" buttons (`partcad.startInstall`) route to `partcad.update` too:
 installing what is missing and updating what is stale is one operation, and a user should not have to know
@@ -100,17 +111,14 @@ removed by a detached reaper once that process exits.
 this window, through `context.environmentVariableCollection`, so `pc` works without the user installing
 anything or editing a shell profile. `partcad.addToolsToTerminalPath` (default true) turns it off.
 
-Which directory that is depends on the backend:
+The directory is `path.dirname()` of whatever `resolveServicePath` found. A standalone bundle is
+`<install-dir>/<version>/{pc,partcad,partcad-json-rpc}`, one directory holding all three, so the executable the
+extension already resolved names it -- and one `PATH` entry covers every entry point.
 
-- `service` — `path.dirname()` of whatever `resolveServicePath` found. A standalone bundle is
-  `<install-dir>/<version>/{pc,partcad,partcad-json-rpc}`, one directory holding all three, so the executable
-  the extension already resolved names it.
-- `python` — the scripts directory of the interpreter the language server runs on, which only that
-  interpreter can name. `bundled/tool/lsp_server.py`'s `report_scripts_directory()` sends it as
-  `?/partcad/scriptsPath`, from `partcad.install`, before the self-update early return so both install paths
-  report. That environment has no `pc` in it today (it is provisioned with the service and the client, not the
-  CLI); the directory is reported anyway, because it is the answer to "where would it be" and reporting only
-  on success would mean never reporting on the environment where the answer would change.
+It also sets `PARTCAD_MANAGED_BY=vscode-extension` on those terminals. `partcad_client.selfupdate` reads it and
+makes `pc upgrade` refuse: a bundle this extension downloaded is replaced by updating the extension, and
+upgrading from inside it would install a second copy the extension does not know about. Keep the two constants
+in step; `selfupdate.py` is the only reader.
 
 Four things about it are deliberate:
 
@@ -146,12 +154,9 @@ edit, immediately on open/save) through the `partcad.lintFile` command and publi
 **The check never reaches the daemon**, and there is no RPC method for it. It is the client's own file --
 usually one the editor has not saved -- and it needs no package graph, no CAD runtime and no loaded context, so
 sending it would mean shipping the buffer across a wire to have it read back, and would leave the editor silent
-exactly when the package fails to load *because* of the file being typed into. Each backend answers
-`partcad.lintFile` from whatever local PartCAD it has:
-
-- `service` — `JsonRpcBackend.lintFile` runs `pc --no-ansi lint --file <path> --stdin --json`, feeding the
-  buffer on stdin. Same reasoning as `pc daemon stop`: defer to the CLI rather than keep a second copy here.
-- `python` — the bundled server's `partcad.lintFile` calls `partcad_client.lint` in its own process.
+exactly when the package fails to load *because* of the file being typed into. `JsonRpcBackend.lintFile`
+answers it by running `pc --no-ansi lint --file <path> --stdin --json`, feeding the buffer on stdin. Same
+reasoning as `pc daemon stop`: defer to the CLI rather than keep a second copy here.
 
 The checker is `partcad_utils.assy_lint` (schema: `partcad-utils/src/partcad_utils/schema/assy.json`), shared
 with the daemon-side package lint so an editor and CI cannot disagree about a file. It masks each Jinja2
@@ -163,7 +168,6 @@ message wording there, not here.
 
 ```bash
 npm install
-nox --session setup   # sets up the bundled Python LSP tool environment
 ```
 
 ## Test and validate changes
@@ -172,24 +176,20 @@ nox --session setup   # sets up the bundled Python LSP tool environment
 npm run lint                                # eslint on src/**/*.ts
 npm run format-check                        # prettier check
 npm test                                    # vscode-test extension tests (xvfb-run -a npm test on Linux)
-nox --session tests                         # pytest src/test/python_tests (bundled LSP tool)
-nox --session lint                          # pylint/black/isort on Python + npm run lint on TS
 ```
 
 ## Build / package
 
 ```bash
-nox --session build_package   # builds partcad.vsix (also runs npm install)
+npm ci && npm run vsce-package   # builds partcad.vsix (vscode:prepublish runs webpack)
 code --install-extension partcad.vsix
 ```
 
-`nox --session build_package` and not `npm run vsce-package`: the nox session populates `bundled/libs` first,
-which is gitignored, holds the language server's vendored dependencies, and is what
-`bundled/tool/lsp_server.py` puts at the front of its `sys.path`. It is the only command that builds this
-package anywhere -- `.github/workflows/nox.yml` runs it once on Linux and attaches `partcad-<version>.vsix` to
-the GitHub release, and `partcad-ide-standalone/build.sh` runs it again per platform for the copy that ships
-inside the PartCAD IDE. Per platform because `bundled/libs` holds compiled wheels (`pygit2`, `aiohttp`,
-`cffi`), so the released Linux package is not the one a macOS or Windows IDE can carry.
+That is the whole build, everywhere: `.github/workflows/vsix.yml` runs it once and attaches
+`partcad-<version>.vsix` to the GitHub release, and `partcad-ide-standalone/build.sh` runs it for the copy that
+ships inside the PartCAD IDE. It used to be `nox --session build_package`, which had to populate `bundled/libs`
+first and had to run per platform because those were compiled wheels. There is no Python in this package any
+more, so one build serves every platform.
 
 After changing `partcad` core code while developing through this extension, click "Restart PartCAD" in the
 PartCAD `Context` view (or restart VS Code) to pick up the change.

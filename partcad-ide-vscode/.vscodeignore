@@ -2,11 +2,7 @@
 coverage/**
 **/node_modules/**
 **/.venv/**
-**/.nox/**
 **/__pycache__/**
 **/.pyc
-**/bundled/libs/bin/**
 **/.pytest_cache/**
-**/requirements.in
-**/tool/_debug_server.py
 **/.conda/**

@@ -66,8 +66,21 @@ from . import __version__
 
 # How PartCAD was installed.
 KIND_STANDALONE = "standalone"  # the frozen PyInstaller bundle
-KIND_WHEEL = "wheel"  # `pip install partcad-cli`
+KIND_WHEEL = "wheel"  # `pip install partcad`
 KIND_SOURCE = "source"  # an editable install of a source checkout
+KIND_IDE_MANAGED = "ide-managed"  # a bundle an editor extension downloaded and owns
+
+# Set by the PartCAD extension on the terminals it opens, beside the PATH entry
+# that puts these tools there in the first place. An extension-managed bundle is
+# replaced by updating the extension, so `pc upgrade` inside one has to refuse:
+# it would install a second copy the extension does not know about, and the
+# extension would go on running the old one.
+#
+# The variable is the exact signal for the case it covers -- a terminal the
+# extension opened -- and `_is_extension_managed()` below is the fallback for a
+# bundle reached any other way.
+MANAGED_BY_ENV = "PARTCAD_MANAGED_BY"
+MANAGED_BY_EXTENSION = "vscode-extension"
 
 DEFAULT_REPOSITORY = "partcad/partcad"
 
@@ -113,8 +126,29 @@ def _noop(_message: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _is_extension_managed() -> bool:
+    """Is this a bundle the PartCAD editor extension downloaded and owns?
+
+    Two signals, because they cover different ways of arriving here. The
+    environment variable is set by the extension on the terminals it opens, so it
+    is exact and works in any editor built on VS Code. The path check catches a
+    bundle reached from somewhere else -- a plain OS terminal, a script -- by the
+    one thing every such install has in common: the extension downloads into its
+    own `globalStorageUri`, and no other installer writes there. Both segments
+    are required, so an unrelated `globalStorage` directory is not enough.
+    """
+    if os.environ.get(MANAGED_BY_ENV) == MANAGED_BY_EXTENSION:
+        return True
+    if not getattr(sys, "frozen", False):
+        return False
+    parts = os.path.abspath(sys.executable).split(os.sep)
+    return "globalStorage" in parts and "partcad-bundle" in parts
+
+
 def installation_kind() -> str:
-    """Classify this installation as standalone, wheel, or source checkout."""
+    """Classify this installation as standalone, wheel, source, or extension-managed."""
+    if _is_extension_managed():
+        return KIND_IDE_MANAGED
     if getattr(sys, "frozen", False):
         return KIND_STANDALONE
     module_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
@@ -246,6 +280,21 @@ def check(repo: Optional[str] = None, to_version: Optional[str] = None) -> dict:
     """
     kind = installation_kind()
     current = current_version()
+    if kind == KIND_IDE_MANAGED:
+        return {
+            "kind": kind,
+            "current": current,
+            "latest": None,
+            "pinned": to_version,
+            "update_available": False,
+            "reason": (
+                "This PartCAD was installed by the PartCAD editor extension, which owns it. "
+                "Update the extension instead -- your editor's Extensions view, or "
+                '"Update PartCAD" in the PartCAD Explorer -- and it will bring a matching '
+                "PartCAD with it. Upgrading from here would install a second copy the "
+                "extension does not know about."
+            ),
+        }
     if kind == KIND_SOURCE:
         return {
             "kind": kind,

@@ -168,14 +168,11 @@ filename = "partcad-ide-vscode/package.json"
 search = "v{current_version} is not found"
 replace = "v{new_version} is not found"
 
-[[tool.bumpversion.files]]
-filename = "partcad-ide-vscode/bundled/tool/lsp_server.py"
-search = "version=\"{current_version}\""
-replace = "version=\"{new_version}\""
-
-# The minimum-version check the extension's activation runs. It moved out of
-# lsp_server.py and into the shared operations core with the JSON-RPC migration;
-# this entry kept naming the old file, so the bound stopped moving with it.
+# The minimum-version check the extension's activation runs. It moved out of the
+# bundled language server and into the shared operations core with the JSON-RPC
+# migration; the entry kept naming the old file, so the bound stopped moving with
+# it. That language server is now gone entirely, and its own version constant
+# with it.
 [[tool.bumpversion.files]]
 filename = "partcad-service-json-rpc/src/partcad_service_json_rpc/core/operations.py"
 search = "(\">={current_version}\")"
