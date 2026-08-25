@@ -478,64 +478,118 @@ jobs:
           fi
           ide/standalone/build.sh --with-cli-bundle dist/standalone/partcad ${extra}
 
-      # TEMPORARY. Inno Setup aborts the Windows build with "Error in
-      # partcad-ide.iss: The system cannot find the path specified", 24 seconds
-      # into compiling -- so it is some way into the tree rather than failing on
-      # a missing top-level path. Nothing in the build says which path, and the
-      # step had never run before, so there is no earlier run to compare with.
+      # TEMPORARY. Remove once the Windows installer builds.
       #
-      # This measures rather than guesses. It reports the three paths the .iss
-      # actually reads, and the length of every path under the application,
-      # because a path over Windows' 260-character limit produces exactly that
-      # message and this tree carries the extension's "bundled/" (1553 files)
-      # and the frozen command line tools.
+      # Inno Setup aborts the Windows build with "Error in partcad-ide.iss: The
+      # system cannot find the path specified", naming no path and no line. A
+      # first measurement ruled out what it was there to rule out: every path
+      # the .iss names exists (bar the icon, which `#ifdef HaveIcon` keeps the
+      # compiler from ever reading, because cairo is not loadable on this
+      # runner), nothing in the application tree is anywhere near MAX_PATH, and
+      # the runner has long paths enabled regardless.
       #
-      # 'always()' because the step above fails: the tree is fully built by the
-      # time Inno runs, so it is still there to look at. Remove this once the
-      # cause is known.
-      - name: "Diagnostic: why Inno Setup cannot find a path"
+      # So this stops inspecting the inputs and asks the compiler instead: it
+      # compiles cut-down scripts from the same directory as the real one, each
+      # isolating one thing the real one does, and prints what each says.
+      #
+      # 'always()' because the build step fails: the tree is fully built by the
+      # time Inno runs, so it is all still there to compile.
+      - name: "Diagnostic: which path Inno Setup cannot find"
         if: ${{ always() && runner.os == 'Windows' }}
         shell: bash
         run: |
+          set +e
+          cd partcad-ide-standalone/installer
+
+          echo "== what 'iscc' resolves to =="
+          type -a iscc
+          echo "== the compiler's own directory, which 'compiler:' resolves to =="
+          ls -la "/c/Program Files (x86)/Inno Setup 6/Default.isl" 2>&1
+
           python - <<'PY'
-          import os, pathlib
+          import os
+          import pathlib
 
-          repo = pathlib.Path.cwd()
-          app = repo / "dist" / "ide" / "partcad-ide"
+          here = pathlib.Path.cwd()
+          app = here.parent.parent / "dist" / "ide" / "partcad-ide"
 
-          # The three inputs "partcad-ide.iss" names. AppDir is its '[Files]'
-          # source and the only one that is a tree rather than a file.
-          for label, path in (
-              ("AppDir", app),
-              ("LicenseFile", repo / "LICENSE.txt"),
-              ("SetupIconFile", app / "partcad-ide.ico"),
-          ):
-              print(f"{label:14} exists={path.exists()}  {path}")
+          # The deepest directory in the application, so that a probe copying it
+          # reproduces the longest paths without copying a gigabyte.
+          deepest = max(
+              (path for path in app.rglob("*") if path.is_dir()),
+              key=lambda path: len(str(path)),
+              default=app,
+          )
+          relative = os.path.relpath(deepest, here)
+          print(f"deepest directory, absolute ({len(str(deepest))} chars):")
+          print(f"  {deepest}")
+          print(f"deepest directory, as the .iss would spell it "
+                f"({len(relative)} chars):")
+          print(f"  {relative}")
 
-          if not app.is_dir():
-              raise SystemExit("no application tree to measure")
+          # Everything a probe shares: no compression, so that a probe that gets
+          # as far as copying files costs seconds rather than minutes.
+          COMMON = """[Setup]
+          AppName=Probe
+          AppVersion=1.0
+          DefaultDirName={autopf}\\Probe
+          Compression=none
+          PrivilegesRequired=lowest
+          %(extra)s
+          [Languages]
+          Name: "english"; MessagesFile: "compiler:Default.isl"
 
-          # Inno resolves '{#AppDir}\*' to absolute paths, so absolute length is
-          # what counts, not the length relative to the .iss.
-          lengths = []
-          for root, _dirs, files in os.walk(app):
-              for name in files:
-                  full = os.path.join(root, name)
-                  lengths.append((len(full), full))
+          [Files]
+          %(files)s
+          """
 
-          lengths.sort(reverse=True)
-          over = [item for item in lengths if item[0] > 259]
-          print(f"\nfiles={len(lengths)}  longest={lengths[0][0] if lengths else 0}"
-                f"  over 259 chars={len(over)}")
-          print("\nthe ten longest:")
-          for length, full in lengths[:10]:
-              print(f"  {length:4}  {full}")
+          probes = {
+              # Nothing but the compiler's own message file and one small file:
+              # if this fails, the failure is in neither of the two the real
+              # script adds.
+              "probe-a": {"extra": "", "files":
+                          'Source: "partcad-ide.iss"; DestDir: "{app}"'},
+              # The one path the real script reads at parse time.
+              "probe-b": {"extra": "LicenseFile=..\\..\\LICENSE.txt", "files":
+                          'Source: "partcad-ide.iss"; DestDir: "{app}"'},
+              # The application tree, reached the way the real script reaches it
+              # -- through '..\..\', which the real script's [Files] source is
+              # spelled with.
+              "probe-c": {"extra": "", "files":
+                          f'Source: "{relative}\\*"; DestDir: "{{app}}"; '
+                          f'Flags: recursesubdirs createallsubdirs'},
+              # The same files, named absolutely. If c fails and d passes, the
+              # spelling is the fault and not the files.
+              "probe-d": {"extra": "", "files":
+                          f'Source: "{deepest}\\*"; DestDir: "{{app}}"; '
+                          f'Flags: recursesubdirs createallsubdirs'},
+          }
+          for name, values in probes.items():
+              pathlib.Path(f"{name}.iss").write_text(COMMON % values)
           PY
 
+          mkdir -p probe-out
+          for probe in probe-a probe-b probe-c probe-d; do
+            echo
+            echo "== ${probe} =="
+            sed -n '1,20p' "${probe}.iss"
+            echo "--"
+            MSYS2_ARG_CONV_EXCL="*" iscc \
+              "/O$(cygpath -w "${PWD}/probe-out")" \
+              "$(cygpath -w "${PWD}/${probe}.iss")" 2>&1 | tail -n 20
+            echo "exit=${PIPESTATUS[0]}"
+          done
+
           echo
-          echo "long paths enabled on this runner:"
-          reg query 'HKLM\SYSTEM\CurrentControlSet\Control\FileSystem' //v LongPathsEnabled ||
-            echo "  (not set)"
+          echo "== the real script, without /Qp =="
+          MSYS2_ARG_CONV_EXCL="*" iscc \
+            "/DVersion=0.0.0" \
+            "/O$(cygpath -w "${PWD}/probe-out")" \
+            "/Fprobe-real" \
+            "$(cygpath -w "${PWD}/partcad-ide.iss")" 2>&1 | tail -n 40
+          echo "exit=${PIPESTATUS[0]}"
+
+          rm -rf probe-out probe-a.iss probe-b.iss probe-c.iss probe-d.iss
 
       # The build warns and carries on when the platform-specific packaging
       # tools are missing, which is right for someone building locally and wrong
