@@ -18,7 +18,7 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
   A JSON-RPC service (`partcad-json-rpc` executable) exposing `partcad` functionality with methods that mirror
   `partcad-cli`. By default it runs a per-workspace background **daemon** (served over a socket / Windows named
-  pipe); it can also serve over stdin/stdout or HTTP. It is the default backend for `partcad-ide-vscode` and
+  pipe); it can also serve over stdin/stdout or HTTP. It is the default backend for `ide/vscode` and
   the backend for most `pc` commands, and the CLI manages it via `pc daemon start`/`stop`.
 
   The daemon owns the warm PartCAD context **and** the sandboxed Python runtimes that CAD wrappers execute in,
@@ -53,7 +53,7 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
   extension by running `pc upgrade` — as does the extension's daemon discovery, through `pc daemon start`.
   Nothing about daemons or upgrading is reimplemented in TypeScript.
 
-* [partcad-ide-vscode](./partcad-ide-vscode/AGENTS.md):
+* [ide/vscode](./ide/vscode/AGENTS.md):
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality. Hosts the `PartCAD Viewer`.
 
@@ -61,21 +61,21 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
   The Python side of the socket protocol `partcad` uses to display shapes in the IDE's `PartCAD Viewer`. Lazily
   imported by `partcad`. A component directory but **not** a distribution: its source is symlinked in at
-  `partcad/src/partcad_ide_client`, so it ships inside the `partcad` wheel and nothing installs it separately.
+  `src/partcad_ide_client`, so it ships inside the `partcad` wheel and nothing installs it separately.
   See "The PartCAD IDE viewer client" in `partcad/AGENTS.md`.
 
-* [partcad-ide-standalone](./partcad-ide-standalone/AGENTS.md):
+* [ide/standalone](./ide/standalone/AGENTS.md):
 
   The **PartCAD IDE**: a rebranded [VSCodium](https://vscodium.com/) build carrying the extension above, the
   extensions this repository recommends, and the standalone command line tools -- one application to download,
   for users who have no Python and no editor set up. It always opens in the PartCAD workbench. Installed with
   `install.sh --ide`.
 
-* [partcad-cad-freecad](./partcad-cad-freecad/AGENTS.md):
+* [cad/freecad](./cad/freecad/AGENTS.md):
 
   The `PartCAD` addon (workbench) for FreeCAD: browse packages, parts and assemblies as a hierarchy, set an
   object's parameters in a generated dialog, and import the result into the open document as a STEP file. Like
-  `partcad-ide-vscode` it is a thin client of `partcad-service-json-rpc` (the standalone PyInstaller bundle),
+  `ide/vscode` it is a thin client of `partcad-service-json-rpc` (the standalone PyInstaller bundle),
   because FreeCAD's embedded Python cannot host `partcad` itself.
 
 * [README.md](./README.md) and [docs](./docs/README.md):
@@ -85,8 +85,8 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 ## Development process
 
 Full narrative guide (Docker/dev-container setup, PR merge criteria): `docs/source/contributing.rst`.
-Component-specific commands: `partcad/AGENTS.md`, `partcad-cli/AGENTS.md`, `partcad-ide-vscode/AGENTS.md`,
-`partcad-ide-client/AGENTS.md`, `partcad-cad-freecad/AGENTS.md`.
+Component-specific commands: `partcad/AGENTS.md`, `partcad-cli/AGENTS.md`, `ide/vscode/AGENTS.md`,
+`partcad-ide-client/AGENTS.md`, `cad/freecad/AGENTS.md`.
 
 ### Where commands run
 
@@ -142,7 +142,7 @@ so this never affects a commit.
 From the repo root, inside the environment:
 
 ```bash
-poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc partcad-cad-freecad \
+poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc cad/freecad \
   partcad-ide-client \
   -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
@@ -181,9 +181,9 @@ wheels stay fine — see `dev-tools/pyinstaller/README.md` before doing any of t
 *OS versions* (`ubuntu-22.04-x86_64`, `macos-26-arm64`, …), and that the same platform list appears in three places
 that nothing keeps in sync; the README says which, and which of them a pull request skips without `#deepTest`. The
 `.vsix` is built once by `.github/workflows/vsix.yml`, which `build.yml` and `deploy.yml` both call, and
-`partcad-ide-standalone/build.sh` runs the same `npm run vsce-package` for the copy inside the IDE. One build
+`ide/standalone/build.sh` runs the same `npm run vsce-package` for the copy inside the IDE. One build
 serves every platform: the extension is a JSON-RPC client with no Python and no compiled content in it. Changing `.vscode/extensions.json` changes what the IDE ships with — see
-`partcad-ide-standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of its
+`ide/standalone/README.md`. The snap carries whatever the bundle carries, so it needs nothing extra of its
 own; `dev-tools/snap/README.md` covers what is specific to it (confinement, aliases, the base, its state directory).
 
 ### Committing

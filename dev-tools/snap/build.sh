@@ -80,7 +80,7 @@ fi
 
 VERSION="$("${PYTHON}" -c "
 import re, pathlib
-source = pathlib.Path('${REPO_ROOT}/partcad/src/partcad/__init__.py').read_text()
+source = pathlib.Path('${REPO_ROOT}/src/partcad/__init__.py').read_text()
 print(re.search(r'__version__: str = \"([^\"]+)\"', source).group(1))
 ")"
 

@@ -22,21 +22,11 @@ __pycache__
 /stage
 /prime
 /*.snap
-/partcad-cli/build
-/partcad-cli/dist
-# Copied in from the repository root by the wheel and standalone builds
-/partcad-cli/LICENSE.txt
-/partcad-service-json-rpc/LICENSE.txt
-/partcad-service-json-rpc/build
-/partcad-service-json-rpc/dist
-/partcad-utils/LICENSE.txt
-/partcad-utils/dist
-/partcad-utils/build
-/partcad-client/LICENSE.txt
-/partcad-client/dist
-/partcad-client/build
-/partcad/build
-/partcad/dist
+# The compatibility shim, built beside the wheel. Its LICENSE.txt is copied in
+# from the repository root by the build, the way each distribution's used to be.
+/shim/build
+/shim/dist
+/shim/LICENSE.txt
 allure-report/
 allure-results/
 behave-results/

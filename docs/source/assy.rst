@@ -382,7 +382,7 @@ Validation
 ==========
 
 ASSY files are checked against a JSON schema
-(``partcad-utils/src/partcad_utils/schema/assy.json``) that describes the
+(``src/partcad_utils/schema/assy.json``) that describes the
 document *after* Jinja2 rendering: the node keys above, the shape of an OCCT
 location, and the fact that ``location``, ``connectPorts`` and ``connect`` -- or
 ``part``, ``assembly`` and ``links`` -- exclude one another.

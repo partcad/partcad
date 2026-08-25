@@ -119,7 +119,7 @@ The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
 this machine. The archive name is a contract with four consumers: `install.sh`, `partcad_client.selfupdate`
 (which is what `pc upgrade` and the VS Code extension use to update a bundle in place), the extension's own
 first-time download (`src/common/provision.ts`), and the FreeCAD addon
-(`partcad-cad-freecad/partcad_freecad/provision.py`). So is the archive's single top-level `partcad/`
+(`cad/freecad/partcad_freecad/provision.py`). So is the archive's single top-level `partcad/`
 directory: all of them unpack it and rename that directory to `<install-dir>/<version>/`, which is what lets a
 new bundle be installed beside a running one instead of over it.
 

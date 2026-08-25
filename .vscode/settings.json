@@ -28,7 +28,7 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "eslint.workingDirectories": [
-    "${workspaceFolder}/partcad-ide-vscode"
+    "${workspaceFolder}/ide/vscode"
   ],
   "[typescriptreact]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
@@ -168,13 +168,13 @@
     "output": true,
     "**/*test-results": true,
     "**/allure-results": true,
-    "partcad-ide-vscode/bundled/libs": true,
-    "partcad-ide-vscode/.nox": true,
-    "partcad-ide-vscode/out": true,
-    "partcad-ide-vscode/dist": true,
-    "partcad-ide-vscode/node_modules": true,
-    "partcad-ide-vscode/.conda": true,
-    "partcad-ide-vscode/partcad.vsix": true,
+    "ide/vscode/bundled/libs": true,
+    "ide/vscode/.nox": true,
+    "ide/vscode/out": true,
+    "ide/vscode/dist": true,
+    "ide/vscode/node_modules": true,
+    "ide/vscode/.conda": true,
+    "ide/vscode/partcad.vsix": true,
     ".pre-commit": true
   },
   "files.insertFinalNewline": true,
@@ -227,9 +227,9 @@
     }
   ],
   "python.analysis.extraPaths": [
-    "./partcad/src",
-    "./partcad-cli/src",
-    "./partcad-ide-vscode/bundled/libs"
+    "./src",
+    "./src",
+    "./ide/vscode/bundled/libs"
   ],
   "python.envFile": "${workspaceFolder}/.env",
   // https://code.visualstudio.com/docs/python/testing#_run-tests-with-coverage
@@ -267,13 +267,13 @@
     "output": true,
     "**/*test-results": true,
     "**/allure-results": true,
-    "partcad-ide-vscode/bundled/libs": true,
-    "partcad-ide-vscode/.nox": true,
-    "partcad-ide-vscode/out": true,
-    "partcad-ide-vscode/dist": true,
-    "partcad-ide-vscode/node_modules": true,
-    "partcad-ide-vscode/.conda": true,
-    "partcad-ide-vscode/partcad.vsix": true,
+    "ide/vscode/bundled/libs": true,
+    "ide/vscode/.nox": true,
+    "ide/vscode/out": true,
+    "ide/vscode/dist": true,
+    "ide/vscode/node_modules": true,
+    "ide/vscode/.conda": true,
+    "ide/vscode/partcad.vsix": true,
     ".pre-commit": true
   },
   // "security.workspace.trust.untrustedFiles": "open",
@@ -292,6 +292,6 @@
     "devel"
   ],
   "yaml.schemas": {
-    "partcad/src/partcad/schema/partcad.json": "*/partcad.yaml"
+    "src/partcad/schema/partcad.json": "*/partcad.yaml"
   }
 }

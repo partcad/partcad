@@ -419,7 +419,7 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
 .. code-block::
 
-  Installing the current project: partcad-dev (0.8.0)
+  Installing the current project: partcad (0.8.0)
 
 Activate Environment
 --------------------
@@ -460,7 +460,7 @@ To test VSCode plugin, run the following commands in a shell session in the Term
 
 .. code-block:: bash
 
-    $ cd partcad-ide-vscode
+    $ cd ide/vscode
     $ nox --session setup
     $ nox --session build_package
     $ code --install-extension partcad.vsix
@@ -515,10 +515,10 @@ You also can run ``pytest`` without activating environment via Poetry, for examp
 
     $ poetry run pytest
 
-The tests for the core module are located in the ``./partcad/tests`` directory.
-The tests for the CLI module are located in the ``./partcad-cli/tests`` directory.
-The tests for the IDE viewer client are located in the ``./partcad-ide-client/tests`` directory.
-The tests for the LSP server of VSCode plugin are located in the ``./partcad-ide-vscode/src/test/python_tests`` directory.
+The tests for the core module are located in the ``./tests/partcad`` directory.
+The tests for the CLI module are located in the ``./tests/partcad_cli`` directory.
+The tests for the IDE viewer client are located in the ``./tests/partcad_ide_client`` directory.
+The tests for the LSP server of VSCode plugin are located in the ``./ide/vscode/src/test/python_tests`` directory.
 
 Behave
 ^^^^^^

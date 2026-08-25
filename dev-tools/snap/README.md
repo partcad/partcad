@@ -118,7 +118,7 @@ The telemetry id stays there too, and for a stronger reason: it identifies a use
 directory would make one machine look like several. `UserConfig.get_generated_id_path()` is the single definition of
 where it lives — it used to be derived independently by the writer and by `pc system telemetry info`/`clear`, which
 agreed only for as long as nothing set `PC_INTERNAL_STATE_DIR`. This snap was the first thing that did, which is how
-the split was found; `partcad/tests/unit/test_telemetry_id_path.py` pins it.
+the split was found; `tests/partcad/unit/test_telemetry_id_path.py` pins it.
 
 ## conda and git are not found, and that is fine
 

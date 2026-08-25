@@ -44,10 +44,10 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: partcad-ide-vscode/package-lock.json
+          cache-dependency-path: ide/vscode/package-lock.json
 
       - name: Install dependencies
-        working-directory: partcad-ide-vscode
+        working-directory: ide/vscode
         run: npm ci
 
       # `npm run vsce-package` runs `vscode:prepublish`, which is the production
@@ -55,20 +55,20 @@ jobs:
       # type check run in "npm-test.yml"; a packaging job that also linted would
       # be a second place for the same failure to appear.
       - name: Package the extension
-        working-directory: partcad-ide-vscode
+        working-directory: ide/vscode
         run: npm run vsce-package
 
       # "npm run vsce-package" writes a fixed "partcad.vsix", because
-      # "partcad-ide-standalone/build.sh" looks for that exact name. A release
+      # "ide/standalone/build.sh" looks for that exact name. A release
       # asset cannot be version-less though -- every other asset on the release
       # carries the version -- so the copy that gets uploaded is renamed here
       # rather than by changing the script the IDE build depends on.
       - name: Name the package after the version
-        working-directory: partcad-ide-vscode
+        working-directory: ide/vscode
         run: |
           version="$(jq -r .version package.json)"
           if [ -z "${version}" ] || [ "${version}" = "null" ]; then
-            echo "::error::no version in partcad-ide-vscode/package.json"
+            echo "::error::no version in ide/vscode/package.json"
             exit 1
           fi
           cp partcad.vsix "partcad-${version}.vsix"
@@ -82,5 +82,5 @@ jobs:
           # directory, and a third name matching either would be merged into the
           # wrong one.
           name: partcad-vsix
-          path: partcad-ide-vscode/partcad-*.vsix
+          path: ide/vscode/partcad-*.vsix
           if-no-files-found: error

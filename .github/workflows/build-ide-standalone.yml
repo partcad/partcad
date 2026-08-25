@@ -25,16 +25,16 @@ on:
   push:
     branches: ["devel"]
     paths:
-      - "partcad-ide-standalone/**"
-      - "partcad-ide-vscode/**"
+      - "ide/standalone/**"
+      - "ide/vscode/**"
       - ".vscode/extensions.json"
       - "install.sh"
       - ".github/workflows/build-ide-standalone.yml"
   pull_request:
     branches: ["main", "devel"]
     paths:
-      - "partcad-ide-standalone/**"
-      - "partcad-ide-vscode/**"
+      - "ide/standalone/**"
+      - "ide/vscode/**"
       - ".vscode/extensions.json"
       - "install.sh"
       - ".github/workflows/build-ide-standalone.yml"
@@ -70,7 +70,7 @@ jobs:
       # `-o addopts=` because the repository-wide options in pyproject.toml pull
       # in coverage and reporting plugins this job has no use for.
       - name: Run the tests
-        run: python -m pytest partcad-ide-standalone/tests -o addopts= -v
+        run: python -m pytest ide/standalone/tests -o addopts= -v
 
   # Where the command line bundles that go inside the IDE come from.
   #
@@ -80,7 +80,7 @@ jobs:
   #
   # "Standalone" runs on its own `push`/`pull_request` triggers, and its path
   # filters overlap this workflow's -- every version bump touches
-  # "partcad-ide-vscode/package.json" (ours) and "partcad-cli/src/**" (theirs).
+  # "ide/vscode/package.json" (ours) and "src/**" (theirs).
   # So one commit started the seven-platform, ~35-minute freeze twice: once as
   # its own run and once inside this one, and half of it was thrown away.
   #
@@ -278,7 +278,7 @@ jobs:
 
           # (2) No run for this commit. That is legitimate: the two workflows
           # have different path filters, and a change confined to
-          # "partcad-ide-standalone/**" fires this one and not that one. The
+          # "ide/standalone/**" fires this one and not that one. The
           # IDE build only needs a working bundle to embed and smoke-test, so
           # the newest one on the base branch keeps that coverage -- as long as
           # nobody reading the log can mistake it for this commit's.
@@ -467,7 +467,7 @@ jobs:
           if [ "${{ runner.os }}" = "macOS" ]; then
             extra="--dmg"
           fi
-          partcad-ide-standalone/build.sh --with-cli-bundle dist/standalone/partcad ${extra}
+          ide/standalone/build.sh --with-cli-bundle dist/standalone/partcad ${extra}
 
       # The build warns and carries on when the platform-specific packaging
       # tools are missing, which is right for someone building locally and wrong
@@ -524,7 +524,7 @@ jobs:
       - name: Install with install.sh
         shell: bash
         run: |
-          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' partcad/src/partcad/__init__.py)
+          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' src/partcad/__init__.py)
           sh install.sh --ide \
             --version "${version}" \
             --base-url "file://${PWD}/archives" \

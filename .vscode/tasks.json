@@ -91,7 +91,7 @@
             "kind": "build",
             "isDefault": true
         },
-        "path": "partcad-ide-vscode"
+        "path": "ide/vscode"
     },
     {
         "type": "npm",
@@ -103,7 +103,7 @@
             "group": "watchers"
         },
         "group": "build",
-        "path": "partcad-ide-vscode"
+        "path": "ide/vscode"
     },
     {
         "label": "tasks: watch-tests",

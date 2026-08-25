@@ -174,7 +174,7 @@ fi
 
 VERSION="$("${PYTHON}" -c "
 import re, pathlib
-source = pathlib.Path('${REPO_ROOT}/partcad/src/partcad/__init__.py').read_text()
+source = pathlib.Path('${REPO_ROOT}/src/partcad/__init__.py').read_text()
 print(re.search(r'__version__: str = \"([^\"]+)\"', source).group(1))
 ")"
 
@@ -220,7 +220,7 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   # works on a machine with no Python: convert("build123d"/"cadquery") hands back
   # live objects and so needs OCP in-process, and the "imported by name" check
   # below refuses to build the bundle without OCP/build123d. Pinned to the
-  # sandbox versions (see partcad/src/partcad/sandbox_versions.py).
+  # sandbox versions (see src/partcad/sandbox_versions.py).
   #
   # Note that 'pc inspect' no longer needs any of this: it tessellates in a
   # sandbox and sends glTF to the PartCAD IDE through 'partcad_ide_client', which

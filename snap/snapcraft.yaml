@@ -15,7 +15,7 @@
 name: partcad
 title: PartCAD
 base: core24
-# The version comes from `partcad/src/partcad/__init__.py`, the same single
+# The version comes from `src/partcad/__init__.py`, the same single
 # source the wheels and the standalone archives use. See the part below.
 adopt-info: partcad
 summary: The package manager for CAD-as-code and manufacturable products
@@ -111,7 +111,7 @@ parts:
     source-type: local
     override-pull: |
       craftctl default
-      craftctl set version="$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' "${CRAFT_PROJECT_DIR}/partcad/src/partcad/__init__.py")"
+      craftctl set version="$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' "${CRAFT_PROJECT_DIR}/src/partcad/__init__.py")"
     # The three executables have to stay next to `_internal/`: PyInstaller
     # resolves the payload relative to the executable. They move into
     # `opt/partcad/` together, so that `$SNAP` keeps holding a bundle rather

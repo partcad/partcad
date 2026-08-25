@@ -18,7 +18,7 @@ repos:
         exclude: "^examples/|_ai_.+\\.(py|scad)"
         exclude_types: [svg]
       - id: check-yaml
-        exclude: "^partcad/tests/unit/data/project_config_(template|include).yaml$"
+        exclude: "^tests/partcad/unit/data/project_config_(template|include).yaml$"
       - id: check-added-large-files
       # https://github.com/docker/for-mac/issues/5029
       # - id: check-executables-have-shebangs
@@ -115,7 +115,7 @@ repos:
         files: \.ts$
         name: eslint
         language: system
-        entry: bash -c "cd partcad-ide-vscode && npm run lint"
+        entry: bash -c "cd ide/vscode && npm run lint"
       # TODO: Add this back in when `npm run x-test` is fast
       # - id: x-test
       #   files: \.ts$

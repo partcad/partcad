@@ -16,7 +16,7 @@ MARKER="${TMPDIR:-/tmp}/partcad-pytest-result-$$"
 export PYTEST_RESULT_MARKER="$MARKER"
 rm -f "$MARKER"
 
-poetry run pytest partcad/tests -n "$WORKERS" -m "not slow" --timeout 300
+poetry run pytest tests/partcad -n "$WORKERS" -m "not slow" --timeout 300
 rc=$?
 
 result=$(cat "$MARKER" 2>/dev/null)
@@ -28,7 +28,7 @@ Tests did not pass (pytest exit code $rc, recorded result '${result:-none}').
 
 Please make sure all tests pass by debugging and fixing any errors before committing your changes.
 Use the command below to run the same tests locally with $WORKERS workers and a 5 minute timeout:
-    poetry run pytest partcad/tests -n $WORKERS -m \"not slow\" --timeout 300
+    poetry run pytest tests/partcad -n $WORKERS -m \"not slow\" --timeout 300
 "
     exit 1
 fi

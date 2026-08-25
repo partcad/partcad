@@ -574,18 +574,18 @@ FreeCAD add-on
 ==============
 
 The ``PartCAD`` workbench browses packages, parts and assemblies inside FreeCAD and imports them into the
-open document. It lives in the ``partcad-cad-freecad`` directory of the repository; copy or link that
+open document. It lives in the ``cad/freecad`` directory of the repository; copy or link that
 directory into FreeCAD's ``Mod`` folder as ``PartCAD`` and restart FreeCAD:
 
 .. code-block:: shell
 
   $ git clone https://github.com/partcad/partcad.git
-  $ ln -s "$PWD/partcad/partcad-cad-freecad" ~/.local/share/FreeCAD/Mod/PartCAD
+  $ ln -s "$PWD/partcad/cad/freecad" ~/.local/share/FreeCAD/Mod/PartCAD
 
 The ``Mod`` folder is ``~/Library/Preferences/FreeCAD/Mod/`` on MacOS and ``%APPDATA%\FreeCAD\Mod\`` on
 Windows. No Python setup is needed: the add-on drives the standalone ``partcad-json-rpc`` service, using an
 existing standalone installation if there is one and offering to download a bundle if there is not. See
-``partcad-cad-freecad/README.md`` for what it does and which environment variables it reads.
+``cad/freecad/README.md`` for what it does and which environment variables it reads.
 
 =========================
 Public PartCAD repository
