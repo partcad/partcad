@@ -473,8 +473,14 @@ jobs:
       # timestamp and GUIDs a DXF is otherwise stamped with, and pins the order
       # of its CLASSES section, under the 'reproducible' parameter of the 'dxf'
       # file type.
+      #
+      # The interpreter named here has to be one PYTHONS_SANDBOX lists, because
+      # that is this job's matrix. It named '3.10' until PYTHONS_SANDBOX was
+      # introduced, and the condition then matched no cell at all: this check
+      # silently stopped running, which is the failure it exists to catch,
+      # applied to itself. Change the two together.
       - name: The rendered examples must match what is checked in
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 

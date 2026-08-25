@@ -45,6 +45,15 @@ fi
 OUTPUT_DIR="${REPO_ROOT}/dist/ide"
 CACHE_DIR="${REPO_ROOT}/build/vscodium"
 STAGE_DIR="${REPO_ROOT}/build/ide"
+# Everything the build produces for its own use rather than for the application:
+# the extension plan, the extension staging directories, the rendered icons, the
+# packaged bootstrap extension. It has to live outside `STAGE_DIR`, because on
+# Linux and Windows the VSCodium archive unpacks flat and `STAGE_DIR` *is* the
+# application root -- so anything written into it is moved into the application
+# further down, shipped inside the release, and gone from where it was written.
+# That is not a tidiness point: `verify_bundle.py` reads the plan after the move
+# and every Linux and Windows IDE build failed on the plan not being there.
+WORK_DIR="${REPO_ROOT}/build/ide-work"
 PYTHON="${PYTHON:-python3}"
 PIN_FILE="${SCRIPT_DIR}/vscodium.json"
 
@@ -210,12 +219,39 @@ log "==> Building the PartCAD IDE ${VERSION} for ${PLATFORM}"
 
 #################################################  FETCH  ####################################################
 
+# `read_api` is for api.github.com and `download` is for everything else, and
+# the difference is the rate limit. An anonymous API call is counted against the
+# source IP, and the hosted MacOS runners share theirs with enough other builds
+# to sit over the limit for minutes at a time: the IDE build then died on
+# `curl: (56) The requested URL returned error: 403` a second after it started,
+# before it had downloaded anything. A token counts the call against the account
+# instead, which raises the limit by three orders of magnitude -- so use one when
+# the environment offers it. Retry either way: the limit is a moving target
+# rather than a permanent state, and curl does not retry a 403 unless told to.
+#
+# Release assets are served from a different host that does not rate limit this
+# way, so `download` needs neither the token nor the retries.
+GITHUB_API_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 if command -v curl >/dev/null 2>&1; then
   download() { curl -fsSL "$1" -o "$2"; }
-  read_url() { curl -fsSL "$1"; }
+  read_api() {
+    if [ -n "${GITHUB_API_TOKEN}" ]; then
+      curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+        -H "Authorization: Bearer ${GITHUB_API_TOKEN}" "$1"
+    else
+      curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "$1"
+    fi
+  }
 elif command -v wget >/dev/null 2>&1; then
   download() { wget -q "$1" -O "$2"; }
-  read_url() { wget -q "$1" -O -; }
+  read_api() {
+    if [ -n "${GITHUB_API_TOKEN}" ]; then
+      wget -q --tries=3 --waitretry=5 --retry-on-http-error=403,429 \
+        --header="Authorization: Bearer ${GITHUB_API_TOKEN}" "$1" -O -
+    else
+      wget -q --tries=3 --waitretry=5 --retry-on-http-error=403,429 "$1" -O -
+    fi
+  }
 else
   fail "neither curl nor wget is available"
 fi
@@ -231,7 +267,16 @@ fi
 
 if [ -z "${VSCODIUM_VERSION}" ]; then
   log "==> Looking up the latest VSCodium release (nothing is pinned in vscodium.json)"
-  VSCODIUM_VERSION="$(read_url "https://api.github.com/repos/${VSCODIUM_REPOSITORY}/releases/latest" |
+  # The response is captured before it is parsed, rather than piped straight into
+  # `sed`, so that a failed call is told apart from a call that returned
+  # something unexpected. Piped, the status of the substitution is the pipeline's
+  # and the two read the same.
+  LATEST_RELEASE="$(read_api "https://api.github.com/repos/${VSCODIUM_REPOSITORY}/releases/latest")" ||
+    fail "could not reach the GitHub API for ${VSCODIUM_REPOSITORY}.
+       An anonymous call is rate limited per source IP, which is what a 403 here means.
+       Set GITHUB_TOKEN (or GH_TOKEN), or pin a version in vscodium.json so that no call
+       is needed at all -- which is what makes this build reproducible anyway."
+  VSCODIUM_VERSION="$(printf '%s\n' "${LATEST_RELEASE}" |
     sed -n 's/.*"tag_name" *: *"\([^"]*\)".*/\1/p' | head -n 1)"
   [ -n "${VSCODIUM_VERSION}" ] || fail "could not determine the latest release of ${VSCODIUM_REPOSITORY}"
 fi
@@ -298,8 +343,8 @@ fi
 
 ################################################  UNPACK  ####################################################
 
-rm -rf "${STAGE_DIR}"
-mkdir -p "${STAGE_DIR}"
+rm -rf "${STAGE_DIR}" "${WORK_DIR}"
+mkdir -p "${STAGE_DIR}" "${WORK_DIR}"
 log "==> Unpacking ${VSCODIUM_ASSET}"
 case "${VSCODIUM_EXT}" in
 tar.gz) tar -xzf "${VSCODIUM_ARCHIVE}" -C "${STAGE_DIR}" ;;
@@ -352,10 +397,10 @@ fi
 # installed version wins over the one shipped here.
 BUILTIN_EXTENSIONS_DIR="${RESOURCES_DIR}/app/extensions"
 
-PLAN_FILE="${STAGE_DIR}/extensions-plan.json"
+PLAN_FILE="${WORK_DIR}/extensions-plan.json"
 
 build_bootstrap_vsix() {
-  local staging="${STAGE_DIR}/bootstrap"
+  local staging="${WORK_DIR}/bootstrap"
   rm -rf "${staging}"
   cp -R "${SCRIPT_DIR}/bootstrap" "${staging}"
   cp "${REPO_ROOT}/LICENSE.txt" "${staging}/LICENSE.txt"
@@ -368,7 +413,7 @@ package = json.loads(manifest.read_text(encoding='utf-8'))
 package['version'] = sys.argv[2]
 manifest.write_text(json.dumps(package, indent=2) + '\n', encoding='utf-8')
 " "${staging}/package.json" "${VERSION}"
-  (cd "${staging}" && npx --yes @vscode/vsce package --no-dependencies --out "${STAGE_DIR}/partcad-ide-bootstrap.vsix" >/dev/null)
+  (cd "${staging}" && npx --yes @vscode/vsce package --no-dependencies --out "${WORK_DIR}/partcad-ide-bootstrap.vsix" >/dev/null)
 }
 
 if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
@@ -402,12 +447,12 @@ if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
     --repo-root "${REPO_ROOT}" \
     --policy "${SCRIPT_DIR}/extensions.json" \
     --local "OpenVMP.partcad=${EXTENSION_VSIX}" \
-    --local "PartCAD.partcad-ide-bootstrap=${STAGE_DIR}/partcad-ide-bootstrap.vsix" \
+    --local "PartCAD.partcad-ide-bootstrap=${WORK_DIR}/partcad-ide-bootstrap.vsix" \
     --output "${PLAN_FILE}" \
     --explain
 
-  STAGING_EXTENSIONS="${STAGE_DIR}/extensions"
-  STAGING_USER_DATA="${STAGE_DIR}/user-data"
+  STAGING_EXTENSIONS="${WORK_DIR}/extensions"
+  STAGING_USER_DATA="${WORK_DIR}/user-data"
   mkdir -p "${STAGING_EXTENSIONS}" "${STAGING_USER_DATA}"
 
   # The application installs its own extensions: it resolves them against the
@@ -434,7 +479,7 @@ if [ "${INSTALL_EXTENSIONS}" = "1" ]; then
     gallery) target="${identifier}" ;;
     local) target="${path}" ;;
     vsix)
-      target="${STAGE_DIR}/$(basename "${url}")"
+      target="${WORK_DIR}/$(basename "${url}")"
       log "==> Downloading ${url}"
       download "${url}" "${target}" || target=""
       ;;
@@ -481,7 +526,7 @@ log "==> Rebranding"
   --overlay "${SCRIPT_DIR}/product.overlay.json" \
   --version "${VERSION}"
 
-ICON_DIR="${STAGE_DIR}/icons"
+ICON_DIR="${WORK_DIR}/icons"
 ICONS_BUILT=0
 if [ "${BRAND_ICONS}" = "1" ]; then
   if "${PYTHON}" "${SCRIPT_DIR}/tools/make_icons.py" \
@@ -688,7 +733,7 @@ if [ "${CREATE_ARCHIVE}" = "1" ]; then
     DMG="${OUTPUT_DIR}/partcad-ide-${VERSION}-${PLATFORM}.dmg"
     log "==> Packing ${DMG}"
     rm -f "${DMG}" "${DMG}.sha256"
-    DMG_STAGE="${STAGE_DIR}/dmg"
+    DMG_STAGE="${WORK_DIR}/dmg"
     rm -rf "${DMG_STAGE}"
     mkdir -p "${DMG_STAGE}"
     cp -R "${APP_ROOT}" "${DMG_STAGE}/"

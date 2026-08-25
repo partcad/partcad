@@ -609,7 +609,17 @@ jobs:
       # `pc`. No coverage: a frozen binary cannot be instrumented, and coverage
       # of the shipped bundle is not meaningful. `cd examples` so the local
       # package resolves as it does in test.yml.
+      #
+      # "The same commands" has to include how their failure is treated, and the
+      # "All" suite in test.yml is `continue-on-error` -- it sweeps the example
+      # packages the public index carries, and several of those have not been
+      # updated for build123d 0.11, so it fails on somebody else's code. Without
+      # the same escape hatch here, this job reported that as a broken bundle
+      # while the "PartCAD" suite beside it -- the one that does test this
+      # repository -- passed. Drop this and the two in test.yml together, when
+      # the index is updated; see the TODOs there.
       - name: Run the ${{ matrix.suite }} examples through the bundle
+        continue-on-error: ${{ matrix.suite == 'All' }}
         shell: bash -el {0}
         run: |
           cd examples

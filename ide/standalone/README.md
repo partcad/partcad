@@ -66,7 +66,14 @@ ide/standalone/build.sh --with-cli-bundle dist/standalone/partcad
 
 Useful while iterating: `--no-extensions` (much faster, and not shippable), `--no-archive`, `--no-icons`,
 `--no-installer`. `--help` lists them all. The VSCodium download is cached in `build/vscodium/`, so a rebuild does not fetch it
-again.
+again. Everything else the build produces for itself -- the extension plan, the staging directories, the rendered icons -- goes
+to `build/ide-work/`, and only `build/ide/` becomes the application: on Linux and Windows the VSCodium archive unpacks flat, so
+anything written beside it would be shipped inside the release.
+
+With no `version` in `vscodium.json` the build asks the GitHub API which VSCodium released last, and an anonymous API call is
+rate limited per source IP -- on a shared address that is a `403` before anything is downloaded. Set `GITHUB_TOKEN` (or
+`GH_TOKEN`) to be counted against an account instead, or pin a version, which is worth doing anyway: a pinned build produces the
+same IDE next month as it does today.
 
 Two optional dependencies change what the build can do, and it reports what it left out rather than failing:
 

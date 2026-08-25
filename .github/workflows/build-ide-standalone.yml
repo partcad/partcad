@@ -462,6 +462,15 @@ jobs:
         shell: bash
         # The .dmg is how a MacOS user expects to install an application; the
         # .tar.gz beside it is what "install.sh --ide" downloads.
+        env:
+          # "vscodium.json" pins no version, so the build asks the GitHub API
+          # which VSCodium released last. Anonymously that is rate limited per
+          # source IP, and the hosted MacOS runners share theirs: the build died
+          # on a 403 a second in, having downloaded nothing. The run's own token
+          # counts the call against the repository instead. It needs no
+          # permission beyond the `contents: read` this workflow already
+          # declares -- the release it reads is public.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           extra=""
           if [ "${{ runner.os }}" = "macOS" ]; then
