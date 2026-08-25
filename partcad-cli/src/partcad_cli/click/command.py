@@ -237,7 +237,7 @@ click.rich_click.COMMAND_GROUPS = {
     is_flag=True,
     default=None,
     show_envvar=True,
-    help="Enable the shared remote cache (memcached protocol); needs the 'memcache' extra",
+    help="Enable the shared remote cache (memcached protocol)",
 )
 @click.option(
     "--cache-remote-server",

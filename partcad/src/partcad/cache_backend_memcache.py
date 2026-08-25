@@ -16,13 +16,16 @@ zstd-compressed BREP frame. memcached values are opaque bytes, so the payload
 goes onto the socket without a copy or an encoding step, which is the whole
 reason the compression happens before the cache rather than inside it.
 
-The client library ('aiomcache') is an optional extra: pip install
-'partcad[memcache]'.
+The client library ('aiomcache') is an ordinary dependency of 'partcad'. It was
+an optional extra until it stopped being worth the upkeep: 9.9 KiB, no
+dependencies of its own, against four files that had to move together and one
+more decision at install time. The import below stays lazy all the same, so a
+run that never switches this tier on never pays for it.
 """
 
 import asyncio
 
-from .cache_backend import PooledCacheBackend, missing_dependency
+from .cache_backend import PooledCacheBackend, broken_dependency
 from . import logging as pc_logging
 from . import telemetry
 
@@ -53,7 +56,7 @@ class MemcacheCacheBackend(PooledCacheBackend):
         try:
             import aiomcache
         except ImportError:
-            raise missing_dependency("cacheRemote", "aiomcache", "memcache")
+            raise broken_dependency("cacheRemote", "aiomcache")
 
         self._aiomcache = aiomcache
         self.host, self.port = _split_server(user_config.cache_remote_server)

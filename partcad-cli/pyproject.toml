@@ -35,10 +35,9 @@ dependencies = {file = ["requirements.txt"]}
 # Pass-through extras: they pull in the matching `partcad` extra.
 [tool.setuptools.dynamic.optional-dependencies]
 lint = {file = ["requirements-lint.txt"]}
-# The two cache tiers that reach off this machine. Each carries a client
-# library the core imports lazily, so neither is a dependency of the wheel:
-# 'cacheRemote' (memcached) and 'cacheS3' (object storage).
-memcache = {file = ["requirements-memcache.txt"]}
+# The off-machine cache tier whose client is heavy enough to leave out:
+# 'cacheS3' (object storage). 'cacheRemote' (memcached) used to be an extra
+# beside it and is now an ordinary dependency of 'partcad'.
 aws = {file = ["requirements-aws.txt"]}
 
 [project.urls]

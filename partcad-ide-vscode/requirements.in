@@ -41,6 +41,9 @@ filelock==3.17.0
 docker>=7.1.0
 jsonschema>=4.23.0
 psutil>=6.1.1
+# The 'cacheRemote' client. An ordinary dependency of partcad since the
+# 'memcache' extra was folded in, so it belongs in this mirror.
+aiomcache>=0.8.2,<1.0
 # zstd for the BREP payloads partcad's wrapper protocol and shape cache carry.
 # Python 3.14 has the same module in the standard library as 'compression.zstd'.
 backports.zstd>=1.6.0; python_version < "3.14"

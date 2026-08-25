@@ -116,11 +116,6 @@ search = "partcad[lint]=={current_version}"
 replace = "partcad[lint]=={new_version}"
 
 [[tool.bumpversion.files]]
-filename = "partcad-cli/requirements-memcache.txt"
-search = "partcad[memcache]=={current_version}"
-replace = "partcad[memcache]=={new_version}"
-
-[[tool.bumpversion.files]]
 filename = "partcad-cli/requirements-aws.txt"
 search = "partcad[aws]=={current_version}"
 replace = "partcad[aws]=={new_version}"

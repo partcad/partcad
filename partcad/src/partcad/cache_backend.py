@@ -19,7 +19,7 @@ The tiers, fastest first:
   * files       - 'cacheFiles', the per-user directory under the internal state
                   directory. Always local, always available.
   * remote      - 'cacheRemote', a memcached-protocol server shared by a team or
-                  a CI fleet. Needs the 'memcache' extra.
+                  a CI fleet.
   * S3          - 'cacheS3', an object store. Slowest and furthest away, but it
                   survives everything else. Needs the 'aws' extra.
 
@@ -187,6 +187,20 @@ def missing_dependency(tier: str, module: str, extra: str) -> CacheDependencyErr
         "The '%s' cache needs the '%s' package, which is not installed. "
         "Install it with: pip install 'partcad[%s]' "
         "(or 'partcad-cli[%s]' when using the command line interface)." % (tier, module, extra, extra)
+    )
+
+
+def broken_dependency(tier: str, module: str) -> CacheDependencyError:
+    """The same, for a client that is an ordinary dependency of 'partcad'.
+
+    There is no extra to name here: the package should be present because
+    installing PartCAD installs it, so its absence is a damaged installation
+    rather than a decision the user has yet to make.
+    """
+    return CacheDependencyError(
+        "The '%s' cache needs the '%s' package, which ships with PartCAD but "
+        "could not be imported. Repair the installation with: "
+        "pip install --force-reinstall partcad" % (tier, module)
     )
 
 

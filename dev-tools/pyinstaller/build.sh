@@ -214,7 +214,7 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-client" "${SETUPTOOLS_BOUND}"
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras that the wheels leave to the user are all built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint,memcache,aws]" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint,aws]" "${SETUPTOOLS_BOUND}"
   # The CAD kernel is NOT a dependency of the 'partcad' wheel - the core runs all
   # CAD in sandboxes. The standalone bundle, however, freezes it in so that 'pc'
   # works on a machine with no Python: convert("build123d"/"cadquery") hands back

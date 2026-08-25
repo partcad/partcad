@@ -38,7 +38,7 @@ nox-poetry==1.2.0
 cadquery-ocp==7.9.3.1.1
 build123d==0.11.1
 ocpsvg==0.6.0
-# Every optional extra the 'partcad' wheel declares. None of them is a runtime
+# Every optional extra the 'partcad' wheel declares. Neither is a runtime
 # dependency - each carries a client library the core imports lazily, and only
 # when the feature that needs it is switched on - but 'partcad/tests/unit' has
 # tests that switch exactly those features on and drive them against local mock
@@ -50,14 +50,17 @@ ocpsvg==0.6.0
 # with 'assert {} == {"part": True}' and the reason only in the captured log
 # ("cacheRemote ... needs the 'aiomcache' package, which is not installed").
 #
-# All three, not just the two that were missing: 'lint' happens to arrive today
+# Both, not just the one that was missing: 'lint' happens to arrive today
 # because '.github/actions/setup-all' installs './partcad[lint]', but that is
 # the workflow's business and not something the test dependencies should rest
 # on. Named here, the suite states what it needs to run.
 #
+# 'memcache' is absent from this list because it is no longer an extra: the
+# 'aiomcache' those tests need is an ordinary dependency of 'partcad' now, so
+# installing the package at all brings it.
+#
 # Included by reference rather than restated, so the version ranges a user
-# installing 'partcad[memcache]' gets are the ones CI tests against. Paths are
+# installing 'partcad[aws]' gets are the ones CI tests against. Paths are
 # relative to this file, which is what pip resolves '-r' against.
 -r requirements-lint.txt
--r requirements-memcache.txt
 -r requirements-aws.txt

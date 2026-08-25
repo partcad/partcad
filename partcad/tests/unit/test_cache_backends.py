@@ -337,7 +337,13 @@ def test_a_shape_reaches_the_remote_tier_as_the_compressed_frame(tmp_path):
 
 
 def test_a_tier_without_its_extra_is_reported_and_skipped(tmp_path, monkeypatch):
-    """Enabling a tier whose client is missing must not take the others down."""
+    """A tier whose client will not import must not take the others down.
+
+    'aiomcache' is an ordinary dependency of 'partcad' now rather than the
+    'memcache' extra, so this is a damaged installation rather than a missing
+    option -- and the point of the test is unchanged either way: the cache is an
+    optimization, and losing a tier of it is reported, not fatal.
+    """
     import builtins
 
     real_import = builtins.__import__
@@ -357,7 +363,8 @@ def test_a_tier_without_its_extra_is_reported_and_skipped(tmp_path, monkeypatch)
 
     assert [b.name for b in backends] == ["files"]
     assert len(errors) == 1
-    assert "pip install 'partcad[memcache]'" in errors[0]
+    assert "aiomcache" in errors[0]
+    assert "pip install --force-reinstall partcad" in errors[0]
 
 
 def test_a_tier_switched_on_without_an_address_is_reported_and_skipped(tmp_path, monkeypatch):

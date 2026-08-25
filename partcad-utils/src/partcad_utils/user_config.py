@@ -463,7 +463,6 @@ class UserConfig(vyper.Vyper):
         #   cacheMem     this process's memory. Nearest, and lost on exit.
         #   cacheFiles   a directory under the internal state directory. Local.
         #   cacheRemote  a memcached server shared by a team or a CI fleet.
-        #                Needs the 'memcache' extra.
         #   cacheS3      an object store, which outlives all of the above.
         #                Needs the 'aws' extra.
         #
@@ -586,8 +585,7 @@ class UserConfig(vyper.Vyper):
 
         # option: cacheRemote
         # description: enable the shared remote cache, reached over the memcached
-        #              protocol. Requires the 'memcache' extra:
-        #              pip install 'partcad[memcache]'
+        #              protocol.
         # values: [True | False]
         # default: False
         self.bind_env("cacheRemote", "PC_CACHE_REMOTE")
