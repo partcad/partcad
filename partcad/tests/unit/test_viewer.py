@@ -133,13 +133,18 @@ def test_encode_gltf_matches_the_client_side_codec():
     'ocp_serialize' runs in the sandbox and cannot import 'partcad_ide_client';
     the client cannot import the sandbox's module either, so each carries its
     own two-line copy. This is the test that notices when one of them drifts.
+
+    Imported outright rather than through 'importorskip': the client ships in
+    this distribution, so it being absent is a packaging regression to fail on
+    rather than a reason to skip.
     """
+    import partcad_ide_client
+
     glb = b"glTF\x02\x00\x00\x00" + os.urandom(64) + b"\x00" * 4096
 
     encoded = ocp_serialize.encode_gltf(glb)
     assert zlib.decompress(base64.b64decode(encoded)) == glb
 
-    partcad_ide_client = pytest.importorskip("partcad_ide_client")
     assert partcad_ide_client.decode_gltf(encoded) == glb
     assert partcad_ide_client.encode_gltf(glb) == encoded
 
@@ -359,10 +364,12 @@ def test_interface_show_survives_components_it_cannot_build(monkeypatch):
 
 
 def test_a_missing_client_package_is_not_an_import_error(monkeypatch):
-    """'partcad_ide_client' is optional, so failing to import it is not fatal.
+    """A client that will not import degrades a preview, it does not fail a command.
 
-    It is installed by the PartCAD IDE, not depended on by 'partcad', so a CLI
-    or library user simply does not have it.
+    'partcad_ide_client' ships inside this distribution, so this is a damaged
+    install rather than a missing optional package -- but 'show()' is a side
+    effect of browsing, and neither that nor a shape that will not tessellate
+    should take down the command that asked for it.
     """
 
     def no_client(name):

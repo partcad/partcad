@@ -9,7 +9,6 @@ include =
         */partcad/*
         */partcad-cli/*
         */partcad-utils/*
-        */partcad-ide-client/*
         */partcad-service-json-rpc/*
         */partcad-cad-freecad/*
 disable_warnings = already-imported

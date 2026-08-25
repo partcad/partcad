@@ -191,8 +191,9 @@ for _dist in ("opentelemetry-api", "opentelemetry-sdk", "opentelemetry-semantic-
     add_metadata(_dist)
 hiddenimports += collect_submodules("opentelemetry")
 
-# Imported lazily, by name, so that a bundle stays useful without them.
-# `pc inspect` sends the tessellated shape to the PartCAD IDE through this.
+# Imported lazily, by name, so PyInstaller cannot see it from the import graph.
+# `pc inspect` sends the tessellated shape to the PartCAD IDE through this. It
+# ships inside the `partcad` wheel, so installing that is what puts it here.
 add_package("partcad_ide_client")
 
 # `pc lint` runs the linter as a subprocess. `ruff.__main__.find_ruff_bin()`

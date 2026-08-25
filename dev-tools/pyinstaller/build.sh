@@ -223,14 +223,10 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   # sandbox versions (see partcad/src/partcad/sandbox_versions.py).
   #
   # Note that 'pc inspect' no longer needs any of this: it tessellates in a
-  # sandbox and sends glTF to the PartCAD IDE, which is what 'partcad-ide-client'
-  # below is for.
+  # sandbox and sends glTF to the PartCAD IDE through 'partcad_ide_client', which
+  # the 'partcad' install above already carries (it ships inside that wheel).
   "${PYTHON}" -m pip install \
     "cadquery-ocp==7.9.3.1.1" "build123d==0.11.1" "ocpsvg==0.6.0" "${SETUPTOOLS_BOUND}"
-  # Pure standard library, and what lets 'pc inspect' from the bundle display
-  # into a running PartCAD IDE. The IDE installs it next to the wheels itself; a
-  # frozen bundle cannot be extended with pip afterwards, so it is built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-ide-client" "${SETUPTOOLS_BOUND}"
   # The JSON-RPC service (the bundle's third executable) is installed before
   # partcad-cli: the CLI pins partcad-service-json-rpc, which is not on PyPI, so
   # it must be satisfied from this checkout. Both pins (partcad, and the service)

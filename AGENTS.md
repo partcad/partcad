@@ -6,7 +6,10 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
 * [partcad](./partcad/AGENTS.md):
 
-  The core logic that enables maintaining digital thread for manufacturable physical products.
+  The core logic that enables maintaining digital thread for manufacturable physical products. Its wheel also
+  ships `partcad_ide_client`, the Python side of the socket protocol `partcad` uses to display shapes in the
+  IDE's `PartCAD Viewer` -- a second top-level package rather than a distribution of its own, so `pip install
+  partcad` is all it takes. See "The PartCAD IDE viewer client" in `partcad/AGENTS.md`.
 
 * [partcad-cli](./partcad-cli/AGENTS.md):
 
@@ -55,10 +58,6 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality. Hosts the `PartCAD Viewer`.
 
-* [partcad-ide-client](./partcad-ide-client/AGENTS.md):
-
-  The Python side of the socket protocol `partcad` uses to display shapes in the IDE's `PartCAD Viewer`. Lazily imported by `partcad`, installed by `partcad-ide-vscode`.
-
 * [partcad-ide-standalone](./partcad-ide-standalone/AGENTS.md):
 
   The **PartCAD IDE**: a rebranded [VSCodium](https://vscodium.com/) build carrying the extension above, the
@@ -81,7 +80,7 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
 Full narrative guide (Docker/dev-container setup, PR merge criteria): `docs/source/contributing.rst`.
 Component-specific commands: `partcad/AGENTS.md`, `partcad-cli/AGENTS.md`, `partcad-ide-vscode/AGENTS.md`,
-`partcad-ide-client/AGENTS.md`, `partcad-cad-freecad/AGENTS.md`.
+`partcad-cad-freecad/AGENTS.md`.
 
 ### Where commands run
 
@@ -138,7 +137,6 @@ From the repo root, inside the environment:
 
 ```bash
 poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc partcad-cad-freecad \
-  partcad-ide-client \
   -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```
@@ -166,7 +164,9 @@ Lint/format (Python): `black`, `flake8`, `isort` — configured in `pyproject.to
 
 ### Packaging
 
-Five artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli` on PyPI), the standalone PyInstaller
+Five artifacts ship from this repo: the Python wheels (`partcad`, `partcad-cli`, `partcad-utils`,
+`partcad-client` and `partcad-service-json-rpc` on PyPI -- five distributions, six packages, since `partcad`
+carries `partcad_ide_client` too), the standalone PyInstaller
 bundles for users who have no Python, the PartCAD IDE, which carries those bundles inside it, the VS Code extension's
 `.vsix`, and the snap, which wraps the Linux bundle and is built but not published yet. Adding a runtime dependency,
 an optional extra, or a file that is read at runtime can be invisible to the frozen bundle and break it while the

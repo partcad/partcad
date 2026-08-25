@@ -151,9 +151,9 @@ deliberately ahead of the 3.13 the wheels publish from: a standalone user cannot
 the fact the way someone installing the wheels can, so shipping the oldest supported one would leave them on it
 for the life of the bundle. Nothing older is exercised. The floor used to be documented as 3.11 because
 `ocp_vscode` (what `pc inspect` used to hand shapes to) required it; `pc inspect` now talks to the PartCAD IDE
-over a socket instead, and `partcad-ide-client` is bundled (see `build.sh`) and is pure standard library, so it
-adds no version floor of its own. A dependency that cannot be imported cannot be frozen, so `build.sh` imports them all before
-it builds and says which import failed.
+over a socket instead, and `partcad_ide_client` is bundled (it ships inside the `partcad` wheel itself) and is
+pure standard library, so it adds no version floor of its own. A dependency that cannot be imported cannot be
+frozen, so `build.sh` imports them all before it builds and says which import failed.
 
 ## What the frozen bundle changes, and what it does not
 

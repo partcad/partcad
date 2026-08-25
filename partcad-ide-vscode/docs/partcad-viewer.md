@@ -48,8 +48,8 @@ the protocol has no authentication.
 | --- | --- |
 | `partcad/src/partcad/viewer.py` | Core entry point: runs the wrapper, calls the client |
 | `partcad/src/partcad/wrappers/wrapper_show.py` | Sandbox: BREP envelopes → compressed glTF |
-| `partcad-ide-client/src/partcad_ide_client/protocol.py` | **Normative** description of the wire format |
-| `partcad-ide-client/src/partcad_ide_client/client.py` | Python client |
+| `partcad/src/partcad_ide_client/protocol.py` | **Normative** description of the wire format |
+| `partcad/src/partcad_ide_client/client.py` | Python client |
 | `src/viewer/protocol.ts` | The same wire format, in TypeScript |
 | `src/viewer/PartcadViewerServer.ts` | The listening socket |
 | `src/viewer/PartcadViewer.ts` | The "PartCAD Viewer" webview panel |

@@ -5,7 +5,7 @@
 //
 // The JS half of the PartCAD IDE viewer protocol. The normative description of
 // the wire format lives next to the other half, in
-// 'partcad-ide-client/src/partcad_ide_client/protocol.py'; keep the two in step.
+// 'partcad/src/partcad_ide_client/protocol.py'; keep the two in step.
 //
 // A frame is a 10-byte header followed by a UTF-8 JSON payload:
 //
@@ -41,7 +41,7 @@ export const PARTCAD_IDE_HOST = '127.0.0.1';
  * falls back to the constant rather than failing to bind, matching the client.
  *
  * The grammar has to match '_port()' in
- * 'partcad-ide-client/src/partcad_ide_client/client.py' exactly, or the two
+ * 'partcad/src/partcad_ide_client/client.py' exactly, or the two
  * ends read the same variable differently and this one binds a port the client
  * never connects to: plain decimal digits only (Number() would also take
  * "1e4" and "0x270f"), and 1..65535.

@@ -99,7 +99,6 @@ PARTCAD_DISTRIBUTIONS = (
     "partcad-client",
     "partcad-utils",
     "partcad-service-json-rpc",
-    "partcad-ide-client",
 )
 
 # "partcad[lint]==0.7.146" and friends: a pin on ourselves, with or without extras.
@@ -164,7 +163,7 @@ def test_every_partcad_self_pin_is_declared_in_bumpversion():
     thing added to the monorepo without being added there keeps whatever version
     it was created with while everything else moves. It has now happened four
     times -- `partcad/requirements.txt`, the three `partcad-cli` extras files,
-    the FreeCAD addon's two constants, and `partcad-ide-client`.
+    the FreeCAD addon's two constants, and `partcad_ide_client`.
 
     A new file is correct on the day it is written, so the staleness test above
     only starts failing one release later, in a commit that touches nothing near

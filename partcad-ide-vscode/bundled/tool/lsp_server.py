@@ -507,29 +507,14 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
             "partcad-client",
         )
 
-        # A separate invocation, and a non-fatal one. 'partcad-ide-client' is
-        # installed alongside PartCAD rather than depended on by it: it is only
-        # useful when an IDE is there to talk to, 'partcad' imports it lazily,
-        # and 'show()' degrades to a warning without it. Putting it in the
-        # command above would mean that one unavailable optional package took
-        # PartCAD itself down with it, since pip installs nothing when any
-        # requirement in a single invocation cannot be resolved.
-        try:
-            pip_install("partcad-ide-client")
-            # Whether the install worked is decided by importing what it was
-            # supposed to install, not by looking at 'stderr': 'run_module'
-            # swallows pip's SystemExit, so no exit status survives, and pip
-            # writes notices to 'stderr' on a perfectly successful run.
-            # 'invalidate_caches' is needed because the package has just
-            # appeared in a directory the import system has already scanned.
-            importlib.invalidate_caches()
-            importlib.import_module("partcad_ide_client")
-        except Exception as e:  # pylint: disable=broad-except
-            LSP_SERVER.send_notification(
-                "?/partcad/warn",
-                "PartCAD is installed, but 'partcad-ide-client' is not, so the PartCAD Viewer "
-                "will not receive anything: %s" % e,
-            )
+        # No separate install for 'partcad_ide_client', the Python half of the
+        # PartCAD Viewer protocol: it ships inside the 'partcad' wheel, so the
+        # install above already brought it. It used to be pip-installed here, on
+        # its own and non-fatally, because a distribution of that name was
+        # expected on PyPI; one never existed, so that call could only ever fail.
+        # Do not add it back -- two distributions owning the same import name
+        # break each other on uninstall, silently. See "The PartCAD IDE viewer
+        # client" in partcad/AGENTS.md.
 
         if partcad_log_w_stream is not None:
             partcad_log_w_stream.write("Done attempting to install the latest PartCAD!\r\n")

@@ -12,11 +12,13 @@
     and the receiving end is a browser, which cannot either. What crosses the
     socket is therefore compressed binary glTF.
 
-  * Delivery runs through 'partcad_ide_client', imported lazily right here. It
-    is not a dependency of 'partcad': the PartCAD IDE extension installs it next
-    to 'partcad' in the interpreter it drives, and a plain CLI or library user
-    simply does not have it - which is why a missing import is a warning and not
-    an error.
+  * Delivery runs through 'partcad_ide_client', imported lazily right here.
+    That package ships inside this distribution (partcad/src/partcad_ide_client),
+    so 'pip install partcad' is enough and nothing installs it separately; the
+    import is still lazy because it is only ever needed when something is being
+    shown, and still guarded because a partial or corrupted install should
+    degrade a preview to a warning rather than fail the command that asked for
+    it.
 
 This replaces handing live OCP objects to 'ocp_vscode', which required a full
 CAD stack in-process (and a second, differently-provisioned one in the IDE's
@@ -46,7 +48,11 @@ _previously_displayed = None
 
 
 def _client():
-    """The lazily imported 'partcad_ide_client', or None if it is not installed."""
+    """The lazily imported 'partcad_ide_client', or None if it will not import.
+
+    Shipped in this distribution, so None here means a broken installation
+    rather than a missing optional package.
+    """
     try:
         return importlib.import_module("partcad_ide_client")
     except ImportError:
@@ -122,8 +128,8 @@ async def show(ctx, components, name=None, kind=None, markers=None):
     client = _client()
     if client is None:
         pc_logging.warning(
-            'Failed to load "partcad_ide_client". Giving up on the connection to the PartCAD IDE. '
-            "Install it with: pip install partcad-ide-client"
+            'Failed to load "partcad_ide_client", which ships inside PartCAD itself. '
+            "Giving up on the connection to the PartCAD IDE; reinstall PartCAD to repair it."
         )
         return False
 

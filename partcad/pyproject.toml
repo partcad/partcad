@@ -25,6 +25,16 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+# Explicit, because this distribution ships two top-level packages and
+# auto-discovery finding both is not something to leave implicit: 'partcad' and
+# 'partcad_ide_client', the Python half of the PartCAD IDE viewer protocol. The
+# latter has no dependencies of its own (standard library only), so shipping it
+# here costs the wheel ~7 KiB and adds nothing to the install closure. See "The
+# PartCAD IDE viewer client" in AGENTS.md for why it is not a distribution of
+# its own.
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.setuptools.package-data]
 # The '.mjs' files are the JavaScript wrappers, read at runtime and handed to a
 # sandboxed Node.js exactly like the '.py' ones are handed to a sandboxed Python.

@@ -16,13 +16,11 @@ filename = "partcad-cli/pyproject.toml"
 search = "version = \"{current_version}\""
 replace = "version = \"{new_version}\""
 
+# 'partcad_ide_client' is not a distribution of its own: it ships inside the
+# 'partcad' wheel (see "The PartCAD IDE viewer client" in partcad/AGENTS.md), so
+# there is no pyproject.toml of its own to bump -- only the constant.
 [[tool.bumpversion.files]]
-filename = "partcad-ide-client/pyproject.toml"
-search = "version = \"{current_version}\""
-replace = "version = \"{new_version}\""
-
-[[tool.bumpversion.files]]
-filename = "partcad-ide-client/src/partcad_ide_client/__init__.py"
+filename = "partcad/src/partcad_ide_client/__init__.py"
 search = "__version__ = \"{current_version}\""
 replace = "__version__ = \"{new_version}\""
 

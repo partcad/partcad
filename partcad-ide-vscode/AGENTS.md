@@ -45,7 +45,7 @@ Three things about it are load-bearing:
   three.js is bundled rather than loaded from a CDN. Do not add an asset that is fetched at runtime — that is
   what rules out drei's `environment` presets, and why the renderer uses `RoomEnvironment`.
 - **The wire format is shared with Python.** `src/viewer/protocol.ts` mirrors
-  `partcad-ide-client/src/partcad_ide_client/protocol.py`, which is the normative description. Changing one
+  `partcad/src/partcad_ide_client/protocol.py`, which is the normative description. Changing one
   means changing both. `src/test/suite/viewerProtocol.test.ts` covers this side.
 
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it

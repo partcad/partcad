@@ -107,8 +107,9 @@ The ``PartCAD Viewer`` is a tab the extension opens when a part, assembly,
 sketch or interface is inspected. PartCAD tessellates the shape in a sandboxed
 runtime, and sends the result to the extension as compressed glTF over a socket
 on ``127.0.0.1:9137``. The Python side of that connection is the
-``partcad-ide-client`` package, which the extension installs alongside
-``partcad``.
+``partcad_ide_client`` package, which ships inside ``partcad`` itself -- so
+``pip install partcad`` (or ``partcad-cli``) is all that is needed, and there is
+nothing separate to install.
 
 Anything with a ``partcad`` that can reach that port can display into the same
 viewer -- including a ``pc`` run in a plain terminal, as long as a window with
@@ -130,8 +131,12 @@ Typical problems
 
 ``Failed to load "partcad_ide_client"`` in the PartCAD terminal view
 
- - Install it with ``pip install partcad-ide-client``, or press "Update PartCAD"
-   in the "Context" left panel, which installs it along with ``partcad``
+ - The package ships inside ``partcad``, so this means the installation is
+   damaged rather than incomplete. Reinstall with
+   ``pip install --force-reinstall partcad``, or press "Update PartCAD" in the
+   "Context" left panel.
+ - On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client``
+   distribution that was never published; upgrading is the fix.
 
 ``No PartCAD IDE with an open PartCAD Viewer detected``
 

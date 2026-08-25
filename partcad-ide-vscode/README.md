@@ -21,7 +21,7 @@ Also, make sure to visit [our website](https://partcad.org/) and browse [the rep
 Selecting a part, assembly, sketch or interface opens it in the **PartCAD Viewer** tab. PartCAD tessellates the
 shape in a sandboxed runtime and sends the result to this extension as compressed glTF over a socket on
 `127.0.0.1:9137`, so the viewer needs no CAD library of its own. The Python side of that connection is the
-`partcad-ide-client` package, which this extension installs alongside `partcad`.
+`partcad_ide_client` package, which ships inside `partcad` itself.
 
 Anything that can reach that port displays into the same viewer, including a `pc inspect` run in a plain
 terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.

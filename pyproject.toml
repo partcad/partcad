@@ -6,7 +6,6 @@ pythonpath = [
     "partcad-utils/src",
     "partcad-client/src",
     "partcad/src",
-    "partcad-ide-client/src",
     "partcad/tests/unit",
     "partcad-service-json-rpc/src",
     # The FreeCAD addon is not a package that gets installed: FreeCAD loads it
@@ -90,7 +89,7 @@ packages = [
   { include = "partcad_client", from = "partcad-client/src" },
   { include = "partcad", from = "partcad/src" },
   { include = "partcad_cli", from = "partcad-cli/src" },
-  { include = "partcad_ide_client", from = "partcad-ide-client/src" },
+  { include = "partcad_ide_client", from = "partcad/src" },
   { include = "partcad_service_json_rpc", from = "partcad-service-json-rpc/src" }
 ]
 

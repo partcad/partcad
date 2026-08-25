@@ -139,8 +139,6 @@ jobs:
           # Build the JSON-RPC service wheel too; partcad-cli pins it.
           (cd partcad-service-json-rpc && python -m build)
           (cd partcad-cli && python -m build)
-          cp LICENSE.txt apache20.svg partcad-ide-client
-          (cd partcad-ide-client && python -m build)
           mamba deactivate
 
       - name: Test installation
@@ -160,7 +158,9 @@ jobs:
           python -m pip install --no-index --find-links=partcad-service-json-rpc/dist partcad-service-json-rpc
           python -m pip install -r partcad-cli/requirements.txt
           python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli
-          python -m pip install --no-index --find-links=partcad-ide-client/dist partcad-ide-client
+          # 'partcad_ide_client' ships inside the 'partcad' wheel rather than as a
+          # distribution of its own, so importing it is what proves it shipped.
+          python -c "import partcad_ide_client"
           mamba deactivate
 
       - name: Build documentation
