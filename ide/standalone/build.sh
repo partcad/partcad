@@ -692,11 +692,36 @@ if [ "${OS_NAME}" = "macos" ]; then
 fi
 
 if [ "${OS_NAME}" = "windows" ] && [ -f "${APP_ROOT}/partcad-ide.ico" ]; then
-  if command -v rcedit >/dev/null 2>&1; then
-    rcedit "${EXECUTABLE}" --set-icon "${APP_ROOT}/partcad-ide.ico" ||
+  # Looked up by three names, and then asked of npm directly, because
+  # `command -v rcedit` says no on machines that have it: Git Bash resolves a
+  # command name trying no extension and then `.exe`, never `.cmd`, and what
+  # npm installs is `rcedit.cmd`. The CI build said "no rcedit on PATH" one
+  # step after `npm install -g rcedit` reported success.
+  RCEDIT=""
+  for candidate in rcedit rcedit.cmd rcedit.exe; do
+    if command -v "${candidate}" >/dev/null 2>&1; then
+      RCEDIT="${candidate}"
+      break
+    fi
+  done
+  if [ -z "${RCEDIT}" ] && command -v npm >/dev/null 2>&1; then
+    # ... and if npm's global directory is not on PATH at all, npm knows where
+    # it is. On Windows the executables sit in the prefix itself, not in `bin`.
+    NPM_PREFIX="$(npm prefix -g 2>/dev/null || true)"
+    if [ -n "${NPM_PREFIX}" ]; then
+      for candidate in "${NPM_PREFIX}/rcedit.cmd" "${NPM_PREFIX}/rcedit"; do
+        if [ -f "${candidate}" ]; then
+          RCEDIT="${candidate}"
+          break
+        fi
+      done
+    fi
+  fi
+  if [ -n "${RCEDIT}" ]; then
+    "${RCEDIT}" "${EXECUTABLE}" --set-icon "${APP_ROOT}/partcad-ide.ico" ||
       warn "could not set the executable's icon"
   else
-    warn "no rcedit on PATH; partcad-ide.exe keeps VSCodium's icon.
+    warn "no rcedit found; partcad-ide.exe keeps VSCodium's icon.
          Install it with: npm install -g rcedit"
   fi
 fi
