@@ -11,8 +11,13 @@ Render the PartCAD logo into the icon formats an application bundle needs.
 
 The source is `ide/vscode/resources/logo.svg`, the same logo the VS Code
 extension uses, so the IDE cannot end up with an icon that has drifted from the
-project's. Nothing rendered here is committed: the icons are built with the IDE,
-from the SVG in git, rather than kept as binaries next to it.
+project's. The icons are built with the IDE rather than kept as binaries next to
+it, with one exception: `../resources/partcad-ide.ico` is in git, because
+`cairocffi` cannot load a `libcairo` on Windows and so this script cannot run
+there at all. Regenerate that one whenever the logo changes:
+
+    python tools/make_icons.py --svg ../partcad-ide-vscode/resources/logo.svg \
+        --output-dir /tmp/icons && cp /tmp/icons/partcad-ide.ico resources/
 
 Outputs (into `--output-dir`):
   partcad-ide.png    512x512, the Linux window and launcher icon

@@ -539,6 +539,23 @@ if [ "${BRAND_ICONS}" = "1" ]; then
   fi
 fi
 
+# The Windows icon is the one icon this repository keeps as a binary, and this
+# is why: rendering needs `cairosvg`, which needs `cairocffi`, which needs a
+# `libcairo-2.dll` that no wheel ships -- so `make_icons.py` fails on every
+# Windows machine, the runner included, with `no library called "cairo-2" was
+# found`. With nothing to fall back on the Windows IDE ships wearing VSCodium's
+# icon in its window, on its executable and in its installer, and the build only
+# warns about it. `resources/partcad-ide.ico` is exactly what `make_icons.py`
+# writes from the logo in git; regenerate it when that logo changes, with the
+# command in README.md.
+if [ "${BRAND_ICONS}" = "1" ] && [ "${OS_NAME}" = "windows" ] &&
+  [ ! -f "${ICON_DIR}/partcad-ide.ico" ] &&
+  [ -f "${SCRIPT_DIR}/resources/partcad-ide.ico" ]; then
+  mkdir -p "${ICON_DIR}"
+  cp "${SCRIPT_DIR}/resources/partcad-ide.ico" "${ICON_DIR}/partcad-ide.ico"
+  log "    using the checked-in Windows icon, since the renderers are unavailable here"
+fi
+
 if [ "${ICONS_BUILT}" = "1" ]; then
   # The window and launcher icon, on the two platforms that read it from a file.
   if [ -f "${RESOURCES_DIR}/app/resources/linux/code.png" ]; then
@@ -551,9 +568,12 @@ if [ "${ICONS_BUILT}" = "1" ]; then
     # entry it writes.
     cp "${ICON_DIR}/partcad-ide.png" "${APP_ROOT}/partcad-ide.png"
   fi
-  if [ "${OS_NAME}" = "windows" ]; then
-    cp "${ICON_DIR}/partcad-ide.ico" "${APP_ROOT}/partcad-ide.ico"
-  fi
+fi
+
+# Guarded on the file rather than on ICONS_BUILT, because on Windows the icon
+# comes from git and ICONS_BUILT is 0 there.
+if [ "${OS_NAME}" = "windows" ] && [ -f "${ICON_DIR}/partcad-ide.ico" ]; then
+  cp "${ICON_DIR}/partcad-ide.ico" "${APP_ROOT}/partcad-ide.ico"
 fi
 
 # Rename the executable, so that the process, the task bar and `ps` all say
@@ -671,7 +691,7 @@ if [ "${OS_NAME}" = "macos" ]; then
   fi
 fi
 
-if [ "${OS_NAME}" = "windows" ] && [ "${ICONS_BUILT}" = "1" ]; then
+if [ "${OS_NAME}" = "windows" ] && [ -f "${APP_ROOT}/partcad-ide.ico" ]; then
   if command -v rcedit >/dev/null 2>&1; then
     rcedit "${EXECUTABLE}" --set-icon "${APP_ROOT}/partcad-ide.ico" ||
       warn "could not set the executable's icon"
@@ -797,7 +817,7 @@ if [ "${OS_NAME}" = "windows" ] && [ "${CREATE_INSTALLER}" = "1" ]; then
     # into paths on the way to a native Windows program, which is what turns
     # "/O<dir>" into "O:\<dir>" and the build into a puzzle.
     ISCC_ARGS=("/Qp" "/DVersion=${VERSION}")
-    if [ "${ICONS_BUILT}" = "1" ] && [ -f "${APP_ROOT}/partcad-ide.ico" ]; then
+    if [ -f "${APP_ROOT}/partcad-ide.ico" ]; then
       ISCC_ARGS+=("/DHaveIcon=1")
     fi
     ISCC_ARGS+=(

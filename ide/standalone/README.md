@@ -78,7 +78,16 @@ same IDE next month as it does today.
 Two optional dependencies change what the build can do, and it reports what it left out rather than failing:
 
 - `cairosvg` and `Pillow` (`pip install cairosvg pillow`) render the icons from the project's logo. Without
-  them the application keeps VSCodium's icon.
+  them the application keeps VSCodium's icon -- except on Windows, which uses `resources/partcad-ide.ico`
+  from git instead. That one is checked in because it cannot be rendered where it is needed: `cairosvg`
+  needs `cairocffi`, and `cairocffi` needs a `libcairo-2.dll` that no wheel ships, so the renderers are
+  installable on Windows but not loadable there. Regenerate it when `partcad-ide-vscode/resources/logo.svg`
+  changes -- on Linux or MacOS, since it is the machines that *can* render that keep it honest:
+
+  ```bash
+  python tools/make_icons.py --svg ../partcad-ide-vscode/resources/logo.svg --output-dir /tmp/icons
+  cp /tmp/icons/partcad-ide.ico resources/partcad-ide.ico
+  ```
 - `rcedit` (`npm install -g rcedit`) puts the icon into `partcad-ide.exe`. There is no other way to change a
   Windows executable's icon after it is linked.
 - Inno Setup 6.3 or newer (`choco install innosetup`) compiles the Windows installer. Without it the build
