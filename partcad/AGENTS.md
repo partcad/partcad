@@ -1,9 +1,9 @@
 # partcad
 
 Core Python module implementing PartCAD's digital-thread logic (packages, parts, assemblies, providers).
-Source: `./src/partcad`, plus the `./src/partcad_ide_client` package this distribution also ships (see "The
-PartCAD IDE viewer client" below). Tests: `./tests`. Part of the shared Poetry workspace rooted at the repo
-root — run all commands below from the repo root unless noted.
+Source: `./src/partcad`, plus `./src/partcad_ide_client`, a symlink to the `partcad-ide-client` component that
+this distribution also ships (see "The PartCAD IDE viewer client" below). Tests: `./tests`. Part of the shared
+Poetry workspace rooted at the repo root — run all commands below from the repo root unless noted.
 
 ## Setup
 
@@ -88,22 +88,32 @@ editor and CI disagree about a file, so there is one, in the package both ends a
 
 ## The PartCAD IDE viewer client
 
-`./src/partcad_ide_client` is a **second top-level package shipped by this distribution**: the Python half of
-the socket protocol that connects `partcad` to the PartCAD IDE extension's **PartCAD Viewer**. `pip install
-partcad` therefore makes `import partcad_ide_client` work, and nothing has to install it separately.
+`./src/partcad_ide_client` is a **relative symlink** to `../../partcad-ide-client/src/partcad_ide_client`, and
+that is how this distribution comes to ship a second top-level package: the Python half of the socket protocol
+that connects `partcad` to the PartCAD IDE extension's **PartCAD Viewer**. `pip install partcad` therefore
+makes `import partcad_ide_client` work, and nothing has to install it separately. setuptools dereferences the
+symlink, so the wheel and the sdist both carry real files — `partcad-ide-client` keeps its own directory,
+tests and AGENTS.md, and stops being a distribution.
+
+**The symlink is load-bearing.** A checkout with `core.symlinks=false` — Git for Windows' default unless
+Developer Mode is on — writes it as a small text file naming the target, `packages.find` then finds nothing
+there, and the wheel builds *successfully* without the package. `tests/unit/test_ide_client_is_shipped.py`
+exists to turn that silent success into a failing test; the `import partcad_ide_client` checks in `build.yml`
+and `deploy.yml` are the same guard in CI. Released wheels are built on Linux (`deploy.yml` pins
+`ubuntu-24.04`), so the exposure is a Windows contributor's local build, not the release.
 
 It ships here rather than as a distribution of its own because it was never on PyPI and every process that
 could import it is a process that already imports `partcad` — `partcad.viewer` is its only importer in the
 tree. Two distributions owning one import name is the thing being avoided: pip does not detect the overlap when
 installing, and uninstalling either one then deletes the module out from under the other, silently. So do not
-reintroduce a `partcad-ide-client` distribution, and do not vendor a second copy into the VS Code extension's
-`bundled/libs` — under `useBundled` that copy would land first on `sys.path` and shadow this one in the
-language server process only, leaving two different clients in play depending on which process is asking.
+give `partcad-ide-client` a `pyproject.toml` again, and do not vendor a second copy into the VS Code
+extension's `bundled/libs` — under `useBundled` that copy would land first on `sys.path` and shadow this one in
+the language server process only, leaving two different clients in play depending on which process is asking.
 
 The other half of the protocol is `partcad-ide-vscode/src/viewer/protocol.ts`. **A change to the wire format is
-a change to both files**, and the frame layout is specified once, in `src/partcad_ide_client/protocol.py` —
-that docstring is the normative description. `partcad-ide-vscode/docs/partcad-viewer.md` walks the whole path
-end to end.
+a change to both files**, and the frame layout is specified once, in
+`partcad-ide-client/src/partcad_ide_client/protocol.py` — that docstring is the normative description.
+`partcad-ide-vscode/docs/partcad-viewer.md` walks the whole path end to end.
 
 Two properties of the package are deliberate and easy to break:
 
@@ -119,9 +129,8 @@ The glTF payload codec (`encode_gltf`/`decode_gltf`) has two other implementatio
 which is why each carries its own copy; `tests/unit/test_viewer.py` and the extension's
 `viewerProtocol.test.ts` are what catch a drift.
 
-`tests/unit/test_ide_client.py` and `tests/unit/test_ide_protocol.py` cover it. The client tests stand up a
-fake IDE on an ephemeral port and point the client at it with `PARTCAD_IDE_PORT`, so they never collide with a
-PartCAD IDE the developer actually has open.
+Its own tests live with the component, in `partcad-ide-client/tests`; `tests/unit/test_ide_client_is_shipped.py`
+here covers the packaging side.
 
 ## Commit
 

@@ -89,7 +89,7 @@ packages = [
   { include = "partcad_client", from = "partcad-client/src" },
   { include = "partcad", from = "partcad/src" },
   { include = "partcad_cli", from = "partcad-cli/src" },
-  { include = "partcad_ide_client", from = "partcad/src" },
+  { include = "partcad_ide_client", from = "partcad-ide-client/src" },
   { include = "partcad_service_json_rpc", from = "partcad-service-json-rpc/src" }
 ]
 

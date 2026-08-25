@@ -7,9 +7,8 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 * [partcad](./partcad/AGENTS.md):
 
   The core logic that enables maintaining digital thread for manufacturable physical products. Its wheel also
-  ships `partcad_ide_client`, the Python side of the socket protocol `partcad` uses to display shapes in the
-  IDE's `PartCAD Viewer` -- a second top-level package rather than a distribution of its own, so `pip install
-  partcad` is all it takes. See "The PartCAD IDE viewer client" in `partcad/AGENTS.md`.
+  carries the `partcad_ide_client` package from `partcad-ide-client` below, so `pip install partcad` is all it
+  takes to get both.
 
 * [partcad-cli](./partcad-cli/AGENTS.md):
 
@@ -58,6 +57,13 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
   Visual Studio Code extension for navigating through objects in a `partcad` project and UI interface to some of `partcad` functionality. Hosts the `PartCAD Viewer`.
 
+* [partcad-ide-client](./partcad-ide-client/AGENTS.md):
+
+  The Python side of the socket protocol `partcad` uses to display shapes in the IDE's `PartCAD Viewer`. Lazily
+  imported by `partcad`. A component directory but **not** a distribution: its source is symlinked in at
+  `partcad/src/partcad_ide_client`, so it ships inside the `partcad` wheel and nothing installs it separately.
+  See "The PartCAD IDE viewer client" in `partcad/AGENTS.md`.
+
 * [partcad-ide-standalone](./partcad-ide-standalone/AGENTS.md):
 
   The **PartCAD IDE**: a rebranded [VSCodium](https://vscodium.com/) build carrying the extension above, the
@@ -80,7 +86,7 @@ This monorepo contains all open source software that forms the PartCAD ecosystem
 
 Full narrative guide (Docker/dev-container setup, PR merge criteria): `docs/source/contributing.rst`.
 Component-specific commands: `partcad/AGENTS.md`, `partcad-cli/AGENTS.md`, `partcad-ide-vscode/AGENTS.md`,
-`partcad-cad-freecad/AGENTS.md`.
+`partcad-ide-client/AGENTS.md`, `partcad-cad-freecad/AGENTS.md`.
 
 ### Where commands run
 
@@ -137,6 +143,7 @@ From the repo root, inside the environment:
 
 ```bash
 poetry run pytest partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc partcad-cad-freecad \
+  partcad-ide-client \
   -x -p no:error-for-skips -p no:warnings --dist no                                        # unit tests (matches CI)
 poetry run behave                                                                        # integration tests (./features)
 ```

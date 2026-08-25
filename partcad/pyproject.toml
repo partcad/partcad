@@ -27,11 +27,13 @@ classifiers = [
 
 # Explicit, because this distribution ships two top-level packages and
 # auto-discovery finding both is not something to leave implicit: 'partcad' and
-# 'partcad_ide_client', the Python half of the PartCAD IDE viewer protocol. The
-# latter has no dependencies of its own (standard library only), so shipping it
-# here costs the wheel ~7 KiB and adds nothing to the install closure. See "The
-# PartCAD IDE viewer client" in AGENTS.md for why it is not a distribution of
-# its own.
+# 'partcad_ide_client', the Python half of the PartCAD IDE viewer protocol,
+# which reaches 'src/' as a symlink to the 'partcad-ide-client' component.
+# setuptools dereferences it, so the wheel and the sdist both carry real files.
+# That package has no dependencies of its own (standard library only), so
+# shipping it here costs the wheel ~7 KiB and adds nothing to the install
+# closure. See "The PartCAD IDE viewer client" in AGENTS.md -- including why a
+# checkout that drops the symlink builds a wheel that is quietly incomplete.
 [tool.setuptools.packages.find]
 where = ["src"]
 

@@ -13,8 +13,9 @@
     socket is therefore compressed binary glTF.
 
   * Delivery runs through 'partcad_ide_client', imported lazily right here.
-    That package ships inside this distribution (partcad/src/partcad_ide_client),
-    so 'pip install partcad' is enough and nothing installs it separately; the
+    That package ships inside this distribution - its source is the
+    'partcad-ide-client' component, symlinked in at 'partcad/src' - so
+    'pip install partcad' is enough and nothing installs it separately; the
     import is still lazy because it is only ever needed when something is being
     shown, and still guarded because a partial or corrupted install should
     degrade a preview to a warning rather than fail the command that asked for

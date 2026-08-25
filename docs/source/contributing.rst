@@ -517,8 +517,7 @@ You also can run ``pytest`` without activating environment via Poetry, for examp
 
 The tests for the core module are located in the ``./partcad/tests`` directory.
 The tests for the CLI module are located in the ``./partcad-cli/tests`` directory.
-The tests for the IDE viewer client are ``test_ide_client.py`` and ``test_ide_protocol.py``,
-also under ``./partcad/tests``, because that package ships inside ``partcad``.
+The tests for the IDE viewer client are located in the ``./partcad-ide-client/tests`` directory.
 The tests for the LSP server of VSCode plugin are located in the ``./partcad-ide-vscode/src/test/python_tests`` directory.
 
 Behave
