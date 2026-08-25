@@ -817,6 +817,17 @@ if [ "${OS_NAME}" = "windows" ] && [ "${CREATE_INSTALLER}" = "1" ]; then
     # into paths on the way to a native Windows program, which is what turns
     # "/O<dir>" into "O:\<dir>" and the build into a puzzle.
     ISCC_ARGS=("/Qp" "/DVersion=${VERSION}")
+    # The application, named absolutely rather than through the '..\..\' the
+    # .iss falls back to. Inno resolves a relative source against the script's
+    # own directory and opens it without normalizing it first, so every path it
+    # touches carries an extra 'partcad-ide-standalone\installer\..\..\' --
+    # 54 characters. The deepest file in the application is 245 characters
+    # absolute and 284 spelled that way; MAX_PATH is 260, and the compiler is
+    # not long-path aware, so it aborted with "The system cannot find the path
+    # specified" naming neither a line nor a file. Measured on the runner: a
+    # probe compiling that one directory through '..\..\' fails with "No files
+    # found matching", and the same files named absolutely compile.
+    ISCC_ARGS+=("/DAppDir=$(cygpath -w "${APP_ROOT}")")
     if [ -f "${APP_ROOT}/partcad-ide.ico" ]; then
       ISCC_ARGS+=("/DHaveIcon=1")
     fi

@@ -18,9 +18,15 @@
   #define Version "0.0.0"
 #endif
 
-; Where the built application is: where ../build.sh leaves it, relative to this
-; file, so no path has to be passed in on a command line that crosses Git Bash,
-; the preprocessor and a native Windows program on its way here.
+; Where the built application is. ../build.sh passes it absolutely, with
+; /DAppDir, and has to: Inno resolves a relative source against this file's own
+; directory without normalizing it, so the '..\..\' below survives into every
+; path it opens and adds 54 characters to each. The deepest file in the
+; application is 245 characters absolute and 284 that way, MAX_PATH is 260, and
+; the compiler is not long-path aware -- it aborts with "The system cannot find
+; the path specified" and names neither a line nor a file. The fallback is kept
+; for compiling this by hand from this directory, which works only while the
+; tree stays shallow enough.
 #ifndef AppDir
   #define AppDir "..\..\dist\ide\partcad-ide"
 #endif
