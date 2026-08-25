@@ -1,19 +1,19 @@
 # partcad
 
 Core Python module implementing PartCAD's digital-thread logic (packages, parts, assemblies, providers).
-Source: `./src/partcad`, plus `./src/partcad_ide_client`, a symlink to the `partcad-ide-client` component that
-this distribution also ships (see "The PartCAD IDE viewer client" below). Tests: `./tests`. Part of the shared
-Poetry workspace rooted at the repo root — run all commands below from the repo root unless noted.
+Source: `./src/partcad`. Tests: `./tests/partcad`. It is one of the packages inside the single `partcad`
+wheel, which also carries `partcad_ide_client` (see "The PartCAD IDE viewer client" below) — run all commands
+below from the repo root unless noted.
 
 ## Setup
 
 All commands on this page run **inside the dev container**, not on the host — see "Where commands run" in the
-root [AGENTS.md](../AGENTS.md) for how to enter it. Dependencies are already installed in the image; re-run
+root [AGENTS.md](../../AGENTS.md) for how to enter it. Dependencies are already installed in the image; re-run
 `poetry install` only after changing `pyproject.toml`. The virtualenv is not auto-activated, so prefix the
 commands below with `poetry run` (e.g. `poetry run pytest ...`).
 
 ```bash
-poetry install   # from repo root; installs partcad (and partcad-cli) in editable mode
+poetry install   # from repo root; installs the whole `partcad` wheel in editable mode
 ```
 
 ## Test and validate changes
@@ -21,20 +21,20 @@ poetry install   # from repo root; installs partcad (and partcad-cli) in editabl
 Running `pytest` to a clean pass is the required validation step for any change under `partcad/`:
 
 ```bash
-pytest partcad -x -p no:error-for-skips -p no:warnings --dist no   # matches CI (test-pytest job)
+pytest tests/partcad -x -p no:error-for-skips -p no:warnings --dist no   # matches CI (test-pytest job)
 pytest tests/partcad -n 4 --timeout 300 -m "not slow"              # matches the pre-commit hook, faster locally
 ```
 
-Tests live in `./tests` (`tests/unit`); slow tests are marked `slow` and excluded by the pre-commit hook's `-m
+Tests live in `./tests/partcad` (`tests/partcad/unit`); slow tests are marked `slow` and excluded by the pre-commit hook's `-m
 "not slow"`. Treat a failing `pytest` run as blocking — do not consider a change to this module complete until
 it passes.
 
 ## Lint / format
 
 ```bash
-black --check partcad     # line-length 120 (pyproject.toml)
-flake8 partcad
-isort --check partcad
+black --check src/partcad tests/partcad     # line-length 120 (pyproject.toml)
+flake8 src/partcad tests/partcad
+isort --check src/partcad tests/partcad
 ```
 
 ## Conventions
@@ -54,8 +54,8 @@ isort --check partcad
   format, changing its defaults or changing which dependencies it needs is an edit to `builtin/*/partcad.yaml`, not
   to `shape.py`. The scripts run in a sandbox through `wrappers/wrapper_export.py`; they are data files, so
   anything new under `builtin/` has to be listed in `pyproject.toml`'s `package-data` and in the PyInstaller
-  spec (see "Packaging" in the root [AGENTS.md](../AGENTS.md)). The requirement strings there are the versions
-  `sandbox_versions.py` pins, which `tests/unit/test_output.py` enforces.
+  spec (see "Packaging" in the root [AGENTS.md](../../AGENTS.md)). The requirement strings there are the versions
+  `sandbox_versions.py` pins, which `tests/partcad/unit/test_output.py` enforces.
 
 - **Sandbox environment** (`./src/partcad/python_env.py`): importing `partcad` sweeps every `PYTHON*` variable
   out of `os.environ` and puts back only `PARTCAD_PYTHON_ENV`. Everything PartCAD spawns — the wrappers, `pip`,
@@ -69,7 +69,7 @@ isort --check partcad
   arrived in 3.11 and an older interpreter ignores it, which would leave the directory PartCAD runs from first
   on `sys.path` for the `-m venv`/`-m pip` calls that provision a sandbox. Those versions keep `-I` and go on
   ignoring `PYTHONHASHSEED` — no flag pins a hash seed, so isolation and reproducibility cannot both be had
-  there. `tests/unit/test_python_env.py` asserts the outcome (a `venv.py`/`pip.py` beside the interpreter never
+  there. `tests/partcad/unit/test_python_env.py` asserts the outcome (a `venv.py`/`pip.py` beside the interpreter never
   wins) on whichever version is running, so both branches are covered by the CI matrix rather than by a
   comment.
 
@@ -88,27 +88,17 @@ editor and CI disagree about a file, so there is one, in the package both ends a
 
 ## The PartCAD IDE viewer client
 
-`./src/partcad_ide_client` is a **relative symlink** to `../../src/partcad_ide_client`, and
-that is how this distribution comes to ship a second top-level package: the Python half of the socket protocol
-that connects `partcad` to the PartCAD IDE extension's **PartCAD Viewer**. `pip install partcad` therefore
-makes `import partcad_ide_client` work, and nothing has to install it separately. setuptools dereferences the
-symlink, so the wheel and the sdist both carry real files — `partcad-ide-client` keeps its own directory,
-tests and AGENTS.md, and stops being a distribution.
+`./src/partcad_ide_client` is the Python half of the socket protocol that connects `partcad` to the PartCAD
+IDE extension's **PartCAD Viewer**. It is a sibling package in the same wheel, so `pip install partcad` makes
+`import partcad_ide_client` work and nothing has to install it separately.
 
-**The symlink is load-bearing.** A checkout with `core.symlinks=false` — Git for Windows' default unless
-Developer Mode is on — writes it as a small text file naming the target, `packages.find` then finds nothing
-there, and the wheel builds *successfully* without the package. `tests/unit/test_ide_client_is_shipped.py`
-exists to turn that silent success into a failing test; the `import partcad_ide_client` checks in `build.yml`
-and `deploy.yml` are the same guard in CI. Released wheels are built on Linux (`deploy.yml` pins
-`ubuntu-24.04`), so the exposure is a Windows contributor's local build, not the release.
-
-It ships here rather than as a distribution of its own because it was never on PyPI and every process that
+It ships that way rather than as a distribution of its own because it was never on PyPI and every process that
 could import it is a process that already imports `partcad` — `partcad.viewer` is its only importer in the
 tree. Two distributions owning one import name is the thing being avoided: pip does not detect the overlap when
 installing, and uninstalling either one then deletes the module out from under the other, silently. So do not
-give `partcad-ide-client` a `pyproject.toml` again, and do not vendor a second copy into the VS Code
-extension's `bundled/libs` — under `useBundled` that copy would land first on `sys.path` and shadow this one in
-the language server process only, leaving two different clients in play depending on which process is asking.
+give `partcad_ide_client` a `pyproject.toml` of its own, and do not vendor a second copy into the VS Code
+extension — a copy that lands first on `sys.path` shadows this one in one process and not another, leaving two
+different clients in play depending on which process is asking.
 
 The other half of the protocol is `ide/vscode/src/viewer/protocol.ts`. **A change to the wire format is
 a change to both files**, and the frame layout is specified once, in
@@ -126,11 +116,10 @@ Two properties of the package are deliberate and easy to break:
 
 The glTF payload codec (`encode_gltf`/`decode_gltf`) has two other implementations that have to agree with it:
 `ocp_serialize.encode_gltf` in the sandbox, and `decodeGltf` in the extension. Neither can import this package,
-which is why each carries its own copy; `tests/unit/test_viewer.py` and the extension's
+which is why each carries its own copy; `tests/partcad/unit/test_viewer.py` and the extension's
 `viewerProtocol.test.ts` are what catch a drift.
 
-Its own tests live with the component, in `tests/partcad_ide_client`; `tests/unit/test_ide_client_is_shipped.py`
-here covers the packaging side.
+Its own tests live in `tests/partcad_ide_client`.
 
 ## Commit
 

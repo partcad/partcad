@@ -221,7 +221,7 @@ MINGW* | MSYS* | CYGWIN*)
   fail "this script does not support Windows. From
        https://github.com/${REPOSITORY}/releases, run the IDE's
        'partcad-ide-<version>-windows-x86_64-setup.exe', or unpack the command
-       line tools' .zip, or install the wheels with 'pip install -U partcad-cli'."
+       line tools' .zip, or install the wheel with 'pip install -U partcad'."
   ;;
 *) fail "unsupported operating system '$(uname -s)'" ;;
 esac

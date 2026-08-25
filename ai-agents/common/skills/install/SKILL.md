@@ -12,7 +12,7 @@ so.
 | Argument | Installs | Afterward it runs as |
 | --- | --- | --- |
 | `executable` | Standalone PyInstaller bundle from the latest GitHub release (no Python needed) | `pc` / `partcad` on `PATH` |
-| `python-module` | The `partcad-cli` module into the **active** Python environment | `python -m partcad_cli.click.command` |
+| `python-module` | The `partcad` wheel into the **active** Python environment | `python -m partcad_cli.click.command` |
 
 ## 0. Skip if already installed
 
@@ -52,16 +52,17 @@ do not hand-roll one.
 
 ## `python-module` — into the active Python environment
 
-Only when the user explicitly asks for this mode. Install the `partcad-cli`
-module with the current interpreter's pip (use `python3` if `python` is absent or
-Python 2):
+Only when the user explicitly asks for this mode. Install the `partcad` wheel
+with the current interpreter's pip (use `python3` if `python` is absent or
+Python 2). It carries the CLI, the JSON-RPC service and the viewer client, so
+this one install is everything:
 
 ```sh
-python -m pip install -U partcad-cli
+python -m pip install -U partcad
 ```
 
 If pip refuses on a permissions or externally-managed-environment error, retry
-with `--user`, or use `pipx install partcad-cli` or a virtualenv. Verify and
+with `--user`, or use `pipx install partcad` or a virtualenv. Verify and
 report the result, then suggest re-running the original task (for example
 `/pc:init`):
 

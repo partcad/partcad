@@ -632,7 +632,7 @@ def test_update_without_a_before_install_hook_just_installs(monkeypatch):
 def test_the_module_never_reaches_for_a_daemon():
     """Updating is a client-side act; a daemon can be remote, or somebody else's.
 
-    Even inside `partcad-client`, the updater does not reach for the
+    Even inside `partcad_client`, the updater does not reach for the
     daemon module next to it: a caller that has daemons passes `before_install`,
     which is what lets `pc upgrade` stop all the local ones and lets the VS Code
     extension's Python backend -- which has none -- stop nothing.
@@ -657,7 +657,8 @@ def test_update_refuses_a_source_checkout(monkeypatch):
 
 
 def test_install_wheels_upgrades_only_the_installed_distributions(monkeypatch):
-    monkeypatch.setattr(selfupdate, "_installed_distributions", lambda: ["partcad-service-json-rpc"])
+    """A `pip install partcad` with no shim gets `partcad` upgraded and nothing else."""
+    monkeypatch.setattr(selfupdate, "_installed_distributions", lambda: ["partcad"])
     monkeypatch.setattr(selfupdate, "_pip_target_flags", list)
     calls = []
 
@@ -668,11 +669,42 @@ def test_install_wheels_upgrades_only_the_installed_distributions(monkeypatch):
 
     monkeypatch.setattr(selfupdate.subprocess, "run", lambda argv, **kw: calls.append(argv) or Result())
     selfupdate._install_wheels(None, lambda _m: None)
-    assert calls[0][-1] == "partcad-service-json-rpc"
+    assert calls[0][-1] == "partcad"
+    assert "partcad-cli" not in calls[0]
     assert "--upgrade" in calls[0]
-    # Unpinned: every component shares a version number but not every one of
-    # them is published for every release.
+    # Unpinned unless the caller asked for a version: pip resolves the newest.
     assert not any("==" in arg for arg in calls[0])
+
+
+def test_install_wheels_upgrades_the_shim_alongside_the_wheel(monkeypatch):
+    """`partcad-cli` pins `partcad` at its own version, so it cannot be left behind.
+
+    An installation that arrived through the old name has both distributions.
+    Upgrading only `partcad` would leave the shim pinning the version just
+    replaced, and pip would resolve the conflict by putting it back.
+    """
+    monkeypatch.setattr(selfupdate, "_installed_distributions", lambda: ["partcad", "partcad-cli"])
+    monkeypatch.setattr(selfupdate, "_pip_target_flags", list)
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(selfupdate.subprocess, "run", lambda argv, **kw: calls.append(argv) or Result())
+    selfupdate._install_wheels(None, lambda _m: None)
+    assert calls[0][-2:] == ["partcad", "partcad-cli"]
+
+
+def test_only_the_two_published_distributions_are_looked_for():
+    """The five-distribution era is over: one wheel, and the shim beside it.
+
+    `_installed_distributions` decides both what a version lookup asks PyPI
+    about and what an upgrade installs, so a name that is no longer published
+    here would make `pc upgrade` query a project this repository does not own.
+    """
+    assert selfupdate.DISTRIBUTIONS == ("partcad", "partcad-cli")
 
 
 def test_install_wheels_pins_only_when_a_version_was_asked_for(monkeypatch):

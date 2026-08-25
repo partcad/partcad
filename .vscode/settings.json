@@ -140,7 +140,7 @@
   "editor.useTabStops": false,
   "esbonio.server.enableDevTools": true,
   "esbonio.server.logLevel": "debug",
-  "esbonio.server.pythonPath": "${workspaceFolder}/partcad-cli/.venv/bin/python3.10",
+  "esbonio.server.pythonPath": "${workspaceFolder}/.venv/bin/python3.10",
   "esbonio.server.showDeprecationWarnings": true,
   "esbonio.server.updateBehavior": "promptAlways",
   "esbonio.server.updateFrequency": "daily",

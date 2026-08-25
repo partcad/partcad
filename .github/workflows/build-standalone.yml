@@ -40,9 +40,8 @@ on:
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "src/**"
-      - "src/**"
-      - "partcad/requirements*.txt"
-      - "partcad-cli/requirements*.txt"
+      - "pyproject.toml"
+      - "requirements*.txt"
   pull_request:
     branches: ["main", "devel"]
     paths:
@@ -52,9 +51,8 @@ on:
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
       - "src/**"
-      - "src/**"
-      - "partcad/requirements*.txt"
-      - "partcad-cli/requirements*.txt"
+      - "pyproject.toml"
+      - "requirements*.txt"
 
 permissions:
   contents: read

@@ -18,10 +18,7 @@ ruff_bin = None
 
 lock = threading.Lock()
 
-RUFF_INSTALL_HINT = (
-    "Install it with: pip install 'partcad[lint]' "
-    "(or 'partcad-cli[lint]' when using the command line interface)."
-)
+RUFF_INSTALL_HINT = "Install it with: pip install 'partcad[lint]'."
 
 
 class LintDependencyError(ImportError):
@@ -70,8 +67,7 @@ def ruff_once() -> str:
                 ruff_bin = ruff_main.find_ruff_bin()
             except FileNotFoundError as e:
                 raise LintDependencyError(
-                    f"The 'ruff' package is installed but its executable was not found ({e!s}). "
-                    + RUFF_INSTALL_HINT
+                    f"The 'ruff' package is installed but its executable was not found ({e!s}). " + RUFF_INSTALL_HINT
                 ) from e
 
     return ruff_bin

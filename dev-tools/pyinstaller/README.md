@@ -7,7 +7,7 @@ with [`install.sh`](../../install.sh) and never see Python.
 
 | | wheels | standalone bundle |
 | --- | --- | --- |
-| Install | `pip install -U partcad-cli` | `curl -fsSL .../install.sh \| sh` |
+| Install | `pip install -U partcad` | `curl -fsSL .../install.sh \| sh` |
 | Upgrade | `pc upgrade` (runs `pip`) | `pc upgrade` (fetches the release archive) |
 | Needs Python | yes, 3.10-3.14 | no |
 | Size | ~15MB plus whatever pip resolves | ~875MB unpacked, ~290MB compressed (Linux, OpenSCAD included) |

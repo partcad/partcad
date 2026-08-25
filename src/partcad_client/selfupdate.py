@@ -6,7 +6,7 @@
 """Updating the PartCAD installation itself.
 
 PartCAD ships in two shapes and both have to be updatable by the same gesture:
-the Python wheels on PyPI (`pip install -U partcad-cli`) and the standalone
+the Python wheel on PyPI (`pip install -U partcad`) and the standalone
 PyInstaller bundle that carries its own interpreter (installed by `install.sh`,
 or downloaded by the VS Code extension). This module is the one place that knows
 the difference.
@@ -84,16 +84,17 @@ MANAGED_BY_EXTENSION = "vscode-extension"
 
 DEFAULT_REPOSITORY = "partcad/partcad"
 
-# The distributions that make up a wheel installation, most specific first. Only
-# the ones actually installed are upgraded: `partcad-cli` pulls the rest in, but
-# an environment provisioned for the VS Code extension has
-# `partcad-service-json-rpc` and no CLI at all.
+# The distributions this repository publishes, in the order that matters here.
+# `partcad` first: it is the wheel, every package is inside it, so it is what a
+# version lookup should ask PyPI about and what an installation with nothing
+# recognisable in it should get. `partcad-cli` second: the compatibility shim,
+# no code of its own, only an `==` pin on `partcad` at the same version. It is
+# listed so that an installation which arrived through the old name is upgraded
+# through it too -- upgrading only `partcad` would leave the shim pinning the
+# version just replaced, and pip would put that version back.
 DISTRIBUTIONS = (
-    "partcad-cli",
-    "partcad-service-json-rpc",
     "partcad",
-    "partcad-client",
-    "partcad-utils",
+    "partcad-cli",
 )
 
 # The executables a standalone bundle contains, which is also what `install.sh`
@@ -885,11 +886,9 @@ def _reject_traversal(names, dest: str) -> None:
 def _install_wheels(pin: Optional[str], log: Callable[[str], None]) -> str:
     """Upgrade the installed PartCAD distributions with pip.
 
-    Unpinned, pip resolves each distribution's own newest release. Pinning every
-    one to a single version is only correct when the user asked for that version:
-    the components share a version number but not every one of them is published
-    for every release, and an `==` on a version that was never uploaded fails the
-    whole install.
+    Usually that is one distribution, `partcad`. It is two when the
+    compatibility shim `partcad-cli` is installed as well, and both are named so
+    that the shim's `==` pin on the wheel cannot hold the wheel back.
     """
     distributions = _installed_distributions()
     if not distributions:

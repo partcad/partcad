@@ -19,10 +19,8 @@ The tests below turn both into pytest failures. They read the command tree with
 :mod:`ast`: nothing here imports a command module or invokes a click command, so
 they cost milliseconds and cannot be fooled by import side effects.
 
-They live under `partcad-cli` rather than next to the daemon because CI's
-`test-pytest` job (`.github/workflows/test.yml`) runs `pytest partcad
-partcad-cli`; a copy under `tests/partcad_service_json_rpc` would only be
-collected by the whole-repo run in `test-dev.yml`.
+They live under `tests/partcad_cli` rather than next to the daemon because that
+is where the command tree they read lives: `src/partcad_cli/click/commands`.
 """
 
 import ast
@@ -40,7 +38,7 @@ COMMANDS_DIR = PARTCAD_CLI_SRC / "click" / "commands"
 # ---------------------------------------------------------------------------
 # The command boundary.
 #
-# The rationale lives in partcad-cli/AGENTS.md, "Command boundary"; the short
+# The rationale lives in src/partcad_cli/AGENTS.md, "Command boundary"; the short
 # version is that a command belongs on the *daemon* when it reads or mutates the
 # package graph or drives a CAD wrapper (whose sandboxed Python runtime lives in
 # the daemon's environment and may not exist on the client at all), and stays
@@ -211,7 +209,7 @@ def _scan_command_modules():
 COMMAND_MODULES = _scan_command_modules()
 
 _BOUNDARY_RULE = """\
-    The rule (partcad-cli/AGENTS.md, "Command boundary"): a command belongs on the
+    The rule (src/partcad_cli/AGENTS.md, "Command boundary"): a command belongs on the
     DAEMON when it reads or mutates the package graph, or drives a CAD wrapper --
     the wrapper's Python runtime lives in the daemon's environment and may not
     exist on the client at all. Such a command must be a thin client

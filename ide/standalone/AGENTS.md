@@ -32,7 +32,7 @@ python -m pytest ide/standalone/tests -o addopts=       # the build tooling
 ```
 
 `-o addopts=` because the repository-wide `pyproject.toml` options pull in coverage and reporting plugins these
-tests have no use for. They are not part of the `pytest partcad partcad-cli` run or of the `pre-commit` hook;
+tests have no use for. They are not part of the `pytest tests` run or of the `pre-commit` hook;
 `.github/workflows/build-ide-standalone.yml` runs them, before it spends an hour building.
 
 There is no unit test for `build.sh` itself. What checks it is `tools/verify_bundle.py`, which the build runs on

@@ -185,8 +185,7 @@ def missing_dependency(tier: str, module: str, extra: str) -> CacheDependencyErr
     """The error a backend raises when the extra that carries its client is absent."""
     return CacheDependencyError(
         "The '%s' cache needs the '%s' package, which is not installed. "
-        "Install it with: pip install 'partcad[%s]' "
-        "(or 'partcad-cli[%s]' when using the command line interface)." % (tier, module, extra, extra)
+        "Install it with: pip install 'partcad[%s]'." % (tier, module, extra)
     )
 
 

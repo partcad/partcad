@@ -1,12 +1,12 @@
 # partcad-cli
 
 CLI interface (`pc` / `partcad` commands) to most `partcad` core functionality. Source:
-`./src/partcad_cli`. Tests: `./tests`. Part of the shared Poetry workspace rooted at the repo root — depends on
-the `partcad` package in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
+`./src/partcad_cli`. Tests: `./tests/partcad_cli`. It is one of the packages inside the single `partcad` wheel,
+not a distribution of its own; run all commands below from the repo root unless noted.
 
 `pc daemon start` / `pc daemon stop` manage the per-workspace background daemon from
-[`partcad-service-json-rpc`](../partcad-service-json-rpc), through
-[`partcad-client`](../partcad-client): `start` goes through
+[`partcad_service_json_rpc`](../partcad_service_json_rpc), through
+[`partcad_client`](../partcad_client): `start` goes through
 `partcad_client.client.start_daemon()` (forwarding the daemon-affecting globals —
 `--offline`, `--force-update`, `--python-sandbox`, verbosity — which otherwise stop at the client's own
 `user_config`), while `stop` calls `partcad_client.daemon.stop_daemon()`.
@@ -30,7 +30,7 @@ one command with a flag.** `pc update` refetches the packages a package imports 
 daemon client like any other. `pc upgrade` replaces this machine's copy of PartCAD
 (`partcad_client.selfupdate`), which only the process running from it can do: a daemon can be remote,
 where "upgrade PartCAD" would mean upgrading somebody else's installation. It stays within the boundary's
-letter as well as its spirit — `selfupdate` lives in the deliberately cheap `partcad-client`, so the
+letter as well as its spirit — `selfupdate` lives in the deliberately cheap `partcad_client`, so the
 command never imports the heavy `partcad`.
 
 `pc upgrade` owns the daemon handling the upgrade needs, because `selfupdate` deliberately has none. Every
@@ -108,23 +108,23 @@ top of that file; update them there when a command intentionally moves.
 ## Setup
 
 All commands on this page run **inside the dev container**, not on the host — see "Where commands run" in the
-root [AGENTS.md](../AGENTS.md) for how to enter it. Dependencies are already installed in the image; re-run
+root [AGENTS.md](../../AGENTS.md) for how to enter it. Dependencies are already installed in the image; re-run
 `poetry install` only after changing `pyproject.toml`. The virtualenv is not auto-activated, so prefix the
 commands below with `poetry run` (e.g. `poetry run pytest ...`, `poetry run pc ...`).
 
 ```bash
-poetry install   # from repo root; installs partcad-cli (and partcad) in editable mode
+poetry install   # from repo root; installs the whole `partcad` wheel in editable mode
 ```
 
 ## Test and validate changes
 
-Two validation steps are required for any change under `partcad-cli/` — both must pass, unit tests alone are
-not sufficient because CI also gates on the example run:
+Two validation steps are required for any change under `src/partcad_cli/` — both must pass, unit tests alone
+are not sufficient because CI also gates on the example run:
 
 1. Unit tests:
 
    ```bash
-   pytest partcad-cli -x -p no:error-for-skips -p no:warnings --dist no   # matches CI (test-pytest job)
+   pytest tests/partcad_cli -x -p no:error-for-skips -p no:warnings --dist no   # matches CI (test-pytest job)
    ```
 
 2. End-to-end CLI validation against the example projects (matches CI's `test-examples-partcad` job in
@@ -152,9 +152,9 @@ pc list all -r //pub/examples/partcad   # from ./examples, or any dir with a par
 ## Lint / format
 
 ```bash
-black --check partcad-cli
-flake8 partcad-cli
-isort --check partcad-cli
+black --check src/partcad_cli tests/partcad_cli
+flake8 src/partcad_cli tests/partcad_cli
+isort --check src/partcad_cli tests/partcad_cli
 ```
 
 ## Commit

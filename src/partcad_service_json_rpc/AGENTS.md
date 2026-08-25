@@ -1,9 +1,9 @@
-# partcad-service-json-rpc
+# partcad_service_json_rpc
 
 JSON-RPC service interface to `partcad`. Ships the `partcad-json-rpc` executable, which exposes PartCAD over a
-JSON-RPC 2.0 interface whose methods mirror `partcad-cli` actions. Source: `./src/partcad_service_json_rpc`.
-Tests: `./tests`. Part of the shared Poetry workspace rooted at the repo root — depends on the `partcad` package
-in this monorepo (`../partcad`); run all commands below from the repo root unless noted.
+JSON-RPC 2.0 interface whose methods mirror the CLI's actions. Source: `./src/partcad_service_json_rpc`.
+Tests: `./tests/partcad_service_json_rpc`. It is one of the packages inside the single `partcad` wheel; run all
+commands below from the repo root unless noted.
 
 By default the service runs a per-workspace **daemon**, served over an AF_UNIX socket at
 `~/.partcad/workspaces/<hash>/socket` (a named pipe on Windows). `--stdio` serves one foreground connection over
@@ -49,17 +49,17 @@ directory.
 ## Setup
 
 All commands run **inside the dev container**, not on the host — see "Where commands run" in the root
-[AGENTS.md](../AGENTS.md). Dependencies are already installed in the image; re-run `poetry install` only after
+[AGENTS.md](../../AGENTS.md). Dependencies are already installed in the image; re-run `poetry install` only after
 changing `pyproject.toml`. The virtualenv is not auto-activated, so prefix commands with `poetry run`.
 
 ```bash
-poetry install   # from repo root; installs partcad-service-json-rpc (and partcad) in editable mode
+poetry install   # from repo root; installs the whole `partcad` wheel in editable mode
 ```
 
 ## Test and validate changes
 
 ```bash
-pytest partcad-service-json-rpc -x -p no:error-for-skips -p no:warnings --dist no   # matches CI
+pytest tests/partcad_service_json_rpc -x -p no:error-for-skips -p no:warnings --dist no   # matches CI
 ```
 
 Manual smoke over stdio (framed JSON-RPC; `rpc.discover` needs no package loaded):
@@ -72,9 +72,9 @@ poetry run partcad-json-rpc --http   # serve on 127.0.0.1:8017 instead
 ## Lint / format
 
 ```bash
-poetry run black --check partcad-service-json-rpc
-poetry run flake8 partcad-service-json-rpc
-poetry run isort --check partcad-service-json-rpc
+poetry run black --check src/partcad_service_json_rpc tests/partcad_service_json_rpc
+poetry run flake8 src/partcad_service_json_rpc tests/partcad_service_json_rpc
+poetry run isort --check src/partcad_service_json_rpc tests/partcad_service_json_rpc
 ```
 
 ## Method surface

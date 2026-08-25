@@ -5,7 +5,7 @@
 #
 """Tests for the client/daemon rendezvous: the address, and the liveness probe.
 
-Deliberately free of `partcad-service-json-rpc`: what is checked here is the
+Deliberately free of `partcad_service_json_rpc`: what is checked here is the
 *contract* -- an address computed the same way on both sides, and a probe that
 believes only an answer. The fake below speaks that contract in twenty lines,
 which is the point; if the real daemon ever stopped satisfying it, that is a

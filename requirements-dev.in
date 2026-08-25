@@ -7,17 +7,18 @@ behave==1.2.6
 behavex==4.6.5
 click==8.4.2
 coverage==7.15.2
-# 'partcad/tests/unit/git_http_server.py' serves a throwaway git repository over
+# 'tests/partcad/unit/git_http_server.py' serves a throwaway git repository over
 # smart HTTP with it, so pytest collection of the git tests fails without it.
-# Declared here because until now it arrived only by accident: 'partcad-cli'
+# Declared here because until now it arrived only by accident: the CLI
 # depended on 'ocp_vscode', which pulled 'flask-sock', which pulled Flask.
 flask==3.1.3
 pyhamcrest==2.1.0
-# 'partcad-cli/tests/unit/test_versions.py' parses 'dev-tools/bumpversion.toml'.
+# 'tests/partcad_cli/unit/test_versions.py' parses 'dev-tools/bumpversion.toml'.
 # 'tomllib' is only in the standard library from Python 3.11, so on 3.10 - which
 # this repo supports and the CI matrix runs - the test falls back to 'tomli'.
-# Declared here because until now it arrived only by accident, through
-# 'partcad-ide-vscode/src/test/python_tests/requirements.txt'.
+# Declared here because until now it arrived only by accident, through the
+# VS Code extension's Python test requirements, which no longer exist: the
+# extension is a JSON-RPC client with no Python of its own.
 tomli==2.4.1; python_version < "3.11"
 pytest==9.1.1
 pytest-cov==7.1.0
@@ -40,7 +41,7 @@ build123d==0.11.1
 ocpsvg==0.6.0
 # Every optional extra the 'partcad' wheel declares. Neither is a runtime
 # dependency - each carries a client library the core imports lazily, and only
-# when the feature that needs it is switched on - but 'partcad/tests/unit' has
+# when the feature that needs it is switched on - but 'tests/partcad/unit' has
 # tests that switch exactly those features on and drive them against local mock
 # servers ('test_cache_backends.py' for both cache tiers, and 'pc lint' for
 # ruff). Without the extra the feature reports itself unusable and skips, the
@@ -51,7 +52,7 @@ ocpsvg==0.6.0
 # ("cacheRemote ... needs the 'aiomcache' package, which is not installed").
 #
 # Both, not just the one that was missing: 'lint' happens to arrive today
-# because '.github/actions/setup-all' installs './partcad[lint]', but that is
+# because '.github/actions/setup-all' installs '.[lint]', but that is
 # the workflow's business and not something the test dependencies should rest
 # on. Named here, the suite states what it needs to run.
 #

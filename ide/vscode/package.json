@@ -886,7 +886,8 @@
   },
   "dependencies": {
     "fs-extra": "^11.4.0",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "vscode-jsonrpc": "^8.2.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",

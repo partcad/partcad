@@ -7,7 +7,7 @@ first time it starts.
 
 |                       | wheels                       | standalone command line tools | PartCAD IDE                     |
 | --------------------- | ---------------------------- | ----------------------------- | ------------------------------- |
-| Install               | `pip install -U partcad-cli` | `install.sh`                  | `install.sh --ide`, or a .dmg   |
+| Install               | `pip install -U partcad`     | `install.sh`                  | `install.sh --ide`, or a .dmg   |
 | Needs Python          | yes, 3.10-3.14               | no                            | no                              |
 | Needs an editor       | -                            | -                             | no, it is one                   |
 | What you get          | `pc`, `partcad`, the library | `pc`, `partcad`               | the editor, the extension, `pc` |

@@ -1,16 +1,13 @@
-# partcad-ide-client
+# partcad_ide_client
 
 The Python half of the socket protocol that connects `partcad` to the PartCAD IDE extension's **PartCAD
-Viewer**. Source: `./src/partcad_ide_client`. Tests: `./tests`. Part of the shared Poetry workspace rooted at
-the repo root; run all commands below from the repo root unless noted.
+Viewer**. Source: `./src/partcad_ide_client`. Tests: `./tests/partcad_ide_client`. Run all commands below from
+the repo root unless noted.
 
-**A component, not a distribution.** There is no `pyproject.toml` here and nothing is published under this
-name. `src/partcad_ide_client` is a relative symlink to `./src/partcad_ide_client`, so this source
-ships inside the `partcad` wheel: `pip install partcad` is what puts `import partcad_ide_client` on a machine.
-That symlink is load-bearing and can be lost silently on a Windows checkout —
-`tests/partcad/unit/test_ide_client_is_shipped.py` is the guard. See "The PartCAD IDE viewer client" in
-[../partcad/AGENTS.md](../partcad/AGENTS.md) for the whole rationale, including why giving this directory a
-`pyproject.toml` again would be a mistake.
+**A package, not a distribution.** Nothing is published under this name: it is one of the packages inside the
+single `partcad` wheel, so `pip install partcad` is what puts `import partcad_ide_client` on a machine. See
+"The PartCAD IDE viewer client" in [../partcad/AGENTS.md](../partcad/AGENTS.md) for the rationale, including
+why giving this directory a `pyproject.toml` of its own would be a mistake.
 
 The other half of the protocol lives in `ide/vscode/src/viewer/protocol.ts`. **A change to the wire
 format is a change to both files**, and the frame layout is specified once, in
@@ -36,14 +33,14 @@ which is why each carries its own copy; `tests/partcad/unit/test_viewer.py` and 
 ## Setup
 
 All commands run **inside the dev container** — see "Where commands run" in the root
-[AGENTS.md](../AGENTS.md). Dependencies are already installed; re-run `poetry install` only after changing
+[AGENTS.md](../../AGENTS.md). Dependencies are already installed; re-run `poetry install` only after changing
 `pyproject.toml`. Prefix commands with `poetry run`.
 
 ## Test and validate changes
 
 ```bash
-poetry run pytest partcad-ide-client -x -p no:error-for-skips -p no:warnings --dist no   # matches CI
-poetry run behave                                                                        # integration tests
+poetry run pytest tests/partcad_ide_client -x -p no:error-for-skips -p no:warnings --dist no   # matches CI
+poetry run behave                                                                            # integration tests
 ```
 
 The client tests stand up a fake IDE on an ephemeral port and point the client at it with `PARTCAD_IDE_PORT`,
@@ -56,12 +53,12 @@ stubbed out, and the sandbox side is covered by the render tests.
 ## Lint / format
 
 ```bash
-poetry run black --check partcad-ide-client
+poetry run black --check src/partcad_ide_client tests/partcad_ide_client
 ```
 
 Note that `flake8` reports E501 at 79 columns on every file in this repo (it does not read the 120-column
 setting from `pyproject.toml` without a plugin), and `isort` disagrees with the tree as committed; neither
-gates a PR. See the root [AGENTS.md](../AGENTS.md).
+gates a PR. See the root [AGENTS.md](../../AGENTS.md).
 
 ## Commit
 

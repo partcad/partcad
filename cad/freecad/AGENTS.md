@@ -12,7 +12,7 @@ This directory *is* the addon: FreeCAD loads a directory under its `Mod/` folder
 
 FreeCAD embeds its own Python interpreter, which a user cannot be asked to grow a PartCAD installation in (and
 which PartCAD's CAD dependencies would fight with). So the addon is a **thin client of
-[`partcad-service-json-rpc`](../partcad-service-json-rpc)**, running as the frozen PyInstaller bundle: it speaks
+[`partcad_service_json_rpc`](../../src/partcad_service_json_rpc)**, running as the frozen PyInstaller bundle: it speaks
 framed JSON-RPC to the per-workspace daemon, exactly as `pc` and the VS Code extension do, and shares the warm
 context with them. Nothing in this directory imports `partcad`.
 
@@ -44,7 +44,7 @@ package and does import FreeCAD — it is the root entry point FreeCAD itself ex
 
 ## Test and validate changes
 
-From the repository root, inside the [dev container](../AGENTS.md):
+From the repository root, inside the [dev container](../../AGENTS.md):
 
 ```bash
 poetry run pytest cad/freecad -x -p no:error-for-skips -p no:warnings --dist no   # matches CI
