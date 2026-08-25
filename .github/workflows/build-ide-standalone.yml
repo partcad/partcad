@@ -478,6 +478,65 @@ jobs:
           fi
           ide/standalone/build.sh --with-cli-bundle dist/standalone/partcad ${extra}
 
+      # TEMPORARY. Inno Setup aborts the Windows build with "Error in
+      # partcad-ide.iss: The system cannot find the path specified", 24 seconds
+      # into compiling -- so it is some way into the tree rather than failing on
+      # a missing top-level path. Nothing in the build says which path, and the
+      # step had never run before, so there is no earlier run to compare with.
+      #
+      # This measures rather than guesses. It reports the three paths the .iss
+      # actually reads, and the length of every path under the application,
+      # because a path over Windows' 260-character limit produces exactly that
+      # message and this tree carries the extension's "bundled/" (1553 files)
+      # and the frozen command line tools.
+      #
+      # 'always()' because the step above fails: the tree is fully built by the
+      # time Inno runs, so it is still there to look at. Remove this once the
+      # cause is known.
+      - name: "Diagnostic: why Inno Setup cannot find a path"
+        if: ${{ always() && runner.os == 'Windows' }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, pathlib
+
+          repo = pathlib.Path.cwd()
+          app = repo / "dist" / "ide" / "partcad-ide"
+
+          # The three inputs "partcad-ide.iss" names. AppDir is its '[Files]'
+          # source and the only one that is a tree rather than a file.
+          for label, path in (
+              ("AppDir", app),
+              ("LicenseFile", repo / "LICENSE.txt"),
+              ("SetupIconFile", app / "partcad-ide.ico"),
+          ):
+              print(f"{label:14} exists={path.exists()}  {path}")
+
+          if not app.is_dir():
+              raise SystemExit("no application tree to measure")
+
+          # Inno resolves '{#AppDir}\*' to absolute paths, so absolute length is
+          # what counts, not the length relative to the .iss.
+          lengths = []
+          for root, _dirs, files in os.walk(app):
+              for name in files:
+                  full = os.path.join(root, name)
+                  lengths.append((len(full), full))
+
+          lengths.sort(reverse=True)
+          over = [item for item in lengths if item[0] > 259]
+          print(f"\nfiles={len(lengths)}  longest={lengths[0][0] if lengths else 0}"
+                f"  over 259 chars={len(over)}")
+          print("\nthe ten longest:")
+          for length, full in lengths[:10]:
+              print(f"  {length:4}  {full}")
+          PY
+
+          echo
+          echo "long paths enabled on this runner:"
+          reg query 'HKLM\SYSTEM\CurrentControlSet\Control\FileSystem' //v LongPathsEnabled ||
+            echo "  (not set)"
+
       # The build warns and carries on when the platform-specific packaging
       # tools are missing, which is right for someone building locally and wrong
       # for a release. Fail here instead.
