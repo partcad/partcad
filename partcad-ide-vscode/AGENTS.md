@@ -94,6 +94,48 @@ itself while it is executing, and is required on Windows, where deleting a runni
 No superseded bundle is left behind: the idle ones go immediately, and the one the updater is running out of is
 removed by a detached reaper once that process exits.
 
+## The tools on the terminal PATH
+
+`src/common/terminalPath.ts` prepends the directory holding `pc`/`partcad` to `PATH` for terminals opened in
+this window, through `context.environmentVariableCollection`, so `pc` works without the user installing
+anything or editing a shell profile. `partcad.addToolsToTerminalPath` (default true) turns it off.
+
+Which directory that is depends on the backend:
+
+- `service` — `path.dirname()` of whatever `resolveServicePath` found. A standalone bundle is
+  `<install-dir>/<version>/{pc,partcad,partcad-json-rpc}`, one directory holding all three, so the executable
+  the extension already resolved names it.
+- `python` — the scripts directory of the interpreter the language server runs on, which only that
+  interpreter can name. `bundled/tool/lsp_server.py`'s `report_scripts_directory()` sends it as
+  `?/partcad/scriptsPath`, from `partcad.install`, before the self-update early return so both install paths
+  report. That environment has no `pc` in it today (it is provisioned with the service and the client, not the
+  CLI); the directory is reported anyway, because it is the answer to "where would it be" and reporting only
+  on success would mean never reporting on the environment where the answer would change.
+
+Four things about it are deliberate:
+
+- **Unconditional.** No `getScoped` per workspace folder, no check for a PartCAD package in the workspace, and
+  no check for what is on `PATH` already. An activated extension means the tools belong in every terminal of
+  the window. Some of `resolveServicePath`'s fallbacks (`~/.local/bin`, a plain PATH lookup) resolve to a
+  directory that is on PATH anyway; prepending it again is inert.
+- **Not persistent.** `collection.persistent = false`, against the default. `pc upgrade` installs beside the
+  running bundle and deletes every superseded one, so a restored collection would put a deleted directory on
+  the PATH of every terminal until activation caught up. Re-applying on each activation cannot go stale.
+- **`clear()` before `prepend()`.** `prepend` appends to what the collection holds, so refreshing after an
+  upgrade would otherwise leave both the old and the new directory on PATH, oldest first.
+- **The trailing `path.delimiter`** is part of the prepended value, not decoration.
+
+Refreshed on activation, on `?/partcad/scriptsPath`, after `updateServiceBundle`, and on any configuration
+change (cheap and idempotent, so it does not work out which setting moved).
+
+Inside the PartCAD IDE this runs alongside `partcad-ide-standalone/bootstrap/extension.js`, which does the same
+thing for the tools bundled in the application. Both prepend, and `bootstrap` points `partcad.servicePath` at
+the bundled service, which `resolveServicePath` honours first -- so the two agree on the directory and the only
+effect is that it appears on `PATH` twice.
+
+This has nothing to do with `src/terminal.ts`, which creates the `PartCAD` output pseudoterminal: that is a log
+surface with a no-op `handleInput`, not a shell, and has no environment to inherit.
+
 ## ASSY diagnostics
 
 `.assy` files are registered as YAML for highlighting but are not YAML: they are Jinja2 templates that render

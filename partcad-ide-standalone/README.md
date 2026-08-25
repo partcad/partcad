@@ -125,6 +125,12 @@ PartCAD extension contributes -- so the IDE opens on the PartCAD Explorer rather
 also points `partcad.servicePath` at the bundled `partcad-json-rpc` and prepends the tools directory to the
 PATH of the integrated terminal, so `pc` works in it without the user installing anything.
 
+The PartCAD extension does the PATH half for itself now too (`partcad.addToolsToTerminalPath`, see
+`partcad-ide-vscode/AGENTS.md`), so inside this IDE both run. They agree on the directory -- the extension
+resolves `partcad.servicePath`, which `bootstrap` has just pointed at the bundled service -- so the only effect
+is that it appears on `PATH` twice. This part of `bootstrap` stays because it is what sets `servicePath` in the
+first place, and because it has to work in an editor where the PartCAD extension is disabled.
+
 The IDE's other view of PartCAD comes from the package rather than from here: `pc init` adds a **Render**
 command to the repository's `.vscode/launch.json` (see `partcad/src/partcad/launch_config.py`), so "Run and
 Debug" has something in it that renders the package the moment there is a package to render.

@@ -26,6 +26,14 @@ shape in a sandboxed runtime and sends the result to this extension as compresse
 Anything that can reach that port displays into the same viewer, including a `pc inspect` run in a plain
 terminal. Set `PARTCAD_IDE_PORT` to move both ends off the default port.
 
+## The command line in the integrated terminal
+
+While the extension is active, terminals opened in the window get the PartCAD command line tools on their
+`PATH`, so `pc` and `partcad` work without installing anything separately or editing a shell profile. VS Code
+marks such a terminal and will show you which extension changed the environment. Terminals already open when
+the extension activates keep the environment they started with; reopen one to pick the tools up. Set
+`partcad.addToolsToTerminalPath` to `false` to keep a PartCAD of your own on the `PATH` instead.
+
 ## Creating PartCAD packages
 
 After this extension is installed, the PartCAD workbench becomes available.

@@ -30,6 +30,7 @@ import os
 import pathlib
 import select
 import sys
+import sysconfig
 import threading
 import time
 from typing import Any, Optional
@@ -452,6 +453,38 @@ def load_package_contents(args=list()) -> None:
     _ops().list_all(session, {"name": name})
 
 
+def report_scripts_directory() -> None:
+    """Tell the extension where this interpreter's console scripts land.
+
+    That is where `pc` is once `partcad-cli` is installed, and it is the
+    directory the extension prepends to the terminal PATH. Only this process can
+    answer it: `pip install` here passes `--user`, so the scheme is the user one
+    -- except where that was overridden, hence checking both and preferring
+    whichever actually has a `pc` in it.
+
+    Reported whether or not a `pc` is there yet. The directory is the answer to
+    "where would it be", the extension logs the absence, and reporting only on
+    success would mean never reporting on an environment provisioned without the
+    CLI -- which is the one where the answer would change.
+    """
+    cli = "pc.exe" if sys.platform == "win32" else "pc"
+    user_scheme = "nt_user" if os.name == "nt" else "posix_user"
+    candidates = []
+    try:
+        candidates.append(sysconfig.get_path("scripts", user_scheme))
+    except KeyError:  # pragma: no cover - an interpreter without that scheme
+        pass
+    candidates.append(sysconfig.get_path("scripts"))
+    candidates = [directory for directory in candidates if directory]
+
+    chosen = next(
+        (directory for directory in candidates if os.path.isfile(os.path.join(directory, cli))),
+        candidates[0] if candidates else None,
+    )
+    if chosen:
+        LSP_SERVER.send_notification("?/partcad/scriptsPath", chosen)
+
+
 @LSP_SERVER.command("partcad.install")
 def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     """LSP handler for partcad.install command.
@@ -468,6 +501,10 @@ def do_install_partcad(params: lsp.ExecuteCommandParams) -> None:
     nothing installed yet to update.
     """
     global partcad_log_w_stream
+
+    # Before the early return below: this is the only place that runs on both
+    # paths, and the answer does not depend on which of them the install takes.
+    report_scripts_directory()
 
     if _do_self_update():
         return

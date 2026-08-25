@@ -136,6 +136,12 @@
             "scope": "machine",
             "type": "string"
           },
+          "partcad.addToolsToTerminalPath": {
+            "default": true,
+            "description": "Put the PartCAD command line tools (`pc`, `partcad`) on the PATH of terminals opened in this window, so they work without installing anything or editing a shell profile. Applies to terminals opened after the extension activates; VS Code shows which extension changed the environment. Turn this off to keep a PartCAD of your own on the PATH instead.",
+            "scope": "machine",
+            "type": "boolean"
+          },
           "partcad.serviceChannel": {
             "default": "socket",
             "description": "How the extension connects to the PartCAD service. 'socket' uses a shared per-workspace background daemon (recommended); 'stdio' runs a dedicated service process over stdin/stdout. Only used when 'partcad.backend' is 'service'.",

@@ -113,7 +113,9 @@ nothing separate to install.
 
 Anything with a ``partcad`` that can reach that port can display into the same
 viewer -- including a ``pc`` run in a plain terminal, as long as a window with
-the extension is open:
+the extension is open. While the extension is active it puts the PartCAD command
+line tools on the ``PATH`` of terminals opened in that window, so ``pc`` is there
+without any further setup (``partcad.addToolsToTerminalPath`` turns that off):
 
   .. code-block:: shell
 

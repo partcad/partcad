@@ -27,6 +27,7 @@ import {
     getPopupTerminalFromSetting,
 } from './common/settings';
 import { updateServiceBundle } from './common/provision';
+import { refreshToolsPath, setPythonScriptsDirectory } from './common/terminalPath';
 import { loadServerDefaults } from './common/setup';
 import { getLSClientTraceLevel } from './common/utilities';
 import { createOutputChannel, isVirtualWorkspace, onDidChangeConfiguration, registerCommand } from './common/vscodeapi';
@@ -124,6 +125,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         }),
     );
 
+    // The command line tools on the PATH of this window's terminals. Done here,
+    // before any backend has started: for the service backend the directory is
+    // whatever is already installed, and a user who opened a terminal first
+    // should not have to wait for a language server to get `pc`.
+    refreshToolsPath(context, serverId);
+
     // Log Server information
     traceLog(`Name: ${serverInfo.name}`);
     traceLog(`Module: ${serverInfo.module}`);
@@ -168,6 +175,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     // The Python backend cannot check anything until PartCAD is
                     // installed into the interpreter; now it can.
                     partcadLint?.refresh();
+                }),
+                lsClient.onNotification('?/partcad/scriptsPath', async (directory: string) => {
+                    // Where `pip install --user` put this interpreter's scripts,
+                    // which is the Python backend's answer to "where is `pc`".
+                    // Only that interpreter can say, so it tells us.
+                    if (setPythonScriptsDirectory(directory)) {
+                        refreshToolsPath(context, serverId);
+                    }
                 }),
                 lsClient.onNotification('?/partcad/installFailed', async () => {
                     await vscode.commands.executeCommand('setContext', 'partcad.installed', false);
@@ -424,6 +439,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             await runServer();
         }),
         onDidChangeConfiguration(async (e: vscode.ConfigurationChangeEvent) => {
+            // Cheap and idempotent, so it is not worth working out which of the
+            // settings that decide the directory was the one that changed.
+            refreshToolsPath(context, serverId);
             if (checkIfConfigurationChanged(e, serverId)) {
                 await runServer();
             }
@@ -484,6 +502,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                     // connection has to go either way.
                     await lsClient?.stopDaemon?.();
                     const result = await updateServiceBundle(context, serverId, outputChannel);
+                    // `pc upgrade` installs beside the running bundle and deletes
+                    // every superseded one, so the directory this put on the PATH
+                    // may no longer exist.
+                    refreshToolsPath(context, serverId);
                     if (!result.execPath) {
                         await vscode.commands.executeCommand('setContext', 'partcad.beingInstalled', false);
                         return;

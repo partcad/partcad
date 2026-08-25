@@ -100,6 +100,11 @@ export function getReopenTerminalFromSetting(namespace: string, scope?: Configur
     return config.get<string>('reopenTerminal');
 }
 
+export function getAddToolsToTerminalPathFromSetting(namespace: string, scope?: ConfigurationScope): boolean {
+    const config = getConfiguration(namespace, scope);
+    return config.get<boolean>('addToolsToTerminalPath') ?? true;
+}
+
 export function getPopupTerminalFromSetting(namespace: string, scope?: ConfigurationScope) {
     const config = getConfiguration(namespace, scope);
     return config.get<string>('popupTerminal');
