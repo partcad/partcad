@@ -271,8 +271,7 @@ jobs:
 
           mkdir -pv pytest-test-results
           pytest \
-            partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc cad/freecad \
-            partcad-ide-client \
+            tests cad/freecad \
             -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
           mamba deactivate

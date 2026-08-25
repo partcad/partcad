@@ -231,8 +231,12 @@ standalone installation is present.
 The recommended method to install PartCAD CLI tools for most users is:
 
 ```shell
-pip install -U partcad-cli
+pip install -U partcad
 ```
+
+That one package is everything: the `pc` command line tool, the Python module, and
+the JSON-RPC service the editor extensions talk to. `partcad-cli` still installs
+and still works — it is now a thin package that pulls `partcad` in.
 
 - On **Windows**, install `Miniforge3` using `Register Miniforge3 as my default Python X.XX` and use this Python
   environment for PartCAD. Also set `LongPathsEnabled` to 1 at

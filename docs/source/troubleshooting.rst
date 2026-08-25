@@ -111,8 +111,8 @@ sketch or interface is inspected. PartCAD tessellates the shape in a sandboxed
 runtime, and sends the result to the extension as compressed glTF over a socket
 on ``127.0.0.1:9137``. The Python side of that connection is the
 ``partcad_ide_client`` package, which ships inside ``partcad`` itself -- so
-``pip install partcad`` (or ``partcad-cli``) is all that is needed, and there is
-nothing separate to install.
+``pip install partcad`` is all that is needed, and there is nothing separate to
+install.
 
 Anything with a ``partcad`` that can reach that port can display into the same
 viewer -- including a ``pc`` run in a plain terminal, as long as a window with

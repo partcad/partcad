@@ -249,8 +249,8 @@ long as they are maintained following the PartCAD standards and conventions.
 Command line tools
 ==================
 
-PartCAD CLI tools get installed using the PyPI module ``partcad-cli``.
-The main tool is called ``pc``.
+PartCAD CLI tools get installed using the PyPI package ``partcad``, which also
+carries the Python module and the JSON-RPC service. The main tool is called ``pc``.
 The CLI tools are supposed to provide the complete set of PartCAD features.
 
 Visual Studio Code extension

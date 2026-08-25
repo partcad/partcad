@@ -1,16 +1,18 @@
 [run]
 branch = True
 concurrency = thread
-# Name every package explicitly. The old value relied on the CI checkout
-# path (.../work/partcad/partcad/...) making */partcad/* match everything,
-# which silently excluded partcad-utils and partcad-service-json-rpc from
-# any run outside CI.
+# Everything the one wheel ships, plus the FreeCAD addon, which is not a
+# package that gets installed. `*/src/*` would also match a user's site-packages
+# on some layouts, so the packages are named -- and naming them is what stops a
+# new one being silently excluded, since the version test fails if `src/` and
+# the package list disagree.
 include =
-        */partcad/*
-        */partcad-cli/*
-        */partcad-utils/*
-        */partcad-ide-client/*
-        */partcad-service-json-rpc/*
+        */src/partcad/*
+        */src/partcad_cli/*
+        */src/partcad_utils/*
+        */src/partcad_client/*
+        */src/partcad_ide_client/*
+        */src/partcad_service_json_rpc/*
         */cad/freecad/*
 disable_warnings = already-imported
 parallel = True
