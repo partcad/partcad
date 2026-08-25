@@ -704,17 +704,41 @@ if [ "${OS_NAME}" = "windows" ] && [ -f "${APP_ROOT}/partcad-ide.ico" ]; then
       break
     fi
   done
-  if [ -z "${RCEDIT}" ] && command -v npm >/dev/null 2>&1; then
+  if [ -z "${RCEDIT}" ]; then
     # ... and if npm's global directory is not on PATH at all, npm knows where
-    # it is. On Windows the executables sit in the prefix itself, not in `bin`.
-    NPM_PREFIX="$(npm prefix -g 2>/dev/null || true)"
-    if [ -n "${NPM_PREFIX}" ]; then
-      for candidate in "${NPM_PREFIX}/rcedit.cmd" "${NPM_PREFIX}/rcedit"; do
-        if [ -f "${candidate}" ]; then
-          RCEDIT="${candidate}"
-          break
-        fi
-      done
+    # it is. Three Windows details decide whether that works, and the first
+    # attempt at this got two of them wrong -- it still said "no rcedit found"
+    # on a runner where `npm install -g rcedit` had just succeeded:
+    #
+    #   - `npm` is `npm.cmd` here, which `command -v` will not find by its bare
+    #     name for the same reason it will not find `rcedit`;
+    #   - `npm prefix -g` answers with a *Windows* path, `C:\npm\prefix`, and
+    #     this shell cannot open one until `cygpath` converts it -- a `[ -f ]`
+    #     on it is simply false, silently;
+    #   - and that answer arrives with a trailing CR, which becomes part of the
+    #     path if it is not stripped.
+    #
+    # On Windows the executables sit in the prefix itself, not in `bin`.
+    NPM=""
+    for candidate in npm npm.cmd; do
+      if command -v "${candidate}" >/dev/null 2>&1; then
+        NPM="${candidate}"
+        break
+      fi
+    done
+    if [ -n "${NPM}" ]; then
+      NPM_PREFIX="$("${NPM}" prefix -g 2>/dev/null | tr -d '\r')"
+      if [ -n "${NPM_PREFIX}" ] && command -v cygpath >/dev/null 2>&1; then
+        NPM_PREFIX="$(cygpath -u "${NPM_PREFIX}")"
+      fi
+      if [ -n "${NPM_PREFIX}" ]; then
+        for candidate in "${NPM_PREFIX}/rcedit.cmd" "${NPM_PREFIX}/rcedit"; do
+          if [ -f "${candidate}" ]; then
+            RCEDIT="${candidate}"
+            break
+          fi
+        done
+      fi
     fi
   fi
   if [ -n "${RCEDIT}" ]; then
