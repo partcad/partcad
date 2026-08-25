@@ -408,6 +408,16 @@ jobs:
         continue-on-error: true
         run: python -m pip install cairosvg pillow
 
+      # The one thing that can put an icon into an already-linked Windows
+      # executable. Without it the installer carries the PartCAD icon and the
+      # application it installs still wears VSCodium's, which is the half-done
+      # version of the same bug. 'continue-on-error' to match the renderers
+      # above: the build warns and produces an IDE either way.
+      - name: Install rcedit
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: npm install -g rcedit
+
       # The runner images ship it, so this is a fallback rather than the usual
       # path. Without it the build produces the .zip and says it produced no
       # installer, which is not what a release should carry.
