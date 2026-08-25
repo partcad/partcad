@@ -450,10 +450,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist/standalone
-          archive=$(find bundles -type f \( -name "partcad-*.tar.gz" -o -name "partcad-*.zip" \) ! -name "*.sha256")
+          archive=$(find bundles -type f \( -name "partcad-*.tar.xz" -o -name "partcad-*.zip" \) ! -name "*.sha256")
           echo "Unpacking ${archive}"
           case "${archive}" in
-          *.tar.gz) tar -xzf "${archive}" -C dist/standalone ;;
+          # `-xf`, not `-xzf`: tar reads the compression from the archive itself.
+          *.tar.*) tar -xf "${archive}" -C dist/standalone ;;
           *.zip) unzip -q "${archive}" -d dist/standalone ;;
           esac
           test -d dist/standalone/partcad

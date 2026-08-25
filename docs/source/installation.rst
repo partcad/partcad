@@ -129,8 +129,10 @@ That downloads the bundle for the current operating system and architecture from
 Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.local/bin`` is not on your
 ``PATH``, the installer says so and prints the line to add.
 
-The bundle is around 875MB unpacked and 290MB to download on Linux, somewhat less on MacOS and Windows.
-Most of it is the OpenCASCADE geometry kernel, which the wheels download too, just at ``pip install`` time.
+The bundle is around 185MB unpacked and 60MB to download on Linux x86_64, and about half that on MacOS and
+on Linux arm64, which carry no bundled OpenSCAD. It carries no CAD kernel: PartCAD builds every shape in a
+conda sandbox it provisions itself, so ``conda`` (or ``mamba``) is a prerequisite here exactly as it is for
+the wheels. ``pc healthcheck`` reports what this machine is missing.
 
 Supported platforms are Linux on x86_64 and arm64, and MacOS on Apple silicon. Windows is covered by the
 ``.zip`` archives under :ref:`manual installation <standalone-manual>`.

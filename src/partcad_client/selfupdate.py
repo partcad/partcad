@@ -387,8 +387,16 @@ def host_platform() -> tuple:
 
 
 def archive_extension(os_name: str) -> str:
-    """The archive format the bundles are published in for ``os_name``."""
-    return "zip" if os_name == "windows" else "tar.gz"
+    """The archive format the bundles are published in for ``os_name``.
+
+    ``dev-tools/pyinstaller/build.sh`` is what writes these names, and xz is
+    what it compresses with everywhere but Windows: the bundle is native code
+    and an unpacked OpenSCAD, on which xz is worth about a quarter of the
+    download over gzip. ``_extract`` reads the compression out of the archive
+    rather than out of this name, so the two can only disagree about which file
+    to fetch.
+    """
+    return "zip" if os_name == "windows" else "tar.xz"
 
 
 def host_release() -> Optional[str]:
@@ -648,7 +656,7 @@ def _download_bundle(
 def _staging_parent(root: str) -> Optional[str]:
     """Where to unpack before the move: the install directory when it is writable.
 
-    ``shutil.move`` across filesystems degrades to a ~875MB copy, and the system
+    ``shutil.move`` across filesystems degrades to a ~185MB copy, and the system
     temp directory is a separate (often much smaller) filesystem on exactly the
     machines this runs on. Falling back to the default keeps a read-only install
     directory failing on the move rather than on the staging.
@@ -714,7 +722,7 @@ def _bin_dirs() -> List[str]:
 
 
 def _prune_old_versions(root: str, keep: str, running: str, log: Callable[[str], None]) -> None:
-    """Delete every superseded bundle. A bundle is ~875MB unpacked, so all of it.
+    """Delete every superseded bundle. A bundle is ~185MB unpacked, so all of it.
 
     ``running`` -- the bundle this process is executing out of -- is superseded
     too, and it is the one directory that cannot simply be removed: on Windows
@@ -856,9 +864,12 @@ def _extract(archive_path: str, dest: str, ext: str) -> None:
         # executables come out unreadable as programs; _make_executable fixes
         # the launchers and the loader finds the rest through the bundle.
         return
-    with tarfile.open(archive_path, "r:gz") as tf:
+    # "r:*" rather than "r:gz": the compression comes from the archive itself,
+    # which keeps this working for a bundle packed either way.
+    with tarfile.open(archive_path, "r:*") as tf:
         members = tf.getmembers()
         _reject_traversal([m.name for m in members], dest)
+        _reject_unsafe_links(members, dest)
         # `filter="data"` is the default from Python 3.14 and rejects unsafe
         # members outright; passing it explicitly keeps the newer 3.10-3.13
         # patch releases identical. The older ones have no such parameter at
@@ -867,6 +878,31 @@ def _extract(archive_path: str, dest: str, ext: str) -> None:
             tf.extractall(dest, members=members, filter="data")  # nosec B202 - members validated above
         except TypeError:
             tf.extractall(dest, members=members)  # nosec B202 - members validated above
+
+
+def _reject_unsafe_links(members, dest: str) -> None:
+    """Refuse an archive whose links would reach outside ``dest``.
+
+    The bundle carries two of them -- ``partcad`` and ``partcad-json-rpc`` are
+    relative symlinks to ``pc``, so that one ~38MB payload serves all three
+    names -- which is why link members are extracted rather than skipped. What
+    ``filter="data"`` enforces on a modern interpreter is enforced here too, for
+    the older ones this falls back to: a link target may be neither absolute nor
+    a path that climbs out of the archive.
+    """
+    for member in members:
+        if not (member.issym() or member.islnk()):
+            continue
+        link = member.linkname
+        if os.path.isabs(link) or (os.name == "nt" and os.path.splitdrive(link)[0]):
+            raise SelfUpdateError("the archive contains an absolute link: %s -> %s" % (member.name, link))
+        # A symlink resolves against its own directory; a hard link name is
+        # relative to the archive root.
+        base = os.path.dirname(member.name) if member.issym() else ""
+        resolved = os.path.normpath(os.path.join(dest, base, link))
+        root = os.path.normpath(dest)
+        if resolved != root and not resolved.startswith(root + os.sep):
+            raise SelfUpdateError("the archive contains an unsafe link: %s -> %s" % (member.name, link))
 
 
 def _reject_traversal(names, dest: str) -> None:

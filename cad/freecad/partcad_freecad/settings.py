@@ -73,7 +73,7 @@ def set(key: str, value: str) -> None:  # pylint: disable=redefined-builtin
 def cache_dir() -> str:
     """Where a downloaded bundle is unpacked.
 
-    FreeCAD's per-user data directory when there is one, so the addon's ~875MB
+    FreeCAD's per-user data directory when there is one, so the addon's ~185MB
     of payload lands with the rest of the user's FreeCAD data rather than in a
     temporary directory that a reboot clears.
     """

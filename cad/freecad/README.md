@@ -52,7 +52,7 @@ the PartCAD monorepo. The `package.xml` here is what the Addon Manager reads onc
 
 1. **PartCAD → Open Package…** and pick a directory holding a `partcad.yaml`. If it holds none, the addon
    offers to create one there.
-2. The first time, it offers to download the PartCAD service (~290 MB compressed, ~875 MB unpacked). An
+2. The first time, it offers to download the PartCAD service (~60 MB compressed, ~185 MB unpacked). An
    existing installation is used instead of downloading — one made by
    [`install.sh`](https://github.com/partcad/partcad#installation), by the PartCAD VS Code extension, or by an
    earlier run of this addon.
