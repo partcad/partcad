@@ -85,8 +85,9 @@ Two optional dependencies change what the build can do, and it reports what it l
   changes -- on Linux or MacOS, since it is the machines that *can* render that keep it honest:
 
   ```bash
-  python tools/make_icons.py --svg ../partcad-ide-vscode/resources/logo.svg --output-dir /tmp/icons
-  cp /tmp/icons/partcad-ide.ico resources/partcad-ide.ico
+  python partcad-ide-standalone/tools/make_icons.py \
+      --svg partcad-ide-vscode/resources/logo.svg --output-dir /tmp/icons
+  cp /tmp/icons/partcad-ide.ico partcad-ide-standalone/resources/partcad-ide.ico
   ```
 - `rcedit` (`npm install -g rcedit`) puts the icon into `partcad-ide.exe`. There is no other way to change a
   Windows executable's icon after it is linked.
