@@ -67,11 +67,16 @@ isort --check src/partcad tests/partcad
 
   Below `sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH` the environment does *not* cover it: `PYTHONSAFEPATH`
   arrived in 3.11 and an older interpreter ignores it, which would leave the directory PartCAD runs from first
-  on `sys.path` for the `-m venv`/`-m pip` calls that provision a sandbox. Those versions keep `-I` and go on
-  ignoring `PYTHONHASHSEED` — no flag pins a hash seed, so isolation and reproducibility cannot both be had
-  there. `tests/partcad/unit/test_python_env.py` asserts the outcome (a `venv.py`/`pip.py` beside the interpreter never
-  wins) on whichever version is running, so both branches are covered by the CI matrix rather than by a
-  comment.
+  on `sys.path` for the `-m venv`/`-m pip` calls that provision a sandbox. Those calls — and only those — keep
+  `-I` there, which is why `PythonRuntime` carries two flag lists (`python_flags` for a wrapper,
+  `python_provisioning_flags` for a `-m` command) and picks between them in `flags_for()`. A wrapper is run by
+  path, so its `sys.path[0]` is PartCAD's own `wrappers/` directory rather than anything a user writes to;
+  giving it `-I` would buy no isolation and would cost it `PYTHONHASHSEED`, since `-I` implies `-E`. So do not
+  collapse the two lists back into one, and do not hand `-I` to anything but a `-m` command.
+  `tests/partcad/unit/test_python_env.py` asserts the outcomes (a `venv.py`/`pip.py` beside the interpreter
+  never wins; a wrapper's sibling import is never shadowed by a file in PartCAD's working directory; the hash
+  seed is honored on every version) on whichever version is running, so both branches are covered by the CI
+  matrix rather than by a comment.
 
 ## Schemas and linting
 
