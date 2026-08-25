@@ -724,7 +724,26 @@ if [ "${CREATE_ARCHIVE}" = "1" ]; then
   rm -f "${ARCHIVE}" "${ARCHIVE}.sha256"
   case "${ARCHIVE_EXT}" in
   tar.gz) tar -czf "${ARCHIVE}" -C "${OUTPUT_DIR}" "${APP_NAME}" ;;
-  zip) (cd "${OUTPUT_DIR}" && zip -qry "$(basename "${ARCHIVE}")" "${APP_NAME}") ;;
+  zip)
+    # Windows is the only platform that packs a .zip, and Git Bash there ships
+    # no `zip`: this used to die with "zip: command not found" -- but one step
+    # after the verifier, which failed first, so nothing ever got here to say so.
+    # Packed with the interpreter this script already requires for the checksum
+    # and the branding, rather than by asking the runner to install a tool.
+    # Entries are sorted, so the order does not follow whatever the filesystem
+    # hands back. That pins the order only: a zip stores each entry's mtime, so
+    # this is not a reproducible archive and nothing here claims to check one.
+    # Symlinks are followed rather than stored, which the `zip -y` this replaces
+    # would have preserved: a Windows VSCodium tree has none, and the platforms
+    # whose bundles do are the ones packed by `tar` above.
+    "${PYTHON}" -c "
+import pathlib, sys, zipfile
+archive, root, name = sys.argv[1], pathlib.Path(sys.argv[2]), sys.argv[3]
+with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
+    for path in sorted((root / name).rglob('*')):
+        bundle.write(path, path.relative_to(root).as_posix())
+" "${ARCHIVE}" "${OUTPUT_DIR}" "${APP_NAME}"
+    ;;
   esac
   checksum "${ARCHIVE}"
   PRODUCED="${PRODUCED} $(basename "${ARCHIVE}")"
