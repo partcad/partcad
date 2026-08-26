@@ -238,9 +238,11 @@ kernel removed the accident and broke every `pc` command that touches git. It is
 entry is there because *nothing the three console programs can reach imports it*:
 
 - **The AI provider SDKs.** PartCAD used to generate parts with an LLM and the bundle carried `openai`,
-  `ollama` and `google-genai` for it, because a frozen bundle cannot be extended with pip. The feature is gone
-  and so is the `ai` extra. `googleapiclient` is named alongside them: it ships a cached REST discovery
-  document for every Google API, ~100MB of JSON, and PyInstaller's hook collects all of them.
+  `ollama` and `google-genai` for it, because a frozen bundle cannot be extended with pip. PartCAD no longer
+  drives a model -- it gives one tools to work with instead, as the Agent Skills in `ai-agents/` -- so the
+  feature, the `ai` extra, the `ai-*` part types and the dependencies themselves are gone. The excludes stay as
+  a floor: nothing has to be declared to arrive, and `googleapiclient` in particular ships a cached REST
+  discovery document for every Google API, ~100MB of JSON, that PyInstaller's hook collects wholesale.
 - **Packaging machinery** — `setuptools`, `pkg_resources`, `distutils`, `wheel`. Nothing in PartCAD imports
   them; the two dependencies that reach for `pkg_resources` (`sentry_sdk.utils`, `wrapt.importer`) both do it
   inside `try: ... except ImportError`. Keeping `pkg_resources` out is also what let the `setuptools<82` bound

@@ -343,16 +343,17 @@ EXCLUDES += [
 # The AI provider SDKs.
 #
 # PartCAD used to generate parts with an LLM, and the bundle carried the SDKs for
-# it because a frozen bundle cannot be extended with pip. That feature is gone --
-# no module under any of the packages here imports one, and there is no longer an
-# `ai` extra to install -- so they are dead weight wherever they still appear.
+# it because a frozen bundle cannot be extended with pip. PartCAD no longer
+# drives a model -- it gives one tools to work with instead (see `ai-agents/`) --
+# so the `ai` extra, the `ai-*` part types and these dependencies are all gone,
+# the last of them from the monorepo's own `pyproject.toml`.
 #
-# They are excluded rather than merely uninstalled because the monorepo's own
-# `pyproject.toml` still lists `google-genai`, `openai` and `ollama` in its
-# `partcad` and `cli` poetry groups, so a developer freezing from the project
-# virtualenv has all three installed. `googleapiclient` is the one that would
-# actually hurt: it ships a cached REST discovery document for every Google API,
-# ~100MB of JSON, and PyInstaller has a hook that collects all of them.
+# The list stays as a floor rather than a cleanup that has already happened.
+# Nothing here has to be *declared* to arrive: a stale virtualenv still has them,
+# and a future transitive edge could reintroduce one without anybody deciding to.
+# `googleapiclient` is the one that would actually hurt -- it ships a cached REST
+# discovery document for every Google API, ~100MB of JSON, and PyInstaller has a
+# hook that collects all of them.
 EXCLUDES += [
     "openai",
     "ollama",
