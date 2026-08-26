@@ -37,7 +37,12 @@ description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
 requires-python = ">=3.10,<3.15"
-license = {file = "LICENSE.txt"}
+# PEP 639: an SPDX expression, with the file named separately. The older
+# `license = {file = "LICENSE.txt"}` inlined the whole Apache text into the
+# `License:` metadata field, which is what PyPI then shows in place of a
+# license name.
+license = "Apache-2.0"
+license-files = ["LICENSE.txt"]
 authors = [
   {name = "PartCAD", email = "support@partcad.org" }
 ]
@@ -53,7 +58,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 
@@ -67,7 +71,7 @@ Homepage = "https://github.com/partcad/partcad"
 Issues = "https://github.com/partcad/partcad/issues"
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 # Explicit rather than left to auto-discovery: this distribution ships six
@@ -309,6 +313,16 @@ jsonschema = "^4.26.0"
 # because the suite needs it either way.
 aiomcache = "^0.8.2"
 aioboto3 = "^15.5.0"
+# The CLI's own two. They are ordinary runtime dependencies of the wheel -- a
+# console script cannot be conditional on an extra, so `pc` needs them
+# unconditionally -- and they are restated here for the same reason as
+# everything above: Poetry does not read `dynamic = ["dependencies"]`, so the
+# dev container and `.devcontainer/requirements.txt` see only what this group
+# names. They used to arrive through a `cli` group that the one-wheel migration
+# deleted; `click` happens to be pulled in transitively today, `rich-click` is
+# not, and `partcad_cli.click.command` imports it at the top.
+click = "^8.4.2"
+rich-click = "^1.9.8"
 
 [tool.poetry.group.performance.dependencies]
 snakeviz = "^2.2.2"
