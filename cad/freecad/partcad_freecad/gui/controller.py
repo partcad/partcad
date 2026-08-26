@@ -25,7 +25,7 @@ from .worker import run_busy
 _DOWNLOAD_PROMPT = (
     "PartCAD needs its standalone service (partcad-json-rpc), which FreeCAD's "
     "Python cannot provide. This is a one-time download (roughly 60 MB "
-    "compressed, ~185 MB unpacked).\n\nDownload it now?"
+    "compressed, ~180 MB unpacked).\n\nDownload it now?"
 )
 
 _instance = None

@@ -541,7 +541,7 @@ async function downloadAndExtract(
 }
 
 /**
- * Remove every bundle under `root` except `keep`. A bundle is ~185MB unpacked,
+ * Remove every bundle under `root` except `keep`. A bundle is ~180MB unpacked,
  * so leaving the superseded ones behind is not an option; failing to remove one
  * (a file still open on Windows) is, and is only logged.
  *

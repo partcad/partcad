@@ -170,7 +170,7 @@ if [ "${OS_NAME}" = "windows" ]; then
 else
   # xz rather than gzip. The bundle is native code and an unpacked OpenSCAD,
   # neither of which gzip does well on: measured on a Linux x86_64 build, xz -6
-  # takes the download from 80MB to 61MB for a few seconds more at either end.
+  # takes the download from 78MB to 57MB for a few seconds more at either end.
   # Every consumer of this name reads the extension from one
   # place of its own (`install.sh`, `partcad_client.selfupdate`,
   # `provision.ts`, the FreeCAD addon's `provision.py`); all four say "tar.xz"
@@ -193,21 +193,25 @@ echo "==> Building PartCAD ${VERSION} for ${PLATFORM} with $("${PYTHON}" --versi
 
 ##############################################  DEPENDENCIES  ################################################
 
-# setuptools 82 removed `pkg_resources` outright, and PyInstaller's
-# `pyi_rth_pkgres` runtime hook still expects it: the bundle then aborts at
-# start-up with "module 'pkg_resources' has no attribute 'NullProvider'".
-# Passed to every install below, because installing PartCAD is otherwise free to
-# pull the newest setuptools back in. Drop the bound once PyInstaller ships a
-# hook that copes.
-SETUPTOOLS_BOUND="setuptools<82"
+# There used to be a "setuptools<82" bound on every install below. setuptools 82
+# removed `pkg_resources`, PyInstaller's `pyi_rth_pkgres` runtime hook expects it,
+# and a bundle built without it aborted at start-up with "module 'pkg_resources'
+# has no attribute 'NullProvider'".
+#
+# It is gone because the hook is: PyInstaller adds `pyi_rth_pkgres` only when
+# `pkg_resources` is in the module graph, and "partcad.spec" now excludes it
+# along with the rest of setuptools -- nothing in PartCAD imports either, and the
+# two dependencies that reach for `pkg_resources` both do it inside
+# `try: ... except ImportError`. A bundle frozen against setuptools 8x builds and
+# runs.
 
 if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   echo "==> Installing build dependencies"
-  "${PYTHON}" -m pip install --upgrade pip wheel "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install --upgrade pip wheel
   # PyInstaller only learned about Python 3.14 in 6.15; older releases cap
   # themselves at "<3.14" and would refuse to install on the interpreter the
   # bundle is built with.
-  "${PYTHON}" -m pip install "pyinstaller>=6.15" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "pyinstaller>=6.15"
 
   echo "==> Installing PartCAD from this checkout"
   # One install: `partcad` ships every package the bundle needs and declares all
@@ -217,7 +221,7 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   #
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras the wheel leaves to the user are all built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}[lint,aws]" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "${REPO_ROOT}[lint,aws]"
   #
   # No CAD kernel is installed here, and none is frozen into the bundle.
   #

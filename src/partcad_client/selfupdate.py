@@ -656,7 +656,7 @@ def _download_bundle(
 def _staging_parent(root: str) -> Optional[str]:
     """Where to unpack before the move: the install directory when it is writable.
 
-    ``shutil.move`` across filesystems degrades to a ~185MB copy, and the system
+    ``shutil.move`` across filesystems degrades to a ~180MB copy, and the system
     temp directory is a separate (often much smaller) filesystem on exactly the
     machines this runs on. Falling back to the default keeps a read-only install
     directory failing on the move rather than on the staging.
@@ -722,7 +722,7 @@ def _bin_dirs() -> List[str]:
 
 
 def _prune_old_versions(root: str, keep: str, running: str, log: Callable[[str], None]) -> None:
-    """Delete every superseded bundle. A bundle is ~185MB unpacked, so all of it.
+    """Delete every superseded bundle. A bundle is ~180MB unpacked, so all of it.
 
     ``running`` -- the bundle this process is executing out of -- is superseded
     too, and it is the one directory that cannot simply be removed: on Windows

@@ -72,9 +72,9 @@ hiddenimports = []
 def add_package(name, include_metadata=False):
     """Pull in everything a distribution needs, tolerating its absence.
 
-    Optional dependencies (the AI provider SDKs, the linter) are imported
-    lazily by PartCAD and are not installed in every environment PyInstaller
-    might be run from by hand. A bundle built without one of them stays usable,
+    Optional dependencies (the linter, the two off-machine cache tiers) are
+    imported lazily by PartCAD and are not installed in every environment
+    PyInstaller might be run from by hand. A bundle built without one of them stays usable,
     it just reports the same "not installed" error the wheels report, so this
     is a warning rather than a build failure. `build.sh`, which is how release
     bundles are built, refuses to build an incomplete one.
@@ -199,10 +199,27 @@ add_package("jsonschema_specifications")
 add_package("referencing")
 add_package("vyper")
 
-# Telemetry. Sentry discovers its integrations by module name, and the
-# OpenTelemetry packages discover propagators and exporters through entry
-# points, which only exist if the metadata is bundled.
-hiddenimports += collect_submodules("sentry_sdk")
+# Telemetry. The OpenTelemetry packages discover propagators and exporters
+# through entry points, which only exist if the metadata is bundled.
+#
+# Sentry is collected whole *except* for its third-party integrations, which are
+# both dead weight and a reproducibility hazard here. `telemetry_sentry.py` calls
+# `sentry_sdk.init(default_integrations=False, integrations=[LoggingIntegration(...)])`,
+# so nothing is ever auto-enabled and the only two that run are imported by name
+# in that module. The other ~40 -- django, flask, celery, starlite, openai,
+# langchain and the rest -- each `import` the library they instrument at module
+# level, so `collect_submodules` on the whole package makes the bundle's contents
+# depend on what else the build environment happens to have installed. That is
+# how a machine with the AI SDKs on it produced a bundle 16MB larger, carrying
+# `pydantic` and `pydantic_core` that nothing in PartCAD can reach.
+#
+# The filter is passed to `collect_submodules` rather than applied to what it
+# returns, because `collect_submodules` imports each module it enumerates: an
+# integration whose library is absent raises `DidNotEnable` and prints a warning
+# during the build for something deliberate.
+hiddenimports += collect_submodules("sentry_sdk", filter=lambda name: not name.startswith("sentry_sdk.integrations."))
+hiddenimports += ["sentry_sdk.integrations.logging"]
+hiddenimports += collect_submodules("sentry_sdk.integrations.opentelemetry")
 for _dist in ("opentelemetry-api", "opentelemetry-sdk", "opentelemetry-semantic-conventions"):
     add_metadata(_dist)
 hiddenimports += collect_submodules("opentelemetry")
@@ -245,6 +262,18 @@ add_metadata("partcad")
 # library search path, and duplicated, at ~100MB. Copying the tree in
 # afterwards keeps OpenSCAD's libraries where only OpenSCAD will find them.
 
+############################################  COLLECTED TESTS  ###############################################
+
+# `collect_all`/`collect_submodules` take a package whole, tests included, and
+# these two are what drags the `unittest` package into a bundle that runs no
+# tests. They are dropped from `hiddenimports` rather than named in `excludes`
+# below: excluding a module that something asked for as a hidden import makes
+# PyInstaller print "Hidden import ... not found" -- a dozen ERROR lines in the
+# log of a release build, for something entirely deliberate.
+TEST_MODULES = ("jsonschema.tests", "aiohttp.test_utils")
+_test_prefixes = TEST_MODULES + tuple(name + "." for name in TEST_MODULES)
+hiddenimports = [m for m in hiddenimports if not m.startswith(_test_prefixes)]
+
 ###############################################  EXCLUDES  ###################################################
 
 EXCLUDES = [
@@ -257,6 +286,79 @@ EXCLUDES = [
     # An IPython dependency, ~30MB of source code completion machinery that
     # is reachable only from an interactive prompt PartCAD never opens.
     "jedi",
+    # `pydoc`'s database of help topics, read only by `help()` at an interactive
+    # prompt. `pydoc` itself stays: `pdb` and `site` reach it.
+    "pydoc_data",
+]
+
+# Packaging machinery. Nothing in PartCAD imports `setuptools`, and the two
+# things that touch `pkg_resources` -- `sentry_sdk.utils` and `wrapt.importer` --
+# both do it inside `try: ... except ImportError: return`, as the fallback for an
+# interpreter too old to have `importlib.metadata`. It was collected only because
+# it happened to be installed in the build environment, and it brought `distutils`
+# and `wheel` with it.
+#
+# Keeping `pkg_resources` out has a second effect worth knowing about: PyInstaller
+# adds its `pyi_rth_pkgres` runtime hook only when `pkg_resources` is in the graph,
+# and that hook is the sole reason `build.sh` used to pin `setuptools<82`.
+EXCLUDES += [
+    "setuptools",
+    "pkg_resources",
+    "_distutils_hack",
+    "distutils",
+    "wheel",
+]
+
+# Whatever the *build machine* keeps in `sitecustomize.py`/`usercustomize.py`.
+# `site` imports them, so PyInstaller collects them, and a bundle then carries a
+# file that has nothing to do with PartCAD and differs between builders. Same
+# reasoning as naming the excluded dependencies below rather than trusting the
+# build environment: the bundle should be the same wherever it is frozen.
+EXCLUDES += ["sitecustomize", "usercustomize"]
+
+# Optional dependencies of dependencies: every one of these is behind a
+# `try: import ... except ImportError` or a `find_spec` check, so a bundle
+# without them behaves exactly as the clean build environment behaves, and
+# a build environment that happens to have them does not produce a heavier
+# bundle than CI's.
+#
+#   cryptography, OpenSSL - `requests` and `urllib3.contrib.pyopenssl` reach for
+#     them to replace the standard library's TLS on interpreters that need it.
+#     11MB, and the bundle's TLS comes from the frozen CPython's `_ssl`.
+#   httpx, httpcore - `aiobotocore` has an httpx backend beside its aiohttp one
+#     ("try: import httpx / except ImportError: httpx = None"). PartCAD does not
+#     select it, and `cache_backend_s3` only calls get_object/put_object.
+#   pydantic, pydantic_core - reachable only from Sentry's starlite integration
+#     (see below) and from a `TYPE_CHECKING` import in `yarl`, which guards its
+#     one runtime use with `find_spec("pydantic_core")`. 4.5MB.
+EXCLUDES += [
+    "cryptography",
+    "OpenSSL",
+    "httpx",
+    "httpcore",
+    "pydantic",
+    "pydantic_core",
+]
+
+# The AI provider SDKs.
+#
+# PartCAD used to generate parts with an LLM, and the bundle carried the SDKs for
+# it because a frozen bundle cannot be extended with pip. That feature is gone --
+# no module under any of the packages here imports one, and there is no longer an
+# `ai` extra to install -- so they are dead weight wherever they still appear.
+#
+# They are excluded rather than merely uninstalled because the monorepo's own
+# `pyproject.toml` still lists `google-genai`, `openai` and `ollama` in its
+# `partcad` and `cli` poetry groups, so a developer freezing from the project
+# virtualenv has all three installed. `googleapiclient` is the one that would
+# actually hurt: it ships a cached REST discovery document for every Google API,
+# ~100MB of JSON, and PyInstaller has a hook that collects all of them.
+EXCLUDES += [
+    "openai",
+    "ollama",
+    "google.genai",
+    "google_genai",
+    "googleapiclient",
 ]
 
 # The CAD stack, kept out on purpose.
@@ -282,7 +384,7 @@ EXCLUDES = [
 # ~250MB of extension module and OpenCASCADE libraries, `build123d` pulls scipy,
 # sympy, scikit-learn, numpy, IPython and ezdxf in at *import* time, and the
 # VTK-enabled OCP the bundle used to pin pulls VTK on top of that. Dropping the
-# lot took a Linux x86_64 build from 1010MB unpacked to 80MB, before the
+# lot took a Linux x86_64 build from 1010MB unpacked to 78MB, before the
 # bundled OpenSCAD is copied in beside it.
 #
 # Naming them here rather than just not installing them is what makes the bundle
@@ -334,23 +436,14 @@ a = Analysis(
 
 ##################################################  TRIM  ####################################################
 
-# `google-api-python-client` ships a cached copy of the REST discovery document
-# of every Google API, ~100MB of JSON, and PyInstaller has a hook that collects
-# all of them. They are only read by `googleapiclient.discovery.build()`, which
-# nothing here calls. `google-genai` does not depend on that package at all -
-# unlike the `google-generativeai` it replaced - so this normally matches
-# nothing now. It is kept as a guard: the filter costs nothing, and without it
-# any transitive dependency that reintroduces the package silently adds an
-# eighth to the bundle. This runs after the analysis because that is where the
-# hook adds them; filtering the `datas` above would not see them.
-_discovery_documents = os.path.join("googleapiclient", "discovery_cache", "documents")
-a.datas = [entry for entry in a.datas if _discovery_documents not in os.path.normpath(entry[0])]
-
-# The same shape of problem, one that does match: `botocore` ships the API model
-# of every AWS service there is -- 400-odd directories, ~25MB -- and PyInstaller's
-# hook collects the lot. PartCAD reaches exactly one of them: `cache_backend_s3`
-# opens `session.client("s3")` and calls `get_object`/`put_object` on it. The
-# rest is the price of a cache tier that most installations never enable.
+# This runs after the analysis rather than on the `datas` above, because the
+# files it drops are added by a PyInstaller hook rather than by this spec.
+#
+# `botocore` ships the API model of every AWS service there is -- 400-odd
+# directories, ~25MB -- and its hook collects the lot. PartCAD reaches exactly
+# one of them: `cache_backend_s3` opens `session.client("s3")` and calls
+# `get_object`/`put_object` on it. The rest is the price of a cache tier that
+# most installations never enable.
 #
 # So keep the four files at the top of `data/` (`endpoints.json` and
 # `partitions.json` resolve the endpoint, `_retry.json` and
@@ -375,6 +468,37 @@ def _botocore_wanted(destination):
 
 
 a.datas = [entry for entry in a.datas if _botocore_wanted(entry[0])]
+
+# Distribution metadata is collected by hooks that do not consult `excludes`, so
+# a build environment that has one of the excluded packages installed still
+# leaves its `.dist-info` behind -- `openai` brings `httpx2`, and its metadata
+# arrived in a bundle that contains no httpx at all. It is inert and it is only
+# tens of kilobytes, but it is also the last thing that made the bundle depend
+# on what else the builder had installed, so drop it.
+#
+# Every name here is a distribution whose *code* is excluded above, which is
+# what makes this safe: nothing that could read the metadata is in the bundle.
+_excluded_metadata = (
+    "httpx",
+    "httpx2",
+    "httpcore",
+    "httpcore2",
+    "pydantic",
+    "pydantic_core",
+    "cryptography",
+    "pyOpenSSL",
+    "openai",
+    "ollama",
+    "google_genai",
+    "google_api_python_client",
+    "setuptools",
+    "wheel",
+)
+a.datas = [
+    entry
+    for entry in a.datas
+    if not os.path.normpath(entry[0]).startswith(tuple(name + "-" for name in _excluded_metadata))
+]
 
 pyz = PYZ(a.pure)
 
