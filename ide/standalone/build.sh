@@ -30,7 +30,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+# Two levels up: this script is <repo>/ide/standalone/build.sh. The component
+# used to sit one level shallower, at <repo>/partcad-ide-standalone/.
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 # On Windows this runs in Git Bash while the tools it drives (Python, npm, the
 # VSCodium command line) are native Windows programs, which read "/d/a/partcad"
 # as the nonexistent "\d\a\partcad". Same treatment as in
