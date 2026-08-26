@@ -28,7 +28,7 @@
 # bytes where 60711 went in. `.3mf` is a zip container and the sniff does catch
 # it; named here too, so that neither rests on the heuristic.
 #
-# `.ico` is one file, `partcad-ide-standalone/resources/partcad-ide.ico`, the
+# `.ico` is one file, `ide/standalone/resources/partcad-ide.ico`, the
 # Windows IDE's icon. It is deliberately not LFS like the `.png` and `.jpg`
 # below: it is 34KB, and it is a build *input* -- `build.sh` reads it and Inno
 # Setup compiles it into the installer -- so a checkout that has not fetched LFS

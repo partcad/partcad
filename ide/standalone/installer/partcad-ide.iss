@@ -21,8 +21,8 @@
 ; Where the built application is. ../build.sh passes it absolutely, with
 ; /DAppDir, and has to: Inno resolves a relative source against this file's own
 ; directory without normalizing it, so the '..\..\' below survives into every
-; path it opens and adds 54 characters to each. The deepest file in the
-; application is 245 characters absolute and 284 that way, MAX_PATH is 260, and
+; path it opens and adds 31 characters to each. The deepest file in the
+; application is 245 characters absolute and 276 that way, MAX_PATH is 260, and
 ; the compiler is not long-path aware -- it aborts with "The system cannot find
 ; the path specified" and names neither a line nor a file. The fallback is kept
 ; for compiling this by hand from this directory, which works only while the

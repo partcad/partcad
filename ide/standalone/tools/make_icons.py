@@ -17,9 +17,9 @@ it, with one exception: `../resources/partcad-ide.ico` is in git, because
 there at all. Regenerate that one whenever the logo changes, from the
 repository root:
 
-    python partcad-ide-standalone/tools/make_icons.py \
-        --svg partcad-ide-vscode/resources/logo.svg --output-dir /tmp/icons
-    cp /tmp/icons/partcad-ide.ico partcad-ide-standalone/resources/partcad-ide.ico
+    python ide/standalone/tools/make_icons.py \
+        --svg ide/vscode/resources/logo.svg --output-dir /tmp/icons
+    cp /tmp/icons/partcad-ide.ico ide/standalone/resources/partcad-ide.ico
 
 Outputs (into `--output-dir`):
   partcad-ide.png    512x512, the Linux window and launcher icon

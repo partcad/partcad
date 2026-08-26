@@ -81,13 +81,13 @@ Two optional dependencies change what the build can do, and it reports what it l
   them the application keeps VSCodium's icon -- except on Windows, which uses `resources/partcad-ide.ico`
   from git instead. That one is checked in because it cannot be rendered where it is needed: `cairosvg`
   needs `cairocffi`, and `cairocffi` needs a `libcairo-2.dll` that no wheel ships, so the renderers are
-  installable on Windows but not loadable there. Regenerate it when `partcad-ide-vscode/resources/logo.svg`
+  installable on Windows but not loadable there. Regenerate it when `ide/vscode/resources/logo.svg`
   changes -- on Linux or MacOS, since it is the machines that *can* render that keep it honest:
 
   ```bash
-  python partcad-ide-standalone/tools/make_icons.py \
-      --svg partcad-ide-vscode/resources/logo.svg --output-dir /tmp/icons
-  cp /tmp/icons/partcad-ide.ico partcad-ide-standalone/resources/partcad-ide.ico
+  python ide/standalone/tools/make_icons.py \
+      --svg ide/vscode/resources/logo.svg --output-dir /tmp/icons
+  cp /tmp/icons/partcad-ide.ico ide/standalone/resources/partcad-ide.ico
   ```
 - `rcedit` (`npm install -g rcedit`) puts the icon into `partcad-ide.exe`. There is no other way to change a
   Windows executable's icon after it is linked.
