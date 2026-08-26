@@ -47,8 +47,9 @@ BOOLEAN_OPTIONS = [
 # The boolean options with no environment binding, settable in config.yaml only.
 # They read through the same get_bool, so they are covered there instead.
 CONFIG_ONLY_OPTIONS = [
-    ("useDockerPython", "use_docker_python"),
-    ("useDockerKicad", "use_docker_kicad"),
+    ("useDocker", "use_docker"),
+    ("useDockerPython", "use_docker_python_declared"),
+    ("useDockerKicad", "use_docker_kicad_declared"),
 ]
 
 # The booleans TelemetryConfig reads, which go through the same get_bool.
@@ -165,8 +166,11 @@ def test_config_file_values_read_the_same_way(config_home, monkeypatch, key, att
         ("cache_memory", True),
         ("cache_remote", False),
         ("cache_s3", False),
+        ("use_docker", True),
         ("use_docker_kicad", True),
+        ("use_docker_kicad_declared", True),
         ("use_docker_python", False),
+        ("use_docker_python_declared", False),
         ("force_update", False),
         ("devel_index", False),
         ("offline", False),
@@ -177,6 +181,39 @@ def test_config_file_values_read_the_same_way(config_home, monkeypatch, key, att
 def test_an_option_nobody_set_keeps_its_default(config_home, monkeypatch, attribute, expected):
     """The reading changed; what an unset option means did not."""
     assert getattr(build_config(monkeypatch), attribute) is expected
+
+
+# ---- the master switch -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "declared_option,declared_attribute,effective_attribute",
+    [
+        ("useDockerPython", "use_docker_python_declared", "use_docker_python"),
+        ("useDockerKicad", "use_docker_kicad_declared", "use_docker_kicad"),
+    ],
+)
+def test_use_docker_off_turns_off_what_it_governs(
+    config_home, monkeypatch, declared_option, declared_attribute, effective_attribute
+):
+    """'useDocker: false' is how a machine with no Docker says so once, rather
+    than once per subject. What each option was *set* to is still readable, and
+    is what the tags report, so a package can tell the two apart."""
+    (config_home / ".partcad").mkdir(exist_ok=True)
+    (config_home / ".partcad" / "config.yaml").write_text("useDocker: false\n%s: true\n" % declared_option)
+
+    config = build_config(monkeypatch)
+    assert getattr(config, declared_attribute) is True
+    assert getattr(config, effective_attribute) is False
+
+
+def test_use_docker_on_leaves_each_option_to_itself(config_home, monkeypatch):
+    (config_home / ".partcad").mkdir(exist_ok=True)
+    (config_home / ".partcad" / "config.yaml").write_text("useDocker: true\nuseDockerPython: true\n")
+
+    config = build_config(monkeypatch)
+    assert config.use_docker_python is True
+    assert config.use_docker_kicad is True  # its own default
 
 
 # ---- the option that was bound but never read --------------------------------

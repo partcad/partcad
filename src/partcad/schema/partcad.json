@@ -53,6 +53,27 @@
       "type": "string",
       "pattern": "((http|https)://)(www.)?[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)"
     },
+    "unless": {
+      "description": "The conditions this declaration does not work under. A list of clauses, any one of which excludes it (OR); a clause is a single tag, or a list of tags that must all hold together (AND) - e.g. [[arm, useDocker, useDockerKicad]]. It is skipped, with an INFO line saying so, wherever a clause holds. A tag names something true of the context: the host's architecture ('arm64', 'arm', 'x86_64'), its operating system ('linux', 'macos', 'windows'), that system's version ('ubuntu-24.04', 'macos-26'), a boolean configuration option in one of its two spellings ('useDocker' when on, '!useDocker' when off; likewise 'useDockerPython' and 'useDockerKicad'), or a tag the user configuration adds. '!' is part of a tag's name, not an operator.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "minItems": 1,
+                "uniqueItems": true
+              }
+            ]
+          },
+          "uniqueItems": true
+        }
+      ]
+    },
     "shape-properties": {
       "type": "object",
       "description": "What the shape this object produces reports about itself, as opposed to 'parameters', which are what is asked of the object type that produces it. Every entry here is an output: it describes the instantiated shape, and an exporter that has a way to state one writes it out rather than recomputing or losing it.",
@@ -408,6 +429,7 @@
       "type": "boolean",
       "default": false
     },
+    "unless": { "$ref": "#/definitions/unless" },
     "docs": {
       "type": "object",
       "properties": {
@@ -653,6 +675,7 @@
                   "additionalProperties": false
                 },
                 "manufacturable": { "type": "boolean" },
+                "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" }
               },
               "required": ["type"],
@@ -672,7 +695,8 @@
                 "fileUrl": { "$ref": "#/definitions/url" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
-                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 }
+                "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
+                "unless": { "$ref": "#/definitions/unless" }
               },
               "required": ["type"],
               "additionalProperties": true
@@ -745,6 +769,7 @@
                 "render": { "$ref": "#/definitions/render" },
                 "export": { "$ref": "#/definitions/output-section" },
                 "manufacturable": { "type": "boolean" },
+                "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
                 "properties": { "$ref": "#/definitions/shape-properties" }
               },
@@ -763,6 +788,7 @@
           "properties": {
             "type": { "type": "string", "enum": ["basic", "dxf", "svg", "cadquery", "build123d", "enrich", "alias"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "fileFrom": { "type": "string", "enum": ["url"] },
             "fileUrl": { "$ref": "#/definitions/url" },
@@ -896,6 +922,7 @@
           "properties": {
             "abstract": { "type": "boolean", "default": false },
             "desc": { "type": "string", "maxLength": 1000 },
+            "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "leadPort": { "type": "string", "minLength": 1 },
             "threadStep": {
@@ -977,6 +1004,7 @@
               "additionalProperties": false
             },
             "abstract": { "type": "boolean", "default": false },
+            "unless": { "$ref": "#/definitions/unless" },
             "parameters": { "$ref": "#/definitions/shape-parameter"}
           },
           "required": ["type"],
@@ -996,6 +1024,7 @@
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
             "with": { "type": "object" },
+            "unless": { "$ref": "#/definitions/unless" },
             "parameters": { "$ref": "#/definitions/shape-parameter"}
           },
           "required": ["type"],
@@ -1012,6 +1041,7 @@
           "properties": {
             "kind": { "type": "string", "enum": ["wrapper"] },
             "desc": { "type": "string", "maxLength": 1000 },
+            "unless": { "$ref": "#/definitions/unless" },
             "path": { "type": "string", "minLength": 1 },
             "pythonRequirements": { "type": "array", "items": { "type": "string" } }
           },

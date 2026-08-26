@@ -77,6 +77,12 @@ def cli(cli_ctx: CliContext) -> None:
 
             pc.logging.info(f"PartCAD version: {pc.__version__}")
 
+            # The tags this machine has, and therefore what a package's
+            # 'unless' is answered against here. Worth stating: a package
+            # skipping itself is a decision made from these, and "which tags do
+            # I have?" is otherwise only answerable by reading the source.
+            pc.logging.info("Tags: %s" % ", ".join(sorted(pc.tags.context_tags(pc.user_config))))
+
             # TODO-108: @alexanderilyin: show detail about loaded partcad.yaml
             pc.logging.info("Internal data storage location: %s" % path)
 

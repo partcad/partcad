@@ -58,6 +58,14 @@ class Configuration:
         self.config_obj = {} if config_obj is None else config_obj
         self.broken = False
 
+        # Whether this package opted out of running here, and on which tag. Set
+        # for real by 'Project', which is the first thing along this chain to
+        # have a context - and therefore a tag set - to decide against. Defined
+        # here so that every package has the attribute even when it never got
+        # that far (a package whose 'partcad.yaml' would not parse, say).
+        self.skipped = False
+        self.skipped_by = None
+
         # 'declared_name' is the identity the package gives itself in its own
         # configuration. It is not necessarily where the package ended up being
         # loaded: the same package may be vendored into another package tree at
@@ -173,6 +181,15 @@ class Configuration:
         # environment and changes nothing for anybody else.
         chili3d_version = self.config_obj.get("chili3dVersion")
         self.chili3d_version = None if chili3d_version is None else str(chili3d_version)
+
+        # option: "unless"
+        # description: the tags this package does not work under. It is skipped
+        #              wherever one of them is a tag of the context - see
+        #              'partcad.tags' and 'Project.__init__', which is where the
+        #              decision is actually made (this class has no context, and
+        #              therefore no tags, to make it against).
+        # values: a tag, or a list of tags
+        # default: none
 
         # option: "manufacturable"
         # description: whether the objects in this package are designed for manufacturing by default
