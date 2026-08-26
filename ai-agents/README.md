@@ -38,7 +38,7 @@ The plugin folder is named `claude`, but the command namespace comes from
   is missing it points the user at `/pc:install` instead of hand-writing files.
 - **`/pc:install <mode>`** — makes `pc`/`partcad` available. `executable`
   installs the standalone PyInstaller build from the latest GitHub release via
-  the official `install.sh`; `python-module` installs the `partcad-cli` module
+  the official `install.sh`; `python-module` installs the `partcad` wheel
   into the active Python environment (run as `python -m partcad_cli.click.command`).
   Until a standalone release is published, `executable` reports that no published
   installer is available and stops.

@@ -1,0 +1,86 @@
+# The VS Code extension: one build, one ".vsix".
+#
+# Called by "build.yml" (CD) and by "deploy.yml", which uploads the package to
+# the GitHub release. It deliberately has no "push"/"pull_request" triggers of
+# its own: adding it to those two workflows on top would build the same package
+# twice per commit. Exactly one run owns the build -- the same arrangement
+# "build-ide-standalone.yml" documents for the command line bundles.
+#
+# This replaces "nox.yml". The extension used to carry a Python language server
+# and a "bundled/libs" of PartCAD's dependencies, which is what needed nox,
+# pip-compile, an interpreter and a page of native build prerequisites here --
+# and which could only ever have worked on the one platform this job runs on,
+# because those wheels are compiled. The extension is a JSON-RPC client now:
+# TypeScript, npm, nothing else.
+name: Extension # Keep the action badge icon short
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+# No "concurrency" block, on purpose. A called workflow evaluates
+# `github.workflow` as the *caller's* name, so a group keyed on it would compute
+# the group the caller is already holding and `cancel-in-progress` would kill the
+# run that started this one. See the note on `concurrency` in
+# "build-standalone.yml", which is where that was learned.
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        # ubuntu-24.04 is still the newest generally available Ubuntu LTS
+        # runner image (ubuntu-26.04 is preview only), so this stays pinned.
+        # One runner is now correct rather than merely cheap: the package has no
+        # compiled content left, so the ".vsix" this produces is the same on
+        # every platform.
+        os: [ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ide/vscode/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ide/vscode
+        run: npm ci
+
+      # `npm run vsce-package` runs `vscode:prepublish`, which is the production
+      # webpack build, so this compiles and packages in one step. Lint and the
+      # type check run in "npm-test.yml"; a packaging job that also linted would
+      # be a second place for the same failure to appear.
+      - name: Package the extension
+        working-directory: ide/vscode
+        run: npm run vsce-package
+
+      # "npm run vsce-package" writes a fixed "partcad.vsix", because
+      # "ide/standalone/build.sh" looks for that exact name. A release
+      # asset cannot be version-less though -- every other asset on the release
+      # carries the version -- so the copy that gets uploaded is renamed here
+      # rather than by changing the script the IDE build depends on.
+      - name: Name the package after the version
+        working-directory: ide/vscode
+        run: |
+          version="$(jq -r .version package.json)"
+          if [ -z "${version}" ] || [ "${version}" = "null" ]; then
+            echo "::error::no version in ide/vscode/package.json"
+            exit 1
+          fi
+          cp partcad.vsix "partcad-${version}.vsix"
+          ls -l "partcad-${version}.vsix"
+
+      - name: Upload the extension
+        uses: actions/upload-artifact@v7
+        with:
+          # Deliberately neither "partcad-ide-*" nor "partcad-standalone-*":
+          # "deploy.yml" downloads those two by pattern, each into its own
+          # directory, and a third name matching either would be merged into the
+          # wrong one.
+          name: partcad-vsix
+          path: ide/vscode/partcad-*.vsix
+          if-no-files-found: error

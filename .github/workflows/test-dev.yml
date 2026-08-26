@@ -185,12 +185,12 @@ jobs:
           configFile: .devcontainer/.devcontainer.json
           push: never
           runCmd: |
-            (cd partcad-ide-vscode && poetry run nox --session setup && poetry run nox --session build_package)
+            (cd ide/vscode && npm ci && npm run vsce-package)
 
             # TODO: Consider using common top level directory for all artifacts: 'output/$TOOL/...'
             mkdir -pv pytest-results
             poetry --no-ansi --no-interaction show --tree
-            poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="partcad-ide-vscode/bundled" --dist no --verbose --color=no
+            poetry --no-ansi --no-interaction run python -m pytest -x -p no:error-for-skips -p no:warnings  --ignore-glob="openscad*" --ignore-glob="ide/vscode/bundled" --dist no --verbose --color=no
             echo DONE
 
       - name: Upload test results & coverage reports to github and codecov

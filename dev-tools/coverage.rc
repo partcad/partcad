@@ -1,17 +1,33 @@
 [run]
 branch = True
 concurrency = thread
-# Name every package explicitly. The old value relied on the CI checkout
-# path (.../work/partcad/partcad/...) making */partcad/* match everything,
-# which silently excluded partcad-utils and partcad-service-json-rpc from
-# any run outside CI.
+# Everything the one wheel ships, plus the FreeCAD addon, which is not a
+# package that gets installed. Every package is named rather than globbed, which
+# is what stops a new one being silently excluded: the version test fails if
+# `src/` and the package list disagree.
+#
+# Two layouts have to match, because the suites reach PartCAD differently. The
+# pytest job imports from the checkout (`pythonpath = ["src", ...]` in
+# `pyproject.toml`), so it measures `.../src/partcad/...`. The behave job drives
+# the installed `pc` console script as a subprocess, so it measures
+# `.../site-packages/partcad/...`. A pattern that covers only the first leaves
+# behave with nothing to report, and `coverage` exits 1 on an empty data set --
+# a green test run and a red job.
+#
+# `partcad` needs both spellings written out because a bare `*/partcad/*` also
+# matches the entire CI checkout, which lives at `.../work/partcad/partcad/`.
+# The underscored packages have no such clash, so one pattern covers both
+# layouts for them -- and covers what the old hyphenated `*/partcad-cli/*`
+# never did, since the installed directory is `partcad_cli`.
 include =
-        */partcad/*
-        */partcad-cli/*
-        */partcad-utils/*
-        */partcad-ide-client/*
-        */partcad-service-json-rpc/*
-        */partcad-cad-freecad/*
+        */src/partcad/*
+        */site-packages/partcad/*
+        */partcad_cli/*
+        */partcad_utils/*
+        */partcad_client/*
+        */partcad_ide_client/*
+        */partcad_service_json_rpc/*
+        */cad/freecad/*
 disable_warnings = already-imported
 parallel = True
 omit =

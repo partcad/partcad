@@ -1,17 +1,129 @@
+#
+# PartCAD ships one Python distribution: `partcad`.
+#
+# It used to ship five -- `partcad`, `partcad-cli`, `partcad-utils`,
+# `partcad-client` and `partcad-service-json-rpc` -- each with its own
+# pyproject.toml, its own requirements.txt, and `==` pins on the others. Every
+# packaging problem this repository had came out of that: which distribution
+# owns an import name, which pin went stale, which of five names is registered
+# on PyPI. One distribution owning all six packages makes the questions stop
+# existing.
+#
+# The boundaries the packaging used to express are still real; they are just
+# enforced where they always actually were:
+#
+#   * A remote daemon is never told to upgrade itself. That is a *protocol*
+#     rule -- there is no upgrade or self-update method in the JSON-RPC surface,
+#     and there must not be one. `src/partcad_service_json_rpc/AGENTS.md` says
+#     so beside the method table. Updating a *local* daemon is unaffected:
+#     `pc upgrade` stops them, replaces the installation and restarts, which has
+#     always been a client acting on its own machine.
+#   * A daemon does not discover or stop other daemons. Enforced by
+#     `partcad_service_json_rpc` not importing `partcad_client`.
+#
+# `partcad-cli` is still published, as a shim: no modules, no entry points, one
+# dependency on this. See `shim/pyproject.toml`.
+#
+# This file is also the development environment: Poetry reads the `[project]`
+# metadata above and the `[tool.poetry.group.*]` dependency groups below, so
+# `poetry install` from the repository root installs PartCAD editable plus
+# everything the tests, the docs and the CAD-backed suites need.
+#
+
+[project]
+name = "partcad"
+version = "0.8.0"
+description = "Package manager for CAD models and a modelling framework"
+readme = "README.md"
+keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
+requires-python = ">=3.10,<3.15"
+# PEP 639: an SPDX expression, with the file named separately. The older
+# `license = {file = "LICENSE.txt"}` inlined the whole Apache text into the
+# `License:` metadata field, which is what PyPI then shows in place of a
+# license name.
+license = "Apache-2.0"
+license-files = ["LICENSE.txt"]
+authors = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+maintainers = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+dynamic = ["dependencies", "optional-dependencies"]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+pc = "partcad_cli.click.command:cli"
+partcad = "partcad_cli.click.command:cli"
+partcad-json-rpc = "partcad_service_json_rpc.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/partcad/partcad"
+Issues = "https://github.com/partcad/partcad/issues"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+# Explicit rather than left to auto-discovery: this distribution ships six
+# top-level packages, and that is not something to leave implicit.
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.dynamic.optional-dependencies]
+# Optional linting dependency. `ruff` ships a native executable that is resolved
+# and launched lazily, so it is only required when `pc lint` actually runs.
+lint = {file = ["requirements-lint.txt"]}
+# The off-machine cache tier whose client is heavy enough to leave out:
+# 'cacheS3' (object storage) pulls aioboto3, and through it a botocore that pins
+# tightly and weighs 13 MiB. 'cacheRemote' (memcached) used to be an extra
+# beside it and is now an ordinary dependency -- see requirements.txt.
+aws = {file = ["requirements-aws.txt"]}
+
+[tool.setuptools.package-data]
+# The '.mjs' files are the JavaScript wrappers, read at runtime and handed to a
+# sandboxed Node.js exactly like the '.py' ones are handed to a sandboxed Python.
+"partcad.wrappers" = ["*.py", "*.mjs"]
+# The packages PartCAD ships inside itself and reaches at '//builtin' (see
+# src/partcad/builtin/). Their 'partcad.yaml' is read and their scripts are
+# executed by path in a sandbox, so both have to land in the wheel as files.
+"partcad.builtin" = ["*.yaml"]
+"partcad.builtin.export" = ["*.py", "*.yaml"]
+"partcad.builtin.render" = ["*.py", "*.yaml"]
+"partcad.template" = ["*.yaml"]
+"partcad.schema" = ["**/partcad.json"]
+# The ASSY schema, which `partcad_utils.assy_lint` validates against.
+"partcad_utils.schema" = ["**/*.json"]
+
 [tool.pytest.ini_options]
-# partcad/tests/unit carries helper modules that tests import by name (see
+# tests/partcad/unit carries helper modules that tests import by name (see
 # git_http_server.py). With --import-mode importlib pytest does not put the
 # test's own directory on the path, so it has to be named here.
 pythonpath = [
-    "partcad-utils/src",
-    "partcad-client/src",
-    "partcad/src",
-    "partcad-ide-client/src",
-    "partcad/tests/unit",
-    "partcad-service-json-rpc/src",
+    "src",
+    "tests/partcad/unit",
     # The FreeCAD addon is not a package that gets installed: FreeCAD loads it
     # from its own directory, which is what it is importable from here too.
-    "partcad-cad-freecad",
+    "cad/freecad",
+    # Same reason as `tests/partcad/unit` above: the IDE build-tooling tests do
+    # `from conftest import REPO_ROOT` (and `import brand`, from the `tools`
+    # directory their conftest adds), which `--import-mode importlib` does not
+    # put on the path on its own. Without this the whole-repo run in
+    # "test-dev.yml" fails to collect them -- and, because that job's `runCmd`
+    # ends in `echo DONE`, reports success anyway while having run nothing.
+    "ide/standalone/tests",
 ]
 addopts = """
     --import-mode importlib
@@ -25,7 +137,6 @@ addopts = """
     --junitxml=pytest-results/junit.xml
     --self-contained-html
     --ignore-glob="openscad*"
-    --ignore-glob="partcad-ide-vscode/bundled/libs/*"
     """
 #    --log-cli-level=DEBUG # Add this flag to see debug logs during test runs
 filterwarnings = [
@@ -73,36 +184,15 @@ strictListInference = true  # Use union types when inferring types of lists elem
 # export POETRY_MULTIPROJECT_CHECK_DIR="/tmp/.check_partcad-dev"
 # export POETRY_MULTIPROJECT_PREPARE_DIR="/tmp/.prepare_partcad-dev"
 
-[tool.poetry.plugins."poetry-multiproject-plugin"]
-cache-dir = "/tmp/.prepare_partcad-dev"
+[tool.ruff.lint]
+ignore = ["F401", "F403", "F405"]
 
-[tool.poetry]
-name = "partcad-dev"
-version = "0.8.0"
-description = "Development Environment for PartCAD"
-authors = [
-  "PartCAD <support@partcad.org>",
-]
-license = "Apache 2.0"
-readme = "README.md"
-packages = [
-  { include = "partcad_utils", from = "partcad-utils/src" },
-  { include = "partcad_client", from = "partcad-client/src" },
-  { include = "partcad", from = "partcad/src" },
-  { include = "partcad_cli", from = "partcad-cli/src" },
-  { include = "partcad_ide_client", from = "partcad-ide-client/src" },
-  { include = "partcad_service_json_rpc", from = "partcad-service-json-rpc/src" }
-]
-
-[tool.poetry.scripts]
-pc = 'partcad_cli.click.command:main'
-partcad = 'partcad_cli.click.command:main'
-partcad-json-rpc = 'partcad_service_json_rpc.__main__:main'
-
-[tool.poetry.dependencies]
-python = ">=3.10,<3.15"
-poetry-plugin-shell = "^1.0.1"
-
+#
+# The development environment. Poetry 2 reads the `[project]` metadata above for
+# the package itself and these groups for everything around it. There is no
+# separate `partcad-dev` distribution any more: the project *is* `partcad`, so
+# `poetry install` installs it editable and the groups add what the suites need.
+#
 [tool.poetry.group.dev.dependencies]
 # black and isort are not run by any CI job or pre-commit hook (see
 # dev-tools/pre-commit-config.yaml), so these are the versions a developer
@@ -118,7 +208,7 @@ poetry-plugin-shell = "^1.0.1"
 [tool.poetry.group.test.dependencies]
 # Serves a throwaway git repository over smart HTTP, so tests can exercise
 # server-side behaviour that file:// cannot express. See
-# partcad/tests/unit/git_http_server.py.
+# tests/partcad/unit/git_http_server.py.
 flask = "^3.1.3"
 pytest = "^9.1.1"
 pytest-cov = "^7.1.0"
@@ -224,32 +314,23 @@ ruff = "^0.15.22"
 jsonschema = "^4.26.0"
 # Only below 3.14, where the standard library has no 'compression.zstd'.
 "backports.zstd" = { version = ">=1.6.0", python = "<3.14" }
-# The clients behind the two off-machine cache tiers. They are extras of the
-# published wheel (partcad[memcache] and partcad[aws]), not dependencies of it;
-# they are here so the monorepo test suite, which drives both tiers against
-# local mock servers, has them installed.
+# The clients behind the two off-machine cache tiers, both driven by the
+# monorepo test suite against local mock servers. 'aiomcache' is an ordinary
+# dependency of the published wheel; 'aioboto3' is its 'aws' extra, and is here
+# because the suite needs it either way.
 aiomcache = "^0.8.2"
 aioboto3 = "^15.5.0"
-
-[tool.poetry.group.cli.dependencies]
-setuptools = "^83.0.0"
-jinja2 = "^3.1.6"
-requests = "^2.34.2"
-aiofiles = "^25.1.0"
-aiohttp = "^3.14.2"
-google-genai = "^2.13.0"
-pillow = "^12.2.0"
-openai = "^2.46.0"
-ollama = "^0.6.2"
+# The CLI's own two. They are ordinary runtime dependencies of the wheel -- a
+# console script cannot be conditional on an extra, so `pc` needs them
+# unconditionally -- and they are restated here for the same reason as
+# everything above: Poetry does not read `dynamic = ["dependencies"]`, so the
+# dev container and `.devcontainer/requirements.txt` see only what this group
+# names. They used to arrive through a `cli` group that the one-wheel migration
+# deleted; `click` happens to be pulled in transitively today, `rich-click` is
+# not, and `partcad_cli.click.command` imports it at the top.
 click = "^8.4.2"
 rich-click = "^1.9.8"
 
 [tool.poetry.group.performance.dependencies]
 snakeviz = "^2.2.2"
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.ruff.lint]
-ignore = ["F401", "F403", "F405"]

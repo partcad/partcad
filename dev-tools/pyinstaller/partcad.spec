@@ -23,8 +23,8 @@ other interpreter.
 
 Build it with ``dev-tools/pyinstaller/build.sh``, which prepares the
 environment this spec expects. To run PyInstaller directly, install ``partcad``
-and ``partcad-cli`` (with their ``lint`` extra) plus ``pyinstaller``
-into the current environment first, then::
+(with its ``lint`` extra) plus ``pyinstaller`` into the current environment
+first, then::
 
     pyinstaller --clean --noconfirm dev-tools/pyinstaller/partcad.spec
 """
@@ -38,10 +38,8 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metada
 # `SPECPATH` is injected by PyInstaller and holds the directory of this file.
 SPEC_DIR = Path(SPECPATH).resolve()
 REPO_ROOT = SPEC_DIR.parents[1]
-PARTCAD_SRC = REPO_ROOT / "partcad" / "src"
-CLI_SRC = REPO_ROOT / "partcad-cli" / "src"
-SERVICE_SRC = REPO_ROOT / "partcad-service-json-rpc" / "src"
-UTILS_SRC = REPO_ROOT / "partcad-utils" / "src"
+# One wheel, one source root: every package the bundle freezes lives under it.
+SRC = REPO_ROOT / "src"
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -99,10 +97,10 @@ def command_modules():
     which is a keyword: it is reachable through ``importlib.import_module``
     (which is how the loader loads it) but not through an import statement.
     """
-    root = CLI_SRC / "partcad_cli" / "click" / "commands"
+    root = SRC / "partcad_cli" / "click" / "commands"
     modules = []
     for path in sorted(root.rglob("*.py")):
-        parts = list(path.relative_to(CLI_SRC).with_suffix("").parts)
+        parts = list(path.relative_to(SRC).with_suffix("").parts)
         if parts[-1] == "__init__":
             parts.pop()
         modules.append(".".join(parts))
@@ -115,21 +113,20 @@ def command_modules():
 # have to come from the checkout too, or the two could disagree.
 datas += [
     # Executed by the sandbox interpreter, by path. They must exist as files.
-    (str(PARTCAD_SRC / "partcad" / "wrappers"), "partcad/wrappers"),
+    (str(SRC / "partcad" / "wrappers"), "partcad/wrappers"),
     # The packages PartCAD ships inside itself, loaded from disk as '//builtin'
     # and executed by path in a sandbox. Both their configuration and their
     # scripts must exist as files.
-    (str(PARTCAD_SRC / "partcad" / "builtin"), "partcad/builtin"),
+    (str(SRC / "partcad" / "builtin"), "partcad/builtin"),
     # Copied into new packages by `pc init`.
-    (str(PARTCAD_SRC / "partcad" / "template"), "partcad/template"),
+    (str(SRC / "partcad" / "template"), "partcad/template"),
     # Read through `importlib.resources` by `pc lint`. The ASSY schema is in
     # `partcad_utils` because both ends check ASSY files -- the daemon over a
-    # package, `pc lint --file` in the client over one file -- so `partcad_utils`
-    # joins `pathex` too, keeping its modules and its data from one checkout.
-    (str(PARTCAD_SRC / "partcad" / "schema"), "partcad/schema"),
-    (str(UTILS_SRC / "partcad_utils" / "schema"), "partcad_utils/schema"),
+    # package, `pc lint --file` in the client over one file.
+    (str(SRC / "partcad" / "schema"), "partcad/schema"),
+    (str(SRC / "partcad_utils" / "schema"), "partcad_utils/schema"),
     # The loader lists this directory to enumerate the available subcommands.
-    (str(CLI_SRC / "partcad_cli" / "click" / "commands"), "partcad_cli/click/commands"),
+    (str(SRC / "partcad_cli" / "click" / "commands"), "partcad_cli/click/commands"),
     # Redistributing a binary bundle means redistributing its dependencies.
     (str(REPO_ROOT / "LICENSE.txt"), "."),
 ]
@@ -191,8 +188,9 @@ for _dist in ("opentelemetry-api", "opentelemetry-sdk", "opentelemetry-semantic-
     add_metadata(_dist)
 hiddenimports += collect_submodules("opentelemetry")
 
-# Imported lazily, by name, so that a bundle stays useful without them.
-# `pc inspect` sends the tessellated shape to the PartCAD IDE through this.
+# Imported lazily, by name, so PyInstaller cannot see it from the import graph.
+# `pc inspect` sends the tessellated shape to the PartCAD IDE through this. It
+# ships inside the `partcad` wheel, so installing that is what puts it here.
 add_package("partcad_ide_client")
 
 # `pc lint` runs the linter as a subprocess. `ruff.__main__.find_ruff_bin()`
@@ -212,12 +210,9 @@ else:
 add_package("aiomcache")
 add_package("aioboto3")
 
-# The version PartCAD reports and sends with telemetry.
+# The version PartCAD reports and sends with telemetry. One distribution now
+# carries every package, so there is one set of metadata to ship.
 add_metadata("partcad")
-add_metadata("partcad-utils")
-add_metadata("partcad-client")
-add_metadata("partcad-cli")
-add_metadata("partcad-service-json-rpc")
 
 ###############################################  OPENSCAD  ###################################################
 
@@ -237,7 +232,7 @@ a = Analysis(
     [str(SPEC_DIR / "entrypoint.py")],
     # The checkout comes first so the bundle matches the working tree rather
     # than whatever copy happens to be installed in the build environment.
-    pathex=[str(PARTCAD_SRC), str(CLI_SRC), str(SERVICE_SRC), str(UTILS_SRC)],
+    pathex=[str(SRC)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

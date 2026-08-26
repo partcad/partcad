@@ -216,11 +216,11 @@ Make sure to have Python configured and a [conda] environment set up in VS Code 
 
 The `PartCAD` workbench browses packages, parts and assemblies inside FreeCAD, asks for an object's parameters,
 and imports the result into the open document. Copy or link
-[`partcad-cad-freecad`](./partcad-cad-freecad/README.md) into FreeCAD's `Mod` folder as `PartCAD` and restart
+[`cad/freecad`](./cad/freecad/README.md) into FreeCAD's `Mod` folder as `PartCAD` and restart
 FreeCAD:
 
 ```shell
-ln -s "$PWD/partcad-cad-freecad" ~/.local/share/FreeCAD/Mod/PartCAD
+ln -s "$PWD/cad/freecad" ~/.local/share/FreeCAD/Mod/PartCAD
 ```
 
 No Python setup is needed: the add-on uses the standalone PartCAD service, downloading it on first use if no
@@ -231,8 +231,12 @@ standalone installation is present.
 The recommended method to install PartCAD CLI tools for most users is:
 
 ```shell
-pip install -U partcad-cli
+pip install -U partcad
 ```
+
+That one package is everything: the `pc` command line tool, the Python module, and
+the JSON-RPC service the editor extensions talk to. `partcad-cli` still installs
+and still works — it is now a thin package that pulls `partcad` in.
 
 - On **Windows**, install `Miniforge3` using `Register Miniforge3 as my default Python X.XX` and use this Python
   environment for PartCAD. Also set `LongPathsEnabled` to 1 at

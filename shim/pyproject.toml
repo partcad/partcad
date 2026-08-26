@@ -1,0 +1,75 @@
+#
+# `partcad-cli`, as a compatibility shim.
+#
+# The CLI used to be its own distribution: `pip install partcad-cli` brought
+# `partcad` with it and provided `pc`. Everything now ships in one `partcad`
+# wheel, entry points included, and `pip install partcad` is what the
+# documentation says. This exists so the older instruction keeps working -- for
+# anyone with it in a requirements file, a Dockerfile, or muscle memory.
+#
+# Two things about it are load-bearing:
+#
+#   * **No modules.** It ships nothing; `partcad_cli` comes from the `partcad`
+#     wheel. Two distributions owning one import name break each other on
+#     uninstall, silently -- pip does not detect the overlap when installing,
+#     and removing either one deletes the package out from under the other.
+#
+#   * **No entry points.** `partcad` declares `pc` and `partcad`. A second
+#     distribution declaring them too would mean whichever installs last wins
+#     the file on disk, and uninstalling that one leaves the command missing
+#     while the other distribution still claims to provide it.
+#
+# The upgrade path from a real `partcad-cli` is clean without any help: pip
+# performs uninstalls before installs within one transaction, so the old
+# `partcad_cli/` is released before the new `partcad` lays down its own. A later
+# `pip uninstall partcad-cli` then correctly leaves it alone, because this
+# distribution never owned it.
+#
+# Built and published by "deploy.yml" beside the wheel, under the same version.
+#
+
+[project]
+name = "partcad-cli"
+version = "0.8.0"
+description = "The PartCAD command line interface, which now ships inside 'partcad'"
+readme = "README.md"
+keywords = ["cadquery", "build123d", "cad", "design", "openscad", "step", "stl"]
+requires-python = ">=3.10,<3.15"
+# PEP 639: an SPDX expression, with the file named separately. The older
+# `license = {file = "LICENSE.txt"}` inlined the whole Apache text into the
+# `License:` metadata field, which is what PyPI then shows in place of a
+# license name.
+license = "Apache-2.0"
+license-files = ["LICENSE.txt"]
+authors = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+maintainers = [
+  {name = "PartCAD", email = "support@partcad.org" }
+]
+
+dependencies = ["partcad==0.8.0"]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+# Mirrored so that `partcad-cli[lint]` and `partcad-cli[aws]` keep resolving for
+# anyone who pinned them.
+[project.optional-dependencies]
+lint = ["partcad[lint]==0.8.0"]
+aws = ["partcad[aws]==0.8.0"]
+
+[project.urls]
+Homepage = "https://github.com/partcad/partcad"
+Issues = "https://github.com/partcad/partcad/issues"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+# Nothing to find. Stated rather than left to auto-discovery, which would
+# otherwise look around and either guess or refuse.
+[tool.setuptools]
+packages = []

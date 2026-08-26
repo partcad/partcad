@@ -11,7 +11,7 @@ because the snap is classic, a manual store review — see [Publishing](#publish
 
 | | wheels | standalone bundle | snap |
 | --- | --- | --- | --- |
-| Install | `pip install -U partcad-cli` | `curl -fsSL .../install.sh \| sh` | `snap install --classic partcad`, once published |
+| Install | `pip install -U partcad` | `curl -fsSL .../install.sh \| sh` | `snap install --classic partcad`, once published |
 | Needs Python | yes, 3.10-3.14 | no | no |
 | Platforms | Linux, macOS, Windows | one build per supported OS version | linux amd64 and arm64 |
 | Sees the host's conda/git | yes | yes | no, see below |
@@ -112,13 +112,13 @@ that snapd exports the variable, and that none of `cache`, `git`, `tar`, `extern
 
 The user *configuration* file is deliberately not moved with it. PartCAD reads `~/.partcad/config.yaml` from the home
 directory directly, without consulting `PC_INTERNAL_STATE_DIR`, so one configuration keeps applying across the snap,
-the standalone bundle and the wheels. Redirecting that too would need a change in `partcad-utils`, not here.
+the standalone bundle and the wheels. Redirecting that too would need a change in `partcad_utils`, not here.
 
 The telemetry id stays there too, and for a stronger reason: it identifies a user, so an id that moved with the state
 directory would make one machine look like several. `UserConfig.get_generated_id_path()` is the single definition of
 where it lives — it used to be derived independently by the writer and by `pc system telemetry info`/`clear`, which
 agreed only for as long as nothing set `PC_INTERNAL_STATE_DIR`. This snap was the first thing that did, which is how
-the split was found; `partcad/tests/unit/test_telemetry_id_path.py` pins it.
+the split was found; `tests/partcad/unit/test_telemetry_id_path.py` pins it.
 
 ## conda and git are not found, and that is fine
 

@@ -1,9 +1,0 @@
-vyper-config==1.2.1
-sentry-sdk[opentelemetry]==2.66.0
-psutil>=6.1.1
-# The ASSY checker (assy_lint): a Jinja2 template, rendered to YAML, validated
-# against a JSON schema. All three are pure-Python and CAD-free, so importing
-# them stays as cheap as the rest of this package.
-jinja2
-pyyaml>=6.0.1
-jsonschema>=4.23.0

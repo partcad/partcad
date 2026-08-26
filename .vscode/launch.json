@@ -97,7 +97,7 @@
       "program": "${workspaceFolder}/.venv/bin/behave",
       "args": [
         // TODO-36: @alexanderilyin: use $input to make it possible to run any feature file
-        "features/partcad-cli/commands/status.feature"
+        "features/status.feature"
       ],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
@@ -112,7 +112,7 @@
       "name": "Debug: partcad inspect",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/partcad-cli/src/partcad_cli/click/command.py",
+      "program": "${workspaceFolder}/src/partcad_cli/click/command.py",
       "args": [
         "-p",
         "examples",
@@ -134,7 +134,7 @@
       "name": "Debug: partcad info cube",
       "type": "debugpy",
       "request": "launch",
-      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "program": "src/partcad_cli/click/command.py",
       "args": [
         "info",
         "cube"
@@ -151,7 +151,7 @@
       "name": "Debug: partcad render",
       "type": "debugpy",
       "request": "launch",
-      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "program": "src/partcad_cli/click/command.py",
       "args": [
         "-p",
         "${workspaceFolder}/examples",
@@ -176,7 +176,7 @@
       "name": "Debug: partcad test",
       "type": "debugpy",
       "request": "launch",
-      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "program": "src/partcad_cli/click/command.py",
       "args": [
         "-p",
         "${workspaceFolder}/examples",
@@ -196,7 +196,7 @@
       "name": "Debug: partcad system status",
       "type": "debugpy",
       "request": "launch",
-      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "program": "src/partcad_cli/click/command.py",
       "args": [
         "system status"
       ],
@@ -211,7 +211,7 @@
       "name": "Debug: partcad init",
       "type": "debugpy",
       "request": "launch",
-      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "program": "src/partcad_cli/click/command.py",
       "args": [
         "init"
       ],
@@ -226,7 +226,7 @@
       "name": "Debug: partcad add --help",
       "type": "debugpy",
       "request": "launch",
-      "program": "partcad-cli/src/partcad_cli/click/command.py",
+      "program": "src/partcad_cli/click/command.py",
       "args": [
         "add",
         "--help"
@@ -243,10 +243,10 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/partcad-ide-vscode"
+        "--extensionDevelopmentPath=${workspaceFolder}/ide/vscode"
       ],
       "outFiles": [
-        "partcad-ide-vscode/dist/**/*.js"
+        "ide/vscode/dist/**/*.js"
       ],
       "env": {
         "USE_DEBUGPY": "True"
@@ -256,7 +256,7 @@
         "group": "",
         "order": 4
       },
-      "localRoot": "partcad-ide-vscode"
+      "localRoot": "ide/vscode"
     },
     {
       "name": "Python debug server (hidden)",

@@ -23,7 +23,7 @@ runs:
         #
         # The same hazard, and the very same spelling of the pin, as in the
         # sandboxes PartCAD provisions at runtime: see
-        # sandbox_versions.python_abi_requirement() in partcad/src/partcad,
+        # sandbox_versions.python_abi_requirement() in src/partcad,
         # which is the other half of this fix. Keep the two in step.
         #
         # There is nothing to pin below 3.13 -- CPython has no free-threaded

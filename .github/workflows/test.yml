@@ -134,18 +134,6 @@ env:
   # is the interpreter PartCAD itself runs on. 'test-pub-repo', which renders
   # the public index, uses PYTHONS_SANDBOX instead.
   PYTHONS_SLIM: '["3.10", "3.14"]'
-  # The VS Code extension pytest job builds the extension bundle, which vendors
-  # partcad's dependencies into 'bundled/libs' with 'pip install --implementation
-  # py' (see partcad-ide-vscode/noxfile.py). That flag pulls pure-Python wheels
-  # only, but partcad depends on pygit2 (a C extension) since #452, so the
-  # bundle install falls back to compiling pygit2 from source and fails on the
-  # runners, which have no libgit2 headers. It happens to resolve on 3.10-3.12
-  # via pip's tag matching but breaks on 3.13/3.14. Making the bundle carry a
-  # platform wheel is an extension-packaging change (see the TODO in
-  # noxfile.py's _install_bundle), so until then this job runs on the range the
-  # extension is actually validated against.
-  # TODO(clairbee): restore 3.13/3.14 here once the bundle can ship pygit2.
-  PYTHONS_IDE: '["3.10", "3.11", "3.12"]'
   VERSION: 0.8.0
   CONTAINER_REGISTRY: ghcr.io
   PC_TELEMETRY_ENV: test
@@ -191,7 +179,6 @@ jobs:
       matrix-sandbox: ${{ steps.set-matrix.outputs.matrix-sandbox }}
       matrix-slim: ${{ steps.set-matrix.outputs.matrix-slim }}
       matrix-behave: ${{ steps.set-matrix.outputs.matrix-behave }}
-      matrix-ide: ${{ steps.set-matrix.outputs.matrix-ide }}
     steps:
       - uses: actions/checkout@v7
 
@@ -233,10 +220,6 @@ jobs:
           # (like test-pub-repo), so sharding does not multiply the full matrix.
           SHARDS_JSON=$(python3 -c "import json, os; print(json.dumps(list(range(1, int(os.environ['BEHAVE_SHARDS']) + 1))))")
           echo 'matrix-behave={"os": ${{ env.OSES_SLIM }}, "python-version": ${{ env.PYTHONS_SLIM }}, "shard": '"$SHARDS_JSON"'}' >> "${GITHUB_OUTPUT}"
-          # The same OS axis and excludes as 'matrix', so it follows the depth
-          # too, but only the Python versions the extension bundle can be built
-          # for. See PYTHONS_IDE above.
-          echo 'matrix-ide={"os": '"${OSES}"', "python-version": ${{ env.PYTHONS_IDE }}, "exclude": ${{ env.EXCLUDES }}}' >> "${GITHUB_OUTPUT}"
 
   # cache-preheat:
   #   name: "Update caches"
@@ -288,8 +271,7 @@ jobs:
 
           mkdir -pv pytest-test-results
           pytest \
-            partcad partcad-cli partcad-utils partcad-client partcad-service-json-rpc partcad-cad-freecad \
-            partcad-ide-client \
+            tests cad/freecad \
             -x -p no:error-for-skips -p no:warnings --dist no
           coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-test-results/coverage.xml
           mamba deactivate
@@ -304,68 +286,6 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           codecov-files: pytest-test-results/junit.xml
           coverage-report: pytest-test-results/coverage.xml
-
-  # timeout-minutes raised once from 20 to 30: every job in this matrix was
-  # being cancelled at ~20m on the current CI runners.
-  test-pytest-ide-vscode:
-    name: "Pytest (VS Code extension)"
-    needs:
-      - set-matrix
-      # - cache-preheat
-    strategy:
-      fail-fast: false
-      # matrix-ide, not matrix: the extension bundle cannot be built on
-      # 3.13/3.14 yet (see PYTHONS_IDE above).
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-ide) }}
-    runs-on: ${{ matrix.os }}
-    # 30 -> 45: same larger install as the other jobs.
-    timeout-minutes: 45
-
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-all
-        with:
-          job: pytest-ide-vscode
-      - uses: ./.github/actions/setup-test
-        with:
-          job: pytest-ide-vscode
-
-      # TODO(clairbee): Move this step to the build jobs. Merge build.yml and test.yml to form a ci.yml, where this test job may 'needs' that build job
-      - name: Build the VS Code extension
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
-          (cd partcad-ide-vscode && nox --session setup && nox --session build_package)
-          mamba deactivate
-
-      - name: Test VS Code extension with pytest
-        env:
-          PYTHONWARNINGS: ignore
-        shell: bash -el {0}
-        run: |
-          . ~/.bashrc
-          . ~/.bash_profile
-          mamba activate ${{ format('env-test-pytest-ide-vscode-{0}', matrix.python-version) }}
-
-          mkdir -pv pytest-vscode-test-results
-          pytest \
-            partcad-ide-vscode \
-            -x -p no:error-for-skips -p no:warnings --dist no
-          coverage xml --rcfile=./dev-tools/coverage.rc --data-file=.coverage -o ./pytest-vscode-test-results/coverage.xml
-          mamba deactivate
-
-      - name: Upload test results & coverage reports to github and codecov
-        uses: ./.github/actions/upload-test-results
-        with:
-          name: pytest-vscode-test-results-${{matrix.os}}-${{matrix.python-version}}
-          path: pytest-vscode-test-results/
-          retention-days: 7
-          status: ${{ job.status }}
-          token: ${{ secrets.CODECOV_TOKEN }}
-          codecov-files: pytest-vscode-test-results/junit.xml
-          coverage-report: pytest-vscode-test-results/coverage.xml
 
   test-behave:
     name: "Behave"

@@ -39,10 +39,9 @@ on:
       - "snap/**"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
-      - "partcad/src/**"
-      - "partcad-cli/src/**"
-      - "partcad/requirements*.txt"
-      - "partcad-cli/requirements*.txt"
+      - "src/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
   pull_request:
     branches: ["main", "devel"]
     paths:
@@ -51,10 +50,9 @@ on:
       - "snap/**"
       - "install.sh"
       - ".github/workflows/build-standalone.yml"
-      - "partcad/src/**"
-      - "partcad-cli/src/**"
-      - "partcad/requirements*.txt"
-      - "partcad-cli/requirements*.txt"
+      - "src/**"
+      - "pyproject.toml"
+      - "requirements*.txt"
 
 permissions:
   contents: read
@@ -261,7 +259,7 @@ jobs:
       - name: Install with install.sh
         shell: bash
         run: |
-          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' partcad/src/partcad/__init__.py)
+          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' src/partcad/__init__.py)
           sh install.sh \
             --version "${version}" \
             --base-url "file://${PWD}/archives" \
@@ -593,7 +591,7 @@ jobs:
       - name: Install with install.sh
         shell: bash -el {0}
         run: |
-          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' partcad/src/partcad/__init__.py)
+          version=$(sed -n 's/^__version__: str = "\(.*\)"$/\1/p' src/partcad/__init__.py)
           sh install.sh \
             --version "${version}" \
             --platform "${{ matrix.platform }}" \

@@ -85,10 +85,13 @@ lines get overwritten). To get the complete and detailed error log, see the
 Typical problems
 ----------------
 
-Message in "Explorer" left panel: "No Python (>= 3.10) installed"
+Message in "Explorer" left panel: "PartCAD ... is not found"
 
- - Install Conda environment into the current working directory (main menu: View -> Command palette -> Python: Create environment...)
- - Choose interpreter (main menu: View -> Command palette -> Python: Choose interpreter...)
+ - Press "Install or update PartCAD" in the "Explorer" left panel and the
+   extension downloads a standalone PartCAD for you. No Python is needed.
+ - Or, if you would rather use your own Python environment, run
+   ``pip install partcad`` in it: the extension finds the ``partcad-json-rpc``
+   that puts on your ``PATH`` and uses that instead of downloading anything.
  - Reload PartCAD extension (by pressing "Reload" button in "Context" left panel)
 
 "The PartCAD extension is being initialized..." in "Explorer" gets into infinite loop (and nothing happens in the corresponding terminal window)
@@ -97,7 +100,7 @@ Message in "Explorer" left panel: "No Python (>= 3.10) installed"
 
 Error while loading part or assembly view: "Module ... not found"
 
- - Make sure that extension version matches PartCAD Python module version in `pc version` command output
+ - Make sure that the extension version matches the PartCAD version in ``pc version`` command output
 
 ==============
 PartCAD Viewer
@@ -107,12 +110,15 @@ The ``PartCAD Viewer`` is a tab the extension opens when a part, assembly,
 sketch or interface is inspected. PartCAD tessellates the shape in a sandboxed
 runtime, and sends the result to the extension as compressed glTF over a socket
 on ``127.0.0.1:9137``. The Python side of that connection is the
-``partcad-ide-client`` package, which the extension installs alongside
-``partcad``.
+``partcad_ide_client`` package, which ships inside ``partcad`` itself -- so
+``pip install partcad`` is all that is needed, and there is nothing separate to
+install.
 
 Anything with a ``partcad`` that can reach that port can display into the same
 viewer -- including a ``pc`` run in a plain terminal, as long as a window with
-the extension is open:
+the extension is open. While the extension is active it puts the PartCAD command
+line tools on the ``PATH`` of terminals opened in that window, so ``pc`` is there
+without any further setup (``partcad.addToolsToTerminalPath`` turns that off):
 
   .. code-block:: shell
 
@@ -130,8 +136,12 @@ Typical problems
 
 ``Failed to load "partcad_ide_client"`` in the PartCAD terminal view
 
- - Install it with ``pip install partcad-ide-client``, or press "Update PartCAD"
-   in the "Context" left panel, which installs it along with ``partcad``
+ - The package ships inside ``partcad``, so this means the installation is
+   damaged rather than incomplete. Reinstall with
+   ``pip install --force-reinstall partcad``, or press "Update PartCAD" in the
+   "Context" left panel.
+ - On a PartCAD older than 0.8.0 it was a separate ``partcad-ide-client``
+   distribution that was never published; upgrading is the fix.
 
 ``No PartCAD IDE with an open PartCAD Viewer detected``
 

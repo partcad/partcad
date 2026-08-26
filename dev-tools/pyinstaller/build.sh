@@ -174,7 +174,7 @@ fi
 
 VERSION="$("${PYTHON}" -c "
 import re, pathlib
-source = pathlib.Path('${REPO_ROOT}/partcad/src/partcad/__init__.py').read_text()
+source = pathlib.Path('${REPO_ROOT}/src/partcad/__init__.py').read_text()
 print(re.search(r'__version__: str = \"([^\"]+)\"', source).group(1))
 ")"
 
@@ -198,45 +198,27 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   # bundle is built with.
   "${PYTHON}" -m pip install "pyinstaller>=6.15" "${SETUPTOOLS_BOUND}"
 
-  # `partcad-cli`, `partcad-service-json-rpc`, and `partcad-utils` each declare
-  # their license by a path inside their own directory, but the file itself only
-  # exists in the repository root. The wheel build in "deploy.yml" copies it the
-  # same way.
-  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-cli/"
-  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-service-json-rpc/"
-  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-utils/"
-  cp "${REPO_ROOT}/LICENSE.txt" "${REPO_ROOT}/partcad-client/"
-
   echo "==> Installing PartCAD from this checkout"
-  # The shared partcad-utils is installed first: partcad (and the CLI/service)
-  # pin it, and it is not on PyPI, so it must come from this checkout.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-utils" "${SETUPTOOLS_BOUND}"
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-client" "${SETUPTOOLS_BOUND}"
+  # One install: `partcad` ships every package the bundle needs and declares all
+  # three of its executables. This used to be five installs in dependency order,
+  # because each distribution pinned the ones below it at `==` and none of them
+  # was on PyPI, so every pin had to be satisfied from this checkout.
+  #
   # A frozen bundle cannot be extended with pip afterwards, so the optional
-  # extras that the wheels leave to the user are all built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad[lint,memcache,aws]" "${SETUPTOOLS_BOUND}"
+  # extras the wheel leaves to the user are all built in.
+  "${PYTHON}" -m pip install "${REPO_ROOT}[lint,aws]" "${SETUPTOOLS_BOUND}"
   # The CAD kernel is NOT a dependency of the 'partcad' wheel - the core runs all
   # CAD in sandboxes. The standalone bundle, however, freezes it in so that 'pc'
   # works on a machine with no Python: convert("build123d"/"cadquery") hands back
   # live objects and so needs OCP in-process, and the "imported by name" check
   # below refuses to build the bundle without OCP/build123d. Pinned to the
-  # sandbox versions (see partcad/src/partcad/sandbox_versions.py).
+  # sandbox versions (see src/partcad/sandbox_versions.py).
   #
   # Note that 'pc inspect' no longer needs any of this: it tessellates in a
-  # sandbox and sends glTF to the PartCAD IDE, which is what 'partcad-ide-client'
-  # below is for.
+  # sandbox and sends glTF to the PartCAD IDE through 'partcad_ide_client', which
+  # the 'partcad' install above already carries (it ships inside that wheel).
   "${PYTHON}" -m pip install \
     "cadquery-ocp==7.9.3.1.1" "build123d==0.11.1" "ocpsvg==0.6.0" "${SETUPTOOLS_BOUND}"
-  # Pure standard library, and what lets 'pc inspect' from the bundle display
-  # into a running PartCAD IDE. The IDE installs it next to the wheels itself; a
-  # frozen bundle cannot be extended with pip afterwards, so it is built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-ide-client" "${SETUPTOOLS_BOUND}"
-  # The JSON-RPC service (the bundle's third executable) is installed before
-  # partcad-cli: the CLI pins partcad-service-json-rpc, which is not on PyPI, so
-  # it must be satisfied from this checkout. Both pins (partcad, and the service)
-  # resolve to the local builds this way.
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-service-json-rpc" "${SETUPTOOLS_BOUND}"
-  "${PYTHON}" -m pip install "${REPO_ROOT}/partcad-cli" "${SETUPTOOLS_BOUND}"
 fi
 
 ###############################################  OPENSCAD  ###################################################

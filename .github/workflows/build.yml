@@ -110,37 +110,20 @@ jobs:
           job: build
       - uses: ./.github/actions/setup-build
 
+      # Two distributions: the `partcad` wheel and the `partcad-cli` shim that
+      # depends on it. This used to be five, built in dependency order because
+      # each pinned the ones below it at `==`; there is nothing to order now.
       - name: Test building and packaging
         shell: bash -el {0}
         run: |
           . ~/.bashrc
           . ~/.bash_profile
           mamba activate env-build
-          # Build the shared partcad-utils wheel first; partcad (and the CLI and
-          # the service) pin it, and it is not on PyPI. partcad-client
-          # pins partcad-utils in turn, and partcad-cli pins it.
-          cp LICENSE.txt partcad-utils
-          (cd partcad-utils && python -m build)
-          cp LICENSE.txt partcad-client
-          (cd partcad-client && python -m build)
-          cp LICENSE.txt apache20.svg partcad
-          (cd partcad && python -m build)
-          mamba deactivate
-
-          mamba activate env-build-cli
-          cp LICENSE.txt apache20.svg README.md partcad-cli
-          cp LICENSE.txt partcad-service-json-rpc
-          # Install partcad-utils (pinned by partcad) before installing partcad.
-          python -m pip install --find-links=partcad-utils/dist partcad-utils
-          python -m pip install --find-links=partcad-client/dist --find-links=partcad-utils/dist \
-            partcad-client
-          python -m pip install -r partcad/requirements.txt
-          python -m pip install --no-index --find-links=partcad/dist partcad
-          # Build the JSON-RPC service wheel too; partcad-cli pins it.
-          (cd partcad-service-json-rpc && python -m build)
-          (cd partcad-cli && python -m build)
-          cp LICENSE.txt apache20.svg partcad-ide-client
-          (cd partcad-ide-client && python -m build)
+          python -m build
+          # The shim states `license = {file = "LICENSE.txt"}`, so it needs the
+          # repository's copy the way each distribution used to.
+          cp LICENSE.txt shim
+          (cd shim && python -m build)
           mamba deactivate
 
       - name: Test installation
@@ -149,18 +132,17 @@ jobs:
           . ~/.bashrc
           . ~/.bash_profile
           mamba activate ${{ format('env-test-build-{0}', matrix.python-version) }}
-          # Install the shared packages first (pinned by partcad/cli/service, not on PyPI).
-          python -m pip install --find-links=partcad-utils/dist partcad-utils
-          python -m pip install --find-links=partcad-client/dist --find-links=partcad-utils/dist \
-            partcad-client
-          python -m pip install -r partcad/requirements.txt
-          python -m pip install --no-index --find-links=partcad/dist partcad
-          # Install the service before partcad-cli, which pins it.
-          python -m pip install -r partcad-service-json-rpc/requirements.txt
-          python -m pip install --no-index --find-links=partcad-service-json-rpc/dist partcad-service-json-rpc
-          python -m pip install -r partcad-cli/requirements.txt
-          python -m pip install --no-index --find-links=partcad-cli/dist partcad-cli
-          python -m pip install --no-index --find-links=partcad-ide-client/dist partcad-ide-client
+          python -m pip install --find-links=dist partcad
+          # Every package the one wheel ships, and every entry point it declares.
+          # A wheel that builds but is missing one of them is the failure this
+          # catches -- `packages.find` sees whatever is under `src/`.
+          python -c "
+          import partcad, partcad_cli, partcad_client, partcad_utils, partcad_service_json_rpc, partcad_ide_client
+          "
+          pc --no-ansi version
+          partcad-json-rpc --help >/dev/null
+          # The shim brings the wheel in, and owns nothing of its own.
+          python -m pip install --no-index --find-links=dist --find-links=shim/dist partcad-cli
           mamba deactivate
 
       - name: Build documentation
@@ -186,4 +168,4 @@ jobs:
   build-vscode-extension:
     name: "VS Code extension"
     if: ${{ github.ref != 'refs/heads/devel' || startsWith(github.event.head_commit.message, 'Version updated') }}
-    uses: ./.github/workflows/nox.yml
+    uses: ./.github/workflows/vsix.yml

@@ -10,7 +10,7 @@ on:
       - main
       - devel
     paths:
-      - partcad-ide-vscode/**
+      - ide/vscode/**
 
 jobs:
   build:
@@ -32,12 +32,12 @@ jobs:
           # Node 24 is the current Active LTS; 22.x is in maintenance now.
           node-version: 24.x
           cache: "npm"
-          cache-dependency-path: partcad-ide-vscode/package-lock.json
-      - working-directory: partcad-ide-vscode
+          cache-dependency-path: ide/vscode/package-lock.json
+      - working-directory: ide/vscode
         run: npm install
-      - working-directory: partcad-ide-vscode
+      - working-directory: ide/vscode
         run: xvfb-run -a npm test
         if: runner.os == 'Linux'
-      - working-directory: partcad-ide-vscode
+      - working-directory: ide/vscode
         run: npm test
         if: runner.os != 'Linux'

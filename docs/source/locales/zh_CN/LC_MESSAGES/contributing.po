@@ -887,12 +887,12 @@ msgstr "你也可以不激活环境，通过 Poetry 来运行 ``pytest`` ，例�
 
 #: ../../source/contributing.rst:518
 msgid ""
-"The tests for the core module are located in the ``./partcad/tests`` "
+"The tests for the core module are located in the ``./tests/partcad`` "
 "directory. The tests for the CLI module are located in the ``./partcad-"
 "cli/tests`` directory. The tests for the LSP server of VSCode plugin are "
-"located in the ``./partcad-ide-vscode/src/test/python_tests`` directory."
+"located in the ``./ide/vscode/src/test/python_tests`` directory."
 msgstr ""
-"核心模块的测试位于 ``./partcad/tests`` 目录中。CLI 模块的测试位于 ``./partcad-cli/tests`` "
+"核心模块的测试位于 ``./tests/partcad`` 目录中。CLI 模块的测试位于 ``./tests/partcad_cli`` "
 "目录中。VSCode 插件的 LSP 服务器的测试位于 ``./partcad-ide-"
 "vscode/src/test/python_tests`` 目录中。"
 

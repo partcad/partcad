@@ -1,0 +1,8 @@
+.vscode-test/**
+coverage/**
+**/node_modules/**
+**/.venv/**
+**/__pycache__/**
+**/.pyc
+**/.pytest_cache/**
+**/.conda/**

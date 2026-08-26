@@ -32,7 +32,7 @@ APP_DIR="${PARTCAD_APP_DIR:-}"
 IDE="${PARTCAD_IDE:-0}"
 UNINSTALL=0
 
-# The name of the application bundle, as `partcad-ide-standalone/build.sh` packs
+# The name of the application bundle, as `ide/standalone/build.sh` packs
 # it. Used on MacOS, where installing means putting this in an Applications
 # directory.
 IDE_APP_NAME="PartCAD IDE.app"
@@ -221,7 +221,7 @@ MINGW* | MSYS* | CYGWIN*)
   fail "this script does not support Windows. From
        https://github.com/${REPOSITORY}/releases, run the IDE's
        'partcad-ide-<version>-windows-x86_64-setup.exe', or unpack the command
-       line tools' .zip, or install the wheels with 'pip install -U partcad-cli'."
+       line tools' .zip, or install the wheel with 'pip install -U partcad'."
   ;;
 *) fail "unsupported operating system '$(uname -s)'" ;;
 esac
@@ -493,7 +493,7 @@ if [ -n "${PLATFORM}" ]; then
 elif [ "${IDE}" = "1" ]; then
   # The IDE is built once per operating system and architecture, not once per
   # OS version: it carries its own Electron runtime, and
-  # "partcad-ide-standalone/build.sh" names its archive "<os>-<arch>". There is
+  # "ide/standalone/build.sh" names its archive "<os>-<arch>". There is
   # therefore exactly one candidate and nothing to choose between, so the
   # manifest is not read. The command line tools inside it are the
   # per-OS-version bundle, but that is the IDE build's choice, not something

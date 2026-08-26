@@ -12,7 +12,15 @@ getting tested on Linux, MacOS and Windows.
 
 .. code-block:: shell
 
-  $ python -m pip install -U partcad-cli
+  $ python -m pip install -U partcad
+
+.. note::
+
+  One package is everything: the ``pc`` command line tool, the Python module, and
+  the ``partcad-json-rpc`` service the editor extensions talk to. ``partcad-cli``
+  used to be a separate package and is now a thin one that just pulls ``partcad``
+  in, so ``pip install partcad-cli`` still works if you have it written down
+  somewhere.
 
 .. note::
 
@@ -479,29 +487,24 @@ Latest Development Version of PartCAD
 =====================================
 
 You can install the latest development version of PartCAD from the ``devel`` branch on
-`PartCAD <https://github.com/partcad/partcad>`_. First, create an isolated Python environment,
-and ensure ``pip``, ``setuptools``, and ``wheel`` are upgraded, then follow the instructions
-below to install the core module and the CLI tool.
+`PartCAD <https://github.com/partcad/partcad>`_. First, create an isolated Python environment
+and ensure ``pip``, ``setuptools``, and ``wheel`` are upgraded, then:
 
-1. **Install or upgrade the Core Python Module**
+.. code-block:: shell
 
-   .. code-block:: shell
+   $ python -m pip install --upgrade git+https://github.com/partcad/partcad.git@devel
 
-      $ python -m pip install --upgrade git+https://github.com/partcad/partcad.git@devel#subdirectory=partcad
-
-2. **Install or upgrade the CLI**
-
-   .. code-block:: shell
-
-      $ python -m pip install --upgrade git+https://github.com/partcad/partcad.git@devel#subdirectory=partcad-cli
+That is the whole thing. It used to be two commands naming two subdirectories, in
+the right order, because the repository shipped several packages that pinned each
+other; it ships one now.
 
 =============
 Python module
 =============
 
 PartCAD provides Python modules that can be used in CAD as code scripts
-(such as ``CadQuery``, ``build123d`` and ``sdf``). It's a dependency of ``partcad-cli`` so it
-doesn't usually need to be installed separately.
+(such as ``CadQuery``, ``build123d`` and ``sdf``). They come with the same package
+as the command line tools, so there is nothing extra to install.
 
 .. code-block:: shell
 
@@ -516,13 +519,7 @@ Linting
 =======
 
 The linter used by ``pc lint`` to check Python files is optional. Install the
-``lint`` extra to enable it, either on ``partcad-cli``:
-
-.. code-block:: shell
-
-    $ python -m pip install -U 'partcad-cli[lint]'
-
-or on ``partcad`` itself, using the same extra name:
+``lint`` extra to enable it:
 
 .. code-block:: shell
 
@@ -538,18 +535,21 @@ Shared caching tiers
 
 Beyond memory and the local filesystem, PartCAD can keep its cache of built
 geometry on a memcached server shared by a team or a CI fleet
-(``cacheRemote``), and in an S3 bucket that outlives both (``cacheS3``). Each
-carries a client library that is only imported when that tier is switched on,
-so each is an extra:
+(``cacheRemote``), and in an S3 bucket that outlives both (``cacheS3``). Both
+clients are imported only when their tier is switched on.
+
+``cacheRemote`` needs nothing installed: its client (``aiomcache``) is an
+ordinary dependency, so switching the tier on is all there is to it.
+
+``cacheS3`` is an extra, because its client pulls in ``botocore``, which is
+larger than the rest of PartCAD put together:
 
 .. code-block:: shell
 
-    $ python -m pip install -U 'partcad-cli[memcache]'   # cacheRemote
-    $ python -m pip install -U 'partcad-cli[aws]'        # cacheS3
+    $ python -m pip install -U 'partcad[aws]'        # cacheS3
 
-or on ``partcad`` itself, using the same extra names. Enabling a tier without
-its extra reports an error naming the package to install and leaves the
-remaining tiers working.
+Enabling ``cacheS3`` without it reports an error naming the package to install
+and leaves the remaining tiers working.
 
 .. _vscode-extension:
 
@@ -570,18 +570,18 @@ FreeCAD add-on
 ==============
 
 The ``PartCAD`` workbench browses packages, parts and assemblies inside FreeCAD and imports them into the
-open document. It lives in the ``partcad-cad-freecad`` directory of the repository; copy or link that
+open document. It lives in the ``cad/freecad`` directory of the repository; copy or link that
 directory into FreeCAD's ``Mod`` folder as ``PartCAD`` and restart FreeCAD:
 
 .. code-block:: shell
 
   $ git clone https://github.com/partcad/partcad.git
-  $ ln -s "$PWD/partcad/partcad-cad-freecad" ~/.local/share/FreeCAD/Mod/PartCAD
+  $ ln -s "$PWD/partcad/cad/freecad" ~/.local/share/FreeCAD/Mod/PartCAD
 
 The ``Mod`` folder is ``~/Library/Preferences/FreeCAD/Mod/`` on MacOS and ``%APPDATA%\FreeCAD\Mod\`` on
 Windows. No Python setup is needed: the add-on drives the standalone ``partcad-json-rpc`` service, using an
 existing standalone installation if there is one and offering to download a bundle if there is not. See
-``partcad-cad-freecad/README.md`` for what it does and which environment variables it reads.
+``cad/freecad/README.md`` for what it does and which environment variables it reads.
 
 =========================
 Public PartCAD repository

@@ -1,4 +1,0 @@
-# The shared remote cache ('cacheRemote'), reached over the memcached protocol.
-# Optional: PartCAD imports it lazily and only when that cache tier is enabled,
-# so an installation that never sets 'cacheRemote' does not carry it.
-aiomcache>=0.8.2,<1.0

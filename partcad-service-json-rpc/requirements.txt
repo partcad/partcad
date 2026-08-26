@@ -1,3 +1,0 @@
-partcad-utils==0.8.0
-partcad==0.8.0
-aiohttp
