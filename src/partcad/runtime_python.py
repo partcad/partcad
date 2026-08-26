@@ -265,14 +265,27 @@ class PythonRuntime(runtime.Runtime):
         # channel open; PYTHONSAFEPATH stands in for "-P".
         #
         # Except below 3.11, where PYTHONSAFEPATH does not exist and is ignored
-        # in silence. Provisioning runs "-m venv" and "-m pip" from whatever
-        # directory PartCAD itself was started in, and for a "-m" command
-        # sys.path[0] is that directory -- so a "venv.py" or "pip.py" sitting in
-        # it is imported instead of the module meant. An interpreter that old
-        # therefore keeps "-I", and with it keeps ignoring PYTHONHASHSEED,
-        # exactly as every version did before this. No flag pins a hash seed,
-        # so below 3.11 the isolation and the reproducibility cannot both be
-        # had; the isolation wins, and 3.10 is left no worse off than it was.
+        # in silence. There what "-P" stands for has to be had from "-I"
+        # instead -- but only on the commands that need it, which is not every
+        # command a sandbox runs:
+        #
+        # * Provisioning ("-m venv", "-m pip") inherits the directory PartCAD
+        #   itself was started in, and for a "-m" command sys.path[0] is that
+        #   directory. A "venv.py" or "pip.py" sitting in it is imported instead
+        #   of the module meant, so provisioning keeps "-I" below 3.11.
+        # * Everything else is a wrapper, run by path. For a script sys.path[0]
+        #   is the *script's* directory -- PartCAD's own 'wrappers/', never a
+        #   directory a user writes to -- so there is nothing there for "-P" to
+        #   keep out, and "-I" adds no isolation that "-s" and the sanitized
+        #   environment do not already provide.
+        #
+        # Keeping the two apart is what lets an old interpreter have both. "-I"
+        # implies "-E", so a command carrying it ignores PYTHONHASHSEED and
+        # hashes with a random seed; confined to provisioning that costs
+        # nothing, as pip and venv have no output whose order anyone compares.
+        # Carried by the wrapper runs as well -- as it was until this split --
+        # it cost every sandbox below 3.11 its reproducibility, and bought
+        # protection for a directory that was never on sys.path to begin with.
         try:
             has_safe_path = sandbox_versions.is_at_least(self.version, sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH)
         except ValueError:
@@ -283,7 +296,8 @@ class PythonRuntime(runtime.Runtime):
             # way an old interpreter does rather than trusting a variable that
             # may be ignored.
             has_safe_path = False
-        self.python_flags = ["-sOOu"] if has_safe_path else ["-sOOIu"]
+        self.python_flags = ["-sOOu"]
+        self.python_provisioning_flags = ["-sOOu"] if has_safe_path else ["-sOOIu"]
 
         # TODO(clairbee): To improve portability, warn about uses of default encoding
         # self.python_flags += ["-X", "warn_default_encoding=1"]
@@ -294,6 +308,22 @@ class PythonRuntime(runtime.Runtime):
             self.pip_install_flags += ["--no-warn-script-location"]
 
         self.constraints_path = None
+
+    def flags_for(self, cmd):
+        """The interpreter flags a sandbox command line runs with.
+
+        Below 3.11 provisioning is isolated with "-I" and everything else is
+        not (see __init__ for why), and provisioning is exactly the set of
+        commands spelled "-m venv" / "-m pip". Reading that off the command
+        rather than off the caller keeps the two from drifting apart: a
+        provisioning call site added later is isolated without anyone having to
+        remember to ask for it, and a wrapper run cannot acquire "-I" -- and
+        with it a random hash seed -- by accident.
+
+        At 3.11 and above the two are the same list, since PYTHONSAFEPATH
+        covers both.
+        """
+        return self.python_provisioning_flags if cmd and cmd[0] == "-m" else self.python_flags
 
     def get_constraints_flags(self):
         """Return the pip flags that apply PIP_CONSTRAINTS to an install.
@@ -500,7 +530,7 @@ class PythonRuntime(runtime.Runtime):
                         self.check_deps_onced_locked(path=session["path"])
 
             python_path = self.get_venv_python_path(session, path)
-            cmd = [python_path, *self.python_flags, *cmd]
+            cmd = [python_path, *self.flags_for(cmd), *cmd]
             pc_logging.debug("Running: %s", cmd)
             # pc_logging.debug("stdin: %s", stdin)
             with telemetry.start_as_current_span("PythonRuntime.run_onced.*{subprocess.Popen}") as span:
@@ -593,7 +623,7 @@ class PythonRuntime(runtime.Runtime):
                 self.check_deps_onced_locked(path=session["path"])
 
         python_path = self.get_venv_python_path(session, path)
-        cmd = [python_path, *self.python_flags, *cmd]
+        cmd = [python_path, *self.flags_for(cmd), *cmd]
         pc_logging.debug("Running: %s", cmd)
         # pc_logging.debug("stdin: %s", stdin)
         exitcode, stdout, stderr = super().run(cmd, stdin=stdin, cwd=cwd)
@@ -646,7 +676,7 @@ class PythonRuntime(runtime.Runtime):
                         await self.check_deps_async_onced_locked(path=session["path"])
 
             python_path = self.get_venv_python_path(session, path)
-            cmd = [python_path, *self.python_flags, *cmd]
+            cmd = [python_path, *self.flags_for(cmd), *cmd]
             pc_logging.debug("Running: %s", cmd)
             # pc_logging.debug("stdin: %s", stdin)
             with telemetry.start_as_current_span("PythonRuntime.run_async_onced.*{subprocess.Popen}") as span:
@@ -738,7 +768,7 @@ class PythonRuntime(runtime.Runtime):
                 await self.check_deps_async_onced_locked(path=session["path"])
 
         python_path = self.get_venv_python_path(session, path)
-        cmd = [python_path, *self.python_flags, *cmd]
+        cmd = [python_path, *self.flags_for(cmd), *cmd]
         pc_logging.debug("Running: %s", cmd)
         exitcode, stdout, stderr = await super().run_async(cmd, stdin=stdin, cwd=cwd)
         return exitcode, stdout, stderr

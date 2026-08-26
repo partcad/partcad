@@ -17,8 +17,8 @@ from partcad import python_env
 from partcad.runtime_python import PythonRuntime
 
 
-def _flags_for(tmp_path, version=None):
-    """The flags a real PythonRuntime hands to a sandbox interpreter.
+def _runtime_for(tmp_path, version=None):
+    """A real PythonRuntime, built for whichever sandbox version is asked for.
 
     Built through __init__, since the flags are what __init__ decides; the
     context only has to answer where the sandbox would live.
@@ -27,13 +27,29 @@ def _flags_for(tmp_path, version=None):
     class _Ctx:
         user_config = types.SimpleNamespace(internal_state_dir=str(tmp_path))
 
-    return PythonRuntime(_Ctx(), "none", version).python_flags
+    return PythonRuntime(_Ctx(), "none", version)
+
+
+def _flags_for(tmp_path, version=None):
+    """The flags a sandbox interpreter runs a wrapper with."""
+    return _runtime_for(tmp_path, version).python_flags
+
+
+def _provisioning_flags_for(tmp_path, version=None):
+    """The flags a sandbox interpreter runs "-m venv"/"-m pip" with."""
+    return _runtime_for(tmp_path, version).python_provisioning_flags
 
 
 @pytest.fixture
 def sandbox_python_flags(tmp_path):
-    """The flags for a sandbox on the interpreter running these tests."""
+    """The wrapper flags for a sandbox on the interpreter running these tests."""
     return _flags_for(tmp_path)
+
+
+@pytest.fixture
+def sandbox_provisioning_flags(tmp_path):
+    """The provisioning flags for a sandbox on the interpreter running these tests."""
+    return _provisioning_flags_for(tmp_path)
 
 
 def test_sanitize_drops_every_python_variable():
@@ -79,17 +95,29 @@ def test_importing_partcad_sanitized_this_process():
 
 @pytest.mark.parametrize("version", ["3.11", "3.12", "3.13", "3.14"])
 def test_sandbox_interpreter_flags_drop_isolated_mode_where_the_environment_can_replace_it(tmp_path, version):
-    """'-I' is gone, but the half of it no environment variable can express is not."""
+    """'-I' is gone, but the half of it no environment variable can express is not.
+
+    Where PYTHONSAFEPATH is honored it covers provisioning too, so both command
+    kinds run with one and the same list.
+    """
     flags = _flags_for(tmp_path, version)
 
     assert flags == ["-sOOu"]
+    assert _provisioning_flags_for(tmp_path, version) == flags
     assert "I" not in "".join(flags)
 
 
 @pytest.mark.parametrize("version", ["3.9", "3.10"])
-def test_sandbox_interpreter_flags_keep_isolated_mode_below_safe_path(tmp_path, version):
-    """PYTHONSAFEPATH is ignored before 3.11, so there '-I' is the only isolation."""
-    assert _flags_for(tmp_path, version) == ["-sOOIu"]
+def test_sandbox_interpreter_flags_keep_isolated_mode_where_only_provisioning_needs_it(tmp_path, version):
+    """PYTHONSAFEPATH is ignored before 3.11, so there '-I' stands in for it.
+
+    Only on the commands whose sys.path[0] is PartCAD's own working directory,
+    which is the "-m" ones. A wrapper is run by path, so its sys.path[0] is the
+    wrapper's directory and there is nothing for '-I' to keep out -- and
+    charging it '-I' would cost it PYTHONHASHSEED, which '-E' ignores.
+    """
+    assert _provisioning_flags_for(tmp_path, version) == ["-sOOIu"]
+    assert _flags_for(tmp_path, version) == ["-sOOu"]
 
 
 def test_a_version_the_bound_cannot_read_isolates_the_old_way(tmp_path):
@@ -97,17 +125,36 @@ def test_a_version_the_bound_cannot_read_isolates_the_old_way(tmp_path):
 
     Nothing between the schema and here trims that into a version this can
     compare, so it must not be the thing that discovers it -- and, since it
-    cannot be shown to understand PYTHONSAFEPATH, it gets the isolation that
-    needs no variable.
+    cannot be shown to understand PYTHONSAFEPATH, its provisioning gets the
+    isolation that needs no variable.
     """
-    assert _flags_for(tmp_path, ">=3.12") == ["-sOOIu"]
+    assert _provisioning_flags_for(tmp_path, ">=3.12") == ["-sOOIu"]
+    assert _flags_for(tmp_path, ">=3.12") == ["-sOOu"]
+
+
+@pytest.mark.parametrize(
+    "cmd, provisioning",
+    [
+        (["-m", "venv", "--upgrade-deps", "/somewhere"], True),
+        (["-m", "pip", "check"], True),
+        (["/somewhere/wrapper_part_type.py", "/a/script.py", "/a/package"], False),
+        ([], False),
+    ],
+)
+def test_only_a_module_command_is_treated_as_provisioning(tmp_path, cmd, provisioning):
+    """Which flags a command gets is read off the command, not off the caller."""
+    runtime = _runtime_for(tmp_path, "3.10")
+    expected = runtime.python_provisioning_flags if provisioning else runtime.python_flags
+
+    assert runtime.flags_for(cmd) == expected
 
 
 @pytest.mark.parametrize(
     "expression, expected",
     [
         # PYTHONHASHSEED is honored now, which is the whole point: under '-I' it
-        # was ignored and this came back randomized.
+        # was ignored and this came back randomized. On every version, including
+        # the ones whose provisioning still carries '-I'.
         ("sys.flags.hash_randomization", "0"),
         # ... and the isolation '-I' used to provide is still in force.
         ("sys.flags.no_user_site", "1"),
@@ -152,7 +199,7 @@ def test_a_child_of_this_process_hashes_reproducibly(sandbox_python_flags):
 
 @pytest.mark.parametrize("module", ["venv", "pip"])
 def test_a_shadowing_module_beside_the_sandbox_cannot_hijack_a_provisioning_command(
-    tmp_path, sandbox_python_flags, module
+    tmp_path, sandbox_provisioning_flags, module
 ):
     """The reason 3.10 keeps '-I': provisioning runs "-m", and "-m" reads sys.path[0].
 
@@ -166,7 +213,7 @@ def test_a_shadowing_module_beside_the_sandbox_cannot_hijack_a_provisioning_comm
     (tmp_path / (module + ".py")).write_text("print('SHADOWED')\n")
 
     out = subprocess.run(
-        [sys.executable, *sandbox_python_flags, "-m", module, "--help"],
+        [sys.executable, *sandbox_provisioning_flags, "-m", module, "--help"],
         cwd=str(tmp_path),
         env=os.environ,
         capture_output=True,
@@ -174,3 +221,41 @@ def test_a_shadowing_module_beside_the_sandbox_cannot_hijack_a_provisioning_comm
     )
 
     assert "SHADOWED" not in out.stdout, out.stdout
+
+
+def test_a_file_beside_partcad_cannot_hijack_a_module_a_wrapper_imports(tmp_path, sandbox_python_flags):
+    """And the reason a wrapper does not need '-I': it is run by path, not by "-m".
+
+    A wrapper reaches its siblings the way every wrapper in 'wrappers/' does --
+    by appending its own directory to sys.path -- so what it imports comes from
+    PartCAD's own directory. PartCAD's working directory, which is the one a
+    user can drop files into, is on sys.path for neither branch: below 3.11 it
+    is the script's directory that leads instead, and at 3.11+ PYTHONSAFEPATH
+    leaves the front of sys.path empty.
+    """
+    wrappers = tmp_path / "wrappers"
+    wrappers.mkdir()
+    (wrappers / "sibling.py").write_text("ORIGIN = 'WRAPPER'\n")
+    (wrappers / "wrapper.py").write_text("""import os
+import sys
+
+sys.path.append(os.path.dirname(__file__))
+import sibling
+
+print(sibling.ORIGIN)
+""")
+
+    working_directory = tmp_path / "cwd"
+    working_directory.mkdir()
+    (working_directory / "sibling.py").write_text("ORIGIN = 'SHADOWED'\n")
+
+    out = subprocess.run(
+        [sys.executable, *sandbox_python_flags, str(wrappers / "wrapper.py")],
+        cwd=str(working_directory),
+        env=os.environ,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert out.stdout.strip() == "WRAPPER"

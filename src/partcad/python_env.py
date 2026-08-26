@@ -56,9 +56,11 @@ PARTCAD_PYTHON_ENV = {
     #
     # It only arrived in 3.11, and an older interpreter ignores it in silence
     # rather than refusing it. So this does not protect a 3.10 sandbox, and
-    # nothing here can: see PythonRuntime.__init__, which falls back to "-I"
-    # below sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH and gives up the hash
-    # seed there in exchange.
+    # nothing here can: see PythonRuntime.__init__, which falls back to "-I" on
+    # the commands that need it below sandbox_versions.MIN_PYTHON_VERSION_SAFE_PATH.
+    # Those commands -- "-m venv" and "-m pip" -- are the only ones whose
+    # sys.path[0] is a directory a user can write to, and they are also the only
+    # ones with nothing to gain from the pinned seed "-I" costs them.
     "PYTHONSAFEPATH": "1",
 }
 
