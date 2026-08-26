@@ -117,6 +117,13 @@ pythonpath = [
     # The FreeCAD addon is not a package that gets installed: FreeCAD loads it
     # from its own directory, which is what it is importable from here too.
     "cad/freecad",
+    # Same reason as `tests/partcad/unit` above: the IDE build-tooling tests do
+    # `from conftest import REPO_ROOT` (and `import brand`, from the `tools`
+    # directory their conftest adds), which `--import-mode importlib` does not
+    # put on the path on its own. Without this the whole-repo run in
+    # "test-dev.yml" fails to collect them -- and, because that job's `runCmd`
+    # ends in `echo DONE`, reports success anyway while having run nothing.
+    "ide/standalone/tests",
 ]
 addopts = """
     --import-mode importlib
