@@ -378,3 +378,44 @@ def test_a_tier_switched_on_without_an_address_is_reported_and_skipped(tmp_path,
     assert [b.name for b in backends] == ["files"]
     assert [e.split(" ")[0] for e in errors] == ["cacheRemote", "cacheS3"]
     assert "cacheRemoteServer" in errors[0] and "cacheS3Bucket" in errors[1]
+
+
+# ---------------------------------------------------------------------------
+# What a tier says when its client is not importable
+# ---------------------------------------------------------------------------
+#
+# These two are the only place a user is told how to repair the situation, and
+# they are reached exactly when the dependency is absent -- which is never in a
+# CI job that installs the extras, so nothing else here exercises them.
+
+
+def test_missing_dependency_names_the_extra_that_carries_the_client():
+    """The 'aws' extra is on 'partcad', and naming it wrong is unactionable advice.
+
+    It used to offer 'partcad-cli[aws]' as an alternative. That distribution is
+    a shim with no extras of its own now, so the alternative would have sent the
+    user to something unsatisfiable.
+    """
+    error = cache_backend.missing_dependency("cacheS3", "aioboto3", "aws")
+
+    assert isinstance(error, cache_backend.CacheDependencyError)
+    assert isinstance(error, ImportError)
+    message = str(error)
+    assert "cacheS3" in message
+    assert "aioboto3" in message
+    assert "pip install 'partcad[aws]'" in message
+    assert "partcad-cli" not in message
+
+
+def test_broken_dependency_offers_a_repair_rather_than_an_extra():
+    """'aiomcache' is an ordinary dependency, so its absence is damage, not a choice."""
+    error = cache_backend.broken_dependency("cacheRemote", "aiomcache")
+
+    assert isinstance(error, cache_backend.CacheDependencyError)
+    message = str(error)
+    assert "cacheRemote" in message
+    assert "aiomcache" in message
+    assert "--force-reinstall" in message
+    # No extra to name: 'memcache' stopped being one when aiomcache became an
+    # ordinary dependency.
+    assert "[" not in message
