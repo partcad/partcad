@@ -877,6 +877,10 @@ if [ "${OS_NAME}" = "windows" ] && [ "${CREATE_INSTALLER}" = "1" ]; then
     # probe compiling that one directory through '..\..\' fails with "No files
     # found matching", and the same files named absolutely compile.
     ISCC_ARGS+=("/DAppDir=$(cygpath -w "${APP_ROOT}")")
+    # Absolute for the same reason, and because this one is relative to the
+    # .iss rather than to the application: #553 moved that file a level
+    # deeper and its '..\..\LICENSE.txt' started resolving inside 'ide/'.
+    ISCC_ARGS+=("/DLicenseFile=$(cygpath -w "${REPO_ROOT}/LICENSE.txt")")
     if [ -f "${APP_ROOT}/partcad-ide.ico" ]; then
       ISCC_ARGS+=("/DHaveIcon=1")
     fi

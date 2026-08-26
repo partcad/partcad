@@ -20,16 +20,26 @@
 
 ; Where the built application is. ../build.sh passes it absolutely, with
 ; /DAppDir, and has to: Inno resolves a relative source against this file's own
-; directory without normalizing it, so the '..\..\' below survives into every
-; path it opens and adds 31 characters to each. The deepest file in the
+; directory without normalizing it, so a relative '[Files]' source survives into
+; every path it opens and adds 31 characters to each. The deepest file in the
 ; application is 245 characters absolute and 276 that way, MAX_PATH is 260, and
 ; the compiler is not long-path aware -- it aborts with "The system cannot find
-; the path specified" and names neither a line nor a file. The fallback is kept
-; for compiling this by hand from this directory, which works only while the
-; tree stays shallow enough.
+; the path specified" and names neither a line nor a file.
 #ifndef AppDir
-  #define AppDir "..\..\dist\ide\partcad-ide"
+  #define AppDir "..\..\..\dist\ide\partcad-ide"
 #endif
+
+; The licence shown in the wizard, passed absolutely for a different reason: it
+; is resolved relative to *this file*, and this file moved a level deeper in
+; #553. That silently turned '..\..\' from the repository root into 'ide/', and
+; Inno aborted with `Could not read "...\installer\..\..\LICENSE.txt"`.
+#ifndef LicenseFile
+  #define LicenseFile "..\..\..\LICENSE.txt"
+#endif
+
+; Both fallbacks are for compiling this by hand from this directory. They are
+; correct for the current depth -- and are exactly what breaks the next time
+; this file moves, which is why build.sh passes both in.
 
 #define AppName "PartCAD IDE"
 #define AppExeName "partcad-ide.exe"
@@ -52,7 +62,7 @@ DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 AllowNoIcons=yes
-LicenseFile=..\..\LICENSE.txt
+LicenseFile={#LicenseFile}
 
 ; Per user unless the person running it asks for otherwise, which is what makes
 ; the common case a double click with no prompt.
