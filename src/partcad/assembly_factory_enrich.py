@@ -9,7 +9,12 @@ import typing
 
 from . import assembly_factory_alias as afa
 from . import logging as pc_logging
-from .enrich import adopt_source_config, enriched_source_name, warn_about_ignored_properties
+from .enrich import (
+    adopt_source_config,
+    enriched_source_name,
+    resolve_source_again,
+    warn_about_ignored_properties,
+)
 from . import telemetry
 
 
@@ -40,6 +45,11 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
             # nothing else to follow.
             config["source_resolved"] = source
 
+            # The declaration as written, kept so that what this points at can
+            # be worked out again once everything is declared (see
+            # 'resolve_source_again'). What is handed to the alias below is a
+            # copy, with the reference spelled out in it.
+            self.enrich_declaration = config
             config = copy.copy(config)
             config["source"] = source
             # Fully qualified now, so the package it names must not be applied
@@ -49,6 +59,10 @@ class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
             super().__init__(ctx, source_project, target_project, config)
 
     async def prepare_async(self, assembly) -> None:
+        # Before anything is resolved: the user's own parameter overrides may
+        # have arrived after this package was loaded, and they say which
+        # instance of the source this wants.
+        resolve_source_again(self, self.enrich_declaration, "source_assembly_name")
         await super().prepare_async(assembly)
 
         # What this object reports, settled here rather than while it is built:

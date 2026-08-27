@@ -140,6 +140,11 @@ def adopt_source_config(obj, source, source_name: str) -> None:
             continue
         obj.config[prop_to_copy] = enrich_config[prop_to_copy]
     obj.config["source"] = source_name
+    # Kept in step with it: a consumer that walks the stored configuration
+    # prefers 'source_resolved' where it is present ('pc convert'), and the one
+    # the declaration carried was written before the source was resolved again
+    # (see 'resolve_source_again').
+    obj.config["source_resolved"] = source_name
     obj.config["orig_name"] = obj.name
     obj.config["name"] = enrich_config["name"]
 
@@ -180,7 +185,41 @@ def enriched_source_name(source_project, target_project, config) -> str:
         source_name = project_name + ":" + source_name
     elif ":" not in source_name:
         source_name = source_project.name + ":" + source_name
+    else:
+        # Written as a reference of its own (':widget', '../other:widget'), so
+        # the package that authored it is what it is relative to. Spelled out
+        # here rather than left to the alias this hands the work to, because the
+        # name is also what gets recorded as 'source_resolved', and a consumer
+        # that walks the stored configuration has no package to read it against.
+        source_name = source_project.normalize(source_name)
 
     parameters = dict(config.get("with") or {})
     parameters.update(user_config.parameter_config.to_dict().get(f"{target_project.name}:{config['name']}", {}))
     return format_parameterized_name(source_name, parameters)
+
+
+def resolve_source_again(factory, declaration, source_attribute: str) -> None:
+    """Point this enrich at whatever its declaration now names.
+
+    The user's own parameter overrides ('pc.user_config.parameter_config') can
+    arrive after the package has been loaded: the CLI reads them from the
+    command line, and a program using PartCAD as a library sets them against a
+    context it already has. An override on an enrich says which instance of the
+    source it wants and not merely what that instance reports, so the name is
+    worked out once more here - where everything has been declared and nothing
+    has been resolved yet - rather than only while the factory was constructed.
+
+    Constructing it still resolves the source, because that is what makes a
+    chain of enriches and aliases work in any order, and because 'pc convert'
+    reads the resolved name off the declaration without preparing anything.
+    """
+    source = enriched_source_name(factory.project, factory.target_project, declaration)
+    if source == factory.source:
+        return
+    factory.source = source
+    # The package name is what precedes the first ':' - it is fully qualified
+    # and holds none of its own - and the rest is the object, parameters and
+    # all.
+    factory.source_project_name, _, object_name = source.partition(":")
+    setattr(factory, source_attribute, object_name)
+    declaration["source_resolved"] = source

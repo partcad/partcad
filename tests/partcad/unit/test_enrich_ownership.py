@@ -744,6 +744,42 @@ def test_a_part_an_assembly_materializes_is_handed_back_the_second_time(one_part
     assert one_part.get_broken_object_reason("part", "robot/forearm") is None
 
 
+def test_a_user_s_parameter_override_says_which_instance_an_enrich_wants(tmp_path):
+    """'pc.user_config.parameter_config' set after the package has been loaded.
+
+    Which is when it is normally set: the CLI reads it off the command line, and
+    a program using PartCAD as a library sets it against a context it already
+    has. An override on an enrich says which instance of the source it wants -
+    not merely what that instance reports - so the reference has to be pointed
+    at the other instance, and the stored declaration has to say so too, since
+    'pc convert' reads the resolved name off it.
+    """
+    write_package(
+        tmp_path,
+        "",
+        {
+            "name": "//test",
+            "parts": {
+                "widget": {"type": "test-null", "parameters": {"width": {"default": 3.0}}},
+                "wide": {"type": "enrich", "source": ":widget", "with": {"width": 5.0}},
+            },
+        },
+    )
+    ctx = pc.Context(str(tmp_path))
+    pc.user_config.parameter_config["//test:wide"] = {"width": 9.0}
+    try:
+        wide = ctx.get_part("//test:wide")
+        asyncio.run(wide.prepare_async())
+    finally:
+        del pc.user_config.parameter_config["//test:wide"]
+
+    project = ctx.get_project("//test")
+    assert "widget;width=9.0" in project.parts
+    assert wide.config["source"] == "//test:widget;width=9.0"
+    assert project.part_configs["wide"]["source_resolved"] == "//test:widget;width=9.0"
+    assert width_of(wide) == 9.0
+
+
 def test_two_threads_materializing_one_part_get_one_part(one_part):
     """The same, when the two passes overlap rather than follow one another.
 
