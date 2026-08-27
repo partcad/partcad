@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-"""Tests for the 'fileFrom'/'fileUrl' constraints in the configuration schema.
+"""Tests for the constraints the configuration schema puts on a declaration.
 
 'pc lint' validates 'partcad.yaml' against this schema, but only for packages
 that load: a configuration broken badly enough to fail the object factories
@@ -93,7 +93,66 @@ def test_schema_unsupported_file_from(kind):
     config = dict(config, fileFrom="ftp", fileUrl="https://example.com/vendor/%s" % name)
     errors = failures({kind: {name: config}})
     assert any(
-        error.json_path == "$.%s.%s.fileFrom" % (kind, name)
-        and "'ftp' is not one of ['url']" in error.message
+        error.json_path == "$.%s.%s.fileFrom" % (kind, name) and "'ftp' is not one of ['url']" in error.message
         for error in errors
     ), [(error.json_path, error.message) for error in errors]
+
+
+# What an 'enrich' may override a parameter with. Overriding parameters asks for
+# the instance of an object that has those values, and that instance is named
+# '<name>;<parameter>=<value>,...' - so a value cannot carry the characters that
+# spelling is made of.
+
+
+ENRICHABLE = {
+    "parts": {"cube": {"type": "enrich", "source": "block"}},
+    "sketches": {"outline": {"type": "enrich", "source": "profile"}},
+    "assemblies": {"desk": {"type": "enrich", "source": "table"}},
+}
+
+
+@pytest.mark.parametrize("kind", ENRICHABLE.keys())
+@pytest.mark.parametrize("value", [20.0, 20, "steel", True, ""])
+def test_schema_parameter_override_accepts_a_nameable_value(kind, value):
+    name, config = next(iter(ENRICHABLE[kind].items()))
+    validate({kind: {name: dict(config, **{"with": {"width": value}})}})
+
+
+@pytest.mark.parametrize("kind", ENRICHABLE.keys())
+@pytest.mark.parametrize("value", ["a,b", "a=b", "a;b"])
+def test_schema_parameter_override_rejects_what_cannot_be_named(kind, value):
+    name, config = next(iter(ENRICHABLE[kind].items()))
+    errors = failures({kind: {name: dict(config, **{"with": {"width": value}})}})
+    assert any(
+        error.json_path == "$.%s.%s.with.width" % (kind, name) and "does not match" in error.message for error in errors
+    ), [(error.json_path, error.message) for error in errors]
+
+
+# The same constraint on the other side of a parameter: what it is worth when
+# nothing overrides it, and what it offers to be set to.
+
+
+@pytest.mark.parametrize("kind", ENRICHABLE.keys())
+def test_schema_a_parameter_default_must_be_nameable(kind):
+    config = dict(next(iter(ENRICHABLE[kind].values())), parameters={"grade": {"type": "string", "default": "a,b"}})
+    errors = failures({kind: {"widget": config}})
+    assert any(error.json_path == "$.%s.widget.parameters.grade.default" % kind for error in errors), [
+        (error.json_path, error.message) for error in errors
+    ]
+
+
+@pytest.mark.parametrize("kind", ENRICHABLE.keys())
+def test_schema_a_parameter_enum_must_be_nameable(kind):
+    config = dict(next(iter(ENRICHABLE[kind].values())), parameters={"grade": {"type": "string", "enum": ["a", "b=c"]}})
+    errors = failures({kind: {"widget": config}})
+    assert any(error.json_path == "$.%s.widget.parameters.grade.enum[1]" % kind for error in errors), [
+        (error.json_path, error.message) for error in errors
+    ]
+
+
+@pytest.mark.parametrize("kind", ENRICHABLE.keys())
+def test_schema_a_parameter_default_may_be_any_other_value(kind):
+    """Only a string can carry those characters; nothing else is constrained."""
+    for default in (20.0, 20, True, ["a", "b"]):
+        config = dict(next(iter(ENRICHABLE[kind].values())), parameters={"grade": {"default": default}})
+        validate({kind: {"widget": config}})

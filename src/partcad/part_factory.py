@@ -142,7 +142,7 @@ class PartFactory(ShapeFactory):
 
     def _create(self, config: object) -> None:
         self.part = self._create_part(config)
-        self.target_project.parts[self.name] = self.part
+        self.target_project.register_object("part", self.name, self.part)
 
         self.apply_environment_cache_key(self.part)
         self.post_create()

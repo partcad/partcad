@@ -350,6 +350,21 @@
         }
       ]
     },
+    "parameter-override": {
+      "description": "One value of an object's 'with:'. A string may not contain ',', ';' or '=': overriding an object's parameters asks for the instance of it that has those values, and the name of that instance is spelled '<name>;<parameter>=<value>,...' - the same name 'pc inspect cube;width=20.0' asks for. Those three characters are what that spelling is made of, so a value carrying one of them cannot be named.",
+      "oneOf": [
+        { "type": "string", "pattern": "^[^,;=]*$" },
+        { "type": "number" },
+        { "type": "boolean" }
+      ]
+    },
+    "parameter-default": {
+      "description": "What a parameter is worth when nothing overrides it, and what its 'enum' offers. The same naming constraint as '#/definitions/parameter-override' applies to a string, for the same reason: a value that cannot be spelled in an instance name cannot be asked for by name. Any other type is left alone - only strings carry those characters.",
+      "anyOf": [
+        { "type": "string", "pattern": "^[^,;=]*$" },
+        { "type": ["number", "boolean", "array"] }
+      ]
+    },
     "shape-parameter": {
       "type": "object",
       "patternProperties": {
@@ -360,9 +375,15 @@
               "type": "object",
               "properties": {
                 "type": { "type": "string", "enum": ["string", "int", "bool", "float"] },
-                "enum": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+                "enum": {
+                  "type": "array",
+                  "items": {
+                    "allOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/parameter-default" }]
+                  },
+                  "uniqueItems": true
+                },
                 "desc": { "type": "string", "maxLength": 1000 },
-                "default": {},
+                "default": { "$ref": "#/definitions/parameter-default" },
                 "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
                 "material": { "type": "string", "minLength": 1 }
               },
@@ -586,7 +607,7 @@
                 "with": {
                   "type": "object",
                   "patternProperties": {
-                    "^[a-zA-Z0-9_/./-]+$": { "type": ["string", "number", "boolean"] }
+                    "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
                   },
                   "additionalProperties": false
                 },
@@ -716,7 +737,7 @@
             {
               "type": "object",
               "properties": {
-                "type": { "type": "string", "enum": ["assy", "step", "urdf", "alias"] },
+                "type": { "type": "string", "enum": ["assy", "step", "urdf", "alias", "enrich"] },
                 "desc": { "type": "string", "maxLength": 1000 },
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
@@ -757,6 +778,13 @@
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "parameters": { "$ref": "#/definitions/shape-parameter"},
+                "with": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
+                  },
+                  "additionalProperties": false
+                },
                 "dependencies": {
                   "type": "array",
                   "items": { "type": "string", "minLength": 1 },
@@ -902,7 +930,7 @@
             "with": {
               "type": "object",
               "patternProperties": {
-                "^[a-zA-Z0-9_/./-]+$": { "type": ["string", "number", "boolean"] }
+                "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
               },
               "additionalProperties": false
             }
@@ -996,9 +1024,15 @@
             "with": {
               "type": "object",
               "properties": {
-                "currency": { "type": "string", "minLength": 1 },
-                "file": { "$ref": "#/definitions/file_path" },
-                "output": { "type": "string", "minLength": 1 },
+                "currency": {
+                  "allOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/parameter-override" }]
+                },
+                "file": {
+                  "allOf": [{ "$ref": "#/definitions/file_path" }, { "$ref": "#/definitions/parameter-override" }]
+                },
+                "output": {
+                  "allOf": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/parameter-override" }]
+                },
                 "startOffsetWidth": { "type": "number" }
               },
               "additionalProperties": false
@@ -1023,7 +1057,13 @@
             "desc": { "type": "string", "maxLength": 1000 },
             "source": { "type": "string", "minLength": 1 },
             "package": { "type": "string", "minLength": 1 },
-            "with": { "type": "object" },
+            "with": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-zA-Z0-9_/./-]+$": { "$ref": "#/definitions/parameter-override" }
+              },
+              "additionalProperties": false
+            },
             "unless": { "$ref": "#/definitions/unless" },
             "parameters": { "$ref": "#/definitions/shape-parameter"}
           },

@@ -1,8 +1,5 @@
 #
-# OpenVMP, 2024
-#
-# Author: Roman Kuzmenko
-# Created: 2024-04-20
+# PartCAD, 2026
 #
 # Licensed under Apache License, Version 2.0.
 #
@@ -10,7 +7,7 @@
 import copy
 import typing
 
-from . import sketch_factory_alias as sfa
+from . import assembly_factory_alias as afa
 from . import logging as pc_logging
 from .enrich import (
     ENRICH_ONLY_PROPERTIES,
@@ -22,14 +19,20 @@ from . import telemetry
 
 
 @telemetry.instrument()
-class SketchFactoryEnrich(sfa.SketchFactoryAlias):
-    """An alias to a parameterized instance of the sketch it enriches.
+class AssemblyFactoryEnrich(afa.AssemblyFactoryAlias):
+    """An alias to a parameterized instance of the assembly it enriches.
 
-    See 'PartFactoryEnrich' for what that means and why it is the whole of what
-    an enrich has to do.
+    An assembly takes parameters like anything else - an ASSY file is a
+    template, and the values reach it as 'param_<name>' (see
+    'AssemblyFactoryAssy.read_assy') - so an assembly can be enriched like
+    anything else, and it means the same thing: the assembly of that package,
+    assembled with other values.
+
+    See 'PartFactoryEnrich' for why that is the whole of what an enrich has to
+    do, and for where each of the two objects involved ends up.
     """
 
-    source_sketch_name: str
+    source_assembly_name: str
     source_project_name: typing.Optional[str]
 
     def __init__(self, ctx, source_project, target_project, config):
@@ -43,27 +46,24 @@ class SketchFactoryEnrich(sfa.SketchFactoryAlias):
             config.pop("project", None)
             super().__init__(ctx, source_project, target_project, config)
 
-    async def instantiate(self, sketch):
-        with pc_logging.Action("Enrich", sketch.project_name, f"{sketch.name}:{self.source_sketch_name}"):
-            source = self.ctx._get_sketch(self.source)
+    def instantiate(self, assembly):
+        with pc_logging.Action("Enrich", assembly.project_name, f"{assembly.name}:{self.source_assembly_name}"):
+            source = self.ctx._get_assembly(self.source)
             if source is None:
-                raise Exception(f"Failed to find the sketch to enrich: {self.source}")
+                raise Exception(f"Failed to find the assembly to enrich: {self.source}")
 
             # The parameters this enrich resolved to are reported by it; what it
             # declares itself stays its own. See 'PartFactoryEnrich'.
-            # The *final* config of the source, so that an enrich pointing
-            # at an alias - or at a chain of them - reports what is at the end
-            # of it rather than the reference in the middle.
-            enrich_config = sketch.config
-            sketch.config = {
+            enrich_config = assembly.config
+            assembly.config = {
                 key: value for key, value in source.get_final_config().items() if key not in INSTANCE_APPLIED_PROPERTIES
             }
             for prop_to_copy in enrich_config:
                 if prop_to_copy in ENRICH_ONLY_PROPERTIES:
                     continue
-                sketch.config[prop_to_copy] = enrich_config[prop_to_copy]
-            sketch.config["source"] = self.source
-            sketch.config["orig_name"] = sketch.name
-            sketch.config["name"] = enrich_config["name"]
+                assembly.config[prop_to_copy] = enrich_config[prop_to_copy]
+            assembly.config["source"] = self.source
+            assembly.config["orig_name"] = assembly.name
+            assembly.config["name"] = enrich_config["name"]
 
-            return await super().instantiate(sketch)
+            super().instantiate(assembly)

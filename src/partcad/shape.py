@@ -170,6 +170,12 @@ class Shape(ShapeConfiguration):
         self.hash = CacheHash(f"{self.project_name}:{self.name}", cache=self.cacheable)
         self.hash.set_dependencies(self.cache_dependencies)
 
+        # Whether this shape's cache entry is this shape's to write. False for
+        # a reference that took its key from the object it points at without
+        # changing anything about it (see 'take_cache_key_from'): the two share
+        # one entry, and the object that owns it is the one that fills it.
+        self.owns_cache_entry = True
+
         if self.cacheable:
             cad_config = {}
             for key in ["parameters", "offset", "scale"]:
@@ -307,11 +313,56 @@ class Shape(ShapeConfiguration):
     def get_cache_key(self) -> Optional[str]:
         return asyncio.run(self.get_cache_key_async())
 
+    async def take_cache_key_from(self, source: "Shape") -> None:
+        """Key this shape on the shape it points at, plus what it adds to it.
+
+        A reference - an alias or an enrich - is not geometry of its own: what
+        it hands back is what the object it points at hands back, moved or
+        scaled if it says so. A key of its own would put that geometry in the
+        cache a second time, under a second key, for every copy of the
+        reference; the source's key stores it once.
+
+        A reference that adds nothing shares the source's entry outright -
+        including the key, so the two are the same entry and not two copies of
+        one - and leaves the writing to the source ('owns_cache_entry'). One
+        that moves or scales what it points at produces different geometry and
+        so keys differently: the source's key, plus what it adds, which is an
+        entry of its own to fill.
+
+        Called once the source is resolved and prepared, which is the first
+        moment there is a key to take, and still before anything asks this
+        shape for its own (see the alias factories' 'prepare_async').
+        """
+        source_key = await source.get_cache_key_async()
+        if source_key is None:
+            # Nothing to share: what this points at is not cached either.
+            self.cacheable = False
+            return
+
+        transform = {key: self.config[key] for key in ("offset", "scale") if key in self.config}
+        if not transform:
+            self.hash = source.hash
+            self.owns_cache_entry = False
+            return
+
+        # 'source.hash' carries everything the source is keyed on by now - the
+        # call above is what hashed the files it depends on - so continuing it
+        # is the source's key with this shape's own contribution after it.
+        self.hash = CacheHash(f"{self.project_name}:{self.name}", hasher=source.hash.hasher, cache=True)
+        self.hash.add_dict(transform)
+
     async def get_wrapped(self, ctx):
         with self.lock:
             async with self.get_async_lock():
                 if self._wrapped is not None:
                     return self._wrapped
+
+                # Before the cache key means anything: the files this shape is
+                # built from have to be on disk to be hashed, and a reference
+                # has to have resolved what it points at to have a key at all
+                # (see 'take_cache_key_from'). Costs one flag test once it has
+                # happened.
+                await self.prepare_async()
 
                 is_cacheable = self.get_cacheable() and ctx
                 if is_cacheable:
@@ -365,7 +416,7 @@ class Shape(ShapeConfiguration):
                 shape = shape_envelope.apply_metadata(shape, self.get_cache_metadata())
 
                 if cache_hash:
-                    if is_cacheable:
+                    if is_cacheable and self.owns_cache_entry:
                         to_cache = {self.kind: await self.get_cache_value(ctx, shape)}
                         if self.components and len(self.components) > 0:
                             to_cache["cmps"] = self.components

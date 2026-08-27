@@ -12,7 +12,7 @@ import typing
 
 from . import part_factory as pf
 from . import logging as pc_logging
-from .utils import get_child_project_path
+from .utils import format_parameterized_name, get_child_project_path
 from . import telemetry
 
 
@@ -30,6 +30,12 @@ class PartFactoryAlias(pf.PartFactory):
 
             self.part.get_final_config = self.get_final_config
             self.part.get_cacheable = self.get_cacheable
+
+            # A reference has no cache key of its own until it has taken the
+            # one of the object it points at (see 'prepare_async'), and is not
+            # cacheable before that: what it would hash until then is its own
+            # 'offset', which identifies nothing.
+            self.keyed = False
 
             if "source" in config:
                 self.source_part_name = config["source"]
@@ -55,6 +61,17 @@ class PartFactoryAlias(pf.PartFactory):
                     )
                 else:
                     self.source_project_name = source_project.name
+            # Parameters handed to an alias are passed on to what it points
+            # at. An alias declares no parameters of its own, so it has nothing
+            # to apply them to - it is a reference, and a reference to an object
+            # with other parameter values is a reference to another instance of
+            # it. This is what lets aliases and enriches be chained in any
+            # order: the parameters travel down the chain until they reach the
+            # object that declares them ('Project.get_object' puts them in
+            # 'with' when it parametrizes a reference).
+            if config.get("with"):
+                self.source_part_name = format_parameterized_name(self.source_part_name, config["with"])
+
             self.source = self.source_project_name + ":" + self.source_part_name
             config["source_resolved"] = self.source
 
@@ -79,6 +96,18 @@ class PartFactoryAlias(pf.PartFactory):
             raise Exception(f"The alias source {self.source} is not found")
         await source.prepare_async()
 
+        # What this object is, taken from what it points at: its key, and the
+        # properties that describe where the geometry came from. Here rather
+        # than in 'instantiate()' because a shape that comes out of the cache
+        # is never instantiated, and this is what tells it which entry that is.
+        await obj.take_cache_key_from(source)
+        self.keyed = True
+        if source.path:
+            obj.path = source.path
+        obj.cacheable = source.cacheable and obj.cacheable
+        obj.cache_dependencies = copy.copy(source.cache_dependencies)
+        obj.cache_dependencies_broken = source.cache_dependencies_broken
+
     async def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_part_name}"):
 
@@ -87,21 +116,23 @@ class PartFactoryAlias(pf.PartFactory):
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return None
 
-            # Clone the source object properties
-            if source.path:
-                obj.path = source.path
-            obj.cacheable = source.cacheable
-            obj.cache_dependencies = copy.copy(source.cache_dependencies)
-            obj.cache_dependencies_broken = source.cache_dependencies_broken
-
-            _wrapped = source._wrapped
-            if _wrapped:
-                obj._wrapped = _wrapped
-                return _wrapped
-
-            self.ctx.stats_parts_instantiated += 1
-
-            return await source.instantiate(obj)
+            # Ask the source object to materialize itself, rather than running
+            # its factory against this one. The source is a single object, and
+            # everything pointing at it - every alias, and so every enrich -
+            # has to get the geometry it has rather than build another copy of
+            # it. Running the factory here left the source's own '_wrapped'
+            # unset, so the next reference to it built it again, and it also
+            # skipped the source's cache entry, which is the only one there is:
+            # a reference is not cacheable in its own right.
+            #
+            # This object then wraps what came back in its own name and applies
+            # its own 'offset'/'scale' to it, which is what 'get_wrapped()'
+            # does with whatever a factory returns.
+            wrapped = await source.get_wrapped(self.ctx)
+            # The pieces a compound or an assembly reports separately from its
+            # own shape, which the source resolved along with it.
+            obj.components = copy.copy(source.components)
+            return wrapped
 
     def get_final_config(self):
         source = self.ctx._get_part(self.source)
@@ -110,6 +141,10 @@ class PartFactoryAlias(pf.PartFactory):
         return source.get_final_config()
 
     def get_cacheable(self) -> bool:
-        # This object is a wrapper around another one.
-        # The other one is the one which must be cached.
-        return False
+        # Cacheable once it knows which entry it shares: a reference keys on
+        # the object it points at, and has nothing to be looked up or stored
+        # under before it has resolved it (see 'prepare_async'). What it says
+        # about itself still applies - 'cache: false' on a reference is the
+        # user asking for this object not to be cached.
+        obj = self.part
+        return self.keyed and obj.cacheable and not obj.get_cache_dependencies_broken()

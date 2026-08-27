@@ -32,7 +32,7 @@ class AssemblyFactory(ShapeFactory):
         self.assembly._prepare = lambda shape_self: self.prepare_async(shape_self)
         self.assembly.info = lambda: self.info(self.assembly)
         self.assembly.with_ports = self.with_ports
-        self.project.assemblies[self.name] = self.assembly
+        self.project.register_object("assembly", self.name, self.assembly)
 
         self.apply_environment_cache_key(self.assembly)
         self.post_create()

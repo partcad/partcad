@@ -33,6 +33,37 @@ def get_child_project_path(parent_path, child_name):
     return result
 
 
+def parse_parameterized_name(name: str) -> tuple:
+    """Split '<name>;<param>=<value>,...' into the name and the parameters.
+
+    The one spelling PartCAD has for an instance of an object with particular
+    parameter values, and the one place that knows how to read it. The values
+    come back as the strings they were written as; what type each of them is
+    belongs to the parameter the object declares (see 'Project.get_object').
+    """
+    base, _, suffix = name.partition(";")
+    parameters = {}
+    for pair in suffix.split(",") if suffix else []:
+        parameter, _, value = pair.partition("=")
+        parameters[parameter] = value
+    return base, parameters
+
+
+def format_parameterized_name(base: str, parameters: dict) -> str:
+    """The name of the instance of 'base' with these parameter values.
+
+    Sorted, so that the same parameters always spell the same name and so ask
+    for the same instance. 'base' may already carry parameters of its own, and
+    the ones given here take precedence over those: they come from whoever is
+    referring to it, which is the outer of the two.
+    """
+    base, inherited = parse_parameterized_name(base)
+    inherited.update(parameters)
+    if not inherited:
+        return base
+    return base + ";" + ",".join("%s=%s" % (name, inherited[name]) for name in sorted(inherited))
+
+
 @telemetry.start_as_current_span("resolve_resource_path")
 def resolve_resource_path(current_project_name, pattern: str):
     if not ":" in pattern:

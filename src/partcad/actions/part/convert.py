@@ -96,9 +96,11 @@ def get_final_base_part_config(project: Project, part_config: dict, part_name: s
         project = base_project
         part_name = base_part_name
 
-        # Merge parameters from the source with the existing parameters
-        if params:
-            part_config["parameters"] = {**part_config.get("parameters", {}), **params}
+        # Parameters named in the source ('cube;width=20.0') are overridden
+        # values, the same thing 'with' states, and they go through the same
+        # channel: writing them into 'parameters' would put bare values where
+        # every reader expects a parameter's full declaration.
+        final_params.update(params)
 
     if final_params:
         part_config.setdefault("with", {}).update(final_params)

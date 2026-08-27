@@ -13,7 +13,7 @@ import typing
 from . import telemetry
 from . import assembly_factory as pf
 from . import logging as pc_logging
-from .utils import get_child_project_path
+from .utils import format_parameterized_name, get_child_project_path
 
 
 @telemetry.instrument()
@@ -28,7 +28,12 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             # Complement the config object here if necessary
             self._create(config)
 
+            self.assembly.get_final_config = self.get_final_config
             self.assembly.get_cacheable = self.get_cacheable
+
+            # A reference has no cache key of its own until it has taken the
+            # one of the object it points at (see 'prepare_async').
+            self.keyed = False
 
             if "source" in config:
                 self.source_assembly_name = config["source"]
@@ -54,6 +59,12 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
                     )
                 else:
                     self.source_project_name = self.project.name
+            # Parameters handed to an alias are passed on to what it points
+            # at: an alias declares none of its own to apply them to. See
+            # 'PartFactoryAlias' for what that makes possible.
+            if config.get("with"):
+                self.source_assembly_name = format_parameterized_name(self.source_assembly_name, config["with"])
+
             self.source = self.source_project_name + ":" + self.source_assembly_name
             config["source_resolved"] = self.source
 
@@ -78,6 +89,19 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             raise Exception(f"The alias source {self.source} is not found")
         await source.prepare_async()
 
+        # What this object is, taken from what it points at: its cache key, and
+        # the properties that say where the geometry came from. Here rather
+        # than in 'instantiate()' because an assembly that comes out of the
+        # cache is never assembled, and this is what tells it which entry that
+        # is.
+        await obj.take_cache_key_from(source)
+        self.keyed = True
+        if source.path:
+            obj.path = source.path
+        obj.cacheable = source.cacheable and obj.cacheable
+        obj.cache_dependencies = copy.copy(source.cache_dependencies)
+        obj.cache_dependencies_broken = source.cache_dependencies_broken
+
     def instantiate(self, obj):
         with pc_logging.Action("Alias", obj.project_name, f"{obj.name}:{self.source_assembly_name}"):
             source = self.ctx._get_assembly(self.source)
@@ -85,24 +109,28 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
                 pc_logging.error(f"The alias source {self.source} is not found")
                 return
 
-            # Clone the source object properties
-            if source.path:
-                obj.path = source.path
-            obj.cacheable = source.cacheable
-            obj.cache_dependencies = copy.copy(source.cache_dependencies)
-            obj.cache_dependencies_broken = source.cache_dependencies_broken
+            # Let the source assemble itself, and take the children it has.
+            # Assembling it against this object instead - which is what used to
+            # happen - read the same ASSY file and resolved the same tree once
+            # per reference, and left the source itself unassembled.
+            #
+            # The children are the pieces, not the geometry: this object still
+            # builds its own envelope out of them, in its own name and with its
+            # own placement, and each piece hands back the one shape it has
+            # (see 'Shape.get_wrapped').
+            if not source.children:
+                source.instantiate(source)
+            obj.children = source.children
 
-            children = source.children
-            if children:
-                obj.children = children
-                obj._wrapped = source._wrapped
-                return
-
-            self.ctx.stats_assemblies_instantiated += 1
-
-            source.instantiate(obj)
+    def get_final_config(self):
+        source = self.ctx._get_assembly(self.source)
+        if not source:
+            raise Exception(f"The alias source {self.source} is not found")
+        return source.get_final_config()
 
     def get_cacheable(self) -> bool:
-        # This object is a wrapper around another one.
-        # The other one is the one which must be cached.
-        return False
+        # Cacheable once it knows which entry it shares: a reference keys on
+        # the object it points at, and has nothing to be looked up or stored
+        # under before it has resolved it (see 'prepare_async').
+        obj = self.assembly
+        return self.keyed and obj.cacheable and not obj.get_cache_dependencies_broken()
