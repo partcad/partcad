@@ -38,6 +38,7 @@ from . import (
     sketch_config,
 )
 from . import sketch_factory_alias as sfa
+from . import tags as pc_tags
 from . import telemetry
 from .document_pdf import render_pdf_async
 from .exception import EmptyShapesError, NeedsUpdateException
@@ -74,6 +75,11 @@ OBJECT_KIND_SECTIONS = {
 # Such a part is only in 'Project.parts' once the assembly has been built, so
 # 'get_part' builds it on demand (see '_materialize_derived_part').
 PART_PRODUCING_ASSEMBLY_TYPES = ("step", "urdf")
+
+# What '_skipped_by' returns for a declaration whose 'unless' PartCAD could not
+# read. Not a clause - nothing excluded it - but the object is dropped all the
+# same, and recorded as broken so that the reason reaches the user.
+INVALID_UNLESS = "<invalid 'unless'>"
 
 
 @telemetry.instrument()
@@ -187,6 +193,39 @@ class Project(project_config.Configuration):
         # Protect the critical sections from access in different threads
         self.lock = threading.Lock()
 
+        # Objects this package declares but could not instantiate, as
+        # {kind: {name: reason}}. They are kept rather than dropped so that the
+        # package can say what is missing and why: an object that vanishes with
+        # nothing but a line in a log leaves the user staring at an empty
+        # package with no way to tell an empty one from a broken one.
+        self.broken_objects: dict[str, dict[str, str]] = {kind: {} for kind in OBJECT_KINDS}
+
+        # Objects this package declares but which do not apply here, as
+        # {kind: {name: clause}} - the 'unless' clause of theirs that excluded
+        # them, as text. Kept apart from 'broken_objects': nothing failed, and
+        # nothing is to be fixed. See 'partcad.tags'.
+        self.skipped_objects: dict[str, dict[str, str]] = {kind: {} for kind in OBJECT_KINDS}
+
+        # option: "unless"
+        # description: the conditions this package does not work under
+        # values: a tag, or a list whose entries are tags (any one excludes) and
+        #         lists of tags (all of which must hold together to exclude)
+        # default: none
+        #
+        # Decided here rather than in 'Configuration', which has no context and
+        # therefore no tags to decide against. A malformed 'unless' is reported
+        # and then ignored: raising would take the whole package - and every
+        # package underneath it - out of the tree over a typo, which is a far
+        # worse outcome than loading a package that meant to exclude itself.
+        try:
+            self.skipped_by = pc_tags.excluded_by(self.config_obj, ctx.tags, self.name)
+        except ValueError as e:
+            pc_logging.error(str(e))
+            self.skipped_by = None
+        self.skipped = self.skipped_by is not None
+        if self.skipped:
+            pc_logging.info("Skipping the package '%s': excluded by 'unless' (%s)" % (self.name, self.skipped_by))
+
         # self._object_configs[kind] holds the declared configuration of every
         # object of that kind. 'None' means "not enumerated yet": a local
         # package knows everything from its parsed 'partcad.yaml' and populates
@@ -196,13 +235,6 @@ class Project(project_config.Configuration):
         self._object_configs: dict[str, typing.Optional[dict]] = {
             kind: self._initial_object_configs(kind) for kind in OBJECT_KINDS
         }
-
-        # Objects this package declares but could not instantiate, as
-        # {kind: {name: reason}}. They are kept rather than dropped so that the
-        # package can say what is missing and why: an object that vanishes with
-        # nothing but a line in a log leaves the user staring at an empty
-        # package with no way to tell an empty one from a broken one.
-        self.broken_objects: dict[str, dict[str, str]] = {kind: {} for kind in OBJECT_KINDS}
 
         # The instantiated objects of each kind, filled lazily by the getters.
         self.interfaces = {}
@@ -244,7 +276,8 @@ class Project(project_config.Configuration):
         else:
             self.desc = ""
 
-        self._instantiate_objects()
+        if not self.skipped:
+            self._instantiate_objects()
 
     def _initial_object_configs(self, kind: str):
         """The configs of the given kind known at construction time.
@@ -253,8 +286,49 @@ class Project(project_config.Configuration):
         plugin-backed package overrides this to return None, deferring
         enumeration until the data is actually requested.
         """
+        if self.skipped:
+            # A skipped package declares nothing here. Emptying it at the source
+            # is what makes every consumer downstream - the listings, the
+            # counts, the getters - agree that there is nothing in it, without
+            # any of them having to know about tags.
+            return {}
         cfg = self.config_obj.get(OBJECT_KIND_SECTIONS[kind])
-        return {} if cfg is None else cfg
+        return {} if cfg is None else self._filter_skipped(kind, cfg)
+
+    def _skipped_by(self, kind: str, name: str, config) -> typing.Optional[str]:
+        """The 'unless' clause excluding this object here, remembering it, or None.
+
+        A malformed 'unless' is recorded as a broken object rather than raised:
+        the object is dropped either way, and going through 'broken_objects'
+        is what puts the reason in front of the user instead of in a traceback.
+        Returns a value in that case too, because the object must not be
+        instantiated from a declaration PartCAD could not read.
+        """
+        try:
+            clause = pc_tags.excluded_by(config, self.ctx.tags, "%s:%s" % (self.name, name))
+        except ValueError as e:
+            self.record_broken_object(kind, name, e)
+            return INVALID_UNLESS
+        if clause is None:
+            return None
+        self.skipped_objects.setdefault(kind, {})[name] = clause
+        pc_logging.info("Skipping the %s '%s:%s': excluded by 'unless' (%s)" % (kind, self.name, name, clause))
+        return clause
+
+    def _filter_skipped(self, kind: str, configs: dict) -> dict:
+        """'configs' without the objects that do not apply to this context."""
+        if not configs:
+            return configs
+        return {name: config for name, config in configs.items() if self._skipped_by(kind, name, config) is None}
+
+    def get_skipped_object_clause(self, kind: str, name: str) -> typing.Optional[str]:
+        """The 'unless' clause an object was excluded on, or None if it was not.
+
+        The clause as text ('arm64', or 'arm and useDocker'), which is what
+        every caller needs it for and what the user will recognize from their
+        own configuration.
+        """
+        return self.skipped_objects.get(kind, {}).get(name)
 
     def _instantiate_objects(self):
         """Instantiate the package's objects.
@@ -280,7 +354,7 @@ class Project(project_config.Configuration):
         """All declared configs of 'kind', enumerating on demand if needed."""
         configs = self._object_configs.get(kind)
         if configs is None:
-            configs = self._enumerate_object_configs(kind)
+            configs = {} if self.skipped else self._filter_skipped(kind, self._enumerate_object_configs(kind))
             self._object_configs[kind] = configs
         return configs
 
@@ -298,8 +372,13 @@ class Project(project_config.Configuration):
         # fetch. A plugin-backed package can serve objects beyond what it
         # enumerates - e.g. the first page of a large, paginated catalog - so
         # any addressable object remains reachable even when it was not listed.
-        one = self._fetch_object_config(kind, name)
+        one = None if self.skipped else self._fetch_object_config(kind, name)
         if one is not None:
+            # Filtered here as well as in the enumeration above: an object a
+            # plugin-backed package serves without listing reaches the caller
+            # through this path only, and 'unless' has to hold on both.
+            if self._skipped_by(kind, name, one) is not None:
+                return None
             return one
         if configs is None:
             return self.object_configs(kind).get(name)
@@ -386,6 +465,11 @@ class Project(project_config.Configuration):
         intentionally does not enumerate the package's objects.
         """
         info = {"Path": self.name}
+        if self.skipped:
+            # Stated here as well as in the log line at load: by the time
+            # somebody asks a package what it is, the line explaining why it is
+            # empty has long scrolled past.
+            info["Skipped"] = "excluded by 'unless' (%s)" % self.skipped_by
         if "url" in self.config_obj and self.config_obj["url"] is not None:
             info["Url"] = self.config_obj["url"]
         if "importUrl" in self.config_obj and self.config_obj["importUrl"] is not None:
@@ -445,6 +529,11 @@ class Project(project_config.Configuration):
         if self.broken:
             pc_logging.info("Ignoring the broken package: %s" % self.name)
             return
+
+        # Skipping a package skips what it brings in, subfolders and declared
+        # dependencies alike. It already said so once, when it was loaded.
+        if self.skipped:
+            return []
 
         children = list()
         if os.path.isdir(self.config_dir):
@@ -950,7 +1039,23 @@ class Project(project_config.Configuration):
                 # object it did not enumerate (a targeted single fetch).
                 config = get_config(object_name)
                 if config is None:
-                    # We don't know anything about such an object
+                    # We don't know anything about such an object - unless it
+                    # is one this context excluded, which is not an error and
+                    # must not read like one: the package declares it, PartCAD
+                    # left it out on purpose, and saying which tag did that is
+                    # the difference between a user fixing a typo they do not
+                    # have and a user reading the one line that explains it.
+                    clause = self.get_skipped_object_clause(factory_name, object_name)
+                    if clause is not None:
+                        if not quiet:
+                            pc_logging.info(
+                                "The %s '%s:%s' is excluded by 'unless' (%s)",
+                                factory_name,
+                                self.name,
+                                object_name,
+                                clause,
+                            )
+                        return None
                     if not quiet:
                         pc_logging.error(
                             "Object '%s' not found in '%s'",
@@ -985,6 +1090,20 @@ class Project(project_config.Configuration):
             # a plugin-backed package enumerates lazily and may not have
             # instantiated the base yet.
             if base_object_name not in object_configs:
+                # The same distinction the unparametrized branch above makes:
+                # a base this context excluded is not a base that is missing,
+                # and 'gone;width=5' has to read the same way as 'gone'.
+                clause = self.get_skipped_object_clause(factory_name, base_object_name)
+                if clause is not None:
+                    if not quiet:
+                        pc_logging.info(
+                            "The %s '%s:%s' is excluded by 'unless' (%s)",
+                            factory_name,
+                            self.name,
+                            base_object_name,
+                            clause,
+                        )
+                    return None
                 pc_logging.error(
                     "Base object '%s' not found in '%s'",
                     base_object_name,
@@ -1383,6 +1502,13 @@ class Project(project_config.Configuration):
         ignore_manufacturability: bool = False,
     ):
         with pc_logging.Action("RenderPkg", self.name):
+            # A skipped package has nothing to render, and must not be asked to:
+            # its declarations are still in 'config_obj' (nothing rewrites the
+            # file), so enumerating them would resolve every one of them to None
+            # and fail the whole render with an 'EmptyShapesError'.
+            if self.skipped:
+                return
+
             options_project = self.ctx.get_project(options_package) if options_package else None
             if options_package and options_project is None:
                 pc_logging.error("The options package is not found: %s" % options_package)
@@ -1477,15 +1603,24 @@ class Project(project_config.Configuration):
         return names
 
     def _enumerate_shapes(self, sketches, interfaces, parts, assemblies):
-        def get_keys(name):
+        def get_keys(section, kind):
             # A section that is present but empty (e.g. `sketches:` with no
             # entries, as `pc init` writes it) parses as None; treat it as {}.
-            return list((self.config_obj.get(name) or {}).keys()) if name in self.config_obj else []
+            if section not in self.config_obj:
+                return []
+            names = list((self.config_obj.get(section) or {}).keys())
+            # Read from 'config_obj' rather than through 'object_configs()' so
+            # that a plugin-backed package - which declares none of this on disk
+            # - keeps rendering nothing, as it always has. But an object this
+            # context excluded is not one to render: it was never instantiated,
+            # so it would come back None and fail the whole package's render
+            # with an 'EmptyShapesError'.
+            return [name for name in names if self.get_skipped_object_clause(kind, name) is None]
 
-        sketches = sketches or get_keys("sketches")
-        # interfaces = sketches or get_keys("interfaces")
-        parts = parts or get_keys("parts")
-        assemblies = assemblies or get_keys("assemblies")
+        sketches = sketches or get_keys("sketches", "sketch")
+        # interfaces = sketches or get_keys("interfaces", "interface")
+        parts = parts or get_keys("parts", "part")
+        assemblies = assemblies or get_keys("assemblies", "assembly")
 
         shapes = []
         for name in sketches:

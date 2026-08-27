@@ -5,7 +5,7 @@
 # Licensed under Apache License, Version 2.0.
 #
 
-__version__: str = "0.8.2"
+__version__: str = "0.8.5"
 
 # Must come before anything that spawns a process: everything PartCAD executes
 # in a Python sandbox inherits this environment, so this is where the sandbox
@@ -67,7 +67,7 @@ from . import telemetry
 
 telemetry.init(__version__)
 
-from . import actions, exception, healthcheck, logging, utils
+from . import actions, exception, healthcheck, logging, tags, utils
 from .assembly import Assembly
 from .assembly_connect import ConnectHold, ConnectHow
 from .consts import *
@@ -150,6 +150,7 @@ __all__ = [
     "logging",
     "part",
     "shape",
+    "tags",
     "scene",
     "telemetry",
     "user_config",

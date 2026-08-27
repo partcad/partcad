@@ -20,6 +20,39 @@ parts:
     type: kicad
 ```
 
+## Platforms
+
+The sandbox is **linux/amd64 only**, and so is everything PartCAD builds it out
+of:
+
+* `kicad/kicad`, the base image, is published for `linux/amd64` alone -- the
+  `9.0` manifest list holds that one platform, and `8.0` (what this Dockerfile
+  pins) is a single-architecture manifest;
+* this Dockerfile then installs the `x86_64` Miniforge build by name.
+
+There is therefore no image to pull on an Arm host, and nothing to run if there
+were. It is also why `ghcr.io/partcad/partcad-container-kicad` is built by one
+`amd64` CI job rather than as a multi-platform image.
+
+KiCad itself is another matter: it ships Arm builds for macOS and Linux
+distributions package it for arm64, so a user who has `kicad-cli` installed can
+run it directly with `useDockerKicad: false` (or the `useDocker` master switch
+over it) and build a `kicad` part on Arm perfectly well.
+
+The KiCad example says exactly that, in the two things the context knows about
+-- what the machine is, and how PartCAD is configured to work (see "Tags" in the
+configuration documentation):
+
+```yaml
+unless: [[arm, useDocker, useDockerKicad]]
+```
+
+All three have to hold together: an Arm machine, *and* Docker in use, *and*
+Docker in use for KiCad. Where they do, the container is what would be reached
+for and there is none to reach for, so the package is skipped with a line saying
+so instead of failing at use. Where the container has been turned off, nothing
+is excluded and the native `kicad-cli` is used as it is anywhere else.
+
 ## Current Status
 
 The manufacturability of the PCBs is only implemented through the providers of type `store`. This means that the vendor

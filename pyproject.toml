@@ -32,7 +32,7 @@
 
 [project]
 name = "partcad"
-version = "0.8.2"
+version = "0.8.5"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
@@ -303,10 +303,7 @@ jinja2 = "^3.1.6"
 requests = "^2.34.2"
 aiofiles = "^25.1.0"
 aiohttp = "^3.14.2"
-google-genai = "^2.13.0"
 pillow = "^12.2.0"
-openai = "^2.46.0"
-ollama = "^0.6.2"
 async-lru = "^2.3.0"
 docker = "^7.2.0"
 psutil = "^7.2.2"

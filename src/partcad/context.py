@@ -23,6 +23,7 @@ from . import output
 from . import runtime_javascript_all
 from . import runtime_python_all
 from . import sandbox_versions
+from . import tags as pc_tags
 from . import project_factory_local as rfl
 from . import project_factory_git as rfg
 from . import project_factory_tar as rft
@@ -93,6 +94,12 @@ class Context:
     current_project_path: str
 
     mates: dict[str, dict[str, Mating]]
+
+    # The tags true of this context: what this machine is (architecture,
+    # operating system, that system's version) plus whatever the user
+    # configuration adds. A package or an object may name the tags it does not
+    # work under ('unless'), and is skipped where one of them is in here.
+    tags: set[str]
 
     class PackageLock(object):
         def __init__(self, ctx, package_name: str):
@@ -175,6 +182,11 @@ class Context:
         self.project_locks_lock = threading.Lock()
         self._projects_being_loaded = {}
         self.user_config = user_config
+
+        # Computed once, here, rather than per package: every 'unless' in the
+        # whole package graph is answered against the same set, and the answer
+        # cannot change while the context lives.
+        self.tags = pc_tags.context_tags(user_config)
 
         self.cache_shapes = ShapeCache(user_config=self.user_config)
         self.cache_tests = Cache("tests", user_config=self.user_config)
@@ -462,6 +474,13 @@ class Context:
             # Found what we are looking for
             return project
 
+        # A skipped package is still addressable - it resolves, empty, above -
+        # but nothing below it is. Skipping a package means skipping what it
+        # brings in, and a child reached through it would otherwise load as if
+        # its parent had never opted out.
+        if project.skipped:
+            return None
+
         # next_import is the next of the import we need to load now
         next_import = import_list[0]
         # import_list is reduced to contain only the items that will remain to
@@ -562,6 +581,14 @@ class Context:
         # bridge to async themselves.
         await project.ensure_enumerated_async()
 
+        # Nothing under a skipped package is imported either. The package itself
+        # already said why, once, when it was loaded. Checked after the
+        # enumeration above rather than before it, because that is where a
+        # plugin-backed package's 'unless' arrives from: its configuration comes
+        # over the wire, not from a file the constructor could read.
+        if project.skipped:
+            return []
+
         # First, iterate all explicitly mentioned "dependencies"s.
         # Do it before iterating subdirectories, as it may kick off a long
         # background task. 'dependencies()' is an accessor so that a plugin
@@ -640,6 +667,12 @@ class Context:
         projects = self.projects.values()
         if parent_name is not None:
             projects = filter(lambda x: x.name.startswith(parent_name), projects)
+
+        # Unconditionally, not only under 'has_stuff': a skipped package holds
+        # no objects, so the filter below would drop it anyway, but a caller
+        # that asks for the empty ones too (the interface listing does) is
+        # asking for packages it can look inside - which this one is not.
+        projects = filter(lambda x: not x.skipped, projects)
 
         if has_stuff:
             # Filter out projects that don't contain anything the user might be interested in.

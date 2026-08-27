@@ -15,6 +15,7 @@ from .cache_hash import CacheHash
 from .project_plugin import ProjectPlugin
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
+from . import tags as pc_tags
 
 # Distinguishes "no cached value" from a cached value of None.
 _MISSING = object()
@@ -326,6 +327,21 @@ class ProjectExternalRepository(ProjectPlugin):
             self.desc = meta["desc"].strip()
         if "manufacturable" in meta:
             self.is_manufacturable = bool(meta["manufacturable"])
+        if pc_tags.UNLESS_KEY in meta:
+            # Re-derived here for the same reason as the two above: the
+            # constructor read a 'config_obj' the repository had not filled yet,
+            # so a package that excludes itself only says so once this returns.
+            # Nothing has been enumerated by then - object access is lazy for a
+            # plugin package - so emptying it now is as good as never filling it.
+            try:
+                self.skipped_by = pc_tags.excluded_by(self.config_obj, self.ctx.tags, self.name)
+            except ValueError as e:
+                pc_logging.error(str(e))
+                self.skipped_by = None
+            self.skipped = self.skipped_by is not None
+            if self.skipped:
+                pc_logging.info("Skipping the package '%s': excluded by 'unless' (%s)" % (self.name, self.skipped_by))
+                self._object_configs = {kind: {} for kind in self._object_configs}
 
     # --- Object-access hooks (see Project) sourced from the repository ---
 

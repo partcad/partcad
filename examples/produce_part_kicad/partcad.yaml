@@ -1,6 +1,15 @@
 desc: Example of KiCad integration using Arduino Nano from KiCad Templates
 url: https://gitlab.com/kicad/libraries/kicad-templates/-/tree/master/Projects/Arduino_Nano
 
+# KiCad's official container images are published for 'linux/amd64' only, so on
+# an Arm host there is no image to pull for the sandbox 'kicad-cli' runs in.
+# That is a statement about the container, not about KiCad: KiCad itself ships
+# Arm builds, and somebody who turned the container off ('useDockerKicad', or
+# the 'useDocker' master switch over it) and has 'kicad-cli' installed natively
+# can build this package on Arm perfectly well. Hence the clause rather than a
+# bare 'arm': all three have to hold together for the part to be unbuildable.
+unless: [[arm, useDocker, useDockerKicad]]
+
 parts:
   Arduino_Nano:
    type: kicad

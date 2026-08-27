@@ -215,7 +215,7 @@ jobs:
         with:
           name: partcad-standalone-${{ matrix.platform }}
           path: |
-            dist/standalone/*.tar.gz
+            dist/standalone/*.tar.xz
             dist/standalone/*.zip
             dist/standalone/*.sha256
           if-no-files-found: error
@@ -376,7 +376,7 @@ jobs:
       - name: Unpack the bundle
         run: |
           mkdir -p dist/standalone
-          tar -xzf archives/partcad-*-${{ matrix.bundle }}.tar.gz -C dist/standalone
+          tar -xf archives/partcad-*-${{ matrix.bundle }}.tar.xz -C dist/standalone
           test -x dist/standalone/partcad/pc
 
       - name: Install snapcraft

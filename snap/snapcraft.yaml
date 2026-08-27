@@ -103,9 +103,9 @@ parts:
   partcad:
     plugin: dump
     # The bundle `dev-tools/pyinstaller/build.sh` produces. It is not built
-    # here: freezing needs Python 3.14 and ~875MB of CAD dependencies, neither
-    # of which belongs in a snapcraft build environment, and building it twice
-    # would mean two answers to "what did we ship". `dev-tools/snap/build.sh`
+    # here: freezing needs Python 3.14 and the whole PartCAD dependency set,
+    # neither of which belongs in a snapcraft build environment, and building it
+    # twice would mean two answers to "what did we ship". `dev-tools/snap/build.sh`
     # makes sure it exists before calling snapcraft.
     source: dist/standalone/partcad
     source-type: local

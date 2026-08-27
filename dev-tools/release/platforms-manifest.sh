@@ -92,12 +92,16 @@ scan() {
   scan_kind="$1"
   scan_dir="$2"
   scan_prefix="$3"
-  find "${scan_dir}" -type f \( -name "${scan_prefix}-*.tar.gz" -o -name "${scan_prefix}-*.zip" \) |
+  # The command line bundle is packed with xz and the IDE with gzip, so both
+  # tar flavours are scanned here rather than one being assumed.
+  find "${scan_dir}" -type f \( -name "${scan_prefix}-*.tar.xz" -o -name "${scan_prefix}-*.tar.gz" \
+    -o -name "${scan_prefix}-*.zip" \) |
     while IFS= read -r scan_path; do
       scan_name="${scan_path##*/}"
+      scan_name="${scan_name%.tar.xz}"
       scan_name="${scan_name%.tar.gz}"
       scan_name="${scan_name%.zip}"
-      scan_rest="${scan_name#${scan_prefix}-}"
+      scan_rest="${scan_name#"${scan_prefix}"-}"
       # "<version>-<platform-id>". A version carries no dash of its own.
       scan_version="${scan_rest%%-*}"
       scan_id="${scan_rest#*-}"
