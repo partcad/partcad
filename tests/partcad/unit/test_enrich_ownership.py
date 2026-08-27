@@ -903,6 +903,57 @@ async def _gather(*coroutines):
     return await asyncio.gather(*coroutines)
 
 
+def test_an_assembly_can_be_assembled_again_under_a_second_loop(tmp_path):
+    """The task lock is keyed on the loop, so a second 'asyncio.run()' can take it.
+
+    A worker thread runs one loop per instantiation, and an 'asyncio.Lock' binds
+    to the loop the first time somebody waits on it - after which awaiting it
+    under another loop raises. So a lock cached against the assembly alone would
+    serve the first loop and refuse the second, which is an assembly asked for
+    twice on one worker thread.
+    """
+
+    class SlowAssemblyFactory(assembly_factory.AssemblyFactory):
+        def __init__(self, ctx, source_project, target_project, config):
+            super().__init__(ctx, source_project, target_project, config)
+            self._create(config)
+
+        def instantiate(self, assembly):
+            time.sleep(0.3)
+            assembly.children.append(object())
+
+    factory.register("assembly", "test-slow-loop", SlowAssemblyFactory)
+    write_package(tmp_path, "", {"name": "//test", "assemblies": {"rig": {"type": "test-slow-loop"}}})
+    ctx = pc.Context(str(tmp_path))
+    rig = ctx.get_project("//test").assemblies["rig"]
+
+    def assemble_contended():
+        # Contended on purpose: an uncontended 'asyncio.Lock' never looks the
+        # loop up, so only a second task waiting on it binds it to this loop.
+        started = asyncio.Event()
+
+        async def first():
+            started.set()
+            await rig.do_instantiate()
+
+        async def second():
+            await started.wait()
+            await rig.do_instantiate()
+
+        asyncio.run(asyncio.wait_for(_gather(first(), second()), timeout=20))
+
+    try:
+        assemble_contended()
+        assert len(rig.children) == 1
+        # Asked for again, on this same thread, under a loop of its own.
+        rig.children = []
+        assemble_contended()
+    finally:
+        del factory.all["assembly"]["test-slow-loop"]
+
+    assert len(rig.children) == 1
+
+
 def test_two_threads_materializing_one_part_get_one_part(one_part):
     """The same, when the two passes overlap rather than follow one another.
 
@@ -1025,6 +1076,75 @@ def test_materializing_a_part_does_not_deadlock_against_a_lookup(tmp_path):
     # The materializing thread got its part; the lookup may hand back either
     # that part or None, depending on which side of the registration it landed.
     assert done[0] is not None or done[1] is not None
+
+
+def test_two_threads_asking_for_one_instance_do_not_deadlock(tmp_path):
+    """Asking for an object releases the package lock before taking the object's.
+
+    An instance is created on demand - it is what an enrich resolves to, and
+    nothing declares it - and creating it registers it, which takes the package
+    lock ('register_object'). A thread that held the package lock while waiting
+    for the instance's own lock would be holding the half the creating thread
+    still needs, and the two would wait on each other. Two threads asking one
+    package for the same instance is all it takes, which is two enriches with
+    the same 'with:' resolving at once.
+    """
+    inside = threading.Event()
+
+    class SlowPartFactory(part_factory.PartFactory):
+        def __init__(self, ctx, source_project, target_project, config):
+            super().__init__(ctx, source_project, target_project, config)
+            if ";" in config["name"]:
+                inside.set()
+                # Wide enough for the other thread to reach the instance's lock
+                # while this one is still short of registering.
+                time.sleep(0.3)
+            self._create(config)
+
+        async def instantiate(self, part):
+            return None
+
+    factory.register("part", "test-slow", SlowPartFactory)
+    write_package(
+        tmp_path,
+        "",
+        {
+            "name": "//test",
+            "parts": {"widget": {"type": "test-slow", "parameters": {"width": {"type": "float", "default": 3.0}}}},
+        },
+    )
+    project = pc.Context(str(tmp_path)).get_project("//test")
+    found, failures = [], []
+
+    def ask(wait_first):
+        try:
+            if wait_first:
+                inside.wait(5)
+            found.append(project.get_part("widget;width=5.0"))
+        except Exception as e:  # pylint: disable=broad-except
+            failures.append(e)
+
+    try:
+        # Daemons, so that a regression fails this assertion rather than hanging
+        # the run at interpreter exit on two blocked threads.
+        threads = [
+            threading.Thread(target=ask, args=(False,), daemon=True),
+            threading.Thread(target=ask, args=(True,), daemon=True),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(20)
+        assert not any(thread.is_alive() for thread in threads), "two lookups of one instance deadlocked"
+    finally:
+        del factory.all["part"]["test-slow"]
+
+    assert failures == []
+    # One instance, handed to both: the second look under the instance's own
+    # lock is what keeps the loser from building a second one.
+    assert len(found) == 2
+    assert found[0] is not None
+    assert found[0] is found[1]
 
 
 def test_an_alias_that_collides_costs_the_alias_and_nothing_else(tmp_path):

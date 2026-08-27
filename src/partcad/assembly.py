@@ -78,16 +78,19 @@ class Assembly(Shape):
 
         Not 'get_async_lock()': 'Shape.get_wrapped()' holds that one on its way
         to 'get_shape()' and so to here, and an 'asyncio.Lock' is not
-        re-entrant. Thread-local for the same reason that one is - a lock is
-        awaited by the loop of the thread that took it, and each thread runs
-        its own.
+        re-entrant. Thread-local, and keyed on the loop as well, exactly as
+        that one is and for its reason: a worker thread runs one 'asyncio.run()'
+        per instantiation, so a thread handed a second one gets a second loop,
+        and an 'asyncio.Lock' awaited under the first refuses to be awaited
+        under the second.
         """
         if not hasattr(self.tls, "async_instantiate_locks"):
             self.tls.async_instantiate_locks = {}
         self_id = id(self)
-        if self_id not in self.tls.async_instantiate_locks:
-            self.tls.async_instantiate_locks[self_id] = asyncio.Lock()
-        return self.tls.async_instantiate_locks[self_id]
+        loop_id = id(asyncio.get_event_loop())
+        if self_id not in self.tls.async_instantiate_locks or self.tls.async_instantiate_locks[self_id][1] != loop_id:
+            self.tls.async_instantiate_locks[self_id] = (asyncio.Lock(), loop_id)
+        return self.tls.async_instantiate_locks[self_id][0]
 
     async def do_instantiate(self):
         # Both locks, the way 'Shape.get_wrapped()' takes them, and for the same

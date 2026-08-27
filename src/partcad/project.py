@@ -615,18 +615,15 @@ class Project(project_config.Configuration):
         self.register_object("interface", interface_name, interface.Interface(interface_name, source_project, config))
 
     def get_interface(self, interface_name) -> interface.Interface:
-        self.lock.acquire()
-
-        # See if it's already available
-        if interface_name in self.interfaces and not self.interfaces[interface_name] is None:
-            p = self.interfaces[interface_name]
-            self.lock.release()
-            return p
+        # Released before the interface's own lock is taken, for the reason
+        # 'get_object' gives: 'init_interface_by_config' registers, and
+        # 'register_object' takes this lock.
+        with self.lock:
+            existing = self.interfaces.get(interface_name)
+        if existing is not None:
+            return existing
 
         with Project.InterfaceLock(self, interface_name):
-            # Release the project lock, and continue with holding the interface lock only
-            self.lock.release()
-
             # The same second look 'get_object' takes, for the same reason: the
             # interface may have been created while this thread waited for the
             # lock, and creating another would collide with it.
@@ -1123,18 +1120,24 @@ class Project(project_config.Configuration):
             # Determine the name we want this parameterized object to have
             result_name = format_parameterized_name(base_object_name, params)
 
-        self.lock.acquire()
-
-        # See if it's already available
-        if result_name in objects and not objects[result_name] is None:
-            p = objects[result_name]
-            self.lock.release()
-            return p
+        # The package lock is released before the object's own lock is taken,
+        # never held across it. Creating an object registers it, and
+        # 'register_object' takes the package lock while this holds the
+        # object's - so a thread waiting for the object lock with the package
+        # lock still in hand would be holding the very thing the creating
+        # thread needs to finish, and the two would wait on each other. Two
+        # threads asking one package for the same instance is enough, which is
+        # two enriches with the same 'with:' resolving at once.
+        #
+        # Releasing it costs nothing: what it guards here is a lookup, and the
+        # look below - under the object lock, where creation happens - is the
+        # one that decides.
+        with self.lock:
+            existing = objects.get(result_name)
+        if existing is not None:
+            return existing
 
         with lock_class(self, result_name):
-            # Release the project lock, and continue with holding the part lock only
-            self.lock.release()
-
             # Look again now that the object lock is held: another thread may
             # have created this object between the check above and this lock,
             # and creating a second one would land on a name that is now taken
