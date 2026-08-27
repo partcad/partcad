@@ -910,6 +910,78 @@ def test_two_threads_materializing_one_part_get_one_part(one_part):
     assert parts[1] is parts[0]
 
 
+def test_materializing_a_part_does_not_deadlock_against_a_lookup(tmp_path):
+    """Materializing a derived part takes one lock, so it cannot invert an order.
+
+    'get_object' holds the package lock while it takes the part's own lock.
+    Anything that held the part lock while registering - 'register_object' takes
+    the package lock - would be the opposite order on the same two locks, and
+    two threads resolving parts of one package at once would hang. So the
+    collision is caught rather than prevented, and this holds the two paths
+    against each other to say so.
+    """
+    inside = threading.Event()
+
+    class SlowPartFactory(part_factory.PartFactory):
+        def __init__(self, ctx, source_project, target_project, config):
+            super().__init__(ctx, source_project, target_project, config)
+            inside.set()
+            time.sleep(0.3)
+            self._create(config)
+
+        async def instantiate(self, part):
+            return None
+
+    factory.register("part", "test-slow", SlowPartFactory)
+    write_package(
+        tmp_path,
+        "",
+        {"name": "//test", "parts": {"widget": {"type": "test-null"}}},
+    )
+    project = pc.Context(str(tmp_path)).get_project("//test")
+    config = {"type": "test-slow", "name": "robot/forearm", "orig_name": "robot/forearm"}
+    done, failures = [], []
+
+    def materialize():
+        try:
+            done.append(project.materialize_part_by_config(dict(config)))
+        except Exception as e:  # pylint: disable=broad-except
+            failures.append(e)
+
+    def look_up():
+        # The same name, which is what makes the two orders meet: while the
+        # other thread is inside the factory, 'get_object' takes the package
+        # lock and then this part's lock, and holds the package lock until it
+        # has it. The package does not declare the name, so this hands back
+        # None - reaching the lock is the whole of what it is here to do.
+        inside.wait(5)
+        try:
+            done.append(project.get_part("robot/forearm", quiet=True))
+        except Exception as e:  # pylint: disable=broad-except
+            failures.append(e)
+
+    try:
+        # Daemons, so that a regression fails this assertion rather than hanging
+        # the whole run at interpreter exit waiting for two blocked threads.
+        threads = [
+            threading.Thread(target=materialize, daemon=True),
+            threading.Thread(target=look_up, daemon=True),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            # Generous, but finite: a deadlock here is the defect under test.
+            thread.join(20)
+        assert not any(thread.is_alive() for thread in threads), "materializing a part deadlocked against a lookup"
+    finally:
+        del factory.all["part"]["test-slow"]
+
+    assert failures == []
+    # The materializing thread got its part; the lookup may hand back either
+    # that part or None, depending on which side of the registration it landed.
+    assert done[0] is not None or done[1] is not None
+
+
 def test_an_alias_that_collides_costs_the_alias_and_nothing_else(tmp_path):
     """An 'aliases:' entry naming a part the package also declares in its own right.
 

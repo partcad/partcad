@@ -890,21 +890,29 @@ class Project(project_config.Configuration):
         The two passes also overlap: 'Assembly.do_instantiate' decides whether
         to assemble by reading 'children' without a lock, so a thread rendering
         the assembly and a thread resolving one of its parts by name can both
-        be walking the same links. Hence the second look under the part's own
-        lock, the way 'get_object' does it - otherwise whichever thread got
-        there second creates a part under a name the first has just taken, and
-        'register_object' refuses it.
+        be walking the same links. Whichever gets here second then creates a
+        part under a name the first has just taken, and 'register_object'
+        refuses it - so that refusal is caught and the part already registered
+        is handed back. The loser's own part is inert: 'register_object' is what
+        raised, and '_create()' does nothing else with it afterwards.
+
+        Caught rather than prevented with the part's own lock, which is what
+        this used to do. 'get_object' holds the package lock while it takes the
+        part lock, and 'register_object' below takes the package lock while
+        this holds the part lock - opposite orders on the same two locks, which
+        is a deadlock as soon as two threads resolve parts of one package at
+        once. There is only one lock in this now, and it is 'register_object's,
+        whose test-and-set under it is what makes this safe at all.
         """
         name = config["name"]
         existing = self.parts.get(name)
         if existing is not None:
             return existing
-        with Project.PartLock(self, name):
-            existing = self.parts.get(name)
-            if existing is not None:
-                return existing
+        try:
             self.init_part_by_config(config)
-            return self.parts.get(name)
+        except ObjectNameTakenError:
+            pass
+        return self.parts.get(name)
 
     def init_object_by_config(self, factory_name: str, config_class, alias_class, config, source_project=None):
         if source_project is None:
