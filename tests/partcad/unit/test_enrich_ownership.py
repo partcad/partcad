@@ -699,6 +699,25 @@ def test_registering_the_same_object_again_is_not_a_collision(one_part):
     assert one_part.parts["widget"] is widget
 
 
+def test_a_part_an_assembly_materializes_is_handed_back_the_second_time(one_part):
+    """A URDF's links and a STEP assembly's components are not declarations.
+
+    Nothing in 'partcad.yaml' says they exist - the assembly's own source file
+    does - so they are registered as it is built, and an assembly is built more
+    than once: asking for one of its parts by name builds it, and so does
+    rendering it. The later pass finds what the first one registered, which is
+    the same part again and not a second claim on the name.
+    """
+    config = {"type": "test-null", "name": "robot/forearm", "orig_name": "robot/forearm"}
+
+    first = one_part.materialize_part_by_config(config)
+    second = one_part.materialize_part_by_config(config)
+
+    assert first is not None
+    assert second is first
+    assert one_part.get_broken_object_reason("part", "robot/forearm") is None
+
+
 def test_an_alias_that_collides_costs_the_alias_and_nothing_else(tmp_path):
     """An 'aliases:' entry naming a part the package also declares in its own right.
 

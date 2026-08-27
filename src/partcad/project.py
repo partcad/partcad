@@ -871,6 +871,27 @@ class Project(project_config.Configuration):
     def init_repository_by_config(self, config, source_project=None):
         self.init_object_by_config("repository", plugin_config.PluginConfiguration, None, config, source_project)
 
+    def materialize_part_by_config(self, config) -> Optional[Part]:
+        """The part an assembly materializes, created on first use.
+
+        A STEP assembly's components and a URDF's links are parts of this
+        package that nothing declares: the assembly's own source file is what
+        says they exist, so they are registered as it is built (see the
+        'part_for()' of those two factories).
+
+        An assembly is built more than once - asking for one of these parts by
+        name builds the assembly that produces it ('_materialize_derived_part'),
+        and so does rendering it - and the later pass finds the parts the first
+        one registered. That is the same part being materialized again rather
+        than two declarations claiming one name, so it is handed back rather
+        than refused ('register_object').
+        """
+        existing = self.parts.get(config["name"])
+        if existing is not None:
+            return existing
+        self.init_part_by_config(config)
+        return self.parts.get(config["name"])
+
     def init_object_by_config(self, factory_name: str, config_class, alias_class, config, source_project=None):
         if source_project is None:
             source_project = self
