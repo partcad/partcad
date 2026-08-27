@@ -32,7 +32,7 @@
 
 [project]
 name = "partcad"
-version = "0.8.5"
+version = "0.8.8"
 description = "Package manager for CAD models and a modelling framework"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "sdf", "cad", "design", "openscad", "step", "stl"]
@@ -187,6 +187,25 @@ strictListInference = true  # Use union types when inferring types of lists elem
 [tool.ruff.lint]
 ignore = ["F401", "F403", "F405"]
 
+# `poetry install` installs the root project editable, and it resolves what to
+# put on `sys.path` with poetry-core, not with the `[tool.setuptools]` config
+# above. Left to auto-detection it would look for a single package named after
+# the project -- and it looks in the project root *before* `src/`, so a stray
+# `./partcad/` directory left over from the pre-monorepo layout (git leaves the
+# directory behind when the only files still in it are ignored ones like
+# `__pycache__/`) makes `poetry install` fail with "partcad is not a package."
+# and install nothing. Naming the six explicitly says the same thing
+# `[tool.setuptools.packages.find]` does, and cannot be shadowed.
+[tool.poetry]
+packages = [
+    { include = "partcad", from = "src" },
+    { include = "partcad_cli", from = "src" },
+    { include = "partcad_client", from = "src" },
+    { include = "partcad_ide_client", from = "src" },
+    { include = "partcad_service_json_rpc", from = "src" },
+    { include = "partcad_utils", from = "src" },
+]
+
 #
 # The development environment. Poetry 2 reads the `[project]` metadata above for
 # the package itself and these groups for everything around it. There is no
@@ -330,4 +349,3 @@ rich-click = "^1.9.8"
 
 [tool.poetry.group.performance.dependencies]
 snakeviz = "^2.2.2"
-

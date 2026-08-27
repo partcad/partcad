@@ -16,13 +16,17 @@ import platform
 import signal
 import subprocess
 import sys
-import threading
-from filelock import FileLock
 
+from . import sandbox_lock
 from . import sandbox_versions
 from . import runtime
 from . import logging as pc_logging
+from .process_output import decode as decode_output
 from . import telemetry
+
+# Every session v-env directory is named this way, which is what lets the
+# environment lock recover the session hash from the path alone.
+VENV_PREFIX = "v-env-"
 
 
 def get_local_partcad_pkg(dep: str) -> str:
@@ -199,39 +203,9 @@ def environment_requirements(project, config) -> list[str]:
     return [sandbox_versions.reconcile_requirement(requirement)[0] for requirement in requirements]
 
 
-class VenvLock:
-    lock: FileLock
-
-    def __init__(self, runtime: "PythonRuntime", venv: str):
-        runtime.venv_locks_lock.acquire()
-
-        # Setup lock for given venv.
-        # If venv is None then use default (no venv)
-        if venv is None:
-            venv = f"{runtime.sandbox_dir}.default"
-            venv_lock_name = f".{venv}.lock"
-        else:
-            venv_lock_name = f".{runtime.sandbox_dir}.{venv}.lock"
-        if venv not in runtime.venv_locks:
-            runtime.venv_locks[venv] = FileLock(
-                os.path.join(runtime.ctx.user_config.internal_state_dir, venv_lock_name), thread_local=False
-            )
-        self.lock = runtime.venv_locks[venv]
-        runtime.venv_locks_lock.release()
-
-    def __enter__(self, *_args):
-        self.lock.acquire()
-
-    def __exit__(self, *_args):
-        self.lock.release()
-
-
 @telemetry.instrument()
 class PythonRuntime(runtime.Runtime):
     def __init__(self, ctx, sandbox, version=None):
-        self.venv_locks = {}
-        self.venv_locks_lock = threading.Lock()
-
         if version is None:
             version = "%d.%d" % (sys.version_info.major, sys.version_info.minor)
         super().__init__(ctx, "py-" + sandbox + "-" + version)
@@ -239,10 +213,13 @@ class PythonRuntime(runtime.Runtime):
         self.version = version
         self.is_mamba = False
 
-        # Runtimes are meant to be executed from dedicated threads, outside of
-        # the asyncio event loop. So a threading lock is appropriate here.
-        self.lock = threading.RLock()
-        self.tls = threading.local()
+        # Whether once() has run to completion in this process. The sandbox
+        # itself is provisioned once and for all, but every run_async(),
+        # ensure_async() and prepare_for_*() used to re-enter once() to find
+        # that out -- taking the runtime lock, and, under conda, spawning an
+        # interpreter to ask the prefix its version -- several times for every
+        # single file rendered.
+        self.provisioned = False
 
         # Requirements already reported as superseded by the pinned CAD stack,
         # so the warning is emitted once per runtime instead of once per part.
@@ -370,32 +347,62 @@ class PythonRuntime(runtime.Runtime):
         exitcode, stdout, stderr = await self.run_async_onced_locked(["-m", "pip", "check"], path=path)
         self.report_dependency_conflicts(exitcode, stdout, stderr, path=path)
 
-    def get_async_lock(self):
-        if not hasattr(self.tls, "async_locks"):
-            self.tls.async_locks = {}
-        self_id = id(self)
-        loop = asyncio.get_event_loop()
-        loop_id = id(loop)
-        if self_id not in self.tls.async_locks or self.tls.async_locks[self_id][1] != loop_id:
-            self.tls.async_locks[self_id] = (asyncio.Lock(), loop_id)
-        return self.tls.async_locks[self_id][0]
+    def environment_path(self, session=None, path=None) -> str:
+        """The environment a command with these arguments runs out of.
+
+        The same three-way choice get_venv_python_path() makes, and it has to
+        stay that way: this is what the environment lock is keyed on, so a
+        command that locks one environment and runs in another is a command
+        running unlocked.
+        """
+        if path is not None:
+            return path
+        if session is not None and session["dirty"]:
+            return session["path"]
+        return self.path
+
+    def environment_lock(self, session=None, path=None):
+        """The lock over the environment a command runs out of.
+
+        The lock file keeps the names the per-session v-env lock used, so that
+        an installing PartCAD of either vintage running beside this one still
+        contends over the same file: a v-env is named by the hash in its
+        directory name, and the runtime's own environment is "default".
+
+        What has changed is which of them a given command takes -- the
+        environment it runs in, rather than the session it was asked for, which
+        for every package without requirements of its own was a lock over an
+        environment nobody used.
+        """
+        environment_path = self.environment_path(session, path)
+        name = os.path.basename(os.path.normpath(environment_path))
+        if name.startswith(VENV_PREFIX):
+            name = name[len(VENV_PREFIX) :]
+        elif os.path.normpath(environment_path) == os.path.normpath(self.path):
+            name = "default"
+        else:
+            name = hashlib.sha256(environment_path.encode()).hexdigest()[:16]
+        lock_path = os.path.join(self.ctx.user_config.internal_state_dir, f".{self.sandbox_dir}.{name}.lock")
+        return sandbox_lock.get(lock_path)
 
     @contextlib.contextmanager
-    def sync_lock(self, session=None):
-        """Lock the runtime and the venv environment for executing a command"""
-        with self.lock:
-            venv = session["hash"] if session is not None else None
-            with VenvLock(self, venv):
-                yield
+    def sync_lock(self, session=None, path=None, write=False):
+        """Hold the environment a command runs out of.
+
+        'write' for anything that installs into the environment or creates it,
+        which excludes everyone else; without it the environment is only being
+        read, and any number of wrappers may read it at once. That is the whole
+        of the difference between this and the single per-runtime mutex it
+        replaces, which held every wrapper of every environment in one queue.
+        """
+        with self.environment_lock(session, path).acquire(write=write):
+            yield
 
     @contextlib.asynccontextmanager
-    async def async_lock(self, session=None):
-        """Lock the runtime and the venv environment for executing a command"""
-        async with self.get_async_lock():
-            with self.lock:
-                venv = session["hash"] if session is not None else None
-                with VenvLock(self, venv):
-                    yield
+    async def async_lock(self, session=None, path=None, write=False):
+        """The asynchronous twin of sync_lock()."""
+        async with self.environment_lock(session, path).acquire_async(write=write):
+            yield
 
     @contextlib.contextmanager
     def sync_lock_install(self, session=None):
@@ -431,7 +438,9 @@ class PythonRuntime(runtime.Runtime):
             await self.ensure_async_onced_locked(zstd)
 
     def once(self):
-        with self.sync_lock():
+        if self.provisioned:
+            return
+        with self.sync_lock(write=True):
             with self.sync_lock_install():
                 self.ensure_zstd_onced_locked()
                 if not self.initialized:
@@ -453,9 +462,12 @@ class PythonRuntime(runtime.Runtime):
                     # 'cadquery-ocp-novtk' dependency has just replaced.
                     self.ensure_onced_locked(sandbox_versions.CADQUERY_OCP)
                     self.initialized = True
+        self.provisioned = True
 
     async def once_async(self):
-        async with self.async_lock():
+        if self.provisioned:
+            return
+        async with self.async_lock(write=True):
             with self.sync_lock_install():
                 await self.ensure_zstd_onced_locked_async()
                 if not self.initialized:
@@ -473,6 +485,7 @@ class PythonRuntime(runtime.Runtime):
                     # 'cadquery-ocp-novtk' dependency has just replaced.
                     await self.ensure_async_onced_locked(sandbox_versions.CADQUERY_OCP)
                     self.initialized = True
+        self.provisioned = True
 
     def _subprocess_env(self):
         """Environment for a spawned sandbox process, or None to inherit ours.
@@ -488,7 +501,7 @@ class PythonRuntime(runtime.Runtime):
         return self.run_onced(cmd, stdin=stdin, cwd=cwd, session=session)
 
     def run_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        # Hold the venv-scoped lock across BOTH provisioning and execution so a
+        # Hold the environment lock across BOTH provisioning and execution so a
         # session's package installs and its interpreter run are one atomic
         # critical section. Two parts of the same package (e.g. a CadQuery part
         # and a build123d part) share a session v-env; if the install loop is
@@ -500,9 +513,15 @@ class PythonRuntime(runtime.Runtime):
         # ImportError (e.g. a missing 'vtkmodules'). The guard bookkeeping makes
         # the VTK build win once all installs settle, but not necessarily at the
         # instant a run starts; serializing install+run per v-env closes that
-        # window. See run_async_onced() for the async twin.
-        with self.sync_lock(session):
-            if session and session["dirty"]:
+        # window.
+        #
+        # It is taken for writing only while that is still ahead: a session
+        # whose v-env has been provisioned, and every session that runs out of
+        # the runtime's own environment, is only reading what is installed, and
+        # any number of those may read it at once. See run_async_onced() for
+        # the async twin.
+        with self.sync_lock(session, path=path, write=self.session_needs_install(session)):
+            if self.session_needs_install(session):
                 # The venv environment has to be created
                 venv_created = not os.path.exists(session["path"])
                 if venv_created:
@@ -528,12 +547,16 @@ class PythonRuntime(runtime.Runtime):
                         self.ensure_onced_locked(dep, path=session["path"])
                     if venv_created:
                         self.check_deps_onced_locked(path=session["path"])
+                session["installed"].update(session["deps"])
 
             python_path = self.get_venv_python_path(session, path)
             cmd = [python_path, *self.flags_for(cmd), *cmd]
             pc_logging.debug("Running: %s", cmd)
             # pc_logging.debug("stdin: %s", stdin)
-            with telemetry.start_as_current_span("PythonRuntime.run_onced.*{subprocess.Popen}") as span:
+            with (
+                sandbox_lock.process_slots.slot(),
+                telemetry.start_as_current_span("PythonRuntime.run_onced.*{subprocess.Popen}") as span,
+            ):
                 # Strip user home directory from the path, if any
                 sanitized_cmd = copy.copy(cmd)
                 sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
@@ -554,8 +577,8 @@ class PythonRuntime(runtime.Runtime):
                     # TODO(clairbee): add timeout
                 )
 
-            stdout = stdout.decode()
-            stderr = stderr.decode()
+            stdout = decode_output(stdout)
+            stderr = decode_output(stderr)
 
             if stdout:
                 pc_logging.debug("Output of %s: %s" % (cmd, stdout))
@@ -634,7 +657,7 @@ class PythonRuntime(runtime.Runtime):
         return await self.run_async_onced(cmd, stdin=stdin, cwd=cwd, session=session)
 
     async def run_async_onced(self, cmd, stdin="", cwd=None, session=None, path=None):
-        # Hold the venv-scoped lock across BOTH provisioning and execution so a
+        # Hold the environment lock across BOTH provisioning and execution so a
         # session's package installs and its interpreter run are one atomic
         # critical section. Two parts of the same package (e.g. a CadQuery part
         # and a build123d part) share a session v-env; if the install loop is
@@ -647,8 +670,13 @@ class PythonRuntime(runtime.Runtime):
         # the VTK build win once all installs settle, but not necessarily at the
         # instant a run starts; serializing install+run per v-env closes that
         # window.
-        async with self.async_lock(session):
-            if session and session["dirty"]:
+        #
+        # It is taken for writing only while that is still ahead: a session
+        # whose v-env has been provisioned, and every session that runs out of
+        # the runtime's own environment, is only reading what is installed, and
+        # any number of those may read it at once.
+        async with self.async_lock(session, path=path, write=self.session_needs_install(session)):
+            if self.session_needs_install(session):
                 # The venv environment has to be created
                 venv_created = not os.path.exists(session["path"])
                 if venv_created:
@@ -674,33 +702,35 @@ class PythonRuntime(runtime.Runtime):
                         await self.ensure_async_onced_locked(dep, path=session["path"])
                     if venv_created:
                         await self.check_deps_async_onced_locked(path=session["path"])
+                session["installed"].update(session["deps"])
 
             python_path = self.get_venv_python_path(session, path)
             cmd = [python_path, *self.flags_for(cmd), *cmd]
             pc_logging.debug("Running: %s", cmd)
             # pc_logging.debug("stdin: %s", stdin)
-            with telemetry.start_as_current_span("PythonRuntime.run_async_onced.*{subprocess.Popen}") as span:
-                # Strip user home directory from the path, if any
-                sanitized_cmd = copy.copy(cmd)
-                sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
-                span.set_attribute("cmd", " ".join(sanitized_cmd))
-                p = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    shell=False,
-                    env=self._subprocess_env(),
-                    # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                    cwd=cwd,
-                )
-                stdout, stderr = await p.communicate(
-                    input=stdin.encode(),
-                    # TODO(clairbee): add timeout
-                )
+            async with sandbox_lock.process_slots.slot_async():
+                with telemetry.start_as_current_span("PythonRuntime.run_async_onced.*{subprocess.Popen}") as span:
+                    # Strip user home directory from the path, if any
+                    sanitized_cmd = copy.copy(cmd)
+                    sanitized_cmd[0] = os.path.join("...", os.path.basename(sanitized_cmd[0]))
+                    span.set_attribute("cmd", " ".join(sanitized_cmd))
+                    p = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        shell=False,
+                        env=self._subprocess_env(),
+                        # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                        cwd=cwd,
+                    )
+                    stdout, stderr = await p.communicate(
+                        input=stdin.encode(),
+                        # TODO(clairbee): add timeout
+                    )
 
-            stdout = stdout.decode()
-            stderr = stderr.decode()
+            stdout = decode_output(stdout)
+            stderr = decode_output(stderr)
 
             if stdout:
                 pc_logging.debug("Output of %s: %s" % (cmd, stdout))
@@ -806,79 +836,91 @@ class PythonRuntime(runtime.Runtime):
         if path is None:
             path = self.path
 
-        guard_path = get_guard_path(path, python_package)
         force = force or needs_reassert(path, python_package)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
-            if not os.path.exists(guard_path):
+            if not self.installed_onced(python_package, path):
                 # Mark this session as needed if the dependency is not met by the runtime environment
                 session["dirty"] = True
-        else:
-            with self.sync_lock():
+        elif not self.installed_onced(python_package, path, force):
+            with self.sync_lock(path=path, write=True):
                 with self.sync_lock_install():
-                    if not os.path.exists(guard_path):
-                        item = python_package
-                        if item == "partcad":
-                            item = get_local_partcad_pkg(item)
-                        if not path is None:
-                            item += " in " + path
-                        with pc_logging.Action("PipInst", self.version, item):
-                            self.run_onced_locked(
-                                [
-                                    "-m",
-                                    "pip",
-                                    *self.pip_flags,
-                                    "install",
-                                    *self.pip_install_flags,
-                                    *self.get_constraints_flags(),
-                                    *(FORCE_REINSTALL_FLAGS if force else []),
-                                    python_package,
-                                ],
-                                path=path,
-                            )
-                        pathlib.Path(guard_path).touch()
-                        clear_reassert(path, python_package)
-                        invalidate_dependent_guards(path, python_package)
-                invalidate_dependent_guards(path, python_package)
+                    self.install_onced_locked(python_package, path, force)
+
+    def installed_onced(self, python_package, path, force=False) -> bool:
+        """Whether 'path' already holds this package.
+
+        The install guard is the record, and reading it is the whole of the
+        fast path: only a requirement that is genuinely missing makes a caller
+        take the environment's write lock and so wait behind every wrapper
+        running out of it. Every requirement of every file rendered used to
+        take that lock to find out there was nothing to do.
+        """
+        if force:
+            return False
+        return os.path.exists(get_guard_path(path, python_package))
+
+    def install_label(self, python_package, path):
+        item = get_local_partcad_pkg(python_package) if python_package == "partcad" else python_package
+        return item if path is None else item + " in " + path
+
+    def pip_install_command(self, python_package, force):
+        return [
+            "-m",
+            "pip",
+            *self.pip_flags,
+            "install",
+            *self.pip_install_flags,
+            *self.get_constraints_flags(),
+            *(FORCE_REINSTALL_FLAGS if force else []),
+            python_package,
+        ]
+
+    def record_install(self, python_package, path):
+        """Note that a package is in 'path', and what that install clobbered.
+
+        Only ever called after an install has actually run. The dependent
+        guards say "these packages have just had their files overwritten", so
+        dropping them when nothing was installed asks for the next render to
+        re-install a package that was never touched -- which, since build123d
+        invalidates cadquery-ocp and every image file type installs both, is a
+        forced re-install of the whole of OCP per rendered file.
+        """
+        pathlib.Path(get_guard_path(path, python_package)).touch()
+        clear_reassert(path, python_package)
+        invalidate_dependent_guards(path, python_package)
+
+    def install_onced_locked(self, python_package, path, force=False):
+        """Install one package. The environment's write lock is already held."""
+        if self.installed_onced(python_package, path, force):
+            return
+        with pc_logging.Action("PipInst", self.version, self.install_label(python_package, path)):
+            self.run_onced_locked(self.pip_install_command(python_package, force), path=path)
+        self.record_install(python_package, path)
+
+    async def install_async_onced_locked(self, python_package, path, force=False):
+        """The asynchronous twin of install_onced_locked()."""
+        if self.installed_onced(python_package, path, force):
+            return
+        with pc_logging.Action("PipInst", self.version, self.install_label(python_package, path)):
+            await self.run_async_onced_locked(self.pip_install_command(python_package, force), path=path)
+        self.record_install(python_package, path)
 
     def ensure_onced_locked(self, python_package, session=None, path=None, force=False):
         python_package = self.reconcile_requirement(python_package)
         if path is None:
             path = self.path
 
-        guard_path = get_guard_path(path, python_package)
         force = force or needs_reassert(path, python_package)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
-            if not os.path.exists(guard_path):
+            if not self.installed_onced(python_package, path):
                 # Mark this session as needed if the dependency is not met by the runtime environment
                 session["dirty"] = True
         else:
-            if not os.path.exists(guard_path):
-                item = python_package
-                if item == "partcad":
-                    item = get_local_partcad_pkg(item)
-                if not path is None:
-                    item += " in " + path
-                with pc_logging.Action("PipInst", self.version, item):
-                    self.run_onced_locked(
-                        [
-                            "-m",
-                            "pip",
-                            *self.pip_flags,
-                            "install",
-                            *self.pip_install_flags,
-                            *self.get_constraints_flags(),
-                            *(FORCE_REINSTALL_FLAGS if force else []),
-                            python_package,
-                        ],
-                        path=path,
-                    )
-                pathlib.Path(guard_path).touch()
-                clear_reassert(path, python_package)
-                invalidate_dependent_guards(path, python_package)
+            self.install_onced_locked(python_package, path, force)
 
     async def ensure_async(self, python_package, session=None, path=None, force=False):
         await self.once_async()
@@ -890,41 +932,17 @@ class PythonRuntime(runtime.Runtime):
             path = self.path
 
         # TODO(clairbee): expire the guard file after a certain time
-        guard_path = get_guard_path(path, python_package)
         force = force or needs_reassert(path, python_package)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
-            if not os.path.exists(guard_path):
+            if not self.installed_onced(python_package, path):
                 # Mark this session as needed if the dependency is not met by the runtime environment
                 session["dirty"] = True
-        else:
-            async with self.async_lock():
+        elif not self.installed_onced(python_package, path, force):
+            async with self.async_lock(path=path, write=True):
                 with self.sync_lock_install():
-                    if not os.path.exists(guard_path):
-                        item = python_package
-                        if item == "partcad":
-                            item = get_local_partcad_pkg(item)
-                        if not path is None:
-                            item += " in " + path
-                        with pc_logging.Action("PipInst", self.version, item):
-                            await self.run_async_onced_locked(
-                                [
-                                    "-m",
-                                    "pip",
-                                    *self.pip_flags,
-                                    "install",
-                                    *self.pip_install_flags,
-                                    *self.get_constraints_flags(),
-                                    *(FORCE_REINSTALL_FLAGS if force else []),
-                                    python_package,
-                                ],
-                                path=path,
-                            )
-                        pathlib.Path(guard_path).touch()
-                        clear_reassert(path, python_package)
-                        invalidate_dependent_guards(path, python_package)
-                invalidate_dependent_guards(path, python_package)
+                    await self.install_async_onced_locked(python_package, path, force)
 
     async def ensure_async_onced_locked(self, python_package, session=None, path=None, force=False):
         python_package = self.reconcile_requirement(python_package)
@@ -933,38 +951,15 @@ class PythonRuntime(runtime.Runtime):
 
         # TODO(clairbee): expire the guard file after a certain time
 
-        guard_path = get_guard_path(path, python_package)
         force = force or needs_reassert(path, python_package)
         if session:
             # Add the dependency to the session dependencies
             session["deps"].append(python_package)
-            if not os.path.exists(guard_path):
+            if not self.installed_onced(python_package, path):
                 # Mark this session as needed if the dependency is not met by the runtime environment
                 session["dirty"] = True
         else:
-            if not os.path.exists(guard_path):
-                item = python_package
-                if item == "partcad":
-                    item = get_local_partcad_pkg(item)
-                if not path is None:
-                    item += " in " + path
-                with pc_logging.Action("PipInst", self.version, item):
-                    await self.run_async_onced_locked(
-                        [
-                            "-m",
-                            "pip",
-                            *self.pip_flags,
-                            "install",
-                            *self.pip_install_flags,
-                            *self.get_constraints_flags(),
-                            *(FORCE_REINSTALL_FLAGS if force else []),
-                            python_package,
-                        ],
-                        path=path,
-                    )
-                pathlib.Path(guard_path).touch()
-                clear_reassert(path, python_package)
-                invalidate_dependent_guards(path, python_package)
+            await self.install_async_onced_locked(python_package, path, force)
 
     async def prepare_for_package(self, project, session=None):
         await self.once_async()
@@ -997,7 +992,7 @@ class PythonRuntime(runtime.Runtime):
                 use_venv = True
         else:
             # This can be either a venv path or a conda path.
-            if str(os.path.basename(path)).startswith("v-env-"):
+            if str(os.path.basename(path)).startswith(VENV_PREFIX):
                 use_venv = True
             else:
                 use_venv = False
@@ -1012,10 +1007,30 @@ class PythonRuntime(runtime.Runtime):
 
         return python_path
 
+    def session_needs_install(self, session=None) -> bool:
+        """Whether running this session still has to install anything.
+
+        Which is the same question as whether the run needs the environment for
+        writing, so the two must be asked the same way: a run that installs
+        while holding the environment for reading is a run installing behind
+        the back of every wrapper reading it.
+
+        A session goes dirty the moment a requirement of its package is not
+        already met by the runtime environment, and stays dirty for good --
+        'dirty' is also what says the session runs out of its own v-env rather
+        than the runtime's, so it cannot be cleared once the v-env exists. What
+        the install pass leaves behind instead is the set of requirements it put
+        there; while that covers what the session asks for, its runs are readers
+        like any other, and a requirement added afterwards puts it back.
+        """
+        if not session or not session["dirty"]:
+            return False
+        return not set(session["deps"]).issubset(session["installed"])
+
     def get_session(self, name: str):
         """Create a context to describe the venv environment in case it is needed"""
         name_hash = hashlib.sha256(name.encode()).hexdigest()[:16]
-        venv_path = os.path.join(self.path, "v-env-" + name_hash)
+        venv_path = os.path.join(self.path, VENV_PREFIX + name_hash)
 
         # A v-env is created by "python -m venv" without --system-site-packages,
         # so it does not see what the sandbox around it has installed: zstd has
@@ -1038,4 +1053,8 @@ class PythonRuntime(runtime.Runtime):
             "path": venv_path,
             "dirty": False,
             "deps": deps,
+            # What the v-env has been given so far. Once it covers 'deps', the
+            # runs that follow share the v-env instead of taking it exclusively
+            # one at a time (see session_needs_install()).
+            "installed": set(),
         }

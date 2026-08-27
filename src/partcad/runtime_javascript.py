@@ -65,6 +65,7 @@ from filelock import FileLock
 from . import sandbox_versions
 from . import runtime
 from . import logging as pc_logging
+from .process_output import decode as decode_output
 from . import telemetry
 
 # The baseline environment, shared by every PartCAD package that needs nothing
@@ -229,7 +230,13 @@ def link_or_copy(source: str, destination: str) -> None:
 
 
 class NodeEnvLock:
-    """A file lock over one Node.js environment, the VenvLock twin."""
+    """A file lock over one Node.js environment.
+
+    Keyed on the environment directory, which is what the Python side now keys
+    its own on too (see sandbox_lock.EnvironmentLock). What it does not have
+    yet is that lock's distinction between running out of an environment and
+    installing into it, so Node.js wrappers still run one at a time.
+    """
 
     lock: FileLock
 
@@ -601,7 +608,7 @@ class JavaScriptRuntime(runtime.Runtime):
             )
             stdout, stderr = p.communicate(input=stdin.encode())
 
-        return self._finish(argv, p.returncode, stdout.decode(), stderr.decode(), package_path)
+        return self._finish(argv, p.returncode, decode_output(stdout), decode_output(stderr), package_path)
 
     async def execute_async_onced_locked(self, cmd, stdin="", cwd=None, session=None, path=None):
         argv, package_path = self.build_command(cmd, cwd, session, path)
@@ -624,7 +631,7 @@ class JavaScriptRuntime(runtime.Runtime):
             )
             stdout, stderr = await p.communicate(input=stdin.encode())
 
-        return self._finish(argv, p.returncode, stdout.decode(), stderr.decode(), package_path)
+        return self._finish(argv, p.returncode, decode_output(stdout), decode_output(stderr), package_path)
 
     def _finish(self, cmd, returncode, stdout, stderr, path):
         """Log what a Node.js process produced and normalize its exit code."""

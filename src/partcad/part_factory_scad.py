@@ -14,6 +14,7 @@ import tempfile
 
 from . import logging as pc_logging
 from . import telemetry, wrapper
+from .process_output import decode as decode_output
 from .healthcheck.openscad import find_executable as find_openscad_executable
 from .part_factory_file import PartFactoryFile
 from . import sandbox_versions
@@ -198,7 +199,7 @@ class PartFactoryScad(PartFactoryFile):
                         if tmp_scad_path is not None and os.path.exists(tmp_scad_path):
                             os.unlink(tmp_scad_path)
 
-                errors = errors.decode()
+                errors = decode_output(errors)
                 if p.returncode != 0 and len(errors) == 0:
                     errors = "%s: %s: Failed to instantiate" % (part.project_name, part.name)
                     pc_logging.debug(

@@ -72,6 +72,15 @@ render:
   # beside the sources - which is all 'prefix' does. A sketch is already flat and
   # already an SVG worth looking at, so it does not get a raster copy; that is
   # what 'exclude' is for.
+  #
+  # The files under 'images/' are checked in like every other rendered output,
+  # but unlike the SVG beside them they are not compared byte-for-byte in CI.
+  # '//builtin/render' rasterizes through svglib, reportlab's renderPM and
+  # Pillow, and that stack is resolved into the sandbox when it is provisioned:
+  # a new release of any of it shifts the encoded bytes without changing the
+  # picture. The SVG these are rasterized from is PartCAD's own output and is
+  # stable, so that is what the check still holds. See the 'UNSTABLE' list in
+  # the 'Examples (PartCAD)' job of '.github/workflows/test.yml'.
   png:
     prefix: images/
     # Independent of each other, and of the shape: the projection is fitted into

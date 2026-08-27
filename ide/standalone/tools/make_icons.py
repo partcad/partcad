@@ -11,8 +11,15 @@ Render the PartCAD logo into the icon formats an application bundle needs.
 
 The source is `ide/vscode/resources/logo.svg`, the same logo the VS Code
 extension uses, so the IDE cannot end up with an icon that has drifted from the
-project's. Nothing rendered here is committed: the icons are built with the IDE,
-from the SVG in git, rather than kept as binaries next to it.
+project's. The icons are built with the IDE rather than kept as binaries next to
+it, with one exception: `../resources/partcad-ide.ico` is in git, because
+`cairocffi` cannot load a `libcairo` on Windows and so this script cannot run
+there at all. Regenerate that one whenever the logo changes, from the
+repository root:
+
+    python ide/standalone/tools/make_icons.py \
+        --svg ide/vscode/resources/logo.svg --output-dir /tmp/icons
+    cp /tmp/icons/partcad-ide.ico ide/standalone/resources/partcad-ide.ico
 
 Outputs (into `--output-dir`):
   partcad-ide.png    512x512, the Linux window and launcher icon
@@ -75,6 +82,11 @@ def write_icns(images: dict[int, bytes], path: pathlib.Path) -> None:
 
 
 def write_ico(images: dict[int, bytes], path: pathlib.Path) -> None:
+    """Assemble a Windows `.ico` out of PNG images keyed by pixel size.
+
+    Pillow builds every size in `ICO_SIZES` by downscaling the largest image it
+    was given, rather than using the separately rendered one for each size.
+    """
     from PIL import Image
 
     largest = Image.open(io.BytesIO(images[max(images)])).convert("RGBA")
@@ -82,6 +94,12 @@ def write_ico(images: dict[int, bytes], path: pathlib.Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Render the logo once per size and write the PNG, `.icns` and `.ico`.
+
+    Returns 1 without writing anything if `cairosvg` or Pillow is missing --
+    which is every Windows machine, since `cairocffi` needs a `libcairo-2.dll`
+    no wheel ships. That is why the `.ico` is checked in.
+    """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--svg", type=pathlib.Path, required=True, help="the logo to render")
     parser.add_argument("--output-dir", type=pathlib.Path, required=True)

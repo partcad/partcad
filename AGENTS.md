@@ -133,8 +133,16 @@ Everything below is written as the command to pass to `exec`.
 Dependencies are already installed in the image. Only re-run this if you change `pyproject.toml`:
 
 ```bash
-poetry install        # installs partcad + partcad-cli in editable mode
+poetry install        # installs the `partcad` distribution -- all six packages -- in editable mode
 ```
+
+**If `pc` fails with `ModuleNotFoundError: No module named 'partcad_cli.click.command'`, the `.venv` predates
+the one-wheel layout.** It still holds the editable install of the old root project, `partcad-dev`, whose `.pth`
+points at the six deleted `<package>/src` directories and whose `pc` script points at the pre-rename entry point.
+`poetry install` does not replace it, because the distribution was renamed and Poetry does not know it is there;
+`pip uninstall partcad-dev` refuses to remove it. The old source tree lingers too: `git` leaves `partcad/`,
+`partcad-cli/` and their four siblings behind when the only files left in them are ignored ones. Delete both and
+install again — the `.. warning::` beside `poetry install` in `docs/source/contributing.rst` has the commands.
 
 The project virtualenv is not auto-activated, and `pytest`, `pc`, and `partcad` are **not** on `PATH` — prefix
 project commands with `poetry run`.
@@ -264,6 +272,27 @@ ln -sf /run/host-gpg-agent.sock /run/user/$(id -u)/gnupg/S.gpg-agent
 ```
 
 Verify with `gpg --list-secret-keys` — your key should appear, served by the forwarded host agent.
+
+**If `pre-commit` fails to install a hook with `Permission denied (publickey)`**, a rewrite rule in your
+gitconfig is turning its fetch of the hook repository into an SSH fetch. `url."ssh://git@github.com/".insteadOf
+= https://github.com/` is a common setup, and the VS Code extension copies your gitconfig into the container,
+rewrite rules included — so pre-commit clones `https://github.com/...` and git dials `git@github.com`. A VS Code
+terminal has the forwarded SSH agent and succeeds; a `devcontainer exec` shell has no agent and does not. Two
+ways out, on the host:
+
+* Scope the rule to `pushInsteadOf` rather than `insteadOf`, which is usually what the rule is for anyway: push
+  over SSH, fetch anonymously over https.
+* Or forward the SSH agent the way the GPG one is forwarded above,
+  `--mount "type=bind,source=$SSH_AUTH_SOCK,target=/run/host-ssh-agent.sock"`, and
+  `export SSH_AUTH_SOCK=/run/host-ssh-agent.sock` in the container. Adding a mount means recreating the
+  container, and recreating it with the CLI is what leaves it with no gitconfig at all — hence the repo-local
+  identity above.
+
+`GIT_CONFIG_GLOBAL=/dev/null` does not work around it: pre-commit strips `GIT_*` from the environment of the git
+it runs, keeping only `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*`/`GIT_CONFIG_VALUE_*`, and those can only add
+configuration, not remove a rewrite. Note that this only bites on a hook repository that is not in
+`~/.cache/pre-commit` yet — a new `rev:`, or a fresh cache volume. The four Poetry hooks are declared
+`repo: local` in `dev-tools/pre-commit-config.yaml` precisely so that they need no repository at all.
 
 ### Verifying a commit landed
 

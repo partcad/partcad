@@ -248,9 +248,15 @@ class Shape(ShapeConfiguration):
         if not hasattr(self.tls, "async_shape_locks"):
             self.tls.async_shape_locks = {}
         self_id = id(self)
-        if self_id not in self.tls.async_shape_locks:
-            self.tls.async_shape_locks[self_id] = asyncio.Lock()
-        return self.tls.async_shape_locks[self_id]
+        # Keyed on the loop as well as the shape, the way the runtime keys its
+        # own (see runtime_python.PythonRuntime). A worker thread runs one
+        # 'asyncio.run()' per instantiation, so a thread that is handed a
+        # second one gets a second loop, and an asyncio.Lock that was awaited
+        # under the first refuses to be awaited under the second.
+        loop_id = id(asyncio.get_event_loop())
+        if self_id not in self.tls.async_shape_locks or self.tls.async_shape_locks[self_id][1] != loop_id:
+            self.tls.async_shape_locks[self_id] = (asyncio.Lock(), loop_id)
+        return self.tls.async_shape_locks[self_id][0]
 
     async def get_components(self, ctx):
         if len(self.components) == 0:

@@ -16,6 +16,8 @@ import base64
 
 from .runtime_json_rpc import RuntimeJsonRpcClient
 from . import logging as pc_logging
+from .process_output import decode as decode_output
+from . import sandbox_lock
 
 
 async def wait_for_port(host, port, timeout=30):
@@ -183,21 +185,22 @@ class Runtime:
                     else:
                         pc_logging.error(f"Unsolicited output file: {file_name}")
         else:
-            p = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=False,
-                encoding="utf-8",
-                # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                cwd=cwd,
-                env=env,
-            )
-            stdout, stderr = p.communicate(
-                input=stdin,
-                # TODO(clairbee): add timeout
-            )
+            with sandbox_lock.process_slots.slot():
+                p = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                    encoding="utf-8",
+                    # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                    cwd=cwd,
+                    env=env,
+                )
+                stdout, stderr = p.communicate(
+                    input=stdin,
+                    # TODO(clairbee): add timeout
+                )
 
         if stdout:
             pc_logging.debug("Output of %s: %s" % (cmd, stdout))
@@ -266,24 +269,25 @@ class Runtime:
                     else:
                         pc_logging.error(f"Unsolicited output file: {file_name}")
         else:
-            p = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=False,
-                # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
-                cwd=cwd,
-                env=env,
-            )
-            stdout, stderr = await p.communicate(
-                # TODO(clairbee): add timeout
-                input=stdin.encode(),
-                # TODO(clairbee): add timeout
-            )
+            async with sandbox_lock.process_slots.slot_async():
+                p = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=False,
+                    # TODO(clairbee): creationflags=subprocess.CREATE_NO_WINDOW,
+                    cwd=cwd,
+                    env=env,
+                )
+                stdout, stderr = await p.communicate(
+                    # TODO(clairbee): add timeout
+                    input=stdin.encode(),
+                    # TODO(clairbee): add timeout
+                )
 
-            stdout = stdout.decode()
-            stderr = stderr.decode()
+            stdout = decode_output(stdout)
+            stderr = decode_output(stderr)
 
         if stdout:
             pc_logging.debug("Output of %s: %s" % (cmd, stdout))
