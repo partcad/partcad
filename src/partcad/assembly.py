@@ -73,20 +73,42 @@ class Assembly(Shape):
         # self.children contains all child parts and assemblies before they turn into 'self.shape'
         self.children = []
 
+    def get_async_instantiate_lock(self) -> asyncio.Lock:
+        """The task lock 'do_instantiate' serializes on, one per thread.
+
+        Not 'get_async_lock()': 'Shape.get_wrapped()' holds that one on its way
+        to 'get_shape()' and so to here, and an 'asyncio.Lock' is not
+        re-entrant. Thread-local for the same reason that one is - a lock is
+        awaited by the loop of the thread that took it, and each thread runs
+        its own.
+        """
+        if not hasattr(self.tls, "async_instantiate_locks"):
+            self.tls.async_instantiate_locks = {}
+        self_id = id(self)
+        if self_id not in self.tls.async_instantiate_locks:
+            self.tls.async_instantiate_locks[self_id] = asyncio.Lock()
+        return self.tls.async_instantiate_locks[self_id]
+
     async def do_instantiate(self):
-        # Under the lock, and looked at again once it is held: two threads can
-        # ask for the same assembly at once - one rendering it, one resolving a
-        # part it produces ('Project._materialize_derived_part') - and a factory
-        # appends to 'children' rather than replacing them, so both finding it
-        # empty puts the whole tree in there twice. 'get_wrapped()' already
-        # holds this lock on the way in, which is why it is an RLock.
+        # Both locks, the way 'Shape.get_wrapped()' takes them, and for the same
+        # reason: a factory appends to 'children' rather than replacing them, so
+        # whoever finds it empty a second time puts the whole tree in twice.
+        #
+        # The thread lock keeps two threads out of here - one rendering the
+        # assembly, one resolving a part it produces
+        # ('Project._materialize_derived_part'). It does not keep two tasks of
+        # one loop out: an RLock is re-entrant per *thread*, and tasks of a loop
+        # share one, so every one of them passes it. Hence the task lock inside
+        # it, which is only ever contended within a single thread because the
+        # thread lock is what excludes the others.
         with self.lock:
-            if len(self.children) != 0:
-                return
-            self._wrapped = None  # Invalidate if any
-            await threadpool_manager.run(self.instantiate, self)
-            if len(self.children) == 0:
-                pc_logging.warning(f"The assembly {self.project_name}:{self.name} is empty")
+            async with self.get_async_instantiate_lock():
+                if len(self.children) != 0:
+                    return
+                self._wrapped = None  # Invalidate if any
+                await threadpool_manager.run(self.instantiate, self)
+                if len(self.children) == 0:
+                    pc_logging.warning(f"The assembly {self.project_name}:{self.name} is empty")
 
     # add is a non-thread-safe method for end users to create custom Assemblies
     def add(

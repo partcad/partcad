@@ -858,6 +858,51 @@ def test_two_threads_assembling_one_assembly_assemble_it_once(tmp_path):
     assert len(rig.children) == 1
 
 
+def test_two_tasks_assembling_one_assembly_assemble_it_once(tmp_path):
+    """The same, for two tasks of one loop rather than two threads.
+
+    The thread lock does not separate them: an RLock is re-entrant per
+    *thread*, and the tasks of a loop share one, so every one of them passes
+    it. Only the task lock inside it keeps the second out.
+    """
+    started = asyncio.Event()
+
+    class SlowAssemblyFactory(assembly_factory.AssemblyFactory):
+        def __init__(self, ctx, source_project, target_project, config):
+            super().__init__(ctx, source_project, target_project, config)
+            self._create(config)
+
+        def instantiate(self, assembly):
+            # On a worker thread, which is what gives the other task on the
+            # loop its chance to run.
+            time.sleep(0.3)
+            assembly.children.append(object())
+
+    factory.register("assembly", "test-slow-task", SlowAssemblyFactory)
+    write_package(tmp_path, "", {"name": "//test", "assemblies": {"rig": {"type": "test-slow-task"}}})
+    ctx = pc.Context(str(tmp_path))
+    rig = ctx.get_project("//test").assemblies["rig"]
+
+    async def first():
+        started.set()
+        await rig.do_instantiate()
+
+    async def second():
+        await started.wait()
+        await rig.do_instantiate()
+
+    try:
+        asyncio.run(asyncio.wait_for(_gather(first(), second()), timeout=20))
+    finally:
+        del factory.all["assembly"]["test-slow-task"]
+
+    assert len(rig.children) == 1
+
+
+async def _gather(*coroutines):
+    return await asyncio.gather(*coroutines)
+
+
 def test_two_threads_materializing_one_part_get_one_part(one_part):
     """The same, when the two passes overlap rather than follow one another.
 
