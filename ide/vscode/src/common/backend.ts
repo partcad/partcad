@@ -209,10 +209,6 @@ class JsonRpcBackend implements PartcadBackend {
         reg('partcad.showAssembly', (a) =>
             this.send('inspect.assembly', { package: a.pkg, name: a.name, params: a.params }),
         );
-        reg('partcad.regeneratePartCb', (a) =>
-            this.send('ai.regenerate', { package: a.pkg, name: a.name, config: a.config }),
-        );
-        reg('partcad.changePartCb', (a) => this.send('ai.change', { package: a.pkg, name: a.name, config: a.config }));
         reg('partcad.exportPart', (type, path, pkg, name, params) =>
             this.send('export.part', { type, path, package: pkg, name, params }),
         );

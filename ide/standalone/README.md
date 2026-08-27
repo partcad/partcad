@@ -11,7 +11,7 @@ first time it starts.
 | Needs Python          | yes, 3.10-3.14               | no                            | no                              |
 | Needs an editor       | -                            | -                             | no, it is one                   |
 | What you get          | `pc`, `partcad`, the library | `pc`, `partcad`               | the editor, the extension, `pc` |
-| Size (Linux, unpacked)| ~15MB plus dependencies      | ~875MB                        | ~1.2GB                          |
+| Size (Linux, unpacked)| ~15MB plus dependencies      | ~185MB                        | ~500MB                          |
 
 It is built from [VSCodium](https://vscodium.com/), rebranded, with the extensions this repository recommends
 installed into it and the [standalone command line tools](../dev-tools/pyinstaller/README.md) inside it. The

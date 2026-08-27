@@ -142,7 +142,6 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - [x] Using specialized `Assembly YAML` format
     - [x] Automatically maintaining the bill of materials
     - [ ] Generating user-friendly visual assembly instructions _(in progress)_
-  - [ ] Generating with LLM/GenAI _(in progress)_
 - Part models (3D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -157,10 +156,6 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
     - [x] `OBJ`
   - Using file formats of third-party tools
     - [x] `KiCad EDA` (PCB)
-  - Generating with LLM/GenAI
-    - [x] Google AI (`Gemini`)
-    - [x] OpenAI (`ChatGPT`)
-    - [x] Any model in [Ollama](https://ollama.com/) (`Llama 3.1`, `DeepSeek-Coder-V2`, `CodeGemma`, `Code Llama` etc.)
 - Part and interface blueprints (2D)
   - Using scripting languages
     - [x] [CadQuery]
@@ -168,6 +163,16 @@ Subscribe on [LinkedIn], [YouTube], [TikTok], [Facebook], [Instagram], [Threads]
   - Using legacy file formats:
     - [x] `DXF`
     - [x] `SVG`
+- Tooling for AI agents doing mechanical design
+  - [x] Agent Skills any `SKILL.md`-aware coding agent can load ([`ai-agents/`](./ai-agents/README.md)),
+        distributed as the `pc` plugin
+    - [x] Generate a part, an assembly or a 2D sketch (`/pc:gen`, `/pc:gen-part`, `/pc:gen-assembly`,
+          `/pc:gen-sketch`) -- the agent authors the CAD script and validates it by rendering
+    - [x] Describe an existing object (`/pc:describe`), search the catalog (`/pc:search`), add interfaces
+          (`/pc:add-interfaces`)
+    - [x] Set a project up (`/pc:init`, `/pc:install`)
+  - [x] `--no-ansi` output on every command, so an agent parses plain text rather than progress bars
+  - [x] Free-form `comment:` context in `Assembly YAML`, written for whoever reads the assembly next
 - Other features
   - Object-Oriented Programming approach to maintaining part interfaces and mating information
   - Live preview of 3D models while working in Visual Studio Code

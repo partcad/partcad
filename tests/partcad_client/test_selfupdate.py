@@ -161,8 +161,8 @@ def test_host_platform_rejects_an_unsupported_machine(monkeypatch):
 
 def test_archive_extension_is_zip_on_windows_only():
     assert selfupdate.archive_extension("windows") == "zip"
-    assert selfupdate.archive_extension("linux") == "tar.gz"
-    assert selfupdate.archive_extension("macos") == "tar.gz"
+    assert selfupdate.archive_extension("linux") == "tar.xz"
+    assert selfupdate.archive_extension("macos") == "tar.xz"
 
 
 def test_host_release_reads_the_ubuntu_version(monkeypatch, tmp_path):
@@ -340,15 +340,36 @@ def test_release_platforms_reports_a_machine_the_release_has_no_build_for(monkey
 # ---------------------------------------------------------------------------
 
 
+# Whether a bundle's aliases are symlinks here, which is what
+# `dev-tools/pyinstaller/build.sh` decides: it points `partcad` and
+# `partcad-json-rpc` at `pc` everywhere but Windows, where the archive is a zip
+# (which stores a symlink as a copy of its target) and creating one needs a
+# privilege a runner may not have. The fixture below ships what the platform
+# ships, so these tests exercise the real layout on both.
+BUNDLE_USES_SYMLINKS = os.name != "nt"
+
+
 def _make_bundle_archive(path, version="0.7.159"):
-    """A tarball shaped like a real release: one top-level `partcad/` directory."""
+    """A tarball shaped like a real release: one top-level `partcad/` directory.
+
+    Including how the executables are laid out: `pc` is the payload and the
+    other names point at it -- as relative symlinks where the real bundle uses
+    them, as copies where it does not. See BUNDLE_USES_SYMLINKS.
+    """
     staging = path / "build" / "partcad"
     staging.mkdir(parents=True)
+    payload = "#!/bin/sh\necho %s\n" % version
+    (staging / "pc").write_text(payload)
     for name in selfupdate.BUNDLE_EXECUTABLES:
-        (staging / name).write_text("#!/bin/sh\necho %s\n" % version)
+        if name == "pc":
+            continue
+        if BUNDLE_USES_SYMLINKS:
+            os.symlink("pc", staging / name)
+        else:
+            (staging / name).write_text(payload)
     (staging / "_internal").mkdir()
-    archive = path / ("partcad-%s-linux-x86_64.tar.gz" % version)
-    with tarfile.open(archive, "w:gz") as tf:
+    archive = path / ("partcad-%s-linux-x86_64.tar.xz" % version)
+    with tarfile.open(archive, "w:xz") as tf:
         tf.add(staging, arcname="partcad")
     return archive
 
@@ -366,8 +387,55 @@ def test_extract_unpacks_the_bundle(tmp_path):
     archive = _make_bundle_archive(tmp_path)
     dest = tmp_path / "dest"
     dest.mkdir()
-    selfupdate._extract(str(archive), str(dest), "tar.gz")
+    selfupdate._extract(str(archive), str(dest), "tar.xz")
     assert (dest / "partcad" / "pc").is_file()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the bundle ships copies, not symlinks, on Windows")
+def test_extract_keeps_the_aliases_that_point_at_pc(tmp_path):
+    """The bundle ships one payload under three names.
+
+    `partcad` and `partcad-json-rpc` are symlinks to `pc`; an extractor that
+    dropped them -- or followed them into a copy -- would give back either a
+    broken installation or the megabytes the links exist to save.
+    """
+    archive = _make_bundle_archive(tmp_path)
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    selfupdate._extract(str(archive), str(dest), "tar.xz")
+    for name in selfupdate.BUNDLE_EXECUTABLES:
+        if name == "pc":
+            continue
+        alias = dest / "partcad" / name
+        assert alias.is_symlink()
+        assert os.readlink(alias) == "pc"
+        assert alias.is_file()
+
+
+def _link_archive(path, name, linkname):
+    archive = path / "links.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        member = tarfile.TarInfo(name)
+        member.type = tarfile.SYMTYPE
+        member.linkname = linkname
+        tf.addfile(member)
+    return archive
+
+
+def test_extract_refuses_a_link_out_of_the_bundle(tmp_path):
+    archive = _link_archive(tmp_path, "partcad/pc", "../../../../etc/passwd")
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    with pytest.raises(selfupdate.SelfUpdateError, match="unsafe link"):
+        selfupdate._extract(str(archive), str(dest), "tar.xz")
+
+
+def test_extract_refuses_an_absolute_link(tmp_path):
+    archive = _link_archive(tmp_path, "partcad/pc", "/etc/passwd")
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    with pytest.raises(selfupdate.SelfUpdateError, match="absolute link"):
+        selfupdate._extract(str(archive), str(dest), "tar.xz")
 
 
 def test_checksum_mismatch_is_fatal(monkeypatch, tmp_path):
@@ -464,8 +532,13 @@ def test_install_standalone_installs_beside_the_running_bundle(standalone, no_re
 def test_install_standalone_repoints_the_launchers(standalone, no_reaper):
     root, bin_dir, _running = standalone
     selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
-    assert os.path.realpath(bin_dir / "pc") == str(root / "0.7.159" / "pc")
-    assert os.path.realpath(bin_dir / "partcad") == str(root / "0.7.159" / "partcad")
+    # `readlink`, not `realpath`: where the bundle's own aliases are symlinks to
+    # `pc`, resolving all the way through says nothing about which version the
+    # launcher was pointed at -- which is what this is.
+    for name in ("pc", "partcad"):
+        assert os.readlink(bin_dir / name) == str(root / "0.7.159" / name)
+        resolved = "pc" if BUNDLE_USES_SYMLINKS else name
+        assert os.path.realpath(bin_dir / name) == str(root / "0.7.159" / resolved)
 
 
 def test_install_standalone_leaves_foreign_launchers_alone(standalone, no_reaper, tmp_path):
@@ -535,7 +608,7 @@ def test_install_standalone_uses_the_base_url_override(monkeypatch, standalone):
 
     with pytest.raises(selfupdate.SelfUpdateError):
         selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
-    assert urls == ["https://example.invalid/builds/partcad-0.7.159-ubuntu-24.04-x86_64.tar.gz"]
+    assert urls == ["https://example.invalid/builds/partcad-0.7.159-ubuntu-24.04-x86_64.tar.xz"]
 
 
 def test_install_standalone_falls_through_to_the_next_published_build(monkeypatch, standalone, no_reaper):
@@ -559,8 +632,8 @@ def test_install_standalone_falls_through_to_the_next_published_build(monkeypatc
     target = selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
     assert target == str(root / "0.7.159")
     assert [url.rsplit("/", 1)[-1] for url in urls] == [
-        "partcad-0.7.159-ubuntu-24.04-x86_64.tar.gz",
-        "partcad-0.7.159-ubuntu-22.04-x86_64.tar.gz",
+        "partcad-0.7.159-ubuntu-24.04-x86_64.tar.xz",
+        "partcad-0.7.159-ubuntu-22.04-x86_64.tar.xz",
     ]
 
 

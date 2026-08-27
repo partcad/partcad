@@ -129,8 +129,10 @@ That downloads the bundle for the current operating system and architecture from
 Nothing else on the system is touched, and no ``sudo`` is asked for. If ``~/.local/bin`` is not on your
 ``PATH``, the installer says so and prints the line to add.
 
-The bundle is around 875MB unpacked and 290MB to download on Linux, somewhat less on MacOS and Windows.
-Most of it is the OpenCASCADE geometry kernel, which the wheels download too, just at ``pip install`` time.
+The bundle is around 180MB unpacked and 57MB to download on Linux x86_64, and about half that on MacOS and
+on Linux arm64, which carry no bundled OpenSCAD. It carries no CAD kernel: PartCAD builds every shape in a
+conda sandbox it provisions itself, so ``conda`` (or ``mamba``) is a prerequisite here exactly as it is for
+the wheels. ``pc healthcheck`` reports what this machine is missing.
 
 Supported platforms are Linux on x86_64 and arm64, and MacOS on Apple silicon. Windows is covered by the
 ``.zip`` archives under :ref:`manual installation <standalone-manual>`.
@@ -253,9 +255,9 @@ Manual installation
 The archives are attached to every `GitHub release <https://github.com/partcad/partcad/releases>`_ next to
 the wheels, together with a ``.sha256`` file each:
 
-* ``partcad-<version>-ubuntu-22.04-x86_64.tar.gz``, ``partcad-<version>-ubuntu-22.04-arm64.tar.gz``
-* ``partcad-<version>-ubuntu-24.04-x86_64.tar.gz``, ``partcad-<version>-ubuntu-24.04-arm64.tar.gz``
-* ``partcad-<version>-macos-15-arm64.tar.gz``, ``partcad-<version>-macos-26-arm64.tar.gz``
+* ``partcad-<version>-ubuntu-22.04-x86_64.tar.xz``, ``partcad-<version>-ubuntu-22.04-arm64.tar.xz``
+* ``partcad-<version>-ubuntu-24.04-x86_64.tar.xz``, ``partcad-<version>-ubuntu-24.04-arm64.tar.xz``
+* ``partcad-<version>-macos-15-arm64.tar.xz``, ``partcad-<version>-macos-26-arm64.tar.xz``
 * ``partcad-<version>-windows-2022-x86_64.zip``
 
 Pick the newest one your machine is not older than -- see :ref:`the note above <standalone-os-versions>` on
@@ -266,9 +268,14 @@ Each one unpacks into a single ``partcad/`` directory holding ``pc``, ``partcad`
 need. Put that directory anywhere and run the commands from it, or add it to ``PATH``. On Windows, unpack
 the ``.zip`` and add the resulting directory to ``PATH`` -- there is no shell script installer for Windows.
 
+The ``tar`` on MacOS and on every Linux distribution reads xz without being told to, which is why the command
+below passes no compression flag. A very small Linux system may need the ``xz`` utility installed for it
+(``xz-utils`` on Debian and Ubuntu, ``xz`` on Fedora and Alpine); ``install.sh`` says so by name if it is
+missing.
+
 .. code-block:: shell
 
-  $ tar -xzf partcad-<version>-ubuntu-22.04-x86_64.tar.gz -C ~/.local/share
+  $ tar -xf partcad-<version>-ubuntu-22.04-x86_64.tar.xz -C ~/.local/share
   $ ~/.local/share/partcad/pc version
 
 .. note::

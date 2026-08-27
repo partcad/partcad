@@ -61,7 +61,7 @@ ARTIFACT_PREFIX = "partcad-standalone-"
 EXE = "partcad-json-rpc.exe" if os.name == "nt" else "partcad-json-rpc"
 
 # Reported to the caller so a UI can say what is happening; the download is
-# ~290MB compressed, which is not something to do behind the user's back.
+# ~60MB compressed, which is not something to do behind the user's back.
 Progress = Callable[[str], None]
 
 
@@ -84,7 +84,14 @@ def host_platform(system: Optional[str] = None, machine: Optional[str] = None):
 
 
 def archive_extension(os_name: str) -> str:
-    return "zip" if os_name == "windows" else "tar.gz"
+    """The extension ``dev-tools/pyinstaller/build.sh`` packs the bundle with.
+
+    xz everywhere but Windows: the bundle is native code and an unpacked
+    OpenSCAD, on which xz is worth about a quarter of the download over gzip.
+    ``extract`` reads the compression out of the archive, so this only names the
+    file to fetch.
+    """
+    return "zip" if os_name == "windows" else "tar.xz"
 
 
 def host_release(system: Optional[str] = None) -> Optional[str]:
@@ -448,16 +455,32 @@ def _safe_members(tf, dest: str):
     The stand-in for ``filter="data"`` on interpreters that do not have it (it
     arrived in 3.12, and in the later patch releases of 3.10/3.11 -- FreeCAD
     embeds its own interpreter, so which one runs this is not ours to choose).
-    Same policy: nothing may escape the destination, and links and device/FIFO
-    entries are dropped rather than recreated.
+    Same policy: nothing may escape the destination, device and FIFO entries are
+    dropped, and a link is kept only when it points back inside the archive.
+
+    Links used to be dropped outright, which was safe and, since the bundle grew
+    them, wrong: ``partcad`` and ``partcad-json-rpc`` are relative symlinks to
+    ``pc`` (one ~38MB payload, three names), and ``EXE`` -- the very file this
+    addon launches -- is one of them. Dropping it left an extracted bundle with
+    no service to start, on old interpreters only.
     """
     root = os.path.realpath(dest)
     for member in tf:
-        if member.issym() or member.islnk() or not (member.isfile() or member.isdir()):
+        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
             continue
         target = os.path.realpath(os.path.join(root, member.name))
         if target != root and not target.startswith(root + os.sep):
             continue
+        if member.issym() or member.islnk():
+            link = member.linkname
+            if os.path.isabs(link):
+                continue
+            # A symlink resolves against its own directory; a hard link name is
+            # relative to the archive root.
+            base = os.path.dirname(member.name) if member.issym() else ""
+            resolved = os.path.normpath(os.path.join(root, base, link))
+            if resolved != root and not resolved.startswith(root + os.sep):
+                continue
         yield member
 
 
@@ -470,7 +493,7 @@ def _extract_tar(archive: str, dest: str) -> None:
 
 
 def extract(archive: str, dest: str) -> None:
-    """Unpack a bundle archive (``.tar.gz`` or ``.zip``) into ``dest``."""
+    """Unpack a bundle archive (``.tar.xz`` or ``.zip``) into ``dest``."""
     if archive.endswith(".zip"):
         _extract_zip(archive, dest)
     else:
@@ -579,7 +602,7 @@ def download_devel(
         (
             os.path.join(inner_dir, name)
             for name in sorted(os.listdir(inner_dir))
-            if name.endswith(".tar.gz") or name.endswith(".zip")
+            if name.endswith(".tar.xz") or name.endswith(".tar.gz") or name.endswith(".zip")
         ),
         None,
     )

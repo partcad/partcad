@@ -168,7 +168,18 @@ if [ "${OS_NAME}" = "windows" ]; then
   # PyInstaller names the executables `pc.exe` and `partcad.exe` there.
   EXE_SUFFIX=".exe"
 else
-  ARCHIVE_EXT="tar.gz"
+  # xz rather than gzip. The bundle is native code and an unpacked OpenSCAD,
+  # neither of which gzip does well on: measured on a Linux x86_64 build, xz -6
+  # takes the download from 78MB to 57MB for a few seconds more at either end.
+  # Every consumer of this name reads the extension from one
+  # place of its own (`install.sh`, `partcad_client.selfupdate`,
+  # `provision.ts`, the FreeCAD addon's `provision.py`); all four say "tar.xz"
+  # and unpack by content rather than by name, so there is no format to agree
+  # on beyond the file name itself.
+  #
+  # Windows stays a zip: it is what a machine with no tar can open, and the
+  # portable OpenSCAD in it is already compressed.
+  ARCHIVE_EXT="tar.xz"
   EXE_SUFFIX=""
 fi
 
@@ -182,21 +193,25 @@ echo "==> Building PartCAD ${VERSION} for ${PLATFORM} with $("${PYTHON}" --versi
 
 ##############################################  DEPENDENCIES  ################################################
 
-# setuptools 82 removed `pkg_resources` outright, and PyInstaller's
-# `pyi_rth_pkgres` runtime hook still expects it: the bundle then aborts at
-# start-up with "module 'pkg_resources' has no attribute 'NullProvider'".
-# Passed to every install below, because installing PartCAD is otherwise free to
-# pull the newest setuptools back in. Drop the bound once PyInstaller ships a
-# hook that copes.
-SETUPTOOLS_BOUND="setuptools<82"
+# There used to be a "setuptools<82" bound on every install below. setuptools 82
+# removed `pkg_resources`, PyInstaller's `pyi_rth_pkgres` runtime hook expects it,
+# and a bundle built without it aborted at start-up with "module 'pkg_resources'
+# has no attribute 'NullProvider'".
+#
+# It is gone because the hook is: PyInstaller adds `pyi_rth_pkgres` only when
+# `pkg_resources` is in the module graph, and "partcad.spec" now excludes it
+# along with the rest of setuptools -- nothing in PartCAD imports either, and the
+# two dependencies that reach for `pkg_resources` both do it inside
+# `try: ... except ImportError`. A bundle frozen against setuptools 8x builds and
+# runs.
 
 if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   echo "==> Installing build dependencies"
-  "${PYTHON}" -m pip install --upgrade pip wheel "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install --upgrade pip wheel
   # PyInstaller only learned about Python 3.14 in 6.15; older releases cap
   # themselves at "<3.14" and would refuse to install on the interpreter the
   # bundle is built with.
-  "${PYTHON}" -m pip install "pyinstaller>=6.15" "${SETUPTOOLS_BOUND}"
+  "${PYTHON}" -m pip install "pyinstaller>=6.15"
 
   echo "==> Installing PartCAD from this checkout"
   # One install: `partcad` ships every package the bundle needs and declares all
@@ -206,19 +221,27 @@ if [ "${INSTALL_DEPENDENCIES}" = "1" ]; then
   #
   # A frozen bundle cannot be extended with pip afterwards, so the optional
   # extras the wheel leaves to the user are all built in.
-  "${PYTHON}" -m pip install "${REPO_ROOT}[lint,aws]" "${SETUPTOOLS_BOUND}"
-  # The CAD kernel is NOT a dependency of the 'partcad' wheel - the core runs all
-  # CAD in sandboxes. The standalone bundle, however, freezes it in so that 'pc'
-  # works on a machine with no Python: convert("build123d"/"cadquery") hands back
-  # live objects and so needs OCP in-process, and the "imported by name" check
-  # below refuses to build the bundle without OCP/build123d. Pinned to the
-  # sandbox versions (see src/partcad/sandbox_versions.py).
+  "${PYTHON}" -m pip install "${REPO_ROOT}[lint,aws]"
   #
-  # Note that 'pc inspect' no longer needs any of this: it tessellates in a
-  # sandbox and sends glTF to the PartCAD IDE through 'partcad_ide_client', which
-  # the 'partcad' install above already carries (it ships inside that wheel).
-  "${PYTHON}" -m pip install \
-    "cadquery-ocp==7.9.3.1.1" "build123d==0.11.1" "ocpsvg==0.6.0" "${SETUPTOOLS_BOUND}"
+  # No CAD kernel is installed here, and none is frozen into the bundle.
+  #
+  # It used to be: 'cadquery-ocp', 'build123d' and 'ocpsvg' were pinned to the
+  # sandbox versions and pulled in so that `convert("build123d"/"cadquery")`
+  # could hand a caller a live object. That is a *library* API, and this bundle
+  # is not importable as a library -- it is three console programs. Every path
+  # the programs do reach builds, renders, exports, converts and tessellates in
+  # a conda sandbox and carries geometry between them as BREP-byte envelopes the
+  # core never opens (see requirements.txt and `Shape._to_envelope`), so the
+  # kernel sat in the bundle unimported.
+  #
+  # It was not cheap to carry. OCP drags in the whole scientific stack through
+  # build123d -- scipy, sympy, scikit-learn, numpy, IPython, ezdxf -- and the
+  # VTK-enabled OCP drags in VTK on top of that. Measured on Linux x86_64, all
+  # of it together was about two thirds of the bundle.
+  #
+  # What this does *not* change: `pc` still needs conda for any CAD, exactly as
+  # the wheel does and exactly as it did before, because that is where the CAD
+  # ran either way. `pc healthcheck` reports it.
 fi
 
 ###############################################  OPENSCAD  ###################################################
@@ -345,10 +368,14 @@ echo "==> Checking the dependencies that are imported by name"
 import importlib
 import sys
 
+# No CAD library is listed: none is frozen in. See the note beside the pip
+# installs above, and the `excludes` in "partcad.spec" that keep one out even
+# when the build environment happens to have it.
 REQUIRED = {
-    "OCP": "the geometry kernel",
-    "build123d": "the geometry kernel",
     "partcad_ide_client": "`pc inspect` displaying into the PartCAD IDE",
+    # pygit2's compiled cffi module loads this from C, so nothing in the import
+    # graph names it -- see the note beside the hidden import in "partcad.spec".
+    "_cffi_backend": "pygit2, and so every repository PartCAD clones",
     "ruff.__main__": "`pc lint` of Python files",
     "aiomcache": "the 'cacheRemote' cache tier",
     "aioboto3": "the 'cacheS3' cache tier",
@@ -467,6 +494,39 @@ if [ -d "${OPENSCAD_PAYLOAD_DIR}" ]; then
   cp -a "${OPENSCAD_PAYLOAD_DIR}" "${OPENSCAD_BUNDLED_DIR}"
 fi
 
+##############################################  ONE PAYLOAD  #################################################
+
+# PyInstaller emits `pc`, `partcad` and `partcad-json-rpc` byte for byte
+# identical -- since PyInstaller 6 an `EXE` carries the whole `PYZ`, so each is
+# a full ~38MB copy of the compiled Python rather than the bootloader stub the
+# one-directory layout suggests. Three of them cost ~76MB unpacked and about as
+# much again in the archive, because a stream compressor cannot see across
+# files that far apart.
+#
+# So keep one and point the other two at it. `entrypoint.py` dispatches on
+# `sys.argv[0]`, which is the name the user typed and therefore survives the
+# symlink, and PyInstaller's bootloader finds `_internal` beside the resolved
+# executable, which is the same directory either way. Both the tar and the
+# unpackers preserve the link: it is relative and stays inside the bundle,
+# which is what `tarfile`'s "data" filter allows.
+#
+# Windows keeps three real copies. Its archive is a zip, which stores a symlink
+# as a copy of its target anyway, and creating one there needs a privilege a
+# runner does not have.
+if [ "${OS_NAME}" != "windows" ]; then
+  echo "==> Pointing the duplicate executables at 'pc'"
+  for alias_name in partcad partcad-json-rpc; do
+    if cmp -s "${BUNDLE_DIR}/pc" "${BUNDLE_DIR}/${alias_name}"; then
+      rm -f "${BUNDLE_DIR}/${alias_name}"
+      ln -s pc "${BUNDLE_DIR}/${alias_name}"
+    else
+      # A PyInstaller that starts emitting per-name executables would land
+      # here. Nothing breaks; the bundle is just as big as it used to be.
+      echo "    '${alias_name}' is not a copy of 'pc', leaving it alone"
+    fi
+  done
+fi
+
 echo "==> Smoke testing the bundle"
 # Run from a directory that is not the checkout: a bundle that accidentally
 # depends on the source tree still works when started next to it.
@@ -528,7 +588,12 @@ if [ "${ARCHIVE_EXT}" = "zip" ]; then
 else
   # The archive unpacks to a single `partcad/` directory, which is what
   # `install.sh` expects to move into place.
-  tar -czf "${ARCHIVE_PATH}" -C "${OUTPUT_DIR}" partcad
+  #
+  # `-T0` gives xz every core, which is what keeps this to under a minute on a
+  # runner; GNU tar passes XZ_OPT on to xz, and the bsdtar on macOS ignores it
+  # and compresses single-threaded. `-6` is xz's default and already within a
+  # couple of percent of `-9` here, which would cost far more memory per thread.
+  XZ_OPT="${XZ_OPT:--6 -T0}" tar -cJf "${ARCHIVE_PATH}" -C "${OUTPUT_DIR}" partcad
 fi
 
 # `install.sh` verifies this checksum before it unpacks anything.
@@ -549,6 +614,6 @@ pathlib.Path(name + '.sha256').write_text(f'{digest}  {name}\n')
 )
 
 echo "==> Done"
-echo "    bundle:   ${BUNDLE_DIR}"
-echo "    archive:  ${ARCHIVE_PATH}"
+echo "    bundle:   ${BUNDLE_DIR} ($(du -sh "${BUNDLE_DIR}" | cut -f1) unpacked)"
+echo "    archive:  ${ARCHIVE_PATH} ($(du -h "${ARCHIVE_PATH}" | cut -f1))"
 echo "    checksum: ${ARCHIVE_PATH}.sha256"

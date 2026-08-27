@@ -477,9 +477,16 @@ fi
 if [ "${IDE}" = "1" ]; then
   ARCHIVE_PREFIX="partcad-ide"
   WHAT="the PartCAD IDE"
+  # The IDE is mostly an Electron runtime, which xz barely improves on, and it
+  # is packed by "ide/standalone/build.sh" rather than here.
+  ARCHIVE_EXT="tar.gz"
 else
   ARCHIVE_PREFIX="partcad"
   WHAT="PartCAD"
+  # The command line bundle is native code and an unpacked OpenSCAD, where xz
+  # is worth about a quarter of the download over gzip.
+  # "dev-tools/pyinstaller/build.sh" packs it; this name has to match.
+  ARCHIVE_EXT="tar.xz"
 fi
 
 : "${BASE_URL:=https://github.com/${REPOSITORY}/releases/download/${VERSION}}"
@@ -542,7 +549,7 @@ trap cleanup EXIT INT TERM
 # ever one candidate, so this is a single download that reports the same way.
 ARCHIVE=""
 for candidate_platform in ${PLATFORMS}; do
-  candidate="${ARCHIVE_PREFIX}-${VERSION}-${candidate_platform}.tar.gz"
+  candidate="${ARCHIVE_PREFIX}-${VERSION}-${candidate_platform}.${ARCHIVE_EXT}"
   log "Downloading ${WHAT} ${VERSION} for ${candidate_platform}..."
   log "  ${BASE_URL}/${candidate}"
   if download "${BASE_URL}/${candidate}" "${TMP_DIR}/${candidate}"; then
@@ -579,7 +586,19 @@ fi
 ###############################################  INSTALL  ####################################################
 
 log "Unpacking..."
-tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "${TMP_DIR}"
+# `-xf` rather than `-xzf`: tar reads the compression from the archive itself,
+# so this one line covers the xz-compressed command line bundle and the
+# gzip-compressed IDE alike. GNU tar runs `xz` as a helper program for the
+# former, which a very small system may not have installed; bsdtar (macOS)
+# decompresses in-process and never needs it.
+if ! tar -xf "${TMP_DIR}/${ARCHIVE}" -C "${TMP_DIR}"; then
+  if [ "${ARCHIVE_EXT}" = "tar.xz" ] && ! command -v xz >/dev/null 2>&1; then
+    fail "could not unpack ${ARCHIVE}: this system has no 'xz'.
+       Install it (xz-utils on Debian/Ubuntu, xz on Fedora and Alpine) and
+       run this installer again."
+  fi
+  fail "could not unpack ${ARCHIVE}"
+fi
 
 # Replace an existing copy by moving the old one aside first, so that a failure
 # part way through cannot leave a half-deleted installation behind.

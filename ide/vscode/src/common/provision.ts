@@ -41,7 +41,14 @@ interface ReleaseManifest {
 interface HostPlatform {
     os: string;
     arch: string;
-    ext: 'tar.gz' | 'zip';
+    /**
+     * The extension `dev-tools/pyinstaller/build.sh` packs the bundle with: xz
+     * everywhere but Windows, because the bundle is native code and an unpacked
+     * OpenSCAD, on which xz is worth about a quarter of the download over gzip.
+     * `extract()` reads the compression out of the archive, so this only names
+     * the file.
+     */
+    ext: 'tar.xz' | 'zip';
 }
 
 /** This machine, in the names the manifest uses. */
@@ -71,7 +78,7 @@ function hostPlatform(): HostPlatform | undefined {
         default:
             return undefined;
     }
-    return { os: osName, arch, ext: osName === 'windows' ? 'zip' : 'tar.gz' };
+    return { os: osName, arch, ext: osName === 'windows' ? 'zip' : 'tar.xz' };
 }
 
 /**
@@ -322,8 +329,8 @@ export async function ensureServiceExecutable(
     }
 
     const choice = await vscode.window.showInformationMessage(
-        'PartCAD needs its standalone service (partcad-json-rpc). This is a large one-time download ' +
-            '(roughly 290 MB compressed). If you would rather not download it, PartCAD can use a Python ' +
+        'PartCAD needs its standalone service (partcad-json-rpc). This is a one-time download ' +
+            '(roughly 60 MB compressed). If you would rather not download it, PartCAD can use a Python ' +
             'environment instead (the "python" backend), which requires a working Python interpreter.',
         { modal: true },
         'Download',
@@ -370,7 +377,7 @@ export async function updateServiceBundle(
     const execPath = resolveServicePath(context, serverId);
     if (!execPath) {
         // Nothing installed yet: an update of nothing is an install, and that is
-        // the one flow that has to ask before spending 290MB of somebody's link.
+        // the one flow that has to ask before spending 60MB of somebody's link.
         const downloaded = await ensureServiceExecutable(context, serverId);
         return { updated: !!downloaded, execPath: downloaded };
     }
@@ -534,7 +541,7 @@ async function downloadAndExtract(
 }
 
 /**
- * Remove every bundle under `root` except `keep`. A bundle is ~875MB unpacked,
+ * Remove every bundle under `root` except `keep`. A bundle is ~180MB unpacked,
  * so leaving the superseded ones behind is not an option; failing to remove one
  * (a file still open on Windows) is, and is only logged.
  *
@@ -718,7 +725,7 @@ function run(cmd: string, args: string[], cwd: string): Promise<void> {
     });
 }
 
-async function extract(archivePath: string, dest: string, ext: 'tar.gz' | 'zip'): Promise<void> {
+async function extract(archivePath: string, dest: string, ext: 'tar.xz' | 'zip'): Promise<void> {
     if (ext === 'zip') {
         if (process.platform === 'win32') {
             // Windows 10+ ships bsdtar, which unpacks zip archives.
@@ -727,6 +734,8 @@ async function extract(archivePath: string, dest: string, ext: 'tar.gz' | 'zip')
             await run('unzip', ['-q', '-o', archivePath, '-d', dest], dest);
         }
     } else {
-        await run('tar', ['-xzf', archivePath, '-C', dest], dest);
+        // `-xf`, not `-xzf`: tar reads the compression from the archive, which
+        // is what lets this stay right whichever way the bundle was packed.
+        await run('tar', ['-xf', archivePath, '-C', dest], dest);
     }
 }

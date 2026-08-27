@@ -10,9 +10,10 @@ with [`install.sh`](../../install.sh) and never see Python.
 | Install | `pip install -U partcad` | `curl -fsSL .../install.sh \| sh` |
 | Upgrade | `pc upgrade` (runs `pip`) | `pc upgrade` (fetches the release archive) |
 | Needs Python | yes, 3.10-3.14 | no |
-| Size | ~15MB plus whatever pip resolves | ~875MB unpacked, ~290MB compressed (Linux, OpenSCAD included) |
-| Optional extras (`ai`, `lint`) | installed on demand | always included |
+| Size | ~15MB plus whatever pip resolves | ~180MB unpacked, ~57MB compressed (Linux x86_64, OpenSCAD included) |
+| Optional extras (`lint`, `memcache`, `aws`) | installed on demand | always included |
 | Importable as a library | yes | no, it is only the CLI |
+| CAD kernel | not a dependency either way — every shape is built in a conda sandbox | same, see `EXCLUDES` in the spec |
 
 ## One build per OS version
 
@@ -74,8 +75,21 @@ releases for.
 The bundle contains three console executables that share one interpreter, `PYZ`, and set of libraries/data:
 `pc` and `partcad` (the CLI) and `partcad-json-rpc` (the JSON-RPC service the VS Code extension launches by
 default). All three run `entrypoint.py`, which dispatches on `sys.argv[0]`: `partcad-json-rpc` starts the
-service, anything else runs the CLI. A third executable adds only a small bootloader stub, not another copy of
-the ~290MB payload.
+service, anything else runs the CLI.
+
+They are not three separate payloads. Since PyInstaller 6 an `EXE` carries the whole `PYZ`, so what it emits is
+three byte-identical files -- ~14MB each -- rather than the bootloader stubs the one-directory layout suggests,
+and a stream compressor cannot see across files that far apart, so the duplication costs as much again in the
+archive. `build.sh` therefore keeps `pc` and replaces the other two with relative symlinks to it, right after
+the freeze and before the smoke test that runs all three. `sys.argv[0]` is the name the user typed, so the
+dispatch is unaffected, and the bootloader looks for `_internal` beside the resolved executable, which is the
+same directory either way.
+
+Windows keeps three real copies: its archive is a zip, which stores a symlink as a copy of its target anyway,
+and creating one there needs a privilege a runner does not have. Every unpacker has to preserve the links --
+`tarfile`'s `data` filter allows a relative link that stays inside the archive, and the two hand-rolled member
+policies (`selfupdate._reject_unsafe_links`, the addon's `_safe_members`) enforce the same rule. The addon
+used to drop links outright, which was fine until `partcad-json-rpc`, the file it launches, became one.
 
 ## Building
 
@@ -114,7 +128,7 @@ conda anywhere near it. The same crash in the *wheel*-based CI jobs, whose runne
 separately in `.github/actions/setup-all/action.yml`.
 
 The results land in `dist/standalone/`: the `partcad/` bundle, an archive named
-`partcad-<version>-<platform>.tar.gz` (`.zip` on Windows), and its `.sha256`, where `<platform>` is the
+`partcad-<version>-<platform>.tar.xz` (`.zip` on Windows), and its `.sha256`, where `<platform>` is the
 `<os>-<os-version>-<arch>` id above. Pass `--platform=<id>` to name the archive explicitly rather than after
 this machine. The archive name is a contract with four consumers: `install.sh`, `partcad_client.selfupdate`
 (which is what `pc upgrade` and the VS Code extension use to update a bundle in place), the extension's own
@@ -134,6 +148,29 @@ archives themselves by `dev-tools/release/platforms-manifest.sh` and uploaded by
   "ide": { "linux": { "x86_64": ["linux-x86_64"] } }
 }
 ```
+
+### The archive format
+
+The command line bundle is packed with **xz**, not gzip. It is native code and an unpacked OpenSCAD, neither of
+which gzip does well on: measured on a Linux x86_64 build, `xz -6` takes the download from 78MB to 57MB, for a
+few seconds more on the builder (`-T0`, so it uses every core) and for the user unpacking it. `-9` is within a
+couple of percent of `-6` here and costs far more memory per thread, so `-6`, xz's default, is what `build.sh`
+passes.
+
+Windows stays a `.zip`: it is what a machine with no `tar` can open, and the portable OpenSCAD inside it is
+already compressed. The **IDE** stays a `.tar.gz` -- it is mostly an Electron runtime, which xz barely improves
+on, and `ide/standalone/build.sh` packs it rather than this one. `install.sh` is the one place that
+downloads both, and it picks the extension per artifact.
+
+Nothing has to agree on the *format*: every unpacker reads the compression out of the archive (`tar -xf`,
+`tarfile.open(..., "r:*")`). What has to agree is the file *name*, which is the same four-place contract the
+platform id already lives in: `install.sh`, `partcad_client.selfupdate.archive_extension()`,
+`provision.ts`'s `hostPlatform()`, and the addon's `provision.archive_extension()`. `dev-tools/release/platforms-manifest.sh`
+scans for both tar flavours, because it is pointed at bundle and IDE directories alike.
+
+One thing xz asks of the host that gzip does not: GNU tar runs `xz` as a helper program, so a very small Linux
+system needs `xz-utils` installed. `install.sh` says so by name when the unpacking fails. bsdtar, which is what
+macOS has, decompresses in-process and needs nothing.
 
 Both artifact kinds are in it because they are named differently: the command line bundle carries the OS
 version it was frozen on, the IDE does not (it ships its own Electron runtime and is built once per operating
@@ -161,6 +198,86 @@ Freezing replaces the *installation*, not the architecture. PartCAD still runs C
 build123d, OpenSCAD) in a separate Python interpreter that it provisions itself with conda, and still clones
 package repositories with `git`. Both remain external prerequisites of the standalone bundle, exactly as they
 are for the wheels. `pc healthcheck` reports what is missing.
+
+## No CAD kernel
+
+The bundle used to freeze one in: `cadquery-ocp`, `build123d` and `ocpsvg`, pinned to the sandbox versions.
+That is gone, and it is the single biggest reason the bundle is what it now weighs -- a Linux x86_64 build went
+from 1010MB unpacked to 78MB before OpenSCAD is copied in beside it.
+
+It was carried for one caller. `Shape.convert("build123d"/"cadquery")` hands back a live object, which needs the
+library in this process -- and that is a *library* API. This bundle is three console programs; it is not
+importable, so nothing can call it. The paths the programs do reach never hold a live shape:
+
+- Everything that builds, renders, exports, converts or tessellates a shape runs in the conda sandbox and comes
+  back as a BREP-byte envelope the core carries without opening (`partcad.shape_envelope`, and the note at the
+  top of `requirements.txt`).
+- `Shape._to_envelope()` is the one place that would encode a live shape a factory built in-process, and no
+  factory builds one: not a single module under `partcad/` outside `wrappers/` and `builtin/` imports a CAD
+  library, and both of those directories run in the sandbox.
+- `partcad.geom` builds an OCCT transform on demand. `_from_ocp()` reads the `ImportError` as "this is not an
+  OCP object", which is the right answer in a process that has no OCP, and nothing calls the other two.
+
+So `pc` from a bundle needs conda for CAD exactly as `pc` from a wheel does, exactly as it did before -- the
+kernel it carried never ran. What it cost: OCP is ~250MB of extension module and OpenCASCADE libraries,
+`build123d` pulls scipy, sympy, scikit-learn, numpy, IPython and ezdxf in at *import* time, and the VTK-enabled
+`cadquery-ocp` the bundle pinned pulls VTK (another ~336MB) on top.
+
+`EXCLUDES` in `partcad.spec` names all of it rather than relying on `build.sh` not installing it, so that a
+bundle frozen from a developer's virtualenv -- which may well have build123d in it for other reasons -- is the
+same bundle CI produces.
+
+One thing to know if you are adding to this: the CAD stack was also, by accident, what dragged `cffi` into the
+bundle. `pygit2` needs `_cffi_backend`, loads it from C, and names it nowhere PyInstaller can see; removing the
+kernel removed the accident and broke every `pc` command that touches git. It is a hidden import now, and a
+`build.sh` pre-flight entry. Expect more of that shape from anything else that leaves.
+
+## What else is excluded, and why the list exists
+
+`EXCLUDES` in `partcad.spec` is not only about the CAD kernel. The rest of it falls into four groups, and every
+entry is there because *nothing the three console programs can reach imports it*:
+
+- **The AI provider SDKs.** PartCAD used to generate parts with an LLM and the bundle carried `openai`,
+  `ollama` and `google-genai` for it, because a frozen bundle cannot be extended with pip. PartCAD no longer
+  drives a model -- it gives one tools to work with instead, as the Agent Skills in `ai-agents/` -- so the
+  feature, the `ai` extra, the `ai-*` part types and the dependencies themselves are gone. The excludes stay as
+  a floor: nothing has to be declared to arrive, and `googleapiclient` in particular ships a cached REST
+  discovery document for every Google API, ~100MB of JSON, that PyInstaller's hook collects wholesale.
+- **Packaging machinery** — `setuptools`, `pkg_resources`, `distutils`, `wheel`. Nothing in PartCAD imports
+  them; the two dependencies that reach for `pkg_resources` (`sentry_sdk.utils`, `wrapt.importer`) both do it
+  inside `try: ... except ImportError`. Keeping `pkg_resources` out is also what let the `setuptools<82` bound
+  go from `build.sh`: PyInstaller adds the `pyi_rth_pkgres` runtime hook only when `pkg_resources` is in the
+  graph, and that hook was the only reason for the pin.
+- **Optional dependencies of dependencies** — `cryptography`/`OpenSSL` (`requests` and
+  `urllib3.contrib.pyopenssl` reach for them, 11MB), `httpx`/`httpcore` (`aiobotocore` has an httpx backend
+  beside its aiohttp one), `pydantic`/`pydantic_core` (4.5MB). Each is behind a `try: import` or a `find_spec`
+  check, so their absence is a state the code already handles.
+- **Test suites and interactive-only data** — `jsonschema.tests` and `aiohttp.test_utils`, which
+  `collect_all`/`collect_submodules` sweep in whole and which are what drag `unittest` into a bundle that runs
+  no tests; and `pydoc_data`, the help-topic database only `help()` reads.
+
+Plus `sitecustomize`/`usercustomize`, which belong to the build *machine* rather than to PartCAD.
+
+### The bundle should not depend on what the builder has installed
+
+That is what the list is really for, and it is worth stating as a property to preserve: **freezing from a
+virtualenv that has extra packages in it must produce the same bundle CI produces.** It is easy to lose. Three
+mechanisms were quietly breaking it before these entries existed:
+
+1. A hook collects a package because it is *installed*, not because it is reachable — `googleapiclient` is the
+   ~100MB case.
+2. A dependency has an optional backend guarded at run time but imported unconditionally in the source, so
+   PyInstaller's static analysis follows it whenever it resolves — `aiobotocore` → `httpx`, `requests` →
+   `cryptography`.
+3. `collect_submodules` on a package whose submodules each import a third-party library. `sentry_sdk` ships an
+   integration module for roughly forty frameworks; collecting them all made the bundle carry whatever subset
+   of those frameworks the builder had. `telemetry_sentry.py` calls `sentry_sdk.init(default_integrations=False,
+   ...)` with a single integration, so the spec collects `sentry_sdk` *except* `sentry_sdk.integrations.*` and
+   names the two that are actually used.
+
+The check is cheap: install something unrelated into the build virtualenv, freeze, and diff the bundle against
+one frozen without it. With the AI SDKs, `cryptography`, `pydantic`, `httpx` and setuptools 8x installed, the
+two are identical today.
 
 ## OpenSCAD
 
@@ -214,7 +331,14 @@ is invisible to it and has to be named in `partcad.spec`. When adding to PartCAD
   `partcad.spec` and say why;
 - a non-Python file read at runtime - add it to `datas` in `partcad.spec`, and remember `__file__` inside a
   bundle points into the unpacked bundle directory, not into a `site-packages`;
-- a new CLI subcommand - nothing to do, `command_modules()` in the spec enumerates the `commands` tree.
+- a new CLI subcommand - nothing to do, `command_modules()` in the spec enumerates the `commands` tree;
+- a compiled extension that loads another module from C rather than importing it in Python - name it in
+  `hiddenimports` *and* in `build.sh`'s pre-flight. `_cffi_backend`, which `pygit2` needs, is the worked
+  example: nothing in the import graph mentions it, so nothing but a runtime failure reveals it missing.
+
+And one in the other direction: a dependency that only the *sandbox* needs does not belong in the bundle at
+all. That is what `EXCLUDES` is for, and the CAD kernel is the case that matters -- see [No CAD
+kernel](#no-cad-kernel).
 
 A missing entry does not fail the build. It fails at runtime, on the one code path that needed it, for users
 only. The `Standalone` workflow (`.github/workflows/build-standalone.yml`) builds every platform and then

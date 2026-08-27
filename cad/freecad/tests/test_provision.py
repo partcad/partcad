@@ -52,13 +52,13 @@ def test_an_unsupported_platform_has_no_bundle():
 
 def test_the_archive_format_is_zip_on_windows_only():
     assert provision.archive_extension("windows") == "zip"
-    assert provision.archive_extension("linux") == "tar.gz"
+    assert provision.archive_extension("linux") == "tar.xz"
 
 
 def test_archive_and_artifact_names_are_the_ci_contract():
     assert (
-        provision.archive_name("0.7.158", "ubuntu-24.04-x86_64", "tar.gz")
-        == "partcad-0.7.158-ubuntu-24.04-x86_64.tar.gz"
+        provision.archive_name("0.7.158", "ubuntu-24.04-x86_64", "tar.xz")
+        == "partcad-0.7.158-ubuntu-24.04-x86_64.tar.xz"
     )
     assert provision.artifact_name("windows-2022-x86_64") == "partcad-standalone-windows-2022-x86_64"
 
@@ -292,7 +292,9 @@ def test_a_zip_bundle_unpacks_its_contents(tmp_path):
 
 def test_the_tar_member_policy_drops_what_must_not_be_written(tmp_path):
     # The stand-in for filter="data" on interpreters that lack it. Anything that
-    # escapes the destination, and every link or special file, has to go.
+    # escapes the destination has to go -- by its own name, or by where a link
+    # points -- and so does every special file. A link that stays inside the
+    # archive is kept; the bundle is built out of two of them.
     archive = str(tmp_path / "hostile.tar.gz")
     payload = tmp_path / "payload"
     payload.write_text("x")
@@ -310,6 +312,10 @@ def test_the_tar_member_policy_drops_what_must_not_be_written(tmp_path):
         link.type = tarfile.SYMTYPE
         link.linkname = "/etc/passwd"
         tf.addfile(link)
+        climbing = tarfile.TarInfo("partcad/climbing-link")
+        climbing.type = tarfile.SYMTYPE
+        climbing.linkname = "../../../../etc/passwd"
+        tf.addfile(climbing)
         fifo = tarfile.TarInfo("partcad/fifo")
         fifo.type = tarfile.FIFOTYPE
         tf.addfile(fifo)
@@ -329,6 +335,35 @@ def test_the_tar_member_policy_keeps_a_normal_bundle(tmp_path):
         kept = [member.name for member in provision._safe_members(tf, dest)]
 
     assert kept == ["partcad/" + provision.EXE]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the bundle ships copies, not symlinks, on Windows")
+def test_the_service_alias_survives_the_tar_member_policy(tmp_path):
+    """`EXE` is a symlink to `pc` in a real bundle, and this is what extracts it.
+
+    One ~38MB payload carries all three names, so `partcad-json-rpc` -- the very
+    file this addon launches -- arrives as a relative symlink. A member policy
+    that dropped links would leave an extracted bundle with no service to start.
+    """
+    archive = str(tmp_path / "aliased.tar.gz")
+    payload = tmp_path / "pc"
+    payload.write_text("#!/bin/sh\n")
+    with tarfile.open(archive, "w:gz") as tf:
+        tf.add(str(payload), arcname="partcad/pc")
+        alias = tarfile.TarInfo("partcad/" + provision.EXE)
+        alias.type = tarfile.SYMTYPE
+        alias.linkname = "pc"
+        tf.addfile(alias)
+
+    dest = str(tmp_path / "out")
+    with tarfile.open(archive) as tf:
+        kept = [member.name for member in provision._safe_members(tf, dest)]
+    assert kept == ["partcad/pc", "partcad/" + provision.EXE]
+
+    provision.extract(archive, dest)
+    exe = os.path.join(dest, "partcad", provision.EXE)
+    assert os.path.islink(exe)
+    assert os.path.isfile(exe)
 
 
 def test_a_checksum_line_is_parsed_the_way_sha256sum_writes_it():
@@ -471,7 +506,7 @@ def test_a_release_with_a_bundle_for_this_platform_is_used(tmp_path, monkeypatch
     monkeypatch.setattr(provision, "download_devel", lambda *args: pytest.fail("should not fall back"))
 
     assert provision.ensure_service(str(tmp_path)) == "/bundle/" + provision.EXE
-    assert calls["asset"].endswith("/0.7.177/partcad-0.7.177-ubuntu-24.04-x86_64.tar.gz")
+    assert calls["asset"].endswith("/0.7.177/partcad-0.7.177-ubuntu-24.04-x86_64.tar.xz")
 
 
 def test_an_archive_the_manifest_lists_but_the_release_lacks_moves_on(tmp_path, monkeypatch, ubuntu_2404_host):
