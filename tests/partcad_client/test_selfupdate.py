@@ -340,19 +340,33 @@ def test_release_platforms_reports_a_machine_the_release_has_no_build_for(monkey
 # ---------------------------------------------------------------------------
 
 
+# Whether a bundle's aliases are symlinks here, which is what
+# `dev-tools/pyinstaller/build.sh` decides: it points `partcad` and
+# `partcad-json-rpc` at `pc` everywhere but Windows, where the archive is a zip
+# (which stores a symlink as a copy of its target) and creating one needs a
+# privilege a runner may not have. The fixture below ships what the platform
+# ships, so these tests exercise the real layout on both.
+BUNDLE_USES_SYMLINKS = os.name != "nt"
+
+
 def _make_bundle_archive(path, version="0.7.159"):
     """A tarball shaped like a real release: one top-level `partcad/` directory.
 
     Including how the executables are laid out: `pc` is the payload and the
-    other names are relative symlinks to it, which is what
-    `dev-tools/pyinstaller/build.sh` produces.
+    other names point at it -- as relative symlinks where the real bundle uses
+    them, as copies where it does not. See BUNDLE_USES_SYMLINKS.
     """
     staging = path / "build" / "partcad"
     staging.mkdir(parents=True)
-    (staging / "pc").write_text("#!/bin/sh\necho %s\n" % version)
+    payload = "#!/bin/sh\necho %s\n" % version
+    (staging / "pc").write_text(payload)
     for name in selfupdate.BUNDLE_EXECUTABLES:
-        if name != "pc":
+        if name == "pc":
+            continue
+        if BUNDLE_USES_SYMLINKS:
             os.symlink("pc", staging / name)
+        else:
+            (staging / name).write_text(payload)
     (staging / "_internal").mkdir()
     archive = path / ("partcad-%s-linux-x86_64.tar.xz" % version)
     with tarfile.open(archive, "w:xz") as tf:
@@ -377,12 +391,13 @@ def test_extract_unpacks_the_bundle(tmp_path):
     assert (dest / "partcad" / "pc").is_file()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="the bundle ships copies, not symlinks, on Windows")
 def test_extract_keeps_the_aliases_that_point_at_pc(tmp_path):
-    """The bundle ships one ~38MB payload under three names.
+    """The bundle ships one payload under three names.
 
     `partcad` and `partcad-json-rpc` are symlinks to `pc`; an extractor that
     dropped them -- or followed them into a copy -- would give back either a
-    broken installation or the 76MB the links exist to save.
+    broken installation or the megabytes the links exist to save.
     """
     archive = _make_bundle_archive(tmp_path)
     dest = tmp_path / "dest"
@@ -517,12 +532,13 @@ def test_install_standalone_installs_beside_the_running_bundle(standalone, no_re
 def test_install_standalone_repoints_the_launchers(standalone, no_reaper):
     root, bin_dir, _running = standalone
     selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
-    # `readlink`, not `realpath`: inside the bundle every name but `pc` is
-    # itself a symlink to `pc`, so resolving all the way through says nothing
-    # about which version the launcher was pointed at -- which is what this is.
+    # `readlink`, not `realpath`: where the bundle's own aliases are symlinks to
+    # `pc`, resolving all the way through says nothing about which version the
+    # launcher was pointed at -- which is what this is.
     for name in ("pc", "partcad"):
         assert os.readlink(bin_dir / name) == str(root / "0.7.159" / name)
-        assert os.path.realpath(bin_dir / name) == str(root / "0.7.159" / "pc")
+        resolved = "pc" if BUNDLE_USES_SYMLINKS else name
+        assert os.path.realpath(bin_dir / name) == str(root / "0.7.159" / resolved)
 
 
 def test_install_standalone_leaves_foreign_launchers_alone(standalone, no_reaper, tmp_path):

@@ -88,7 +88,7 @@ same directory either way.
 Windows keeps three real copies: its archive is a zip, which stores a symlink as a copy of its target anyway,
 and creating one there needs a privilege a runner does not have. Every unpacker has to preserve the links --
 `tarfile`'s `data` filter allows a relative link that stays inside the archive, and the two hand-rolled member
-policies (`selfupdate._reject_unsafe_links`, the addon's `_safe_members`) enforce the same rule. The addon's
+policies (`selfupdate._reject_unsafe_links`, the addon's `_safe_members`) enforce the same rule. The addon
 used to drop links outright, which was fine until `partcad-json-rpc`, the file it launches, became one.
 
 ## Building
