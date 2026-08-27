@@ -8,6 +8,7 @@ import threading
 from partcad.context import Context
 from partcad.project import Project
 from partcad.lint.lint import Linting, LintingReport, Severity
+from partcad.process_output import decode as decode_output
 
 # Lazy-load the linting dependency as it is not always needed.
 # `ruff` is an optional extra: it is only required when Python linting runs.
@@ -97,7 +98,7 @@ class PythonLinting(Linting):
                 stderr=subprocess.PIPE,
             )
             stdout, _ = await p.communicate()
-            stdout = stdout.decode()
+            stdout = decode_output(stdout)
 
             if stdout and 'passed' not in stdout:
                 for item in json.loads(stdout):

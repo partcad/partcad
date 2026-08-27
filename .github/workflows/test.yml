@@ -489,9 +489,22 @@ jobs:
           # pin - and stamps the PDF with the time it was written. Neither is
           # settable through anything it takes; see 'render:' in the example's
           # partcad.yaml.
+          #
+          # The four raster projections below drift for a different reason: the
+          # bytes are not PartCAD's. '//builtin/render' projects the shape to
+          # SVG itself - and those SVGs are byte-stable, which is why none of
+          # them is listed here - then hands the SVG to svglib, reportlab's
+          # renderPM and Pillow to rasterize. That stack is resolved into the
+          # sandbox at provisioning time, so a new release of any of it moves
+          # the encoded bytes by a few tens without changing the picture. See
+          # 'render:' in the example's partcad.yaml.
           UNSTABLE=(
             ':(exclude)examples/feature_render_custom/bracket.svg'
             ':(exclude)examples/feature_render_custom/bracket.pdf'
+            ':(exclude)examples/feature_render/images/cube.png'
+            ':(exclude)examples/feature_render/images/cube.jpg'
+            ':(exclude)examples/feature_render/images/cylinder.png'
+            ':(exclude)examples/feature_render/images/cylinder.jpg'
           )
 
           if [ -n "$(git status --porcelain -- examples "${UNSTABLE[@]}")" ]; then

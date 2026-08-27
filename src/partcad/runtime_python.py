@@ -22,6 +22,7 @@ from filelock import FileLock
 from . import sandbox_versions
 from . import runtime
 from . import logging as pc_logging
+from .process_output import decode as decode_output
 from . import telemetry
 
 
@@ -554,8 +555,8 @@ class PythonRuntime(runtime.Runtime):
                     # TODO(clairbee): add timeout
                 )
 
-            stdout = stdout.decode()
-            stderr = stderr.decode()
+            stdout = decode_output(stdout)
+            stderr = decode_output(stderr)
 
             if stdout:
                 pc_logging.debug("Output of %s: %s" % (cmd, stdout))
@@ -699,8 +700,8 @@ class PythonRuntime(runtime.Runtime):
                     # TODO(clairbee): add timeout
                 )
 
-            stdout = stdout.decode()
-            stderr = stderr.decode()
+            stdout = decode_output(stdout)
+            stderr = decode_output(stderr)
 
             if stdout:
                 pc_logging.debug("Output of %s: %s" % (cmd, stdout))

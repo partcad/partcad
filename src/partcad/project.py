@@ -448,7 +448,12 @@ class Project(project_config.Configuration):
 
         children = list()
         if os.path.isdir(self.config_dir):
-            sub_folders = [f.name for f in os.scandir(self.config_dir) if f.is_dir()]
+            # Sorted, because this list reaches a generated README: 'os.scandir'
+            # yields whatever order the filesystem stores, so without this the
+            # sub-package section of 'feature_monorepo/README.md' came out in a
+            # different order on a different machine and the rendered-examples
+            # check failed on a tree nobody had touched.
+            sub_folders = sorted(f.name for f in os.scandir(self.config_dir) if f.is_dir())
             for subdir in list(sub_folders):
                 if os.path.exists(
                     os.path.join(
