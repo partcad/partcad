@@ -32,12 +32,53 @@ repos:
       - id: check-github-actions
       - id: check-github-workflows
         args: ["--verbose"]
-  - repo: https://github.com/python-poetry/poetry
-    rev: 1.8.0
+  # Poetry's four hooks are declared here rather than pulled from
+  # `https://github.com/python-poetry/poetry`, for two reasons the
+  # one-distribution refactor made concrete.
+  #
+  # A hook repository is pinned by git tag, and the tag pinned here was 1.8.0 --
+  # a Poetry that predates PEP 621. It does not read `[project]`, so it took the
+  # `[tool.poetry.group.*]` tables in `pyproject.toml` for the package's own
+  # metadata and failed with "The fields ['authors', 'description', 'name',
+  # 'version'] are required in package mode" on every commit that touched that
+  # file. The version now sits in the open, next to what it is pinned to: the
+  # Poetry that generated `poetry.lock`.
+  #
+  # And a hook repository has to be cloned. A developer whose gitconfig rewrites
+  # `https://github.com/` to SSH -- the VS Code dev container copies the host's
+  # gitconfig in, rewrite rules included -- has pre-commit's fetch of it turned
+  # into an SSH fetch, which fails in a shell with no agent behind it (a
+  # `devcontainer exec` session, a CI runner). `additional_dependencies` comes
+  # from PyPI over https and is not rewritten.
+  #
+  # `poetry-plugin-export` is named because `poetry export` left core Poetry in
+  # 2.0. What it exports is byte-identical to what 1.8 exported.
+  - repo: local
     hooks:
       - id: poetry-check
+        name: poetry-check
+        description: run poetry check to validate config
+        entry: poetry check
+        language: python
+        additional_dependencies: ["poetry==2.3.3"]
+        pass_filenames: false
+        files: ^(.*/)?pyproject\.toml$
       - id: poetry-lock
+        name: poetry-lock
+        description: run poetry lock to update lock file
+        entry: poetry lock
+        language: python
+        additional_dependencies: ["poetry==2.3.3"]
+        pass_filenames: false
+        files: ^(.*/)?(poetry\.lock|pyproject\.toml)$
       - id: poetry-export
+        name: poetry-export
+        description: run poetry export to sync lock file with requirements.txt
+        entry: poetry export
+        language: python
+        additional_dependencies: ["poetry==2.3.3", "poetry-plugin-export==1.10.0"]
+        pass_filenames: false
+        files: ^(.*/)?poetry\.lock$
         args: [
             "--format=requirements.txt",
             "--output=.devcontainer/requirements.txt",
@@ -47,6 +88,14 @@ repos:
             "--with=docs",
           ]
       - id: poetry-install
+        name: poetry-install
+        description: run poetry install to install dependencies from the lock file
+        entry: poetry install
+        language: python
+        additional_dependencies: ["poetry==2.3.3"]
+        pass_filenames: false
+        stages: [post-checkout, post-merge]
+        always_run: true
   - repo: local
     hooks:
       - id: shellcheck

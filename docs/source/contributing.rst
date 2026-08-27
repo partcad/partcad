@@ -421,6 +421,34 @@ are downloaded Poetry will also install current package in editable mode, and yo
 
   Installing the current project: partcad (0.8.6)
 
+.. warning::
+
+    **A checkout that predates the one-wheel layout needs cleaning out first.** This repository used to hold six
+    Python distributions in six top-level directories -- ``partcad/``, ``partcad-cli/``, ``partcad-client/``,
+    ``partcad-ide-client/``, ``partcad-service-json-rpc/``, ``partcad-utils/`` -- and to install a seventh,
+    ``partcad-dev``, as the root project. Switching to the branch that collapsed them into ``src/`` leaves both
+    behind, and neither goes away on its own:
+
+    * ``git`` does not remove the old directories, because the only files still in them are ignored ones
+      (``__pycache__/``, ``*.egg-info/``). They look empty and are not.
+    * ``.venv`` keeps the ``partcad-dev`` install. Its ``.pth`` still puts the six deleted ``*/src`` directories on
+      ``sys.path`` and its ``pc`` still points at the pre-rename entry point, so ``pc`` fails with
+      ``ModuleNotFoundError: No module named 'partcad_cli.click.command'``. ``poetry install`` does not replace it
+      -- the distribution was renamed, so Poetry does not know it is there -- and ``pip uninstall partcad-dev``
+      refuses to remove it, with ``ValueError: ('Invalid group name', 'poetry-multiproject-plugin')``, because the
+      metadata it left behind names an entry point group that is not valid.
+
+    Delete both from the repository root, then install again:
+
+    .. code-block:: bash
+
+      $ rm -rf partcad partcad-cli partcad-client partcad-ide-client partcad-service-json-rpc partcad-utils
+      $ rm -rf .venv/lib/python*/site-packages/partcad_dev.pth \
+               .venv/lib/python*/site-packages/partcad_dev-*.dist-info
+      $ poetry install
+
+    A fresh clone needs none of this.
+
 Activate Environment
 --------------------
 
