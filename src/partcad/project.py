@@ -886,12 +886,25 @@ class Project(project_config.Configuration):
         one registered. That is the same part being materialized again rather
         than two declarations claiming one name, so it is handed back rather
         than refused ('register_object').
+
+        The two passes also overlap: 'Assembly.do_instantiate' decides whether
+        to assemble by reading 'children' without a lock, so a thread rendering
+        the assembly and a thread resolving one of its parts by name can both
+        be walking the same links. Hence the second look under the part's own
+        lock, the way 'get_object' does it - otherwise whichever thread got
+        there second creates a part under a name the first has just taken, and
+        'register_object' refuses it.
         """
-        existing = self.parts.get(config["name"])
+        name = config["name"]
+        existing = self.parts.get(name)
         if existing is not None:
             return existing
-        self.init_part_by_config(config)
-        return self.parts.get(config["name"])
+        with Project.PartLock(self, name):
+            existing = self.parts.get(name)
+            if existing is not None:
+                return existing
+            self.init_part_by_config(config)
+            return self.parts.get(name)
 
     def init_object_by_config(self, factory_name: str, config_class, alias_class, config, source_project=None):
         if source_project is None:

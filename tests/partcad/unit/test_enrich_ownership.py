@@ -32,6 +32,8 @@ about what they are testing.
 """
 
 import asyncio
+import threading
+import time
 from typing import ClassVar
 
 import pytest
@@ -740,6 +742,58 @@ def test_a_part_an_assembly_materializes_is_handed_back_the_second_time(one_part
     assert first is not None
     assert second is first
     assert one_part.get_broken_object_reason("part", "robot/forearm") is None
+
+
+def test_two_threads_materializing_one_part_get_one_part(one_part):
+    """The same, when the two passes overlap rather than follow one another.
+
+    'Assembly.do_instantiate' decides whether to assemble by reading 'children'
+    without a lock, so the thread rendering a URDF assembly and the thread
+    resolving one of its links by name can both be walking the same links. The
+    second one must find the part the first is registering, not create a part
+    under a name that is being taken.
+
+    Deterministic in both directions: the second thread is released while the
+    first is inside the factory, so without the lock it passes the presence
+    test and lands on 'ObjectNameTakenError'.
+    """
+    inside = threading.Event()
+
+    class SlowPartFactory(part_factory.PartFactory):
+        def __init__(self, ctx, source_project, target_project, config):
+            super().__init__(ctx, source_project, target_project, config)
+            inside.set()
+            time.sleep(0.3)
+            self._create(config)
+
+        async def instantiate(self, part):
+            return None
+
+    factory.register("part", "test-slow", SlowPartFactory)
+    config = {"type": "test-slow", "name": "robot/wrist/visual/2", "orig_name": "robot/wrist/visual/2"}
+    parts, failures = [], []
+
+    def materialize(wait):
+        if wait:
+            inside.wait(5)
+        try:
+            parts.append(one_part.materialize_part_by_config(dict(config)))
+        except Exception as e:  # pylint: disable=broad-except
+            failures.append(e)
+
+    try:
+        threads = [threading.Thread(target=materialize, args=(wait,)) for wait in (False, True)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        del factory.all["part"]["test-slow"]
+
+    assert failures == []
+    assert len(parts) == 2
+    assert parts[0] is not None
+    assert parts[1] is parts[0]
 
 
 def test_an_alias_that_collides_costs_the_alias_and_nothing_else(tmp_path):
