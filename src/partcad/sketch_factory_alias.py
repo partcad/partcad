@@ -28,6 +28,7 @@ class SketchFactoryAlias(SketchFactory):
             # Complement the config object here if necessary
             self._create(config)
 
+            self.sketch.get_final_config = self.get_final_config
             self.sketch.get_cacheable = self.get_cacheable
 
             # A reference has no cache key of its own until it has taken the
@@ -131,6 +132,12 @@ class SketchFactoryAlias(SketchFactory):
             # which the source resolved along with it.
             obj.components = copy.copy(source.components)
             return wrapped
+
+    def get_final_config(self):
+        source = self.ctx._get_sketch(self.source)
+        if not source:
+            raise Exception(f"The alias source {self.source} is not found")
+        return source.get_final_config()
 
     def get_cacheable(self) -> bool:
         # Cacheable once it knows which entry it shares: a reference keys on

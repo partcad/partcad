@@ -32,6 +32,7 @@ about what they are testing.
 """
 
 import asyncio
+from typing import ClassVar
 
 import pytest
 import yaml
@@ -60,7 +61,7 @@ class CountingPartFactory(part_factory.PartFactory):
     and two objects holding copies of it can be told apart.
     """
 
-    builds: list = []
+    builds: ClassVar[list] = []
 
     def __init__(self, ctx, source_project, target_project, config):
         super().__init__(ctx, source_project, target_project, config)
@@ -128,7 +129,12 @@ def write_package(root, path, config):
 
 
 def build(shape):
-    """Run the factory behind 'shape', which is where an enrich does its work."""
+    """Prepare 'shape' and run the factory behind it, as 'get_wrapped()' does.
+
+    Both halves matter: an enrich resolves what it points at while it is
+    prepared, and hands back the geometry while it is instantiated.
+    """
+    asyncio.run(shape.prepare_async())
     asyncio.run(shape.instantiate(shape))
 
 
@@ -137,7 +143,8 @@ def width_of(shape):
 
 
 def assemble(assembly):
-    """Run the factory behind an assembly, which resolves an enrich the same way."""
+    """The same for an assembly, whose factory assembles synchronously."""
+    asyncio.run(assembly.prepare_async())
     assembly.instantiate(assembly)
 
 
@@ -341,6 +348,23 @@ def test_an_enrich_keeps_its_own_properties_and_the_instance_gets_none_of_them(t
     instance = source.parts["widget;width=5.0"]
     assert instance.config["desc"] == "the original"
     assert "offset" not in instance.config
+
+
+def test_an_enrich_reports_what_it_resolved_to_without_being_built(two_packages):
+    """A shape that comes out of the cache is never instantiated.
+
+    'Shape.get_wrapped()' returns a cached shape before it ever reaches the
+    factory, so what an enrich reports cannot be settled there: it would answer
+    one way on a cold cache and another on a warm one.
+    """
+    ctx = pc.Context(str(two_packages))
+    enricher = ctx.get_project("//test/enricher")
+
+    enrich = enricher.get_part("widget")
+    asyncio.run(enrich.prepare_async())
+
+    assert width_of(enrich) == 5.0
+    assert enrich.config["source"] == "//test/source:widget;width=5.0"
 
 
 def test_the_same_enrich_can_be_instantiated_twice(two_packages):

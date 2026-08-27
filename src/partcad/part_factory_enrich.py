@@ -12,12 +12,7 @@ import typing
 
 from . import part_factory_alias as pfa
 from . import logging as pc_logging
-from .enrich import (
-    ENRICH_ONLY_PROPERTIES,
-    INSTANCE_APPLIED_PROPERTIES,
-    enriched_source_name,
-    warn_about_ignored_properties,
-)
+from .enrich import adopt_source_config, enriched_source_name, warn_about_ignored_properties
 
 from . import telemetry
 
@@ -52,40 +47,33 @@ class PartFactoryEnrich(pfa.PartFactoryAlias):
 
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitEnrich", target_project.name, config["name"]):
+            source = enriched_source_name(source_project, target_project, config)
+            warn_about_ignored_properties(target_project, config, source)
+            # What it resolved to, recorded on the declaration itself the way an
+            # alias records it: 'pc convert' follows the stored configuration
+            # rather than the object, and the 'package:' shorthand leaves it
+            # nothing else to follow.
+            config["source_resolved"] = source
+
             config = copy.copy(config)
-            config["source"] = enriched_source_name(source_project, target_project, config)
-            warn_about_ignored_properties(target_project, config, config["source"])
+            config["source"] = source
             # Fully qualified now, so the package it names must not be applied
             # to it a second time by the alias this hands the work to.
             config.pop("package", None)
             config.pop("project", None)
             super().__init__(ctx, source_project, target_project, config)
 
+    async def prepare_async(self, part) -> None:
+        await super().prepare_async(part)
+
+        # What this object reports, settled here rather than while it is built:
+        # a shape that comes out of the cache is never instantiated, and an
+        # enrich has to answer the same either way (see 'adopt_source_config').
+        source = self.ctx._get_part(self.source)
+        if source is None:
+            raise Exception(f"Failed to find the part to enrich: {self.source}")
+        adopt_source_config(part, source, self.source)
+
     async def instantiate(self, part):
         with pc_logging.Action("Enrich", part.project_name, f"{part.name}:{self.source_part_name}"):
-            source = self.ctx._get_part(self.source)
-            if source is None:
-                raise Exception(f"Failed to find the part to enrich: {self.source}")
-
-            # Unlike a plain alias, an enrich reports the parameters it resolved
-            # to: those values are what was asked for, and 'pc info' and the
-            # assemblies that use it read them from here. What it declares
-            # itself - 'desc', 'offset', whatever else - stays its own, since
-            # that describes this object and not the instance it shares with
-            # every other enrich that asks for the same parameters.
-            # The *final* config of the source, so that an enrich pointing
-            # at an alias - or at a chain of them - reports what is at the end
-            # of it rather than the reference in the middle.
-            enrich_config = part.config
-            part.config = {
-                key: value for key, value in source.get_final_config().items() if key not in INSTANCE_APPLIED_PROPERTIES
-            }
-            for prop_to_copy in enrich_config:
-                if prop_to_copy in ENRICH_ONLY_PROPERTIES:
-                    continue
-                part.config[prop_to_copy] = enrich_config[prop_to_copy]
-            part.config["source"] = self.source
-            part.config["orig_name"] = part.name
-            part.config["name"] = enrich_config["name"]
-
             return await super().instantiate(part)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import decimal
 import os
 import re
 import tempfile
@@ -1207,7 +1208,7 @@ class Project(project_config.Configuration):
                 return None
 
             config = copy.deepcopy(config)
-            if (not "parameters" in config or config["parameters"] is None) and (
+            if ("parameters" not in config or config["parameters"] is None) and (
                 config["type"] not in PARAMETER_PASSING_TYPES
             ):
                 pc_logging.error(
@@ -1231,11 +1232,19 @@ class Project(project_config.Configuration):
                     if config["parameters"][param_name]["type"] == "string":
                         config["parameters"][param_name]["default"] = str(param_value)
                     elif config["parameters"][param_name]["type"] == "int":
-                        # Through 'float' so that a whole number written as one
-                        # ('4.0', which is what a YAML value of 4.0 spells) is
-                        # accepted rather than raising: the values reach here as
-                        # the strings they were written as.
-                        config["parameters"][param_name]["default"] = int(float(param_value))
+                        # A whole number written as one ('4.0', which is what a
+                        # YAML value of 4.0 spells) is what was meant; anything
+                        # with a fraction is not an integer and is refused
+                        # rather than silently truncated. Through 'Decimal'
+                        # rather than 'float' so that neither the test nor the
+                        # value loses precision on a large integer.
+                        value = decimal.Decimal(str(param_value))
+                        if value != value.to_integral_value():
+                            raise ValueError(
+                                "The parameter '%s' of '%s' is an integer, and '%s' is not one"
+                                % (param_name, result_name, param_value)
+                            )
+                        config["parameters"][param_name]["default"] = int(value)
                     elif config["parameters"][param_name]["type"] == "float":
                         config["parameters"][param_name]["default"] = float(param_value)
                     elif config["parameters"][param_name]["type"] == "bool":

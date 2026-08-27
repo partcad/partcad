@@ -113,6 +113,37 @@ def warn_about_ignored_properties(target_project, config, source: str) -> None:
     )
 
 
+def adopt_source_config(obj, source, source_name: str) -> None:
+    """Have this enrich report the instance it resolved to.
+
+    The parameters it asked for are what a reader wants back from it - 'pc
+    info' and the assemblies that use it read them from here - while what the
+    enrich declares itself describes this object and not the instance it shares
+    with every other enrich that asks for the same values.
+
+    Done while the object is prepared rather than while it is instantiated,
+    because a shape that comes out of the cache is never instantiated, and what
+    it reports cannot depend on whether it was built or read back.
+
+    The source's *final* config, so that an enrich pointing at an alias - or at
+    a chain of them - reports what is at the end of it rather than the
+    reference in the middle. Not its placement: the instance applies its own
+    when it materializes itself, and this object's own applies on top of what
+    came back.
+    """
+    enrich_config = obj.config
+    obj.config = {
+        key: value for key, value in source.get_final_config().items() if key not in INSTANCE_APPLIED_PROPERTIES
+    }
+    for prop_to_copy in enrich_config:
+        if prop_to_copy in ENRICH_ONLY_PROPERTIES:
+            continue
+        obj.config[prop_to_copy] = enrich_config[prop_to_copy]
+    obj.config["source"] = source_name
+    obj.config["orig_name"] = obj.name
+    obj.config["name"] = enrich_config["name"]
+
+
 def enriched_source_name(source_project, target_project, config) -> str:
     """'<package>:<object>;<param>=<value>,...' - the instance an enrich asks for.
 

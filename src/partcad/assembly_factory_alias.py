@@ -95,6 +95,14 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
         # cache is never assembled, and this is what tells it which entry that
         # is.
         await obj.take_cache_key_from(source)
+        # Unlike a part or a sketch, which hand back what the source built, this
+        # object builds its own envelope out of the source's children (see
+        # 'instantiate'), so it is the one that fills the entry they share -
+        # otherwise nothing fills it unless the source is asked for directly.
+        # Two references writing it write the same payload: what the cache
+        # stores is the geometry, and the name and placement around it are
+        # stripped on the way in.
+        obj.owns_cache_entry = True
         self.keyed = True
         if source.path:
             obj.path = source.path
@@ -118,9 +126,14 @@ class AssemblyFactoryAlias(pf.AssemblyFactory):
             # builds its own envelope out of them, in its own name and with its
             # own placement, and each piece hands back the one shape it has
             # (see 'Shape.get_wrapped').
-            if not source.children:
-                source.instantiate(source)
-            obj.children = source.children
+            # Under the source's lock: two references can otherwise both find
+            # it empty and assemble it, and the ASSY factory appends to
+            # 'children' rather than replacing them, so the tree would end up in
+            # there twice.
+            with source.lock:
+                if not source.children:
+                    source.instantiate(source)
+                obj.children = source.children
 
     def get_final_config(self):
         source = self.ctx._get_assembly(self.source)
