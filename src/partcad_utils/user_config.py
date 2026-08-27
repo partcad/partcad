@@ -304,8 +304,10 @@ OPTION_KEYS = (
     "git.clone.timeout",
     "git.clone.retry.max",
     "git.clone.retry.patience",
+    "useDocker",
     "useDockerPython",
     "useDockerKicad",
+    "tags",
 )
 
 # The nested sections, by the path each configuration view reads. 'git.auth'
@@ -527,8 +529,10 @@ class UserConfig(vyper.Vyper):
         # default: 180
         self.set_default("git.clone.timeout", 180)
 
+        self.set_default("useDocker", True)
         self.set_default("useDockerPython", False)
         self.set_default("useDockerKicad", True)
+        self.set_default("tags", "")
 
         self.set_env_prefix("pc")
 
@@ -823,17 +827,55 @@ class UserConfig(vyper.Vyper):
         self.bind_env("offline", "PC_OFFLINE")
         self.offline = self.get_bool("offline")
 
+        # option: useDocker
+        # description: whether PartCAD may use Docker at all. The master switch
+        #              over every "useDocker*" option below: turning this off
+        #              turns all of them off, whatever they say, which is what
+        #              lets a machine with no Docker say so once instead of once
+        #              per subject.
+        # values: [True | False]
+        # default: True
+        self.use_docker = self.get_bool("useDocker")
+
         # option: useDockerPython
         # description: use a Docker container for running Python scripts
         # values: [True | False]
         # default: False
-        self.use_docker_python = self.get_bool("useDockerPython")
+        #
+        # Two attributes, because two questions have different answers and both
+        # are asked: '*_declared' is what the configuration says (which is what
+        # the 'useDockerPython' tag reports, so that a package can tell "not
+        # asked for" from "asked for but unavailable"), and the plain attribute
+        # is what actually happens once 'useDocker' has had its say.
+        self.use_docker_python_declared = self.get_bool("useDockerPython")
+        self.use_docker_python = self.use_docker and self.use_docker_python_declared
 
         # option: useDockerKicad
         # description: use a Docker container for KiCad
         # values: [True | False]
         # default: True
-        self.use_docker_kicad = self.get_bool("useDockerKicad")
+        self.use_docker_kicad_declared = self.get_bool("useDockerKicad")
+        self.use_docker_kicad = self.use_docker and self.use_docker_kicad_declared
+
+        # option: tags
+        # description: extra tags to add to the ones PartCAD works out about
+        #              this machine (its architecture, its operating system and
+        #              that system's version). A package, or one of its objects,
+        #              may name the tags it does not work under ("unless:") and
+        #              is then skipped wherever one of them applies. This is how
+        #              a user states something PartCAD cannot see for itself -
+        #              that this host has no Docker, that this is the build
+        #              machine, that KiCad is not installed here.
+        # values: a list of tags, or a string of them separated by commas or
+        #         whitespace (which is what PC_TAGS has to carry)
+        # default: none
+        #
+        # The tags PartCAD derives are NOT here: they are a property of the
+        # machine the work runs on, and are worked out there. This option is
+        # user intent, so it travels with the rest of the configuration - a
+        # daemon serving this caller honours the tags the caller declared.
+        self.bind_env("tags", "PC_TAGS")
+        self.tags = self.get("tags")
 
 
 user_config = UserConfig()

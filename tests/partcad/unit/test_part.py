@@ -233,6 +233,13 @@ def test_part_example_kicad():
         if sys.platform == "win32":
             pytest.skip("Docker does not support nested virtualization on Windows in GitHub Actions")
     ctx = pc.init("examples")
+    # The example declares 'unless: [arm64]', because KiCad publishes no arm64
+    # container image for the sandbox to run 'kicad-cli' in. Asserting on the
+    # package rather than on the architecture is what keeps this test and the
+    # example's own declaration from drifting apart.
+    kicad_package = ctx.get_project("//produce_part_kicad")
+    if kicad_package.skipped:
+        pytest.skip("//produce_part_kicad is excluded here: tag '%s'" % kicad_package.skipped_by)
     nano = ctx.get_part("//produce_part_kicad:Arduino_Nano")
     assert nano is not None
 

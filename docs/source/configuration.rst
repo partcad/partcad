@@ -54,6 +54,7 @@ Besides the package properties and, optionally, a list of imported dependencies,
   javascriptVersion: <(optional) Node.js major version for sandboxing if applicable>
   javascriptRequirements: <(JavaScript scripts only) the list of npm dependencies to install>
   chili3dVersion: <(Chili3D parts only) the version of Chili3D to render with>
+  unless: <(optional) the conditions this package does not work under; see "Tags" below>
 
   dependencies:
       <dependency-name>:
@@ -222,6 +223,110 @@ Common Metadata
 ===============
 
 All :ref:`objects` in PartCAD may carry the following metadata:
+
+.. _tags:
+
+Tags
+----
+
+Not everything a package can be built out of exists everywhere. The KiCad
+example is the case this was introduced for: KiCad publishes its official
+container images for ``linux/amd64`` only, so the sandbox PartCAD runs
+``kicad-cli`` in cannot be pulled on an Arm host at all. That is a property of
+the design, not a fault in it, and the package saying so is better than every
+consumer of it finding out at use.
+
+A **tag** is a short string naming something that is true of *here*. Every
+context carries the tags true of itself.
+
+What the machine is:
+
+* the CPU architecture -- ``x86_64`` and ``amd64`` on 64-bit Intel/AMD,
+  ``arm64``, ``aarch64`` and ``arm`` on 64-bit Arm (all of them, so that a
+  package need not know which spelling the host happens to report);
+* the operating system -- ``linux``, ``macos`` (also ``darwin``), ``windows``;
+* the operating system and its version, as ``<os>-<version>``. On Linux that is
+  the distribution rather than the kernel, read from ``/etc/os-release``:
+  ``ubuntu`` and ``ubuntu-24.04``, plus whatever ``ID_LIKE`` names (``debian``).
+  On macOS, ``macos-26`` and ``macos-26.1``. On Windows, ``windows-11``.
+
+How PartCAD is configured to work -- one tag per boolean option, carried in one
+of two spellings, the option's name when it is on and that name prefixed with
+``!`` when it is off:
+
+* ``useDocker`` / ``!useDocker`` -- whether PartCAD may use Docker at all;
+* ``useDockerPython`` / ``!useDockerPython``;
+* ``useDockerKicad`` / ``!useDockerKicad``.
+
+These report each option **as configured**, not as it ends up applying:
+``useDocker`` is a master switch over the other two, so ``useDockerKicad`` and
+``!useDocker`` can hold at once. Both spellings exist so that either answer can
+be named -- a package that cares which way an option is set should not have to
+guess what an absent tag meant. Note that ``!`` is part of a tag's name, not an
+operator: a tag is matched, never evaluated, and ``!`` means nothing anywhere
+else.
+
+Anything PartCAD cannot work out for itself -- that this is the build machine,
+that this host is behind a proxy -- is added by the user, through the ``tags``
+user configuration option (``pc config`` shows it) or the ``PC_TAGS``
+environment variable. ``pc system status`` prints the whole resolved set:
+
+.. code-block:: console
+
+  $ PC_TAGS="build-machine" pc system status
+  INFO: Tags: aarch64, arm, arm64, build-machine, debian, linux, ubuntu, ubuntu-24.04, useDocker, useDockerKicad, !useDockerPython
+
+Tags are matched case-insensitively, and are shown in the spelling PartCAD names
+them by -- which is why ``useDocker`` is camelCase (it is an option name) and
+``arm64`` is not.
+
+A package, or any object of a package, may then declare the conditions it does
+**not** work under, using ``unless``:
+
+.. code-block:: yaml
+
+  # The whole package is skipped on an Arm host that will run KiCad in a
+  # container -- but not on one where KiCad has been configured to run natively
+  unless: [[arm, useDocker, useDockerKicad]]
+
+  parts:
+    pcb:
+      type: kicad
+      # ... or just this one part, and on any Arm host
+      unless: arm
+
+``unless`` is a list of **clauses**, and *any one* of them excluding is enough
+(OR). A clause is either a single tag, or a list of tags that must *all* hold
+together (AND). Either level may be written as a bare tag when there is only
+one, so all of these are valid:
+
+.. code-block:: yaml
+
+  unless: arm64                                   # one tag
+  unless: [arm64, windows]                        # either one excludes
+  unless: [[arm, useDocker], macos]               # both of the first, or macOS
+
+An empty clause is refused rather than ignored: it would hold everywhere.
+
+Wherever a clause holds, the declaration is skipped -- it is not enumerated, not
+listed, and not instantiated -- and PartCAD says so once, at ``INFO``, naming
+the clause that did it:
+
+.. code-block::
+
+  INFO: Skipping the package '//pub/examples/partcad/produce_part_kicad': excluded by 'unless' (arm and useDocker and useDockerKicad)
+
+Skipping a package skips what it brings in: its subfolders and its declared
+dependencies are not imported either.
+
+Note that there is deliberately no inverse condition ("only on"). A declaration
+is expected to work everywhere; naming the exceptions keeps the common case
+unwritten, and keeps a platform that does not exist yet from silently excluding
+everything written before it.
+
+A reference to an object that was skipped does not resolve. An alias or an
+``enrich`` built on an object excluded here has to carry the same ``unless``, or
+it will be left pointing at nothing.
 
 .. _requirements:
 

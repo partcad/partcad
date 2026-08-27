@@ -67,7 +67,7 @@ from . import telemetry
 
 telemetry.init(__version__)
 
-from . import actions, exception, healthcheck, logging, utils
+from . import actions, exception, healthcheck, logging, tags, utils
 from .assembly import Assembly
 from .assembly_connect import ConnectHold, ConnectHow
 from .consts import *
@@ -150,6 +150,7 @@ __all__ = [
     "logging",
     "part",
     "shape",
+    "tags",
     "scene",
     "telemetry",
     "user_config",
