@@ -74,7 +74,15 @@ class Assembly(Shape):
         self.children = []
 
     async def do_instantiate(self):
-        if len(self.children) == 0:
+        # Under the lock, and looked at again once it is held: two threads can
+        # ask for the same assembly at once - one rendering it, one resolving a
+        # part it produces ('Project._materialize_derived_part') - and a factory
+        # appends to 'children' rather than replacing them, so both finding it
+        # empty puts the whole tree in there twice. 'get_wrapped()' already
+        # holds this lock on the way in, which is why it is an RLock.
+        with self.lock:
+            if len(self.children) != 0:
+                return
             self._wrapped = None  # Invalidate if any
             await threadpool_manager.run(self.instantiate, self)
             if len(self.children) == 0:

@@ -27,6 +27,14 @@ from .utils import format_parameterized_name, get_child_project_path
 # 'type' come from the instance, which is what is actually built.
 ENRICH_ONLY_PROPERTIES = frozenset({"type", "path", "orig_name", "source", "project", "package", "with"})
 
+# What belongs to the object an enrich points at and to nothing else. An
+# 'aliases:' entry is a name the *source's* package publishes for the source,
+# and a package does not gain a part called 'box' because one of its enriches
+# happens to point at something that has one. The enrich publishes its own
+# aliases if it declares them - that is an ordinary property of the declaration,
+# and it is kept.
+SOURCE_ONLY_PROPERTIES = frozenset({"aliases"})
+
 # What the object an enrich points at has already applied to itself by the time
 # it hands its geometry back: 'get_wrapped()' places and scales what a factory
 # produced, and the instance now materializes itself (see 'PartFactoryAlias').
@@ -133,7 +141,9 @@ def adopt_source_config(obj, source, source_name: str) -> None:
     """
     enrich_config = obj.config
     obj.config = {
-        key: value for key, value in source.get_final_config().items() if key not in INSTANCE_APPLIED_PROPERTIES
+        key: value
+        for key, value in source.get_final_config().items()
+        if key not in INSTANCE_APPLIED_PROPERTIES and key not in SOURCE_ONLY_PROPERTIES
     }
     for prop_to_copy in enrich_config:
         if prop_to_copy in ENRICH_ONLY_PROPERTIES:

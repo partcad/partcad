@@ -780,6 +780,84 @@ def test_a_user_s_parameter_override_says_which_instance_an_enrich_wants(tmp_pat
     assert width_of(wide) == 9.0
 
 
+def test_an_enrich_does_not_publish_the_aliases_of_what_it_points_at(tmp_path):
+    """'aliases:' on the source is the source package's name for the source.
+
+    A package does not gain a part called 'box' because one of its enriches
+    happens to point at something that has one - which is what
+    'examples/produce_part_cadquery_primitive' saw as an 'Aliases: box' row
+    appearing under every enriched entry of its README.
+    """
+    write_package(
+        tmp_path,
+        "",
+        {
+            "name": "//test",
+            "parts": {
+                "widget": {
+                    "type": "test-null",
+                    "parameters": {"width": {"default": 3.0}},
+                    "aliases": ["box"],
+                },
+                "wide": {"type": "enrich", "source": ":widget", "with": {"width": 5.0}},
+            },
+        },
+    )
+    ctx = pc.Context(str(tmp_path))
+    project = ctx.get_project("//test")
+    wide = project.parts["wide"]
+    build(wide)
+
+    # The source keeps its own, and so does the alias the package made for it.
+    assert project.part_configs["widget"]["aliases"] == ["box"]
+    assert "box" in project.parts
+    assert "aliases" not in wide.config
+
+
+def test_two_threads_assembling_one_assembly_assemble_it_once(tmp_path):
+    """An assembly is assembled once, however many threads ask for it.
+
+    'Project._materialize_derived_part' assembles one to get at the parts it
+    produces while another thread may be rendering it, and a factory appends to
+    'children' rather than replacing them - so both finding it empty puts the
+    whole tree in there twice. That is what 'examples/produce_assembly_urdf'
+    saw as a robot.svg carrying every line of itself twice.
+    """
+    inside = threading.Event()
+
+    class SlowAssemblyFactory(assembly_factory.AssemblyFactory):
+        def __init__(self, ctx, source_project, target_project, config):
+            super().__init__(ctx, source_project, target_project, config)
+            self._create(config)
+
+        def instantiate(self, assembly):
+            inside.set()
+            time.sleep(0.3)
+            # As the URDF and ASSY factories do: appended, not assigned.
+            assembly.children.append(object())
+
+    factory.register("assembly", "test-slow", SlowAssemblyFactory)
+    write_package(tmp_path, "", {"name": "//test", "assemblies": {"rig": {"type": "test-slow"}}})
+    ctx = pc.Context(str(tmp_path))
+    rig = ctx.get_project("//test").assemblies["rig"]
+
+    def assemble_it(wait):
+        if wait:
+            inside.wait(5)
+        asyncio.run(rig.do_instantiate())
+
+    try:
+        threads = [threading.Thread(target=assemble_it, args=(wait,)) for wait in (False, True)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        del factory.all["assembly"]["test-slow"]
+
+    assert len(rig.children) == 1
+
+
 def test_two_threads_materializing_one_part_get_one_part(one_part):
     """The same, when the two passes overlap rather than follow one another.
 
