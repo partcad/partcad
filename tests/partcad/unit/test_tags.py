@@ -18,6 +18,7 @@ used, which is a fact about the configuration and not about the machine. Hence
 '[[arm, useDocker, useDockerKicad]]', and hence tags for both.
 """
 
+import asyncio
 import platform
 
 import pytest
@@ -25,6 +26,7 @@ import yaml
 
 import partcad as pc
 from partcad import tags as pc_tags
+from partcad_utils.user_config import UserConfig
 
 CUBE = "import cadquery as cq\nshape = cq.Workplane('front').box(1, 1, 1)\nshow_object(shape)\n"
 
@@ -41,6 +43,17 @@ def write_package(path, config, with_cube=True):
 def here():
     """A tag this host really has, so that 'unless' on it excludes for real."""
     return sorted(pc_tags.host_tags())[0]
+
+
+@pytest.fixture
+def also_here():
+    """A second one, for the clauses that need two tags that both hold.
+
+    From the host rather than from the configuration: every host has an
+    architecture and an operating system, whereas which way 'useDocker' is set
+    is a property of whoever is running the tests.
+    """
+    return sorted(pc_tags.host_tags())[1]
 
 
 # The tags a host reports about itself
@@ -155,13 +168,13 @@ def test_the_master_switch_is_reported_apart_from_what_it_governs():
 # Clauses: any one excludes (OR), all the tags in one must hold (AND)
 
 
-def test_a_clause_excludes_only_when_all_of_its_tags_hold(tmp_path, here):
+def test_a_clause_excludes_only_when_all_of_its_tags_hold(tmp_path, here, also_here):
     write_package(
         tmp_path,
         {
             "name": "//test",
             "parts": {
-                "gone": {"type": "cadquery", "path": "cube.py", "unless": [[here, "useDocker"]]},
+                "gone": {"type": "cadquery", "path": "cube.py", "unless": [[here, also_here]]},
                 "kept": {"type": "cadquery", "path": "cube.py", "unless": [[here, "no-such-tag"]]},
             },
         },
@@ -169,7 +182,7 @@ def test_a_clause_excludes_only_when_all_of_its_tags_hold(tmp_path, here):
     project = pc.Context(str(tmp_path)).get_project("//")
 
     assert project.object_names("part") == ["kept"]
-    assert project.get_skipped_object_clause("part", "gone") == "%s and useDocker" % here
+    assert project.get_skipped_object_clause("part", "gone") == "%s and %s" % (here, also_here)
 
 
 def test_any_one_clause_is_enough(tmp_path, here):
@@ -305,6 +318,72 @@ def test_a_misshapen_unless_is_reported_against_the_object(tmp_path):
     assert "unless" in project.get_broken_object_reason("part", "bad")
 
 
+def test_a_parametrized_name_whose_base_is_excluded_says_so(tmp_path, here, caplog):
+    """'gone;width=5' has to read the way 'gone' does.
+
+    The parametrized path looks the base up in the filtered declarations, where
+    an excluded object is absent - which used to come back as an ERROR saying
+    the base was not found, sending the user hunting for a typo they do not
+    have.
+    """
+    write_package(
+        tmp_path,
+        {
+            "name": "//test",
+            "parts": {
+                "gone": {
+                    "type": "cadquery",
+                    "path": "cube.py",
+                    "unless": here,
+                    "parameters": {"width": {"type": "float", "default": 1.0}},
+                }
+            },
+        },
+    )
+    project = pc.Context(str(tmp_path)).get_project("//")
+
+    with caplog.at_level("INFO", logger="partcad"):
+        assert project.get_part("gone;width=5") is None
+    assert "excluded by 'unless'" in caplog.text
+    assert "not found" not in caplog.text
+
+
+def test_a_genuinely_missing_base_is_still_an_error(tmp_path, caplog):
+    """The distinction above must not swallow the case it was carved out of."""
+    write_package(tmp_path, {"name": "//test", "parts": {"kept": {"type": "cadquery", "path": "cube.py"}}})
+    project = pc.Context(str(tmp_path)).get_project("//")
+
+    with caplog.at_level("INFO", logger="partcad"):
+        assert project.get_part("nosuch;width=5") is None
+    assert "not found" in caplog.text
+
+
+def test_rendering_a_package_does_not_trip_over_its_excluded_objects(tmp_path, here):
+    """An excluded object is not a shape to render.
+
+    'render_async' enumerates a package's shapes from its configuration, which
+    still lists everything - nothing rewrites the file. An excluded one resolves
+    to None, and a None among the shapes fails the whole package's render with
+    'EmptyShapesError'.
+    """
+    write_package(
+        tmp_path,
+        {
+            "name": "//test",
+            "parts": {
+                "kept": {"type": "cadquery", "path": "cube.py"},
+                "gone": {"type": "cadquery", "path": "cube.py", "unless": here},
+            },
+            "render": {"svg": None},
+        },
+    )
+    project = pc.Context(str(tmp_path)).get_project("//")
+
+    shapes = project._enumerate_shapes(None, None, None, None)
+    assert None not in shapes
+    assert [shape.name for shape in shapes] == ["kept"]
+
+
 # 'unless' on a package
 
 
@@ -319,6 +398,25 @@ def test_a_package_excluded_by_a_tag_declares_nothing(tmp_path, here):
     assert project.skipped_by == here
     assert project.object_names("part") == []
     assert project.parts == {}
+
+
+def test_rendering_a_skipped_package_is_a_no_op(tmp_path, here):
+    """Not an 'EmptyShapesError'. Its declarations are all still in
+    'config_obj', so enumerating them would resolve every one to None."""
+    write_package(
+        tmp_path,
+        {
+            "name": "//test",
+            "unless": here,
+            "parts": {"gone": {"type": "cadquery", "path": "cube.py"}},
+            "render": {"svg": None},
+        },
+    )
+    project = pc.Context(str(tmp_path)).get_project("//")
+    assert project.skipped
+
+    asyncio.run(project.render_async(output_dir=str(tmp_path)))
+    assert not list(tmp_path.glob("*.svg"))
 
 
 def test_a_skipped_package_is_not_listed(tmp_path, here):
@@ -433,15 +531,30 @@ def test_the_kicad_example_is_declared_the_way_it_is_skipped():
     assert pc_tags.parse_unless(config.get("unless"), "kicad example") == [KICAD_CLAUSE]
 
 
+def kicad_container_config(**overrides):
+    """A configuration with the two Docker switches pinned, not inherited.
+
+    The tags a context carries come from the user configuration it resolves, so
+    a developer whose own '~/.partcad/config.yaml' turns either switch off would
+    otherwise fail these tests over a machine setting rather than over the code.
+    """
+    config = UserConfig()
+    config.use_docker = overrides.get("use_docker", True)
+    config.use_docker_kicad_declared = overrides.get("use_docker_kicad_declared", True)
+    config.use_docker_python_declared = False
+    config.tags = ""
+    return config
+
+
 def test_the_kicad_example_is_skipped_on_an_arm_host_using_the_container(monkeypatch):
     """The whole point, exercised on every host rather than only on Arm ones.
 
     'platform.machine()' is the one thing that decides the architecture, so
     standing in for it is enough to put a context on the far side of the
-    condition CI hits: an Arm machine with 'useDockerKicad' at its default.
+    condition CI hits: an Arm machine with the KiCad container in use.
     """
     monkeypatch.setattr(platform, "machine", lambda: "aarch64")
-    ctx = pc.init("examples")
+    ctx = pc.Context("examples", user_config=kicad_container_config())
     assert {"arm64", "aarch64", "arm"} <= ctx.tags
     assert {"useDocker", "useDockerKicad"} <= ctx.tags
 
@@ -454,8 +567,8 @@ def test_the_kicad_example_is_skipped_on_an_arm_host_using_the_container(monkeyp
     assert "//produce_part_kicad" not in listed
 
 
-@pytest.mark.parametrize("option", ["useDocker", "useDockerKicad"])
-def test_an_arm_host_running_kicad_natively_keeps_the_example(monkeypatch, option):
+@pytest.mark.parametrize("off", ["use_docker", "use_docker_kicad_declared"])
+def test_an_arm_host_running_kicad_natively_keeps_the_example(monkeypatch, off):
     """Turning the container off - either switch - takes the exclusion away.
 
     KiCad does ship Arm builds, so somebody who has 'kicad-cli' installed
@@ -463,16 +576,16 @@ def test_an_arm_host_running_kicad_natively_keeps_the_example(monkeypatch, optio
     is the case a bare 'unless: [arm]' would have got wrong.
     """
     monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    ctx = pc.Context("examples", user_config=kicad_container_config(**{off: False}))
 
-    tags = pc_tags.context_tags(pc.user_config) | {"!" + option}
-    tags.discard(option)
-    with open("examples/produce_part_kicad/partcad.yaml", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-
-    assert pc_tags.excluded_by(config, tags, "kicad example") is None
+    project = ctx.get_project("//produce_part_kicad")
+    assert not project.skipped
+    assert "Arduino_Nano" in project.object_names("part")
 
 
 def test_the_kicad_example_is_skipped_exactly_where_it_says():
+    """Against whatever this machine actually resolves to, ambient configuration
+    included - which is why it branches rather than asserting one outcome."""
     ctx = pc.init("examples")
     project = ctx.get_project("//produce_part_kicad")
     excluded = all(tag in ctx.tags for tag in KICAD_CLAUSE)

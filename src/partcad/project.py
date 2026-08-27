@@ -1085,6 +1085,20 @@ class Project(project_config.Configuration):
             # a plugin-backed package enumerates lazily and may not have
             # instantiated the base yet.
             if base_object_name not in object_configs:
+                # The same distinction the unparametrized branch above makes:
+                # a base this context excluded is not a base that is missing,
+                # and 'gone;width=5' has to read the same way as 'gone'.
+                clause = self.get_skipped_object_clause(factory_name, base_object_name)
+                if clause is not None:
+                    if not quiet:
+                        pc_logging.info(
+                            "The %s '%s:%s' is excluded by 'unless' (%s)",
+                            factory_name,
+                            self.name,
+                            base_object_name,
+                            clause,
+                        )
+                    return None
                 pc_logging.error(
                     "Base object '%s' not found in '%s'",
                     base_object_name,
@@ -1483,6 +1497,13 @@ class Project(project_config.Configuration):
         ignore_manufacturability: bool = False,
     ):
         with pc_logging.Action("RenderPkg", self.name):
+            # A skipped package has nothing to render, and must not be asked to:
+            # its declarations are still in 'config_obj' (nothing rewrites the
+            # file), so enumerating them would resolve every one of them to None
+            # and fail the whole render with an 'EmptyShapesError'.
+            if self.skipped:
+                return
+
             options_project = self.ctx.get_project(options_package) if options_package else None
             if options_package and options_project is None:
                 pc_logging.error("The options package is not found: %s" % options_package)
@@ -1577,15 +1598,24 @@ class Project(project_config.Configuration):
         return names
 
     def _enumerate_shapes(self, sketches, interfaces, parts, assemblies):
-        def get_keys(name):
+        def get_keys(section, kind):
             # A section that is present but empty (e.g. `sketches:` with no
             # entries, as `pc init` writes it) parses as None; treat it as {}.
-            return list((self.config_obj.get(name) or {}).keys()) if name in self.config_obj else []
+            if section not in self.config_obj:
+                return []
+            names = list((self.config_obj.get(section) or {}).keys())
+            # Read from 'config_obj' rather than through 'object_configs()' so
+            # that a plugin-backed package - which declares none of this on disk
+            # - keeps rendering nothing, as it always has. But an object this
+            # context excluded is not one to render: it was never instantiated,
+            # so it would come back None and fail the whole package's render
+            # with an 'EmptyShapesError'.
+            return [name for name in names if self.get_skipped_object_clause(kind, name) is None]
 
-        sketches = sketches or get_keys("sketches")
-        # interfaces = sketches or get_keys("interfaces")
-        parts = parts or get_keys("parts")
-        assemblies = assemblies or get_keys("assemblies")
+        sketches = sketches or get_keys("sketches", "sketch")
+        # interfaces = sketches or get_keys("interfaces", "interface")
+        parts = parts or get_keys("parts", "part")
+        assemblies = assemblies or get_keys("assemblies", "assembly")
 
         shapes = []
         for name in sketches:
