@@ -44,10 +44,12 @@ def entries():
 
 
 def test_the_checked_in_icon_is_there():
+    """The build falls back to this file, so its absence must not be a warning."""
     assert ICON.is_file(), f"{ICON} is missing; regenerate it as README.md describes"
 
 
 def test_it_holds_the_sizes_the_generator_declares():
+    """The checked-in file must still be what 'make_icons.py' would produce today."""
     _data, parsed = entries()
     assert sorted(width for width, _height, _offset, _length in parsed) == sorted(make_icons.ICO_SIZES)
     for width, height, _offset, _length in parsed:
@@ -56,6 +58,7 @@ def test_it_holds_the_sizes_the_generator_declares():
 
 @pytest.mark.parametrize("index", range(len(make_icons.ICO_SIZES)))
 def test_every_image_is_wholly_inside_the_file(index):
+    """A truncated or LFS-pointer '.ico' still parses as a directory of entries."""
     data, parsed = entries()
     _width, _height, offset, length = parsed[index]
     assert length > 0

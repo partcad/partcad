@@ -82,6 +82,11 @@ def write_icns(images: dict[int, bytes], path: pathlib.Path) -> None:
 
 
 def write_ico(images: dict[int, bytes], path: pathlib.Path) -> None:
+    """Assemble a Windows `.ico` out of PNG images keyed by pixel size.
+
+    Pillow builds every size in `ICO_SIZES` by downscaling the largest image it
+    was given, rather than using the separately rendered one for each size.
+    """
     from PIL import Image
 
     largest = Image.open(io.BytesIO(images[max(images)])).convert("RGBA")
@@ -89,6 +94,12 @@ def write_ico(images: dict[int, bytes], path: pathlib.Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Render the logo once per size and write the PNG, `.icns` and `.ico`.
+
+    Returns 1 without writing anything if `cairosvg` or Pillow is missing --
+    which is every Windows machine, since `cairocffi` needs a `libcairo-2.dll`
+    no wheel ships. That is why the `.ico` is checked in.
+    """
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--svg", type=pathlib.Path, required=True, help="the logo to render")
     parser.add_argument("--output-dir", type=pathlib.Path, required=True)
