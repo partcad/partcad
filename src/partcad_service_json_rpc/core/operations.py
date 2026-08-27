@@ -1666,6 +1666,8 @@ def _render_objects(
     ignore_manufacturability,
 ):
     """The body of 'render_objects', once the request has been made sense of."""
+    import asyncio
+
     if params.get("recursive"):
         packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=True)]
     else:
@@ -1680,39 +1682,103 @@ def _render_objects(
         validated_packages.append(options_package)
     _validate_output_format(pc, ctx, fmt, validated_packages)
 
-    for package in packages:
-        if object_name is not None:
-            package, object_name = pc.utils.resolve_resource_path(package, object_name)
+    asyncio.run(
+        _render_packages_async(
+            pc,
+            ctx,
+            params,
+            packages,
+            fmt,
+            output_dir,
+            object_name,
+            options_package,
+            ignore_manufacturability,
+        )
+    )
 
-        if object_name is None:
-            ctx.render(
-                project_path=package,
-                format=fmt,
-                output_dir=output_dir,
-                options_package=options_package,
-                ignore_manufacturability=ignore_manufacturability,
-            )
-        else:
-            sketches, interfaces, parts, assemblies = [], [], [], []
-            if params.get("sketch"):
-                sketches.append(object_name)
-            elif params.get("interface"):
-                interfaces.append(object_name)
-            elif params.get("assembly"):
-                assemblies.append(object_name)
+
+async def _render_packages_async(
+    pc,
+    ctx,
+    params,
+    packages,
+    fmt,
+    output_dir,
+    object_name,
+    options_package,
+    ignore_manufacturability,
+):
+    """Render the given packages, several at a time.
+
+    A package used to be rendered by its own 'asyncio.run()' after the previous
+    one had finished, so a recursive render cost the sum of its packages even
+    though nothing relates one package's files to another's. They are gathered
+    here instead, the way a recursive test and a recursive lint already gather
+    theirs.
+
+    Bounded, because a package admits every one of its shapes and every file
+    type of each at once: what keeps the machine busy is the sandbox process
+    budget (see partcad.sandbox_lock), and enough packages to keep that budget
+    full is all the concurrency there is any use for.
+
+    Nothing is cancelled when one package fails. A render writes files, and a
+    package interrupted half way through writing them is worse than one that
+    finishes and reports; the first failure is raised once they are all done,
+    which is what the caller would have seen anyway.
+    """
+    import asyncio
+
+    from partcad.sandbox_lock import process_slots
+
+    # The packages PartCAD ships inside itself are loaded on demand, by the
+    # first thing that asks what file types exist (see
+    # Context._get_builtin_project). Ask once here, before anything runs, so
+    # that several packages arriving at that question together do not each
+    # import them.
+    pc.output.all_formats(ctx)
+
+    at_once = asyncio.Semaphore(max(1, process_slots.count))
+
+    async def render_package(package):
+        object_in_package = object_name
+        if object_in_package is not None:
+            package, object_in_package = pc.utils.resolve_resource_path(package, object_in_package)
+
+        async with at_once:
+            if object_in_package is None:
+                await ctx.render_async(
+                    project_path=package,
+                    format=fmt,
+                    output_dir=output_dir,
+                    options_package=options_package,
+                    ignore_manufacturability=ignore_manufacturability,
+                )
             else:
-                parts.append(object_name)
-            prj = ctx.get_project(package)
-            prj.render(
-                sketches=sketches,
-                interfaces=interfaces,
-                parts=parts,
-                assemblies=assemblies,
-                format=fmt,
-                output_dir=output_dir,
-                options_package=options_package,
-                ignore_manufacturability=ignore_manufacturability,
-            )
+                sketches, interfaces, parts, assemblies = [], [], [], []
+                if params.get("sketch"):
+                    sketches.append(object_in_package)
+                elif params.get("interface"):
+                    interfaces.append(object_in_package)
+                elif params.get("assembly"):
+                    assemblies.append(object_in_package)
+                else:
+                    parts.append(object_in_package)
+                prj = ctx.get_project(package)
+                await prj.render_async(
+                    sketches=sketches,
+                    interfaces=interfaces,
+                    parts=parts,
+                    assemblies=assemblies,
+                    format=fmt,
+                    output_dir=output_dir,
+                    options_package=options_package,
+                    ignore_manufacturability=ignore_manufacturability,
+                )
+
+    results = await asyncio.gather(*[render_package(package) for package in packages], return_exceptions=True)
+    for result in results:
+        if isinstance(result, BaseException):
+            raise result
 
 
 def convert_object(session, params):

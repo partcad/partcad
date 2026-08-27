@@ -6,6 +6,7 @@
 #
 
 import asyncio
+import contextlib
 import os
 import pathlib
 import re
@@ -355,3 +356,152 @@ def test_no_factory_pins_its_own_version_of_the_shared_cad_stack():
             if sandbox_versions.distribution_name(literal) in pinned_names:
                 offenders.append("%s: %s" % (path.name, literal))
     assert offenders == [], offenders
+
+
+class _StubUserConfig:
+    def __init__(self, internal_state_dir):
+        self.internal_state_dir = str(internal_state_dir)
+
+
+class _StubContext:
+    def __init__(self, internal_state_dir):
+        self.user_config = _StubUserConfig(internal_state_dir)
+
+
+def _locking_runtime(tmp_path):
+    """A bare runtime with the little more that the environment lock reads."""
+    runtime = _bare_runtime(tmp_path / "sandbox")
+    runtime.version = "3.11"
+    runtime.sandbox_dir = "pc-py-conda-3.11"
+    runtime.ctx = _StubContext(tmp_path)
+    runtime.superseded_requirements = set()
+    runtime.pip_flags = []
+    runtime.pip_install_flags = []
+    return runtime
+
+
+def test_the_environment_locked_is_the_one_run_in(tmp_path):
+    """A lock over an environment nobody runs in locks nothing.
+
+    The v-env lock this replaces was keyed on the session, but a session whose
+    package asks for nothing of its own runs the runtime's own interpreter --
+    so two such packages took two different locks over the one environment they
+    were both reading, and an install into it took a third.
+    """
+    runtime = _locking_runtime(tmp_path)
+    session = PythonRuntime.get_session(runtime, "//some:package")
+
+    assert PythonRuntime.environment_path(runtime, session) == runtime.path
+    assert PythonRuntime.environment_path(runtime, None) == runtime.path
+    assert PythonRuntime.environment_lock(runtime, session) is PythonRuntime.environment_lock(runtime, None)
+    assert PythonRuntime.environment_lock(runtime, session).lock_path.endswith(
+        os.path.join("", ".pc-py-conda-3.11.default.lock")
+    )
+
+
+def test_a_session_with_a_venv_locks_the_venv(tmp_path):
+    runtime = _locking_runtime(tmp_path)
+    session = PythonRuntime.get_session(runtime, "//some:package")
+    session["dirty"] = True
+
+    assert PythonRuntime.environment_path(runtime, session) == session["path"]
+    # The name the per-session lock used, so a PartCAD of either vintage
+    # running beside this one contends over the same file.
+    assert PythonRuntime.environment_lock(runtime, session).lock_path.endswith(
+        ".pc-py-conda-3.11.%s.lock" % session["hash"]
+    )
+    assert PythonRuntime.environment_lock(runtime, session) is not PythonRuntime.environment_lock(runtime, None)
+
+
+def test_a_session_needs_the_environment_for_writing_only_until_it_is_provisioned(tmp_path):
+    """Which is what lets a package's parts render together rather than in turn."""
+    runtime = _locking_runtime(tmp_path)
+    session = PythonRuntime.get_session(runtime, "//some:package")
+
+    assert not PythonRuntime.session_needs_install(runtime, None)
+    assert not PythonRuntime.session_needs_install(runtime, session)
+
+    session["dirty"] = True
+    assert PythonRuntime.session_needs_install(runtime, session)
+
+    session["installed"].update(session["deps"])
+    assert not PythonRuntime.session_needs_install(runtime, session)
+
+    session["deps"].append("something-else==1.0")
+    assert PythonRuntime.session_needs_install(runtime, session)
+
+
+def _forbid_locking(runtime, monkeypatch):
+    """Make taking the environment lock a test failure."""
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("the environment lock was taken with nothing to install")
+
+    monkeypatch.setattr(type(runtime), "sync_lock", refuse, raising=False)
+    monkeypatch.setattr(type(runtime), "async_lock", refuse, raising=False)
+
+
+def test_an_installed_requirement_takes_no_lock(tmp_path, monkeypatch):
+    """The fast path: a warm sandbox renders without ever queueing on it."""
+    runtime = _locking_runtime(tmp_path)
+    os.makedirs(runtime.path, exist_ok=True)
+    pathlib.Path(get_guard_path(runtime.path, sandbox_versions.CADQUERY_OCP)).touch()
+    _forbid_locking(runtime, monkeypatch)
+
+    PythonRuntime.ensure_onced(runtime, sandbox_versions.CADQUERY_OCP)
+    asyncio.run(PythonRuntime.ensure_async_onced(runtime, sandbox_versions.CADQUERY_OCP))
+
+
+def test_a_missing_requirement_still_takes_the_lock_for_writing(tmp_path, monkeypatch):
+    runtime = _locking_runtime(tmp_path)
+    os.makedirs(runtime.path, exist_ok=True)
+    taken = []
+
+    @contextlib.contextmanager
+    def sync_lock(self, session=None, path=None, write=False):
+        taken.append(write)
+        yield
+
+    monkeypatch.setattr(type(runtime), "sync_lock", sync_lock, raising=False)
+    monkeypatch.setattr(type(runtime), "install_onced_locked", lambda *a, **k: None, raising=False)
+
+    PythonRuntime.ensure_onced(runtime, sandbox_versions.CADQUERY_OCP)
+
+    assert taken == [True]
+
+
+def test_ensure_does_not_reassert_what_it_did_not_install(tmp_path, monkeypatch):
+    """Regression guard for a forced reinstall of OCP per rendered file.
+
+    Every image file type installs build123d and then cadquery-ocp, and
+    build123d's install is what demands that cadquery-ocp be re-asserted. When
+    that demand was raised whether or not build123d had just been installed,
+    the cadquery-ocp that followed it was force-reinstalled every single time.
+    """
+    runtime = _locking_runtime(tmp_path)
+    os.makedirs(runtime.path, exist_ok=True)
+    pathlib.Path(get_guard_path(runtime.path, sandbox_versions.BUILD123D)).touch()
+    ocp_guard = get_guard_path(runtime.path, sandbox_versions.CADQUERY_OCP)
+    pathlib.Path(ocp_guard).touch()
+    _forbid_locking(runtime, monkeypatch)
+
+    PythonRuntime.ensure_onced(runtime, sandbox_versions.BUILD123D)
+    asyncio.run(PythonRuntime.ensure_async_onced(runtime, sandbox_versions.BUILD123D))
+
+    assert os.path.exists(ocp_guard)
+    assert not needs_reassert(runtime.path, sandbox_versions.CADQUERY_OCP)
+
+
+def test_an_install_still_reasserts_what_it_clobbered(tmp_path, monkeypatch):
+    """The other half: a build123d that really is installed must demand it."""
+    runtime = _locking_runtime(tmp_path)
+    os.makedirs(runtime.path, exist_ok=True)
+    ocp_guard = get_guard_path(runtime.path, sandbox_versions.CADQUERY_OCP)
+    pathlib.Path(ocp_guard).touch()
+    monkeypatch.setattr(type(runtime), "run_onced_locked", lambda *a, **k: (0, "", ""), raising=False)
+
+    PythonRuntime.install_onced_locked(runtime, sandbox_versions.BUILD123D, runtime.path)
+
+    assert os.path.exists(get_guard_path(runtime.path, sandbox_versions.BUILD123D))
+    assert not os.path.exists(ocp_guard)
+    assert needs_reassert(runtime.path, sandbox_versions.CADQUERY_OCP)
