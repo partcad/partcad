@@ -64,6 +64,10 @@ class PartFactorySweep(PartFactory):
                 sweep_config["axisCoords"] = self.axis
             if "ratio" in config:
                 sweep_config["ratio"] = self.ratio
+            # Which sketch is swept, for the reason spelled out in
+            # PartFactoryExtrude: two parts that differ only in their sketch
+            # otherwise hash the same and share one cache entry.
+            self.part.hash.add_string(self.source_sketch_spec)
             self.part.hash.add_dict(sweep_config)
             # TODO(clairbee): add dependency tracking for Sweep (PC-313)
             self.part.cache_dependencies_broken = True

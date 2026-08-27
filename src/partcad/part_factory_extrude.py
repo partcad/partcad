@@ -58,6 +58,14 @@ class PartFactoryExtrude(PartFactoryHomogen):
             self.source_sketch_spec = self.source_project_name + ":" + self.source_sketch_name
 
             self._create(config)
+            # Which sketch is extruded, and how far. The sketch has to be in
+            # there: a shape's hash is seeded with nothing that identifies the
+            # shape itself (see Shape.__init__), so without it every extrude
+            # part of a package that shares a depth shares a cache entry, and
+            # whichever of them the cache is asked for first is what all of
+            # them get back. What is still missing is the sketch's *content*,
+            # which is what the broken-dependencies flag below stands for.
+            self.part.hash.add_string(self.source_sketch_spec)
             self.part.hash.add_string(str(self.depth))
             # TODO(clairbee): add dependency tracking for Extrude (PC-313)
             self.part.cache_dependencies_broken = True

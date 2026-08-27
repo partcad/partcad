@@ -537,9 +537,11 @@ class UserConfig(vyper.Vyper):
         self.set_env_prefix("pc")
 
         # option: threadsMax
-        # description: the maximum number of processing threads to use (not a strict limit)
+        # description: how much of the machine PartCAD may use. Sizes the thread
+        #              pools (not a strict limit) and, strictly, how many sandbox
+        #              interpreters run at once (partcad.sandbox_lock)
         # values: >2
-        # default: min(7, <cpu threads count - 1>)
+        # default: min(7, <cpu threads count - 1>) threads, <cpu threads count> sandbox processes
         self.bind_env("threadsMax", "PC_THREADS_MAX")
         self.threads_max = None
         if self.is_set("threadsMax"):

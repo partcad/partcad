@@ -76,7 +76,14 @@ class Assembly(Shape):
     async def do_instantiate(self):
         if len(self.children) == 0:
             self._wrapped = None  # Invalidate if any
-            await threadpool_manager.run(self.instantiate, self)
+            # Detached, not constrained: an assembly does not compute anything
+            # itself, it waits for the parts it is made of - and each of those
+            # takes a thread out of the constrained pool. Assemblies waiting in
+            # that same pool is how a render of enough of them at once runs it
+            # out of threads, with every one of them waiting for a part that
+            # has nowhere left to run. Now that a recursive render admits
+            # several packages at a time, that is no longer hypothetical.
+            await threadpool_manager.run_detached(self.instantiate, self)
             if len(self.children) == 0:
                 pc_logging.warning(f"The assembly {self.project_name}:{self.name} is empty")
 

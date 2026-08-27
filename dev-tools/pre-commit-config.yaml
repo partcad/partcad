@@ -68,17 +68,26 @@ repos:
         language: system
         pass_filenames: false
         files: ^examples/
+      # 'pass_filenames: false' on both: the scripts ignore what they are
+      # handed and run the whole suite. Left on, pre-commit splits the staged
+      # files into as many batches as it has cores and runs the hook once per
+      # batch *concurrently* -- so a commit touching a handful of Python files
+      # ran the entire suite four times over, four times the cost, with four
+      # sessions racing each other over the paths a test writes (test_file.py
+      # downloads into 'examples/bolt.step' and deletes it again).
       - id: behave
         name: "Poetry: behave"
         entry: .devcontainer/behave_hook.sh
         language: system
         types: [python]
+        pass_filenames: false
         description: Run Behave tests in parallel using behavex
       - id: pytest
         name: "Poetry: pytest"
         entry: .devcontainer/pytest_hook.sh
         language: system
         types: [python]
+        pass_filenames: false
         description: Run pytest tests in parallel using xdist
   - repo: https://github.com/hadolint/hadolint
     rev: v2.14.0

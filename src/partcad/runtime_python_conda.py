@@ -206,12 +206,21 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         return env
 
     def once(self):
-        with self.sync_lock():
+        # 'provisioned' is raised by the base implementation below, once the
+        # whole of this has run. Without the check, every command run in this
+        # sandbox re-entered once_conda_locked(), which spawns an interpreter
+        # to ask the prefix what version it is (see verify_conda) -- an extra
+        # process per requirement checked and per file rendered.
+        if self.provisioned:
+            return
+        with self.sync_lock(write=True):
             self.once_conda_locked()
         super().once()
 
     async def once_async(self):
-        async with self.async_lock():
+        if self.provisioned:
+            return
+        async with self.async_lock(write=True):
             self.once_conda_locked()
         await super().once_async()
 

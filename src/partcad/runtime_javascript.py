@@ -230,7 +230,13 @@ def link_or_copy(source: str, destination: str) -> None:
 
 
 class NodeEnvLock:
-    """A file lock over one Node.js environment, the VenvLock twin."""
+    """A file lock over one Node.js environment.
+
+    Keyed on the environment directory, which is what the Python side now keys
+    its own on too (see sandbox_lock.EnvironmentLock). What it does not have
+    yet is that lock's distinction between running out of an environment and
+    installing into it, so Node.js wrappers still run one at a time.
+    """
 
     lock: FileLock
 

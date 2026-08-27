@@ -42,7 +42,19 @@ isort --check src/partcad tests/partcad
 - **Async naming**: every externally visible coroutine has a name ending in `_async`, paired with a synchronous
   wrapper of the same name without the suffix. Coroutines run on asyncio's event loop; CPU-heavy work runs on a
   separate thread pool (sized to CPU cores minus 1). Tasks on the thread pool must not call coroutines that use
-  `asyncio.Lock()`.
+  `asyncio.Lock()`. An assembly is instantiated on the *unconstrained* pool instead: it computes nothing itself,
+  it waits for its parts, and each of those takes a thread from the constrained one -- assemblies waiting there
+  is how enough of them at once run it out of threads, every one waiting for a part with nowhere left to run.
+
+- **Sandbox concurrency**: a wrapper runs in a sandbox *environment* -- the runtime's own conda prefix, or the
+  session v-env of a package that has requirements of its own -- and `sandbox_lock.py` is what holds those
+  apart. `EnvironmentLock` is a readers/writer lock keyed on the environment's path: running a wrapper reads it,
+  installing into it or creating it writes, so any number of wrappers share an environment while an install has
+  it to itself. `process_slots` caps how many sandbox interpreters run at once, because a wrapper is a whole CAD
+  process and it is the machine, not the thread pool, that decides how many fit; `threadsMax` sizes it. Both are
+  polled rather than blocked on: they are taken from several event loops at once (a part is instantiated on a
+  worker thread running a loop of its own), and a task that blocked its own loop waiting for a lock the task
+  beside it is about to release would never see it released.
 - **Location/coordinate format**: 3D locations (OpenCASCADE `TopLoc_Location`) are represented as
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
