@@ -66,12 +66,29 @@ ide/standalone/build.sh --with-cli-bundle dist/standalone/partcad
 
 Useful while iterating: `--no-extensions` (much faster, and not shippable), `--no-archive`, `--no-icons`,
 `--no-installer`. `--help` lists them all. The VSCodium download is cached in `build/vscodium/`, so a rebuild does not fetch it
-again.
+again. Everything else the build produces for itself -- the extension plan, the staging directories, the rendered icons -- goes
+to `build/ide-work/`, and only `build/ide/` becomes the application: on Linux and Windows the VSCodium archive unpacks flat, so
+anything written beside it would be shipped inside the release.
+
+With no `version` in `vscodium.json` the build asks the GitHub API which VSCodium released last, and an anonymous API call is
+rate limited per source IP -- on a shared address that is a `403` before anything is downloaded. Set `GITHUB_TOKEN` (or
+`GH_TOKEN`) to be counted against an account instead, or pin a version, which is worth doing anyway: a pinned build produces the
+same IDE next month as it does today.
 
 Two optional dependencies change what the build can do, and it reports what it left out rather than failing:
 
 - `cairosvg` and `Pillow` (`pip install cairosvg pillow`) render the icons from the project's logo. Without
-  them the application keeps VSCodium's icon.
+  them the application keeps VSCodium's icon -- except on Windows, which uses `resources/partcad-ide.ico`
+  from git instead. That one is checked in because it cannot be rendered where it is needed: `cairosvg`
+  needs `cairocffi`, and `cairocffi` needs a `libcairo-2.dll` that no wheel ships, so the renderers are
+  installable on Windows but not loadable there. Regenerate it when `ide/vscode/resources/logo.svg`
+  changes -- on Linux or MacOS, since it is the machines that *can* render that keep it honest:
+
+  ```bash
+  python ide/standalone/tools/make_icons.py \
+      --svg ide/vscode/resources/logo.svg --output-dir /tmp/icons
+  cp /tmp/icons/partcad-ide.ico ide/standalone/resources/partcad-ide.ico
+  ```
 - `rcedit` (`npm install -g rcedit`) puts the icon into `partcad-ide.exe`. There is no other way to change a
   Windows executable's icon after it is linked.
 - Inno Setup 6.3 or newer (`choco install innosetup`) compiles the Windows installer. Without it the build

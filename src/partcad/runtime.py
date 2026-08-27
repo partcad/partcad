@@ -16,6 +16,7 @@ import base64
 
 from .runtime_json_rpc import RuntimeJsonRpcClient
 from . import logging as pc_logging
+from .process_output import decode as decode_output
 
 
 async def wait_for_port(host, port, timeout=30):
@@ -282,8 +283,8 @@ class Runtime:
                 # TODO(clairbee): add timeout
             )
 
-            stdout = stdout.decode()
-            stderr = stderr.decode()
+            stdout = decode_output(stdout)
+            stderr = decode_output(stderr)
 
         if stdout:
             pc_logging.debug("Output of %s: %s" % (cmd, stdout))

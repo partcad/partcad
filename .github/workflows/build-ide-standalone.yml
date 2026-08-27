@@ -408,6 +408,16 @@ jobs:
         continue-on-error: true
         run: python -m pip install cairosvg pillow
 
+      # The one thing that can put an icon into an already-linked Windows
+      # executable. Without it the installer carries the PartCAD icon and the
+      # application it installs still wears VSCodium's, which is the half-done
+      # version of the same bug. 'continue-on-error' to match the renderers
+      # above: the build warns and produces an IDE either way.
+      - name: Install rcedit
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: npm install -g rcedit
+
       # The runner images ship it, so this is a fallback rather than the usual
       # path. Without it the build produces the .zip and says it produced no
       # installer, which is not what a release should carry.
@@ -463,6 +473,15 @@ jobs:
         shell: bash
         # The .dmg is how a MacOS user expects to install an application; the
         # .tar.gz beside it is what "install.sh --ide" downloads.
+        env:
+          # "vscodium.json" pins no version, so the build asks the GitHub API
+          # which VSCodium released last. Anonymously that is rate limited per
+          # source IP, and the hosted MacOS runners share theirs: the build died
+          # on a 403 a second in, having downloaded nothing. The run's own token
+          # counts the call against the repository instead. It needs no
+          # permission beyond the `contents: read` this workflow already
+          # declares -- the release it reads is public.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           extra=""
           if [ "${{ runner.os }}" = "macOS" ]; then
