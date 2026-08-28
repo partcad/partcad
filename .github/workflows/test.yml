@@ -638,8 +638,19 @@ jobs:
 
           # BEGIN PUBLIC REPO
           cd ./examples
+          # Both commands run whatever the other one does. The step is
+          # 'continue-on-error' precisely because the index carries packages
+          # this repository cannot fix, so a non-zero exit from the listing was
+          # never the signal here -- but under 'bash -e' it silently took the
+          # 'test' run below with it, and that is the more interesting half.
+          # It is not hypothetical: '//pub/universe/lego/ldraw' serves the LDraw
+          # library through a repository plugin that cannot answer within
+          # 'plugin.query.timeout', so the listing reports it and exits non-zero
+          # every time.
+          set +e
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub
+          set -e
           coverage combine
           # END PUBLIC REPO
 

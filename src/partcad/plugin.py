@@ -22,6 +22,10 @@ class Plugin:
     url: typing.Optional[str] = None
     errors: list[str]
     caps: dict[str, typing.Any] = None
+    # Set to the reason once a query to this plugin has blown its deadline; see
+    # plugin_factory_python.query_with_deadline. From then on the plugin is not
+    # asked again, so one runaway script costs one deadline and not one per key.
+    deadline_exceeded: typing.Optional[str] = None
 
     def __init__(self, name: str, config: dict[str, typing.Any] = {}, target_project_name=None):
         super().__init__()
@@ -33,6 +37,7 @@ class Plugin:
             self.project_name = target_project_name
         self.config = config
         self.errors = []
+        self.deadline_exceeded = None
         self.desc = config.get("desc", "")
         self.url = config.get("url", None)
 
