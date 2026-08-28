@@ -1143,6 +1143,33 @@ already defined elsewhere.
 |         |       offset: <OCCT-Location-obj>      || of parameters many times. |
 +---------+----------------------------------------+----------------------------+
 
+Both are references rather than parts of their own. An ``enrich`` resolves to
+the *instance* of the object it points at that has the values it asks for --
+the same object PartCAD produces for ``<name>;<param>=<value>`` -- so that
+instance belongs to the package declaring the source, and one instance serves
+every enrich, in any package, that asks for the same values. An ``alias``
+resolves to the object itself.
+
+That is also what the shape cache is keyed on: a reference takes the key of
+what it points at, so the geometry is stored once however many references lead
+to it rather than once per reference. A reference that moves or scales what it
+points at hands back different geometry and so keys differently -- on the
+source's key, plus what it adds.
+
+Because asking for a value is asking for the instance that has it, and an
+instance is named ``<name>;<param>=<value>,...``, a ``with:`` value may not
+contain ``,``, ``;`` or ``=``: such a value could not be named. The same holds
+for what a parameter declares as its ``default:`` or offers in its ``enum:``.
+
+An enrich says which values it wants, and nothing about how the object is
+built. ``path``, the requirements, the sandbox versions, the inputs of the
+types that build one object out of another -- and ``parameters:``, which
+``with:`` is the way to state -- belong to the declaration of the object
+itself. Declaring one of them on an enrich is reported as ignored, and the
+object it produces is the one it would have produced without it.
+
+Both are available for :ref:`sketches` and :ref:`assemblies` too, spelled the
+same way.
 
 Other Part Types
 ----------------
@@ -1739,8 +1766,10 @@ References
 ----------
 
 It is also possible to declare assemblies by referencing other assemblies that are
-already defined elsewhere. Unfortunately, ``enrich`` (documented in the `Parts` section) is not yet implemented for
-assemblies.
+already defined elsewhere. Both methods work the same way they do for
+:ref:`parts`: an assembly takes parameters like anything else, so an assembly
+with other values is another instance of the same assembly, and that is what an
+``enrich`` of it asks for.
 
 +---------+--------------------------------------------+----------------------------+
 | Method  | Configuration                              | Description                |
@@ -1751,6 +1780,15 @@ assemblies.
 |         |     <alias-name>:                          || For example, to           |
 |         |       type: alias                          || make it easier to         |
 |         |       source: </path/to:existing-assembly> || reference it locally.     |
++---------+--------------------------------------------+----------------------------+
+| Enrich  | .. code-block:: yaml                       || Create an opinionated     |
+|         |                                            || alternative to the        |
+|         |   assemblies:                              || existing assembly by      |
+|         |     <enriched-assembly-name>:              || setting some of its       |
+|         |       type: enrich                         || parameters, the same      |
+|         |       source: </path/to:existing-assembly> || way a part is             |
+|         |       with:                                || enriched.                 |
+|         |         <param1>: <value1>                 |                            |
 +---------+--------------------------------------------+----------------------------+
 
 Procurement

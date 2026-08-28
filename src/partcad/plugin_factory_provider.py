@@ -43,6 +43,6 @@ class PluginFactoryProvider(PluginFactoryPython):
         if hasattr(self, "path"):
             self.plugin.path = self.path
 
-        self.target_project.providers[self.name] = self.plugin
+        self.target_project.register_object("provider", self.name, self.plugin)
         self.ctx.stats_plugins += 1
         self.ctx.stats_providers += 1

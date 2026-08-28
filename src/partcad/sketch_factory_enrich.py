@@ -10,185 +10,66 @@
 import copy
 import typing
 
-from . import sketch_config
-from . import sketch_factory as pf
+from . import sketch_factory_alias as sfa
 from . import logging as pc_logging
-from .utils import get_child_project_path
+from .enrich import (
+    adopt_source_config,
+    enriched_source_name,
+    resolve_source_again,
+    warn_about_ignored_properties,
+)
 from . import telemetry
 
 
 @telemetry.instrument()
-class SketchFactoryEnrich(pf.SketchFactory):
+class SketchFactoryEnrich(sfa.SketchFactoryAlias):
+    """An alias to a parameterized instance of the sketch it enriches.
+
+    See 'PartFactoryEnrich' for what that means and why it is the whole of what
+    an enrich has to do.
+    """
+
     source_sketch_name: str
     source_project_name: typing.Optional[str]
 
     def __init__(self, ctx, source_project, target_project, config):
         with pc_logging.Action("InitEnrich", target_project.name, config["name"]):
-            # Determine the sketch the 'enrich' points to
-            if "source" in config:
-                source_sketch_name = config["source"]
-            else:
-                source_sketch_name = config["name"]
-                if "project" not in config and "package" not in config:
-                    raise Exception("Enrich needs either the source sketch name or the source project name")
+            source = enriched_source_name(source_project, target_project, config)
+            warn_about_ignored_properties(target_project, config, source)
+            # What it resolved to, recorded on the declaration itself the way an
+            # alias records it: 'pc convert' follows the stored configuration
+            # rather than the object, and the 'package:' shorthand leaves it
+            # nothing else to follow.
+            config["source_resolved"] = source
 
-            if "project" in config or "package" in config:
-                if "project" in config:
-                    source_project_name = config["project"]
-                else:
-                    source_project_name = config["package"]
-                if source_project_name == "this" or source_project_name == "":
-                    source_project_name = source_project.name
-                elif not source_project_name.startswith("//"):
-                    # Resolve the project name relative to the target project
-                    source_project_name = get_child_project_path(target_project.name, source_project_name)
-            else:
-                if ":" in source_sketch_name:
-                    source_project_name, source_sketch_name = source_project.resolve(
-                        source_sketch_name,
-                    )
-                else:
-                    source_project_name = source_project.name
-
-            # pc_logging.debug(f"Initialized an enrich to {source_project_name}:{source_sketch_name}")
-
+            # The declaration as written, kept so that what this points at can
+            # be worked out again once everything is declared (see
+            # 'resolve_source_again'). What is handed to the alias below is a
+            # copy, with the reference spelled out in it.
+            self.enrich_declaration = config
+            config = copy.copy(config)
+            config["source"] = source
+            # Fully qualified now, so the package it names must not be applied
+            # to it a second time by the alias this hands the work to.
+            config.pop("package", None)
+            config.pop("project", None)
             super().__init__(ctx, source_project, target_project, config)
-            self.source_project = source_project
-            self.source_project_name = source_project_name
-
-            if ";" in source_sketch_name:
-                self.source_sketch_name = source_sketch_name.split(";")[0]
-                suffix = source_sketch_name.split(";")[1]
-                self.extra_with = [p.split("=") for p in suffix.split(",")]
-            else:
-                self.source_sketch_name = source_sketch_name
-                self.extra_with = []
-
-            self._create(config)
-
-            self.sketch.get_cacheable = self.get_cacheable
 
     async def prepare_async(self, sketch) -> None:
-        """Resolve the source object, then prepare it.
+        # Before anything is resolved: the user's own parameter overrides may
+        # have arrived after this package was loaded, and they say which
+        # instance of the source this wants.
+        resolve_source_again(self, self.enrich_declaration, "source_sketch_name")
+        await super().prepare_async(sketch)
 
-        Only the source is resolved here, not the enriched clone: an enrich
-        adds nothing of its own to fetch, while resolving the source loads -
-        and so downloads - the package that holds it.
-        """
-        source_project = self.source_project
-        if self.source_project_name != source_project.name:
-            source_project = self.ctx.get_project(self.source_project_name)
-            if source_project is None:
-                raise Exception("Package not found: %s" % self.source_project_name)
-        source = source_project.get_sketch(self.source_sketch_name)
+        # What this object reports, settled here rather than while it is built:
+        # a shape that comes out of the cache is never instantiated, and an
+        # enrich has to answer the same either way (see 'adopt_source_config').
+        source = self.ctx._get_sketch(self.source)
         if source is None:
-            raise Exception(f"Failed to find the sketch to enrich: {source_project.name}:{self.source_sketch_name}")
-        await source.prepare_async()
+            raise Exception(f"Failed to find the sketch to enrich: {self.source}")
+        adopt_source_config(sketch, source, self.source)
 
     async def instantiate(self, sketch):
         with pc_logging.Action("Enrich", sketch.project_name, f"{sketch.name}:{self.source_sketch_name}"):
-
-            # Get the config of the sketch the 'enrich' points to
-            if self.source_project_name == self.source_project.name:
-                augmented_config = self.source_project.get_sketch_config(self.source_sketch_name)
-            else:
-                self.source_project = self.ctx.get_project(self.source_project_name)
-                if self.source_project is None:
-                    pc_logging.debug("Available projects: %s" % str(sorted(list(self.ctx.projects.keys()))))
-                    raise Exception("Package not found: %s" % self.source_project_name)
-                augmented_config = self.source_project.get_sketch_config(self.source_sketch_name)
-            if augmented_config is None:
-                pc_logging.error(
-                    f"Failed to find the sketch to enrich: {self.source_project.name}:{self.source_sketch_name}"
-                )
-                return
-
-            object_name = f"{self.project.name}:{self.name}"
-            augmented_config = copy.deepcopy(augmented_config)
-
-            # TODO(clairbee): ideally whatever we pull from the project is already normalized
-            augmented_config = sketch_config.SketchConfiguration.normalize(
-                self.source_sketch_name, augmented_config, object_name
-            )
-
-            # See if there are any extra "with" parameters deduced from the source name
-            if len(self.extra_with):
-                # Create "with" if it wasn't there
-                if "with" not in sketch.config:
-                    sketch.config["with"] = {}
-
-                # The "with" values from the enrich config take precedence over the source name
-                for [name, value] in self.extra_with:
-                    if name not in sketch.config["with"]:
-                        sketch.config["with"][name] = value
-
-            # Fill in the parameter values using the simplified "with" option
-            if "with" in sketch.config:
-                if "parameters" not in augmented_config:
-                    raise Exception(
-                        "Attempting to parametrize a sketch that has no parameters: %s" % str(augmented_config)
-                    )
-                for param in sketch.config["with"]:
-                    if param not in augmented_config["parameters"]:
-                        raise Exception(
-                            "Attempting to parametrize a sketch with an unknown parameter: %s:%s: %s"
-                            % (self.source_project_name, self.source_sketch_name, param)
-                        )
-                    desired_type = type(augmented_config["parameters"][param]["default"])
-                    augmented_config["parameters"][param]["default"] = desired_type(sketch.config["with"][param])
-
-            # Recalling normalize to normalize data after replacing target parameters from with key.
-            augmented_config = sketch_config.SketchConfiguration.normalize(
-                augmented_config["name"], augmented_config, object_name
-            )
-
-            # Drop fields we don't want to be inherited by enriched clones
-            # TODO(clairbee): keep aliases if they are a function of the orignal name
-            if "aliases" in augmented_config:
-                del augmented_config["aliases"]
-
-            # Fill in all non-enrich-specific properties from the enrich config into
-            # the original config
-            for prop_to_copy in sketch.config:
-                if (
-                    prop_to_copy == "type"
-                    or prop_to_copy == "path"
-                    or prop_to_copy == "orig_name"
-                    or prop_to_copy == "source"
-                    or prop_to_copy == "project"
-                    or prop_to_copy == "with"
-                ):
-                    continue
-                augmented_config[prop_to_copy] = sketch.config[prop_to_copy]
-
-            self.source_project.init_sketch_by_config(augmented_config)
-
-            source = self.source_project.get_sketch(sketch.name)
-            name = sketch.config["name"]
-            sketch.config = copy.copy(source.config)
-            sketch.config["source"] = self.source_project_name + ":" + self.source_sketch_name
-            sketch.config["orig_name"] = sketch.name
-            sketch.config["name"] = name
-
-            # Clone the source object properties
-            if source.path:
-                sketch.path = source.path
-            if "with" in source.config:
-                sketch.hash.add_dict(source.config["with"])
-            sketch.cacheable = source.cacheable
-            sketch.cache_dependencies = copy.copy(source.cache_dependencies)
-            sketch.cache_dependencies_broken = source.cache_dependencies_broken
-
-            _wrapped = source._wrapped
-            if _wrapped:
-                sketch._wrapped = _wrapped
-                return _wrapped
-
-            self.ctx.stats_sketches_instantiated += 1
-
-            return await source.instantiate(sketch)
-
-    def get_cacheable(self) -> bool:
-        # This object is a wrapper around another one.
-        # The other one is the one which must be cached.
-        return False
+            return await super().instantiate(sketch)

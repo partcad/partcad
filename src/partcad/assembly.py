@@ -73,19 +73,53 @@ class Assembly(Shape):
         # self.children contains all child parts and assemblies before they turn into 'self.shape'
         self.children = []
 
+    def get_async_instantiate_lock(self) -> asyncio.Lock:
+        """The task lock 'do_instantiate' serializes on, one per thread.
+
+        Not 'get_async_lock()': 'Shape.get_wrapped()' holds that one on its way
+        to 'get_shape()' and so to here, and an 'asyncio.Lock' is not
+        re-entrant. Thread-local, and keyed on the loop as well, exactly as
+        that one is and for its reason: a worker thread runs one 'asyncio.run()'
+        per instantiation, so a thread handed a second one gets a second loop,
+        and an 'asyncio.Lock' awaited under the first refuses to be awaited
+        under the second.
+        """
+        if not hasattr(self.tls, "async_instantiate_locks"):
+            self.tls.async_instantiate_locks = {}
+        self_id = id(self)
+        loop_id = id(asyncio.get_event_loop())
+        if self_id not in self.tls.async_instantiate_locks or self.tls.async_instantiate_locks[self_id][1] != loop_id:
+            self.tls.async_instantiate_locks[self_id] = (asyncio.Lock(), loop_id)
+        return self.tls.async_instantiate_locks[self_id][0]
+
     async def do_instantiate(self):
-        if len(self.children) == 0:
-            self._wrapped = None  # Invalidate if any
-            # Detached, not constrained: an assembly does not compute anything
-            # itself, it waits for the parts it is made of - and each of those
-            # takes a thread out of the constrained pool. Assemblies waiting in
-            # that same pool is how a render of enough of them at once runs it
-            # out of threads, with every one of them waiting for a part that
-            # has nowhere left to run. Now that a recursive render admits
-            # several packages at a time, that is no longer hypothetical.
-            await threadpool_manager.run_detached(self.instantiate, self)
-            if len(self.children) == 0:
-                pc_logging.warning(f"The assembly {self.project_name}:{self.name} is empty")
+        # Both locks, the way 'Shape.get_wrapped()' takes them, and for the same
+        # reason: a factory appends to 'children' rather than replacing them, so
+        # whoever finds it empty a second time puts the whole tree in twice.
+        #
+        # The thread lock keeps two threads out of here - one rendering the
+        # assembly, one resolving a part it produces
+        # ('Project._materialize_derived_part'). It does not keep two tasks of
+        # one loop out: an RLock is re-entrant per *thread*, and tasks of a loop
+        # share one, so every one of them passes it. Hence the task lock inside
+        # it, which is only ever contended within a single thread because the
+        # thread lock is what excludes the others.
+        with self.lock:
+            async with self.get_async_instantiate_lock():
+                if len(self.children) != 0:
+                    return
+                self._wrapped = None  # Invalidate if any
+                # Detached, not constrained: an assembly does not compute
+                # anything itself, it waits for the parts it is made of - and
+                # each of those takes a thread out of the constrained pool.
+                # Assemblies waiting in that same pool is how a render of enough
+                # of them at once runs it out of threads, with every one of them
+                # waiting for a part that has nowhere left to run. Now that a
+                # recursive render admits several packages at a time, that is no
+                # longer hypothetical.
+                await threadpool_manager.run_detached(self.instantiate, self)
+                if len(self.children) == 0:
+                    pc_logging.warning(f"The assembly {self.project_name}:{self.name} is empty")
 
     # add is a non-thread-safe method for end users to create custom Assemblies
     def add(

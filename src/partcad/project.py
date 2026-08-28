@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import decimal
 import os
 import re
 import tempfile
@@ -41,10 +42,15 @@ from . import sketch_factory_alias as sfa
 from . import tags as pc_tags
 from . import telemetry
 from .document_pdf import render_pdf_async
-from .exception import EmptyShapesError, NeedsUpdateException
+from .exception import EmptyShapesError, NeedsUpdateException, ObjectNameTakenError
 from .part import Part
 from .render import render_cfg_merge
-from .utils import normalize_resource_path, resolve_resource_path
+from .utils import (
+    format_parameterized_name,
+    normalize_resource_path,
+    parse_parameterized_name,
+    resolve_resource_path,
+)
 
 if TYPE_CHECKING:
     from partcad.context import Context
@@ -68,6 +74,14 @@ OBJECT_KIND_SECTIONS = {
     # PartFactoryWrapper, which looks the definition up here.
     "partType": "partTypes",
 }
+
+# The object types that are references to another object rather than an object
+# of their own. Parametrizing one of these does not mean applying the values to
+# it - it declares no parameters to apply them to - but asking for the instance
+# of what it points at that has them, so the values are handed to it in 'with'
+# and it passes them on (see 'PartFactoryAlias', 'PartFactoryEnrich'). That is
+# what makes a chain of aliases and enriches work in any order.
+PARAMETER_PASSING_TYPES = ("alias", "enrich")
 
 # Assembly types whose parts the assembly itself materializes, rather than the
 # package declaring them: a STEP assembly's components become the parts
@@ -598,20 +612,23 @@ class Project(project_config.Configuration):
             source_project = self
 
         interface_name: str = config["name"]
-        self.interfaces[interface_name] = interface.Interface(interface_name, source_project, config)
+        self.register_object("interface", interface_name, interface.Interface(interface_name, source_project, config))
 
     def get_interface(self, interface_name) -> interface.Interface:
-        self.lock.acquire()
-
-        # See if it's already available
-        if interface_name in self.interfaces and not self.interfaces[interface_name] is None:
-            p = self.interfaces[interface_name]
-            self.lock.release()
-            return p
+        # Released before the interface's own lock is taken, for the reason
+        # 'get_object' gives: 'init_interface_by_config' registers, and
+        # 'register_object' takes this lock.
+        with self.lock:
+            existing = self.interfaces.get(interface_name)
+        if existing is not None:
+            return existing
 
         with Project.InterfaceLock(self, interface_name):
-            # Release the project lock, and continue with holding the interface lock only
-            self.lock.release()
+            # The same second look 'get_object' takes, for the same reason: the
+            # interface may have been created while this thread waited for the
+            # lock, and creating another would collide with it.
+            if self.interfaces.get(interface_name) is not None:
+                return self.interfaces[interface_name]
 
             # This is just a regular interface name, no params (interface_name == result_name)
             if not interface_name in self.interface_configs:
@@ -775,6 +792,49 @@ class Project(project_config.Configuration):
         """Why an object could not be created, or None if it was not one of them."""
         return self.broken_objects.get(kind, {}).get(name)
 
+    def objects(self, kind: str) -> dict:
+        """The instantiated objects of one kind, as {name: object}.
+
+        The counterpart of 'object_configs()', which answers the same question
+        about what the package *declares*. Only the kinds that are instantiated
+        at all: a 'partType' is a way of constructing parts, not an object.
+        """
+        objects = getattr(self, OBJECT_KIND_SECTIONS.get(kind, ""), None)
+        if objects is None:
+            raise ValueError("'%s' is not a kind of object a package instantiates" % kind)
+        return objects
+
+    def register_object(self, kind: str, name: str, obj) -> None:
+        """Put a newly created object into this package under 'name'.
+
+        The one place an object enters a package, so that the name is tested
+        for being taken before the entry is written, rather than the newcomer
+        silently displacing whatever was there. What used to happen instead is
+        the defect this exists to stop: an 'enrich' registered the instance it
+        builds in the package its source comes from *under the enriching
+        object's name* - and that name defaults to the source object's own - so
+        enriching an object replaced it, and the enriched parameters then
+        rendered in the source package's own outputs.
+
+        The object already registered under the name is the one that stays; the
+        newcomer raises 'ObjectNameTakenError', which the caller records
+        against that one object ('record_broken_object'). Re-registering the
+        very same object is not a clash: a factory that produced the object
+        already there has not displaced anything.
+
+        Asking for an object rather than creating one is 'get_object()', which
+        hands back what the package already holds under that name - including
+        the parameterized instance an 'enrich' asks for, which is why two
+        enriches with the same parameters share one instance instead of
+        colliding here.
+        """
+        with self.lock:
+            objects = self.objects(kind)
+            existing = objects.get(name)
+            if existing is not None and existing is not obj:
+                raise ObjectNameTakenError(kind, self.name, name)
+            objects[name] = obj
+
     def init_objects(
         self,
         factory_name: str,
@@ -814,6 +874,48 @@ class Project(project_config.Configuration):
     def init_repository_by_config(self, config, source_project=None):
         self.init_object_by_config("repository", plugin_config.PluginConfiguration, None, config, source_project)
 
+    def materialize_part_by_config(self, config) -> Optional[Part]:
+        """The part an assembly materializes, created on first use.
+
+        A STEP assembly's components and a URDF's links are parts of this
+        package that nothing declares: the assembly's own source file is what
+        says they exist, so they are registered as it is built (see the
+        'part_for()' of those two factories).
+
+        An assembly is built more than once - asking for one of these parts by
+        name builds the assembly that produces it ('_materialize_derived_part'),
+        and so does rendering it - and the later pass finds the parts the first
+        one registered. That is the same part being materialized again rather
+        than two declarations claiming one name, so it is handed back rather
+        than refused ('register_object').
+
+        The two passes also overlap: 'Assembly.do_instantiate' decides whether
+        to assemble by reading 'children' without a lock, so a thread rendering
+        the assembly and a thread resolving one of its parts by name can both
+        be walking the same links. Whichever gets here second then creates a
+        part under a name the first has just taken, and 'register_object'
+        refuses it - so that refusal is caught and the part already registered
+        is handed back. The loser's own part is inert: 'register_object' is what
+        raised, and '_create()' does nothing else with it afterwards.
+
+        Caught rather than prevented with the part's own lock, which is what
+        this used to do. 'get_object' holds the package lock while it takes the
+        part lock, and 'register_object' below takes the package lock while
+        this holds the part lock - opposite orders on the same two locks, which
+        is a deadlock as soon as two threads resolve parts of one package at
+        once. There is only one lock in this now, and it is 'register_object's,
+        whose test-and-set under it is what makes this safe at all.
+        """
+        name = config["name"]
+        existing = self.parts.get(name)
+        if existing is not None:
+            return existing
+        try:
+            self.init_part_by_config(config)
+        except ObjectNameTakenError:
+            pass
+        return self.parts.get(name)
+
     def init_object_by_config(self, factory_name: str, config_class, alias_class, config, source_project=None):
         if source_project is None:
             source_project = self
@@ -837,7 +939,16 @@ class Project(project_config.Configuration):
                 # object the alias points at.
                 full_alias_name = f"{self.name}:{alias}"
                 alias_object_config = config_class.normalize(alias, alias_object_config, full_alias_name)
-                alias_class(self.ctx, source_project, self, alias_object_config)
+                # Per alias, and against the alias rather than the object it
+                # points at: an alias that cannot be created - most often
+                # because the package already declares something under that
+                # name ('register_object') - is a defect in that one name, and
+                # failing here would take down the perfectly good object whose
+                # 'aliases' mentioned it.
+                try:
+                    alias_class(self.ctx, source_project, self, alias_object_config)
+                except Exception as e:
+                    self.record_broken_object(factory_name, alias, e)
 
     def get_sketch(self, sketch_name, func_params=None) -> Optional[sketch.Sketch]:
         return self.get_object(
@@ -996,18 +1107,8 @@ class Project(project_config.Configuration):
         else:
             has_func_params = True
 
-        params: dict[str, typing.Any] = {}
-        if ";" in object_name:
-            has_name_params = True
-            base_object_name = object_name.split(";")[0]
-            object_name_params_string = object_name.split(";")[1]
-
-            for kv in object_name_params_string.split(","):
-                k, v = kv.split("=")
-                params[k] = v
-        else:
-            has_name_params = False
-            base_object_name = object_name
+        base_object_name, params = parse_parameterized_name(object_name)
+        has_name_params = bool(params)
 
         if has_func_params:
             params = {**params, **func_params}
@@ -1017,20 +1118,33 @@ class Project(project_config.Configuration):
             result_name = object_name
         else:
             # Determine the name we want this parameterized object to have
-            result_name = base_object_name + ";"
-            result_name += ",".join(map(lambda n: n + "=" + str(params[n]), sorted(params)))
+            result_name = format_parameterized_name(base_object_name, params)
 
-        self.lock.acquire()
-
-        # See if it's already available
-        if result_name in objects and not objects[result_name] is None:
-            p = objects[result_name]
-            self.lock.release()
-            return p
+        # The package lock is released before the object's own lock is taken,
+        # never held across it. Creating an object registers it, and
+        # 'register_object' takes the package lock while this holds the
+        # object's - so a thread waiting for the object lock with the package
+        # lock still in hand would be holding the very thing the creating
+        # thread needs to finish, and the two would wait on each other. Two
+        # threads asking one package for the same instance is enough, which is
+        # two enriches with the same 'with:' resolving at once.
+        #
+        # Releasing it costs nothing: what it guards here is a lookup, and the
+        # look below - under the object lock, where creation happens - is the
+        # one that decides.
+        with self.lock:
+            existing = objects.get(result_name)
+        if existing is not None:
+            return existing
 
         with lock_class(self, result_name):
-            # Release the project lock, and continue with holding the part lock only
-            self.lock.release()
+            # Look again now that the object lock is held: another thread may
+            # have created this object between the check above and this lock,
+            # and creating a second one would land on a name that is now taken
+            # ('register_object'), turning a race into a failure for whichever
+            # thread got here second.
+            if objects.get(result_name) is not None:
+                return objects[result_name]
 
             if not has_name_params:
                 # This is just a regular object name, no params (object_name == result_name).
@@ -1123,7 +1237,9 @@ class Project(project_config.Configuration):
                 return None
 
             config = copy.deepcopy(config)
-            if (not "parameters" in config or config["parameters"] is None) and (config["type"] != "enrich"):
+            if ("parameters" not in config or config["parameters"] is None) and (
+                config["type"] not in PARAMETER_PASSING_TYPES
+            ):
                 pc_logging.error(
                     "Attempt to parametrize '%s' of '%s' which has no parameters: %s",
                     base_object_name,
@@ -1145,7 +1261,19 @@ class Project(project_config.Configuration):
                     if config["parameters"][param_name]["type"] == "string":
                         config["parameters"][param_name]["default"] = str(param_value)
                     elif config["parameters"][param_name]["type"] == "int":
-                        config["parameters"][param_name]["default"] = int(param_value)
+                        # A whole number written as one ('4.0', which is what a
+                        # YAML value of 4.0 spells) is what was meant; anything
+                        # with a fraction is not an integer and is refused
+                        # rather than silently truncated. Through 'Decimal'
+                        # rather than 'float' so that neither the test nor the
+                        # value loses precision on a large integer.
+                        value = decimal.Decimal(str(param_value))
+                        if value != value.to_integral_value():
+                            raise ValueError(
+                                "The parameter '%s' of '%s' is an integer, and '%s' is not one"
+                                % (param_name, result_name, param_value)
+                            )
+                        config["parameters"][param_name]["default"] = int(value)
                     elif config["parameters"][param_name]["type"] == "float":
                         config["parameters"][param_name]["default"] = float(param_value)
                     elif config["parameters"][param_name]["type"] == "bool":

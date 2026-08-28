@@ -176,12 +176,11 @@ class AssemblyFactoryStep(AssemblyFactoryFile):
         full_name = "%s:%s" % (self.project.name, part_name)
         config = PartConfiguration.normalize(part_name, config, full_name)
         try:
-            self.project.init_part_by_config(config)
+            part = self.project.materialize_part_by_config(config)
         except Exception as e:
             pc_logging.error("%s: failed to add the part '%s': %s" % (self.name, part_name, e))
             return None
 
-        part = self.project.parts.get(part_name)
         if part is None:
             pc_logging.error("%s: the part '%s' failed to instantiate" % (self.name, part_name))
             return None

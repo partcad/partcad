@@ -15,6 +15,7 @@ from .context import Context
 from .assembly import Assembly
 from .assembly_factory_assy import AssemblyFactoryAssy
 from .assembly_factory_alias import AssemblyFactoryAlias
+from .assembly_factory_enrich import AssemblyFactoryEnrich
 from .assembly_factory_step import AssemblyFactoryStep
 from .assembly_factory_urdf import AssemblyFactoryUrdf
 from .file_factory_url import FileFactoryUrl
@@ -94,6 +95,7 @@ factory.register("assembly", "assy", AssemblyFactoryAssy)
 factory.register("assembly", "step", AssemblyFactoryStep)
 factory.register("assembly", "urdf", AssemblyFactoryUrdf)
 factory.register("assembly", "alias", AssemblyFactoryAlias)
+factory.register("assembly", "enrich", AssemblyFactoryEnrich)
 factory.register("file", "url", FileFactoryUrl)
 factory.register("file", "plugin", FileFactoryPlugin)
 factory.register("provider", "manufacturer", PluginFactoryProviderManufacturer)
