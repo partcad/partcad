@@ -40,18 +40,60 @@ runs:
           PYTHON_ABI=("python_abi==${PYTHON_MAJOR}.${PYTHON_MINOR}=*_cp${PYTHON_MAJOR}${PYTHON_MINOR}")
         fi
 
+        # "build" 1.6.0 (2026-08-27) cannot create its isolated build
+        # environment on the Windows runners, so hold Windows below it and let
+        # every other image keep exercising the current release.
+        #
+        # "build" creates that environment with
+        # "venv.EnvBuilder(symlinks=_fs_supports_symlink(), ...)". Up to and
+        # including 1.5.0 the probe was broken on Windows: it tried to symlink
+        # onto f'{tmp_file}-b', the repr of a NamedTemporaryFile object, so a
+        # name containing "<", ">" and ":" -- characters Windows forbids in a
+        # filename. os.symlink therefore always raised, the probe always
+        # answered False, and every isolated environment was built out of
+        # copies. 1.6.0 fixed the probe to f'{tmp_file.name}-b'; a GitHub
+        # Windows runner can create symlinks, so the answer flipped to True and
+        # the environment is now built out of symlinks -- a layout in which the
+        # conda interpreter these steps run under stops finding the DLLs its
+        # "_ssl.pyd" and "_ctypes.pyd" link against in "<prefix>\Library\bin".
+        #
+        # What the log shows is the far end of that, and it does not name
+        # symlinks anywhere. pip 26.2 pre-imports
+        # "pip._internal.operations.install.wheel" before installing; in the
+        # isolated environment that pre-import dies on "DLL load failed while
+        # importing _ctypes", pip records the module as missing, then raises
+        # "No module named 'pip._internal.operations.install.wheel'" against
+        # itself and exits 2. The "--- Logging error ---" blocks around it are
+        # pip's own console failing for the same reason while reporting the
+        # failure.
+        #
+        # Windows only: elsewhere the probe short-circuits to True and always
+        # did, so those images never took the changed path. Note that
+        # "build<1.6" resolves to 1.5.0 rather than 1.5.1, which is yanked --
+        # which is also why the last green run was on 1.5.0.
+        #
+        # To lift this, drop the pin and watch the Windows cells of "build.yml":
+        # it is still real if "Creating isolated environment: venv+pip" is
+        # followed by a DLL load failure. It goes away when "build" stops
+        # handing a symlinked venv to an interpreter that cannot use one, or
+        # when these steps stop running against a conda interpreter at all.
+        BUILD_REQUIREMENT="build"
+        if [ "${RUNNER_OS}" = "Windows" ]; then
+          BUILD_REQUIREMENT="build<1.6"
+        fi
+
         mamba create -n env-build python==${{ matrix.python-version }} "${PYTHON_ABI[@]}" -y
         mamba activate env-build
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
-        python -m pip install --upgrade build
+        python -m pip install --upgrade "${BUILD_REQUIREMENT}"
         mamba deactivate
 
         mamba create -n env-build-cli python==${{ matrix.python-version }} "${PYTHON_ABI[@]}" -y
         mamba activate env-build-cli
         python -m ensurepip --upgrade
         python -m pip install --upgrade pip wheel mypy setuptools
-        python -m pip install --upgrade build
+        python -m pip install --upgrade "${BUILD_REQUIREMENT}"
         mamba deactivate
 
     #################################################  CADQUERY  ####################################################
