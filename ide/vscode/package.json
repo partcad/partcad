@@ -4,7 +4,7 @@
   "description": "Build system and package manager for CAD files, and assembly modeling framework",
   "markdown": "github",
   "icon": "resources/logo_128x128.png",
-  "version": "0.8.10",
+  "version": "0.8.11",
   "serverInfo": {
     "name": "PartCAD",
     "module": "partcad"
@@ -821,7 +821,7 @@
       },
       {
         "view": "partcadExplorer",
-        "contents": "PartCAD v0.8.10 is not found.\n\nThe extension needs a PartCAD to talk to. Install one below and it will be downloaded for you, or run `pip install partcad` in a Python environment of your own -- the extension finds a `partcad-json-rpc` on the PATH.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD](command:partcad.startInstall)",
+        "contents": "PartCAD v0.8.11 is not found.\n\nThe extension needs a PartCAD to talk to. Install one below and it will be downloaded for you, or run `pip install partcad` in a Python environment of your own -- the extension finds a `partcad-json-rpc` on the PATH.\n\nPartCAD is the first package manager for CAD files. Learn more about PartCAD in our [GitHub repository](https://github.com/openvmp/partcad) or [documentation](https://partcad.readthedocs.io/).\n\n[Install or update PartCAD](command:partcad.startInstall)",
         "when": "partcad.activated && !partcad.installed && !partcad.beingInstalled"
       },
       {
