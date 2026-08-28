@@ -474,7 +474,7 @@ class JavaScriptRuntime(runtime.Runtime):
     async def once_async(self):
         """Asynchronous counterpart of once()."""
         async with self.async_lock():
-            with self.sync_lock_install():
+            async with self.async_lock_install():
                 if not self.initialized:
                     self.prepare_env_locked(os.path.join(self.path, BASE_ENV_DIR))
                     self.initialized = True
@@ -572,7 +572,7 @@ class JavaScriptRuntime(runtime.Runtime):
             with pc_logging.Action("v-env", self.version, session["name"]):
                 pc_logging.debug("Creating a Node.js environment: %s" % env_path)
                 self.prepare_env_locked(env_path)
-        with self.sync_lock_install():
+        async with self.async_lock_install():
             for dep in session["deps"]:
                 await self.ensure_async_onced_locked(dep, path=env_path)
 
@@ -748,7 +748,7 @@ class JavaScriptRuntime(runtime.Runtime):
         if path is None:
             path = os.path.join(self.path, BASE_ENV_DIR)
         async with self.async_lock(path=path):
-            with self.sync_lock_install():
+            async with self.async_lock_install():
                 if not os.path.exists(get_guard_path(path, js_package)):
                     await self.install_async_onced_locked(js_package, path, force or needs_reassert(path, js_package))
 

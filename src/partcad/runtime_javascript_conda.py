@@ -19,10 +19,9 @@ import shutil
 import subprocess
 import sys
 
-from filelock import FileLock
-
 from . import runtime_javascript
 from . import runtime_python_conda
+from . import sandbox_lock
 from . import logging as pc_logging
 from . import telemetry
 
@@ -32,10 +31,11 @@ class CondaJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
     def __init__(self, ctx, version=None):
         super().__init__(ctx, "conda", version)
 
-        # Shared with the Python conda runtimes on purpose: conda serializes
-        # poorly against itself whatever it is installing, and the lock is over
-        # conda rather than over a particular environment.
-        self.global_conda_lock = FileLock(os.path.join(ctx.user_config.internal_state_dir, ".conda.lock"))
+        # Shared with the Python conda runtimes on purpose, and now actually
+        # the same object as theirs: conda serializes poorly against itself
+        # whatever it is installing, and the lock is over conda rather than over
+        # a particular environment (see sandbox_lock.conda).
+        self.global_conda_lock = sandbox_lock.conda(ctx.user_config.internal_state_dir)
         self.conda_initialized = self.initialized
 
         self.conda_path = runtime_python_conda.CondaPythonRuntime.find_conda_executable()
@@ -88,12 +88,18 @@ class CondaJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
 
     @contextlib.contextmanager
     def sync_lock_install(self, session=None):
-        with self.global_conda_lock:
+        with self.global_conda_lock.acquire(write=True):
             yield
 
     @contextlib.asynccontextmanager
     async def async_lock_install(self, session=None):
-        with self.global_conda_lock:
+        """The asynchronous twin of sync_lock_install().
+
+        Waits for conda asynchronously, for the reason CondaPythonRuntime's
+        does: the lock is held across 'await's, so a task waiting for it by
+        blocking would be blocking the loop the holder runs on.
+        """
+        async with self.global_conda_lock.acquire_async(write=True):
             yield
 
     def _subprocess_env(self):
@@ -120,22 +126,34 @@ class CondaJavaScriptRuntime(runtime_javascript.JavaScriptRuntime):
 
     async def once_async(self):
         async with self.async_lock():
-            self.once_conda_locked()
+            await self.once_conda_locked_async()
         await super().once_async()
 
     def once_conda_locked(self):
         with self.sync_lock_install():
-            # See if it just got created
-            if os.path.exists(self.path):
-                self.verify_conda()
+            self.once_conda_holding_install_lock()
 
+    async def once_conda_locked_async(self):
+        """once_conda_locked() for a caller that is running on an event loop.
+
+        Only the wait is asynchronous; see CondaPythonRuntime's counterpart.
+        """
+        async with self.async_lock_install():
+            self.once_conda_holding_install_lock()
+
+    def once_conda_holding_install_lock(self):
+        """Create the conda environment. The conda lock is already held."""
+        # See if it just got created
+        if os.path.exists(self.path):
+            self.verify_conda()
+
+        if not self.conda_initialized:
+            self.once_conda_locked_attempt()
             if not self.conda_initialized:
+                # Sometimes it fails to create from the first attempt
                 self.once_conda_locked_attempt()
-                if not self.conda_initialized:
-                    # Sometimes it fails to create from the first attempt
-                    self.once_conda_locked_attempt()
-                if not self.conda_initialized:
-                    raise Exception("ERROR: Conda environment initialization failed")
+            if not self.conda_initialized:
+                raise Exception("ERROR: Conda environment initialization failed")
 
     def once_conda_locked_attempt(self):
         with pc_logging.Action("Conda", "create", "node-" + self.version):

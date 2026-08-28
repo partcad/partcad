@@ -8,7 +8,6 @@
 
 import contextlib
 import copy
-from filelock import FileLock
 import importlib
 import os
 import shutil
@@ -17,11 +16,10 @@ import sys
 import json
 
 from . import runtime_python
+from . import sandbox_lock
 from . import sandbox_versions
 from . import logging as pc_logging
 from . import telemetry
-
-# Global lock for conda that can be shared across threads
 
 
 @telemetry.instrument()
@@ -35,7 +33,10 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
             self.variant_packages = [f"{variant}"]
         super().__init__(ctx, sandbox_type_name, version)
 
-        self.global_conda_lock = FileLock(os.path.join(ctx.user_config.internal_state_dir, ".conda.lock"))
+        # One object for the whole process, shared with every other conda
+        # sandbox -- the Python ones of the other versions and the Node.js
+        # one (see sandbox_lock.conda).
+        self.global_conda_lock = sandbox_lock.conda(ctx.user_config.internal_state_dir)
         self.conda_initialized = self.initialized
         # Set by verify_conda() when the sandbox on disk turns out to hold a
         # free-threaded interpreter, which nothing but a rebuild can fix.
@@ -178,12 +179,19 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
 
     @contextlib.contextmanager
     def sync_lock_install(self, session=None):
-        with self.global_conda_lock:
+        with self.global_conda_lock.acquire(write=True):
             yield
 
     @contextlib.asynccontextmanager
     async def async_lock_install(self, session=None):
-        with self.global_conda_lock:
+        """The asynchronous twin of sync_lock_install().
+
+        Not 'with self.global_conda_lock.acquire(...)': conda runs for minutes
+        and this lock is held across the 'await's that wait for it, so a task
+        that waited for it by blocking would be blocking the loop the holder
+        needs in order to finish and release.
+        """
+        async with self.global_conda_lock.acquire_async(write=True):
             yield
 
     def _subprocess_env(self):
@@ -221,35 +229,50 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
         if self.provisioned:
             return
         async with self.async_lock(write=True):
-            self.once_conda_locked()
+            await self.once_conda_locked_async()
         await super().once_async()
 
     def once_conda_locked(self):
         with self.sync_lock_install():
-            # See if it just got created
-            if os.path.exists(self.path):
+            self.once_conda_holding_install_lock()
+
+    async def once_conda_locked_async(self):
+        """once_conda_locked() for a caller that is running on an event loop.
+
+        Only the wait for the conda lock is asynchronous. What happens under it
+        is the same synchronous conda run: it spawns processes and waits for
+        them, and giving it an asynchronous form is a separate change (see the
+        TODO on once_conda_locked_attempt).
+        """
+        async with self.async_lock_install():
+            self.once_conda_holding_install_lock()
+
+    def once_conda_holding_install_lock(self):
+        """Create the conda prefix. The conda lock is already held."""
+        # See if it just got created
+        if os.path.exists(self.path):
+            self.verify_conda()
+            self.discard_if_free_threaded()
+
+        # TODO(clairbee): Does it make sense to retry more than once?
+        attempts = 0
+        while not self.conda_initialized and attempts < 2:
+            # Sometimes it fails to create from the first attempt
+            attempts += 1
+            self.once_conda_locked_attempt()
+            if self.conda_initialized:
+                # An attempt reports success from the exit code of the last
+                # command it ran, which says nothing about *which*
+                # interpreter ended up in the prefix. Ask the prefix itself,
+                # so a create that quietly produced the wrong one is caught
+                # here rather than by the next process to open this sandbox
+                # -- which is what turned this into a rebuild every sandbox
+                # of every run repeated and none of them fixed.
                 self.verify_conda()
                 self.discard_if_free_threaded()
 
-            # TODO(clairbee): Does it make sense to retry more than once?
-            attempts = 0
-            while not self.conda_initialized and attempts < 2:
-                # Sometimes it fails to create from the first attempt
-                attempts += 1
-                self.once_conda_locked_attempt()
-                if self.conda_initialized:
-                    # An attempt reports success from the exit code of the last
-                    # command it ran, which says nothing about *which*
-                    # interpreter ended up in the prefix. Ask the prefix itself,
-                    # so a create that quietly produced the wrong one is caught
-                    # here rather than by the next process to open this sandbox
-                    # -- which is what turned this into a rebuild every sandbox
-                    # of every run repeated and none of them fixed.
-                    self.verify_conda()
-                    self.discard_if_free_threaded()
-
-            if not self.conda_initialized:
-                raise Exception("ERROR: Conda environment initialization failed")
+        if not self.conda_initialized:
+            raise Exception("ERROR: Conda environment initialization failed")
 
     # TODO(clairbee): Make an async version of this function
     def once_conda_locked_attempt(self):
