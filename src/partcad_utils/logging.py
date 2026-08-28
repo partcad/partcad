@@ -17,10 +17,16 @@ import sentry_sdk
 from opentelemetry import trace
 from . import telemetry
 
-
 # Track if any errors occurred during the execution for test purposes and for
 # the main program to know if it should exit with an error code.
 had_errors = False
+
+# The first error that set the flag above, kept so that the exit can name it.
+# The flag is read at the very end of a command, by which time the error that
+# set it may be thousands of lines up the log -- and click's own abort prints
+# "Aborted." and nothing else. Only the first: it is the one that has not been
+# caused by an earlier failure.
+first_error = None
 
 # Other packages (such as 'pip' or 'pytest') may mess with the root logger
 # in a way that we don't want. We create a separate logger for our own use.
@@ -45,17 +51,35 @@ def reset_errors():
     This should be called before running a new test. This function modifies a global variable and should be called
     with appropriate thread safety considerations.
     """
-    global had_errors
+    global had_errors, first_error
     had_errors = False
+    first_error = None
+
+
+def _rendered(args):
+    """The message as the user saw it, for `first_error`.
+
+    Callers use both styles: a pre-formatted string, and the lazy
+    ``("%s failed", name)`` the stdlib takes. Rendering must never be what
+    fails, so anything unexpected falls back to the format string itself.
+    """
+    if not args:
+        return None
+    try:
+        return str(args[0]) % args[1:] if len(args) > 1 else str(args[0])
+    except Exception:
+        return str(args[0])
 
 
 # TODO(clairbee): replace this with some kind of a hook, so that it can be handled differently in CLI and IDE, and ignored in backend jobs
 def _track_error(args):
-    global had_errors
+    global had_errors, first_error
     if args and len(args) > 1:
         if "conda run pythonw" in str(args[0]):
             return
     had_errors = True
+    if first_error is None:
+        first_error = _rendered(args)
 
 
 def error(*args, **kwargs):

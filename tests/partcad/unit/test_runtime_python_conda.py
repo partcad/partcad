@@ -21,6 +21,7 @@ import pathlib
 
 import pytest
 
+from partcad import logging as pc_logging
 from partcad import runtime_python_conda
 from partcad.runtime_python_conda import CondaPythonRuntime
 
@@ -60,6 +61,8 @@ def _bare_runtime(path, version, is_mamba=True):
     runtime.path = str(path / ("pc-py-conda-" + version))
     runtime.variant_packages = []
     runtime.conda_initialized = False
+    runtime.conda_free_threaded = False
+    runtime.conda_last_error = None
     runtime.constraints_path = None
     runtime.initialized = True
     return runtime
@@ -95,7 +98,7 @@ def test_nothing_is_pinned_below_the_free_threaded_builds(tmp_path, recorded_com
 
 @pytest.mark.parametrize("is_mamba", [True, False])
 def test_the_python_spec_is_the_fuzzy_one(tmp_path, recorded_commands, is_mamba):
-    """"python==3.14" does not mean what it looks like it means.
+    """ "python==3.14" does not mean what it looks like it means.
 
     libmamba reads it as the 3.14 release exactly, which is 3.14.0 - the oldest
     patch of the line rather than the newest - and then the next solve wants to
@@ -146,3 +149,135 @@ def test_a_free_threaded_prefix_is_the_only_one_thrown_away(tmp_path):
     runtime.discard_if_free_threaded()
     assert not os.path.exists(runtime.path)
     assert runtime.conda_free_threaded is False
+
+
+class _ScriptedProcess:
+    """A process that says what the script told it to say."""
+
+    def __init__(self, returncode, stdout, stderr):
+        self.returncode = returncode
+        self._stdout = stdout
+        self._stderr = stderr
+
+    def communicate(self):
+        return self._stdout, self._stderr
+
+
+@pytest.fixture
+def scripted_commands(monkeypatch):
+    """Drive 'subprocess.Popen' from a queue of (returncode, stdout, stderr).
+
+    Returns (commands, script): append outcomes to 'script' before the call and
+    read the commands that were run out of 'commands' afterwards. A call past the
+    end of the script succeeds silently, which is what a healthy conda does.
+    """
+    commands = []
+    script = []
+
+    def popen(args, **kwargs):
+        commands.append(list(args))
+        if script:
+            return _ScriptedProcess(*script.pop(0))
+        return _FakeProcess()
+
+    monkeypatch.setattr(runtime_python_conda.subprocess, "Popen", popen)
+    return commands, script
+
+
+# glibc's, not conda's: check_pf.c calls __libc_fatal() and kills the process
+# when the netlink socket getaddrinfo() enumerates interfaces over answers with
+# an unexpected errno. 9 is EBADF. Seen on ubuntu-24.04 in Standalone job
+# 98777554923, and gone on the retry.
+_NETLINK = "Unexpected error 9 on netlink descriptor 9.\n"
+
+
+def test_a_recovered_conda_create_does_not_fail_the_run(tmp_path, scripted_commands):
+    """A provisioning error the code retries past must not fail the command.
+
+    This is the whole bug. `pc render` in Standalone job 98777554923 hit this,
+    retried, built the sandbox, ran every wrapper out of it and rendered
+    everything -- and then exited 1 with a bare `Aborted.`, because
+    `pc_logging.error()` had set the process-wide `had_errors` flag on the way
+    through and `process_result()` reads it after the work is done. A CLI that
+    renders everything successfully and then aborts is telling the user nothing
+    they can act on.
+    """
+    commands, script = scripted_commands
+    script.append((0, "", _NETLINK))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert runtime.conda_initialized is True
+    assert pc_logging.had_errors is False, "a recovered provisioning error still fails the command"
+    # Two creates: the one glibc killed, and the retry that worked.
+    creates = [command for command in commands if "create" in command]
+    assert len(creates) == 2, commands
+
+
+def test_a_sporadic_create_failure_is_retried_before_pip_is_asked_to_populate_it(tmp_path, scripted_commands):
+    """The retry has to happen before the second command, not after it.
+
+    Falling through to "conda install pip" against a prefix that was never
+    created is what produced the "Not a conda environment" line in that job: a
+    second, louder, wholly derivative failure that named the sandbox rather than
+    the thing that broke it.
+    """
+    commands, script = scripted_commands
+    script.append((0, "", _NETLINK))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert [command[1] for command in commands] == ["create", "create", "install"], commands
+
+
+def test_an_unrecognised_create_failure_is_still_only_a_warning(tmp_path, scripted_commands):
+    """Severity is not the attempt's call to make.
+
+    `once_conda_holding_install_lock()` retries the attempt and then raises. An
+    attempt that reports at error severity has already decided the command
+    fails, whatever the caller goes on to do about it.
+    """
+    commands, script = scripted_commands
+    script.append((0, "", "something nobody has seen before\n"))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert pc_logging.had_errors is False
+    assert [command[1] for command in commands] == ["create", "install"], commands
+
+
+def test_a_failed_pip_install_is_a_warning_and_leaves_the_sandbox_uninitialized(tmp_path, scripted_commands):
+    """The failure is reported by the return value, not by the log severity."""
+    commands, script = scripted_commands
+    script.append((0, "{}", ""))
+    script.append((1, "", "could not install pip\n"))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert runtime.conda_initialized is False
+    assert pc_logging.had_errors is False
+
+
+def test_provisioning_that_never_succeeds_is_fatal_and_names_the_cause(tmp_path, scripted_commands):
+    """The one place that gets to fail the run, and it has to say what failed.
+
+    "ERROR: Conda environment initialization failed" named nothing: not the
+    sandbox, not the interpreter, not the diagnostic. Now that every attempt
+    warns, this message is the only account of the failure there is.
+    """
+    commands, script = scripted_commands
+    for _ in range(8):
+        script.append((1, "", "could not install pip\n"))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    with pytest.raises(Exception) as raised:
+        runtime.once_conda_holding_install_lock()
+
+    message = str(raised.value)
+    assert "3.13" in message, message
+    assert runtime.path in message, message
+    assert "could not install pip" in message, message

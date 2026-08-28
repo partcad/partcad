@@ -21,9 +21,32 @@ from . import sandbox_versions
 from . import logging as pc_logging
 from . import telemetry
 
+# Conda/mamba failures that are the machine, not the request, and that a retry
+# has been observed to clear. Matched against the stderr of "conda create".
+#
+# "Unexpected error N on netlink descriptor M" is not conda's own message at
+# all: it is glibc's, from check_pf.c, where getaddrinfo() enumerates local
+# interfaces over a NETLINK_ROUTE socket. When that socket answers with an
+# unexpected errno (9 is EBADF), glibc calls __libc_fatal() and kills the
+# process outright -- so conda dies mid-solve, through no fault of its own or
+# ours, and leaves no prefix behind. It is a property of the runner's network
+# namespace and it comes and goes; the retry below is the whole remedy.
+_SPORADIC_CONDA_ERRORS = (
+    "Found incorrect download",
+    "libmamba libarchive",
+    "netlink descriptor",
+)
+
 
 @telemetry.instrument()
 class CondaPythonRuntime(runtime_python.PythonRuntime):
+    # The last thing that went wrong while provisioning this sandbox. Every
+    # diagnostic inside an attempt is a warning, because the attempt may be
+    # retried; this is what the exception raised after the last attempt quotes,
+    # so that the fatal message names the cause and not just the fact. A class
+    # attribute so that it is readable however the instance was made.
+    conda_last_error = None
+
     def __init__(self, ctx, version=None, variant=None):
         if variant is None:
             sandbox_type_name = "conda"
@@ -272,7 +295,20 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 self.discard_if_free_threaded()
 
         if not self.conda_initialized:
-            raise Exception("ERROR: Conda environment initialization failed")
+            # The one fatal point in provisioning, and the only place that gets
+            # to fail the run. Everything an attempt logged on the way here was
+            # a warning, so this message has to carry the cause: a bare
+            # "initialization failed" from a command that then went on to render
+            # everything successfully is what made this unactionable in CI.
+            raise Exception(
+                "ERROR: Conda environment initialization failed for Python %s at %s after %d attempt(s): %s"
+                % (
+                    self.version,
+                    self.path,
+                    attempts,
+                    self.conda_last_error or "no diagnostic was captured",
+                )
+            )
 
     # TODO(clairbee): Make an async version of this function
     def once_conda_locked_attempt(self):
@@ -326,21 +362,22 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         )
                         stdout, stderr = p.communicate()
 
+                    # Everything reported in here is a *warning*, however bad it
+                    # reads. This is one attempt of several, and whether the
+                    # sandbox ends up usable is decided by the caller
+                    # (once_conda_holding_install_lock), which retries and then
+                    # raises. pc_logging.error() sets the global had_errors flag
+                    # that the CLI turns into a non-zero exit at the very end of
+                    # the command -- so an error logged here failed a run that
+                    # had already recovered, rendered everything and finished.
                     if not stderr is None and stderr.strip() != "":
+                        self.conda_last_error = stderr.strip()
                         # Handle most common sporadic conda/mamba failures
-                        if "Found incorrect download" in stderr:
-                            pc_logging.warn("conda env install error: %s" % stderr)
+                        if any(marker in stderr for marker in _SPORADIC_CONDA_ERRORS):
+                            pc_logging.warning("conda env install error (retrying): %s" % stderr)
                             attempts += 1
                             continue
-                        if "libmamba libarchive" in stderr:
-                            pc_logging.warn("conda env install error: %s" % stderr)
-                            attempts += 1
-                            continue
-                        if "Found incorrect download" in stderr:
-                            pc_logging.warn("conda env install error: %s" % stderr)
-                            attempts += 1
-                            continue
-                        pc_logging.error("conda env install error: %s" % stderr)
+                        pc_logging.warning("conda env install error: %s" % stderr)
                     elif p.returncode != 0:
                         # A failed solve under "--json" is reported *on stdout*,
                         # as {"success": false, "error": ...}, and leaves stderr
@@ -348,7 +385,11 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                         # one is the only thing between a failed create and the
                         # "conda install" below being asked to populate a prefix
                         # that was never made.
-                        pc_logging.error(
+                        self.conda_last_error = "conda env create exited %s: %s" % (
+                            p.returncode,
+                            (stdout or "").strip(),
+                        )
+                        pc_logging.warning(
                             "conda env create failed (exit %s): %s" % (p.returncode, (stdout or "").strip())
                         )
                     break
@@ -408,7 +449,14 @@ class CondaPythonRuntime(runtime_python.PythonRuntime):
                 if not stderr is None and stderr.strip() != "":
                     pc_logging.warning("conda pip install error: %s" % stderr)
                 if p.returncode != 0:
-                    pc_logging.error("conda pip install return code: %s" % p.returncode)
+                    # A warning for the same reason as the create diagnostics
+                    # above: this only means *this* attempt did not finish, and
+                    # the caller decides whether that is fatal.
+                    self.conda_last_error = "conda pip install exited %s: %s" % (
+                        p.returncode,
+                        (stderr or "").strip(),
+                    )
+                    pc_logging.warning("conda pip install return code: %s" % p.returncode)
                     self.conda_initialized = False
                 else:
                     self.conda_initialized = True
