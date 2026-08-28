@@ -6,6 +6,7 @@
 
 import copy
 import os
+from unittest.mock import mock_open, patch
 
 import pytest
 
@@ -37,6 +38,34 @@ def restore_parameter_config():
         del parameter_config[key]
     for key, value in saved.items():
         parameter_config[key] = value
+
+
+@pytest.fixture
+def mocked_git_open():
+    """Mock the ``open()`` that ``partcad.project_factory_git`` uses, and only that one.
+
+    A test that mocks the clone itself leaves the repository cache directory
+    uncreated, so the guard file that ``project_factory_git`` writes beside the
+    clone has nowhere to go and the write has to be mocked away.
+
+    Patch the name in that module rather than ``builtins.open``: a global
+    ``open()`` mock is also handed to the standard library, and the standard
+    library opens files during ``pc.Context()`` on some platforms. On macOS
+    ``Context.__init__`` computes the host tags, which reads the OS version out
+    of ``/System/Library/CoreServices/SystemVersion.plist``; ``plistlib`` reads
+    it in binary mode, so a mock handing back ``str`` fails there with
+    ``TypeError: startswith first arg must be str or a tuple of str, not bytes``.
+    That is invisible on Linux, so keep the mock where it belongs.
+
+    ``create=True`` because ``open`` is a builtin: the module has no global of
+    that name until this puts one there, which is exactly what makes the module
+    find the mock while everyone else keeps the real thing.
+    """
+
+    def _patch():
+        return patch("partcad.project_factory_git.open", mock_open(read_data=""), create=True)
+
+    return _patch
 
 
 @pytest.hookimpl(trylast=True)
