@@ -30,7 +30,7 @@
 
 [project]
 name = "partcad-cli"
-version = "0.8.9"
+version = "0.8.10"
 description = "The PartCAD command line interface, which now ships inside 'partcad'"
 readme = "README.md"
 keywords = ["cadquery", "build123d", "cad", "design", "openscad", "step", "stl"]
@@ -48,7 +48,7 @@ maintainers = [
   {name = "PartCAD", email = "support@partcad.org" }
 ]
 
-dependencies = ["partcad==0.8.9"]
+dependencies = ["partcad==0.8.10"]
 
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -58,8 +58,8 @@ classifiers = [
 # Mirrored so that `partcad-cli[lint]` and `partcad-cli[aws]` keep resolving for
 # anyone who pinned them.
 [project.optional-dependencies]
-lint = ["partcad[lint]==0.8.9"]
-aws = ["partcad[aws]==0.8.9"]
+lint = ["partcad[lint]==0.8.10"]
+aws = ["partcad[aws]==0.8.10"]
 
 [project.urls]
 Homepage = "https://github.com/partcad/partcad"
