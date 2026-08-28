@@ -1,0 +1,65 @@
+# Throwaway diagnostic. Reproduces the "Examples (PartCAD)" sequence on the one
+# runner where 'pc test' wedges - ubuntu-24.04-arm, roughly every other run -
+# and, when it does, dumps every thread of every Python process instead of
+# waiting for the job timeout. Delete this branch once the stack has been read.
+name: arm64 hang probe
+
+on:
+  push:
+    branches: ["claude/arm64-hang-probe"]
+
+permissions:
+  contents: read
+
+env:
+  PC_TELEMETRY_ENV: test
+  PC_TELEMETRY_PERFORMANCE: false
+
+jobs:
+  probe:
+    name: "Probe"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-24.04-arm"]
+        python-version: ["3.11", "3.14"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-all
+        with:
+          job: examples-partcad
+      - uses: ./.github/actions/setup-test
+        with:
+          job: examples-partcad
+
+      - name: List, then test under a watchdog
+        shell: bash -el {0}
+        run: |
+          . ~/.bashrc
+          . ~/.bash_profile
+          mamba activate ${{ format('env-test-examples-partcad-{0}', matrix.python-version) }}
+          python -m pip install --quiet py-spy
+
+          cd ./examples
+          python -m partcad_cli.click.command --no-ansi list all -r //pub/examples/partcad
+
+          set +e
+          timeout -s KILL 780 python -m partcad_cli.click.command \
+            --no-ansi --threads-max 4 test -r --package //pub/examples/partcad
+          rc=$?
+          set -e
+          echo "::notice::test exited with $rc (137 = the watchdog killed it)"
+
+          if [ "$rc" != "0" ]; then
+            echo "===== PROCESS TABLE ====="
+            ps -eo pid,ppid,etime,stat,args | grep -E "partcad|python|conda" | grep -v grep || true
+            echo "===== STACKS ====="
+            for p in $(pgrep -f "partcad_service_json_rpc|partcad_cli|wrapper_" || true); do
+              echo "----- pid $p: $(tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null)"
+              sudo env "PATH=$PATH" py-spy dump --pid "$p" 2>&1 || true
+            done
+            echo "===== END ====="
+            exit 1
+          fi
