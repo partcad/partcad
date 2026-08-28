@@ -537,10 +537,13 @@ class UserConfig(vyper.Vyper):
         #              repository plugin that enumerates a category by fetching
         #              every part in it over the network can run for hours, and
         #              without a bound "pc list -r" simply stops producing
-        #              output and never returns.
+        #              output and never returns. Three minutes, the same as
+        #              "git.clone.timeout" above and for the same reason: it is
+        #              what a whole network operation is allowed, and one
+        #              key/value query is far less than that.
         # values: <int>
-        # default: 300
-        self.set_default("plugin.query.timeout", 300)
+        # default: 180
+        self.set_default("plugin.query.timeout", 180)
 
         self.set_default("useDocker", True)
         self.set_default("useDockerPython", False)
@@ -783,12 +786,12 @@ class UserConfig(vyper.Vyper):
         # option: plugin.query.timeout
         # description: seconds one query to a plugin script may take
         # values: <int>
-        # default: 300
+        # default: 180
         self.bind_env("plugin.query.timeout", "PC_PLUGIN_QUERY_TIMEOUT")
         self.plugin_query_timeout = self.get_int("plugin.query.timeout")
         if not self.plugin_query_timeout or self.plugin_query_timeout <= 0:
             # An unset or nonsensical value must not turn the bound back off
-            self.plugin_query_timeout = 300
+            self.plugin_query_timeout = 180
 
         # option: telemetry
         # description: Telemetry configuration

@@ -607,6 +607,21 @@ jobs:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix-slim) }}
     runs-on: ${{ matrix.os }}
     # 45 -> 60: Windows was already at ~35-38 min and the new stack is slower.
+    #
+    # Deliberately NOT raised again, though it was tempting: Linux and macOS
+    # finish in 9-12 minutes and Windows in 42, of which 30 are 'list all'
+    # alone. Windows costs five times what the others do because there is no
+    # socket daemon there yet -- every operation opens a one-shot service over
+    # stdio (client.connect -> _connect_stdio), so each of the six listings
+    # 'pc list all' runs gets a cold context of its own and reloads the whole
+    # index, seven 'DONE: InitCtx' lines to Linux's one. Loading it is itself
+    # dearer than it was: '//pub/universe/lego/ldraw' is served by a repository
+    # plugin, so the index now runs a sandbox interpreter twice per LDraw
+    # category ('meta' and 'deps', 208 of them) and pays 'plugin.query.timeout'
+    # once for the enumeration nobody can wait out. Both are worth fixing
+    # rather than buying more minutes for -- and a longer budget is time a
+    # future wedge gets to burn before this job says so, which is the thing the
+    # deadline exists to prevent.
     timeout-minutes: 60
 
     steps:

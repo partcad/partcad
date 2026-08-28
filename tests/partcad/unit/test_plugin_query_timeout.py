@@ -40,12 +40,12 @@ def _plugin():
 # ---- the configured bound ----------------------------------------------------
 
 
-def test_the_deadline_defaults_to_five_minutes(monkeypatch):
+def test_the_deadline_defaults_to_three_minutes(monkeypatch):
     # Cleared rather than assumed absent: the option is environment-bound, and
     # a job that exports it to shorten the deadline would otherwise make this
     # assert whatever that job chose.
     monkeypatch.delenv("PC_PLUGIN_QUERY_TIMEOUT", raising=False)
-    assert UserConfig().plugin_query_timeout == 300
+    assert UserConfig().plugin_query_timeout == 180
 
 
 def test_the_deadline_reads_the_environment(monkeypatch):
@@ -56,7 +56,7 @@ def test_the_deadline_reads_the_environment(monkeypatch):
 def test_the_deadline_rejects_nonsense(monkeypatch):
     """A zero or negative value must not silently turn the bound back off."""
     monkeypatch.setenv("PC_PLUGIN_QUERY_TIMEOUT", "0")
-    assert UserConfig().plugin_query_timeout == 300
+    assert UserConfig().plugin_query_timeout == 180
 
 
 def test_the_deadline_travels_to_the_daemon(monkeypatch):
@@ -74,7 +74,7 @@ def test_a_query_that_finishes_is_returned_untouched():
     async def run():
         return (0, "answer", "")
 
-    assert asyncio.run(query_with_deadline(plugin, run, 300)) == (0, "answer", "")
+    assert asyncio.run(query_with_deadline(plugin, run, 180)) == (0, "answer", "")
     assert plugin.deadline_exceeded is None
     assert plugin.errors == []
 
@@ -86,7 +86,7 @@ def test_a_blown_deadline_reads_as_no_answer():
     async def run():
         raise asyncio.TimeoutError()
 
-    assert asyncio.run(query_with_deadline(plugin, run, 300)) is None
+    assert asyncio.run(query_with_deadline(plugin, run, 180)) is None
 
 
 def test_a_blown_deadline_is_reported_with_the_way_out():
@@ -95,12 +95,12 @@ def test_a_blown_deadline_is_reported_with_the_way_out():
     async def run():
         raise asyncio.TimeoutError()
 
-    asyncio.run(query_with_deadline(plugin, run, 300, "//pub/universe/lego:ldraw 'Brick/objects/part'"))
+    asyncio.run(query_with_deadline(plugin, run, 180, "//pub/universe/lego:ldraw 'Brick/objects/part'"))
 
     assert len(plugin.errors) == 1
     message = plugin.errors[0]
     assert "Brick/objects/part" in message  # which package came out empty
-    assert "300 seconds" in message
+    assert "180 seconds" in message
     assert "plugin.query.timeout" in message  # and how to wait longer
 
 
@@ -109,14 +109,14 @@ def test_a_plugin_that_blew_its_deadline_is_marked():
 
     A repository plugin serves a whole tree - LDraw's is 104 categories, each
     asked for three kinds of object - so retrying it would be the same wedge in
-    slower motion: 312 queries at five minutes each is twenty-six hours.
+    slower motion: 312 queries at three minutes each is fifteen hours.
     """
     plugin = _plugin()
 
     async def run():
         raise asyncio.TimeoutError()
 
-    asyncio.run(query_with_deadline(plugin, run, 300))
+    asyncio.run(query_with_deadline(plugin, run, 180))
 
     assert plugin.deadline_exceeded is not None
 
@@ -131,7 +131,7 @@ def test_a_marked_plugin_is_not_asked_again():
     factory = object.__new__(PluginFactoryPython)
     factory.ctx = pc.Context("examples")
     plugin = _plugin()
-    plugin.deadline_exceeded = "the plugin script did not answer within 300 seconds"
+    plugin.deadline_exceeded = "the plugin script did not answer within 180 seconds"
 
     result = asyncio.run(factory.query_script(plugin, "get", {"key": "Technic/objects/part"}))
 
@@ -144,7 +144,7 @@ def test_a_refused_query_still_says_why():
     factory = object.__new__(PluginFactoryPython)
     factory.ctx = pc.Context("examples")
     plugin = _plugin()
-    plugin.deadline_exceeded = "skipped: the plugin script exceeded its 300 second deadline"
+    plugin.deadline_exceeded = "skipped: the plugin script exceeded its 180 second deadline"
 
     asyncio.run(factory.query_script(plugin, "get", {"key": "Technic/objects/part"}))
 
@@ -162,7 +162,7 @@ def test_the_long_explanation_is_said_once():
     async def run():
         raise asyncio.TimeoutError()
 
-    asyncio.run(query_with_deadline(plugin, run, 300, "//pub/universe/lego:ldraw 'Brick/objects/part'"))
+    asyncio.run(query_with_deadline(plugin, run, 180, "//pub/universe/lego:ldraw 'Brick/objects/part'"))
 
     assert "plugin.query.timeout" in plugin.errors[0]
     assert "plugin.query.timeout" not in plugin.deadline_exceeded
