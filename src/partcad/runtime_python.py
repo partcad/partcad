@@ -468,7 +468,7 @@ class PythonRuntime(runtime.Runtime):
         if self.provisioned:
             return
         async with self.async_lock(write=True):
-            with self.sync_lock_install():
+            async with self.async_lock_install():
                 await self.ensure_zstd_onced_locked_async()
                 if not self.initialized:
                     # Preinstall the most common packages to avoid
@@ -695,7 +695,7 @@ class PythonRuntime(runtime.Runtime):
                 # venv lock, so use the *_locked ensure and take the install
                 # lock explicitly; the resulting order (venv lock, then the
                 # conda global lock) matches once()/ensure and cannot deadlock.
-                with self.sync_lock_install():
+                async with self.async_lock_install():
                     for dep in session["deps"]:
                         if dep == "partcad":
                             dep = get_local_partcad_pkg(dep)
@@ -941,7 +941,7 @@ class PythonRuntime(runtime.Runtime):
                 session["dirty"] = True
         elif not self.installed_onced(python_package, path, force):
             async with self.async_lock(path=path, write=True):
-                with self.sync_lock_install():
+                async with self.async_lock_install():
                     await self.install_async_onced_locked(python_package, path, force)
 
     async def ensure_async_onced_locked(self, python_package, session=None, path=None, force=False):

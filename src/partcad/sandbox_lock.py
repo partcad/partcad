@@ -177,6 +177,39 @@ def get(lock_path: str) -> EnvironmentLock:
         return _environment_locks[lock_path]
 
 
+# conda serializes poorly against itself whatever it is installing -- the
+# package cache and the solver's own state are shared by every prefix -- so what
+# this stands for is conda, not any one environment. Named here rather than in
+# the runtimes so that the Python and the JavaScript conda sandboxes cannot
+# drift into naming two files and believing they share one.
+CONDA_LOCK_NAME = ".conda.lock"
+
+
+def conda(internal_state_dir: str) -> EnvironmentLock:
+    """The one lock over conda itself, whatever is being provisioned with it.
+
+    Always taken for writing: everything conda is asked to do here creates or
+    installs into a prefix, so there is no reader half to share.
+
+    A lock over conda has to be one object, and used to be one per runtime: the
+    Python 3.11 sandbox, the Python 3.13 sandbox and the Node.js sandbox each
+    built a FileLock of their own over this path. Across processes that still
+    worked, and across threads it worked by accident -- the second thread waited
+    on the file. Two of them on one event loop did not: a render holds this lock
+    across an 'await' while conda runs, so the next task to reach it was the
+    same thread asking for a lock it already held through another object, which
+    filelock refuses outright ("Deadlock: ... already held by a different
+    FileLock instance in this thread"). Refusing was the kind thing to do; the
+    alternative was hanging.
+
+    So the fix is not to talk filelock out of noticing -- 'is_singleton=True'
+    would hand the second task the lock, which is the one outcome worse than
+    either -- but to make the lock what it always claimed to be: one object,
+    shared, with the waiting done by EnvironmentLock rather than by the file.
+    """
+    return get(os.path.join(internal_state_dir, CONDA_LOCK_NAME))
+
+
 class ProcessSlots:
     """How many sandbox interpreters may run at once.
 
