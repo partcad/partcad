@@ -10,6 +10,7 @@
 import asyncio
 import os
 import sys
+import typing
 
 from . import shape_envelope
 
@@ -23,7 +24,7 @@ from . import sandbox_versions
 from . import telemetry
 
 
-async def query_with_deadline(plugin: Plugin, run, timeout: int, subject: str = None):
+async def query_with_deadline(plugin: Plugin, run, timeout: int, subject: typing.Optional[str] = None):
     """Await ``run()`` on behalf of ``plugin``, for at most ``timeout`` seconds.
 
     A plugin script is third-party code doing whatever it likes in a sandbox of

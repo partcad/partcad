@@ -662,10 +662,16 @@ jobs:
           # library through a repository plugin that cannot answer within
           # 'plugin.query.timeout', so the listing reports it and exits non-zero
           # every time.
+          # Each exit code is reported rather than swallowed: 'continue-on-error'
+          # already keeps the job green, so the log is the only place a genuine
+          # regression in either command can show up.
           set +e
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.1 -m partcad_cli.click.command --no-ansi list all -r //pub
+          list_rc=$?
           coverage run --rcfile=../dev-tools/coverage.rc --data-file=.coverage.2 -m partcad_cli.click.command --no-ansi --threads-max 4 test -r --package //pub
+          test_rc=$?
           set -e
+          echo "::notice title=Repo //pub::'list all' exited ${list_rc}, 'test' exited ${test_rc}"
           coverage combine
           # END PUBLIC REPO
 
