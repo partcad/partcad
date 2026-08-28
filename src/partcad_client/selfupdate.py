@@ -47,8 +47,10 @@ reaper that waits for this process to exit first. See :func:`_reap_after_exit`.
 import contextlib
 import glob
 import json
+import ntpath
 import os
 import platform
+import posixpath
 import re
 import shlex
 import shutil
@@ -894,7 +896,7 @@ def _reject_unsafe_links(members, dest: str) -> None:
         if not (member.issym() or member.islnk()):
             continue
         link = member.linkname
-        if os.path.isabs(link) or (os.name == "nt" and os.path.splitdrive(link)[0]):
+        if _is_absolute_link(link):
             raise SelfUpdateError("the archive contains an absolute link: %s -> %s" % (member.name, link))
         # A symlink resolves against its own directory; a hard link name is
         # relative to the archive root.
@@ -903,6 +905,29 @@ def _reject_unsafe_links(members, dest: str) -> None:
         root = os.path.normpath(dest)
         if resolved != root and not resolved.startswith(root + os.sep):
             raise SelfUpdateError("the archive contains an unsafe link: %s -> %s" % (member.name, link))
+
+
+def _is_absolute_link(link: str) -> bool:
+    """Whether a tar link target names a place of its own rather than one in the archive.
+
+    A tar stores a link target as a POSIX path, whatever host wrote the archive
+    and whatever host unpacks it, so :mod:`posixpath` is what decides whether it
+    is absolute -- not ``os.path``, which is :mod:`ntpath` on Windows. Python
+    3.13 stopped calling a rootless ``/etc/passwd`` absolute there, on the
+    grounds that Windows resolves it against the current drive rather than
+    against a root, and the caller's guard quietly stopped firing for exactly
+    the target it was written for. The archive stayed refused -- the traversal
+    check that follows it catches the same member a line later -- but under the
+    wrong name, so a Windows 3.13+ user was told a hostile bundle was malformed.
+
+    The Windows anchors are then refused everywhere rather than only where they
+    mean something: a drive (``C:\\x``), a UNC root, and a bare leading
+    backslash, which names the root of the current drive there and is an
+    ordinary filename here. An archive is hostile or it is not, and which host
+    happens to unpack it does not change the answer. Nothing legitimate is
+    caught either way -- a bundle's links are bare relative names.
+    """
+    return posixpath.isabs(link) or bool(ntpath.splitdrive(link)[0]) or link.startswith("\\")
 
 
 def _reject_traversal(names, dest: str) -> None:

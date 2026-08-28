@@ -35,8 +35,10 @@ read from ``PC_CAD_GITHUB_TOKEN``, ``GITHUB_TOKEN`` or ``GH_TOKEN``; without one
 
 import hashlib
 import json
+import ntpath
 import os
 import platform as _platform
+import posixpath
 import shutil
 import sys
 import tarfile
@@ -473,7 +475,15 @@ def _safe_members(tf, dest: str):
             continue
         if member.issym() or member.islnk():
             link = member.linkname
-            if os.path.isabs(link):
+            # A tar stores a link target as a POSIX path, so `posixpath` is what
+            # decides whether it is absolute -- `os.path` is `ntpath` on
+            # Windows, and since Python 3.13 that no longer calls a rootless
+            # `/etc/passwd` absolute (it is relative to the current drive
+            # there). The Windows anchors that `posixpath` does not know about
+            # -- a drive, a UNC root, a bare leading backslash -- are dropped
+            # everywhere rather than only where they mean something: a bundle's
+            # links are bare relative names, so nothing legitimate is caught.
+            if posixpath.isabs(link) or ntpath.splitdrive(link)[0] or link.startswith("\\"):
                 continue
             # A symlink resolves against its own directory; a hard link name is
             # relative to the archive root.
