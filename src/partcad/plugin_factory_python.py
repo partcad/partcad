@@ -40,7 +40,8 @@ async def query_with_deadline(plugin: Plugin, run, timeout: int, subject: str = 
     so that it is not asked again. The second half matters as much as the first:
     a package tree served by one plugin asks it once per sub-package per object
     kind, so paying the deadline over and over is the same wedge in slower
-    motion -- 104 categories at five minutes each is nine hours.
+    motion -- LDraw's 104 categories, three kinds each, at five minutes apiece
+    is twenty-six hours.
 
     The deadline is over the *script*, not over the sandbox it runs in.
     Provisioning a Python sandbox means creating a conda environment and

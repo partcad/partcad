@@ -40,7 +40,11 @@ def _plugin():
 # ---- the configured bound ----------------------------------------------------
 
 
-def test_the_deadline_defaults_to_five_minutes():
+def test_the_deadline_defaults_to_five_minutes(monkeypatch):
+    # Cleared rather than assumed absent: the option is environment-bound, and
+    # a job that exports it to shorten the deadline would otherwise make this
+    # assert whatever that job chose.
+    monkeypatch.delenv("PC_PLUGIN_QUERY_TIMEOUT", raising=False)
     assert UserConfig().plugin_query_timeout == 300
 
 
@@ -55,8 +59,9 @@ def test_the_deadline_rejects_nonsense(monkeypatch):
     assert UserConfig().plugin_query_timeout == 300
 
 
-def test_the_deadline_travels_to_the_daemon():
+def test_the_deadline_travels_to_the_daemon(monkeypatch):
     """The daemon does the work, so an option it never receives does nothing."""
+    monkeypatch.delenv("PC_PLUGIN_QUERY_TIMEOUT", raising=False)
     assert "plugin.query.timeout" in UserConfig().to_dict()
 
 
