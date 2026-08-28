@@ -2,7 +2,7 @@ import pytest
 import tempfile
 import partcad as pc
 from pygit2 import GitError
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 from partcad.user_config import UserConfig
 
@@ -76,7 +76,7 @@ def test_project_import_git_clone_retry_failure(git_error: GitError, user_config
     assert mock_clone.call_count == test_git_retry_config["max"] + 1
 
 
-def test_project_import_git_clone_retry_then_success(user_config):
+def test_project_import_git_clone_retry_then_success(user_config, mocked_git_open):
     fail_count = 3
 
     def side_effect(*args, **kwargs):
@@ -89,7 +89,7 @@ def test_project_import_git_clone_retry_then_success(user_config):
 
     with (
         patch("partcad.project_factory_git._clone", side_effect=side_effect) as mock_clone,
-        patch("builtins.open", mock_open(read_data="")),
+        mocked_git_open(),
     ):
 
         ctx = pc.Context(user_config=user_config)

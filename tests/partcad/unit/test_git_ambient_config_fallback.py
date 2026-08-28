@@ -15,7 +15,7 @@ import pytest
 import pygit2
 from pygit2 import GitError
 from pygit2.enums import ConfigLevel
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import partcad as pc
 from partcad.user_config import UserConfig
@@ -49,7 +49,7 @@ def _ambient_config_ignored() -> bool:
     return pygit2.settings.search_path[ConfigLevel.GLOBAL] == ""
 
 
-def test_clone_falls_back_to_ignoring_ambient_config(user_config):
+def test_clone_falls_back_to_ignoring_ambient_config(user_config, mocked_git_open):
     """A clone that fails while honoring the ambient config succeeds once it is
     ignored, and the search path is restored afterwards."""
 
@@ -64,7 +64,7 @@ def test_clone_falls_back_to_ignoring_ambient_config(user_config):
 
     with (
         patch("partcad.project_factory_git._clone", side_effect=side_effect),
-        patch("builtins.open", mock_open(read_data="")),
+        mocked_git_open(),
     ):
         ctx = pc.Context(user_config=user_config)
         factory = pc.ProjectFactoryGit(ctx, None, test_config_import_git)
@@ -95,7 +95,7 @@ def test_search_path_restored_when_fallback_also_fails(user_config):
     assert pygit2.settings.search_path[ConfigLevel.GLOBAL] == saved
 
 
-def test_successful_clone_never_touches_the_search_path(user_config):
+def test_successful_clone_never_touches_the_search_path(user_config, mocked_git_open):
     """The happy path honors the ambient config and never clears the search
     path, so a clone always sees the user's configuration when it works."""
 
@@ -107,7 +107,7 @@ def test_successful_clone_never_touches_the_search_path(user_config):
 
     with (
         patch("partcad.project_factory_git._clone", side_effect=side_effect),
-        patch("builtins.open", mock_open(read_data="")),
+        mocked_git_open(),
     ):
         ctx = pc.Context(user_config=user_config)
         pc.ProjectFactoryGit(ctx, None, test_config_import_git)
