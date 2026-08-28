@@ -348,6 +348,14 @@ def test_release_platforms_reports_a_machine_the_release_has_no_build_for(monkey
 # ships, so these tests exercise the real layout on both.
 BUNDLE_USES_SYMLINKS = os.name != "nt"
 
+# The suffix a bundle's executables carry on this machine: the Windows bundle
+# `dev-tools/pyinstaller/build.sh` publishes holds `pc.exe`. `_prune_old_versions`
+# looks for exactly that name when it decides whether a directory holds a bundle
+# at all, and it decides off `os.name` -- the host -- not off the `sys.platform`
+# these tests fake to choose an archive. So a bundle laid out below has to carry
+# the host's suffix, or the code under test does not recognise it as one.
+BUNDLE_EXE_SUFFIX = ".exe" if os.name == "nt" else ""
+
 
 def _make_bundle_archive(path, version="0.7.159"):
     """A tarball shaped like a real release: one top-level `partcad/` directory.
@@ -359,14 +367,14 @@ def _make_bundle_archive(path, version="0.7.159"):
     staging = path / "build" / "partcad"
     staging.mkdir(parents=True)
     payload = "#!/bin/sh\necho %s\n" % version
-    (staging / "pc").write_text(payload)
+    (staging / ("pc" + BUNDLE_EXE_SUFFIX)).write_text(payload)
     for name in selfupdate.BUNDLE_EXECUTABLES:
         if name == "pc":
             continue
         if BUNDLE_USES_SYMLINKS:
             os.symlink("pc", staging / name)
         else:
-            (staging / name).write_text(payload)
+            (staging / (name + BUNDLE_EXE_SUFFIX)).write_text(payload)
     (staging / "_internal").mkdir()
     archive = path / ("partcad-%s-linux-x86_64.tar.xz" % version)
     with tarfile.open(archive, "w:xz") as tf:
@@ -388,7 +396,7 @@ def test_extract_unpacks_the_bundle(tmp_path):
     dest = tmp_path / "dest"
     dest.mkdir()
     selfupdate._extract(str(archive), str(dest), "tar.xz")
-    assert (dest / "partcad" / "pc").is_file()
+    assert (dest / "partcad" / ("pc" + BUNDLE_EXE_SUFFIX)).is_file()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="the bundle ships copies, not symlinks, on Windows")
@@ -488,14 +496,14 @@ def standalone(monkeypatch, tmp_path):
     running = root / "0.7.158"
     running.mkdir(parents=True)
     for name in selfupdate.BUNDLE_EXECUTABLES:
-        (running / name).write_text("old")
+        (running / (name + BUNDLE_EXE_SUFFIX)).write_text("old")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     for name in ("pc", "partcad"):
-        os.symlink(running / name, bin_dir / name)
+        os.symlink(running / (name + BUNDLE_EXE_SUFFIX), bin_dir / name)
 
     monkeypatch.setattr(selfupdate.sys, "frozen", True, raising=False)
-    monkeypatch.setattr(selfupdate.sys, "executable", str(running / "partcad-json-rpc"))
+    monkeypatch.setattr(selfupdate.sys, "executable", str(running / ("partcad-json-rpc" + BUNDLE_EXE_SUFFIX)))
     monkeypatch.setenv("PARTCAD_BIN_DIR", str(bin_dir))
     monkeypatch.setenv("PATH", str(bin_dir))
     monkeypatch.setattr(selfupdate.sys, "platform", "linux")
@@ -521,7 +529,7 @@ def test_install_standalone_installs_beside_the_running_bundle(standalone, no_re
     root, _bin_dir, running = standalone
     target = selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
     assert target == str(root / "0.7.159")
-    assert os.path.isfile(os.path.join(target, "pc"))
+    assert os.path.isfile(os.path.join(target, "pc" + BUNDLE_EXE_SUFFIX))
     # Beside, never over: the running bundle is intact when the install returns,
     # which is what makes this safe on Windows and safe for a daemon that
     # outlived the stop. It is handed to the reaper, not deleted here.
@@ -529,6 +537,7 @@ def test_install_standalone_installs_beside_the_running_bundle(standalone, no_re
     assert no_reaper == [str(running)]
 
 
+@pytest.mark.skipif(os.name == "nt", reason="install.sh does not run on Windows, so there are no launchers to repoint")
 def test_install_standalone_repoints_the_launchers(standalone, no_reaper):
     root, bin_dir, _running = standalone
     selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
@@ -561,7 +570,7 @@ def test_install_standalone_prunes_superseded_bundles(standalone, no_reaper):
     root, _bin_dir, _running = standalone
     stale = root / "0.7.100"
     stale.mkdir()
-    (stale / "pc").write_text("ancient")
+    (stale / ("pc" + BUNDLE_EXE_SUFFIX)).write_text("ancient")
     selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
     assert not stale.exists()
 
@@ -572,7 +581,7 @@ def test_no_old_bundle_is_left_behind(standalone, no_reaper):
     for version in ("0.7.100", "0.7.157"):
         stale = root / version
         stale.mkdir()
-        (stale / "pc").write_text("ancient")
+        (stale / ("pc" + BUNDLE_EXE_SUFFIX)).write_text("ancient")
 
     target = selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
 
@@ -598,7 +607,7 @@ def test_install_standalone_replaces_an_existing_copy_of_the_same_version(standa
     (existing / "stale-leftover").write_text("from a previous attempt")
     selfupdate._install_standalone("0.7.159", "partcad/partcad", lambda _m: None)
     assert not (existing / "stale-leftover").exists()
-    assert (existing / "pc").is_file()
+    assert (existing / ("pc" + BUNDLE_EXE_SUFFIX)).is_file()
 
 
 def test_install_standalone_uses_the_base_url_override(monkeypatch, standalone):
@@ -846,7 +855,7 @@ def test_install_standalone_refuses_to_unpack_into_the_running_bundle(monkeypatc
         # The running bundle lives in `<root>/0.7.158`, so asking for 0.7.158
         # would target the directory currently being executed.
         selfupdate._install_standalone("0.7.158", "partcad/partcad", lambda _m: None)
-    assert (running / "pc").read_text() == "old"
+    assert (running / ("pc" + BUNDLE_EXE_SUFFIX)).read_text() == "old"
 
 
 # ---------------------------------------------------------------------------
@@ -854,6 +863,7 @@ def test_install_standalone_refuses_to_unpack_into_the_running_bundle(monkeypatc
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(os.name == "nt", reason="the helper here is the POSIX one; Windows gets the `cmd` loop instead")
 def test_reap_after_exit_removes_the_directory_once_the_process_is_gone(tmp_path, monkeypatch):
     """For real: a throwaway process stands in for the one being updated."""
     import subprocess
