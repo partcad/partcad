@@ -73,7 +73,13 @@ isort --check src/partcad tests/partcad
   something else. Every assembly's bill of materials then lists that software with the commit its package was
   read at (`revision.py`), because a firmware image, unlike a bracket, is a different file once its package
   publishes again. `lint/software.py` is what keeps that answerable: a file the package does not carry has to
-  declare a `hash`.
+  declare a `hash`, and `CamTest.software_failure()` enforces the same rule where it bites -- a board nobody
+  can flash is not a board anybody can make, so a part fails the manufacturing test when its software does not
+  resolve, cannot be fetched, or does not match its hash.
+
+  That test reads more than the shape's hash covers, which is what `Test.cache_key_suffix()` exists for: a
+  corrected hash has to move the cache key, or `pc test` answers the new declaration with the old one's
+  failure.
 
 - **Built-in packages** (`./src/partcad/builtin`): PartCAD ships two packages inside itself, reachable from
   every context as `//builtin/export` and `//builtin/render` (loaded on demand by `Context.get_project`, see

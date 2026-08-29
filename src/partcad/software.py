@@ -22,8 +22,12 @@ beside the parts, with the revision of the package it came from, so that
 bracket went into this unit".
 """
 
+import asyncio
+import hashlib
 import os
 import typing
+
+import aiofiles
 
 from . import logging as pc_logging
 from . import telemetry
@@ -42,6 +46,84 @@ from .utils import normalize_resource_path, resolve_resource_path
 # new type belongs beside this one, with the same 'path'/'fileFrom' plumbing
 # underneath it, and never as a second way of pointing at a file.
 DEFAULT_TYPE = "raw"
+
+# The hash algorithms a 'hash' may name, mapped to the length of their hex
+# digest. The length is what identifies the algorithm when the declaration does
+# not name one, which is the form people paste from a vendor's download page.
+HASH_ALGORITHMS = {"md5": 32, "sha1": 40, "sha256": 64, "sha512": 128}
+
+# How much of the file is read at a time while hashing it. A firmware image is
+# small, a disk image is not, and neither should be held in memory whole.
+HASH_CHUNK_SIZE = 1024 * 1024
+
+# The 'fileFrom' sources that are the package itself rather than somewhere else.
+# A package with no source tree serves its own files through its repository
+# plugin - PartCAD writes 'fileFrom: plugin' onto every file-backed object of
+# such a package itself (see 'ProjectExternalRepository._augment') - so a file
+# behind it is package content exactly as a 'path' is, and the package's
+# revision identifies it. Treating it as a foreign file would demand a hash of
+# every object of every repository-backed package, for a file the package is
+# already the authority on.
+PACKAGE_FILE_SOURCES = frozenset({"plugin"})
+
+
+def is_package_file(config) -> bool:
+    """Whether the package itself is where this software's file comes from.
+
+    Reads a declaration rather than a 'Software', because the same question is
+    asked of a configuration nothing has been built from yet - that is what the
+    'Software' lint check has in front of it.
+    """
+    file_from = config.get("fileFrom") if isinstance(config, dict) else None
+    return file_from is None or file_from in PACKAGE_FILE_SOURCES
+
+
+def parse_hash(value: str):
+    """('<algorithm>', '<digest>', None), or (None, None, '<why not>').
+
+    Accepts '<algorithm>:<digest>', which is the form the schema documents, and
+    a bare digest whose length names the algorithm on its own.
+    """
+    value = str(value).strip()
+    if ":" in value:
+        algorithm, _, digest = value.partition(":")
+        algorithm = algorithm.strip().lower().replace("-", "")
+        digest = digest.strip().lower()
+        if algorithm not in HASH_ALGORITHMS:
+            return (
+                None,
+                None,
+                "unknown hash algorithm '%s' (expected one of %s)"
+                % (
+                    algorithm,
+                    ", ".join(sorted(HASH_ALGORITHMS)),
+                ),
+            )
+    else:
+        digest = value.lower()
+        algorithm = next((name for name, length in HASH_ALGORITHMS.items() if length == len(digest)), None)
+        if algorithm is None:
+            return (
+                None,
+                None,
+                "cannot tell which algorithm '%s' is a digest of; write it as '<algorithm>:<digest>'" % value,
+            )
+
+    if len(digest) != HASH_ALGORITHMS[algorithm] or any(c not in "0123456789abcdef" for c in digest):
+        return None, None, "'%s' is not a %s digest" % (digest, algorithm)
+    return algorithm, digest, None
+
+
+async def file_digest_async(path: str, algorithm: str) -> str:
+    """The hex digest of a file, read in chunks."""
+    digest = hashlib.new(algorithm)
+    async with aiofiles.open(path, "rb") as f:
+        while True:
+            chunk = await f.read(HASH_CHUNK_SIZE)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 @telemetry.instrument()
@@ -66,7 +148,11 @@ class Software:
         self.project_name = project_name
         self.config = config
         self.name = config["name"]
-        self.desc = config.get("desc", "")
+        # Stripped the way 'Shape' strips its own: a folded YAML scalar ends
+        # with a newline, and that newline reaches a generated README as a
+        # trailing line break inside a table cell.
+        desc = config.get("desc", "")
+        self.desc = desc.strip() if isinstance(desc, str) else desc
         self.url = config.get("url", None)
         self.version = config.get("version", None)
         self.errors = []
@@ -105,13 +191,76 @@ class Software:
         return str(value).strip() or None
 
     def is_local_file(self) -> bool:
-        """Whether the file lives in the package's own repository.
+        """Whether the file is content of the package it is declared in.
 
-        True for a declaration that only points at a 'path'. False as soon as
-        'fileFrom' is involved: the file is then fetched from somewhere else and
-        is not part of what the package's revision identifies.
+        True for a declaration that only points at a 'path', and for one the
+        package serves itself (see 'PACKAGE_FILE_SOURCES'). False as soon as the
+        file comes from somewhere else, which is when the package's revision
+        stops identifying it and a hash has to.
         """
-        return "fileFrom" not in self.config
+        return is_package_file(self.config)
+
+    async def verify_async(self) -> typing.Optional[str]:
+        """Why this software cannot be relied on, or None if it can.
+
+        What "relied on" means is the question the bill of materials leaves
+        hanging: it names a file, and this is what says the file is really
+        there and really the one that was meant. Three things have to hold, and
+        they are the same three wherever the question is asked:
+
+          * The package is specific about *which* file. Either it carries the
+            file, so the package's revision identifies it, or it pins what it
+            fetches with a 'hash'. This is the rule the 'Software' lint check
+            enforces on the declaration; here it is enforced on the object,
+            because a part that cannot say which firmware it runs cannot be
+            manufactured (see 'test/cam.py').
+          * The file can actually be had - it is in the package, or fetching it
+            works.
+          * It matches the hash, when one is declared.
+
+        A reason, not a boolean, so that whoever asked can say what is wrong
+        rather than only that something is.
+        """
+        declared = self.declared_hash()
+
+        if not self.is_local_file() and declared is None:
+            return (
+                "it is pulled in with 'fileFrom: %s' and declares no 'hash', so nothing says which file it is"
+                % self.config.get("fileFrom")
+            )
+
+        algorithm = digest = None
+        if declared is not None:
+            algorithm, digest, error = parse_hash(declared)
+            if error is not None:
+                return "its 'hash' is unusable: %s" % error
+
+        if not self.is_fetched:
+            if self.prepare_async is None:
+                return "the file is missing: %s" % self.path
+            try:
+                await self.prepare_async()
+            except Exception as e:  # pylint: disable=broad-except
+                return "the file could not be fetched: %s" % e
+        if not self.is_fetched:
+            return "the file is missing: %s" % self.path
+
+        if digest is None:
+            return None
+
+        actual = await file_digest_async(self.path, algorithm)
+        if actual != digest:
+            return "the file does not match its 'hash': %s:%s was declared, %s:%s is on disk (%s)" % (
+                algorithm,
+                digest,
+                algorithm,
+                actual,
+                self.path,
+            )
+        return None
+
+    def verify(self) -> typing.Optional[str]:
+        return asyncio.run(self.verify_async())
 
     def software_info(self) -> dict:
         """What this object is, as the '<label>: <value>' pairs 'pc info' prints.
@@ -200,21 +349,27 @@ def resolved_software_refs(project_name: str, config) -> list[str]:
     return declared_software_refs(project_name, config)
 
 
-def lookup(ctx, ref: str):
+def lookup(ctx, ref: str, quiet: bool = False):
     """The (package, software) a fully qualified reference points at.
 
     Both are None when the reference resolves to nothing. Reported here, once,
     rather than by each caller: a bill of materials and a generated README ask
     the same question and a reference that does not resolve is the same mistake
     either way.
+
+    'quiet' is for the callers that are not the ones to report it - deciding
+    what a cached test result is keyed on, say ('CamTest.cache_key_suffix'),
+    which asks the same question moments before the caller that *will* report
+    it and would otherwise say it twice.
     """
     package_name, name = resolve_resource_path("", ref)
     project = ctx.get_project(package_name) if ctx is not None else None
     if project is None:
-        pc_logging.error("The software '%s' is not found: no such package" % ref)
+        if not quiet:
+            pc_logging.error("The software '%s' is not found: no such package" % ref)
         return None, None
-    software = project.get_software(name)
+    software = project.get_software(name, quiet=quiet)
     if software is None:
-        # 'get_software' has already said why.
+        # 'get_software' has already said why, unless it was asked not to.
         return project, None
     return project, software

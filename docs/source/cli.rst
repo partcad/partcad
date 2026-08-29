@@ -127,6 +127,10 @@ Object commands
   it is procured from -- its parts, and the sub-assemblies that are ordered assembled -- has to be obtainable
   on its own.
 
+  It also requires the :ref:`software` an object declares to hold up: every reference has to resolve, and the
+  file it resolves to has to be obtainable and be the one that was meant. A board nobody can flash is not a
+  board anybody can make.
+
 ``pc inspect``
   View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) description instead of a visual
   one, and ``-p <name>=<value>`` to set parameters.

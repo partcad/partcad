@@ -1299,7 +1299,7 @@ class Project(project_config.Configuration):
             func_params,
         )
 
-    def get_software(self, software_name, func_params=None) -> Optional[pc_software.Software]:
+    def get_software(self, software_name, func_params=None, quiet=False) -> Optional[pc_software.Software]:
         return self.get_object(
             "software",
             Project.SoftwareLock,
@@ -1310,6 +1310,7 @@ class Project(project_config.Configuration):
             None,
             software_name,
             func_params,
+            quiet=quiet,
         )
 
     def get_object(

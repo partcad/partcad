@@ -1925,6 +1925,12 @@ another:
       software:
         - service-tool
 
+``software`` is optional, and most parts declare none. A single one may be
+written on its own instead of as a list (``software: controller-firmware``).
+Declaring it is what puts the file into the bill of materials of every assembly
+the part ends up in, and what makes ``pc test`` insist the file be obtainable
+(see `Manufacturability`_ below).
+
 The reference is resolved against the package that *wrote* it, so an ``alias``
 or an ``enrich`` of that part in another package still points at the same file.
 
@@ -1996,7 +2002,35 @@ specific, and ``pc lint`` requires one of them (the ``Software`` check):
       fileUrl: https://example.com/vendor/radio-1.4.bin
       hash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
 
-See ``examples/produce_software`` for a package that does both.
+The ``hash`` is written as ``<algorithm>:<digest>`` -- ``md5``, ``sha1``,
+``sha256`` or ``sha512``. A bare digest is accepted too, and the algorithm is
+read from its length.
+
+See ``examples/produce_software`` for a package that does both, and
+``examples/produce_part_kicad`` for a board that pulls its host-side tool from a
+public URL.
+
+Manufacturability
+-----------------
+
+A board nobody can flash is not a board anybody can make. So the manufacturing
+test (``pc test``, the ``cam`` check) asks the same question of a part's
+``software`` that it asks of everything else the part needs, and the part fails
+unless all of it holds:
+
+- every reference resolves to a software object;
+- the file is there -- carried by the package, or fetched successfully;
+- it matches its ``hash``, where one is declared;
+- and the declaration is specific about which file it is at all, which is the
+  ``fileFrom``-needs-a-``hash`` rule above.
+
+That applies whether the part is bought or made: buying the board does not
+answer the question of which image goes on it. An assembly that declares
+software of its own is held to the same rule; its parts' software is checked by
+their own run of the test.
+
+Software is otherwise absent from procurement -- ``pc supply`` walks the
+hardware only, because nobody sells a firmware image.
 
 .. _providers:
 

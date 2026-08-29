@@ -8,11 +8,17 @@ desc: |
   'raw' (the default) each name a firmware flashing procedure for the same file
   rather than a different kind of object.
 
-  A part or an assembly says what it ships with in its own 'software:', and the
-  bill of materials of every assembly it ends up in then lists that software
-  beside the parts, with the revision of the package it came from -- because a
-  firmware image, unlike a bracket, is a different thing once its package
-  publishes again.
+  A part or an assembly says what it ships with in its own 'software:' -- which
+  is optional, and most parts declare none. Declaring it puts the software into
+  the bill of materials of every assembly the part ends up in, beside the parts
+  themselves, with the revision of the package it came from: a firmware image,
+  unlike a bracket, is a different thing once its package publishes again. It
+  also makes 'pc test' require the file to be obtainable and to be the one that
+  was meant before it will call the part manufacturable -- a board nobody can
+  flash is not a board anybody can make.
+
+  See 'examples/produce_part_kicad' for a board whose software is not carried by
+  the package at all but fetched from a public URL and pinned by its hash.
 
 docs:
   usage: |

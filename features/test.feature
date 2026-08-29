@@ -42,6 +42,82 @@ Feature: `pc test` command
     Then STDOUT should contain "cam: No suppliers found"
     Then STDOUT should contain "DONE: Test: //"
 
+  @success @pc-test @pc-test-software
+  Scenario: A board whose image does not match its hash is not manufacturable
+    # 'cam' only: the siblings ('cam-additive', 'cam-subtractive', ...) apply to
+    # a part that is made rather than bought, and this one is bought, so nothing
+    # here needs the geometry built.
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      software:
+        firmware:
+          desc: What the board runs
+          path: firmware.bin
+          hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+      parts:
+        board:
+          type: cadquery
+          desc: A board bought off the shelf, flashed with an image of ours
+          vendor: partcad
+          sku: BOARD-1
+          software:
+            - firmware
+      """
+    And a file named "firmware.bin" with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    And a file named "board.py" with content:
+      """
+      import cadquery as cq
+
+      shape = cq.Workplane("XY").box(40, 25, 1.6)
+      show_object(shape)
+      """
+    When I run "pc test -f cam board"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "//:firmware"
+    And STDOUT should contain "does not match its 'hash'"
+
+  @success @pc-test @pc-test-software
+  Scenario: A board whose image the package carries is manufacturable
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      software:
+        firmware:
+          desc: What the board runs
+          path: firmware.bin
+
+      parts:
+        board:
+          type: cadquery
+          desc: A board bought off the shelf, flashed with an image of ours
+          vendor: partcad
+          sku: BOARD-1
+          software:
+            - firmware
+      """
+    And a file named "firmware.bin" with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    And a file named "board.py" with content:
+      """
+      import cadquery as cq
+
+      shape = cq.Workplane("XY").box(40, 25, 1.6)
+      show_object(shape)
+      """
+    When I run "pc test -f cam board"
+    # The package declares no supplier, so the part still has nowhere to be
+    # bought from -- but the software is no longer what is wrong with it.
+    Then STDOUT should not contain "cannot be relied on"
+
   @wip
   Scenario: Test with invalid configuration
     Given I have an invalid PartCAD configuration

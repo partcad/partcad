@@ -75,10 +75,11 @@
       ]
     },
     "software-refs": {
-      "description": "The software objects an object ships with: a firmware image the board runs, a binary that has to be on the host. Each entry names a 'software' object, either of this package or of another ('<package path>:<name>'). Listed in the bill of materials of every assembly the object ends up in.",
-      "type": "array",
-      "items": { "type": "string", "minLength": 1 },
-      "uniqueItems": true
+      "description": "The software objects an object ships with: a firmware image the board runs, a binary that has to be on the host. Optional, and most objects declare none. Each entry names a 'software' object, either of this package or of another ('<package path>:<name>'); a single one may be written on its own instead of as a list. Listed in the bill of materials of every assembly the object ends up in, and required to be obtainable by the manufacturing test.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      ]
     },
     "shape-properties": {
       "type": "object",

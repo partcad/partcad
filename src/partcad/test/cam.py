@@ -9,6 +9,7 @@
 
 import asyncio
 import copy
+import hashlib
 
 from .test import Test
 from ..part import Part
@@ -16,6 +17,7 @@ from ..part_config import PartConfiguration
 from ..assembly import Assembly
 from ..assembly_config import AssemblyConfiguration
 from ..plugin_provider_data_cart import ProviderCartItem, resolve_cart_object
+from .. import software as pc_software
 
 
 class CamTest(Test):
@@ -37,6 +39,58 @@ class CamTest(Test):
             return await self.test_part(tests_to_run, ctx, shape, test_ctx)
         else:
             return await self.test_assembly(tests_to_run, ctx, shape, test_ctx)
+
+    def cache_key_suffix(self, ctx, shape) -> str:
+        """The software this object ships with, folded into the cache key.
+
+        A shape's hash covers what it is built from, and software is not that:
+        it is a file the product ships with, so a part's hash does not move when
+        its 'software:' does. Without this, correcting a wrong hash - or pointing
+        the part at a different image altogether - would be answered with the
+        cached failure of the declaration that was replaced, which is the one
+        thing a test must never do.
+
+        The referenced names *and* the hash each of them pins, because both are
+        what 'software_failure()' reads. Not the content of the files: that is
+        what the hashes are for, and re-hashing every image to decide whether a
+        cached answer may be used would cost what the cache exists to save.
+        """
+        parts = []
+        for ref in pc_software.resolved_software_refs(shape.project_name, shape.get_final_config()):
+            _project, software = pc_software.lookup(ctx, ref, quiet=True)
+            parts.append("%s@%s" % (ref, "" if software is None else software.declared_hash()))
+        if not parts:
+            return ""
+        return ".software=" + hashlib.sha256(";".join(parts).encode()).hexdigest()[:16]
+
+    async def software_failure(self, ctx, shape) -> str | None:
+        """Why the software this object ships with is unusable, or None.
+
+        A board nobody can flash is not a board anybody can make, so the
+        software an object declares has to hold up before the object is called
+        manufacturable: every reference has to resolve, and every file it
+        resolves to has to be obtainable and be the one that was meant (see
+        'Software.verify_async()').
+
+        Checked for a purchased object as well as a manufactured one. Buying the
+        board does not answer the question of which image goes on it, and the
+        bill of materials lists that image either way.
+
+        Every failure is reported, not just the first: a package that got two
+        hashes wrong should learn both in one run.
+        """
+        failures = []
+        for ref in pc_software.resolved_software_refs(shape.project_name, shape.get_final_config()):
+            _project, software = pc_software.lookup(ctx, ref)
+            if software is None:
+                failures.append("the software '%s' is not found" % ref)
+                continue
+            failure = await software.verify_async()
+            if failure is not None:
+                failures.append("the software '%s' cannot be relied on: %s" % (ref, failure))
+        if not failures:
+            return None
+        return "; ".join(failures)
 
     async def supply_failure(self, ctx, shape) -> str | None:
         """Why this object cannot be supplied, or None if it can.
@@ -117,6 +171,14 @@ class CamTest(Test):
             if failure:
                 return self.failed(part, failure)
 
+        # Whatever this part ships with has to hold up too: the bill of
+        # materials of every assembly it ends up in lists that software beside
+        # the part, and a line item nobody can obtain is not a bill of materials
+        # anybody can work from.
+        failure = await self.software_failure(ctx, part)
+        if failure:
+            return self.failed(part, failure)
+
         failure = await self.supply_failure(ctx, part)
         if failure:
             return self.failed(part, failure)
@@ -125,6 +187,14 @@ class CamTest(Test):
 
     async def test_assembly(self, tests_to_run: list[Test], ctx, assembly: Assembly, test_ctx: dict = {}) -> bool:
         self.debug(assembly, "Testing for manufacturability")
+
+        # The same rule as for a part, and for the same reason: an assembly that
+        # ships a host-side tool of its own lists it in its own bill of
+        # materials, so it has to be obtainable. Its parts' software is checked
+        # by their own run of this test, over the supply BoM below.
+        failure = await self.software_failure(ctx, assembly)
+        if failure:
+            return self.failed(assembly, failure)
 
         # Test if it can be purchased at a store
         can_be_purchased = False

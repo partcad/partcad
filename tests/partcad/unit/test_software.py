@@ -15,8 +15,10 @@ package that declared it" apart from "resolved against whoever is reading".
 """
 
 import asyncio
+import hashlib
 import os
 
+import jsonschema
 import pytest
 import yaml
 
@@ -139,12 +141,114 @@ def test_a_carried_file_is_local(root):
     assert root.get_software("firmware").declared_hash() is None
 
 
+def test_a_file_the_plugin_serves_is_the_package_own(root):
+    """'fileFrom: plugin' is the package serving itself, not a foreign file.
+
+    PartCAD writes it onto every file-backed object of a package that has no
+    source tree, so treating it as foreign would demand a hash of every object
+    of every repository-backed package - for a file that package is already the
+    authority on.
+    """
+    from partcad.software import is_package_file
+
+    assert is_package_file({"path": "fw.bin"})
+    assert is_package_file({"path": "fw.bin", "fileFrom": "plugin"})
+    assert not is_package_file({"fileFrom": "url", "fileUrl": "https://example.com/fw.bin"})
+
+
 def test_info_reports_what_identifies_the_file(root):
     info = root.get_software("firmware").info()
     assert info["Type"] == "raw"
     assert info["Version"] == "1.0.0"
     assert info["Desc"] == "The controller firmware"
     assert info["File"].endswith("firmware.bin")
+
+
+#
+# Whether the file can be relied on
+#
+
+
+def test_a_carried_file_verifies(root):
+    """Nothing to fetch and nothing to check: the package's revision says it all."""
+    assert asyncio.run(root.get_software("firmware").verify_async()) is None
+
+
+def test_a_fetched_file_is_checked_against_its_hash(tmp_path, monkeypatch):
+    """The fetch happens, and then the hash decides.
+
+    In a package of its own, under 'tmp_path': verifying a 'fileFrom' object
+    writes the file it fetched to disk, and the fixture package above lives in
+    this repository.
+    """
+    from partcad.file_factory_url import FileFactoryUrl
+
+    served = {"content": b"the right image\n"}
+
+    async def download(self, path):
+        with open(path, "wb") as f:
+            f.write(served["content"])
+
+    monkeypatch.setattr(FileFactoryUrl, "download", download)
+
+    digest = hashlib.sha256(served["content"]).hexdigest()
+    (tmp_path / "partcad.yaml").write_text(
+        "software:\n"
+        "  blob:\n"
+        "    fileFrom: url\n"
+        "    fileUrl: https://example.com/vendor/blob.bin\n"
+        "    hash: sha256:%s\n" % digest
+    )
+    software = pc.Context(str(tmp_path)).get_project("//").get_software("blob")
+
+    assert not software.is_fetched
+    assert asyncio.run(software.verify_async()) is None
+    # Fetched on the way, and left where the declaration said to put it.
+    assert software.is_fetched
+    assert (tmp_path / "blob").read_bytes() == served["content"]
+
+
+def test_a_fetch_that_serves_something_else_fails(tmp_path, monkeypatch):
+    from partcad.file_factory_url import FileFactoryUrl
+
+    async def download(self, path):
+        with open(path, "wb") as f:
+            f.write(b"something else\n")
+
+    monkeypatch.setattr(FileFactoryUrl, "download", download)
+
+    (tmp_path / "partcad.yaml").write_text(
+        "software:\n"
+        "  blob:\n"
+        "    fileFrom: url\n"
+        "    fileUrl: https://example.com/vendor/blob.bin\n"
+        "    hash: sha256:%s\n" % ("0" * 64)
+    )
+    software = pc.Context(str(tmp_path)).get_project("//").get_software("blob")
+
+    failure = asyncio.run(software.verify_async())
+    assert failure is not None and "does not match its 'hash'" in failure
+
+
+def test_a_fetch_that_fails_says_so(tmp_path, monkeypatch):
+    from partcad.file_factory_url import FileFactoryUrl
+
+    async def download(self, path):
+        raise Exception("the remote is not there")
+
+    monkeypatch.setattr(FileFactoryUrl, "download", download)
+
+    (tmp_path / "partcad.yaml").write_text(
+        "software:\n"
+        "  blob:\n"
+        "    fileFrom: url\n"
+        "    fileUrl: https://example.com/vendor/blob.bin\n"
+        "    hash: sha256:%s\n" % ("0" * 64)
+    )
+    software = pc.Context(str(tmp_path)).get_project("//").get_software("blob")
+
+    failure = asyncio.run(software.verify_async())
+    assert failure is not None and "could not be fetched" in failure
 
 
 #
@@ -159,6 +263,33 @@ def test_references_are_resolved_against_the_declaring_package(ctx, root):
     # The child package's part says 'diagnostics', meaning its own.
     sensor = ctx.get_part(SENSOR)
     assert sensor.config["software_resolved"] == [DIAGNOSTICS]
+
+
+def test_a_single_reference_may_be_written_on_its_own(tmp_path):
+    """'software: firmware' is the list of one, and the schema takes it too."""
+    import json
+
+    from partcad.lint.all import get_partcad_schema
+
+    (tmp_path / "partcad.yaml").write_text(
+        "software:\n"
+        "  firmware:\n"
+        "    path: firmware.bin\n"
+        "parts:\n"
+        "  board:\n"
+        "    type: cadquery\n"
+        "    software: firmware\n"
+    )
+    (tmp_path / "firmware.bin").write_text("image")
+    (tmp_path / "board.py").write_text("")
+
+    board = pc.Context(str(tmp_path)).get_project("//").get_part("board")
+    assert board.config["software_resolved"] == ["//:firmware"]
+
+    jsonschema.validate(
+        instance=yaml.safe_load((tmp_path / "partcad.yaml").read_text()),
+        schema=json.loads(json.dumps(get_partcad_schema())),
+    )
 
 
 def test_a_reference_resolves_to_the_object(ctx):

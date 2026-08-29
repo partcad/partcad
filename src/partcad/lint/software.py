@@ -26,6 +26,7 @@ import os
 
 from ..context import Context
 from ..project import Project
+from ..software import is_package_file
 from .lint import Linting, LintingReport, Severity
 
 
@@ -51,9 +52,11 @@ class SoftwareLinting(Linting):
 
         for name in names:
             config = package.get_software_config(name) or {}
-            if "fileFrom" not in config:
-                # Kept in this repository: the package's revision says which
-                # file it is, and there is nothing left to pin.
+            if is_package_file(config):
+                # Content of the package: its revision says which file it is,
+                # and there is nothing left to pin. Shared with
+                # 'Software.is_local_file()' so that the check and the object
+                # cannot come to different answers about the same declaration.
                 continue
             if str(config.get("hash") or "").strip():
                 continue
