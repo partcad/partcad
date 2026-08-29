@@ -63,8 +63,13 @@ def ctx():
     return ctx
 
 
-def _run(ctx, name, assembly=False):
-    shape = ctx._get_assembly("//:%s" % name) if assembly else ctx.get_part("//:%s" % name)
+def _run(ctx, name, kind="part"):
+    getters = {
+        "part": ctx.get_part,
+        "assembly": ctx._get_assembly,
+        "sketch": ctx.get_sketch,
+    }
+    shape = getters[kind]("//:%s" % name)
     assert shape is not None
     test = cam.CamTest()
     return test, shape, asyncio.run(test.test([test], ctx, shape))
@@ -104,9 +109,59 @@ def test_an_unpinned_download_is_not_manufacturable(ctx):
 
 def test_an_unpinned_assembly_is_not_manufacturable(ctx):
     """An ASSY file pulled from a URL is no more repeatable than a part is."""
-    test, assembly, result = _run(ctx, "fetched-unpinned-assembly", assembly=True)
+    test, assembly, result = _run(ctx, "fetched-unpinned-assembly", "assembly")
     assert result == Test.TEST_FAILED
     assert "not reproducible" in test.reproducibility_failure(assembly)
+
+
+#
+# What a part may say instead
+#
+
+
+def test_a_part_that_is_bought_is_reproducible_without_a_hash(ctx):
+    """A vendor and an SKU are their own answer to "the same again"."""
+    test, part, result = _run(ctx, "fetched-purchasable")
+    assert test.reproducibility_failure(part) is None
+    assert result == Test.TEST_PASSED
+
+
+def test_half_a_purchase_is_not_a_purchase(ctx):
+    """A vendor without an SKU does not say what to order."""
+    test, part, result = _run(ctx, "fetched-vendor-only")
+    assert result == Test.TEST_FAILED
+    failure = test.reproducibility_failure(part)
+    assert failure is not None and "vendor and SKU" in failure
+
+
+#
+# What a sketch may not
+#
+
+
+def test_a_carried_sketch_is_reproducible(ctx):
+    test, sketch, result = _run(ctx, "outline", "sketch")
+    assert test.reproducibility_failure(sketch) is None
+    assert result == Test.TEST_PASSED
+
+
+def test_an_unpinned_sketch_is_not_reproducible(ctx):
+    """A sketch cannot be bought, so for it the file is the whole question.
+
+    Nothing manufactures a drawing, but a part extruded from one is no more
+    repeatable than the drawing was, and this is where that is worth saying.
+    """
+    test, sketch, result = _run(ctx, "fetched-outline", "sketch")
+    assert result == Test.TEST_FAILED
+    assert "not reproducible" in test.reproducibility_failure(sketch)
+
+
+def test_a_sketch_is_asked_nothing_else(ctx):
+    """The rest of the manufacturing test does not apply to a drawing."""
+    test, sketch, result = _run(ctx, "outline", "sketch")
+    # No vendor, no SKU, no manufacturing method, no tolerance - and it passes.
+    assert sketch.get_store_data().is_purchasable is False
+    assert result == Test.TEST_PASSED
 
 
 def test_a_part_that_is_not_manufacturable_is_not_asked(ctx):

@@ -9,16 +9,13 @@
 #
 
 import asyncio
-import contextlib
-import functools
 import hashlib
-import http.server
 import os
-import threading
 
 import pytest
 
 import partcad as pc
+from http_server import serve as _serve
 
 
 def test_file_url_part_1():
@@ -51,26 +48,6 @@ def test_file_url_part_1():
 
     assert os.path.exists(bolt.path) is True
     os.unlink(bolt.path)
-
-
-@contextlib.contextmanager
-def _serve(directory):
-    """Serve 'directory' over HTTP on a private loopback port.
-
-    Downloads go through 'aiohttp', so a file:// URL is not an option: the test
-    needs something that actually speaks HTTP. Binding to port 0 keeps the
-    server private to this test, so tests can still run in parallel.
-    """
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(directory))
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield "http://127.0.0.1:%d" % server.server_address[1]
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
 
 
 def test_file_url_assembly_1(tmp_path):

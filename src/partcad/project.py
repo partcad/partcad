@@ -112,6 +112,18 @@ def _has_running_loop() -> bool:
     return True
 
 
+# The file extension each object kind is written to, where it is not the kind's
+# own name. 'None' means the kind is not file-backed at all, so what the user
+# names is the object rather than a path. Lifted out of the 'add_*' methods
+# because the URL form of 'pc add' has to derive the same name from the last
+# segment of a URL, and two copies of these would name one file two ways.
+SECTION_EXTENSIONS = {
+    "sketches": {"cadquery": "py", "build123d": "py", "basic": None},
+    "parts": {"cadquery": "py", "build123d": "py", "chili3d": "chili", "sdf": "py"},
+    "assemblies": {},
+}
+
+
 # What '_skipped_by' returns for a declaration whose 'unless' PartCAD could not
 # read. Not a clause - nothing excluded it - but the object is dropped all the
 # same, and recorded as broken so that the reason reaches the user.
@@ -1625,7 +1637,9 @@ class Project(project_config.Configuration):
 
         path = os.path.relpath(path, root).replace("\\", "/")
         name = path
-        if name.lower().endswith((".%s" % extension).lower()):
+        # 'extension' is None for a caller that wants the path back untouched
+        # (software, whose file has no extension PartCAD can predict).
+        if extension and name.lower().endswith((".%s" % extension).lower()):
             name = name[: -len(extension) - 1]
 
         return True, path, name
@@ -1655,28 +1669,48 @@ class Project(project_config.Configuration):
             name = path
             path = None
 
-        yaml = ruamel.yaml.YAML()
-        yaml.preserve_quotes = True
-        with open(self.config_path) as fp:
-            config = yaml.load(fp)
-            fp.close()
-
         obj = {"type": kind, **component_config}
         if name == path:
             obj["path"] = path
 
-        found = False
-        for elem in config:
-            if elem == section:
-                config_section = config[section]
-                if config_section is None:
-                    config_section = {}
-                config_section[name] = obj
-                config[section] = config_section
-                found = True
-                break  # no need to iterate further
-        if not found:
-            config[section] = {name: obj}
+        return self.add_object_config(section, name, obj)
+
+    def extension_for(self, section: str, kind: str):
+        """The file extension objects of this kind are written to.
+
+        'None' where the kind is not file-backed; the kind's own name where
+        nothing says otherwise, which is the common case ('step' -> '.step').
+        """
+        by_kind = SECTION_EXTENSIONS.get(section, {})
+        return by_kind[kind] if kind in by_kind else kind
+
+    def add_object_config(self, section: str, name: str, obj: dict) -> bool:
+        """Write one object declaration into this package's 'partcad.yaml'.
+
+        The one place a declaration is added, so that a locally added file and
+        one fetched from a URL land in the file the same way, and so that
+        'ruamel' keeps the rest of the document as the author wrote it.
+        """
+        yaml = ruamel.yaml.YAML()
+        yaml.preserve_quotes = True
+        # Wide enough that nothing here is ever folded onto a second line. The
+        # default wraps at about 80 columns, which is narrower than a URL and
+        # narrower than a sha256 'fileHash' - and a URL split across two lines is
+        # both hard to read and easy to break while editing it by hand.
+        yaml.width = 4096
+        with open(self.config_path) as fp:
+            config = yaml.load(fp)
+            fp.close()
+
+        # A 'partcad.yaml' holding nothing at all parses as None.
+        if config is None:
+            config = {}
+
+        config_section = config.get(section)
+        if config_section is None:
+            config_section = {}
+        config_section[name] = obj
+        config[section] = config_section
 
         with open(self.config_path, "w") as fp:
             yaml.dump(config, fp)
@@ -1686,43 +1720,47 @@ class Project(project_config.Configuration):
 
     def add_sketch(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the sketch %s of type %s" % (self.rel_path(path), kind))
-        ext_by_kind = {
-            "cadquery": "py",
-            "build123d": "py",
-            "basic": None,
-        }
         return self._add_component(
             kind,
             path,
             "sketches",
-            ext_by_kind,
+            SECTION_EXTENSIONS["sketches"],
             config,
         )
 
     def add_part(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the part %s of type %s" % (self.rel_path(path), kind))
-        ext_by_kind = {
-            "cadquery": "py",
-            "build123d": "py",
-            "chili3d": "chili",
-            "sdf": "py",
-        }
         return self._add_component(
             kind,
             path,
             "parts",
-            ext_by_kind,
+            SECTION_EXTENSIONS["parts"],
             config,
         )
 
+    def add_software(self, path: str, config={}) -> bool:
+        """Declare a file of this package as software of it.
+
+        No 'kind' argument: 'raw' is the only type there is, and the types that
+        will join it name a flashing procedure rather than a file format. No
+        extension either - a firmware image is as likely to be a '.img' or
+        nothing at all as a '.bin' - so the path is recorded whole and the name
+        is its stem.
+        """
+        pc_logging.info("Adding the software %s" % self.rel_path(path))
+        valid, rel_path, _ = self._validate_path(path, None)
+        if not valid:
+            return False
+        name = os.path.splitext(os.path.basename(rel_path))[0]
+        return self.add_object_config("software", name, {**config, "path": rel_path})
+
     def add_assembly(self, kind: str, path: str, config={}) -> bool:
         pc_logging.info("Adding the assembly %s of type %s" % (self.rel_path(path), kind))
-        ext_by_kind = {}
         return self._add_component(
             kind,
             path,
             "assemblies",
-            ext_by_kind,
+            SECTION_EXTENSIONS["assemblies"],
             config,
         )
 

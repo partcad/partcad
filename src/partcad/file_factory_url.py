@@ -39,6 +39,11 @@ class FileFactoryUrl(FileFactory):
 
         async with aiohttp.ClientSession() as session:
             r = await session.get(self.url)
+            # A 404 answers with a page, not with nothing. Without this the body
+            # of that page is written out as the file, and everything downstream
+            # treats it as the real one: the object fails later with a baffling
+            # parse error, and 'pc add' would pin the hash of an error page.
+            r.raise_for_status()
             content = await r.read()
 
         async with aiofiles.open(path, "wb") as f:

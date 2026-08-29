@@ -8,6 +8,8 @@ import os
 
 import rich_click as click
 
+from partcad_utils.utils import looks_like_url
+
 from ...service import run
 
 # The assembly types that are a file in the package. 'alias' is deliberately
@@ -29,8 +31,14 @@ def cli(click_ctx: click.Context, kind: str, path: str):
     """
     cli_ctx = click_ctx.obj
 
-    # Absolute for the daemon (see add/part.py); reported back package-relative.
-    params = {"obj_kind": "assembly", "kind": kind, "path": os.path.abspath(path)}
+    params = {"obj_kind": "assembly", "kind": kind}
+    if looks_like_url(path):
+        # Fetched once, so the declaration can be pinned with its 'fileHash'.
+        params["url"] = path
+    else:
+        # Absolute for the daemon (see add/part.py); reported back
+        # package-relative.
+        params["path"] = os.path.abspath(path)
     package = click_ctx.parent.params.get("package")
     if package is not None:
         params["package"] = package

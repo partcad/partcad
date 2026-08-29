@@ -73,19 +73,29 @@ isort --check src/partcad tests/partcad
   something else. Every assembly's bill of materials then lists that software with the commit its package was
   read at (`revision.py`), because a firmware image, unlike a bracket, is a different file once its package
   publishes again. `lint/software.py` is what keeps that answerable: a file the package does not carry has to
-  declare a `hash`, and `CamTest.software_failure()` enforces the same rule where it bites -- a board nobody
+  declare a `fileHash`, and `CamTest.software_failure()` enforces the same rule where it bites -- a board nobody
   can flash is not a board anybody can make, so a part fails the manufacturing test when its software does not
   resolve, cannot be fetched, or does not match its `fileHash`.
+
+  `pc add` writes a `fileHash` by itself where it can: given a URL rather than a path it fetches the file once
+  (`actions/add.py`) and records the hash of what came back, so an object added that way is pinned from the
+  moment it exists. That is also why `FileFactoryUrl` raises on a failed HTTP status -- without it a 404 page
+  is written out as the file, and `pc add` would pin the hash of an error page.
 
   `fileHash` itself is **not** a software feature and does not live here: it sits beside `fileFrom`/`fileUrl`
   and pins the *bytes* of any file a package fetches rather than carries, so it belongs to `file_factory.py`,
   which refuses a download that does not hash to it (and deletes what it refused, or the next run would skip
   the download and reuse it). It is optional in the declaration and required for reproducibility:
   `unreproducible_reason()` is the one statement of that rule, and `CamTest.reproducibility_failure()` is what
-  makes a fetched-but-unpinned part or assembly fail the manufacturing test -- manufacturing is repetition,
-  and a file that may be a different file tomorrow cannot be made again. `lint/software.py` answers the same
-  rule earlier, on the declaration, and only for software. A file a repository plugin serves is exempt for
-  now (`PACKAGE_FILE_SOURCES`): a `fileHash` given for one is verified, it is simply not required yet.
+  makes a fetched-but-unpinned object fail the manufacturing test -- manufacturing is repetition, and a file
+  that may be a different file tomorrow cannot be made again. There are three ways out and any one will do: a
+  `vendor` and an `sku` (ordering the same SKU again is what "the same again" means for a bought thing), a
+  file the package carries, or a `fileHash`. Only parts and assemblies can take the first -- the schema gives
+  `vendor`/`sku` to those two alone -- so a sketch and a piece of software fall through to the file, which is
+  why the check reaches sketches at all even though nothing manufactures a drawing. `lint/software.py`
+  answers the same rule earlier, on the declaration, and only for software. A file a repository plugin serves
+  is exempt for now (`PACKAGE_FILE_SOURCES`): a `fileHash` given for one is verified, it is simply not
+  required yet.
 
   Keep all of it clear of the hashes PartCAD computes for itself -- `CacheHash`, a git revision -- which
   identify something PartCAD built or fetched, where this states in advance which bytes were asked for.

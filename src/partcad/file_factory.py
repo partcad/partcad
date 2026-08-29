@@ -15,6 +15,7 @@ import aiofiles
 
 from . import logging as pc_logging
 from . import telemetry
+from .shape_config_store import ShapeConfigStore
 
 # The hash algorithms a 'fileHash' may name, mapped to the length of their hex
 # digest. The length is what identifies the algorithm when the declaration does
@@ -70,20 +71,31 @@ def is_package_file(config) -> bool:
 
 
 def unreproducible_reason(config) -> typing.Optional[str]:
-    """Why the file this declaration points at is not reproducible, or None.
+    """Why this declaration cannot be obtained again identically, or None.
 
-    A file the package carries is identified by the package's revision: fetch
-    the package again at that commit and the same bytes come back. A file it
-    fetches from elsewhere is whatever the remote served at the time, and only
-    'fileHash' says which bytes were meant. Without one there is no answer to
-    "which file went into this", which is why the manufacturing test refuses
-    such an object (see 'CamTest.reproducibility_failure') - you cannot make a
-    thing again if you cannot say what it was made from.
+    Manufacturing is repetition, so everything that goes into a product has to
+    be gettable a second time and be the same thing. There are three ways a
+    declaration can promise that, and any one of them is enough:
 
-    'fileHash' stays optional in the declaration all the same: a package that
-    does not pin its download is not malformed, it has only said less about
-    itself, and demanding one of every package that ever pulled a vendor file
-    from a URL is not something a schema should do.
+      * **It is bought.** A 'vendor' and an 'sku' name a thing to order, and
+        ordering it again is what "the same again" means for it. Whatever file
+        the declaration also carries is a drawing of what arrives, not the
+        identity of it. Only a part or an assembly can say this - the schema
+        gives 'vendor'/'sku' to those two alone - which is why a sketch or a
+        piece of software has to fall through to the file rules below.
+      * **The package carries the file.** Its revision identifies the file:
+        fetch the package again at that commit and the same bytes come back.
+      * **The file is pinned.** A fetched file is whatever the remote served at
+        the time, and 'fileHash' is what says which bytes were meant.
+
+    A declaration that does none of the three has no answer to "which one went
+    in", which is why the manufacturing test refuses it (see
+    'CamTest.reproducibility_failure').
+
+    'fileHash' stays optional in the declaration all the same, for every kind of
+    object: a package that does not pin its download is not malformed, it has
+    only said less about itself, and demanding one of every package that ever
+    pulled a vendor file from a URL is not something a schema should do.
 
     A file served by a repository plugin is treated as reproducible here, and
     that is a gap rather than a conclusion: such a package has no revision of
@@ -92,13 +104,17 @@ def unreproducible_reason(config) -> typing.Optional[str]:
     nothing has been put in place for a plugin-backed package to pin what its
     plugin serves.
     """
+    # Read through 'ShapeConfigStore' rather than by looking for 'vendor' and
+    # 'sku' here, so that what counts as purchasable is decided in one place.
+    if ShapeConfigStore(config if isinstance(config, dict) else {}).is_purchasable:
+        return None
     if is_package_file(config):
         return None
     if declared_hash(config) is not None:
         return None
     return (
-        "it is fetched with 'fileFrom: %s' and declares no 'fileHash', so nothing says which bytes it is"
-        % config.get("fileFrom")
+        "it is fetched with 'fileFrom: %s', declares no 'fileHash', and names no vendor and SKU to order it "
+        "by, so nothing says which one it is" % config.get("fileFrom")
     )
 
 

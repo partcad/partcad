@@ -12,8 +12,48 @@ import sys
 from types import ModuleType, FunctionType
 from gc import get_referents
 
+from urllib.parse import unquote, urlparse
+
 from . import telemetry
 from . import logging as pc_logging
+
+# What counts as a URL rather than a path, wherever PartCAD has to tell the two
+# apart. Deliberately just the two schemes 'fileFrom: url' can actually fetch:
+# anything else is far more likely to be a path that happens to contain a colon
+# (a Windows drive letter, an scp-style git remote) than a source PartCAD could
+# read.
+#
+# Here rather than beside the code that fetches, because the thin CLI commands
+# have to make the same judgement before handing an argument to the daemon, and
+# they must not import the heavy 'partcad' package to do it (see "Command
+# boundary" in src/partcad_cli/AGENTS.md).
+URL_SCHEMES = ("http", "https")
+
+
+def looks_like_url(value) -> bool:
+    """Whether this argument names a URL to fetch rather than a file on disk."""
+    if not isinstance(value, str):
+        return False
+    try:
+        return urlparse(value).scheme.lower() in URL_SCHEMES
+    except ValueError:
+        return False
+
+
+def filename_from_url(url: str, fallback: str = "download") -> str:
+    """The file name a URL would sensibly be saved as.
+
+    The last segment of the path, percent-decoding undone so that a URL ending
+    in '%20' does not become a file name with a literal one in it. A URL with no
+    path segment at all (a bare host, a directory) has no name to offer, and the
+    caller's fallback is used instead - as it is for anything that could climb
+    out of the directory it is joined onto.
+    """
+    name = os.path.basename(unquote(urlparse(url).path or "")).strip()
+    if not name or name in (".", "..") or "/" in name or "\\" in name:
+        return fallback
+    return name
+
 
 # Custom objects know their class.
 # Function objects seem to know way too much, including modules.

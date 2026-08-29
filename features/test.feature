@@ -44,9 +44,8 @@ Feature: `pc test` command
 
   @success @pc-test @pc-test-reproducibility
   Scenario: A part fetched from a URL and pinned by nothing is not manufacturable
-    # 'cam' only: the siblings apply to a part that is made rather than bought,
-    # and this one is bought, so nothing here needs the geometry built. Nothing
-    # is fetched either -- the declaration alone settles it.
+    # 'cam' only, and nothing is fetched: the declaration alone settles it, so
+    # no geometry is built and no request is made.
     Given a file named "partcad.yaml" with content:
       """
       manufacturable: true
@@ -54,8 +53,6 @@ Feature: `pc test` command
       parts:
         bolt:
           type: step
-          vendor: partcad
-          sku: BOLT-1
           fileFrom: url
           fileUrl: https://example.com/vendor/bolt.step
       """
@@ -65,7 +62,28 @@ Feature: `pc test` command
     And STDOUT should contain "declares no 'fileHash'"
 
   @success @pc-test @pc-test-reproducibility
-  Scenario: The same part is manufacturable once the download is pinned
+  Scenario: The same part is reproducible once the download is pinned
+    Given a file named "partcad.yaml" with content:
+      """
+      manufacturable: true
+
+      parts:
+        bolt:
+          type: step
+          fileFrom: url
+          fileUrl: https://example.com/vendor/bolt.step
+          fileHash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
+      """
+    When I run "pc test -f cam bolt"
+    # It still has no way of being made or bought, so the test still fails --
+    # but reproducibility is no longer what is wrong with it.
+    Then STDOUT should not contain "not reproducible"
+
+  @success @pc-test @pc-test-reproducibility
+  Scenario: A part that is bought is reproducible without a hash
+    # A vendor and an SKU say what to order, and ordering the same SKU again is
+    # what "the same again" means for a bought thing. The file it draws is a
+    # picture of what arrives rather than the identity of it.
     Given a file named "partcad.yaml" with content:
       """
       manufacturable: true
@@ -77,11 +95,8 @@ Feature: `pc test` command
           sku: BOLT-1
           fileFrom: url
           fileUrl: https://example.com/vendor/bolt.step
-          fileHash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
       """
     When I run "pc test -f cam bolt"
-    # The package declares no supplier, so the part still has nowhere to be
-    # bought from -- but reproducibility is no longer what is wrong with it.
     Then STDOUT should not contain "not reproducible"
 
   @success @pc-test @pc-test-software

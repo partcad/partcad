@@ -315,13 +315,30 @@ def _invalidate_context(session, params):
         session.partcad_ctx = None
 
 
-def add_object(session, params):
-    """Add an existing part or assembly to a package (by reference, no copy).
+# The 'partcad.yaml' section each kind of object 'pc add' can create is
+# declared in.
+_ADD_SECTIONS = {
+    "part": "parts",
+    "assembly": "assemblies",
+    "sketch": "sketches",
+    "software": "software",
+}
 
-    The CLI resolves ``path`` to an absolute path (it and the daemon do not
-    share a working directory); ``Project._validate_path`` rejects anything
-    outside the package, and messages report the path relative to the package.
+
+def add_object(session, params):
+    """Add a part, assembly or piece of software to a package.
+
+    Two forms. Given ``path``, the package is pointed at a file it already has:
+    the CLI resolves it to an absolute path (it and the daemon do not share a
+    working directory), ``Project._validate_path`` rejects anything outside the
+    package, and messages report the path relative to the package.
+
+    Given ``url``, there is no file yet. It is fetched once - here, because the
+    daemon is what has the context and the network - so that the declaration can
+    be written with the ``fileHash`` of what came back. See
+    ``partcad.actions.add``.
     """
+    import asyncio
     from pathlib import Path
 
     ctx = _ctx(session, params)
@@ -335,19 +352,42 @@ def add_object(session, params):
         pc.logging.error("Package %s is not found" % package)
         return None
 
-    path = params["path"]
-    if not Path(path).exists():
-        raise JsonRpcError(USAGE_ERROR, "ERROR: The part file '%s' does not exist." % package_obj.rel_path(path))
-
     config = {}
     if params.get("desc"):
         config["desc"] = params["desc"]
+
+    url = params.get("url")
+    if url:
+        from partcad.actions.add import add_object_from_url_async
+
+        section = _ADD_SECTIONS.get(obj_kind)
+        if section is None:
+            raise JsonRpcError(USAGE_ERROR, "ERROR: '%s' cannot be added from a URL." % obj_kind)
+        try:
+            name = asyncio.run(
+                add_object_from_url_async(ctx, package_obj, section, url, kind=params.get("kind"), config=config)
+            )
+        except Exception as e:  # pylint: disable=broad-except
+            # Without the bytes there is no hash, and an unpinned declaration is
+            # what fetching it here exists to avoid - so this fails rather than
+            # writing one.
+            raise JsonRpcError(USAGE_ERROR, "ERROR: Failed to fetch '%s': %s" % (url, e))
+        finally:
+            _invalidate_context(session, params)
+        return {"name": name}
+
+    path = params["path"]
+    if not Path(path).exists():
+        raise JsonRpcError(USAGE_ERROR, "ERROR: The part file '%s' does not exist." % package_obj.rel_path(path))
 
     try:
         if obj_kind == "part":
             from partcad.actions.part import add_part_action
 
             added = add_part_action(package_obj, params["kind"], path, config)
+        elif obj_kind == "software":
+            with pc.logging.Process("AddSoftware", package_obj.name):
+                added = package_obj.add_software(path, config)
         else:
             with pc.logging.Process("AddAssy", package_obj.name):
                 added = package_obj.add_assembly(params["kind"], path)

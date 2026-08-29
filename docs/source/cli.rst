@@ -106,7 +106,15 @@ Object commands
   ``interfaces``, ``mates``, ``providers``, ``software``, and ``packages``.
 
 ``pc add``
-  Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, and ``assembly``.
+  Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, ``assembly``, and
+  ``software``.
+
+  Each object subcommand takes a file the package already has, **or an http(s) URL**. Given a URL, the file is
+  fetched once so that the declaration can be written with the ``fileHash`` of what came back -- an object
+  added from a URL is pinned, and therefore reproducible, from the moment it exists (see :ref:`file-hash`).
+  The fetched copy is not kept: the package deliberately does not carry the file, and ``pc install`` fetches
+  it when it is first needed. A fetch that fails adds nothing, because a declaration written without the hash
+  is the unpinned one this exists to avoid.
 
 ``pc import``
   Import an existing object into a package. Subcommands: ``part`` (import an existing part and optionally

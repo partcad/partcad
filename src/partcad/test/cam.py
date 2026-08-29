@@ -27,27 +27,28 @@ class CamTest(Test):
         super().__init__("cam")
 
     async def test(self, tests_to_run: list[Test], ctx, shape, test_ctx: dict = {}) -> bool:
-        is_part = isinstance(shape, Part)
-        is_assembly = isinstance(shape, Assembly)
-        if not is_part and not is_assembly:
-            self.debug(shape, "Not applicable")
-            return self.TEST_PASSED
-
         if not shape.is_manufacturable and "force_manufacturing" not in test_ctx:
             self.debug(shape, "Not supposed to be manufacturable")
             return self.TEST_PASSED
 
-        # Before anything specific to a part or an assembly, because it is
-        # neither: it is about the file the object is *read from*, and both are
-        # read from one.
+        # Asked of every shape, before anything specific to one kind of them,
+        # because it is not specific to one: it is about the file the object is
+        # read from. A sketch is not manufactured itself, but a part extruded
+        # from one is no more repeatable than the drawing it was extruded from,
+        # and the sketch is where that is worth reporting.
         failure = self.reproducibility_failure(shape)
         if failure:
             return self.failed(shape, failure)
 
-        if is_part:
+        if isinstance(shape, Part):
             return await self.test_part(tests_to_run, ctx, shape, test_ctx)
-        else:
+        if isinstance(shape, Assembly):
             return await self.test_assembly(tests_to_run, ctx, shape, test_ctx)
+
+        # A sketch is the only other thing that reaches here, and reproducibility
+        # is all of this test that applies to it: nothing manufactures a drawing.
+        self.debug(shape, "Not applicable")
+        return self.TEST_PASSED
 
     def reproducibility_failure(self, shape) -> str | None:
         """Why this object cannot be made again, or None if it can.
@@ -60,11 +61,19 @@ class CamTest(Test):
         So the rule is not "the file is available", which it may well be, but
         "the file is identified".
 
+        A part or an assembly has another way out: a 'vendor' and an 'sku' say
+        what to order, and ordering the same SKU again is what "the same again"
+        means for a bought thing - the file it also carries is a drawing of what
+        arrives rather than the identity of it. A sketch and a piece of software
+        cannot say that (the schema gives 'vendor'/'sku' to parts and assemblies
+        alone), so for them it is the file or nothing.
+
         'fileHash' stays optional in the declaration (see
-        'file_factory.unreproducible_reason', which is this rule and is shared
-        with the 'Software' lint check). This is the one place it is insisted
-        on, and only of what is actually going to be made: a package may pull a
-        vendor's model from a URL and never claim it is manufacturable.
+        'file_factory.unreproducible_reason', which is this rule whole and is
+        shared with the 'Software' lint check). This is the one place it is
+        insisted on, and only of what is actually going to be made: a package
+        may pull a vendor's model from a URL and never claim it is
+        manufacturable.
 
         Read from the *final* configuration, so an alias or an enrich is judged
         on the declaration it resolves to rather than on its own, which says

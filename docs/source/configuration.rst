@@ -447,11 +447,16 @@ Write it as ``<algorithm>:<digest>`` over ``md5``, ``sha1``, ``sha256`` or
 which is the form most vendors publish.
 
 ``fileHash`` is recognized wherever ``fileFrom`` is, and it is **optional but
-required for reproducibility**. Nothing refuses to load, build or lint an
-object that omits it. What such an object cannot do is promise that the next
-run produces the same thing, and manufacturing is repetition -- so ``pc test``
-refuses to call it manufacturable (see :ref:`reproducibility`). Pull a vendor's
-model down and never claim it can be made, and none of this touches you.
+required for reproducibility**. The schema never demands one, of any kind of
+object, and nothing refuses to load, build or lint an object that omits it.
+What such an object cannot do is promise that the next run produces the same
+thing, and manufacturing is repetition -- so ``pc test`` refuses to call it
+manufacturable (see :ref:`reproducibility`). Pull a vendor's model down and
+never claim it can be made, and none of this touches you.
+
+``pc add`` writes one for you. Given a URL instead of a path it fetches the file
+once and records the hash of what came back, so an object added that way is
+pinned from the moment it exists.
 
 A file served by a repository plugin -- what PartCAD uses for a package with no
 source tree of its own -- may carry a ``fileHash`` too, and it is verified the
@@ -469,24 +474,40 @@ Reproducibility and manufacturability
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Manufacturing is repetition: the run after this one has to produce the same
-thing. An object read from a file the package carries is repeatable, because the
-package's revision identifies that file exactly. An object read from a file the
-package *fetches* is repeatable only if it says which bytes it expects.
+thing, so everything that goes into a product has to be gettable a second time
+and be the same thing. There are three ways an object can promise that, and the
+``cam`` check of ``pc test`` fails one that offers none of them:
 
-So the ``cam`` check of ``pc test`` fails a part or an assembly that is fetched
-with ``fileFrom`` and declares no ``fileHash``, whatever else is right about it:
+- **It is bought.** A ``vendor`` and an ``sku`` name a thing to order, and
+  ordering it again is what "the same again" means for it -- whatever file the
+  declaration also carries is a drawing of what arrives rather than the identity
+  of it. Only :ref:`parts` and :ref:`assemblies` can say this; the schema gives
+  ``vendor``/``sku`` to those two alone.
+- **The package carries the file.** Its revision identifies the file exactly.
+- **The file is pinned** with a ``fileHash``.
+
+A :ref:`sketch <sketches>` cannot be bought, so for it the second and third are
+the whole of it -- nothing manufactures a drawing, but a part extruded from one
+is no more repeatable than the drawing was. :ref:`software` is the same case,
+and for the same reason: a firmware image nobody can identify makes the bill of
+materials that names it worthless.
 
 .. code-block:: text
 
   Test failed: //robot:bracket: cam: It is not reproducible: it is fetched with
-  'fileFrom: url' and declares no 'fileHash', so nothing says which bytes it is
+  'fileFrom: url', declares no 'fileHash', and names no vendor and SKU to order
+  it by, so nothing says which one it is
 
 The rule is about being *identified*, not about being available -- the file may
 download perfectly well and still be a different file than it was last month.
-It reaches the object's :ref:`software` too, for the same reason: a firmware
-image nobody can identify makes the bill of materials that names it worthless.
-Software is also the one kind of object where a missing ``fileHash`` is reported
-by ``pc lint``, before anything is built or fetched at all.
+
+Software is the one kind of object where a missing ``fileHash`` is reported by
+``pc lint`` as well, before anything is built or fetched at all.
+
+A file served by a repository plugin is exempt from all of this for now. A
+``fileHash`` given for one is verified like any other; it is simply not required
+yet, because nothing has been put in place for a plugin-backed package to pin
+what its plugin serves.
 
 Parameters
 ----------

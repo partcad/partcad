@@ -38,6 +38,46 @@ parts:
     parameters:
       tolerance: 0.1
 
+  # Fetched and unpinned, but bought by vendor and SKU: ordering the same SKU
+  # again is what "the same again" means for it, and the file it draws is a
+  # picture of what arrives rather than the identity of it.
+  fetched-purchasable:
+    type: cadquery
+    path: purchasable.py
+    fileFrom: url
+    fileUrl: https://example.com/vendor/board.py
+    vendor: partcad
+    sku: BOARD-1
+    desc: A board that is bought, whose drawing is fetched
+
+  # Half of that is not enough: an SKU without a vendor does not say from whom,
+  # and a vendor without an SKU does not say what.
+  fetched-vendor-only:
+    type: cadquery
+    path: vendor-only.py
+    fileFrom: url
+    fileUrl: https://example.com/vendor/board.py
+    vendor: partcad
+    desc: A board with a vendor and no SKU
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+
+sketches:
+  # A sketch cannot be bought, so for it the file is the whole question.
+  outline:
+    type: cadquery
+    path: outline.py
+    desc: An outline this package carries
+
+  fetched-outline:
+    type: cadquery
+    path: fetched-outline.py
+    fileFrom: url
+    fileUrl: https://example.com/vendor/outline.py
+    desc: An outline fetched from a URL, identified by nothing
+
 assemblies:
   fetched-unpinned-assembly:
     type: assy
