@@ -19,7 +19,7 @@ import asyncio
 import pytest
 
 import partcad as pc
-from partcad.software import parse_hash
+from partcad.file_factory import parse_hash
 from partcad.test import cam
 from partcad.test.test import Test
 
@@ -182,6 +182,9 @@ def test_the_cache_key_follows_the_software_declaration(ctx):
 #
 # Reading a declared hash
 #
+# 'hash' pins the bytes of a file, and nothing else -- it is read and checked by
+# 'FileFactory', which is why these live beside the software tests rather than
+# inside them: a part, a sketch and an assembly declare it the same way.
 
 
 @pytest.mark.parametrize(

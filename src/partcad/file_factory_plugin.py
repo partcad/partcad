@@ -34,7 +34,7 @@ class FileFactoryPlugin(FileFactory):
         # was rebased into the cache directory by the object factory).
         self.plugin_path = config.get("path")
 
-    async def download(self, path):
+    async def _download(self, path):
         pc_logging.debug("Materializing plugin file '%s' to '%s'" % (self.plugin_path, path))
 
         get_data_async = getattr(self.project, "get_data_async", None)

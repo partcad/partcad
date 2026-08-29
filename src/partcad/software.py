@@ -23,14 +23,13 @@ bracket went into this unit".
 """
 
 import asyncio
-import hashlib
 import os
 import typing
 
-import aiofiles
-
 from . import logging as pc_logging
 from . import telemetry
+from .file_factory import declared_hash as declared_file_hash
+from .file_factory import file_hash_failure
 from .utils import normalize_resource_path, resolve_resource_path
 
 # The kind of a software object. 'raw' is a file PartCAD hands over as it is:
@@ -46,15 +45,6 @@ from .utils import normalize_resource_path, resolve_resource_path
 # new type belongs beside this one, with the same 'path'/'fileFrom' plumbing
 # underneath it, and never as a second way of pointing at a file.
 DEFAULT_TYPE = "raw"
-
-# The hash algorithms a 'hash' may name, mapped to the length of their hex
-# digest. The length is what identifies the algorithm when the declaration does
-# not name one, which is the form people paste from a vendor's download page.
-HASH_ALGORITHMS = {"md5": 32, "sha1": 40, "sha256": 64, "sha512": 128}
-
-# How much of the file is read at a time while hashing it. A firmware image is
-# small, a disk image is not, and neither should be held in memory whole.
-HASH_CHUNK_SIZE = 1024 * 1024
 
 # The 'fileFrom' sources that are the package itself rather than somewhere else.
 # A package with no source tree serves its own files through its repository
@@ -76,54 +66,6 @@ def is_package_file(config) -> bool:
     """
     file_from = config.get("fileFrom") if isinstance(config, dict) else None
     return file_from is None or file_from in PACKAGE_FILE_SOURCES
-
-
-def parse_hash(value: str):
-    """('<algorithm>', '<digest>', None), or (None, None, '<why not>').
-
-    Accepts '<algorithm>:<digest>', which is the form the schema documents, and
-    a bare digest whose length names the algorithm on its own.
-    """
-    value = str(value).strip()
-    if ":" in value:
-        algorithm, _, digest = value.partition(":")
-        algorithm = algorithm.strip().lower().replace("-", "")
-        digest = digest.strip().lower()
-        if algorithm not in HASH_ALGORITHMS:
-            return (
-                None,
-                None,
-                "unknown hash algorithm '%s' (expected one of %s)"
-                % (
-                    algorithm,
-                    ", ".join(sorted(HASH_ALGORITHMS)),
-                ),
-            )
-    else:
-        digest = value.lower()
-        algorithm = next((name for name, length in HASH_ALGORITHMS.items() if length == len(digest)), None)
-        if algorithm is None:
-            return (
-                None,
-                None,
-                "cannot tell which algorithm '%s' is a digest of; write it as '<algorithm>:<digest>'" % value,
-            )
-
-    if len(digest) != HASH_ALGORITHMS[algorithm] or any(c not in "0123456789abcdef" for c in digest):
-        return None, None, "'%s' is not a %s digest" % (digest, algorithm)
-    return algorithm, digest, None
-
-
-async def file_digest_async(path: str, algorithm: str) -> str:
-    """The hex digest of a file, read in chunks."""
-    digest = hashlib.new(algorithm)
-    async with aiofiles.open(path, "rb") as f:
-        while True:
-            chunk = await f.read(HASH_CHUNK_SIZE)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 @telemetry.instrument()
@@ -179,16 +121,13 @@ class Software:
     def declared_hash(self) -> typing.Optional[str]:
         """The hash the declaration pins the file to, or None.
 
-        A file the package does not carry (see 'fileFrom') is whatever the
-        remote serves at the moment it is fetched, so a declaration that names
-        no hash pins nothing at all. That is what 'lint/software.py' checks; this
-        is where the value it checks is read from, so that the check and every
-        consumer read the same field the same way.
+        Nothing software-specific: 'hash' pins the bytes of any file a package
+        fetches rather than carries, and 'FileFactory' is what checks them as
+        they arrive. What *is* specific to software is that a fetched file must
+        have one - see 'lint/software.py' - because a firmware image nobody can
+        identify makes the bill of materials that names it worthless.
         """
-        value = self.config.get("hash")
-        if value is None:
-            return None
-        return str(value).strip() or None
+        return declared_file_hash(self.config)
 
     def is_local_file(self) -> bool:
         """Whether the file is content of the package it is declared in.
@@ -229,34 +168,25 @@ class Software:
                 % self.config.get("fileFrom")
             )
 
-        algorithm = digest = None
-        if declared is not None:
-            algorithm, digest, error = parse_hash(declared)
-            if error is not None:
-                return "its 'hash' is unusable: %s" % error
-
         if not self.is_fetched:
             if self.prepare_async is None:
                 return "the file is missing: %s" % self.path
             try:
                 await self.prepare_async()
             except Exception as e:  # pylint: disable=broad-except
+                # A hash mismatch on a file that was fetched right now arrives
+                # here, as the download refusing it (see 'FileFactory').
                 return "the file could not be fetched: %s" % e
         if not self.is_fetched:
             return "the file is missing: %s" % self.path
 
-        if digest is None:
-            return None
-
-        actual = await file_digest_async(self.path, algorithm)
-        if actual != digest:
-            return "the file does not match its 'hash': %s:%s was declared, %s:%s is on disk (%s)" % (
-                algorithm,
-                digest,
-                algorithm,
-                actual,
-                self.path,
-            )
+        # Checked again even though the download checks it, because most of the
+        # time there is no download: the file was fetched by an earlier run, or
+        # the package carries it. A 'hash' corrected since then, and a file
+        # edited since then, are both only visible here.
+        failure = await file_hash_failure(self.path, declared)
+        if failure is not None:
+            return "the file does not match its 'hash': %s" % failure
         return None
 
     def verify(self) -> typing.Optional[str]:

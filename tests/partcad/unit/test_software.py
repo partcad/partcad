@@ -185,11 +185,11 @@ def test_a_fetched_file_is_checked_against_its_hash(tmp_path, monkeypatch):
 
     served = {"content": b"the right image\n"}
 
-    async def download(self, path):
+    async def _download(self, path):
         with open(path, "wb") as f:
             f.write(served["content"])
 
-    monkeypatch.setattr(FileFactoryUrl, "download", download)
+    monkeypatch.setattr(FileFactoryUrl, "_download", _download)
 
     digest = hashlib.sha256(served["content"]).hexdigest()
     (tmp_path / "partcad.yaml").write_text(
@@ -211,11 +211,11 @@ def test_a_fetched_file_is_checked_against_its_hash(tmp_path, monkeypatch):
 def test_a_fetch_that_serves_something_else_fails(tmp_path, monkeypatch):
     from partcad.file_factory_url import FileFactoryUrl
 
-    async def download(self, path):
+    async def _download(self, path):
         with open(path, "wb") as f:
             f.write(b"something else\n")
 
-    monkeypatch.setattr(FileFactoryUrl, "download", download)
+    monkeypatch.setattr(FileFactoryUrl, "_download", _download)
 
     (tmp_path / "partcad.yaml").write_text(
         "software:\n"
@@ -227,16 +227,19 @@ def test_a_fetch_that_serves_something_else_fails(tmp_path, monkeypatch):
     software = pc.Context(str(tmp_path)).get_project("//").get_software("blob")
 
     failure = asyncio.run(software.verify_async())
-    assert failure is not None and "does not match its 'hash'" in failure
+    assert failure is not None and "does not match the declared 'hash'" in failure
+    # The bytes that were refused are not left behind: the next run skips the
+    # download when the file is already there, and would reuse them forever.
+    assert not (tmp_path / "blob").exists()
 
 
 def test_a_fetch_that_fails_says_so(tmp_path, monkeypatch):
     from partcad.file_factory_url import FileFactoryUrl
 
-    async def download(self, path):
+    async def _download(self, path):
         raise Exception("the remote is not there")
 
-    monkeypatch.setattr(FileFactoryUrl, "download", download)
+    monkeypatch.setattr(FileFactoryUrl, "_download", _download)
 
     (tmp_path / "partcad.yaml").write_text(
         "software:\n"

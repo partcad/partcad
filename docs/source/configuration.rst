@@ -418,6 +418,44 @@ They are recognized in :ref:`parts`, :ref:`sketches`, :ref:`assemblies`
 (an assembly's source file is pulled the same way, whether it is an ``.assy``
 file or a CAD file) and :ref:`software`.
 
+.. _file-hash:
+
+Pinning what is downloaded
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A URL serves whatever it serves at the moment it is fetched. The same
+declaration can produce a different file tomorrow -- the vendor revises the
+model, the branch moves, the host is not the one you thought. ``hash`` pins the
+bytes:
+
+.. code-block:: yaml
+
+  parts:
+    bolt:
+      type: step
+      fileFrom: url
+      fileUrl: https://example.com/vendor/catalog/bolt.step
+      hash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
+
+The download is refused unless the file hashes to this, and the bytes that were
+refused are deleted rather than left behind -- the next run skips the download
+when the file is already there, and would otherwise reuse the file the hash had
+just rejected.
+
+Write it as ``<algorithm>:<digest>`` over ``md5``, ``sha1``, ``sha256`` or
+``sha512``. A bare digest works too, and the algorithm is read from its length,
+which is the form most vendors publish.
+
+``hash`` is optional and is recognized wherever ``fileFrom`` is. A package that
+does not pin its download is not thereby wrong -- it has only said less about
+it. :ref:`software` is the one place PartCAD insists on one, because a firmware
+image nobody can identify makes the bill of materials that names it worthless.
+
+This has nothing to do with the hashes PartCAD computes for itself -- a shape's
+cache key, or the commit a package was read at. Those identify something PartCAD
+built or fetched; ``hash`` states, in advance, which bytes a package is asking
+for.
+
 Parameters
 ----------
 
@@ -1880,7 +1918,7 @@ it. What it is, always, is a *file*:
       path: <(optional) the file, relative to the package>
       fileFrom: <(optional) where to fetch the file from; see "Files">
       fileUrl: <(optional) the URL to fetch it from>
-      hash: <(optional) "<algorithm>:<digest>", e.g. "sha256:...">
+      hash: <the bytes to expect; required with "fileFrom", see "Files">
 
 The short form declares nothing but the path:
 
@@ -2002,9 +2040,11 @@ specific, and ``pc lint`` requires one of them (the ``Software`` check):
       fileUrl: https://example.com/vendor/radio-1.4.bin
       hash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
 
-The ``hash`` is written as ``<algorithm>:<digest>`` -- ``md5``, ``sha1``,
-``sha256`` or ``sha512``. A bare digest is accepted too, and the algorithm is
-read from its length.
+``hash`` is not a software-specific idea: it pins the bytes of any file a
+package fetches rather than carries, and the download is refused unless they
+match (see :ref:`file-hash` for the spelling and the details).
+What *is* specific to software is that it is required -- everywhere else
+pinning a download is a package's own choice.
 
 See ``examples/produce_software`` for a package that does both, and
 ``examples/produce_part_kicad`` for a board that pulls its host-side tool from a

@@ -30,7 +30,7 @@ class FileFactoryUrl(FileFactory):
             raise Exception("ERROR: '%s' declares 'fileFrom: url' but no 'fileUrl'" % config.get("name", "<unnamed>"))
         self.url = config["fileUrl"]
 
-    async def download(self, path):
+    async def _download(self, path):
         debug("Downloading file from %s to %s" % (self.url, path))
 
         dirs = os.path.dirname(path)

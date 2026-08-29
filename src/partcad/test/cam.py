@@ -43,17 +43,18 @@ class CamTest(Test):
     def cache_key_suffix(self, ctx, shape) -> str:
         """The software this object ships with, folded into the cache key.
 
-        A shape's hash covers what it is built from, and software is not that:
-        it is a file the product ships with, so a part's hash does not move when
-        its 'software:' does. Without this, correcting a wrong hash - or pointing
-        the part at a different image altogether - would be answered with the
-        cached failure of the declaration that was replaced, which is the one
-        thing a test must never do.
+        A shape's cache key covers what the shape is built from, and the
+        software it ships with is not that: a part's key does not move when its
+        'software:' does. Without this, correcting a mistyped 'hash' - or
+        pointing the part at a different image altogether - would be answered
+        with the cached failure of the declaration that was replaced, which is
+        the one thing a test must never do.
 
-        The referenced names *and* the hash each of them pins, because both are
-        what 'software_failure()' reads. Not the content of the files: that is
-        what the hashes are for, and re-hashing every image to decide whether a
-        cached answer may be used would cost what the cache exists to save.
+        Note what is being folded in: the references, and the *declared* hash of
+        each - the text a package wrote down, which is what
+        'software_failure()' reads. Not the content of the files, and not any
+        hash PartCAD computed: re-hashing every image to decide whether a cached
+        answer may be used would cost exactly what the cache exists to save.
         """
         parts = []
         for ref in pc_software.resolved_software_refs(shape.project_name, shape.get_final_config()):
