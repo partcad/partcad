@@ -677,3 +677,50 @@ Feature: `pc lint` command
       """
     When I run "pc lint --file logo.assy --recursive"
     Then the command should exit with a status code of "2"
+
+  @failure
+  Scenario: Software pulled in from elsewhere has to be pinned by a hash
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package whose firmware is not in the package
+      software:
+        firmware:
+          desc: A vendor image nothing identifies
+          fileFrom: url
+          fileUrl: https://example.com/vendor/firmware.bin
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "1"
+    And STDOUT should contain "software 'firmware' is pulled in with 'fileFrom: url' and declares no 'hash'"
+
+  @success
+  Scenario: Software the package carries needs no hash
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package that carries its own firmware
+      software:
+        firmware:
+          desc: The image this package carries
+          path: firmware.bin
+      """
+    And a file named "firmware.bin" with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"
+
+  @success
+  Scenario: Software pulled in with a hash passes
+    Given a file named "partcad.yaml" with content:
+      """
+      desc: A package whose firmware is pinned
+      software:
+        firmware:
+          desc: A vendor image, pinned
+          fileFrom: url
+          fileUrl: https://example.com/vendor/firmware.bin
+          hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+      """
+    When I run "pc lint"
+    Then the command should exit with a status code of "0"

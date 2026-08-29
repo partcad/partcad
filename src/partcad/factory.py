@@ -129,6 +129,7 @@ all = {
     "provider": {},
     "repository": {},
     "sketch": {},
+    "software": {},
 }
 
 

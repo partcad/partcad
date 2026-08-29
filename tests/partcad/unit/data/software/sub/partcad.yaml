@@ -1,0 +1,12 @@
+desc: A package whose part ships software of the package above it
+
+software:
+  diagnostics:
+    desc: The diagnostics image
+
+parts:
+  sensor:
+    type: cadquery
+    desc: A sensor board
+    software:
+      - diagnostics

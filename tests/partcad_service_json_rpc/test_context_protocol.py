@@ -148,7 +148,7 @@ class FakeInstallAction:
 
     def __init__(self):
         self.calls = []
-        self.stats = {"sketch": 0, "part": 0, "assembly": 0, "failed": 0, "failed_packages": 0}
+        self.stats = {"sketch": 0, "part": 0, "assembly": 0, "software": 0, "failed": 0, "failed_packages": 0}
 
     def install(self, ctx, packages):
         self.calls.append((ctx, list(packages)))
@@ -500,6 +500,7 @@ def test_install_reports_the_objects_it_could_not_prepare(tmp_path):
         "sketch": 1,
         "part": 2,
         "assembly": 0,
+        "software": 0,
         "failed": 3,
         "failed_packages": 0,
     }

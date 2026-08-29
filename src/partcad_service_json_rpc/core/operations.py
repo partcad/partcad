@@ -516,7 +516,7 @@ def info(session, params):
 
 
 def info_object(session, params):
-    """Show detailed information about a part, assembly, interface, or sketch.
+    """Show detailed information about a part, assembly, interface, sketch, or software.
 
     Ported verbatim from the CLI `info` command: with no object name it reports
     the package's info, otherwise the object's configuration and info. Output is
@@ -552,6 +552,12 @@ def info_object(session, params):
         obj = ctx.get_interface(path)
     elif params.get("sketch"):
         obj = ctx.get_sketch(path, params=param_list)
+    elif params.get("software"):
+        # Resolved through the package rather than through a context accessor:
+        # software is not a shape, and none of what 'ctx.get_*' does for one -
+        # parameters, instantiation, the shape cache - applies to a file.
+        project = ctx.get_project(package)
+        obj = project.get_software(object_name) if project is not None else None
     else:
         obj = ctx.get_part(path, params=param_list)
 
@@ -1085,7 +1091,8 @@ def install(session, params):
         stats = pc.actions.package.install(ctx, packages)
 
     session.emitter.info(
-        "Installed %d sketches, %d parts and %d assemblies" % (stats["sketch"], stats["part"], stats["assembly"])
+        "Installed %d sketches, %d parts, %d assemblies and %d software objects"
+        % (stats["sketch"], stats["part"], stats["assembly"], stats["software"])
     )
     if stats["failed"]:
         session.emitter.error("Failed to install %d objects" % stats["failed"])
@@ -1236,20 +1243,30 @@ def list_all(session, params):
     return None
 
 
-# The four object kinds `pc list <kind>` renders identically (name + description
-# table, optional package column when recursive). One operation serves all four;
+# The object kinds `pc list <kind>` renders identically (name + description
+# table, optional package column when recursive). One operation serves them all;
 # the CLI passes the kind. Output is emitted verbatim through PartCAD's logger so
 # it renders exactly as the old in-process command did.
+#
+# The key is the name of the package attribute holding the objects, which is why
+# 'software' looks singular here: the section is called that in both numbers.
 _LIST_LABELS = {
     "parts": "PartCAD parts",
     "sketches": "PartCAD sketches",
     "assemblies": "PartCAD assemblies",
     "interfaces": "PartCAD interfaces",
+    "software": "PartCAD software",
 }
+
+# The kinds whose recursive listing walks every package rather than only the
+# ones with geometry in them. A package of firmware images has nothing to render
+# and would be filtered out of the walk exactly as a package of interfaces is
+# (see 'Context.get_packages', and the TODO there about the two).
+_LIST_EVERY_PACKAGE = ("interfaces", "software")
 
 
 def list_objects(session, params):
-    """List a package's parts, sketches, assemblies, or interfaces."""
+    """List a package's parts, sketches, assemblies, interfaces or software."""
     ctx = _ctx(session, params)
     if ctx is None:
         return None
@@ -1267,8 +1284,9 @@ def list_objects(session, params):
     with pc.logging.Process("List" + kind.capitalize(), package):
         count = 0
         if recursive:
-            # `list interfaces` walks every package; the others only those with content.
-            has_stuff = kind != "interfaces"
+            # `list interfaces` and `list software` walk every package; the
+            # others only those with content.
+            has_stuff = kind not in _LIST_EVERY_PACKAGE
             packages = [p["name"] for p in ctx.get_all_packages(parent_name=package, has_stuff=has_stuff)]
         else:
             packages = [package]
@@ -1492,10 +1510,14 @@ def bom(session, params):
         )
 
         items = [{"name": name, **entry} for name, entry in sorted(bom_items.items())]
+        # 'total' counts the hardware, as it always has; the software of an
+        # assembly is counted separately rather than added into it. Two boards
+        # and the one image both of them run is not five of anything.
         result = {
             "assembly": path,
             "items": items,
-            "total": sum(item["count"] for item in items),
+            "total": sum(item["count"] for item in items if item.get("kind") != "software"),
+            "totalSoftware": sum(item["count"] for item in items if item.get("kind") == "software"),
         }
 
         if not params.get("json"):
@@ -1509,17 +1531,45 @@ def _bom_output(result: dict) -> str:
     The columns are sized from the content, not fixed the way `pc list` sizes
     its own: every name here carries the package it comes from, so the names are
     long and their length varies a lot from one BoM to the next.
+
+    Software is listed under a heading of its own rather than interleaved with
+    the hardware. What its "source" column says is not a vendor and an SKU -
+    nobody sells a firmware image - but the package it comes from and the
+    revision of that package, which is what identifies the file.
     """
     items = result["items"]
     output = "Bill of materials of %s:\n" % result["assembly"]
     if not items:
         return output + "\t<none>\n"
 
+    hardware = [item for item in items if item.get("kind") != "software"]
+    software = [item for item in items if item.get("kind") == "software"]
+
+    output += _bom_table(hardware)
+    output += "Total: %d\n" % result["total"]
+    if software:
+        output += "Software:\n"
+        output += _bom_table(software)
+        output += "Software total: %d\n" % result.get("totalSoftware", 0)
+    return output
+
+
+def _bom_table(items: list) -> str:
+    """One block of BoM line items, with the columns sized from the content."""
+    if not items:
+        return "\t<none>\n"
+
     rows = []
     for item in items:
-        # What to order, for the items that say so: buying one needs the vendor
-        # and the SKU, not the name PartCAD knows it by.
-        if item.get("vendor") and item.get("sku"):
+        if item.get("kind") == "software":
+            # The package and the commit it was read at: the same name in the
+            # same package is a different file once the package publishes again.
+            source = item.get("package") or ""
+            if item.get("revision"):
+                source = "%s@%s" % (source, item["revision"])
+        elif item.get("vendor") and item.get("sku"):
+            # What to order, for the items that say so: buying one needs the
+            # vendor and the SKU, not the name PartCAD knows it by.
             source = "%s %s" % (item["vendor"], item["sku"])
         else:
             source = ""
@@ -1531,13 +1581,13 @@ def _bom_output(result: dict) -> str:
 
     # Where a folded description continues, counting the leading tab as one.
     indent = 1 + name_width + 2 + count_width + 2 + (source_width + 2 if source_width else 0)
+    output = ""
     for name, count, source, desc in rows:
         line = "\t%s  %s" % (name.ljust(name_width), count.rjust(count_width))
         if source_width:
             line += "  %s" % source.ljust(source_width)
         line += "  " + desc.replace("\n", "\n" + " " * indent)
         output += line.rstrip() + "\n"
-    output += "Total: %d\n" % result["total"]
     return output
 
 

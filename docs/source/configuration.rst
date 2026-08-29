@@ -216,6 +216,9 @@ PartCAD :ref:`packages` may contain the following objects:
 
 - :ref:`assemblies` are instructions how to put parts and other assemblies together to be used as a single object.
 
+- :ref:`software` is what the product ships with that is not geometry: a firmware image, a binary, a disk image.
+  It is always a file.
+
 - :ref:`providers` are implementations of a way to get parts and assemblies (to purchase them or to manufacture them).
 
 ===============
@@ -411,9 +414,9 @@ not expected to be a part of the package, PartCAD does not complain about it
 being missing while the package is loaded.
 
 ``fileFrom`` and ``fileUrl`` must be declared together.
-They are recognized in :ref:`parts`, :ref:`sketches` and :ref:`assemblies`
+They are recognized in :ref:`parts`, :ref:`sketches`, :ref:`assemblies`
 (an assembly's source file is pulled the same way, whether it is an ``.assy``
-file or a CAD file).
+file or a CAD file) and :ref:`software`.
 
 Parameters
 ----------
@@ -1851,6 +1854,150 @@ an Assembly YAML file) is not an object of any package, so there is no name to
 order it by. Such an assembly is always procured as its contents, and declaring
 a vendor for it has no effect.
 
+.. _software:
+
+========
+Software
+========
+
+A product is rarely hardware alone: the board in it runs a firmware image, the
+controller boots a disk image, the tool that talks to it is a binary on the
+host. ``software`` declares those as objects of the package, beside its parts
+and its assemblies.
+
+Software is **not** a shape. There is no geometry to render, to export or to
+measure, and none of what :ref:`parts` and :ref:`assemblies` can do applies to
+it. What it is, always, is a *file*:
+
+.. code-block:: yaml
+
+  software:
+    <software name>:
+      type: raw # (optional) "raw" is the default and the only type so far
+      desc: <(optional) textual description>
+      version: <(optional) the version of this software>
+      url: <(optional) where to read about it>
+      path: <(optional) the file, relative to the package>
+      fileFrom: <(optional) where to fetch the file from; see "Files">
+      fileUrl: <(optional) the URL to fetch it from>
+      hash: <(optional) "<algorithm>:<digest>", e.g. "sha256:...">
+
+The short form declares nothing but the path:
+
+.. code-block:: yaml
+
+  software:
+    service-tool: tools/service-tool.sh
+
+``path`` behaves as it does everywhere else (see `Files`_): without it the file
+is the object's own name, and a file the package does not carry is declared with
+``fileFrom``/``fileUrl`` and fetched lazily. The default path carries no
+extension, because a firmware image is as likely to be a ``.img``, a ``.uf2`` or
+nothing at all as it is a ``.bin``.
+
+``raw`` is the file handed over as it is: PartCAD carries it, says which one it
+is, and what to do with it is the reader's business. Every type is a file and
+that will not change -- the types that come after ``raw`` name the *procedure*
+the file goes through rather than a different kind of object, associating a
+specific firmware flashing procedure (which tool, which bootloader, which reset
+dance) with the image.
+
+Which software an object ships with
+-----------------------------------
+
+A part or an assembly says what it ships with in its own ``software`` list. A
+bare name is software of the same package; a qualified one is software of
+another:
+
+.. code-block:: yaml
+
+  parts:
+    controller:
+      type: step
+      software:
+        - controller-firmware
+        - //vendor/blobs:radio-firmware
+
+  assemblies:
+    device:
+      type: assy
+      # The host-side tool is the whole device's, not any one board's.
+      software:
+        - service-tool
+
+The reference is resolved against the package that *wrote* it, so an ``alias``
+or an ``enrich`` of that part in another package still points at the same file.
+
+In the bill of materials
+------------------------
+
+Every assembly's bill of materials lists the software of the parts and
+sub-assemblies it is made of, and its own, under a heading of its own:
+
+.. code-block:: shell
+
+  $ pc bom :device
+  Bill of materials of //robot:device:
+          //robot:controller  2  The controller board
+  Total: 2
+  Software:
+          //robot:controller-firmware  2  //robot@8f1c...  The image the board is flashed with
+          //robot:service-tool         1  //robot@8f1c...
+  Software total: 3
+
+Each software line names the package it came from **and the revision of that
+package** -- the commit its files were read at. A bracket is the same bracket
+whenever it is fetched; a firmware image is a different file as soon as its
+package publishes again, so the revision is what makes the line mean something.
+A package that is not in a git repository has no revision, and the line says so
+rather than inventing one.
+
+The count is how many times something in the assembly needs it: three boards
+running one image is a count of three, the same way three of anything else is.
+A sub-assembly that is bought whole -- it declares a vendor and an SKU, and a
+supplier has it available -- is not expanded, so its firmware is no more a line
+item than its screws are.
+
+Software is not procured: ``pc supply`` and the manufacturability tests walk the
+hardware only, because nobody sells a firmware image.
+
+In the package's README
+-----------------------
+
+``pc render -t readme`` lists the software of a package in a table of its own,
+saying which file each one is, the version it declares, and the hash it is
+pinned to. The file is linked where the package carries it; where it is fetched,
+the URL it comes from is shown instead.
+
+Which file is it?
+-----------------
+
+The whole point of listing software beside the hardware is being able to say
+which file went into a product. There are two ways a package can be that
+specific, and ``pc lint`` requires one of them (the ``Software`` check):
+
+- The package **carries the file**. It is content of the repository, so the
+  revision recorded beside every software line item identifies it exactly.
+- The package **pulls it in** with ``fileFrom``, and pins it with ``hash``.
+  Without a hash nothing identifies it: the URL serves whatever it serves at the
+  moment it is fetched, and the same package revision produces a different image
+  tomorrow.
+
+.. code-block:: yaml
+
+  software:
+    # In this repository: its revision says which file it is.
+    controller-firmware:
+      path: controller-firmware.bin
+
+    # Not in this repository: pinned by hash.
+    radio-firmware:
+      fileFrom: url
+      fileUrl: https://example.com/vendor/radio-1.4.bin
+      hash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
+
+See ``examples/produce_software`` for a package that does both.
+
 .. _providers:
 
 =========
@@ -2015,7 +2162,7 @@ or a new piece of metadata needs no new API:
 
 - ``objects/<kind>`` -- all objects of a kind, as ``{name: config, ...}`` (kinds
   are ``sketch``, ``part``, ``assembly``, ``interface``, ``provider``,
-  ``repository``)
+  ``repository``, ``software``)
 - ``objects/<kind>/<name>`` -- a single object's config, fetched without listing
   the whole repository
 - ``deps`` -- the names of the child packages

@@ -36,6 +36,8 @@ from . import (
     project_config,
     sketch,
     sketch_config,
+    software as pc_software,
+    software_config,
 )
 from . import sketch_factory_alias as sfa
 from . import tags as pc_tags
@@ -59,7 +61,7 @@ if TYPE_CHECKING:
 # The kinds of first-class objects a package may contain, mapped to the
 # 'partcad.yaml' section that declares them. Kept as data so that introducing a
 # new kind of object does not require touching the per-kind accessor plumbing.
-OBJECT_KINDS = ("interface", "sketch", "part", "assembly", "provider", "repository", "partType")
+OBJECT_KINDS = ("interface", "sketch", "part", "assembly", "provider", "repository", "software", "partType")
 OBJECT_KIND_SECTIONS = {
     "interface": "interfaces",
     "sketch": "sketches",
@@ -67,6 +69,11 @@ OBJECT_KIND_SECTIONS = {
     "assembly": "assemblies",
     "provider": "providers",
     "repository": "repositories",
+    # 'software' is the one kind of object that is neither a shape nor a plugin:
+    # a file the product ships with (a firmware image, a binary) rather than
+    # geometry or a way of getting geometry. The section is named the same in
+    # the singular and the plural, which is why this entry looks like a no-op.
+    "software": "software",
     # A 'partType' is a package-defined way to construct parts (e.g. a wrapper
     # script). It is enumerable like any other object, but it is not a shape and
     # is never instantiated: parts whose 'type' references it are constructed by
@@ -111,6 +118,12 @@ def _has_running_loop() -> bool:
 INVALID_UNLESS = "<invalid 'unless'>"
 
 
+def _readme_cell(text) -> str:
+    """A value made safe to put in one cell of a generated markdown table."""
+    text = "" if text is None else str(text)
+    return text.replace("|", "\\|").replace("\n", "<br/>")
+
+
 @telemetry.instrument()
 class Project(project_config.Configuration):
     sketches: dict[str, sketch.Sketch]
@@ -118,6 +131,7 @@ class Project(project_config.Configuration):
     assemblies: dict[str, assembly.Assembly]
     providers: dict[str, plugin_provider.Provider]
     repositories: dict[str, plugin_repository.Repository]
+    software: dict[str, pc_software.Software]
 
     class InterfaceLock(object):
         def __init__(self, prj, interface_name: str):
@@ -196,6 +210,20 @@ class Project(project_config.Configuration):
                 prj.repository_locks[repository_name] = threading.Lock()
             self.lock = prj.repository_locks[repository_name]
             prj.repository_locks_lock.release()
+
+        def __enter__(self, *_args):
+            self.lock.acquire()
+
+        def __exit__(self, *_args):
+            self.lock.release()
+
+    class SoftwareLock(object):
+        def __init__(self, prj, software_name: str):
+            prj.software_locks_lock.acquire()
+            if not software_name in prj.software_locks:
+                prj.software_locks[software_name] = threading.Lock()
+            self.lock = prj.software_locks[software_name]
+            prj.software_locks_lock.release()
 
         def __enter__(self, *_args):
             self.lock.acquire()
@@ -290,6 +318,10 @@ class Project(project_config.Configuration):
         self.repository_locks = {}
         self.repository_locks_lock = threading.Lock()
 
+        self.software = {}
+        self.software_locks = {}
+        self.software_locks_lock = threading.Lock()
+
         # The assemblies already built to materialize a part of theirs (see
         # '_materialize_derived_part'), and the lock that keeps two threads from
         # building the same one.
@@ -370,6 +402,10 @@ class Project(project_config.Configuration):
         override it to instantiate lazily, on demand, instead of enumerating
         and instantiating everything up front.
         """
+        # First: software is a file the package ships, not geometry, so nothing
+        # here depends on it having been read, and a part that references one
+        # resolves it by name when asked rather than at load time.
+        self.init_software()
         self.init_sketches()
         self.init_interfaces()  # After sketches
         self.init_mates()  # After interfaces
@@ -478,6 +514,10 @@ class Project(project_config.Configuration):
     @property
     def repository_configs(self) -> dict:
         return self.object_configs("repository")
+
+    @property
+    def software_configs(self) -> dict:
+        return self.object_configs("software")
 
     # TODO(clairbee): Implement get_cover()
     # def get_cover(self):
@@ -716,6 +756,9 @@ class Project(project_config.Configuration):
     def get_repository_config(self, repository_name):
         return self.object_config("repository", repository_name)
 
+    def get_software_config(self, software_name):
+        return self.object_config("software", software_name)
+
     def get_part_type_config(self, part_type_name):
         return self.object_config("partType", part_type_name)
 
@@ -767,6 +810,15 @@ class Project(project_config.Configuration):
             plugin_config.PluginConfiguration,
             None,
             self.get_repository_config,
+        )
+
+    def init_software(self):
+        return self.init_objects(
+            "software",
+            self.software_configs,
+            software_config.SoftwareConfiguration,
+            None,
+            self.get_software_config,
         )
 
     def record_broken_object(self, kind: str, name: str, reason) -> None:
@@ -892,6 +944,9 @@ class Project(project_config.Configuration):
 
     def init_repository_by_config(self, config, source_project=None):
         self.init_object_by_config("repository", plugin_config.PluginConfiguration, None, config, source_project)
+
+    def init_software_by_config(self, config, source_project=None):
+        self.init_object_by_config("software", software_config.SoftwareConfiguration, None, config, source_project)
 
     def materialize_part_by_config(self, config) -> Optional[Part]:
         """The part an assembly materializes, created on first use.
@@ -1241,6 +1296,19 @@ class Project(project_config.Configuration):
             plugin_config.PluginConfiguration,
             None,
             repository_name,
+            func_params,
+        )
+
+    def get_software(self, software_name, func_params=None) -> Optional[pc_software.Software]:
+        return self.get_object(
+            "software",
+            Project.SoftwareLock,
+            self.software,
+            self.software_configs,
+            self.get_software_config,
+            software_config.SoftwareConfiguration,
+            None,
+            software_name,
             func_params,
         )
 
@@ -2390,6 +2458,54 @@ class Project(project_config.Configuration):
             for name in shape_names:
                 shape = self.sketches[name]
                 lines += add_section(name, name, shape, render_cfg)
+
+        if self.software and not "software" in exclude:
+            # A table rather than the per-object sections above: software has no
+            # image to show and no parameters to enumerate, and what a reader
+            # needs of it - which file, which version, is it pinned - is a few
+            # short columns that are worth comparing side by side.
+            lines += ["## Software"]
+            lines += [""]
+            lines += [
+                "| Software | Version | File | Hash | Description |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+            for name in sorted(self.software.keys()):
+                software = self.software[name]
+                config = software.config
+                file_text = ""
+                if software.path:
+                    # Relative to the package, the way a part's source file is
+                    # linked above: a generated README lives in the package it
+                    # documents.
+                    file_path = os.path.relpath(software.path, self.config_dir)
+                    file_name = os.path.basename(software.path)
+                    if software.is_local_file():
+                        # The package carries the file, so the README can link
+                        # straight at it. What 'fileFrom' pulls in is not in the
+                        # repository at all, and a link to where it is not is
+                        # worse than the name of the file it will be saved as.
+                        file_text = "[%s](%s)" % (_readme_cell(file_name), _readme_cell(file_path))
+                    else:
+                        file_text = "`%s`" % _readme_cell(file_name)
+                        file_url = config.get("fileUrl")
+                        if file_url:
+                            file_text += " from [%s](%s)" % (
+                                _readme_cell(config.get("fileFrom", "url")),
+                                _readme_cell(file_url),
+                            )
+                declared_hash = software.declared_hash()
+                lines += [
+                    "| %s | %s | %s | %s | %s |"
+                    % (
+                        _readme_cell(name),
+                        _readme_cell(config.get("version") or ""),
+                        file_text,
+                        "`%s`" % _readme_cell(declared_hash) if declared_hash else "",
+                        _readme_cell(software.desc or ""),
+                    )
+                ]
+            lines += [""]
 
         lines += [
             "<br/><br/>",

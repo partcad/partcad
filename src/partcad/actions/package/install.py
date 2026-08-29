@@ -7,7 +7,7 @@
 
 ``pc install`` is to a PartCAD package what ``npm install`` is to a Node.js one.
 It downloads every package the current one imports, and then asks every sketch,
-part and assembly for its cache key.
+part and assembly for its cache key, and every piece of software for its file.
 
 Asking for the cache key is what does the rest of the work. The key hashes the
 content of the files an object is built from, so it is only computable once
@@ -29,21 +29,29 @@ from ... import logging as pc_logging
 _DEFAULT_CONCURRENCY = 8
 
 # The object kinds an install covers, paired with the accessor that resolves one
-# by name. Interfaces and providers are deliberately absent: neither carries a
-# file of its own to download.
+# by name and with what asking for it has to do to fetch its files. Interfaces
+# and providers are deliberately absent: neither carries a file of its own to
+# download.
+#
+# For a shape, that is the cache key: it hashes the content of the files the
+# shape is built from, so computing it is what puts them on disk. Software has
+# no cache key - it is a file, not something built out of one - so it is asked
+# to fetch its file directly.
 _KINDS = {
-    "sketch": lambda project, name: project.get_sketch(name),
-    "part": lambda project, name: project.get_part(name),
-    "assembly": lambda project, name: project.get_assembly(name),
+    "sketch": (lambda project, name: project.get_sketch(name), lambda obj: obj.get_cache_key_async()),
+    "part": (lambda project, name: project.get_part(name), lambda obj: obj.get_cache_key_async()),
+    "assembly": (lambda project, name: project.get_assembly(name), lambda obj: obj.get_cache_key_async()),
+    "software": (lambda project, name: project.get_software(name), lambda obj: obj.prepare_async()),
 }
 
 
 async def _install_object(project, kind: str, name: str, stats: dict) -> None:
     try:
-        obj = _KINDS[kind](project, name)
+        get, prepare = _KINDS[kind]
+        obj = get(project, name)
         if obj is None:
             raise Exception("%s is not found" % kind)
-        await obj.get_cache_key_async()
+        await prepare(obj)
         stats[kind] += 1
     except Exception as e:  # pylint: disable=broad-except
         # One object that cannot be prepared must not cost the user the rest of
@@ -53,14 +61,14 @@ async def _install_object(project, kind: str, name: str, stats: dict) -> None:
 
 
 async def install_async(ctx, packages: list[str]) -> dict:
-    """Prepare every sketch, part and assembly of every named package.
+    """Prepare every sketch, part, assembly and piece of software of every named package.
 
     Returns the per-kind counts of what was prepared, plus ``failed`` (objects
     that could not be) and ``failed_packages`` (packages whose objects could not
     even be enumerated). Every failure is reported through the log as it happens;
     the counts are there so the caller can still fail the command afterwards.
     """
-    stats = {"sketch": 0, "part": 0, "assembly": 0, "failed": 0, "failed_packages": 0}
+    stats = {"sketch": 0, "part": 0, "assembly": 0, "software": 0, "failed": 0, "failed_packages": 0}
     # A package can declare thousands of objects. Preparing them concurrently is
     # the point (most of the time goes into downloads), but unbounded fan-out
     # would open a socket per object; keep it to the same width as the rest of

@@ -10,7 +10,7 @@ from ..service import run
 
 
 # TODO-94: @alexanderilyin: Replace -i, -a, -s, -S with --type; https://stackoverflow.com/a/37491504/25671117
-@click.command(help="Show detailed information about a part, assembly, or scene")
+@click.command(help="Show detailed information about a part, assembly, scene, or software")
 @click.option(
     "-P",
     "--package",
@@ -53,6 +53,14 @@ from ..service import run
     show_envvar=True,
 )
 @click.option(
+    "-w",
+    "--software",
+    "software",
+    is_flag=True,
+    help="The object is software",
+    show_envvar=True,
+)
+@click.option(
     "-p",
     "--param",
     "params",
@@ -64,7 +72,7 @@ from ..service import run
 )
 @click.argument("object", type=str, required=False)  # help="Part (default), assembly or scene to show"
 @click.pass_obj
-def cli(cli_ctx, package, interface, assembly, sketch, scene, object, params):
+def cli(cli_ctx, package, interface, assembly, sketch, scene, software, object, params):
     run(
         cli_ctx,
         "info.object",
@@ -74,6 +82,7 @@ def cli(cli_ctx, package, interface, assembly, sketch, scene, object, params):
             "assembly": assembly,
             "sketch": sketch,
             "scene": scene,
+            "software": software,
             "object": object,
             "params": list(params),
         },

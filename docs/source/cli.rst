@@ -82,7 +82,9 @@ Package commands
   Download everything the current package needs to be built - the PartCAD counterpart of ``npm install``.
   It fetches all imported packages, then prepares every sketch, part and assembly by computing its cache key:
   that downloads the files behind ``fileFrom`` and resolves each alias, enrich, compound and assembly link,
-  which loads the packages the objects really depend on. Nothing is built. Use ``-P`` to install a package
+  which loads the packages the objects really depend on. Every piece of :ref:`software` is prepared too, by
+  fetching its file - it has no cache key, being a file rather than something built out of one. Nothing is
+  built. Use ``-P`` to install a package
   other than the current one and ``-r`` to prepare the objects of the imported packages too.
 
 ``pc update``
@@ -101,7 +103,7 @@ Object commands
 
 ``pc list``
   List components. Subcommands select what to list: ``all``, ``parts``, ``sketches``, ``assemblies``,
-  ``interfaces``, ``mates``, and ``packages``.
+  ``interfaces``, ``mates``, ``providers``, ``software``, and ``packages``.
 
 ``pc add``
   Add an object to a package. Subcommands: ``dep`` (a dependency), ``sketch``, ``part``, and ``assembly``.
@@ -143,6 +145,11 @@ Object commands
   Such a sub-assembly is listed as a single line item and its own contents are left out: it is one thing to
   order, not a list of parts to source and assemble. A sub-assembly that names a vendor and an SKU nobody
   supplies is still expanded.
+
+  The :ref:`software` the parts and the assembly ship with is listed under a heading of its own, counted
+  apart from the hardware. Each software line names the package it came from and the revision of that
+  package, because a firmware image — unlike a bracket — is a different file once its package publishes
+  again.
 
 ``pc convert``
   Convert parts, sketches or assemblies to another format and update their type in the package. Subcommands:

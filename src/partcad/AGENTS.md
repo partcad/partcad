@@ -59,6 +59,22 @@ isort --check src/partcad tests/partcad
   `[[x, y, z], [rx, ry, rz], angle]` — translation in mm, then an axis vector and rotation angle (degrees)
   around it.
 
+- **Software is not a shape** (`software.py`, `software_factory*.py`): a package's `software:` section declares
+  the files a product ships with -- firmware images, binaries -- and `Software` deliberately does not inherit
+  `Shape`. There is no geometry, so nothing here renders, exports, tessellates or caches a shape; what it shares
+  with the shape factories is the `path`/`fileFrom` plumbing, and it shares it by following the same shape of
+  code rather than by inheriting a class built for shapes. Only one type exists, `raw`; the ones that follow it
+  name a firmware flashing procedure for the same file, so they belong beside `SoftwareFactoryRaw` and never as
+  a second way of pointing at a file.
+
+  A part or an assembly lists what it ships with in its own `software:`, resolved **once**, by
+  `ShapeFactory.__init__`, into `software_resolved` -- that is the only place that knows which package authored
+  the declaration, and an alias or an enrich hands the configuration on to packages where a bare name would mean
+  something else. Every assembly's bill of materials then lists that software with the commit its package was
+  read at (`revision.py`), because a firmware image, unlike a bracket, is a different file once its package
+  publishes again. `lint/software.py` is what keeps that answerable: a file the package does not carry has to
+  declare a `hash`.
+
 - **Built-in packages** (`./src/partcad/builtin`): PartCAD ships two packages inside itself, reachable from
   every context as `//builtin/export` and `//builtin/render` (loaded on demand by `Context.get_project`, see
   `output.py`). They declare the file types `pc export` and `pc render` write, in exactly the form a user's

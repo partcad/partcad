@@ -74,6 +74,12 @@
         }
       ]
     },
+    "software-refs": {
+      "description": "The software objects an object ships with: a firmware image the board runs, a binary that has to be on the host. Each entry names a 'software' object, either of this package or of another ('<package path>:<name>'). Listed in the bill of materials of every assembly the object ends up in.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
     "shape-properties": {
       "type": "object",
       "description": "What the shape this object produces reports about itself, as opposed to 'parameters', which are what is asked of the object type that produces it. Every entry here is an output: it describes the instantiated shape, and an exporter that has a way to state one writes it out rather than recomputing or losing it.",
@@ -697,7 +703,8 @@
                 },
                 "manufacturable": { "type": "boolean" },
                 "unless": { "$ref": "#/definitions/unless" },
-                "connect": { "$ref": "#/definitions/connect" }
+                "connect": { "$ref": "#/definitions/connect" },
+                "software": { "$ref": "#/definitions/software-refs" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -799,7 +806,8 @@
                 "manufacturable": { "type": "boolean" },
                 "unless": { "$ref": "#/definitions/unless" },
                 "connect": { "$ref": "#/definitions/connect" },
-                "properties": { "$ref": "#/definitions/shape-properties" }
+                "properties": { "$ref": "#/definitions/shape-properties" },
+                "software": { "$ref": "#/definitions/software-refs" }
               },
               "required": ["type"],
               "additionalProperties": false
@@ -1069,6 +1077,47 @@
           },
           "required": ["type"],
           "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "software": {
+      "description": "The software this package ships: firmware images, binaries, disk images. Software is an object of a package like a part is, and unlike a part it has no geometry - it is always a file. Every type is a file; the types beyond 'raw' will name the firmware flashing procedure the file goes through (which tool, which bootloader), never a different way of pointing at it.",
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_/./-]+$": {
+          "oneOf": [
+            {
+              "description": "The short form: the path of the file, relative to the package.",
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "dependencies": { "fileFrom": ["fileUrl"], "fileUrl": ["fileFrom"] },
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["raw"],
+                  "default": "raw",
+                  "description": "'raw' is the file handed over as it is, and is the default."
+                },
+                "desc": { "type": "string", "maxLength": 1000 },
+                "version": { "type": ["string", "number"], "minLength": 1 },
+                "url": { "$ref": "#/definitions/url" },
+                "path": { "type": "string", "minLength": 1 },
+                "fileFrom": { "type": "string", "enum": ["url"] },
+                "fileUrl": { "$ref": "#/definitions/url" },
+                "hash": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The hash of the file, as '<algorithm>:<digest>' (e.g. 'sha256:...'). Required for a file this package does not carry itself: what 'fileFrom' pulls in is whatever the remote serves at the time, and the hash is the only thing that says it is the right file. See the 'Software' lint check."
+                },
+                "unless": { "$ref": "#/definitions/unless" }
+              },
+              "additionalProperties": false
+            }
+          ]
         }
       },
       "additionalProperties": false

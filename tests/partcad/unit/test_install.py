@@ -68,7 +68,7 @@ def test_install_downloads_the_files_behind_file_from(tmp_path, downloads):
 
     stats = install(ctx)
 
-    assert stats == {"sketch": 0, "part": 1, "assembly": 0, "failed": 0, "failed_packages": 0}
+    assert stats == {"sketch": 0, "part": 1, "assembly": 0, "software": 0, "failed": 0, "failed_packages": 0}
     assert downloads == ["https://example.com/bolt.stl"]
     assert (tmp_path / "bolt.stl").exists()
 
@@ -168,7 +168,7 @@ links:
 
     stats = install(ctx)
 
-    assert stats == {"sketch": 0, "part": 0, "assembly": 1, "failed": 0, "failed_packages": 0}
+    assert stats == {"sketch": 0, "part": 0, "assembly": 1, "software": 0, "failed": 0, "failed_packages": 0}
     assert (tmp_path / "sub" / "bolt.stl").exists()
 
 

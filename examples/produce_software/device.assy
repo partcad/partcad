@@ -1,0 +1,7 @@
+links:
+  - part: controller
+    name: controller1
+    location: [[0, 0, 0], [0, 0, 1], 0]
+  - part: controller
+    name: controller2
+    location: [[0, 0, 20], [0, 0, 1], 0]

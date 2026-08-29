@@ -13,7 +13,9 @@ from . import telemetry
 from . import shape_envelope
 from .geom import Location
 from .plugin_provider_data_cart import ProviderCartItem
+from .revision import package_revision
 from .shape import Shape
+from . import software as pc_software
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
 
@@ -399,44 +401,56 @@ class Assembly(Shape):
 
         return bom
 
-    async def get_bom_grouped_async(self):
+    async def get_bom_grouped_async(self, ctx=None):
         """The recursive contents of this assembly, grouped by package.
 
         Unlike 'get_bom()', which flattens the whole tree into a map of part
-        names, this keeps parts and sub-assemblies apart and groups each of them
-        by the package they come from:
+        names, this keeps parts, sub-assemblies and software apart and groups
+        each of them by the package they come from:
 
             {
                 "parts": {"//package": {"name": {"count": 2, "desc": "..."}}},
                 "assemblies": {...},
+                "software": {"//package": {"name": {"count": 1, "desc": "...",
+                                                    "revision": "<commit id>"}}},
             }
 
         Assemblies embedded in the parent's source file (the nested 'links:' of
         an ASSY file) are not objects of any package, so they are not listed:
         their contents are attributed to the assembly that embeds them.
+
+        Software is what the parts, the sub-assemblies and this assembly itself
+        declare they ship with (see 'software' in 'partcad.yaml'). Resolving a
+        reference needs 'ctx', because the software may well come from another
+        package; without one the software section comes back empty rather than
+        half-filled with names nothing was read from.
         """
         with pc_logging.Action("BoMGrouped", self.project_name, self.name):
-            return await self._get_bom_grouped_locked()
+            return await self._get_bom_grouped_locked(ctx)
 
-    def get_bom_grouped(self):
-        return asyncio.run(self.get_bom_grouped_async())
+    def get_bom_grouped(self, ctx=None):
+        return asyncio.run(self.get_bom_grouped_async(ctx))
 
-    async def _get_bom_grouped_locked(self):
+    async def _get_bom_grouped_locked(self, ctx=None):
         with self.lock:
             async with self.get_async_lock():
                 await self.do_instantiate()
-                return await self._get_bom_grouped_real()
+                return await self._get_bom_grouped_real(ctx)
 
-    async def _get_bom_grouped_real(self):
-        grouped = {"parts": {}, "assemblies": {}}
+    async def _get_bom_grouped_real(self, ctx):
+        grouped = {"parts": {}, "assemblies": {}, "software": {}}
+        # This assembly's own software first: an assembly that ships a firmware
+        # image ships it whether or not any of its parts say so.
+        _bom_grouped_add_software(grouped["software"], ctx, self)
         for child in self.children:
             item = child.item
             if isinstance(item, Assembly):
                 if not item.config.get("child", False):
                     _bom_grouped_add(grouped["assemblies"], item)
-                _bom_grouped_merge(grouped, await item._get_bom_grouped_locked())
+                _bom_grouped_merge(grouped, await item._get_bom_grouped_locked(ctx))
             else:
                 _bom_grouped_add(grouped["parts"], item)
+                _bom_grouped_add_software(grouped["software"], ctx, item)
         return grouped
 
     async def get_bom_detailed_async(self, ctx=None, stop_at_purchasable: bool = False):
@@ -450,6 +464,15 @@ class Assembly(Shape):
 
             {"//package:name": {"kind": "part", "count": 2, "desc": "...",
                                 "vendor": None, "sku": None, "count_per_sku": 1}}
+
+        Software the objects ship with is listed too, as entries of kind
+        "software" (see 'get_bom_grouped_async'). A software line item is the
+        file itself, so instead of a vendor and an SKU it carries what
+        identifies that file: the package it comes from, the revision of that
+        package, and the version and hash the declaration pins it to. Its
+        'count' is how many times something in this assembly needs it - three
+        boards running one firmware image is a count of three, the same way
+        three of anything else is.
 
         With 'stop_at_purchasable', a sub-assembly that can be bought whole -- it
         declares a vendor and an SKU, and a supplier of its package has it
@@ -472,6 +495,7 @@ class Assembly(Shape):
 
     async def _get_bom_detailed_real(self, ctx, stop_at_purchasable, purchasable: dict):
         bom = {}
+        _bom_detailed_add_software(bom, ctx, self)
         for child in self.children:
             item = child.item
             if isinstance(item, Assembly):
@@ -480,12 +504,16 @@ class Assembly(Shape):
                 # expanded, exactly as the grouped BoM treats it. That rule is
                 # part of the declaration half of '_is_available_to_buy()'.
                 if stop_at_purchasable and await _is_available_to_buy(ctx, item, purchasable):
+                    # Bought whole, and so is whatever is inside it - the
+                    # firmware its boards run comes flashed, and is no more a
+                    # line item here than its screws are.
                     _bom_detailed_add(bom, item, "assembly")
                     continue
                 child_bom = await item._get_bom_detailed_locked(ctx, stop_at_purchasable, purchasable)
                 _bom_detailed_merge(bom, child_bom)
             else:
                 _bom_detailed_add(bom, item, "part")
+                _bom_detailed_add_software(bom, ctx, item)
         return bom
 
 
@@ -494,6 +522,62 @@ def _bom_grouped_add(section: dict, item):
     entries = section.setdefault(item.project_name, {})
     entry = entries.setdefault(item.name, {"count": 0, "desc": getattr(item, "desc", None)})
     entry["count"] += 1
+
+
+def _software_of(ctx, item):
+    """The (reference, package, software) triples an object ships with.
+
+    A reference that resolves to nothing is dropped here, after 'lookup' has
+    reported it: a bill of materials that silently invented a line item for a
+    name nothing was read from would be worse than one that is short by it.
+    """
+    if ctx is None:
+        return []
+    found = []
+    for ref in pc_software.resolved_software_refs(item.project_name, _final_config(item)):
+        project, software = pc_software.lookup(ctx, ref)
+        if software is None:
+            continue
+        found.append((ref, project, software))
+    return found
+
+
+def _final_config(item):
+    """The configuration an object's software is declared in.
+
+    'get_final_config()' rather than 'config', so that an alias and an enrich
+    report what the object they point at ships with. The references in it were
+    resolved against the package that authored them, which is what makes reading
+    them here from another package correct (see 'software.RESOLVED_KEY').
+    """
+    get_final_config = getattr(item, "get_final_config", None)
+    if get_final_config is None:
+        return item.config
+    try:
+        return get_final_config()
+    except Exception as e:  # pylint: disable=broad-except
+        pc_logging.debug("Failed to resolve the configuration of %s: %s" % (item.name, e))
+        return item.config
+
+
+def _bom_grouped_add_software(section: dict, ctx, item):
+    """Account for the software 'item' ships with in a grouped BoM section."""
+    for _ref, project, software in _software_of(ctx, item):
+        entries = section.setdefault(software.project_name, {})
+        entry = entries.setdefault(
+            software.name,
+            {
+                "count": 0,
+                "desc": software.desc or None,
+                # The commit the package was read at. Without it the line names
+                # a file that changes whenever the package publishes again,
+                # which for software is the whole of what identifies it.
+                "revision": package_revision(project),
+                "version": software.config.get("version"),
+                "hash": software.declared_hash(),
+            },
+        )
+        entry["count"] += 1
 
 
 def _bom_grouped_merge(grouped: dict, other: dict):
@@ -523,6 +607,30 @@ def _bom_detailed_add(bom: dict, item, kind: str):
             "count_per_sku": store_data.count_per_sku,
         }
     entry["count"] += 1
+
+
+def _bom_detailed_add_software(bom: dict, ctx, item):
+    """Account for the software 'item' ships with in a detailed BoM."""
+    for ref, project, software in _software_of(ctx, item):
+        entry = bom.get(ref)
+        if entry is None:
+            entry = bom[ref] = {
+                "kind": "software",
+                "count": 0,
+                "desc": software.desc or None,
+                # Kept so that every line item of a BoM has the same shape,
+                # whatever it is: a reader that asks for the vendor of a line
+                # should get an answer rather than a KeyError.
+                "vendor": None,
+                "sku": None,
+                "count_per_sku": 1,
+                "package": software.project_name,
+                "revision": package_revision(project),
+                "type": software.type,
+                "version": software.config.get("version"),
+                "hash": software.declared_hash(),
+            }
+        entry["count"] += 1
 
 
 def _bom_detailed_merge(bom: dict, other: dict):

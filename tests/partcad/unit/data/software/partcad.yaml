@@ -1,0 +1,41 @@
+desc: A package that ships software beside its hardware
+
+software:
+  # The file is in this package, so its revision identifies it.
+  firmware:
+    desc: The controller firmware
+    version: "1.0.0"
+    path: firmware.bin
+  # The short form: the value is the path of the file.
+  service-tool: service-tool.sh
+  # 'path' defaults to the object's own name, with no extension.
+  bootloader:
+    desc: The bootloader image
+  # Not in this package. Pinned by hash, which is what the 'Software' lint check
+  # requires of anything 'fileFrom' pulls in.
+  vendor-blob:
+    desc: A vendor image this package does not carry
+    fileFrom: url
+    fileUrl: https://example.com/vendor/blob.bin
+    hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  # The same, with nothing that says which file it is: what the lint check is
+  # there to catch.
+  unpinned-blob:
+    desc: A vendor image nothing identifies
+    fileFrom: url
+    fileUrl: https://example.com/vendor/unpinned.bin
+
+parts:
+  controller:
+    type: cadquery
+    desc: The controller board
+    software:
+      - firmware
+      - //:vendor-blob
+
+assemblies:
+  device:
+    type: assy
+    desc: Two controller boards and the tool that talks to them
+    software:
+      - service-tool
