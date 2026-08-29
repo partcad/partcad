@@ -12,10 +12,79 @@ body {
     overflow: hidden;
 }
 
+/* An author 'display' beats the user agent's '[hidden] { display: none }', so a
+   pane that sets one of its own - the instructions are a flex column - would go
+   on showing after being hidden. The panes are stacked on top of each other, so
+   that is the previous tab painted over the current one. */
+[hidden] {
+    display: none !important;
+}
+
+/* The panel is a tab strip over one object: the 3D view, and whatever else
+   PartCAD has to say about what is on screen. */
+.panel {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+.tabs {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.tab {
+    padding: 0.4rem 0.9rem;
+    border: none;
+    border-bottom: 1px solid transparent;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.tab:hover {
+    color: var(--vscode-foreground);
+}
+
+.tab.current {
+    color: var(--vscode-foreground);
+    border-bottom-color: var(--vscode-focusBorder, currentColor);
+}
+
+.tab:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.panes {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.pane {
+    position: absolute;
+    inset: 0;
+    overflow: auto;
+}
+
+/* The canvas fills its pane and never scrolls: the model is moved with the
+   camera, not with a scrollbar. */
+.pane-3d {
+    overflow: hidden;
+}
+
 .viewer {
     position: relative;
     width: 100%;
-    height: 100vh;
+    height: 100%;
 }
 
 .viewer canvas {
@@ -49,4 +118,284 @@ body {
     font-family: var(--vscode-font-family);
     font-size: var(--vscode-font-size);
     pointer-events: none;
+}
+
+/*
+ * The panes that are read rather than looked at: the bill of materials and the
+ * supply information.
+ */
+
+.sheet {
+    padding: 0.75rem 1rem 1.5rem 1rem;
+}
+
+.sheet h1 {
+    margin: 0.2em 0 0.1em 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+}
+
+.sheet h2 {
+    margin: 1.2em 0 0.4em 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.subtitle {
+    margin: 0 0 1em 0;
+    color: var(--vscode-descriptionForeground);
+}
+
+.placeholder {
+    color: var(--vscode-descriptionForeground);
+}
+
+.error {
+    padding: 0.75rem 1rem;
+    color: var(--vscode-errorForeground, var(--vscode-foreground));
+    white-space: pre-wrap;
+}
+
+.total {
+    margin-top: 0.8em;
+    font-weight: 600;
+}
+
+.badge {
+    margin-left: 0.5em;
+    padding: 0 0.35em;
+    border: 1px solid var(--vscode-panel-border, currentColor);
+    border-radius: 3px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.85em;
+}
+
+.name {
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+table.grid {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.grid th,
+table.grid td {
+    padding: 0.3em 0.6em;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+    text-align: left;
+    vertical-align: top;
+}
+
+table.grid th {
+    color: var(--vscode-descriptionForeground);
+    font-weight: 600;
+}
+
+table.grid .numeric {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* The rows of the supply list are the way in to one item's suppliers. */
+table.selectable tbody tr {
+    cursor: pointer;
+}
+
+table.selectable tbody tr:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+table.selectable tbody tr:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.back {
+    margin-bottom: 0.6em;
+    padding: 0.2em 0.5em;
+    border: none;
+    background: transparent;
+    color: var(--vscode-textLink-foreground);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+
+.properties {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 2px 12px;
+    margin: 0.6em 0;
+}
+
+.properties dt {
+    color: var(--vscode-descriptionForeground);
+}
+
+.properties dd {
+    margin: 0;
+}
+
+/* One supplier's offer for one item. */
+.option {
+    margin: 0.6em 0;
+    padding: 0.6em 0.8em;
+    border: 1px solid var(--vscode-panel-border, transparent);
+    border-radius: 4px;
+}
+
+.option-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1em;
+}
+
+.option .price {
+    font-size: 1.1em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/*
+ * The instructions: the same document `pc render -t html` writes, shown the way
+ * it shows it - one page at a time, with arrows to flip through them.
+ */
+
+.document {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.document-pages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 1rem;
+}
+
+.document .page {
+    display: none;
+    max-width: 48rem;
+    /* A column, and as tall as the pane, for the same reason the printed page is
+       one: a block's share of the page ('flex-basis' on an image row) means
+       nothing without it, and the footer belongs at the bottom rather than under
+       the last paragraph. */
+    flex-direction: column;
+    min-height: 100%;
+    margin: 0 auto;
+}
+
+.document .page.current {
+    display: flex;
+}
+
+.document h1 {
+    margin: 0 0 0.6em 0;
+    font-size: 1.6rem;
+}
+
+.document h2 {
+    margin: 1em 0 0.4em 0;
+    font-size: 1.25rem;
+}
+
+.document h3 {
+    margin: 1em 0 0.4em 0;
+    font-size: 1.05rem;
+}
+
+.document p {
+    line-height: 1.5;
+    /* The model carries newlines inside a paragraph; the paginated formats turn
+       each into a break, and so does this. */
+    white-space: pre-line;
+}
+
+.document table {
+    width: 100%;
+    margin: 0.5em 0 1em 0;
+    border-collapse: collapse;
+}
+
+.document th,
+.document td {
+    padding: 0.25em 0.5em;
+    border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.document .images {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    margin: 0.8em 0;
+}
+
+.document .images figure {
+    margin: 0;
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+}
+
+.document .images img {
+    max-width: 100%;
+    max-height: 50vh;
+    height: auto;
+}
+
+.document figcaption {
+    margin-top: 0.4em;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.85em;
+}
+
+.document ul.links {
+    line-height: 1.8;
+}
+
+.document .footer {
+    margin-top: auto;
+    padding-top: 2em;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.8em;
+    text-align: center;
+}
+
+.document-bar {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.3rem;
+    border-top: 1px solid var(--vscode-panel-border, transparent);
+}
+
+.document-bar .counter {
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.85em;
+}
+
+.nav {
+    border: none;
+    background: transparent;
+    color: var(--vscode-foreground);
+    font-family: inherit;
+    font-size: 1.4rem;
+    line-height: 1;
+    padding: 0 0.6rem;
+    cursor: pointer;
+}
+
+.nav[disabled] {
+    opacity: 0.3;
+    cursor: default;
+}
+
+a {
+    color: var(--vscode-textLink-foreground);
 }

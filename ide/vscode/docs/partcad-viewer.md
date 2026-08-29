@@ -1,6 +1,26 @@
 # PartCAD Viewer
 
-How a shape gets from a `partcad` process onto the screen.
+The panel is a strip of tabs over one object, not a canvas:
+
+| Tab | Shown for | Where it comes from |
+| --- | --- | --- |
+| **3D** | everything | the viewer protocol, from whichever `partcad` asked for the shape to be shown |
+| **Bill of Materials** | assemblies | the daemon's `bom` (what `pc bom` prints) |
+| **Instructions** | assemblies | the daemon's `assembly.guide` (the book `pc render -t html\|pdf` writes) |
+| **Supply** | everything | the daemon's `supply.quote` (the cart `pc supply quote` fills) |
+
+The 3D view is always the first: "show this part" means the geometry. The rest are questions about
+`<package>:<name>` that only the extension host can put to the daemon — the panel's CSP forbids every network
+request, and the daemon is behind a JSON-RPC connection anyway — so the renderer asks (`fetchTab`) and the host
+answers (`tabData`), the first time a tab is looked at. That is also why the show message carries the object's
+**package**: a name on its own cannot spell what to ask about, and a show that does not say (a shape belonging
+to no package, a `partcad` older than the field) gets the 3D view alone rather than tabs that could only fail.
+
+Nothing about a bill of materials, an instruction book or a quote is implemented in TypeScript. All three are
+the CLI's own operations, asked for as data rather than as a file, so what the panel shows and what `pc` prints
+cannot drift apart.
+
+## How a shape gets onto the screen
 
 ```text
 partcad (any process)                       ide/vscode (extension host)     webview
@@ -52,8 +72,15 @@ the protocol has no authentication.
 | `src/partcad_ide_client/client.py` | Python client |
 | `src/viewer/protocol.ts` | The same wire format, in TypeScript |
 | `src/viewer/PartcadViewerServer.ts` | The listening socket |
-| `src/viewer/PartcadViewer.ts` | The "PartCAD Viewer" webview panel |
-| `src/webview/viewer.ts` | The three.js renderer inside the panel |
+| `src/viewer/PartcadViewer.ts` | The "PartCAD Viewer" webview panel, and the tab fetches |
+| `src/webview/viewer.ts` | The panel shell inside the webview: tabs, routing |
+| `src/webview/messages.ts` | The `postMessage` contract between the two, and the daemon payloads |
+| `src/webview/scene.ts` | The three.js renderer behind the 3D tab |
+| `src/webview/bom.ts` | The Bill of Materials tab |
+| `src/webview/document.ts` | The Instructions tab: `partcad/document.py`'s model, drawn |
+| `src/webview/supply.ts` | The Supply tab: the list, and one item's suppliers |
+| `src/partcad/assembly_guide.py` | The instruction book, built once for every format |
+| `src/partcad/document.py` | The renderer-independent document model |
 
 ## Coordinates and units
 
@@ -94,3 +121,31 @@ It departs from `Part.js` in three places, each for a reason:
 Positional lights use `decay: 0`. With three's physical default of 2, irradiance is `intensity/d²`, and a 10 mm
 part in metre units sits ~0.03 from the rig — intensity 1 would arrive as ~1000 and burn the model to a white
 silhouette. `Part.js` never hits this because its OBJ models are in millimetres.
+
+## The tabs beside the 3D view
+
+Each is fetched on first look and cached until the next show, so opening a tab costs one daemon round trip and
+switching back to it costs none. Every request carries the generation of the object it was made for and an
+answer for an older one is dropped: a bill of materials walks the whole assembly tree and a supply quote goes
+out to the network, so a round trip easily outlives a change of selection.
+
+**Bill of Materials** is `Assembly.get_bom_detailed_async()` — the tree flattened and counted, with the store
+data that says what to order — in the columns `pc bom` prints it in.
+
+**Instructions** is the very document `pc render -t html|pdf` writes: built once in
+`partcad/assembly_guide.py` as the renderer-independent model in `partcad/document.py`, handed over by
+`assembly.guide` through `document.to_data(embed_images=True)`, and drawn by `src/webview/document.ts` one page
+at a time. The illustrations are inlined as data URIs rather than pointed at, because they live in a temporary
+directory that is deleted as soon as the document is built — and because the CSP forbids fetching anything
+anyway. An assembly PartCAD cannot write instructions for (not an ASSY file, or not meant to be built) is
+refused with the reason, and the tab shows that.
+
+**Supply** fills a `ProviderCart` exactly as `pc supply quote` does — an assembly becomes the things to order,
+a part is one thing — and asks every supplier of each line item **on its own**. One cart per line item, not one
+per supplier: a cart of the whole assembly comes back as a single price for all of it, which cannot say what
+any one part costs. An assembly therefore opens on the list of things to order and clicking one zooms in on
+where that one can be bought; a part has no list to choose from and opens on the options themselves.
+
+A package that declares no `suppliers:` is the ordinary case, not a failure, so the lookup is skipped for its
+items rather than run and reported: in the IDE `pc_logging.error` is a modal popup, and
+`Context.find_part_suppliers()` raises one per part.

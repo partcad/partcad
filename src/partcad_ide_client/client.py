@@ -186,6 +186,7 @@ def show(
     objects,
     name=None,
     kind=None,
+    package=None,
     keep_camera=False,
     markers=None,
     reply_timeout: float = REPLY_TIMEOUT,
@@ -201,6 +202,13 @@ def show(
     interface ports - as packed '[[tx,ty,tz], [ax,ay,az], angle]' locations. The
     viewer draws axes at each; there is no glTF primitive for "a frame".
 
+    'package' is the package the shown object belongs to. The viewer has more to
+    say about an object than its geometry - what an assembly is made of, how it
+    goes together, where to buy its parts - and it asks the PartCAD daemon for
+    all of that by name; a name with no package to resolve it against is not
+    enough to ask with. Optional, because a shape shown from a script may belong
+    to no package at all.
+
     'keep_camera' asks the viewer to leave the camera where the user put it,
     which is what makes re-showing the same part after an edit not jump.
     """
@@ -215,6 +223,7 @@ def show(
             "id": uuid.uuid4().hex,
             "name": name,
             "kind": kind,
+            "package": package,
             "keepCamera": bool(keep_camera),
             "objects": objects,
             "markers": [protocol.make_marker(marker) for marker in (markers or [])],

@@ -123,7 +123,7 @@ def no_ide(monkeypatch):
 def test_show_sends_objects_and_returns_the_ack(ide):
     obj = protocol.make_object(b"glTF-payload", name="//pkg:part", label="part")
 
-    ack = client.show([obj], name="//pkg:part", kind="part", keep_camera=True)
+    ack = client.show([obj], name="//pkg:part", kind="part", package="//pkg", keep_camera=True)
 
     assert ack["type"] == protocol.MSG_ACK
     assert ack["ok"] is True
@@ -132,8 +132,21 @@ def test_show_sends_objects_and_returns_the_ack(ide):
     assert message["type"] == protocol.MSG_SHOW
     assert message["name"] == "//pkg:part"
     assert message["kind"] == "part"
+    # What the viewer's other tabs are about: they ask the daemon about
+    # '<package>:<name>', which a name on its own cannot spell.
+    assert message[protocol.KEY_PACKAGE] == "//pkg"
     assert message["keepCamera"] is True
     assert protocol.decode_gltf(message["objects"][0][protocol.KEY_GLTF]) == b"glTF-payload"
+
+
+def test_show_without_a_package_says_so_rather_than_omitting_it(ide):
+    """A shape belonging to no package still has geometry to show"""
+    client.show([protocol.make_object(b"glTF-payload")], name="widget")
+
+    (message,) = ide.received
+    # Present and null, not absent: the viewer reads it to decide which tabs to
+    # offer, and "the sender did not say" is the answer it needs.
+    assert message[protocol.KEY_PACKAGE] is None
 
 
 def test_show_rejects_objects_without_geometry(ide):

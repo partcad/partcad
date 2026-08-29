@@ -3,383 +3,213 @@
 //
 // Licensed under Apache License, Version 2.0.
 //
-// The PartCAD Viewer's renderer. Runs inside the webview, not in the extension
-// host, so it has no access to 'vscode' or to node - the geometry arrives over
-// postMessage as base64 binary glTF and is parsed straight out of memory. There
-// is deliberately no network request anywhere in this file; the panel's CSP
-// forbids one.
+// The PartCAD Viewer panel, inside the webview.
 //
-// The presentation follows 'react-partcad-prerendered' (see its
-// 'src/components/Part.js'), which is the viewer PartCAD already ships on the
-// web, so that a part looks the same in the IDE as it does on partcad.org:
+// Geometry is only the first of what the panel has to say about what is on
+// screen. An assembly also has a bill of materials and a set of assembly
+// instructions, and anything that can be bought has suppliers and prices, so the
+// panel is a strip of tabs over one object rather than a canvas:
 //
-//   * an auto-rotating orbit camera, framed on the model;
-//   * drei's <Stage> lighting - an environment map plus an ambient/spot/point
-//     trio scaled from the model's size - with contact shadows underneath;
-//   * the hemisphere and point lights Part.js adds on top of Stage;
-//   * MeshPhongMaterial;
-//   * a loading overlay showing the model size and progress.
+//     3D  |  Bill of Materials  |  Instructions  |  Supply
 //
-// Two deliberate departures from Part.js, both forced by the webview: React and
-// react-three-fiber are not used (a lot of bundle for one canvas), and the
-// environment is three's procedural RoomEnvironment rather than drei's
-// environment="city" preset, which is an HDRI fetched from a CDN that the CSP
-// blocks and that would not work offline.
+// Which of them exist depends on what is being shown - see 'tabsFor()' - and the
+// 3D view is always the first, because that is what "show this part" means.
 //
-// A third difference is not a choice. Part.js loads OBJ, a format with no scene
-// graph and no units, so it has to rotate the model by -90 degrees about X
-// itself to stand PartCAD's Z-up geometry up in a Y-up scene. glTF has both:
-// build123d's export_gltf writes that same rotation into the node transform and
-// converts millimetres to glTF's metres, so the model arrives correctly oriented
-// and rotating it again here would lay it on its side. Only the port markers,
-// which come from PartCAD as raw millimetre Z-up locations rather than through
-// the exporter, still need the conversion applied - see MM_TO_M/Z_UP_TO_Y_UP.
-
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-
-interface ShowObject {
-    name: string;
-    label: string | null;
-    gltf: string;
-    size: number;
-}
-
-interface ShowMarker {
-    name?: string | null;
-    location: [[number, number, number], [number, number, number], number];
-}
-
-interface ShowMessage {
-    type: 'show';
-    name: string | null;
-    kind: string | null;
-    keepCamera: boolean;
-    objects: ShowObject[];
-    markers: ShowMarker[];
-}
-
-interface ClearMessage {
-    type: 'clear';
-}
-
-declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
-
-const vscode = acquireVsCodeApi();
-
-// Part.js: <Stage intensity={0.5}> and MeshPhongMaterial with no arguments.
-const STAGE_INTENSITY = 0.5;
-// Part.js: <OrbitControls autoRotate={true} autoRotateSpeed={5.0} />
-const AUTO_ROTATE_SPEED = 5.0;
-// The two conversions build123d's export_gltf bakes into the geometry it writes,
-// and which therefore have to be applied by hand to anything that does not go
-// through it - the port markers. glTF's unit is the metre and its up axis is Y;
-// PartCAD's locations are in millimetres about a Z-up frame.
-const MM_TO_M = 0.001;
-const Z_UP_TO_Y_UP = -Math.PI / 2;
-
-const container = document.getElementById('viewer') as HTMLDivElement;
-const overlay = document.getElementById('overlay') as HTMLDivElement;
-const label = document.getElementById('label') as HTMLDivElement;
-
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-// The panel's background is the editor's, so the canvas stays transparent and
-// the viewer follows the user's colour theme rather than fighting it.
-renderer.setClearColor(0x000000, 0);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-container.appendChild(renderer.domElement);
-
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 10000);
-camera.position.set(0, 0, 5);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.autoRotate = true;
-controls.autoRotateSpeed = AUTO_ROTATE_SPEED;
-
-// An environment map stands in for drei's <Environment preset="...">: image
-// based lighting is what makes a machined surface read as one. RoomEnvironment
-// is generated in code, so it costs no asset and works offline.
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = STAGE_INTENSITY;
-
-// <Stage>'s light rig, plus the two lights Part.js adds itself. Positions are
-// set from the model's size in frame(), because a rig scaled for a 10 mm part
-// lights a 2 m assembly not at all.
+// This file is the shell: it owns the tab strip and the panes, routes what the
+// extension host posts in, and asks for the contents of a tab the first time it
+// is looked at. Each pane draws itself ('scene.ts', 'bom.ts', 'document.ts',
+// 'supply.ts'); none of them talks to the host directly.
 //
-// Every positional light here has decay 0 - no inverse-square falloff - which
-// is what makes these intensities mean the same thing whatever size the model
-// is. With three's default physical decay of 2, irradiance is intensity/d², and
-// glTF is in metres: a 10 mm part sits ~0.03 units from the rig, so intensity 1
-// would arrive as ~1000 and burn the model to a white silhouette. (Part.js gets
-// away with the default because its OBJ models are in millimetres, where the
-// same lights land three orders of magnitude weaker and contribute almost
-// nothing.) Turning decay off is the scale-invariant reading of that rig.
-const ambientLight = new THREE.AmbientLight(0xffffff, STAGE_INTENSITY / 3);
-const spotLight = new THREE.SpotLight(0xffffff, 2 * STAGE_INTENSITY, 0, Math.PI / 4, 1, 0);
-spotLight.castShadow = true;
-spotLight.shadow.mapSize.set(1024, 1024);
-const stagePointLight = new THREE.PointLight(0xffffff, STAGE_INTENSITY, 0, 0);
-// Part.js: <hemisphereLight color="#40c040" intensity={0.7} groundColor="black" />
-const hemisphereLight = new THREE.HemisphereLight(0x40c040, 0x000000, 0.7);
-// Part.js: <pointLight intensity={1} />, at the scene origin.
-const partPointLight = new THREE.PointLight(0xffffff, 1, 0, 0);
-scene.add(ambientLight, spotLight, stagePointLight, hemisphereLight, partPointLight);
+// Everything but the 3D view is answered by the PartCAD daemon, which this
+// renderer cannot reach: the panel's CSP forbids every network request, and the
+// daemon is behind the extension host's JSON-RPC connection anyway. So a pane's
+// contents are asked for ('fetchTab') and delivered ('tabData'), never fetched.
+//
 
-// <Stage shadows="contact">: a shadow catcher under the model. ShadowMaterial
-// keeps the plane itself invisible, so only the shadow lands on the background.
-const shadowPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1, 1),
-    new THREE.ShadowMaterial({ opacity: 0.35, transparent: true }),
-);
-shadowPlane.rotation.x = -Math.PI / 2;
-shadowPlane.receiveShadow = true;
-scene.add(shadowPlane);
+import { renderBom } from './bom';
+import { DocumentView } from './document';
+import { el, empty, placeholder } from './dom';
+import { fetchTab, ready, reportError } from './host';
+import { BomData, GuideData, HostMessage, ShowMessage, SupplyData, TabId } from './messages';
+import { clearGeometry, resizeCanvas, showGeometry } from './scene';
+import { SupplyView } from './supply';
+import { TabSpec, Tabs } from './tabs';
 
-/** Everything the current show put on the stage; replaced wholesale by the next. */
-let content: THREE.Group | undefined;
+const panes: Record<TabId, HTMLElement> = {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    '3d': byId('pane-3d'),
+    bom: byId('pane-bom'),
+    instructions: byId('pane-instructions'),
+    supply: byId('pane-supply'),
+};
+
+const supplyView = new SupplyView(panes.supply);
+const tabs = new Tabs(byId('tabs'), onTabSelected);
+
+/** What the panel is showing, or undefined when it is empty. */
+let shown: ShowMessage | undefined;
 
 /**
- * Which show is the current one.
+ * Which object the panes belong to.
  *
- * Parsing a glTF is asynchronous, so a second show (or a clear) can arrive and
- * finish while the first is still decoding its objects. Without this, the older
- * call would go on to install its now-stale model over the newer one - visible
- * as the viewer showing the previously selected part after a quick change of
- * selection, or after a save that re-renders. Every show takes a generation on
- * entry and abandons its work as soon as it is no longer the newest.
+ * A daemon round trip outlives a change of selection easily - a bill of
+ * materials walks the whole assembly tree, a supply quote goes out to the
+ * network - so every request carries the generation it was made for and an
+ * answer for an older one is dropped rather than painted over what is now on
+ * screen. The same reason 'scene.ts' keeps a generation of its own.
  */
 let generation = 0;
 
-const loader = new GLTFLoader();
+/** The tabs already asked for, for the current generation. */
+const requested = new Set<TabId>();
 
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes.buffer;
-}
+/** The instructions, once they have arrived: it owns the paging. */
+let instructions: DocumentView | undefined;
 
-function parseGltf(buffer: ArrayBuffer): Promise<THREE.Group> {
-    return new Promise((resolve, reject) => {
-        // parse(), not load(): the bytes are already here, and load() would mean
-        // a URL and therefore a network request the CSP forbids.
-        loader.parse(buffer, '', (gltf) => resolve(gltf.scene), reject);
-    });
-}
-
-function disposeTree(root: THREE.Object3D): void {
-    root.traverse((node) => {
-        const mesh = node as THREE.Mesh;
-        if (mesh.geometry) {
-            mesh.geometry.dispose();
-        }
-        const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
-        if (Array.isArray(material)) {
-            material.forEach((m) => m.dispose());
-        } else if (material) {
-            material.dispose();
-        }
-    });
-}
-
-function clear(): void {
-    // Takes a generation too, so a show still decoding cannot undo the clear.
-    generation += 1;
-    if (content !== undefined) {
-        scene.remove(content);
-        disposeTree(content);
-        content = undefined;
-    }
-    label.textContent = '';
-    overlay.textContent = 'Nothing to display yet.';
-    overlay.style.display = '';
+function byId(id: string): HTMLElement {
+    return document.getElementById(id) as HTMLElement;
 }
 
 /**
- * Center the model at the origin and frame the camera on it, as
- * <Stage adjustCamera> does, and scale the light rig and shadow catcher to it.
+ * Empty a pane and take back the class its last contents put on it.
+ *
+ * Each pane is styled by whatever drew into it - 'sheet' for a table, 'document'
+ * for the paged instructions - so a pane reused for something else has to start
+ * from the bare '.pane' it was written as.
  */
-function frame(group: THREE.Group, keepCamera: boolean): void {
-    const box = new THREE.Box3().setFromObject(group);
-    if (box.isEmpty()) {
+function reset(tab: TabId): HTMLElement {
+    const pane = panes[tab];
+    empty(pane);
+    pane.className = 'pane';
+    return pane;
+}
+
+/**
+ * The tabs an object gets.
+ *
+ * Everything but the 3D view is a question put to the daemon about
+ * '<package>:<name>', so an object whose package the sender did not tell us
+ * about - a shape shown from a script, or a 'partcad' older than the field -
+ * gets the 3D view alone rather than tabs that could only fail.
+ */
+function tabsFor(message: ShowMessage): TabSpec[] {
+    const specs: TabSpec[] = [{ id: '3d', label: '3D', pane: panes['3d'] }];
+    if (!message.package) {
+        return specs;
+    }
+    if (message.kind === 'assembly') {
+        specs.push({ id: 'bom', label: 'Bill of Materials', pane: panes.bom });
+        specs.push({ id: 'instructions', label: 'Instructions', pane: panes.instructions });
+    }
+    specs.push({ id: 'supply', label: 'Supply', pane: panes.supply });
+    return specs;
+}
+
+function show(message: ShowMessage): void {
+    shown = message;
+    generation += 1;
+    requested.clear();
+    instructions = undefined;
+    for (const tab of ['bom', 'instructions', 'supply'] as TabId[]) {
+        reset(tab);
+    }
+
+    void showGeometry(message);
+    // Rebuilt on every show, which also re-asks for whatever tab the user is on:
+    // the object may be the same one after an edit, and its answers may not be.
+    tabs.setTabs(tabsFor(message));
+}
+
+function clear(): void {
+    shown = undefined;
+    generation += 1;
+    requested.clear();
+    instructions = undefined;
+    clearGeometry();
+    for (const tab of ['bom', 'instructions', 'supply'] as TabId[]) {
+        reset(tab);
+    }
+    tabs.setTabs([{ id: '3d', label: '3D', pane: panes['3d'] }]);
+}
+
+function onTabSelected(tab: TabId): void {
+    if (tab === '3d') {
+        // The canvas had no size at all while the tab was hidden, and a WebGL
+        // renderer does not find out on its own that it has one again.
+        resizeCanvas();
+        return;
+    }
+    if (requested.has(tab)) {
+        return;
+    }
+    requested.add(tab);
+    reset(tab).appendChild(placeholder('Asking PartCAD…'));
+    fetchTab({ type: 'fetchTab', tab, token: generation });
+}
+
+function onTabData(tab: TabId, token: number, data: unknown, error: string | undefined): void {
+    if (token !== generation) {
+        // For an object that is no longer on screen.
+        return;
+    }
+    const pane = reset(tab);
+
+    if (error !== undefined) {
+        // Not every refusal is a failure: asking for the instructions of an
+        // assembly that has no assembly steps is answered with why, and that is
+        // what the reader needs to see.
+        pane.appendChild(el('p', 'error', error));
+        return;
+    }
+    if (data === null || data === undefined) {
+        pane.appendChild(placeholder('PartCAD had nothing to say about this.'));
         return;
     }
 
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const radius = Math.max(size.x, size.y, size.z) / 2 || 1;
-
-    // Stage centers the model rather than moving the camera to it, so that
-    // orbiting turns the model about itself.
-    group.position.sub(center);
-
-    shadowPlane.position.y = -size.y / 2;
-    shadowPlane.scale.setScalar(radius * 8);
-
-    spotLight.position.set(radius * 2, radius * 4, radius * 2);
-    spotLight.shadow.camera.near = radius * 0.1;
-    spotLight.shadow.camera.far = radius * 20;
-    stagePointLight.position.set(-radius * 2, radius, -radius * 2);
-    // Part.js leaves this one at the scene origin, i.e. inside the model.
-    partPointLight.position.set(0, 0, 0);
-
-    camera.near = radius / 100;
-    camera.far = radius * 100;
-    camera.updateProjectionMatrix();
-
-    if (!keepCamera) {
-        // Far enough back that the bounding sphere fits the vertical field of
-        // view, with the same slight elevation Stage's default camera has.
-        const distance = (radius * 1.6) / Math.tan((camera.fov * Math.PI) / 360);
-        camera.position.set(distance * 0.6, distance * 0.5, distance * 0.8);
-        controls.target.set(0, 0, 0);
-    }
-    controls.update();
-}
-
-function addMarkers(parent: THREE.Group, markers: ShowMarker[], size: number): void {
-    if (markers.length === 0) {
-        return;
-    }
-
-    // The markers are raw PartCAD locations: millimetres, Z-up. Putting them
-    // under a group that carries the same conversion export_gltf applies to the
-    // geometry is what lines the two up, and keeps each marker's own transform
-    // expressed in the frame PartCAD stated it in.
-    const frame = new THREE.Group();
-    frame.rotation.set(Z_UP_TO_Y_UP, 0, 0);
-    frame.scale.setScalar(MM_TO_M);
-    parent.add(frame);
-
-    for (const marker of markers) {
-        const [translation, axis, angle] = marker.location;
-        // A port is a coordinate frame and has no geometry of its own, so it is
-        // drawn as a triad - the same thing showing a bare location used to give.
-        const axes = new THREE.AxesHelper(size);
-        axes.position.set(translation[0], translation[1], translation[2]);
-        const direction = new THREE.Vector3(axis[0], axis[1], axis[2]);
-        if (direction.lengthSq() > 0) {
-            axes.quaternion.setFromAxisAngle(direction.normalize(), (angle * Math.PI) / 180);
-        }
-        axes.name = marker.name ?? 'port';
-        frame.add(axes);
+    try {
+        render(tab, pane, data);
+    } catch (e: unknown) {
+        empty(pane);
+        pane.appendChild(el('p', 'error', `Failed to display this: ${e}`));
+        reportError(`failed to render the '${tab}' tab: ${e}`);
     }
 }
 
-async function show(message: ShowMessage): Promise<void> {
-    const mine = (generation += 1);
-    const superseded = () => generation !== mine;
-
-    const totalSize = message.objects.reduce((sum, object) => sum + object.size, 0);
-    overlay.style.display = '';
-    overlay.textContent = `Model size: ${(totalSize / 1048576.0).toFixed(2)}MB\n0% loaded`;
-
-    const group = new THREE.Group();
-
-    let loaded = 0;
-    for (const object of message.objects) {
-        let parsed: THREE.Group;
-        try {
-            parsed = await parseGltf(base64ToArrayBuffer(object.gltf));
-        } catch (error: any) {
-            vscode.postMessage({ type: 'error', message: `failed to parse '${object.name}': ${error}` });
-            continue;
-        }
-
-        if (superseded()) {
-            // Something newer arrived while this object was decoding. Drop what
-            // has been built so far rather than paint it over the newer state.
-            disposeTree(group);
+function render(tab: TabId, pane: HTMLElement, data: unknown): void {
+    switch (tab) {
+        case 'bom':
+            renderBom(pane, data as BomData);
             return;
-        }
-
-        parsed.traverse((node) => {
-            const mesh = node as THREE.Mesh;
-            if (!mesh.isMesh) {
-                return;
-            }
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            // Part.js replaces whatever material the file carries with a plain
-            // MeshPhongMaterial, which is what gives every PartCAD model the
-            // same look regardless of how it was authored.
-            const previous = mesh.material as THREE.Material | THREE.Material[];
-            mesh.material = new THREE.MeshPhongMaterial();
-            if (Array.isArray(previous)) {
-                previous.forEach((m) => m.dispose());
-            } else {
-                previous?.dispose();
-            }
-        });
-        parsed.name = object.name;
-        group.add(parsed);
-
-        loaded += object.size;
-        const percent = totalSize > 0 ? Math.round((loaded / totalSize) * 100) : 100;
-        overlay.textContent = `Model size: ${(totalSize / 1048576.0).toFixed(2)}MB\n${percent}% loaded`;
+        case 'instructions':
+            instructions = new DocumentView(pane, (data as GuideData).document);
+            return;
+        case 'supply':
+            supplyView.render(data as SupplyData, shown?.kind ?? null);
+            return;
+        default:
+            return;
     }
-
-    // The triads are built inside the millimetre frame, so their length is in
-    // millimetres too: a quarter of the model's largest dimension, or 10 mm when
-    // there is no geometry to measure against (an interface with bare ports).
-    const geometryBox = new THREE.Box3().setFromObject(group);
-    const largest = geometryBox.isEmpty() ? 0 : Math.max(...geometryBox.getSize(new THREE.Vector3()).toArray());
-    addMarkers(group, message.markers ?? [], largest > 0 ? largest / 4 / MM_TO_M : 10);
-
-    if (superseded()) {
-        disposeTree(group);
-        return;
-    }
-
-    if (content !== undefined) {
-        scene.remove(content);
-        disposeTree(content);
-    }
-    content = group;
-    scene.add(group);
-    frame(group, message.keepCamera);
-
-    label.textContent = message.name ?? '';
-    overlay.style.display = 'none';
 }
 
-function resize(): void {
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-    if (width === 0 || height === 0) {
-        return;
-    }
-    renderer.setSize(width, height, false);
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-}
-
-function animate(): void {
-    controls.update();
-    renderer.render(scene, camera);
-}
-
-window.addEventListener('resize', resize);
-window.addEventListener('message', (event: MessageEvent<ShowMessage | ClearMessage>) => {
+window.addEventListener('message', (event: MessageEvent<HostMessage>) => {
     const message = event.data;
     if (message.type === 'clear') {
         clear();
     } else if (message.type === 'show') {
-        void show(message);
+        show(message);
+    } else if (message.type === 'tabData') {
+        onTabData(message.tab, message.token, message.data, message.error);
     }
 });
 
-resize();
-renderer.setAnimationLoop(animate);
-vscode.postMessage({ type: 'ready' });
+window.addEventListener('keydown', (event: KeyboardEvent) => {
+    // The instructions are pages to flip through, and the arrow keys are how a
+    // reader flips them. Only while that tab is the one on screen: the same keys
+    // orbit the camera on the 3D one.
+    if (tabs.current === 'instructions' && instructions?.handleKey(event.key)) {
+        event.preventDefault();
+    }
+});
+
+tabs.setTabs([{ id: '3d', label: '3D', pane: panes['3d'] }]);
+ready();

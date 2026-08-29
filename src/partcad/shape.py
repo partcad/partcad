@@ -745,7 +745,9 @@ class Shape(ShapeConfiguration):
                 # draw a triad at.
                 markers = self.with_ports.get_markers() if self.with_ports is not None else []
 
-                await viewer.show(ctx, components, name=self.name, kind=self.kind, markers=markers)
+                await viewer.show(
+                    ctx, components, name=self.name, kind=self.kind, package=self.project_name, markers=markers
+                )
 
     def show(self, ctx=None):
         asyncio.run(self.show_async(ctx))

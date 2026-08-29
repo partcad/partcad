@@ -140,6 +140,34 @@ def test_document_to_data_is_plain():
     assert blocks[2]["images"] == [{"path": "/tmp/widget.svg", "caption": "widget", "alt": ""}]
 
 
+def test_document_to_data_embeds_images_on_request():
+    """A reader with no file system in reach is handed the pictures themselves
+
+    The IDE's viewer is a webview on the other side of a JSON-RPC connection, and
+    the illustrations of an instruction book live in a temporary directory that
+    is deleted as soon as the document has been built.
+    """
+    with tempfile.TemporaryDirectory() as directory:
+        path = os.path.join(directory, "widget.svg")
+        with open(path, "w") as f:
+            f.write('<svg xmlns="http://www.w3.org/2000/svg"/>')
+
+        document = pc_document.Document(
+            pages=[
+                pc_document.Page(
+                    blocks=[pc_document.ImageRow([pc_document.Image(file=path, caption="widget", alt="widget")])]
+                )
+            ]
+        )
+        data = pc_document.to_data(document, embed_images=True)
+
+    (image,) = data["pages"][0]["blocks"][0]["images"]
+    assert image["src"].startswith("data:image/svg+xml;base64,")
+    assert image["caption"] == "widget"
+    # The file it was made from is gone by now, and the document still has it.
+    assert "path" not in image
+
+
 def test_pdf_table_row_never_outgrows_the_table():
     """A row wider than the table's columns stays on the page
 
@@ -369,6 +397,48 @@ def test_render_assembly_guide_html():
     # Every illustration is carried by the document itself.
     assert "data:image/svg+xml;base64," in html
     assert 'src="/' not in html
+
+
+def test_assembly_guide_data_carries_the_same_document_with_its_pictures():
+    """The instruction book as data, for the IDE's viewer
+
+    The same document 'render_assembly_guide()' writes to a file, so what the
+    viewer's Instructions tab shows and what the printed book says cannot drift
+    apart -- only the pictures travel differently, inline rather than as files
+    that are deleted the moment the document is built.
+    """
+    ctx = pc.init("examples")
+    prj = ctx.get_project(CONNECT_PACKAGE)
+    assert prj is not None
+
+    data = prj.assembly_guide_data(CONNECT_ASSEMBLY, ignore_manufacturability=True)
+
+    titles = [page["title"] for page in data["pages"]]
+    assert titles[0] == CONNECT_ASSEMBLY
+    assert titles[1] == "Bill of Materials"
+    assert titles[-1] == "Links"
+    assert "%s: step 1" % CONNECT_ASSEMBLY in titles
+
+    images = [
+        image
+        for page in data["pages"]
+        for block in page["blocks"]
+        if block["type"] == "images"
+        for image in block["images"]
+    ]
+    assert images
+    # Carried, not pointed at: nothing here is a path into a directory that no
+    # longer exists.
+    assert all(image["src"].startswith("data:") for image in images)
+    assert all("path" not in image for image in images)
+
+
+def test_assembly_guide_data_of_a_missing_assembly_is_none():
+    ctx = pc.init("examples")
+    prj = ctx.get_project(CONNECT_PACKAGE)
+    assert prj is not None
+
+    assert prj.assembly_guide_data("no-such-assembly") is None
 
 
 @pytest.mark.slow

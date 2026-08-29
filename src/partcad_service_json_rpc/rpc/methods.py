@@ -38,6 +38,8 @@ _OPERATIONS = {
     "list.providers": operations.list_providers,
     "list.mates": operations.list_mates,
     "bom": operations.bom,
+    "assembly.guide": operations.assembly_guide,
+    "supply.quote": operations.supply_quote,
     "search.objects": operations.search_objects,
     "render.objects": operations.render_objects,
     "convert.object": operations.convert_object,

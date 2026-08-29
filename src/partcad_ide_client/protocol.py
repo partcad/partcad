@@ -68,6 +68,12 @@ MSG_ACK = "ack"
 KEY_GLTF = "gltf"
 KEY_NAME = "name"
 KEY_LABEL = "label"
+# On a show message, beside 'name' and 'kind': the package the shown object
+# belongs to. The viewer shows more than geometry - what an assembly is made of,
+# how it goes together, where to buy its parts - and asks the PartCAD daemon for
+# all of it by '<package>:<name>', which a name on its own cannot spell. Absent
+# or None for a shape that belongs to no package.
+KEY_PACKAGE = "package"
 # On a marker: the packed [[tx,ty,tz], [ax,ay,az], angle] frame to draw axes at.
 KEY_LOCATION = "location"
 

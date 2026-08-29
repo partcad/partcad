@@ -317,11 +317,18 @@ def _html_block(block: Block) -> str:
     raise TypeError("Unsupported document block: %s" % type(block).__name__)
 
 
-def to_data(document: Document) -> dict:
+def to_data(document: Document, embed_images: bool = False) -> dict:
     """The document as plain data, for a renderer that runs somewhere else.
 
     The PDF is composed in a sandboxed runtime (that is where the libraries that
     can draw one are), and only plain data crosses that boundary.
+
+    With 'embed_images', every picture carries its bytes as a data URI instead of
+    the path it was rendered to, the way the HTML document embeds them. That is
+    for a renderer that cannot open the file at all: the IDE's viewer is a
+    webview on the other side of a JSON-RPC connection, and the illustrations of
+    an instruction book live in a temporary directory that is deleted as soon as
+    the document has been built.
     """
     return {
         "title": document.title,
@@ -330,14 +337,24 @@ def to_data(document: Document) -> dict:
         "pages": [
             {
                 "title": page.title,
-                "blocks": [_block_to_data(block) for block in page.blocks],
+                "blocks": [_block_to_data(block, embed_images) for block in page.blocks],
             }
             for page in document.pages
         ],
     }
 
 
-def _block_to_data(block: Block) -> dict:
+def _image_to_data(image: Image, embed: bool) -> Optional[dict]:
+    """One picture as plain data, addressed the way the reader can reach it."""
+    if not embed:
+        return {"path": image.file, "caption": image.caption, "alt": image.alt} if image.file else None
+    source = _image_source(image)
+    if source is None:
+        return None
+    return {"src": source, "caption": image.caption, "alt": image.alt}
+
+
+def _block_to_data(block: Block, embed_images: bool = False) -> dict:
     if isinstance(block, Heading):
         return {"type": "heading", "text": block.text, "level": block.level, "url": block.url}
     if isinstance(block, Paragraph):
@@ -345,12 +362,11 @@ def _block_to_data(block: Block) -> dict:
     if isinstance(block, Properties):
         return {"type": "properties", "items": [list(item) for item in block.items]}
     if isinstance(block, ImageRow):
+        images = [_image_to_data(image, embed_images) for image in block.images]
         return {
             "type": "images",
             "height": block.height,
-            "images": [
-                {"path": image.file, "caption": image.caption, "alt": image.alt} for image in block.images if image.file
-            ],
+            "images": [image for image in images if image is not None],
         }
     if isinstance(block, Table):
         return {

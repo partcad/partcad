@@ -17,6 +17,10 @@ def test_registry_maps_cli_shaped_names_to_operations():
     assert registry["package.load"] is operations.package_load
     assert registry["list.all"] is operations.list_all
     assert registry["info"] is operations.info
+    # What the PartCAD Viewer's tabs beside the 3D one are filled from.
+    assert registry["bom"] is operations.bom
+    assert registry["assembly.guide"] is operations.assembly_guide
+    assert registry["supply.quote"] is operations.supply_quote
 
 
 def test_every_registry_entry_is_callable():

@@ -41,13 +41,27 @@ Linux, for one CPython. Do not reintroduce a second backend; extend this one.
 
 ## The PartCAD Viewer
 
-End-to-end walkthrough, with the data flow diagram: [docs/partcad-viewer.md](./docs/partcad-viewer.md).
+End-to-end walkthrough, with the data flow diagram and what each tab is:
+[docs/partcad-viewer.md](./docs/partcad-viewer.md).
 
 `src/viewer/` is the extension-host half of the viewer: a TCP server on a constant loopback port
 (`PartcadViewerServer`) that `partcad` processes connect to, and the webview panel that displays what they
-send (`PartcadViewer`). `src/webview/viewer.ts` is the renderer that runs *inside* that webview.
+send (`PartcadViewer`). `src/webview/` is what runs *inside* that webview: `viewer.ts` is the shell,
+`scene.ts` the three.js renderer, and one module per tab beside it.
 
-Three things about it are load-bearing:
+**The panel is a strip of tabs over one object, not a canvas.** 3D first, then the bill of materials and the
+assembly instructions for an assembly, then supply information for anything that can be bought. Only the 3D
+view comes over the viewer protocol; every other tab is a question about `<package>:<name>` that the renderer
+cannot ask itself -- the CSP forbids network access and the daemon is behind the host's JSON-RPC connection --
+so it asks the host (`fetchTab`) and the host answers (`tabData`), on first look. Which is why the show
+message carries the object's **package**: without it the panel offers the 3D view alone.
+
+None of those three is implemented here. `bom`, `assembly.guide` and `supply.quote` are the CLI's own operations
+(`pc bom`, the book `pc render -t html` writes, the cart `pc supply quote` fills), asked for as data rather
+than as a file -- the same rule as everywhere else in this extension: extend the one backend, do not
+reimplement it in TypeScript.
+
+Four things about it are load-bearing:
 
 - **Two webpack bundles, two tsconfigs.** The extension host is CommonJS; the webview is a browser context and
   three.js ships its addons as ES modules only, so `src/webview` compiles under `tsconfig.webview.json` (and is
@@ -58,6 +72,10 @@ Three things about it are load-bearing:
 - **The wire format is shared with Python.** `src/viewer/protocol.ts` mirrors
   `src/partcad_ide_client/protocol.py`, which is the normative description. Changing one
   means changing both. `src/test/suite/viewerProtocol.test.ts` covers this side.
+- **Nothing is escaped on its way into a pane.** What the tabs display is text out of a package's
+  configuration -- a description, a part name, a supplier's answer -- so every pane builds its DOM node by
+  node through `src/webview/dom.ts` rather than assigning `innerHTML`. `textContent` cannot be talked into
+  being markup; a template literal can.
 
 Geometry reaches the viewer already tessellated: `partcad` renders to binary glTF in a sandbox and sends it
 compressed, so the extension never needs a CAD library. It used to hand live OCP objects to the third-party
