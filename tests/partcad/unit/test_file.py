@@ -155,13 +155,13 @@ ASSY_SHA256 = hashlib.sha256(ASSY_SOURCE.encode()).hexdigest()
 
 
 def test_file_url_hash_accepts_the_file_it_pins(tmp_path):
-    """'hash' pins the bytes a URL serves, for any object, not only software."""
+    """'fileHash' pins the bytes a URL serves, for any object, not only software."""
     served = tmp_path / "served"
     served.mkdir()
     (served / "downloaded.assy").write_text(ASSY_SOURCE)
 
     with _serve(served) as url:
-        pkg = _package_with_downloaded_assembly(tmp_path, url, "    hash: sha256:%s\n" % ASSY_SHA256)
+        pkg = _package_with_downloaded_assembly(tmp_path, url, "    fileHash: sha256:%s\n" % ASSY_SHA256)
         assembly = pc.Context(str(pkg))._get_assembly(":downloaded")
         assert sum(asyncio.run(assembly.get_bom()).values()) == 1
         assert os.path.exists(assembly.path)
@@ -174,7 +174,7 @@ def test_file_url_hash_may_omit_the_algorithm(tmp_path):
     (served / "downloaded.assy").write_text(ASSY_SOURCE)
 
     with _serve(served) as url:
-        pkg = _package_with_downloaded_assembly(tmp_path, url, "    hash: %s\n" % ASSY_SHA256)
+        pkg = _package_with_downloaded_assembly(tmp_path, url, "    fileHash: %s\n" % ASSY_SHA256)
         assembly = pc.Context(str(pkg))._get_assembly(":downloaded")
         assert sum(asyncio.run(assembly.get_bom()).values()) == 1
 
@@ -187,12 +187,12 @@ def test_file_url_hash_refuses_what_the_server_actually_served(tmp_path):
 
     with _serve(served) as url:
         # Pinned to the one-cube file above; the server has a two-cube one.
-        pkg = _package_with_downloaded_assembly(tmp_path, url, "    hash: sha256:%s\n" % ASSY_SHA256)
+        pkg = _package_with_downloaded_assembly(tmp_path, url, "    fileHash: sha256:%s\n" % ASSY_SHA256)
         assembly = pc.Context(str(pkg))._get_assembly(":downloaded")
 
         with pytest.raises(Exception) as excinfo:
             asyncio.run(assembly.get_bom())
-        assert "does not match the declared 'hash'" in str(excinfo.value)
+        assert "does not match the declared 'fileHash'" in str(excinfo.value)
 
         # And the bytes that were refused are gone: the download is skipped when
         # the file is already there, so keeping them would mean every later run
@@ -201,7 +201,7 @@ def test_file_url_hash_refuses_what_the_server_actually_served(tmp_path):
 
 
 def test_file_url_without_a_hash_is_downloaded_unchecked(tmp_path):
-    """'hash' is optional. A package that does not pin its download still works."""
+    """'fileHash' is optional here. Only what is to be made has to be pinned."""
     served = tmp_path / "served"
     served.mkdir()
     (served / "downloaded.assy").write_text(ASSY_SOURCE)

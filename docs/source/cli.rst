@@ -127,9 +127,11 @@ Object commands
   it is procured from -- its parts, and the sub-assemblies that are ordered assembled -- has to be obtainable
   on its own.
 
-  It also requires the :ref:`software` an object declares to hold up: every reference has to resolve, and the
-  file it resolves to has to be obtainable and be the one that was meant. A board nobody can flash is not a
-  board anybody can make.
+  It also requires what is to be made to be *reproducible*: an object read from a file the package fetches
+  rather than carries has to pin it with ``fileHash``, or nothing says which bytes it was made from and the
+  next run may quietly make something else (see :ref:`reproducibility`). The same is asked of the
+  :ref:`software` an object declares -- every reference has to resolve, and the file it resolves to has to be
+  obtainable and be the one that was meant. A board nobody can flash is not a board anybody can make.
 
 ``pc inspect``
   View a part, assembly, or scene visually. Use ``-V`` for a verbal (text) description instead of a visual

@@ -75,17 +75,23 @@ isort --check src/partcad tests/partcad
   publishes again. `lint/software.py` is what keeps that answerable: a file the package does not carry has to
   declare a `hash`, and `CamTest.software_failure()` enforces the same rule where it bites -- a board nobody
   can flash is not a board anybody can make, so a part fails the manufacturing test when its software does not
-  resolve, cannot be fetched, or does not match its hash.
+  resolve, cannot be fetched, or does not match its `fileHash`.
 
-  `hash` itself is **not** a software feature and does not live here: it pins the *bytes* of any file a
-  package fetches rather than carries, so it belongs to `file_factory.py`, which refuses a download that does
-  not hash to it (and deletes what it refused, or the next run would skip the download and reuse it). Parts,
-  sketches and assemblies may pin their `fileFrom` downloads the same way; software is only where PartCAD
-  insists on it. Keep it clear of the hashes PartCAD computes for itself -- `CacheHash`, a git revision --
-  which identify something PartCAD built or fetched, where this states in advance which bytes were asked for.
+  `fileHash` itself is **not** a software feature and does not live here: it sits beside `fileFrom`/`fileUrl`
+  and pins the *bytes* of any file a package fetches rather than carries, so it belongs to `file_factory.py`,
+  which refuses a download that does not hash to it (and deletes what it refused, or the next run would skip
+  the download and reuse it). It is optional in the declaration and required for reproducibility:
+  `unreproducible_reason()` is the one statement of that rule, and `CamTest.reproducibility_failure()` is what
+  makes a fetched-but-unpinned part or assembly fail the manufacturing test -- manufacturing is repetition,
+  and a file that may be a different file tomorrow cannot be made again. `lint/software.py` answers the same
+  rule earlier, on the declaration, and only for software. A file a repository plugin serves is exempt for
+  now (`PACKAGE_FILE_SOURCES`): a `fileHash` given for one is verified, it is simply not required yet.
+
+  Keep all of it clear of the hashes PartCAD computes for itself -- `CacheHash`, a git revision -- which
+  identify something PartCAD built or fetched, where this states in advance which bytes were asked for.
 
   That test reads more than the shape's hash covers, which is what `Test.cache_key_suffix()` exists for: a
-  corrected hash has to move the cache key, or `pc test` answers the new declaration with the old one's
+  corrected `fileHash` has to move the cache key, or `pc test` answers the new declaration with the old one's
   failure.
 
 - **Built-in packages** (`./src/partcad/builtin`): PartCAD ships two packages inside itself, reachable from

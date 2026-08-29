@@ -17,6 +17,8 @@ from ..part_config import PartConfiguration
 from ..assembly import Assembly
 from ..assembly_config import AssemblyConfiguration
 from ..plugin_provider_data_cart import ProviderCartItem, resolve_cart_object
+from ..file_factory import declared_hash, unreproducible_reason
+from ..shape_config import final_config as _final_config
 from .. import software as pc_software
 
 
@@ -35,34 +37,77 @@ class CamTest(Test):
             self.debug(shape, "Not supposed to be manufacturable")
             return self.TEST_PASSED
 
+        # Before anything specific to a part or an assembly, because it is
+        # neither: it is about the file the object is *read from*, and both are
+        # read from one.
+        failure = self.reproducibility_failure(shape)
+        if failure:
+            return self.failed(shape, failure)
+
         if is_part:
             return await self.test_part(tests_to_run, ctx, shape, test_ctx)
         else:
             return await self.test_assembly(tests_to_run, ctx, shape, test_ctx)
 
+    def reproducibility_failure(self, shape) -> str | None:
+        """Why this object cannot be made again, or None if it can.
+
+        Manufacturing is repetition: the run after this one has to produce the
+        same thing. An object read from a file the package fetches rather than
+        carries cannot promise that unless it says which bytes it expects -
+        'fileHash' next to 'fileUrl' - because the URL is free to serve
+        something else tomorrow, and then the part is quietly a different part.
+        So the rule is not "the file is available", which it may well be, but
+        "the file is identified".
+
+        'fileHash' stays optional in the declaration (see
+        'file_factory.unreproducible_reason', which is this rule and is shared
+        with the 'Software' lint check). This is the one place it is insisted
+        on, and only of what is actually going to be made: a package may pull a
+        vendor's model from a URL and never claim it is manufacturable.
+
+        Read from the *final* configuration, so an alias or an enrich is judged
+        on the declaration it resolves to rather than on its own, which says
+        nothing about where any file comes from.
+        """
+        failure = unreproducible_reason(_final_config(shape))
+        if failure is None:
+            return None
+        return "It is not reproducible: %s" % failure
+
     def cache_key_suffix(self, ctx, shape) -> str:
-        """The software this object ships with, folded into the cache key.
+        """What this test reads beyond the shape itself, folded into the cache key.
 
         A shape's cache key covers what the shape is built from, and the
         software it ships with is not that: a part's key does not move when its
-        'software:' does. Without this, correcting a mistyped 'hash' - or
+        'software:' does. Without this, correcting a mistyped 'fileHash' - or
         pointing the part at a different image altogether - would be answered
         with the cached failure of the declaration that was replaced, which is
         the one thing a test must never do.
 
-        Note what is being folded in: the references, and the *declared* hash of
-        each - the text a package wrote down, which is what
-        'software_failure()' reads. Not the content of the files, and not any
-        hash PartCAD computed: re-hashing every image to decide whether a cached
-        answer may be used would cost exactly what the cache exists to save.
+        The object's own 'fileHash' is in here for the same reason, and so is
+        where its file comes from: 'reproducibility_failure()' reads both, and
+        neither moves the shape's cache key either.
+
+        Note what is being folded in: the *declared* text a package wrote down,
+        which is what those two methods read. Not the content of the files, and
+        not any hash PartCAD computed - re-hashing every image to decide whether
+        a cached answer may be used would cost exactly what the cache exists to
+        save.
         """
-        parts = []
-        for ref in pc_software.resolved_software_refs(shape.project_name, shape.get_final_config()):
+        config = _final_config(shape)
+        declared = []
+        if config.get("fileFrom") is not None or declared_hash(config) is not None:
+            declared.append("file:%s@%s" % (config.get("fileFrom"), declared_hash(config)))
+        for ref in pc_software.resolved_software_refs(shape.project_name, config):
             _project, software = pc_software.lookup(ctx, ref, quiet=True)
-            parts.append("%s@%s" % (ref, "" if software is None else software.declared_hash()))
-        if not parts:
+            declared.append("%s@%s" % (ref, "" if software is None else software.declared_hash()))
+        if not declared:
+            # Nothing beyond the shape itself was read, so nothing is added:
+            # an object that declares neither keys exactly as it always has,
+            # and the cache entries it already has stay valid.
             return ""
-        return ".software=" + hashlib.sha256(";".join(parts).encode()).hexdigest()[:16]
+        return ".declared=" + hashlib.sha256(";".join(declared).encode()).hexdigest()[:16]
 
     async def software_failure(self, ctx, shape) -> str | None:
         """Why the software this object ships with is unusable, or None.
@@ -81,7 +126,7 @@ class CamTest(Test):
         hashes wrong should learn both in one run.
         """
         failures = []
-        for ref in pc_software.resolved_software_refs(shape.project_name, shape.get_final_config()):
+        for ref in pc_software.resolved_software_refs(shape.project_name, _final_config(shape)):
             _project, software = pc_software.lookup(ctx, ref)
             if software is None:
                 failures.append("the software '%s' is not found" % ref)

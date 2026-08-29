@@ -1,0 +1,49 @@
+desc: Manufacturable parts, one of them read from a file nothing identifies
+manufacturable: true
+
+parts:
+  # Carried by this package: its revision says which file this is.
+  carried:
+    type: cadquery
+    path: board.py
+    desc: A board whose script is in this package
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+
+  # Fetched, and pinned: the bytes are stated in advance.
+  fetched-pinned:
+    type: cadquery
+    path: fetched.py
+    fileFrom: url
+    fileUrl: https://example.com/vendor/board.py
+    fileHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    desc: A board whose script is fetched, and pinned
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+
+  # Fetched, and pinned by nothing: the URL may serve something else tomorrow,
+  # and then this is quietly a different part.
+  fetched-unpinned:
+    type: cadquery
+    path: unpinned.py
+    fileFrom: url
+    fileUrl: https://example.com/vendor/board.py
+    desc: A board whose script is fetched, and identified by nothing
+    manufacturing:
+      method: subtractive
+    parameters:
+      tolerance: 0.1
+
+assemblies:
+  fetched-unpinned-assembly:
+    type: assy
+    path: fetched.assy
+    fileFrom: url
+    fileUrl: https://example.com/vendor/device.assy
+    desc: An assembly whose ASSY file is fetched, and identified by nothing
+    manufacturing:
+      method: assy

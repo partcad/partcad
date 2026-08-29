@@ -14,24 +14,29 @@ specific about *which* file:
   * The package pulls it in ('fileFrom'). Nothing about the package identifies
     the file then: the URL serves whatever it serves at the moment it is
     fetched, and the same package revision can produce a different image
-    tomorrow. Only a hash closes that, so one is required.
+    tomorrow. Only a 'fileHash' closes that, so one is required.
 
-That is the whole rule: **in the repository, or hashed**. A firmware image is
+That is the whole rule: **in the repository, or pinned**. A firmware image is
 the one part of a product that can be swapped without leaving a trace in the
 geometry, so a digital thread that cannot say which one went in is not a thread
 at all.
+
+The rule itself is 'file_factory.unreproducible_reason()', which the
+manufacturing test applies to the file a part is built from as well. What this
+check adds is *when* it is answered: at lint time, on the declaration, before
+anything has been built or fetched.
 """
 
 import os
 
 from ..context import Context
 from ..project import Project
-from ..software import is_package_file
+from ..file_factory import unreproducible_reason
 from .lint import Linting, LintingReport, Severity
 
 
 class SoftwareLinting(Linting):
-    """The 'in the repository, or hashed' check, per package."""
+    """The 'in the repository, or pinned' check, per package."""
 
     def get_targets(self, ctx: Context, package: Project) -> list[str]:
         # The package's own configuration is what declares its software, so it
@@ -52,19 +57,16 @@ class SoftwareLinting(Linting):
 
         for name in names:
             config = package.get_software_config(name) or {}
-            if is_package_file(config):
-                # Content of the package: its revision says which file it is,
-                # and there is nothing left to pin. Shared with
-                # 'Software.is_local_file()' so that the check and the object
-                # cannot come to different answers about the same declaration.
-                continue
-            if str(config.get("hash") or "").strip():
+            # The same rule the manufacturing test applies, read from the same
+            # place, so that the check and the test cannot come to different
+            # answers about one declaration.
+            if unreproducible_reason(config) is None:
                 continue
             lint_result.add(
                 Severity.FAILED,
-                "software '%s' is pulled in with 'fileFrom: %s' and declares no 'hash', "
+                "software '%s' is fetched with 'fileFrom: %s' and declares no 'fileHash', "
                 "so nothing says which file it is. Either commit the file to this package "
-                "and point 'path' at it, or add 'hash: <algorithm>:<digest>'." % (name, config.get("fileFrom")),
+                "and point 'path' at it, or add 'fileHash: <algorithm>:<digest>'." % (name, config.get("fileFrom")),
             )
 
         return lint_result

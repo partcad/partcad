@@ -197,7 +197,7 @@ def test_a_fetched_file_is_checked_against_its_hash(tmp_path, monkeypatch):
         "  blob:\n"
         "    fileFrom: url\n"
         "    fileUrl: https://example.com/vendor/blob.bin\n"
-        "    hash: sha256:%s\n" % digest
+        "    fileHash: sha256:%s\n" % digest
     )
     software = pc.Context(str(tmp_path)).get_project("//").get_software("blob")
 
@@ -222,12 +222,12 @@ def test_a_fetch_that_serves_something_else_fails(tmp_path, monkeypatch):
         "  blob:\n"
         "    fileFrom: url\n"
         "    fileUrl: https://example.com/vendor/blob.bin\n"
-        "    hash: sha256:%s\n" % ("0" * 64)
+        "    fileHash: sha256:%s\n" % ("0" * 64)
     )
     software = pc.Context(str(tmp_path)).get_project("//").get_software("blob")
 
     failure = asyncio.run(software.verify_async())
-    assert failure is not None and "does not match the declared 'hash'" in failure
+    assert failure is not None and "does not match the declared 'fileHash'" in failure
     # The bytes that were refused are not left behind: the next run skips the
     # download when the file is already there, and would reuse them forever.
     assert not (tmp_path / "blob").exists()
@@ -246,7 +246,7 @@ def test_a_fetch_that_fails_says_so(tmp_path, monkeypatch):
         "  blob:\n"
         "    fileFrom: url\n"
         "    fileUrl: https://example.com/vendor/blob.bin\n"
-        "    hash: sha256:%s\n" % ("0" * 64)
+        "    fileHash: sha256:%s\n" % ("0" * 64)
     )
     software = pc.Context(str(tmp_path)).get_project("//").get_software("blob")
 
@@ -330,14 +330,14 @@ def test_a_software_line_item_names_its_package_and_revision(ctx):
     # This fixture is read out of this repository, so there is a commit to name.
     assert entry["revision"] and len(entry["revision"]) == 40
     assert entry["version"] == "1.0.0"
-    assert entry["hash"] is None
+    assert entry["fileHash"] is None
     # The same package, so the same revision, whichever object asked.
     assert bom[SERVICE_TOOL]["revision"] == entry["revision"]
 
 
 def test_a_software_line_item_carries_what_pins_the_file(ctx):
     bom = _detailed(ctx)
-    assert bom[VENDOR_BLOB]["hash"].startswith("sha256:")
+    assert bom[VENDOR_BLOB]["fileHash"].startswith("sha256:")
     # And the shape of a line item is the same whatever kind it is.
     for entry in bom.values():
         assert set(("kind", "count", "desc", "vendor", "sku", "count_per_sku")) <= set(entry)
@@ -405,7 +405,7 @@ def test_the_lint_check_wants_a_hash_for_what_is_not_in_the_repository(ctx, root
     severity, message = messages[0]
     assert severity == Severity.FAILED
     assert "unpinned-blob" in message
-    assert "hash" in message
+    assert "fileHash" in message
     # The pinned one and the ones this package carries are not complained about.
     for name in ("vendor-blob", "firmware", "service-tool", "bootloader"):
         assert name not in message

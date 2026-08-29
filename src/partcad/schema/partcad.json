@@ -75,7 +75,7 @@
       ]
     },
     "file-hash": {
-      "description": "The hash of the file this declaration points at, as '<algorithm>:<digest>' -- md5, sha1, sha256 or sha512 (a bare digest is accepted too, and the algorithm is read from its length). It pins the *bytes*: a file fetched with 'fileFrom' is whatever the remote serves at the moment it is fetched, and the download is refused unless it hashes to this. Nothing to do with the hashes PartCAD computes for itself, such as a shape's cache key.",
+      "description": "The hash of the file this declaration points at, as '<algorithm>:<digest>' -- md5, sha1, sha256 or sha512 (a bare digest is accepted too, and the algorithm is read from its length). It pins the *bytes*: a file fetched with 'fileFrom' is whatever the remote serves at the moment it is fetched, and the download is refused unless it hashes to this. Optional, but an object fetched without one is not reproducible and so fails the manufacturing test. Nothing to do with the hashes PartCAD computes for itself, such as a shape's cache key.",
       "type": "string",
       "minLength": 1
     },
@@ -581,7 +581,7 @@
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
-                "hash": { "$ref": "#/definitions/file-hash" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
                 "source": { "type": "string", "minLength": 1 },
                 "package": { "type": "string", "minLength": 1 },
                 "desc": { "type": "string", "maxLength": 1000 },
@@ -728,7 +728,7 @@
                 "parameters": { "$ref": "#/definitions/shape-parameter" },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
-                "hash": { "$ref": "#/definitions/file-hash" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
                 "vendor": { "type": "string", "minLength": 1 },
                 "sku": { "type": "string", "minLength": 1 },
                 "count_per_sku": { "type": "integer", "minimum": 1, "default": 1 },
@@ -757,7 +757,7 @@
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
-                "hash": { "$ref": "#/definitions/file-hash" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
                 "precision": {
                   "type": "integer",
                   "minimum": 0,
@@ -837,7 +837,7 @@
             "path": { "type": "string", "minLength": 1 },
             "fileFrom": { "type": "string", "enum": ["url"] },
             "fileUrl": { "$ref": "#/definitions/url" },
-            "hash": { "$ref": "#/definitions/file-hash" },
+            "fileHash": { "$ref": "#/definitions/file-hash" },
             "tolerance": { "type": "number", "minimum": 0 },
             "parameters": { "$ref": "#/definitions/shape-parameter"},
             "render": { "$ref": "#/definitions/render" },
@@ -1118,9 +1118,9 @@
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
-                "hash": {
+                "fileHash": {
                   "allOf": [{ "$ref": "#/definitions/file-hash" }],
-                  "description": "As elsewhere, and required here for a file this package does not carry itself: a firmware image nobody can identify makes the bill of materials that names it worthless. See the 'Software' lint check."
+                  "description": "As elsewhere. Software is the one place a missing one is reported before anything is built: see the 'Software' lint check."
                 },
                 "unless": { "$ref": "#/definitions/unless" }
               },

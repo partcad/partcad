@@ -86,7 +86,7 @@ def test_a_part_that_ships_nothing_is_asked_nothing(ctx):
 def test_a_file_that_does_not_match_its_hash_fails(ctx):
     failure = _software_failure(ctx, "board-mismatched")
     assert failure is not None
-    assert "does not match its 'hash'" in failure
+    assert "does not match its 'fileHash'" in failure
     assert "//:mismatched" in failure
 
 
@@ -94,7 +94,7 @@ def test_a_fetched_file_with_no_hash_fails(ctx):
     """The rule the 'Software' lint check states, enforced where it bites."""
     failure = _software_failure(ctx, "board-unpinned")
     assert failure is not None
-    assert "declares no 'hash'" in failure
+    assert "declares no 'fileHash'" in failure
     # Nothing was fetched: the declaration is unusable before the network is.
     assert "example.com" not in failure
 
@@ -165,7 +165,8 @@ def test_the_cache_key_follows_the_software_declaration(ctx):
     board = ctx.get_part("//:board")
     mismatched = ctx.get_part("//:board-mismatched")
 
-    # A part that ships nothing keys exactly as it always did.
+    # A part that ships nothing and fetches nothing keys exactly as it always
+    # did, so the cache entries it already has stay valid.
     assert test.cache_key_suffix(ctx, plain) == ""
 
     # Two parts pointing at two different declarations key differently...
@@ -173,8 +174,8 @@ def test_the_cache_key_follows_the_software_declaration(ctx):
 
     # ...and so do the same part before and after its hash is corrected.
     before = test.cache_key_suffix(ctx, mismatched)
-    ctx.get_project("//").get_software("mismatched").config["hash"] = (
-        ctx.get_project("//").get_software("firmware").config["hash"]
+    ctx.get_project("//").get_software("mismatched").config["fileHash"] = (
+        ctx.get_project("//").get_software("firmware").config["fileHash"]
     )
     assert test.cache_key_suffix(ctx, mismatched) != before
 
@@ -182,7 +183,7 @@ def test_the_cache_key_follows_the_software_declaration(ctx):
 #
 # Reading a declared hash
 #
-# 'hash' pins the bytes of a file, and nothing else -- it is read and checked by
+# 'fileHash' pins the bytes of a file, and nothing else -- it is read and checked by
 # 'FileFactory', which is why these live beside the software tests rather than
 # inside them: a part, a sketch and an assembly declare it the same way.
 
@@ -218,6 +219,6 @@ def test_an_unusable_hash_says_what_is_wrong_with_it(declared, complaint):
 
 
 def test_an_unusable_hash_fails_the_part(ctx):
-    ctx.get_project("//").get_software("firmware").config["hash"] = "not-a-hash"
+    ctx.get_project("//").get_software("firmware").config["fileHash"] = "not-a-hash"
     failure = _software_failure(ctx, "board")
     assert failure is not None and "unusable" in failure

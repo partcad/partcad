@@ -29,7 +29,7 @@ import typing
 from . import logging as pc_logging
 from . import telemetry
 from .file_factory import declared_hash as declared_file_hash
-from .file_factory import file_hash_failure
+from .file_factory import file_hash_failure, is_package_file, unreproducible_reason
 from .utils import normalize_resource_path, resolve_resource_path
 
 # The kind of a software object. 'raw' is a file PartCAD hands over as it is:
@@ -45,27 +45,6 @@ from .utils import normalize_resource_path, resolve_resource_path
 # new type belongs beside this one, with the same 'path'/'fileFrom' plumbing
 # underneath it, and never as a second way of pointing at a file.
 DEFAULT_TYPE = "raw"
-
-# The 'fileFrom' sources that are the package itself rather than somewhere else.
-# A package with no source tree serves its own files through its repository
-# plugin - PartCAD writes 'fileFrom: plugin' onto every file-backed object of
-# such a package itself (see 'ProjectExternalRepository._augment') - so a file
-# behind it is package content exactly as a 'path' is, and the package's
-# revision identifies it. Treating it as a foreign file would demand a hash of
-# every object of every repository-backed package, for a file the package is
-# already the authority on.
-PACKAGE_FILE_SOURCES = frozenset({"plugin"})
-
-
-def is_package_file(config) -> bool:
-    """Whether the package itself is where this software's file comes from.
-
-    Reads a declaration rather than a 'Software', because the same question is
-    asked of a configuration nothing has been built from yet - that is what the
-    'Software' lint check has in front of it.
-    """
-    file_from = config.get("fileFrom") if isinstance(config, dict) else None
-    return file_from is None or file_from in PACKAGE_FILE_SOURCES
 
 
 @telemetry.instrument()
@@ -119,13 +98,11 @@ class Software:
         return bool(self.path) and os.path.exists(self.path)
 
     def declared_hash(self) -> typing.Optional[str]:
-        """The hash the declaration pins the file to, or None.
+        """The 'fileHash' the declaration pins the file to, or None.
 
-        Nothing software-specific: 'hash' pins the bytes of any file a package
-        fetches rather than carries, and 'FileFactory' is what checks them as
-        they arrive. What *is* specific to software is that a fetched file must
-        have one - see 'lint/software.py' - because a firmware image nobody can
-        identify makes the bill of materials that names it worthless.
+        Nothing software-specific: 'fileHash' pins the bytes of any file a
+        package fetches rather than carries, and 'FileFactory' is what checks
+        them as they arrive.
         """
         return declared_file_hash(self.config)
 
@@ -147,26 +124,25 @@ class Software:
         there and really the one that was meant. Three things have to hold, and
         they are the same three wherever the question is asked:
 
-          * The package is specific about *which* file. Either it carries the
-            file, so the package's revision identifies it, or it pins what it
-            fetches with a 'hash'. This is the rule the 'Software' lint check
-            enforces on the declaration; here it is enforced on the object,
-            because a part that cannot say which firmware it runs cannot be
-            manufactured (see 'test/cam.py').
+          * The file is reproducible: the package carries it, so its revision
+            identifies it, or it pins what it fetches with a 'fileHash' (see
+            'file_factory.unreproducible_reason'). That is the same rule the
+            manufacturing test applies to the file a *part* is built from - a
+            firmware image nobody can identify makes the bill of materials that
+            names it worthless, exactly as an unpinned STEP file makes the part
+            it draws unrepeatable.
           * The file can actually be had - it is in the package, or fetching it
             works.
-          * It matches the hash, when one is declared.
+          * It matches the 'fileHash', when one is declared.
 
         A reason, not a boolean, so that whoever asked can say what is wrong
         rather than only that something is.
         """
         declared = self.declared_hash()
 
-        if not self.is_local_file() and declared is None:
-            return (
-                "it is pulled in with 'fileFrom: %s' and declares no 'hash', so nothing says which file it is"
-                % self.config.get("fileFrom")
-            )
+        failure = unreproducible_reason(self.config)
+        if failure is not None:
+            return failure
 
         if not self.is_fetched:
             if self.prepare_async is None:
@@ -182,11 +158,11 @@ class Software:
 
         # Checked again even though the download checks it, because most of the
         # time there is no download: the file was fetched by an earlier run, or
-        # the package carries it. A 'hash' corrected since then, and a file
+        # the package carries it. A 'fileHash' corrected since then, and a file
         # edited since then, are both only visible here.
         failure = await file_hash_failure(self.path, declared)
         if failure is not None:
-            return "the file does not match its 'hash': %s" % failure
+            return "the file does not match its 'fileHash': %s" % failure
         return None
 
     def verify(self) -> typing.Optional[str]:

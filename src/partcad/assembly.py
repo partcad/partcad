@@ -15,6 +15,7 @@ from .geom import Location
 from .plugin_provider_data_cart import ProviderCartItem
 from .revision import package_revision
 from .shape import Shape
+from .shape_config import final_config as _final_config
 from . import software as pc_software
 from .sync_threads import threadpool_manager
 from . import logging as pc_logging
@@ -542,24 +543,6 @@ def _software_of(ctx, item):
     return found
 
 
-def _final_config(item):
-    """The configuration an object's software is declared in.
-
-    'get_final_config()' rather than 'config', so that an alias and an enrich
-    report what the object they point at ships with. The references in it were
-    resolved against the package that authored them, which is what makes reading
-    them here from another package correct (see 'software.RESOLVED_KEY').
-    """
-    get_final_config = getattr(item, "get_final_config", None)
-    if get_final_config is None:
-        return item.config
-    try:
-        return get_final_config()
-    except Exception as e:  # pylint: disable=broad-except
-        pc_logging.debug("Failed to resolve the configuration of %s: %s" % (item.name, e))
-        return item.config
-
-
 def _bom_grouped_add_software(section: dict, ctx, item):
     """Account for the software 'item' ships with in a grouped BoM section."""
     for _ref, project, software in _software_of(ctx, item):
@@ -574,7 +557,7 @@ def _bom_grouped_add_software(section: dict, ctx, item):
                 # which for software is the whole of what identifies it.
                 "revision": package_revision(project),
                 "version": software.config.get("version"),
-                "hash": software.declared_hash(),
+                "fileHash": software.declared_hash(),
             },
         )
         entry["count"] += 1
@@ -628,7 +611,7 @@ def _bom_detailed_add_software(bom: dict, ctx, item):
                 "revision": package_revision(project),
                 "type": software.type,
                 "version": software.config.get("version"),
-                "hash": software.declared_hash(),
+                "fileHash": software.declared_hash(),
             }
         entry["count"] += 1
 

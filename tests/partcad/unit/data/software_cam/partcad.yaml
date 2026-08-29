@@ -7,13 +7,13 @@ software:
   firmware:
     desc: The image the board is flashed with
     path: firmware.bin
-    hash: sha256:3bed2db952367fceb79394840944affb604fe6ba1409f1a7d4033223dd18de46
+    fileHash: sha256:3bed2db952367fceb79394840944affb604fe6ba1409f1a7d4033223dd18de46
 
   # The same file, with a hash that is not its own.
   mismatched:
     desc: A file that is not what its hash says it is
     path: firmware.bin
-    hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    fileHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
 
   # Not in this package, and pinned by nothing.
   unpinned:

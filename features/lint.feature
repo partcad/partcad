@@ -688,7 +688,7 @@ Feature: `pc lint` command
           type: step
           fileFrom: url
           fileUrl: https://example.com/vendor/bolt.step
-          hash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
+          fileHash: sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
       """
     When I run "pc lint"
     Then the command should exit with a status code of "0"
@@ -711,7 +711,7 @@ Feature: `pc lint` command
     Then the command should exit with a status code of "0"
 
   @failure
-  Scenario: Software pulled in from elsewhere has to be pinned by a hash
+  Scenario: Software pulled in from elsewhere has to be pinned by a fileHash
     Given a file named "partcad.yaml" with content:
       """
       desc: A package whose firmware is not in the package
@@ -723,7 +723,7 @@ Feature: `pc lint` command
       """
     When I run "pc lint"
     Then the command should exit with a status code of "1"
-    And STDOUT should contain "software 'firmware' is pulled in with 'fileFrom: url' and declares no 'hash'"
+    And STDOUT should contain "software 'firmware' is fetched with 'fileFrom: url' and declares no 'fileHash'"
 
   @success
   Scenario: Software the package carries needs no hash
@@ -743,7 +743,7 @@ Feature: `pc lint` command
     Then the command should exit with a status code of "0"
 
   @success
-  Scenario: Software pulled in with a hash passes
+  Scenario: Software pulled in with a fileHash passes
     Given a file named "partcad.yaml" with content:
       """
       desc: A package whose firmware is pinned
@@ -752,7 +752,7 @@ Feature: `pc lint` command
           desc: A vendor image, pinned
           fileFrom: url
           fileUrl: https://example.com/vendor/firmware.bin
-          hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+          fileHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
       """
     When I run "pc lint"
     Then the command should exit with a status code of "0"

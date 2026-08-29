@@ -17,7 +17,7 @@ software:
     desc: A vendor image this package does not carry
     fileFrom: url
     fileUrl: https://example.com/vendor/blob.bin
-    hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    fileHash: sha256:0000000000000000000000000000000000000000000000000000000000000000
   # The same, with nothing that says which file it is: what the lint check is
   # there to catch.
   unpinned-blob:
