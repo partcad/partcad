@@ -38,7 +38,6 @@ docs/source/simulation.rst describes the gap and what closing it would take.
 import asyncio
 import hashlib
 import os
-import threading
 
 from . import logging as pc_logging
 from . import sandbox_versions, shape_envelope, telemetry, wrapper
@@ -231,25 +230,25 @@ class AssemblyFactoryUrdf(AssemblyFactoryFile):
     def _read_urdf_for_info(self):
         """Read the URDF just to populate 'urdf_info', reporting rather than raising.
 
-        On a thread of its own, for the reason 'Project._materialize_derived_part'
-        gives: this is reached from synchronous callers and from coroutines
-        alike, and 'asyncio.run' raises in a thread that already has a loop.
+        Driven with 'asyncio.run()' on the calling thread. Its one caller,
+        'info()', is synchronous and is reached synchronously -- the daemon's
+        'info' and 'info.object' operations are ordinary handlers -- so there is
+        no loop here to collide with.
+
+        It used to run on a 'threading.Thread' of its own, citing
+        'Project._materialize_derived_part()' for the reason. That reason was
+        real there and was never established here, and the thread cost what one
+        always costs: it is invisible to 'threads_max' and to the traced
+        executors of 'ThreadPoolManager', and 'join()' blocks whatever thread is
+        waiting on it.
+
         A file that cannot be read is a problem for building the assembly, not
         for describing it, so it is logged and the rest of the info still shows.
         """
-        failure = []
-
-        def read():
-            try:
-                self._report(asyncio.run(self._read_async()))
-            except Exception as e:  # pylint: disable=broad-except
-                failure.append(e)
-
-        thread = threading.Thread(target=read, daemon=True)
-        thread.start()
-        thread.join()
-        if failure:
-            pc_logging.error("%s: could not read the URDF: %s" % (self.name, failure[0]))
+        try:
+            self._report(asyncio.run(self._read_async()))
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.error("%s: could not read the URDF: %s" % (self.name, e))
 
     def _report(self, result):
         """Record and log the parser's complaints and what could not be kept."""
