@@ -89,6 +89,22 @@ PARAMETER_PASSING_TYPES = ("alias", "enrich")
 # 'get_part' builds it on demand (see '_materialize_derived_part').
 PART_PRODUCING_ASSEMBLY_TYPES = ("step", "urdf")
 
+# How often a caller waiting on somebody else's derived-part build looks again.
+# It waits for a CAD build, so the granularity costs nothing next to what it is
+# waiting for; what matters is that the wait yields to the loop instead of
+# occupying a thread.
+_DERIVED_PART_POLL_SECONDS = 0.01
+
+
+def _has_running_loop() -> bool:
+    """Whether this thread is already running an event loop."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
 # What '_skipped_by' returns for a declaration whose 'unless' PartCAD could not
 # read. Not a clause - nothing excluded it - but the object is dropped all the
 # same, and recorded as broken so that the reason reaches the user.
@@ -278,6 +294,10 @@ class Project(project_config.Configuration):
         # '_materialize_derived_part'), and the lock that keeps two threads from
         # building the same one.
         self._derived_parts_attempted: set[str] = set()
+        # owner -> the event its builder sets when the build is over. A second
+        # caller for the same owner waits on this instead of looking the part
+        # up while 'children' is still being filled.
+        self._derived_parts_building: dict[str, threading.Event] = {}
         self._derived_parts_lock = threading.Lock()
 
         if (
@@ -962,13 +982,8 @@ class Project(project_config.Configuration):
             func_params,
         )
 
-    def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
-        # A part an assembly materializes (a STEP component or a URDF link) is
-        # not declared in 'partcad.yaml' - the assembly's own source file is
-        # what declares it - so it only exists once that assembly has been
-        # built. Build it now, rather than report a part that the package can
-        # perfectly well produce as missing.
-        self._materialize_derived_part(part_name)
+    def _part_object(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+        """The declared part, once anything that had to be built for it has been."""
         return self.get_object(
             "part",
             Project.PartLock,
@@ -981,6 +996,37 @@ class Project(project_config.Configuration):
             func_params,
             quiet=quiet,
         )
+
+    def get_part(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+        """The synchronous accessor, for callers that own no event loop.
+
+        A coroutine must use 'get_part_async()'. Materializing a derived part
+        means instantiating an assembly, which is asynchronous, and the only way
+        a synchronous caller can drive that is 'asyncio.run()' -- which raises on
+        a thread that already has a running loop. Reaching that state used to be
+        answered by building on a thread of its own; see
+        '_materialize_derived_part_async()' for why that was worse than the
+        error.
+        """
+        # A part an assembly materializes (a STEP component or a URDF link) is
+        # not declared in 'partcad.yaml' - the assembly's own source file is
+        # what declares it - so it only exists once that assembly has been
+        # built. Build it now, rather than report a part that the package can
+        # perfectly well produce as missing.
+        self._materialize_derived_part(part_name)
+        return self._part_object(part_name, func_params, quiet=quiet)
+
+    async def get_part_async(self, part_name, func_params=None, quiet=False) -> Optional[Part]:
+        """'get_part()' for callers that are already running on a loop.
+
+        The pair exists the way 'test()'/'test_async()' and
+        'render_assembly_readme()'/'render_assembly_readme_async()' do: the
+        coroutine is the implementation and the synchronous one wraps it. What is
+        specific here is that the wrapping is around the *materialization* only -
+        looking a declared part up costs nothing and needs no loop.
+        """
+        await self._materialize_derived_part_async(part_name)
+        return self._part_object(part_name, func_params, quiet=quiet)
 
     def _derived_part_owner(self, part_name: str) -> Optional[str]:
         """The assembly whose parts are named '<this assembly>/<something>'.
@@ -1003,51 +1049,161 @@ class Project(project_config.Configuration):
                 return prefix
         return None
 
+    def _derived_part_to_build(self, part_name: str):
+        """The assembly to build so that 'part_name' exists, or None.
+
+        Cheap and synchronous: dictionary lookups and one set. Both accessors
+        take this before deciding whether they need a loop at all, so the common
+        path -- a part that is declared, or a name no assembly produces -- never
+        pays for one.
+
+        Returns (owner, assembly), or None when there is nothing to build.
+        Claims nothing: '_claim_derived_part()' does that, and only once the
+        caller is known to be allowed to build at all.
+
+        Whoever ends up not building has to wait for whoever does, rather than
+        go and look the part up. 'children' is filled as the factory works, so a
+        lookup made in the middle of a build finds a part that is not registered
+        yet and reports it missing; 'AssemblyFactoryAssy.handle_node()' raises
+        on that.
+
+        This is not hypothetical. 'handle_node_list()' dispatches its links with
+        'asyncio.create_task', so two derived parts of one assembly really are
+        resolved at the same time. It could not bite while materialization ran
+        on a thread the caller then joined -- that blocked the caller's loop, so
+        no second task of it could run at all -- which is precisely the blocking
+        this change removes.
+        """
+        if part_name in self.parts:
+            return None
+        owner = self._derived_part_owner(part_name)
+        if owner is None:
+            return None
+        owning_assembly = self.get_assembly(owner)
+        if owning_assembly is None or owning_assembly.children:
+            return None
+        return owner, owning_assembly
+
+    def _claim_derived_part(self, owner: str):
+        """Claim the right to build 'owner', or find out who already has it.
+
+        Returns (done, claimed): the event to set when the build is over and
+        whether this caller is the one that must build, or None when the owner
+        has been attempted already and nothing is running.
+
+        Kept apart from '_derived_part_to_build()' because a caller has to be
+        *allowed* to build before it claims anything. A synchronous accessor
+        reached from a coroutine is not, and a claim it could not honour would
+        leave an event nobody ever sets and every later caller polling on it.
+        """
+        with self._derived_parts_lock:
+            building = self._derived_parts_building.get(owner)
+            if building is not None:
+                # Someone else's build. Wait for theirs; do not start another.
+                return building, False
+            if owner in self._derived_parts_attempted:
+                return None
+            self._derived_parts_attempted.add(owner)
+            done = threading.Event()
+            self._derived_parts_building[owner] = done
+            return done, True
+
+    def _finish_derived_part(self, owner: str, done) -> None:
+        """Release whoever is waiting on this owner's build, however it went."""
+        with self._derived_parts_lock:
+            self._derived_parts_building.pop(owner, None)
+        done.set()
+
     def _materialize_derived_part(self, part_name: str) -> None:
         """Build the assembly that would produce 'part_name', if one would.
 
-        A no-op unless the name is unknown *and* names an assembly that produces
-        parts, so the common path costs one dictionary lookup.
-
-        Each owner is attempted once. A build that failed, and a source file
-        with nothing in it (a URDF with no links), both leave 'children' empty,
-        and repeating the attempt on every later lookup would repeat the whole
-        sandboxed import; taking the attempt under a lock also keeps two threads
-        that resolve two children of the same assembly from building it twice.
+        The synchronous half of the pair. It drives the coroutine below with
+        'asyncio.run()' **on the calling thread**, which is what a synchronous
+        caller is entitled to do and what keeps the instantiation on the thread
+        that asked for it.
         """
-        if part_name in self.parts:
+        target = self._derived_part_to_build(part_name)
+        if target is None:
             return
-        owner = self._derived_part_owner(part_name)
-        if owner is None:
+        owner, owning_assembly = target
+        # Asked before anything is claimed and before anything is waited on,
+        # because a coroutine may do neither. Waiting would block the very loop
+        # the builder runs on, and claiming would leave an event nobody sets
+        # once the raise below unwinds -- both of which are worse than the
+        # blocking this change set out to remove.
+        #
+        # Asked before the coroutine is even created, so that a caller on a loop
+        # is told rather than left with an un-awaited coroutine object.
+        #
+        # A coroutine reaching this accessor is a caller that has not been
+        # converted to 'get_part_async()' yet, and saying so is the point. What
+        # used to happen instead was a 'threading.Thread(...).start(); .join()'
+        # to borrow a clean loop, and that was wrong three times over: 'join()'
+        # blocked the caller's event loop for the length of the build; the
+        # thread was invisible to 'threads_max' and to the traced executors of
+        # 'ThreadPoolManager', which is where every other thread in the core
+        # comes from; and moving the work off this thread threw away the
+        # ownership of 'Assembly.lock' that a nested resolution depends on --
+        # an 'RLock' is re-entrant for the thread holding it, so a nested call
+        # used to pass straight through, and from a borrowed thread it blocked
+        # on a lock the waiting thread was holding.
+        if _has_running_loop():
+            raise RuntimeError(
+                "%s: cannot materialize the derived part %s from a coroutine; "
+                "await get_part_async() instead of calling get_part()" % (self.name, part_name)
+            )
+
+        claim = self._claim_derived_part(owner)
+        if claim is None:
             return
-        owning_assembly = self.get_assembly(owner)
-        if owning_assembly is None or owning_assembly.children:
+        done, claimed = claim
+        if not claimed:
+            # Another caller is building this owner. A synchronous caller owns
+            # no event loop, so blocking here blocks nothing but itself.
+            done.wait()
             return
-        with self._derived_parts_lock:
-            if owner in self._derived_parts_attempted:
-                return
-            self._derived_parts_attempted.add(owner)
 
         pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
+        try:
+            asyncio.run(owning_assembly.do_instantiate())
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.error("Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner, part_name, e))
+        finally:
+            self._finish_derived_part(owner, done)
 
-        # On a thread of its own: instantiating an assembly runs 'asyncio.run()',
-        # which raises if the calling thread already has a running event loop -
-        # and this is reached from both synchronous callers and coroutines.
-        failure = []
+    async def _materialize_derived_part_async(self, part_name: str) -> None:
+        """'_materialize_derived_part()' for a caller already on a loop.
 
-        def build():
-            try:
-                asyncio.run(owning_assembly.do_instantiate())
-            except Exception as e:  # pylint: disable=broad-except
-                failure.append(e)
-
-        thread = threading.Thread(target=build, daemon=True)
-        thread.start()
-        thread.join()
-        if failure:
-            pc_logging.error(
-                "Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner, part_name, failure[0])
-            )
+        Awaited on the caller's own loop and so on the caller's own thread,
+        which is the whole point: 'Assembly.do_instantiate()' guards itself with
+        a thread-owned 'RLock' chosen to be re-entrant precisely so that a
+        nested resolution -- an assembly whose instantiation resolves one of the
+        parts it itself produces -- passes through instead of blocking.
+        """
+        target = self._derived_part_to_build(part_name)
+        if target is None:
+            return
+        owner, owning_assembly = target
+        claim = self._claim_derived_part(owner)
+        if claim is None:
+            return
+        done, claimed = claim
+        if not claimed:
+            # Another caller is building this owner. Waited for by polling
+            # rather than by handing the wait to a thread: a thread would be one
+            # more of exactly what this change is removing, and would be blocked
+            # for the length of a CAD build. The wait is between two tasks of
+            # one command, and the thing waited on takes seconds.
+            while not done.is_set():
+                await asyncio.sleep(_DERIVED_PART_POLL_SECONDS)
+            return
+        pc_logging.debug("Building %s:%s to resolve the part %s", self.name, owner, part_name)
+        try:
+            await owning_assembly.do_instantiate()
+        except Exception as e:  # pylint: disable=broad-except
+            pc_logging.error("Failed to build %s:%s while resolving the part %s: %s" % (self.name, owner, part_name, e))
+        finally:
+            self._finish_derived_part(owner, done)
 
     def get_assembly(self, assembly_name, func_params=None) -> Optional[assembly.Assembly]:
         return self.get_object(

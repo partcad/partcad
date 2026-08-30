@@ -174,7 +174,7 @@ class ProviderCart:
         name = project_name + ":" + object_name
         prj = ctx.get_project(project_name)
 
-        part = prj.get_part(object_name, quiet=True)
+        part = await prj.get_part_async(object_name, quiet=True)
         if part:
             pc_logging.debug(f"Adding part '{object_name}' to the cart")
             item = ProviderCartItem()

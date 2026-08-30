@@ -136,7 +136,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             item = self.ctx._get_assembly(name, self.node_params(node))
         elif "part" in node:
             name = self.node_object_name(node, "part")
-            item = self.ctx._get_part(name, self.node_params(node))
+            item = await self.ctx._get_part_async(name, self.node_params(node))
         else:
             return
 
@@ -309,7 +309,7 @@ class AssemblyFactoryAssy(AssemblyFactoryFile):
             elif "part" in node:
                 if name is None:
                     name = node["part"]
-                item = self.ctx._get_part(self.node_object_name(node, "part"), params)
+                item = await self.ctx._get_part_async(self.node_object_name(node, "part"), params)
                 if item is None:
                     pc_logging.error("Part not found: %s in %s" % (name, self.name))
                     raise Exception("Part not found: %s in %s" % (name, self.name))

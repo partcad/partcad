@@ -628,9 +628,7 @@ class Context:
         # plugin-backed package has no directory on disk, so there is nothing to
         # scan; its children came from 'dependencies()' above.
         subfolders = (
-            [f.name for f in os.scandir(project.config_dir) if f.is_dir()]
-            if os.path.isdir(project.config_dir)
-            else []
+            [f.name for f in os.scandir(project.config_dir) if f.is_dir()] if os.path.isdir(project.config_dir) else []
         )
         for subdir in list(subfolders):
             if os.path.exists(
@@ -1018,7 +1016,8 @@ class Context:
         pc_logging.debug("Retrieving %s from %s" % (part_name, project_name))
         return prj.get_provider(part_name, params)
 
-    def _get_part(self, part_spec, params=None) -> Optional[Part]:
+    def _resolve_part_project(self, part_spec):
+        """(project, part name) for a spec, or None once the miss is reported."""
         project_name, part_name = resolve_resource_path(
             self.current_project_path,
             part_spec,
@@ -1029,10 +1028,34 @@ class Context:
             pc_logging.error("Packages found: %s" % str(self.projects))
             return None
         pc_logging.debug("Retrieving %s from %s" % (part_name, project_name))
+        return prj, part_name
+
+    def _get_part(self, part_spec, params=None) -> Optional[Part]:
+        resolved = self._resolve_part_project(part_spec)
+        if resolved is None:
+            return None
+        prj, part_name = resolved
         return prj.get_part(part_name, params)
+
+    async def _get_part_async(self, part_spec, params=None) -> Optional[Part]:
+        """'_get_part()' for a caller already running on a loop.
+
+        Resolving a part may have to build the assembly that produces it, and
+        that is asynchronous. A coroutine has to await it rather than let the
+        synchronous accessor drive it, which it cannot do from a thread that
+        already owns a loop -- see 'Project._materialize_derived_part()'.
+        """
+        resolved = self._resolve_part_project(part_spec)
+        if resolved is None:
+            return None
+        prj, part_name = resolved
+        return await prj.get_part_async(part_name, params)
 
     def get_part(self, part_spec, params=None) -> Optional[Part]:
         return self._get_part(part_spec, params)
+
+    async def get_part_async(self, part_spec, params=None) -> Optional[Part]:
+        return await self._get_part_async(part_spec, params)
 
     def get_part_shape(self, part_spec, params=None):
         return asyncio.run(self._get_part(part_spec, params).get_wrapped(self))
