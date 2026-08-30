@@ -67,12 +67,22 @@ SKETCH_EXTENSION_MAPPING = {
     "build123d": "py",
 }
 
-# File extensions for the render formats whose name is not their extension.
-# Deliberately kept apart from the two mappings above: those also enumerate the
-# part types 'Shape.convert()' accepts, and a rasterized projection is not one
-# of them (it cannot be read back in as a part).
+# The 2D projections '//builtin/render' implements, and the file extension each
+# one writes. Deliberately kept apart from the two mappings above: those also
+# enumerate the part types 'Shape.convert()' accepts, and a projection is not one
+# of them (it cannot be read back in as a part or a sketch).
+#
+# Only 'jpeg' has an extension that differs from its name, which is what this is
+# consulted first for. The other three are listed anyway so that this is the set
+# of built-in projections and not a list of exceptions - 'pc adhoc render' reads
+# it in reverse, to tell from an output file name which projection was asked for.
+# A file type a package implements itself is not here, and is not inferable: it
+# is declared in that package, and an ad-hoc render has no package.
 RENDER_EXTENSION_MAPPING = {
+    "svg": "svg",
+    "png": "png",
     "jpeg": "jpg",
+    "dxf": "dxf",
 }
 
 # The part types 'Shape.convert()' can hand back as a live in-memory CAD object

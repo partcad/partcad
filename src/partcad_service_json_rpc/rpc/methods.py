@@ -49,6 +49,7 @@ _OPERATIONS = {
     "render.objects": operations.render_objects,
     "convert.object": operations.convert_object,
     "adhoc.convert": operations.adhoc_convert,
+    "adhoc.render": operations.adhoc_render,
     "test.run": operations.test_run,
     "lint.run": operations.lint_run,
     "daemon.reset": operations.daemon_reset,

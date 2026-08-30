@@ -2533,6 +2533,13 @@ the object's value wins:
         step:
           comment: Revision C.
 
+A parameter can also be given for one command instead of written down. The two
+that aim a 2D projection -- ``viewport_origin``, which is where the shape is
+looked at from, and ``viewport_up``, which way is up in the picture -- are
+``pc render --viewport-origin``/``--viewport-up``, with ``--view`` naming the
+common directions (see :doc:`cli`). Passed that way they layer on top of
+everything below, package and object alike, for that run only.
+
 Two names are not entirely the package's own.
 
 ``decode`` is not a parameter at all. It is one of the fields PartCAD reads

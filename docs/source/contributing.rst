@@ -548,6 +548,14 @@ The tests for the CLI module are located in the ``./tests/partcad_cli`` director
 The tests for the IDE viewer client are located in the ``./tests/partcad_ide_client`` directory.
 The tests for the LSP server of VSCode plugin are located in the ``./ide/vscode/src/test/python_tests`` directory.
 
+**The first run is slow, and that is the sandboxes rather than the tests.** A test whose part is scripted
+(build123d, CadQuery, SDF, OpenSCAD) runs in a Python environment PartCAD provisions on first use -- a fresh
+interpreter plus a pip install of the CAD stack -- and whichever test is the first to need a given one pays for
+building it. Once built they are cached under ``~/.partcad`` and reused, so the same suite that took half an
+hour cold takes minutes warm. The ``pytest`` ``pre-commit`` hook allows 15 minutes per test for that reason
+(``PC_PYTEST_TIMEOUT`` overrides it); a test reported as timing out on a cold cache is worth simply running
+again before it is treated as a bug.
+
 Behave
 ^^^^^^
 

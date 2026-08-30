@@ -258,6 +258,39 @@ Object commands
   ``port_label_size`` set how big the markers and the names are, as a fraction of the projection's largest
   dimension.
 
+  A port is a coordinate frame rather than geometry, but it is projected like everything else: the axis it is
+  offset along is the one a given projection collapses, so two frames a millimetre apart along the line of
+  sight are drawn one on top of the other. A port that comes out ambiguous is worth the same second and third
+  ``--view`` below that an ambiguous feature is.
+
+  ``--view`` picks the direction the object is looked at from for this one run: ``front``, ``back``, ``left``,
+  ``right``, ``top``, ``bottom`` or ``iso``. Each name is shorthand for a pair of vectors, which
+  ``--viewport-origin`` and ``--viewport-up`` give as ``X,Y,Z`` instead: the first is where the camera is, the
+  second is which way is up in the resulting picture. Either one replaces the vector the name resolved to, so
+  ``--view top --viewport-up 0,1,0.5`` tilts the top view without spelling the rest of it out:
+
+  .. code-block:: shell
+
+    pc render -t png --view front -O ./ bracket
+    pc render -t png --view top --viewport-up 0,1,0.5 -O ./ bracket
+    pc render -t png --viewport-origin 120,-40,60 -O ./ bracket
+
+  All three are the ``viewport_origin`` and ``viewport_up`` of a render file type in ``partcad.yaml``
+  (see :ref:`output-files`), passed for one command instead of written down — so they layer on top of whatever
+  the package and the object configured, and a file type that does not project (``step``, ``readme``, an
+  assembly instruction book) never reads them. PartCAD is Z-up with ``+Y`` pointing away from the front view,
+  which is what puts ``+X`` on the right of it.
+
+  A rendered file is named after the object, so several views of one object go into directories of their own
+  rather than over each other:
+
+  .. code-block:: shell
+
+    for view in front top iso; do
+      mkdir -p ./views/$view
+      pc render -t png --view $view -O ./views/$view bracket
+    done
+
   ``-t readme`` generates a markdown document instead of a projection: the package document (``README.md``,
   listing what the package declares) or, when ``-a`` names an assembly, that assembly's own document
   (``<assembly>.md``, listing the bill of materials — every part and sub-assembly it is made of, recursively,
@@ -312,10 +345,27 @@ Other commands
 **************
 
 ``pc adhoc``
-  Ad-hoc operations that run on the fly without creating or configuring a package. Subcommand: ``convert``
-  (convert a part or sketch to another format without updating its type). The assembly formats ``assy`` and
-  ``urdf`` are refused here: an ASSY file is a set of references to the parts of a package and a URDF becomes a
-  part per link, so neither means anything without one. Use ``pc convert assembly`` in a package instead.
+  Ad-hoc operations that run on the fly, on a file that belongs to no package: PartCAD declares the file in a
+  throwaway package of its own, produces one output file, and deletes the package again. Nothing is created and
+  nothing is configured. Subcommands, each taking ``part`` or ``sketch``:
+
+  - ``pc adhoc convert`` — write the file back out as another format
+    (``pc adhoc convert part bracket.step bracket.stl``).
+  - ``pc adhoc render`` — write a 2D projection of it: ``svg``, ``png``, ``jpeg`` or ``dxf``
+    (``pc adhoc render part --view top bracket.step bracket.png``).
+
+  Both infer the types from the file names, and take ``--input``/``--output`` to say them outright. ``pc adhoc
+  render`` takes the same ``--view``, ``--viewport-origin`` and ``--viewport-up`` as ``pc render`` — and with no
+  ``partcad.yaml`` to configure a viewport in, they are the only way to aim one. The output file name may be
+  left off when ``--output`` names the type: the file is then named after the input.
+
+  Which of the two to use is which kind of file is wanted, and it is the same distinction as between
+  ``pc export`` and ``pc render``: geometry another CAD tool can go on working with, or a picture. A file type a
+  package implements itself is available to neither, since there is no package here to declare it in.
+
+  The assembly formats ``assy`` and ``urdf`` are refused by both: an ASSY file is a set of references to the
+  parts of a package and a URDF becomes a part per link, so neither means anything without one. Declare it in a
+  package and use ``pc convert assembly``, ``pc export`` or ``pc render`` instead.
 
 ``pc healthcheck``
   Check the host system for known issues. Use ``--dry-run`` to list the available checks, ``--filters`` to run

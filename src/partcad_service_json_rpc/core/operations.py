@@ -743,6 +743,100 @@ def adhoc_convert(session, params):
     return None
 
 
+def adhoc_render(session, params):
+    """Render a CAD or sketch file to a 2D projection, ad-hoc (no package/context).
+
+    The sibling of ``adhoc_convert`` for the other thing an output file can be,
+    and the same pure file operation: paths arrive absolute from the CLI, and a
+    type the caller left unsaid is inferred from the file name. The input type
+    comes from the part/sketch mappings as it does for a conversion; the *output*
+    type comes from the projections instead, which is the whole difference.
+
+    ``view``, ``viewport_origin`` and ``viewport_up`` aim the projection, exactly
+    as they do for ``render.objects`` -- with no ``partcad.yaml`` to configure a
+    viewport in, this is the only way to ask for one.
+    """
+    from pathlib import Path
+
+    from partcad.shape import RENDER_EXTENSION_MAPPING
+
+    pc = session.ensure_partcad()
+    kind = params.get("kind", "part")
+    if kind == "part":
+        from partcad.adhoc.render import render_cad_file as render_fn
+        from partcad.shape import PART_EXTENSION_MAPPING as input_mapping
+    elif kind == "sketch":
+        from partcad.adhoc.render import render_sketch_file as render_fn
+        from partcad.shape import SKETCH_EXTENSION_MAPPING as input_mapping
+    else:
+        # Named rather than fallen through to the sketch renderer: an assembly
+        # or a scene is exactly what cannot be rendered without the package
+        # that names its contents, so answering with a sketch of it would be
+        # answering a different question. The CLI offers the two subcommands
+        # and nothing else; a client speaking the protocol directly can ask.
+        raise JsonRpcError(USAGE_ERROR, "Cannot render '%s' ad-hoc. Supported kinds: part, sketch" % kind)
+
+    input_path = Path(params["input_filename"])
+    output_filename = params.get("output_filename")
+    output_path = Path(output_filename) if output_filename else None
+
+    input_ext_to_type = {".%s" % v: k for k, v in input_mapping.items()}
+    # '.jpeg' alongside the '.jpg' the mapping declares: the mapping says what
+    # extension a projection is *written* with and so holds one per format, but
+    # a file already named '.jpeg' is just as clearly a JPEG.
+    output_ext_to_type = {".%s" % v: k for k, v in RENDER_EXTENSION_MAPPING.items()}
+    output_ext_to_type[".jpeg"] = "jpeg"
+
+    input_type = params.get("input_type") or input_ext_to_type.get(input_path.suffix.lower())
+    output_type = params.get("output_type") or (
+        output_ext_to_type.get(output_path.suffix.lower()) if output_path else None
+    )
+
+    noun = "sketch type" if kind == "sketch" else "type"
+    if not input_type:
+        pc.logging.error("Cannot infer input %s. Please specify --input explicitly." % noun)
+        return None
+    if not output_type:
+        pc.logging.error("Cannot infer the projection to render. Please specify --output explicitly.")
+        return None
+    if output_type not in RENDER_EXTENSION_MAPPING:
+        # Checked before the extension lookup below, which would otherwise
+        # raise KeyError for a type nobody projects to and turn a bad request
+        # into an internal error.
+        raise JsonRpcError(
+            USAGE_ERROR,
+            "Cannot render to '%s'. Supported projections: %s"
+            % (output_type, ", ".join(sorted(RENDER_EXTENSION_MAPPING))),
+        )
+    if output_path is None:
+        output_path = input_path.with_suffix(".%s" % RENDER_EXTENSION_MAPPING[output_type])
+
+    from partcad.render import resolve_viewport
+
+    try:
+        render_opts = resolve_viewport(
+            params.get("view"),
+            params.get("viewport_origin"),
+            params.get("viewport_up"),
+        )
+    except ValueError as e:
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
+
+    try:
+        pc.logging.info("Rendering %s (%s) to %s (%s)..." % (input_path, input_type, output_path, output_type))
+        render_fn(str(input_path), input_type, str(output_path), output_type, **render_opts)
+        pc.logging.info("Render complete: %s" % output_path)
+    except ValueError as e:
+        # A format that only means anything inside a package ('.urdf', '.assy')
+        # is inferable from the filename, so it reaches here even though the
+        # CLI's choices exclude it. Nothing was attempted and nothing could have
+        # been: a usage error, not a failed render.
+        raise JsonRpcError(USAGE_ERROR, str(e))
+    except Exception as e:  # pylint: disable=broad-except
+        pc.logging.error("Failed to render: %s" % e)
+    return None
+
+
 async def _test_async(ctx, pc, packages, filter_prefix, sketch, interface, assembly, scene, object_name):
     import asyncio
 
@@ -2074,6 +2168,11 @@ def render_objects(session, params):
     names a further package whose ``export:``/``render:`` sections are read on
     top of the built-in ones, which is how a custom implementation declared in
     one package is used against the objects of another.
+
+    ``view``, ``viewport_origin`` and ``viewport_up`` re-aim the projection for
+    this one run. They resolve to the very parameters a ``render:`` file type
+    configures, so the override lands on top of the configuration rather than
+    beside it, and a file type that does not project never reads them.
     """
     ctx = _ctx(session, params)
     if ctx is None:
@@ -2095,6 +2194,20 @@ def render_objects(session, params):
         options_package = ctx.resolve_package_path(options_package)
         if ctx.get_project(options_package) is None:
             raise JsonRpcError(USAGE_ERROR, "Options package %s is not found" % options_package)
+
+    from partcad.render import resolve_viewport
+
+    try:
+        render_opts = resolve_viewport(
+            params.get("view"),
+            params.get("viewport_origin"),
+            params.get("viewport_up"),
+        )
+    except ValueError as e:
+        # A view nobody offers, or a vector that is not one: the request cannot
+        # be made sense of, so nothing is rendered rather than something aimed
+        # somewhere else.
+        raise JsonRpcError(USAGE_ERROR, str(e)) from e
 
     from partcad.exception import AssemblyDocumentError
     from partcad.render_overlay import Overlay
@@ -2122,6 +2235,7 @@ def render_objects(session, params):
                 options_package,
                 ignore_manufacturability,
                 overlay,
+                render_opts,
             )
         except AssemblyDocumentError as e:
             # Asking for an assembly instruction book of something that has no
@@ -2142,6 +2256,7 @@ def _render_objects(
     options_package,
     ignore_manufacturability,
     overlay=None,
+    render_opts=None,
 ):
     """The body of 'render_objects', once the request has been made sense of."""
     import asyncio
@@ -2172,6 +2287,7 @@ def _render_objects(
             options_package,
             ignore_manufacturability,
             overlay,
+            render_opts,
         )
     )
 
@@ -2187,6 +2303,7 @@ async def _render_packages_async(
     options_package,
     ignore_manufacturability,
     overlay=None,
+    render_opts=None,
 ):
     """Render the given packages, several at a time.
 
@@ -2233,6 +2350,7 @@ async def _render_packages_async(
                     options_package=options_package,
                     ignore_manufacturability=ignore_manufacturability,
                     overlay=overlay,
+                    render_opts=render_opts,
                 )
             else:
                 sketches, interfaces, parts, assemblies, scenes = [], [], [], [], []
@@ -2258,6 +2376,7 @@ async def _render_packages_async(
                     options_package=options_package,
                     ignore_manufacturability=ignore_manufacturability,
                     overlay=overlay,
+                    render_opts=render_opts,
                 )
 
     results = await asyncio.gather(*[render_package(package) for package in packages], return_exceptions=True)
