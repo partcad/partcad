@@ -14,6 +14,7 @@ silently no-op when none is loaded, exactly as the legacy server did.
 """
 
 import hashlib
+import math
 import os
 from pathlib import Path
 from urllib.parse import urlparse
@@ -1707,7 +1708,7 @@ async def _supply_option(pc, ctx, cart_item, provider_name, qos):
     result = request.result or {}
     option.update(
         {
-            "price": result.get("price"),
+            "price": _as_price(result.get("price")),
             "cartId": result.get("cartId"),
             "expire": result.get("expire"),
             "etaMin": result.get("etaMin"),
@@ -1716,6 +1717,25 @@ async def _supply_option(pc, ctx, cart_item, provider_name, qos):
         }
     )
     return option
+
+
+def _as_price(value):
+    """A quoted price as a number, or None when the provider did not give one.
+
+    A quote is whatever a provider's own script put in it, and everything
+    downstream of here treats the price as a number: the options are sorted by
+    it and the cheapest of each are added up. A string where a number belongs
+    would fail the whole request rather than the one supplier that sent it, so it
+    is read as "no price" instead.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        price = float(value)
+    except (TypeError, ValueError):
+        return None
+    # A quote of NaN or infinity sorts and sums as nonsense.
+    return price if math.isfinite(price) else None
 
 
 def _provider_currency(provider):
@@ -1747,7 +1767,7 @@ def _supply_totals(items):
         if best is None or best.get("price") is None:
             continue
         currency = best.get("currency") or ""
-        totals[currency] = totals.get(currency, 0.0) + float(best["price"])
+        totals[currency] = totals.get(currency, 0.0) + best["price"]
     return [{"currency": currency or None, "price": price} for currency, price in sorted(totals.items())]
 
 

@@ -124,8 +124,8 @@ silhouette. `Part.js` never hits this because its OBJ models are in millimetres.
 
 ## The tabs beside the 3D view
 
-Each is fetched on first look and cached until the next show, so opening a tab costs one daemon round trip and
-switching back to it costs none. Every request carries the generation of the object it was made for and an
+Each non-3D tab is fetched on first look and cached until the next show, so opening one costs one daemon round
+trip and switching back to it costs none. Every request carries the generation of the object it was made for and an
 answer for an older one is dropped: a bill of materials walks the whole assembly tree and a supply quote goes
 out to the network, so a round trip easily outlives a change of selection.
 

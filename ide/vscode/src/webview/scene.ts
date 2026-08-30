@@ -153,18 +153,42 @@ function parseGltf(buffer: ArrayBuffer): Promise<THREE.Group> {
     });
 }
 
+/**
+ * Let go of a material and of the textures it holds.
+ *
+ * 'Material.dispose()' frees the shader program and nothing else: a texture can
+ * be shared between materials, so three.js leaves it to the application to say
+ * when one is finished with. Here every texture came out of the glTF being
+ * discarded and is referenced by nothing outside it, and 'dispose()' is
+ * idempotent, so one shared between two materials of the same file is simply
+ * disposed twice.
+ */
+function disposeMaterial(material: THREE.Material): void {
+    for (const value of Object.values(material)) {
+        const texture = value as THREE.Texture | undefined;
+        if (texture?.isTexture) {
+            texture.dispose();
+        }
+    }
+    material.dispose();
+}
+
+/** The same, for the one-or-many a mesh's 'material' can be. */
+function disposeMaterials(material: THREE.Material | THREE.Material[] | undefined): void {
+    if (Array.isArray(material)) {
+        material.forEach(disposeMaterial);
+    } else if (material) {
+        disposeMaterial(material);
+    }
+}
+
 function disposeTree(root: THREE.Object3D): void {
     root.traverse((node) => {
         const mesh = node as THREE.Mesh;
         if (mesh.geometry) {
             mesh.geometry.dispose();
         }
-        const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
-        if (Array.isArray(material)) {
-            material.forEach((m) => m.dispose());
-        } else if (material) {
-            material.dispose();
-        }
+        disposeMaterials(mesh.material as THREE.Material | THREE.Material[] | undefined);
     });
 }
 
@@ -274,7 +298,10 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
 
         if (superseded()) {
             // Something newer arrived while this object was decoding. Drop what
-            // has been built so far rather than paint it over the newer state.
+            // has been built so far rather than paint it over the newer state -
+            // and what was just parsed with it, which is not in the group yet
+            // and so is not reached by disposing that.
+            disposeTree(parsed);
             disposeTree(group);
             return;
         }
@@ -289,13 +316,9 @@ export async function showGeometry(message: ShowMessage): Promise<void> {
             // Part.js replaces whatever material the file carries with a plain
             // MeshPhongMaterial, which is what gives every PartCAD model the
             // same look regardless of how it was authored.
-            const previous = mesh.material as THREE.Material | THREE.Material[];
+            const previous = mesh.material as THREE.Material | THREE.Material[] | undefined;
             mesh.material = new THREE.MeshPhongMaterial();
-            if (Array.isArray(previous)) {
-                previous.forEach((m) => m.dispose());
-            } else {
-                previous?.dispose();
-            }
+            disposeMaterials(previous);
         });
         parsed.name = object.name;
         group.add(parsed);

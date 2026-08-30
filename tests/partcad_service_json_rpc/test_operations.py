@@ -1208,6 +1208,28 @@ def test_supply_keeps_a_supplier_that_would_not_quote(monkeypatch):
     assert "price" not in options[1]
 
 
+def test_supply_reads_a_price_that_is_not_a_number_as_no_price(monkeypatch):
+    """A quote is whatever a provider's own script put in it
+
+    Everything downstream treats the price as a number -- the options are sorted
+    by it and the cheapest of each are added up -- so a string where a number
+    belongs must cost that one supplier its price, not fail the whole request.
+    """
+    session, ctx = make_supply_session(monkeypatch)
+    ctx.provider_plugins["//:cheap"] = FakeProvider("//:cheap", price="$1.50", currency="USD")
+    ctx.provider_plugins["//:dear"] = FakeProvider("//:dear", price="4.00", currency="USD")
+
+    result = operations.supply_quote(session, {"package": "//", "object": "top"})
+
+    options = {option["name"]: option for option in result["items"][0]["suppliers"]}
+    assert options["//:cheap"]["price"] is None
+    # A number that merely arrived as a string is still a number.
+    assert options["//:dear"]["price"] == 4.0
+    # The one that could be read wins the sort, and is what the total is of.
+    assert [option["name"] for option in result["items"][0]["suppliers"]] == ["//:dear", "//:cheap"]
+    assert result["totals"] == [{"currency": "USD", "price": 4.0}]
+
+
 def test_supply_reports_an_object_that_cannot_be_ordered(monkeypatch):
     session, _ = make_supply_session(monkeypatch)
 
