@@ -37,8 +37,12 @@ from .assembly import Assembly
 class Scene(Assembly):
     path: typing.Optional[str] = None
 
-    def __init__(self, project_name: str, config: dict = {}):
-        super().__init__(project_name, config)
+    def __init__(self, project_name: str, config: typing.Optional[dict] = None):
+        # A fresh dictionary rather than a shared default: 'ShapeConfiguration'
+        # writes a generated name into whatever it is handed, so one default
+        # dictionary would be one name for every scene that was built without a
+        # configuration.
+        super().__init__(project_name, {} if config is None else config)
         # What every consumer branches on: the shape cache keys on it, the
         # renderer maps it to the 'scenes' section, and the viewer labels the
         # object with it.

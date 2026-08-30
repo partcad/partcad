@@ -216,6 +216,9 @@ PartCAD :ref:`packages` may contain the following objects:
 
 - :ref:`assemblies` are instructions how to put parts and other assemblies together to be used as a single object.
 
+- :ref:`scenes` are placed arrangements of objects - a workcell, a table, a simulation world - stating where things
+  are and not how they got there.
+
 - :ref:`software` is what the product ships with that is not geometry: a firmware image, a binary, a disk image.
   It is always a file.
 

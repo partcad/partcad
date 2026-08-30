@@ -194,9 +194,15 @@ class ProviderCart:
         else:
             # Quietly, both of them: a name that is one is not the other, and
             # the failure worth reporting is the one at the end.
-            assembly = prj.get_assembly(object_name, quiet=True) or prj.get_scene(object_name, quiet=True)
-            if assembly:
-                if not recursive and assembly.is_declared_purchasable():
+            assembly = prj.get_assembly(object_name, quiet=True)
+            scene = prj.get_scene(object_name, quiet=True) if assembly is None else None
+            holder = assembly or scene
+            if holder:
+                # The shortcut is an assembly's alone. 'Scene' inherits
+                # 'is_declared_purchasable()', which answers from 'vendor' and
+                # 'sku' in the configuration -- but nobody sells an
+                # arrangement, so a scene is expanded whatever it carries.
+                if assembly is not None and not recursive and assembly.is_declared_purchasable():
                     pc_logging.debug(f"Adding assembly '{object_name}' to the cart as is")
                     item = ProviderCartItem()
                     await item.set_spec(ctx, name)
@@ -204,7 +210,7 @@ class ProviderCart:
                     return
 
                 pc_logging.debug(f"Adding the contents of assembly '{object_name}' to the cart")
-                bom = await (assembly.get_bom() if recursive else assembly.get_supply_bom())
+                bom = await (holder.get_bom() if recursive else holder.get_supply_bom())
                 tasks = []
                 for item_name, item_count in bom.items():
                     pc_logging.debug(f"Adding '{item_name}' to the cart")

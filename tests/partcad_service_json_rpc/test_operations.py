@@ -220,8 +220,19 @@ class FakeProject:
         getattr(self, kind)[obj.name] = obj
         return self
 
-    def object_count(self):
-        return len(self.sketches) + len(self.parts) + len(self.assemblies)
+    def object_count(self, kind=None):
+        # 'Context.get_packages(has_stuff=True)' asks one kind at a time; the
+        # bare call is the whole package. Both, so the fake answers whichever
+        # the code under test makes.
+        counts = {
+            "sketch": len(self.sketches),
+            "part": len(self.parts),
+            "assembly": len(self.assemblies),
+            "scene": len(self.scenes),
+        }
+        if kind is None:
+            return sum(counts.values())
+        return counts.get(kind, 0)
 
     def matches(self, keyword):
         if not keyword:

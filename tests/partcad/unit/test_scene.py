@@ -12,6 +12,7 @@ package calls it, and the one rule that follows from what it means -- a scene
 states an end state, so it has no assembly instructions.
 """
 
+import asyncio
 import os
 import shutil
 
@@ -226,3 +227,94 @@ def test_a_scene_asks_for_the_output_files_a_scene_excludes(project):
     # An assembly is not what the exclusion names, so it still gets the file.
     assert project._should_render_format("step", cfg, None, "assembly") is True
     assert project._should_render_format("step", {"step": {}}, None, "scene") is True
+
+
+#
+# Supply
+#
+
+
+class _FakeStoreData:
+    vendor = None
+    sku = None
+    count_per_sku = None
+
+
+class _FakeLeaf:
+    """A line item the cart can resolve: what a bill of materials names."""
+
+    def get_store_data(self):
+        return _FakeStoreData()
+
+    async def get_mcftt(self, _which):
+        return None
+
+
+class _FakeHolder(_FakeLeaf):
+    """An object that claims to be sold whole, and knows what it holds."""
+
+    def __init__(self, bom):
+        self._bom = bom
+
+    def is_declared_purchasable(self):
+        return True
+
+    async def get_supply_bom(self):
+        return dict(self._bom)
+
+    async def get_bom(self):
+        return dict(self._bom)
+
+
+class _FakeProject:
+    """A package holding one object called 'thing' and the parts it is made of."""
+
+    def __init__(self, assembly=None, scene=None):
+        self._assembly = assembly
+        self._scene = scene
+
+    async def get_part_async(self, name, quiet=False):
+        return self.get_part(name, quiet)
+
+    def get_part(self, name, quiet=False):
+        return None if name == "thing" else _FakeLeaf()
+
+    def get_assembly(self, name, quiet=False):
+        return self._assembly if name == "thing" else None
+
+    def get_scene(self, name, quiet=False):
+        return self._scene if name == "thing" else None
+
+
+class _FakeContext:
+    def __init__(self, project):
+        self.current_project_path = "//pkg"
+        self._project = project
+
+    def get_project(self, name):
+        return self._project
+
+
+def _cart_names(project):
+    from partcad.plugin_provider_data_cart import ProviderCart
+
+    cart = ProviderCart()
+    asyncio.run(cart.add_object(_FakeContext(project), "//pkg:thing"))
+    return sorted(cart.parts)
+
+
+def test_a_scene_is_never_ordered_whole_however_it_is_declared():
+    """Nobody sells an arrangement, so a scene is expanded and never added as is.
+
+    'Scene' inherits 'is_declared_purchasable()' from 'Assembly', which answers
+    from 'vendor' and 'sku'. The schema gives a scene neither, but an enrich or
+    an alias can carry anything, and the contract is absolute.
+    """
+    scene = _FakeHolder({"//pkg:bolt": 2})
+    assert _cart_names(_FakeProject(scene=scene)) == ["//pkg:bolt"]
+
+
+def test_an_assembly_sold_assembled_is_still_added_as_one_item():
+    """The shortcut the scene skips is untouched for what it is there for."""
+    assembly = _FakeHolder({"//pkg:bolt": 2})
+    assert _cart_names(_FakeProject(assembly=assembly)) == ["//pkg:thing"]

@@ -845,6 +845,7 @@
                 "path": { "type": "string", "minLength": 1 },
                 "fileFrom": { "type": "string", "enum": ["url"] },
                 "fileUrl": { "$ref": "#/definitions/url" },
+                "fileHash": { "$ref": "#/definitions/file-hash" },
                 "ignoreCollision": {
                   "oneOf": [
                     { "type": "boolean" },

@@ -190,7 +190,14 @@ def mesh_scale_factor(scale_text, warnings):
     """
     if not scale_text or not scale_text.strip():
         return MM_PER_M
-    values = [float(v) for v in scale_text.split()]
+    try:
+        values = [float(v) for v in scale_text.split()]
+    except ValueError:
+        # Reported and defaulted rather than raised, the way 'parse_pose'
+        # treats an unreadable pose: a mesh at the wrong size is easier to see
+        # and to correct than a world that refuses to load at all.
+        warnings.append("Unreadable mesh scale '%s'; reading the mesh as millimetres instead" % scale_text.strip())
+        return MM_PER_M
     if not values:
         return MM_PER_M
     if len(values) < 3:

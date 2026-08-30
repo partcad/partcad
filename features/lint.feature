@@ -668,7 +668,7 @@ Feature: `pc lint` command
     Then the command should exit with a status code of "1"
     And STDOUT should contain "logo.assy:2:5: expected at least one of 'links', 'part', 'assembly'"
 
-  @success
+  @failure
   Scenario: An ASSY file a scene points at is checked without `how`
     Given a file named "partcad.yaml" with content:
       """

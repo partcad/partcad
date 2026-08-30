@@ -252,6 +252,72 @@ def test_an_include_that_resolves_is_read(tmp_path):
     assert node["location"][0] == pytest.approx([1000.0, 0.0, 0.0])
 
 
+def test_an_included_file_with_more_than_one_model_says_which_one_it_placed(tmp_path):
+    """An <include> places one model, so the rest of them go unplaced."""
+    models = tmp_path / "models" / "pair"
+    models.mkdir(parents=True)
+    (models / "model.sdf").write_text(
+        """<sdf version="1.9">
+        <model name="first"><link name="l">
+          <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
+        </link></model>
+        <model name="second"><link name="l">
+          <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
+        </link></model></sdf>"""
+        % (STL_EXAMPLE, STL_EXAMPLE)
+    )
+    world = tmp_path / "w.world"
+    world.write_text(
+        """<sdf version="1.9"><world name="w">
+        <include><uri>model://pair</uri></include></world></sdf>"""
+    )
+
+    result = wrapper_import_world.process(
+        {"world_file": str(world), "output_folder": str(tmp_path), "model_paths": [str(tmp_path / "models")]}
+    )
+
+    assert result["dropped"]["include"] == 1
+    assert any("declares 2 models" in warning and "'first'" in warning for warning in result["warnings"])
+    assert [node["model"] for node in result["root"]["links"]] == ["first"]
+
+
+def test_a_model_nested_in_an_included_one_is_read_rather_than_counted_as_dropped(tmp_path):
+    """The nested model is placed by the outer one, so nothing goes unplaced."""
+    models = tmp_path / "models" / "stack"
+    models.mkdir(parents=True)
+    (models / "model.sdf").write_text(
+        """<sdf version="1.9"><model name="outer">
+        <link name="l">
+          <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
+        </link>
+        <model name="inner"><link name="l">
+          <collision name="c"><geometry><mesh><uri>%s</uri></mesh></geometry></collision>
+        </link></model></model></sdf>"""
+        % (STL_EXAMPLE, STL_EXAMPLE)
+    )
+    world = tmp_path / "w.world"
+    world.write_text(
+        """<sdf version="1.9"><world name="w">
+        <include><uri>model://stack</uri></include></world></sdf>"""
+    )
+
+    result = wrapper_import_world.process(
+        {"world_file": str(world), "output_folder": str(tmp_path), "model_paths": [str(tmp_path / "models")]}
+    )
+
+    # 'summary()' keeps only the non-zero counters, so nothing dropped is no key.
+    assert "include" not in result["dropped"]
+    assert not any("declares" in warning for warning in result["warnings"])
+
+
+def test_an_unreadable_mesh_scale_is_reported_and_the_mesh_read_as_millimetres():
+    """As with an unreadable pose: a world that refuses to load helps nobody."""
+    warnings = []
+
+    assert gazebo_common.mesh_scale_factor("0.001 0.001 auto", warnings) == gazebo_common.MM_PER_M
+    assert any("Unreadable mesh scale" in warning for warning in warnings)
+
+
 def test_a_world_with_no_geometry_is_an_error(tmp_path):
     world = tmp_path / "empty.world"
     world.write_text('<sdf version="1.9"><world name="empty"/></sdf>')

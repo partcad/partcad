@@ -94,7 +94,7 @@ poetry run isort --check src/partcad_service_json_rpc tests/partcad_service_json
 
 Method names mirror `partcad-cli` subcommands: `inspect.part|sketch|interface|assembly|scene|file`,
 `export.part|assembly|scene`, `ai.regenerate|change`, `add.part|assembly|scene`, `package.load|path|refresh`, `init`,
-`list.all`, `bom`, `supply.quote`, `test`, `info`, `activate`, and `rpc.discover`. Server-to-client
+`list.all`, `bom`, `assembly.guide`, `supply.quote`, `test`, `info`, `activate`, and `rpc.discover`. Server-to-client
 notifications carry the same semantics as the extension's legacy `?/partcad/*` events (`info`/`warn`/`error`, `items`,
 `stats`, `terminal`, `execute`, and the `*Done`/lifecycle signals).
 

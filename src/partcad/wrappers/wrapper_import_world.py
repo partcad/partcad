@@ -449,11 +449,25 @@ def include_node(include, prefix, context, depth=0):
         context["dropped"].add("include")
         return None
 
-    models = included_root.findall(".//model") if included_root.tag != "model" else [included_root]
+    if included_root.tag == "model":
+        models = [included_root]
+    else:
+        # Top-level models, then anywhere as a fallback. Not './/model' outright:
+        # that also matches the models nested *inside* a model, which
+        # 'model_node()' reads itself, so counting those as extras would report
+        # a file that is read in full as one that is not.
+        models = included_root.findall("model") or included_root.findall(".//model")
     if not models:
         context["warnings"].append("The included file '%s' declares no model" % path)
         context["dropped"].add("include")
         return None
+    if len(models) > 1:
+        # An <include> places one model, so the rest of them go unplaced.
+        context["warnings"].append(
+            "The included file '%s' declares %d models; only the first, '%s', is placed"
+            % (path, len(models), name_of(models[0], "model"))
+        )
+        context["dropped"].add("include", len(models) - 1)
 
     # The include's own name and pose win over the model's, which is what
     # SDFormat says an <include> does.

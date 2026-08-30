@@ -141,7 +141,9 @@ Package commands
   Run linting checks on the files within packages. Use ``-r`` to check imported packages recursively and
   ``-f`` to run only checks whose name starts with a given prefix. ``--file PATH`` (repeatable) checks the
   named files instead, in this process rather than through the daemon; add ``--json`` for machine-readable
-  findings and ``--stdin`` to check unsaved content supplied on standard input.
+  findings and ``--stdin`` to check unsaved content supplied on standard input. ``--schema`` says which schema
+  an ASSY ``--file`` is checked against -- ``assembly``, ``scene`` (the same one with ``how:`` forbidden), or
+  ``auto``, the default, which reads the declaration out of the package that names the file.
 
 ***************
 Object commands
@@ -304,4 +306,4 @@ Other commands
 
 ``pc search``
   Search for objects by keyword. Subcommands: ``all``, ``parts``, ``sketches``, ``assemblies``,
-  ``interfaces``, and ``packages``.
+  ``scenes``, ``interfaces``, and ``packages``.
