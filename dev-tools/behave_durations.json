@@ -1,13 +1,13 @@
 {
-  "_source": "Measured in CI run 33149121989 (commit 314290fc), from the timestamps behave prints on each \"Feature:\" line. Each value is the longest of the three cells measured there: windows-latest/3.10, windows-latest/3.14 and ubuntu-latest/3.10 -- Windows is what the 60 minute job timeout binds on, and taking the maximum keeps a feature that is skipped on one OS from being weighed as free on the others. The two 'software' features were added after that run and are scaled from a local measurement against a feature of the same shape measured there ('features/add/sketch.feature' and 'features/list/sketches.feature'), so they are estimates until the table is next re-measured.",
+  "_source": "Measured in CI run 33149121989 (commit 314290fc), from the timestamps behave prints on each \"Feature:\" line. Each value is the longest of the three cells measured there: windows-latest/3.10, windows-latest/3.14 and ubuntu-latest/3.10 -- Windows is what the 60 minute job timeout binds on, and taking the maximum keeps a feature that is skipped on one OS from being weighed as free on the others. The two 'software' features were added after that run and are scaled from a local measurement against a feature of the same shape measured there ('features/add/sketch.feature' and 'features/list/sketches.feature'), so they are estimates until the table is next re-measured. 'features/add/sketch.feature' is its measurement scaled by the same local ratio, for the URL scenario added to it here.",
   "_unit": "seconds",
   "_refresh": "Re-measure when the suite's shape changes materially: download the Behave job logs (gh api repos/partcad/partcad/actions/jobs/<id>/logs), take the timestamp of each \"Feature: ... # features/<path>:<line>\" line, and difference consecutive ones. Values only have to be right relative to each other. tests/partcad_cli/unit/test_behave_shard.py fails when a feature file here no longer exists, or when a feature file has no entry.",
   "seconds": {
     "features/add/assembly.feature": 325.2,
     "features/add/dependency.feature": 19.6,
     "features/add/part.feature": 36.3,
-    "features/add/sketch.feature": 8.3,
-    "features/add/software.feature": 13.0,
+    "features/add/sketch.feature": 9.3,
+    "features/add/software.feature": 21.5,
     "features/adhoc/convert/part.feature": 849.6,
     "features/adhoc/convert/sketch.feature": 826.8,
     "features/bom.feature": 11.5,

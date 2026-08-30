@@ -53,3 +53,36 @@ Feature: `pc add software` command
     When I run "pc list software"
     Then the command should exit with a status code of "0"
     And STDOUT should contain "<none>"
+
+  @success
+  Scenario: Add software from a URL, pinned by the hash of what came back
+    # The point of the URL form: a piece of software cannot be bought by vendor
+    # and SKU, so a file the package neither carries nor pins is one nothing
+    # identifies. `pc add` fetches once and writes the hash, so the declaration
+    # is reproducible from the moment it exists.
+    Given "firmware.bin" is served over HTTP with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    When I run "partcad add software $PC_TEST_HTTP_URL/firmware.bin"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "Software 'firmware' added to the project."
+    And a file named "partcad.yaml" should contain "fileFrom: url"
+    And a file named "partcad.yaml" should contain "fileHash: sha256:dd20df4dd573bce521655bd99622da79ad904afad39d77f0dea18e590ef56bd6"
+    # The fetched copy is not kept: the package declares where to get the file,
+    # it does not carry it. `pc install` fetches it when it is first needed.
+    And a file named "firmware.bin" should not exist
+
+  @failure
+  Scenario: A URL that answers with an error adds nothing
+    # Without the bytes there is no hash, and a declaration written without one
+    # is the unpinned declaration the fetch exists to avoid.
+    Given "firmware.bin" is served over HTTP with content:
+      """
+      PARTCAD-BEHAVE-FIRMWARE
+      """
+    When I run "partcad add software $PC_TEST_HTTP_URL/nowhere.bin"
+    Then the command should exit with a non-zero status code
+    When I run "pc list software"
+    Then the command should exit with a status code of "0"
+    And STDOUT should contain "<none>"
