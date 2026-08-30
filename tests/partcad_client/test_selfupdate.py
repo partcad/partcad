@@ -420,13 +420,17 @@ def test_extract_keeps_the_aliases_that_point_at_pc(tmp_path):
         assert alias.is_file()
 
 
+def _link_member(name, linkname):
+    member = tarfile.TarInfo(name)
+    member.type = tarfile.SYMTYPE
+    member.linkname = linkname
+    return member
+
+
 def _link_archive(path, name, linkname):
     archive = path / "links.tar.gz"
     with tarfile.open(archive, "w:gz") as tf:
-        member = tarfile.TarInfo(name)
-        member.type = tarfile.SYMTYPE
-        member.linkname = linkname
-        tf.addfile(member)
+        tf.addfile(_link_member(name, linkname))
     return archive
 
 
@@ -444,6 +448,50 @@ def test_extract_refuses_an_absolute_link(tmp_path):
     dest.mkdir()
     with pytest.raises(selfupdate.SelfUpdateError, match="absolute link"):
         selfupdate._extract(str(archive), str(dest), "tar.xz")
+
+
+# Every spelling of a link target that names a place of its own rather than one
+# inside the archive. Both hosts run all of them, because the answer is a
+# property of the archive and not of the machine that unpacks it -- and because
+# a table only one host could tell apart is what let this one through.
+#
+# `/etc/passwd` is the case that broke: a tar carries a link target as a POSIX
+# path, but the guard asked `os.path.isabs`, which is `ntpath.isabs` on Windows,
+# and Python 3.13 stopped calling a rootless path absolute there (Windows
+# resolves it against the current drive). So on a Windows 3.13+ the archive was
+# still refused -- by the traversal check a line later -- but as a malformed one
+# rather than a hostile one, and only that host and that interpreter could see
+# it. The four Windows spellings are the mirror image: `posixpath` calls every
+# one of them an ordinary relative filename, and so did the old guard on a POSIX
+# host, which asked for a drive only when `os.name == "nt"`.
+ANCHORED_LINKS = [
+    "/etc/passwd",  # absolute, and drive-relative on Windows since 3.13
+    "//server/share/secrets",  # a UNC root, absolute either way
+    "C:/Windows/System32/config/SAM",  # a drive, in the spelling a tar carries
+    "C:\\Windows\\System32\\config\\SAM",  # a drive, in Windows spelling
+    "C:secrets",  # anchored to a drive without a root
+    "\\etc\\passwd",  # the root of the current drive on Windows
+]
+
+
+@pytest.mark.parametrize("link", ANCHORED_LINKS)
+def test_an_anchored_link_is_refused_as_absolute(link, tmp_path):
+    with pytest.raises(selfupdate.SelfUpdateError, match="absolute link"):
+        selfupdate._reject_unsafe_links([_link_member("partcad/pc", link)], str(tmp_path))
+
+
+@pytest.mark.parametrize("link", ["../../../../etc/passwd", "../../outside", "aliases/../../../outside"])
+def test_a_climbing_link_is_refused_as_unsafe(link, tmp_path):
+    """The other half of the pair: relative, but it walks out of the bundle."""
+    with pytest.raises(selfupdate.SelfUpdateError, match="unsafe link"):
+        selfupdate._reject_unsafe_links([_link_member("partcad/pc", link)], str(tmp_path))
+
+
+def test_the_links_a_bundle_carries_are_accepted(tmp_path):
+    """Nothing above may cost the bundle its aliases: `pc` is a bare name."""
+    members = [_link_member("partcad/" + name, "pc") for name in selfupdate.BUNDLE_EXECUTABLES if name != "pc"]
+    assert members
+    selfupdate._reject_unsafe_links(members, str(tmp_path))
 
 
 def test_checksum_mismatch_is_fatal(monkeypatch, tmp_path):
