@@ -70,6 +70,39 @@ Host commands
 
   The "Update PartCAD" command in the VS Code extension runs exactly this, so the two never drift apart.
 
+``pc open``
+  Open a file in a third-party CAD application, on this machine::
+
+    pc open cube.step                       # in a locally installed FreeCAD
+    pc open --use-docker cube.step          # or in a container, when there is none
+
+  ``--with`` names the application (``freecad`` today, and the default). A locally installed one is always
+  used when there is one: the command looks on the ``PATH``, in ``/Applications`` on macOS, under
+  ``Program Files`` on Windows, and for a flatpak on Linux.
+
+  With ``--use-docker``, a machine that has no local installation runs the application in a container instead
+  — one container per application, named after it (``partcad-freecad``), created from the application's image
+  (``--docker-image`` overrides it; FreeCAD's is ``linuxserver/freecad:latest``, since the FreeCAD project
+  publishes no image of its own) the first time and reused afterwards, so a container you have prepared
+  keeps being the one that is used. Remove it (``docker rm -f partcad-freecad``) to have the next ``pc open``
+  create a fresh one. The workspace and the directory holding this workspace's daemon socket are mounted **at
+  the paths they have on the host**, which is what lets one path mean the same thing on both sides. A file
+  that is not in this workspace gets its own workspace mounted instead, so that whatever is mounted always
+  contains the file the application is handed; a container created for one workspace and then used from
+  another says so, and says to remove it, rather than opening a name the container cannot resolve.
+
+  A containerised application draws on the host's X display. On Linux that display is usually a socket, which
+  is shared with the container along with its authority cookie, and nothing needs configuring; a display
+  reached over TCP — a forwarded one, or an X server on macOS or Windows (XQuartz, VcXsrv) — has to be
+  installed and allowed to accept the connection. When there is none, the command says which one to install
+  and what to run rather than starting a container whose window never appears.
+
+  Like ``pc lint --file`` and ``pc upgrade``, this never talks to the daemon — a daemon can be remote, where
+  the window would open on somebody else's screen. That is also why it takes a path rather than a
+  ``<package>:<part>`` name: resolving a name is a package-graph question, which is the round trip this
+  command does not make. ``--json`` prints what happened (or the reason it did not) as one object, which is
+  what the VS Code extension's "Open in..." context menu reads.
+
 ****************
 Package commands
 ****************

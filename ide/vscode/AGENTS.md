@@ -289,6 +289,35 @@ construct with equally sized filler before parsing, which is what keeps every fi
 column; findings that depend on what the mask hid are dropped rather than guessed. Change the schema or the
 message wording there, not here.
 
+## Opening a file in a third-party application
+
+The Explorer's per-item **"Open in > FreeCAD"** menu (`partcad.openInFreeCAD`, on parts and assemblies that
+have a source file) hands the item's `itemPath` to `partcad.openExternal`, which runs
+`pc --no-ansi open --with freecad [--use-docker] [--docker-image <image>] <path> --json`.
+
+**It never reaches the daemon, and there is no RPC method for it** -- a stronger version of the rule
+`pc lint --file` follows. A daemon can be remote: "open this in FreeCAD" sent to one would put a window on
+somebody else's screen, on a machine that may have no display at all, and the path would name a file only the
+client has. So the finding of the application, the container and the X forwarding are `partcad_client.external`
+and nothing here reimplements them; what stays in TypeScript is the menu, the setting, and showing the failure.
+
+The failure is the interesting half. `pc open` prints its reason as JSON *and* exits non-zero, so
+`JsonRpcBackend.openExternal` reads the JSON with `allowFailure` and throws the message as it came --
+`PartcadExplorer.openWith` shows it verbatim in the error dialog's detail. That message is the answer the user
+needs (which X server to install and what to allow, or how to let PartCAD use a container); replacing it with
+"the command failed" would throw away the whole point of the command.
+
+What is handed over is `config.item_path`, not the item's `itemPath`. The tree sets `itemPath` only for the
+types this editor can *edit* -- the scripts -- so a STEP or BREP part, which is exactly what another CAD
+application is for, has none; `config.item_path` is the file the daemon reported for the object either way.
+The menu is therefore on the same items as "Export" (`part`, `assembly`, with or without code) and an object
+that has no file of its own says so when it is picked, rather than being silently missing from the menu.
+
+`partcad.open.useDocker` and `partcad.open.dockerImage` are read here, on the way to that command line, rather
+than being worked out anywhere in Python: PartCAD decides *how* to run the application, and the settings only
+say what it is allowed to do. Adding a second application is a command, a menu entry and a row in
+`external.TOOLS` -- no new branch in this extension.
+
 ## Setup
 
 ```bash

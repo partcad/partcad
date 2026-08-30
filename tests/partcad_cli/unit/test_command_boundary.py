@@ -62,6 +62,10 @@ IN_PROCESS = {
     # process running from it can do. Two commands, on opposite sides of the
     # boundary, which is why they are not one command with a flag.
     "upgrade.py": "replaces this machine's PartCAD installation, and stops the local daemons to do it",
+    # A GUI application opens on the screen of the machine that starts it, and
+    # the path it is handed only exists there. A daemon can be remote, so this
+    # cannot be its work -- and it needs no package graph or CAD runtime anyway.
+    "open.py": "launches a third-party application on the client's own machine, with the client's own file",
     "daemon/start.py": "manages the daemon process itself",
     "daemon/stop.py": "manages the daemon process itself",
     "system/telemetry/clear.py": "clears the client's own telemetry id under the client's state dir",

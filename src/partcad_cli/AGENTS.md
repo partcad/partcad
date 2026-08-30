@@ -53,6 +53,17 @@ file. The checker (`partcad_client.lint`, over `partcad_utils.assy_lint`) is the
 package, so an editor and CI cannot disagree. The VS Code extension runs `pc lint --file`, so the two cannot
 drift apart either.
 
+**`pc open` is on the in-process side for a stronger version of the same reason.** Opening a file in a
+third-party CAD application puts a window on a screen, and the only screen a command can put one on is the one
+in front of the user who ran it: a daemon can be remote, where that window would appear on somebody else's
+desk, on a machine that may have no display at all -- and the path on the command line names a file only the
+client has. It needs no package graph, no CAD runtime and no context either, so there is deliberately no RPC
+method for it and none may be added. The application, the container PartCAD keeps for one that is not
+installed, and the X forwarding into it are `partcad_client.external`, so the command never imports the heavy
+`partcad`. Taking a path rather than a `<package>:<part>` name follows from the same rule: resolving a name is
+a package-graph question, which is exactly the round trip this command does not make. The VS Code extension's
+"Open in..." context menu runs `pc open --json`, so the two cannot drift apart.
+
 A command stays **in-process** only when it operates on the client's own state, which does not cross the wire:
 `init` (creates the workspace, before any package or context exists, and adds the `Render` command to the
 repository's `.vscode/launch.json` — see `src/partcad/launch_config.py`; the daemon's `init` operation

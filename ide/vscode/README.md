@@ -90,6 +90,22 @@ template is rendered, so a schema finding that depends on such a value is left
 out rather than guessed at. Set `partcad.lint.enabled` to `false` to turn this
 off.
 
+## Opening a part in another CAD application
+
+Right-click a part or an assembly in the PartCAD Explorer and pick **Open in > FreeCAD** to open the file it is
+defined by in FreeCAD. It is the object's own source file that is opened, so this is the way to reach it in a
+tool that draws, next to what the extension does with it.
+
+This runs on your machine and never goes anywhere near the PartCAD daemon: the extension runs `pc open`, which
+looks for a FreeCAD installed here and starts it. If there is none, and `partcad.open.useDocker` is on, PartCAD
+runs FreeCAD in a Docker container instead -- one container named `partcad-freecad`, created from
+`linuxserver/freecad:latest` (or `partcad.open.dockerImage`) the first time and reused afterwards, with your
+workspace and the PartCAD daemon's socket mounted at the paths they have here, so one path means the same thing
+on both sides. Its windows come out on your X display. On Linux that is the display you are already using; on
+macOS and Windows it needs an X server (XQuartz, VcXsrv) that PartCAD cannot install for you, so it tells you
+which one to install and what to allow rather than starting a container whose windows go nowhere. Remove the
+container (`docker rm -f partcad-freecad`) to have the next open create a fresh one.
+
 ## Inspecting published PartCAD packages
 
 To see a good example of a package with parts, it is recommended to browse
