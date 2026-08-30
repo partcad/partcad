@@ -16,6 +16,7 @@ silently no-op when none is loaded, exactly as the legacy server did.
 import hashlib
 import math
 import os
+import traceback
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import url2pathname
@@ -1126,8 +1127,18 @@ def activate(session, params):
         session.partcad.healthcheck.tests.run_healthchecks()
         session.emitter.signal(events.LOADED)
     except Exception as e:  # pylint: disable=broad-except
+        # The traceback, not just the message. Activation covers importing (or
+        # reloading) the whole of `partcad`, checking its version and running
+        # every health check, so `str(e)` on its own can name neither the file
+        # nor the operation: a reload failure reported exactly "'module' object
+        # is not callable", which says nothing about where, and the client shows
+        # this text as the only account of why the window is dead.
+        #
+        # Emitted rather than logged through `partcad.logging`: what failed may
+        # be the import of `partcad` itself, in which case there is no logger.
         session.emitter.error(
-            "Failed to activate PartCAD: %s.\nFollow instructions in the PartCAD's Explorer view." % e
+            "Failed to activate PartCAD: %s.\nFollow instructions in the PartCAD's Explorer view.\n%s"
+            % (e, traceback.format_exc())
         )
         session.emitter.signal(events.ACTIVATE_FAILED)
     return None
