@@ -12,36 +12,75 @@ output stream with responses, guarded by a lock so the log-streaming thread and
 the dispatch loop never interleave a frame.
 """
 
+import base64
 import sys
 import threading
 from typing import BinaryIO, Mapping
 
 from ..rpc.dispatcher import Dispatcher, Handler
 from partcad_utils.framing import read_message, write_message
+from partcad_utils.logging_ansi_render import AnsiEventRenderer
 
-
-def _notification_sink(write_stream: BinaryIO, lock: threading.Lock):
-    def sink(event, payload):
-        with lock:
-            write_message(write_stream, {"jsonrpc": "2.0", "method": event, "params": payload})
-
-    return sink
+# The same opt-in the socket daemon answers; see the note on `LOG_MODE_METHOD`
+# in `socket_server.py`. Kept working here so that `partcad.serviceChannel:
+# stdio` is a transport choice and not also a change in what the terminal looks
+# like. There is one connection here, so this is connection state either way.
+LOG_MODE_METHOD = "log.mode"
 
 
 def serve(read_stream: BinaryIO, write_stream: BinaryIO, session, registry: Mapping[str, Handler]) -> None:
     """Serve JSON-RPC over the given binary streams until end of input."""
     lock = threading.Lock()
-    session.emitter.set_sink(_notification_sink(write_stream, lock))
+    renderer = [None]
+
+    def send(event, payload):
+        try:
+            with lock:
+                write_message(write_stream, {"jsonrpc": "2.0", "method": event, "params": payload})
+        except (OSError, ValueError):
+            # The renderer's ticking thread can outlive the stream by a tick.
+            pass
+
+    def sink(event, payload):
+        if renderer[0] is not None and event == "log":
+            renderer[0].handle(payload)
+            return
+        send(event, payload)
+
+    session.emitter.set_sink(sink)
     dispatcher = Dispatcher(registry)
 
-    while True:
-        request = read_message(read_stream)
-        if request is None:
-            break
-        response = dispatcher.dispatch(request, session)
-        if response is not None:
-            with lock:
-                write_message(write_stream, response)
+    try:
+        while True:
+            request = read_message(read_stream)
+            if request is None:
+                break
+
+            if isinstance(request, dict) and request.get("method") == LOG_MODE_METHOD:
+                wants_ansi = bool((request.get("params") or {}).get("ansi"))
+                if wants_ansi and renderer[0] is None:
+                    renderer[0] = AnsiEventRenderer(
+                        lambda text: send("terminal", {"line": base64.b64encode(text.encode("utf-8")).decode("ascii")})
+                    )
+                elif not wants_ansi and renderer[0] is not None:
+                    renderer[0].close()
+                    renderer[0] = None
+                if "id" in request:
+                    with lock:
+                        write_message(
+                            write_stream,
+                            {"jsonrpc": "2.0", "id": request["id"], "result": {"ansi": renderer[0] is not None}},
+                        )
+                continue
+
+            response = dispatcher.dispatch(request, session)
+            if response is not None:
+                with lock:
+                    write_message(write_stream, response)
+    finally:
+        if renderer[0] is not None:
+            renderer[0].close()
+            renderer[0] = None
 
 
 def serve_stdio(session, registry: Mapping[str, Handler]) -> None:

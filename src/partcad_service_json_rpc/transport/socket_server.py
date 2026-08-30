@@ -12,11 +12,14 @@ dispatch, and while a request is handled the session emitter is bound to the
 calling connection's writer, so events (logs, items, stats, prompts) are routed
 back to that client only.
 
-``daemon.stop`` is handled at the transport level (it controls the server, not
-the PartCAD context): the server answers, then stops accepting, closes, and
-unlinks the socket.
+``daemon.stop`` and ``log.mode`` are handled at the transport level rather than
+by the dispatcher: they are properties of the *connection*, and the dispatcher
+only ever sees ``(request, session)`` -- and the session is shared by every
+client of this daemon, so a setting stored there would be one client deciding
+for all of them.
 """
 
+import base64
 import os
 import socket
 import threading
@@ -24,8 +27,17 @@ from typing import Callable, Mapping, Optional
 
 from ..rpc.dispatcher import Dispatcher, Handler
 from partcad_utils.framing import read_message, write_message
+from partcad_utils.logging_ansi_render import AnsiEventRenderer
 
 STOP_METHOD = "daemon.stop"
+
+# "Send me the display, not the records." A client that cannot host the ANSI
+# progress state machine -- the VS Code extension, which is TypeScript -- asks
+# for this once, right after connecting, and from then on its log events arrive
+# as rendered bytes on the ``terminal`` notification instead of as structured
+# records on ``log``. Instead of, not as well as: the two carry the same
+# information, and sending both would double the traffic to no end.
+LOG_MODE_METHOD = "log.mode"
 
 
 class SocketServer:
@@ -78,10 +90,36 @@ class SocketServer:
         rfile = conn.makefile("rb")
         wfile = conn.makefile("wb")
         write_lock = threading.Lock()
+        # Per connection, because the ANSI footer is drawn by moving the cursor
+        # back over the lines it last wrote: one renderer shared between two
+        # clients would have each erasing lines from the other's terminal.
+        renderer: list = [None]
+
+        def send(event, payload):
+            try:
+                with write_lock:
+                    write_message(wfile, {"jsonrpc": "2.0", "method": event, "params": payload})
+            except (OSError, ValueError):
+                # The client went away. The renderer's ticking thread outlives
+                # the read loop by up to one tick, so this is reached in normal
+                # operation, not only on a crash.
+                pass
 
         def sink(event, payload):
-            with write_lock:
-                write_message(wfile, {"jsonrpc": "2.0", "method": event, "params": payload})
+            if renderer[0] is not None and event == "log":
+                # Rendered instead of forwarded. The renderer writes through
+                # `send` itself -- from this thread and from its own ticking
+                # thread -- so nothing is emitted here.
+                renderer[0].handle(payload)
+                return
+            send(event, payload)
+
+        def start_rendering():
+            renderer[0] = AnsiEventRenderer(
+                # base64 because this is a text field carrying terminal control
+                # bytes, and the client writes it into a pty verbatim.
+                lambda text: send("terminal", {"line": base64.b64encode(text.encode("utf-8")).decode("ascii")})
+            )
 
         try:
             while not self._stop.is_set():
@@ -96,6 +134,21 @@ class SocketServer:
                     self.stop()
                     break
 
+                if isinstance(request, dict) and request.get("method") == LOG_MODE_METHOD:
+                    wants_ansi = bool((request.get("params") or {}).get("ansi"))
+                    if wants_ansi and renderer[0] is None:
+                        start_rendering()
+                    elif not wants_ansi and renderer[0] is not None:
+                        renderer[0].close()
+                        renderer[0] = None
+                    if "id" in request:
+                        with write_lock:
+                            write_message(
+                                wfile,
+                                {"jsonrpc": "2.0", "id": request["id"], "result": {"ansi": renderer[0] is not None}},
+                            )
+                    continue
+
                 with self._dispatch_lock:
                     self._session.emitter.set_sink(sink)
                     try:
@@ -108,6 +161,11 @@ class SocketServer:
         except OSError:
             pass
         finally:
+            if renderer[0] is not None:
+                # A client that disconnects mid-operation leaves a thread
+                # redrawing a footer into a closed socket.
+                renderer[0].close()
+                renderer[0] = None
             try:
                 conn.close()
             except OSError:
