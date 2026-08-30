@@ -117,18 +117,40 @@ option_groups = [
         "options": ["--path", "--help"],
     },
 ]
+# Every top-level command belongs in exactly one of these panels. A command that
+# is in none of them is not hidden -- rich-click appends it to a trailing,
+# unnamed "Commands" panel below the named ones, which reads as an afterthought
+# and is where `search` and `upgrade` sat. `tests/partcad_cli/unit/test_command_help.py`
+# fails when a command is listed here twice, is listed but does not exist, or
+# exists and is listed nowhere.
 command_groups = [
     {
+        # `version` and `upgrade` are about this installation of PartCAD;
+        # `config`, `system` and `daemon` about the host it runs on.
         "name": "Host commands",
-        "commands": ["version", "config", "system", "daemon"],
+        "commands": ["version", "upgrade", "config", "system", "daemon"],
     },
     {
         "name": "Package commands",
         "commands": ["init", "install", "update", "lint"],
     },
     {
+        # `search` sits beside `list`: both enumerate the objects in a package,
+        # one filtered by keyword and one not.
         "name": "Object commands",
-        "commands": ["list", "add", "import", "test", "inspect", "info", "bom", "convert", "export", "render"],
+        "commands": [
+            "list",
+            "search",
+            "add",
+            "import",
+            "test",
+            "inspect",
+            "info",
+            "bom",
+            "convert",
+            "export",
+            "render",
+        ],
     },
     {
         "name": "Workflow commands",

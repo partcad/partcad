@@ -7,6 +7,8 @@ from partcad_cli.click.commands.search.packages import cli as search_packages
 from partcad_cli.click.commands.search.parts import cli as search_parts
 from partcad_cli.click.commands.search.sketches import cli as search_sketches
 
+from ...cli_context import CliContext
+
 
 @click.command(help="Search all available parts, sketches, and assemblies with the given keyword")
 @click.option(
