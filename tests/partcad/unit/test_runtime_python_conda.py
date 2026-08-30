@@ -18,6 +18,7 @@ arguments, and reproducing it for real means a conda solve per case.
 
 import os
 import pathlib
+import subprocess
 
 import pytest
 
@@ -31,7 +32,9 @@ class _FakeProcess:
 
     returncode = 0
 
-    def communicate(self):
+    # '*args, **kwargs' because the real Popen.communicate takes 'input' and
+    # 'timeout', and callers here pass them.
+    def communicate(self, *args, **kwargs):
         return "{}", ""
 
 
@@ -159,7 +162,7 @@ class _ScriptedProcess:
         self._stdout = stdout
         self._stderr = stderr
 
-    def communicate(self):
+    def communicate(self, *args, **kwargs):
         return self._stdout, self._stderr
 
 
@@ -281,3 +284,290 @@ def test_provisioning_that_never_succeeds_is_fatal_and_names_the_cause(tmp_path,
     assert "3.13" in message, message
     assert runtime.path in message, message
     assert "could not install pip" in message, message
+
+
+# ---- a corrupt package cache -------------------------------------------------
+#
+# The retry that already existed could not clear this one. conda's package cache
+# is shared and lives outside the prefix, so a tarball that did not survive its
+# download, or an extracted directory that cannot be read back, fails every
+# attempt identically -- the next solve finds the same bad file. That is what
+# `Examples PartCAD via bundle (ubuntu-24.04-arm64)` hit twice, three minutes
+# apart, in run 33293181928:
+#
+#   error libmamba Error when extracting package: filesystem error:
+#         cannot remove all: Bad file descriptor [.../pycairo-1.29.1-...]
+#   Found incorrect download: pycairo. Aborting
+
+_CORRUPT_CACHE = (
+    "warning  libmamba Extracted package cache '/home/runner/conda_pkgs_dir/pycairo-1.29.1-py311hbe9a378_0' "
+    "has invalid 'repodata_record.json' file: [json.exception.type_error.302] type must be string, but is null\n"
+    "error    libmamba Error when extracting package: filesystem error: cannot remove all: "
+    "Bad file descriptor [/home/runner/conda_pkgs_dir/pycairo-1.29.1-py311hbe9a378_0]\n"
+    "Found incorrect download: pycairo. Aborting\n"
+)
+
+
+def _cleans(commands):
+    return [command for command in commands if "clean" in command]
+
+
+def test_the_real_failure_is_recognised_as_a_corrupt_cache():
+    assert runtime_python_conda._is_corrupt_cache(_CORRUPT_CACHE) is True
+
+
+def test_an_unrelated_sporadic_failure_is_not_a_corrupt_cache():
+    """The netlink error is the runner's network, not the cache.
+
+    Dropping a shared cache costs every environment on the machine a re-download,
+    so it has to be reserved for the failures it actually repairs.
+    """
+    assert runtime_python_conda._is_corrupt_cache(_NETLINK) is False
+    assert runtime_python_conda._is_corrupt_cache("") is False
+
+
+def test_a_corrupt_cache_is_dropped_before_the_create_is_retried(tmp_path, scripted_commands):
+    """Order is the whole point: cleaning after the retry repairs nothing."""
+    commands, script = scripted_commands
+    script.append((1, "", _CORRUPT_CACHE))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    verbs = [command[1] for command in commands]
+    assert verbs == ["create", "clean", "create", "install"], commands
+    assert pc_logging.had_errors is False
+
+
+def test_a_sporadic_failure_that_is_not_the_cache_retries_without_cleaning(tmp_path, scripted_commands):
+    commands, script = scripted_commands
+    script.append((0, "", _NETLINK))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert _cleans(commands) == [], commands
+    assert [command[1] for command in commands] == ["create", "create", "install"], commands
+
+
+def test_a_create_that_exited_zero_is_never_cleaned_up_after(tmp_path, scripted_commands):
+    """The markers on the stderr of a create that *worked* are not a reason to clean.
+
+    libmamba prints the invalid 'repodata_record.json' complaint as a warning and
+    carries on; the prefix it leaves behind is usable. Reading the markers off
+    stderr without asking the exit status would drop a cache every conda
+    environment on the machine shares, and redo a create that had succeeded,
+    on every run that happened to log one.
+    """
+    commands, script = scripted_commands
+    script.append((0, "", _CORRUPT_CACHE))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert _cleans(commands) == [], commands
+    # Still retried -- "Found incorrect download" is a sporadic marker as well --
+    # but retried against the cache rather than after dropping it.
+    assert [command[1] for command in commands] == ["create", "create", "install"], commands
+    assert pc_logging.had_errors is False
+
+
+def test_a_corrupt_cache_in_the_pip_install_is_dropped_too(tmp_path, scripted_commands):
+    """The half of the attempt that had no sporadic handling at all.
+
+    The caller retries the whole attempt, so before this the second attempt was
+    a byte-for-byte repeat of the first against the same bad cache. Cleaning
+    here is what makes it a different attempt.
+    """
+    commands, script = scripted_commands
+    script.append((0, "{}", ""))  # create succeeds
+    script.append((1, "", _CORRUPT_CACHE))  # pip install hits the cache
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert runtime.conda_initialized is False, "the attempt still failed; only the cache was repaired"
+    assert _cleans(commands), commands
+    # Cleaned after the install that failed, not before it.
+    assert [command[1] for command in commands] == ["create", "install", "clean"], commands
+    assert pc_logging.had_errors is False
+
+
+def test_a_pip_install_failure_that_is_not_the_cache_cleans_nothing(tmp_path, scripted_commands):
+    commands, script = scripted_commands
+    script.append((0, "{}", ""))
+    script.append((1, "", "could not install pip\n"))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert runtime.conda_initialized is False
+    assert _cleans(commands) == [], commands
+
+
+def test_cleaning_the_cache_is_never_what_fails_the_run(tmp_path, scripted_commands):
+    """It runs while an attempt is already failing, so it may not raise.
+
+    A cleanup that threw would turn a recoverable provisioning failure into an
+    exception out of a code path whose caller is still deciding what to do.
+    """
+    commands, script = scripted_commands
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    def explode(*args, **kwargs):
+        raise OSError("mamba is not on PATH")
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(runtime_python_conda.subprocess, "Popen", explode)
+    try:
+        runtime._clean_package_cache()  # must not raise
+    finally:
+        monkeypatch.undo()
+
+    assert pc_logging.had_errors is False
+
+
+def test_a_clean_that_reports_failure_is_only_a_warning(tmp_path, scripted_commands):
+    commands, script = scripted_commands
+    script.append((1, "", "CondaError: cache is locked\n"))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime._clean_package_cache()
+
+    assert [command[1] for command in commands] == ["clean"], commands
+    assert pc_logging.had_errors is False
+
+
+# ---- each corrupt-cache marker on its own -------------------------------------
+#
+# The two marker lists share only "Found incorrect download". So a create
+# failure naming just the extraction or just the record file passes no sporadic
+# test, and if the cache check were nested under that one it would fall through
+# to a bare warning: uncleaned, then retried by the caller against the cache
+# that failed it. Each marker is therefore driven on its own here rather than
+# through the real three-line message, which happens to carry all of them.
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "Found incorrect download: pycairo. Aborting\n",
+        "warning  libmamba Extracted package cache '/x/pycairo' has invalid 'repodata_record.json' file\n",
+        "error    libmamba Error when extracting package: filesystem error: cannot remove all\n",
+    ],
+)
+def test_each_corrupt_cache_marker_alone_cleans_and_retries_the_create(tmp_path, scripted_commands, stderr):
+    commands, script = scripted_commands
+    script.append((1, "", stderr))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert [command[1] for command in commands] == ["create", "clean", "create", "install"], commands
+    assert pc_logging.had_errors is False
+
+
+# ---- a clean that will not finish ---------------------------------------------
+
+
+class _HangingProcess:
+    """A process whose communicate() times out until it is killed.
+
+    subprocess.communicate() does not kill the child when its timeout passes, so
+    what matters is that the caller does, and then reaps it.
+    """
+
+    returncode = None
+
+    def __init__(self):
+        self.killed = False
+        self.reaped = False
+
+    def communicate(self, *args, **kwargs):
+        if not self.killed:
+            raise subprocess.TimeoutExpired(cmd="conda clean", timeout=kwargs.get("timeout", 300))
+        self.reaped = True
+        self.returncode = -9
+        return "", ""
+
+    def kill(self):
+        self.killed = True
+
+
+def test_a_clean_that_times_out_is_killed_and_reaped(tmp_path, monkeypatch):
+    """Otherwise 'conda clean' keeps writing the cache the retry solves from.
+
+    Two conda processes on one package cache is a worse place to be than the
+    corrupt entry that started this, so the timeout may not simply be reported
+    and walked away from.
+    """
+    hanging = _HangingProcess()
+    monkeypatch.setattr(runtime_python_conda.subprocess, "Popen", lambda *a, **k: hanging)
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime._clean_package_cache()  # must not raise
+
+    assert hanging.killed is True, "a timed-out conda clean was left running"
+    assert hanging.reaped is True, "the killed process was never reaped"
+    assert pc_logging.had_errors is False
+
+
+# ---- the marker can arrive on either stream -----------------------------------
+#
+# Which stream carries the complaint is not fixed. The code's own note on the
+# create path says it: a failed solve under "--json" is reported on *stdout* and
+# leaves stderr empty. Detection gated on stderr alone therefore misses exactly
+# the case conda documents, and the retry goes back into the same cache.
+
+_CORRUPT_ON_STDOUT = (
+    '{"success": false, "error": "Found incorrect download: pycairo. Aborting", '
+    '"caused_by": "Error when extracting package"}\n'
+)
+
+
+def test_a_corrupt_cache_named_only_on_stdout_still_cleans_the_create(tmp_path, scripted_commands):
+    commands, script = scripted_commands
+    script.append((1, _CORRUPT_ON_STDOUT, ""))  # non-zero, marker on stdout, stderr empty
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert [command[1] for command in commands] == ["create", "clean", "create", "install"], commands
+    assert pc_logging.had_errors is False
+
+
+def test_a_corrupt_cache_named_only_on_stdout_still_cleans_the_pip_install(tmp_path, scripted_commands):
+    commands, script = scripted_commands
+    script.append((0, "{}", ""))  # create succeeds
+    script.append((1, _CORRUPT_ON_STDOUT, ""))  # pip install fails, marker on stdout
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert runtime.conda_initialized is False
+    assert [command[1] for command in commands] == ["create", "install", "clean"], commands
+    assert pc_logging.had_errors is False
+
+
+def test_what_went_wrong_is_recorded_from_whichever_stream_carried_it(tmp_path, scripted_commands):
+    """The fatal message quotes conda_last_error, so it must not lose stdout."""
+    commands, script = scripted_commands
+    script.append((0, "{}", ""))
+    script.append((1, '{"success": false, "error": "no such package"}\n', ""))
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert "no such package" in (runtime.conda_last_error or "")
+
+
+def test_a_clean_run_that_merely_mentions_a_marker_is_not_treated_as_a_failure(tmp_path, scripted_commands):
+    """Cleaning a shared cache costs every environment on the machine, so it is
+    reserved for runs that actually failed."""
+    commands, script = scripted_commands
+    script.append((0, _CORRUPT_ON_STDOUT, ""))  # exit 0, nothing wrong
+    runtime = _bare_runtime(tmp_path, "3.13")
+
+    runtime.once_conda_locked_attempt()
+
+    assert [command[1] for command in commands] == ["create", "install"], commands
