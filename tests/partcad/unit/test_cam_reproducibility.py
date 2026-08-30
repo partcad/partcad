@@ -213,7 +213,7 @@ class _PluginProject:
         return self.content
 
 
-def _plugin_factory(project, path, file_hash=None):
+def _plugin_factory(project, file_hash=None):
     config = {"name": "board", "orig_name": "board", "path": "board.py"}
     if file_hash is not None:
         config["fileHash"] = file_hash
@@ -222,7 +222,7 @@ def _plugin_factory(project, path, file_hash=None):
 
 def test_a_plugin_file_is_verified_when_it_is_pinned(tmp_path):
     """Given a 'fileHash', a plugin's file is checked like any other."""
-    factory = _plugin_factory(_PluginProject(SERVED), tmp_path, file_hash=SERVED_SHA256)
+    factory = _plugin_factory(_PluginProject(SERVED), file_hash=SERVED_SHA256)
     assert declared_hash(factory.config) == SERVED_SHA256
 
     path = str(tmp_path / "board.py")
@@ -231,7 +231,7 @@ def test_a_plugin_file_is_verified_when_it_is_pinned(tmp_path):
 
 
 def test_a_plugin_file_that_does_not_match_is_refused(tmp_path):
-    factory = _plugin_factory(_PluginProject(SERVED), tmp_path, file_hash="sha256:" + "0" * 64)
+    factory = _plugin_factory(_PluginProject(SERVED), file_hash="sha256:" + "0" * 64)
 
     path = str(tmp_path / "board.py")
     with pytest.raises(FileHashError):
@@ -240,7 +240,7 @@ def test_a_plugin_file_that_does_not_match_is_refused(tmp_path):
 
 
 def test_a_plugin_file_without_a_hash_is_served_unchecked(tmp_path):
-    factory = _plugin_factory(_PluginProject(SERVED), tmp_path)
+    factory = _plugin_factory(_PluginProject(SERVED))
 
     path = str(tmp_path / "board.py")
     asyncio.run(factory.download(path))

@@ -146,7 +146,7 @@ Object commands
   one, and ``-p <name>=<value>`` to set parameters.
 
 ``pc info``
-  Show detailed information about a part, assembly, or scene, including its parameters.
+  Show detailed information about a part, assembly, scene, or software, including its parameters.
 
 ``pc bom``
   Print the bill of materials of an assembly: every part it is made of, recursively, with how many of each

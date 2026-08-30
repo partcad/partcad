@@ -179,10 +179,13 @@ def test_a_fetch_that_fails_writes_nothing(package, served):
     """No bytes, no hash - and a declaration written anyway would be unpinned."""
     with serve(served) as url:
         ctx = pc.Context(str(package))
-        with pytest.raises(Exception):
+        # Not a bare 'Exception': that would pass on a TypeError in the call
+        # itself, and what is under test is that the *fetch* failed.
+        with pytest.raises(Exception) as excinfo:
             asyncio.run(
                 add_object_from_url_async(ctx, ctx.get_project("//"), "parts", "%s/nowhere.step" % url, kind="step")
             )
+        assert "404" in str(excinfo.value) or "Not Found" in str(excinfo.value)
 
     assert yaml.safe_load((package / "partcad.yaml").read_text()) == {"desc": "A package under test"}
 
@@ -235,4 +238,20 @@ def test_software_outside_the_package_is_refused(package, tmp_path):
     project = pc.Context(str(package)).get_project("//")
 
     assert not project.add_software(str(outside))
+    assert yaml.safe_load((package / "partcad.yaml").read_text()) == {"desc": "A package under test"}
+
+
+def test_a_sibling_of_the_package_is_outside_it(package, tmp_path):
+    """A shared prefix is not containment.
+
+    The package is 'pkg', and 'pkg-other' starts with its whole path. Compared
+    as strings the sibling looks like content of it, and the declaration written
+    down would have read '../pkg-other/firmware.bin'.
+    """
+    sibling = tmp_path / "pkg-other"
+    sibling.mkdir()
+    (sibling / "firmware.bin").write_bytes(b"image\n")
+    project = pc.Context(str(package)).get_project("//")
+
+    assert not project.add_software(str(sibling / "firmware.bin"))
     assert yaml.safe_load((package / "partcad.yaml").read_text()) == {"desc": "A package under test"}

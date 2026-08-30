@@ -1631,7 +1631,11 @@ class Project(project_config.Configuration):
         if not os.path.isabs(root):
             root = os.path.abspath(root)
 
-        if not path.startswith(root):
+        # A path boundary, not a string prefix: '/work/pkg-other/fw.bin' starts
+        # with '/work/pkg' and is not in it, and 'relpath' would then hand back
+        # '../pkg-other/fw.bin' to be written down as the object's path. This is
+        # the test 'rel_path()' above already makes.
+        if not (path == root or path.startswith(root + os.sep)):
             pc_logging.error("Can't add files outside of the package")
             return False, None, None
 
